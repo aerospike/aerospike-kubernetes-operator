@@ -1,0 +1,59 @@
+apiVersion: aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+spec:
+  # Add fields here
+  size: 2
+  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  fileStorage:
+    - storageClass: ssd
+      volumeMounts:
+        - mountPath: /opt/aerospike/data
+          sizeInGB: 3
+  multiPodPerHost: true
+  aerospikeAuthSecret:
+    secretName: auth-secret
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    network:
+      service:
+        tls-name: bob-cluster-a
+        tls-authenticate-client: any
+      heartbeat:
+        tls-name: bob-cluster-b
+      fabric:
+        tls-name: bob-cluster-c
+      tls:
+        - name: bob-cluster-a
+          cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
+          key-file: /etc/aerospike/secret/svc_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+        - name: bob-cluster-b
+          cert-file: /etc/aerospike/secret/hb_cluster_chain.pem
+          key-file: /etc/aerospike/secret/hb_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+        - name: bob-cluster-c
+          cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
+          key-file: /etc/aerospike/secret/fb_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+    namespace:
+      - name: bar
+        memory-size: 3000000000
+        replication-factor: 1
+        storage-engine:
+          file:
+            - /opt/aerospike/data/bar.dat
+          filesize: 2000000000
+          data-in-memory: true
+  resources:
+    requests:
+      memory: 5Gi
+      cpu: 200m

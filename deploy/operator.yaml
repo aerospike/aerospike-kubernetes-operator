@@ -1,0 +1,54 @@
+# Service for webhook
+apiVersion: v1
+kind: Service
+metadata:
+  name: aerospike-cluster-webhook
+  namespace: aerospike
+spec:
+  selector:
+    # Specified by the deployment/pod
+    name: aerospike-kubernetes-operator
+  ports:
+    - port: 443
+      # Can be the name of port 8443 of the container
+      targetPort: 8443
+---
+
+# Operator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: aerospike
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: aerospike-kubernetes-operator
+  template:
+    metadata:
+      labels:
+        name: aerospike-kubernetes-operator
+    spec:
+      serviceAccountName: aerospike-kubernetes-operator
+      containers:
+        - name: aerospike-kubernetes-operator
+          image: aerospike/aerospike-kubernetes-operator:v0.0.1-beta
+          command:
+          - aerospike-kubernetes-operator
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 8443
+          env:
+          - name: WATCH_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: OPERATOR_NAME
+            value: "aerospike-kubernetes-operator"
+          - name: LOG_LEVEL
+            value: debug

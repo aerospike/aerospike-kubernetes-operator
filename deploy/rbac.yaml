@@ -1,0 +1,145 @@
+# Service account used by the operator roles and rights.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: aerospike
+
+---
+
+# Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: aerospike-kubernetes-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  - services/finalizers
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  - configmaps
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  # - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - '*'
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - apps
+  resourceNames:
+  - aerospike-kubernetes-operator
+  resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - deployments
+  verbs:
+  - get
+- apiGroups:
+  - aerospike.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingwebhookconfigurations
+  - mutatingwebhookconfigurations
+  verbs:
+    - '*'
+
+---
+
+# RoleBinding
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: aerospike-kubernetes-operator
+subjects:
+- kind: ServiceAccount
+  name: aerospike-kubernetes-operator
+  namespace: aerospike
+roleRef:
+  kind: ClusterRole
+  name: aerospike-kubernetes-operator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# Service account used by the pods to obtain pod metadata.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  # Do not change name, its hard-coded in operator
+  name: aerospike-cluster
+  namespace: aerospike
+
+---
+
+# Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: aerospike-cluster
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - services
+  verbs:
+  - get
+  - list
+
+---
+
+# RoleBinding
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: aerospike-cluster
+subjects:
+- kind: ServiceAccount
+  name: aerospike-cluster
+  namespace: aerospike
+roleRef:
+  kind: ClusterRole
+  name: aerospike-cluster
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,38 @@
+apiVersion: aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+spec:
+  # Add fields here
+  size: 2
+  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  blockStorage:
+    - storageClass: local-ssd
+      volumeDevices:
+        - devicePath: "/dev/nvme0n1"
+          sizeInGB: 5
+    - storageClass: ssd
+      volumeDevices:
+        - devicePath: "/dev/sdf"
+          sizeInGB: 5
+  multiPodPerHost: true 
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    namespace:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine:
+          device: 
+            - /dev/nvme0n1	/dev/sdf
+  resources:
+    requests: 
+      memory: 5Gi
+      cpu: 200m

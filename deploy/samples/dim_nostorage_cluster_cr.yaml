@@ -1,0 +1,32 @@
+apiVersion: aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+spec:
+  # Add fields here
+  size: 2
+  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  multiPodPerHost: true
+  aerospikeAuthSecret:
+    secretName: auth-secret
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+  aerospikeConfig:
+    logging:
+      - name: /var/log/aerospike/aerospike.log
+        any: info
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    namespace:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine: memory
+  resources:
+    requests: 
+      memory: 5Gi
+      cpu: 200m

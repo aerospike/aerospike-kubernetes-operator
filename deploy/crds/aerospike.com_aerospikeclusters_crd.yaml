@@ -1,0 +1,210 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: aerospikeclusters.aerospike.com
+spec:
+  group: aerospike.com
+  names:
+    kind: AerospikeCluster
+    listKind: AerospikeClusterList
+    plural: aerospikeclusters
+    singular: aerospikecluster
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: AerospikeCluster is the Schema for the aerospikeclusters API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: AerospikeClusterSpec defines the desired state of AerospikeCluster
+          properties:
+            aerospikeAuthSecret:
+              description: 'AerospikeAuthSecret has secret info created by user. User
+                needs to create this secret from password literal if aerospike cluster
+                is security enabled. password key in secret has password for default
+                aerospike user which user wants to set for cluster eg: kubectl create
+                secret generic dev-db-secret --from-literal=password=''password'''
+              properties:
+                secretName:
+                  type: string
+              required:
+              - secretName
+              type: object
+            aerospikeConfig:
+              description: AerospikeConfig sets config in aerospike.conf file. Other
+                configs are taken as default
+            aerospikeConfigSecret:
+              description: AerospikeConfigSecret has secret info created by user.
+                User needs to create this secret having tls files, feature key for
+                cluster
+              properties:
+                mountPath:
+                  type: string
+                secretName:
+                  type: string
+              required:
+              - mountPath
+              - secretName
+              type: object
+            blockStorage:
+              description: BlockStorage has block storage info.
+              items:
+                description: BlockStorageSpec has storage info. StorageClass for devices
+                properties:
+                  storageClass:
+                    description: StorageClass should be created by user
+                    type: string
+                  volumeDevices:
+                    description: VolumeDevices is the list of block devices to be
+                      used by the container. Devices should be provisioned by user
+                    items:
+                      description: VolumeDevice is device to be used by the container
+                      properties:
+                        devicePath:
+                          description: DevicePath is the path inside of the container
+                            that the device will be mapped to
+                          type: string
+                        sizeInGB:
+                          description: SizeInGB Size of device in GB
+                          format: int32
+                          type: integer
+                      required:
+                      - devicePath
+                      - sizeInGB
+                      type: object
+                    type: array
+                required:
+                - storageClass
+                - volumeDevices
+                type: object
+              type: array
+            build:
+              description: Aerospike cluster build
+              type: string
+            fileStorage:
+              description: FileStorage has filesystem storage info.
+              items:
+                description: FileStorageSpec has storage info. StorageClass for fileSystems
+                properties:
+                  storageClass:
+                    description: StorageClass should be created by user
+                    type: string
+                  volumeMounts:
+                    description: Pod volumes to mount into the container's filesystem.
+                    items:
+                      description: VolumeMount is Pod volume to mount into the container's
+                        filesystem
+                      properties:
+                        mountPath:
+                          description: Path within the container at which the volume
+                            should be mounted
+                          type: string
+                        sizeInGB:
+                          description: SizeInGB Size of mount volume
+                          format: int32
+                          type: integer
+                      required:
+                      - mountPath
+                      - sizeInGB
+                      type: object
+                    type: array
+                required:
+                - storageClass
+                - volumeMounts
+                type: object
+              type: array
+            multiPodPerHost:
+              description: "If set true then multiple pods can be created per kubernetes
+                Host. This will create a NodePort service for each Pod. NodePort,
+                as the name implies, opens a specific port on all the kubernetes Hosts
+                , and any traffic that is sent to this port is forwarded to the service.
+                Here service picks a random port in range (30000-32767), so these
+                port should be open. \n If set false then only single pod can be created
+                per kubernetes Host. This will create Pods using HostPort setting.
+                The container port will be exposed to the external network at <hostIP>:<hostPort>,
+                where the hostIP is the IP address of the Kubernetes Host where the
+                container is running and the hostPort is the port requested by the
+                user."
+              type: boolean
+            resources:
+              description: Define resources requests and limits for Aerospike Server
+                Container. Please contact aerospike for proper sizing exercise Only
+                Memory and Cpu resources can be given Resources.Limits should be more
+                than Resources.Requests.
+              properties:
+                limits:
+                  additionalProperties:
+                    type: string
+                  description: 'Limits describes the maximum amount of compute resources
+                    allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+                requests:
+                  additionalProperties:
+                    type: string
+                  description: 'Requests describes the minimum amount of compute resources
+                    required. If Requests is omitted for a container, it defaults
+                    to Limits if that is explicitly specified, otherwise to an implementation-defined
+                    value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+              type: object
+            size:
+              description: Aerospike cluster size
+              format: int32
+              type: integer
+          required:
+          - aerospikeConfig
+          - build
+          - resources
+          - size
+          type: object
+        status:
+          description: AerospikeClusterStatus defines the observed state of AerospikeCluster
+          properties:
+            nodes:
+              description: Nodes tells the observed state of AerospikeClusterNodes
+              items:
+                description: AerospikeNodeSummary defines the observed state of AerospikeClusterNode
+                properties:
+                  build:
+                    type: string
+                  clusterName:
+                    type: string
+                  ip:
+                    type: string
+                  nodeID:
+                    type: string
+                  port:
+                    type: integer
+                  tlsname:
+                    type: string
+                required:
+                - build
+                - clusterName
+                - ip
+                - nodeID
+                - port
+                - tlsname
+                type: object
+              type: array
+          required:
+          - nodes
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true

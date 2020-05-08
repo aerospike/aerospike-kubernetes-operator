@@ -1,0 +1,52 @@
+apiVersion: aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+spec:
+  # Add fields here
+  size: 2
+  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  fileStorage: 
+    - storageClass: ssd
+      volumeMounts:
+        - mountPath: /opt/aerospike/data/test
+          sizeInGB: 3
+        - mountPath: /opt/aerospike/data/bar
+          sizeInGB: 3        
+  multiPodPerHost: true 
+  aerospikeAuthSecret:
+    secretName: auth-secret
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    namespace:
+      - name: test
+        memory-size: 2000000000
+        single-bin: true
+        data-in-index: true
+        replication-factor: 1
+        storage-engine:
+          file: 
+            - /opt/aerospike/data/test/test.dat
+          filesize: 2000000000
+          data-in-memory: true
+      - name: bar
+        memory-size: 3000000000
+        single-bin: true
+        data-in-index: true
+        replication-factor: 1
+        storage-engine:
+          file: 
+            - /opt/aerospike/data/bar/bar.dat
+          filesize: 2000000000
+          data-in-memory: true
+  resources:
+    requests: 
+      memory: 8Gi
+      cpu: 200m
