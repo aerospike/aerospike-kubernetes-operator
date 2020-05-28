@@ -60,7 +60,7 @@ var privileges = map[string][]PrivilegeScope{
 func IsAerospikeAccessControlValid(aerospikeCluster aerospikev1alpha1.AerospikeClusterSpec) (bool, error) {
 	enabled, err := isSecurityEnabled(aerospikeCluster)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
 	if !enabled && aerospikeCluster.AerospikeAccessControl != nil {
@@ -105,7 +105,7 @@ func isRoleSpecValid(roles map[string]aerospikev1alpha1.AerospikeRoleSpec, aeros
 		_, ok := predefinedRoles[roleName]
 		if ok {
 			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf("Cannot create or mdify redefined role: %s", roleName)
+			return false, fmt.Errorf("Cannot create or modify predefined role: %s", roleName)
 		}
 
 		_, err := isRoleNameValid(roleName)
@@ -139,6 +139,10 @@ func isRoleSpecValid(roles map[string]aerospikev1alpha1.AerospikeRoleSpec, aeros
 
 // Indicates if a role name is valid.
 func isRoleNameValid(roleName string) (bool, error) {
+	if len(strings.TrimSpace(roleName)) == 0 {
+		return false, fmt.Errorf("Role name cannot be empty")
+	}
+
 	if len(roleName) > roleNameLengthMax {
 		return false, fmt.Errorf("Role name '%s' cannot have more than %d characters", roleName, roleNameLengthMax)
 	}
@@ -159,7 +163,7 @@ func isPrivilegeValid(privilege string, aerospikeConfig aerospikev1alpha1.Values
 
 	nParts := len(parts)
 
-	if nParts > 2 {
+	if nParts > 3 {
 		return false, fmt.Errorf("Invalid privilege %s", privilege)
 	}
 
@@ -176,8 +180,13 @@ func isPrivilegeValid(privilege string, aerospikeConfig aerospikev1alpha1.Values
 			return false, fmt.Errorf("For privilege %s, namespace %s not configured", privilege, namespaceName)
 		}
 
-		if nParts == 2 {
+		if nParts == 3 {
 			// TODO Validate set name
+			setName := parts[2]
+
+			if len(strings.TrimSpace(setName)) == 0 {
+				return false, fmt.Errorf("For privilege %s invalid set name", privilege)
+			}
 		}
 	}
 
@@ -251,12 +260,20 @@ func isUserSpecValid(users map[string]aerospikev1alpha1.AerospikeUserSpec, roles
 		for _, roleName := range userSpec.Roles {
 			_, ok := roles[roleName]
 			if !ok {
-				return false, fmt.Errorf("User '%s' has non-existent role %s", userName, roleName)
+				// Check is this is a predefined role.
+				_, ok = predefinedRoles[roleName]
+				if !ok {
+					// Neither a specified role nor a predefined role.
+					return false, fmt.Errorf("User '%s' has non-existent role %s", userName, roleName)
+				}
 			}
 		}
 
-		// TODO Should validate password here but we cannot read the secret here.
+		// TODO Should validate actual password here but we cannot read the secret here.
 		// Will have to be done at the time of creating the user!
+		if len(strings.TrimSpace(userSpec.SecretName)) == 0 {
+			return false, fmt.Errorf("User %s has empty secret name", userName)
+		}
 
 		if subset(requiredRoles, userSpec.Roles) {
 			// We found a user that has the required roles.
@@ -273,8 +290,12 @@ func isUserSpecValid(users map[string]aerospikev1alpha1.AerospikeUserSpec, roles
 
 // isUserNameValid Indicates if a user name is valid.
 func isUserNameValid(userName string) (bool, error) {
+	if len(strings.TrimSpace(userName)) == 0 {
+		return false, fmt.Errorf("Username cannot be empty")
+	}
+
 	if len(userName) > userNameLengthMax {
-		return false, fmt.Errorf("User name '%s' cannot have more than %d characters", userName, userNameLengthMax)
+		return false, fmt.Errorf("Username '%s' cannot have more than %d characters", userName, userNameLengthMax)
 	}
 
 	// TODO Length seems to be the only constraint to check. Find out more checks.
