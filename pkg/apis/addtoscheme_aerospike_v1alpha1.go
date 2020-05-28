@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 )
 
 func init() {

@@ -3,8 +3,8 @@ package admission
 import (
 	"fmt"
 
-	aerospikev1alpha1 "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/controller/utils"
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	log "github.com/inconshreveable/log15"
 	av1beta1 "k8s.io/api/admission/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"

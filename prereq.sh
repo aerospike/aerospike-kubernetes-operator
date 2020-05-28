@@ -1,7 +1,7 @@
 
 #!/usr/bin/env bash
 
-# Setup operator 
+# Setup operator
 kubectl create namespace aerospike
 sleep 2
 
@@ -11,7 +11,7 @@ sleep 2
 kubectl apply -f deploy/crds/aerospike.com_aerospikeclusters_crd.yaml
 sleep 2
 
-kubectl apply -f deploy/prereqs.yaml
+kubectl apply -f deploy/rbac.yaml
 sleep 2
 
 kubectl apply -f deploy/operator.yaml
@@ -23,9 +23,6 @@ kubectl create secret generic aerospike-secret --from-file=deploy/secrets -n aer
 sleep 2
 
 kubectl create secret generic auth-secret --from-literal=password='admin123' -n aerospike
-sleep 2
-
-kubectl apply -f deploy/crds/prereqs.yaml
 sleep 2
 
 #### DataInMemory without persistent Cluster
