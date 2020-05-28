@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	lib "github.com/citrusleaf/aerospike-management-lib"
+	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,16 +20,16 @@ type AerospikeClusterSpec struct {
 	Size int32 `json:"size"`
 	// Aerospike cluster build
 	Build string `json:"build"`
-	// If set true then multiple pods can be created per kubernetes Host.
+	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
-	// NodePort, as the name implies, opens a specific port on all the kubernetes Hosts ,
+	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
 	// and any traffic that is sent to this port is forwarded to the service.
-	// Here service picks a random port in range (30000–32767), so these port should be open.
+	// Here service picks a random port in range (30000-32767), so these port should be open.
 	//
-	// If set false then only single pod can be created per kubernetes Host.
+	// If set false then only single pod can be created per Kubernetes Node.
 	// This will create Pods using hostPort setting.
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
-	// where the hostIP is the IP address of the Kubernetes Host where the container is running and
+	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 	// BlockStorage has block storage info.
@@ -43,12 +43,58 @@ type AerospikeClusterSpec struct {
 	// password key in secret has password for default aerospike user which user wants to set for cluster
 	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
 	AerospikeAuthSecret AerospikeAuthSecretSpec `json:"aerospikeAuthSecret,omitempty"`
+	// AerospikeAccessControl has the Aerospike roles and users. Required if aerospike cluster security is enabled.
+	AerospikeAccessControl *AerospikeAccessControlSpec `json:"accessControl"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	AerospikeConfig Values `json:"aerospikeConfig"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources"`
+}
+
+// AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
+type AerospikeRoleSpec struct {
+	Privileges []string `json:"privileges"`
+	Whitelist  []string `json:"whitelist"`
+}
+
+// DeepCopy implements deepcopy func for AerospikeRoleSpec
+func (v *AerospikeRoleSpec) DeepCopy() *AerospikeRoleSpec {
+	src := *v
+	var dst = AerospikeRoleSpec{Privileges: []string{}}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// AerospikeUserSpec specifies an Aerospike database user, the secret name for the password and, associated roles.
+type AerospikeUserSpec struct {
+	// SecretName has secret info created by user. User needs to create this secret from password literal.
+	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
+	SecretName string   `json:"secretName"`
+	Roles      []string `json:"roles"`
+}
+
+// DeepCopy implements deepcopy func for AerospikeUserSpec
+func (v *AerospikeUserSpec) DeepCopy() *AerospikeUserSpec {
+	src := *v
+	var dst = AerospikeUserSpec{Roles: []string{}}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// AerspikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
+type AerospikeAccessControlSpec struct {
+	Roles map[string]AerospikeRoleSpec `json:"roles"`
+	Users map[string]AerospikeUserSpec `json:"users"`
+}
+
+// DeepCopy implements deepcopy func for AerospikeAccessControlSpec
+func (v *AerospikeAccessControlSpec) DeepCopy() *AerospikeAccessControlSpec {
+	src := *v
+	var dst = AerospikeAccessControlSpec{Roles: map[string]AerospikeRoleSpec{}, Users: map[string]AerospikeUserSpec{}}
+	lib.DeepCopy(dst, src)
+	return &dst
 }
 
 // AerospikeConfigSecretSpec has secret info created by user. User need to create secret having tls files, feature key for cluster
@@ -63,7 +109,7 @@ type AerospikeAuthSecretSpec struct {
 	SecretName string `json:"secretName"`
 }
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *AerospikeConfigSecretSpec) DeepCopy() *AerospikeConfigSecretSpec {
 	src := *v
 	var dst = AerospikeConfigSecretSpec{}
@@ -89,7 +135,7 @@ type VolumeDevice struct {
 	SizeInGB int32 `json:"sizeInGB"`
 }
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *BlockStorageSpec) DeepCopy() *BlockStorageSpec {
 	src := *v
 	var dst = BlockStorageSpec{VolumeDevices: []VolumeDevice{}}
@@ -97,7 +143,7 @@ func (v *BlockStorageSpec) DeepCopy() *BlockStorageSpec {
 	return &dst
 }
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *VolumeDevice) DeepCopy() *VolumeDevice {
 	src := *v
 	var dst = VolumeDevice{}
@@ -123,7 +169,7 @@ type VolumeMount struct {
 	SizeInGB int32 `json:"sizeInGB"`
 }
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *FileStorageSpec) DeepCopy() *FileStorageSpec {
 	src := *v
 	var dst = FileStorageSpec{VolumeMounts: []VolumeMount{}}
@@ -131,7 +177,7 @@ func (v *FileStorageSpec) DeepCopy() *FileStorageSpec {
 	return &dst
 }
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *VolumeMount) DeepCopy() *VolumeMount {
 	src := *v
 	var dst = VolumeMount{}
@@ -142,7 +188,7 @@ func (v *VolumeMount) DeepCopy() *VolumeMount {
 // Values used to take unstructured config
 type Values map[string]interface{}
 
-// DeepCopy implement deepcopy func for Values
+// DeepCopy implements deepcopy func for Values
 func (v *Values) DeepCopy() *Values {
 	src := *v
 	var dst = make(Values)
@@ -182,7 +228,7 @@ type AerospikeNodeSummary struct {
 	Build       string `json:"build"`
 }
 
-// DeepCopy implement deepcopy func for AerospikeNodeSummary
+// DeepCopy implements deepcopy func for AerospikeNodeSummary
 func (v *AerospikeNodeSummary) DeepCopy() *AerospikeNodeSummary {
 	src := *v
 	var dst = AerospikeNodeSummary{}

@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/controller/aerospikecluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/aerospikecluster"
 )
 
 func init() {

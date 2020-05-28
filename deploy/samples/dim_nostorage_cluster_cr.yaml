@@ -8,6 +8,19 @@ spec:
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
   multiPodPerHost: true
+  accessControl:
+    roles:
+      super-admin:
+        privileges:
+          - reader
+          - writer
+          - god
+    users:
+      ashish:
+        secretName: hush
+        roles:
+          - super-admin
+          - sys-admin
   aerospikeAuthSecret:
     secretName: auth-secret
   aerospikeConfigSecret:
@@ -27,6 +40,6 @@ spec:
         replication-factor: 2
         storage-engine: memory
   resources:
-    requests: 
+    requests:
       memory: 5Gi
       cpu: 200m
