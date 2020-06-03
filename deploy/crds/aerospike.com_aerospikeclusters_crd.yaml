@@ -131,14 +131,26 @@ spec:
                 Host. This will create a NodePort service for each Pod. NodePort,
                 as the name implies, opens a specific port on all the kubernetes Hosts
                 , and any traffic that is sent to this port is forwarded to the service.
-                Here service picks a random port in range (30000-32767), so these
+                Here service picks a random port in range (30000–32767), so these
                 port should be open. \n If set false then only single pod can be created
-                per kubernetes Host. This will create Pods using HostPort setting.
+                per kubernetes Host. This will create Pods using hostPort setting.
                 The container port will be exposed to the external network at <hostIP>:<hostPort>,
                 where the hostIP is the IP address of the Kubernetes Host where the
                 container is running and the hostPort is the port requested by the
                 user."
               type: boolean
+            rack:
+              items:
+                properties:
+                  ID:
+                    type: integer
+                  zone:
+                    type: string
+                required:
+                - ID
+                - zone
+                type: object
+              type: array
             resources:
               description: Define resources requests and limits for Aerospike Server
                 Container. Please contact aerospike for proper sizing exercise Only
@@ -167,6 +179,7 @@ spec:
           required:
           - aerospikeConfig
           - build
+          - rack
           - resources
           - size
           type: object

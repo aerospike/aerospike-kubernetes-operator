@@ -5,14 +5,20 @@ metadata:
   namespace: aerospike
 spec:
   # Add fields here
-  size: 2
+  size: 4
   build: aerospike/aerospike-server-enterprise:4.7.0.10
+  #build: aerospike/aerospike-server-enterprise:4.9.0.5
+  rack: 
+    - ID: 1
+      zone: us-central1-a
+    - ID: 2
+      zone: us-central1-b
   fileStorage: 
     - storageClass: ssd
       volumeMounts:
         - mountPath: /opt/aerospike/data
           sizeInGB: 3
-  multiPodPerHost: false 
+  multiPodPerHost: true 
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret
@@ -32,6 +38,6 @@ spec:
           data-in-memory: true        
   resources:
     requests: 
-      memory: 5Gi
+      memory: 2Gi
       cpu: 200m
     

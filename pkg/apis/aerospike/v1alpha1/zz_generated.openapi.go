@@ -11,14 +11,14 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeCluster":       schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec":   schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus": schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary":   schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec":       schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec":        schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice":           schema_pkg_apis_aerospike_v1alpha1_VolumeDevice(ref),
-		"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount":            schema_pkg_apis_aerospike_v1alpha1_VolumeMount(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeCluster":       schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec":   schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus": schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary":   schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec":       schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec":        schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice":           schema_pkg_apis_aerospike_v1alpha1_VolumeDevice(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount":            schema_pkg_apis_aerospike_v1alpha1_VolumeMount(ref),
 	}
 }
 
@@ -50,19 +50,19 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref common.ReferenceCal
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec"),
+							Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus"),
+							Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -101,7 +101,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec"),
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec"),
 									},
 								},
 							},
@@ -114,7 +114,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec"),
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec"),
 									},
 								},
 							},
@@ -123,13 +123,13 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					"aerospikeConfigSecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster",
-							Ref:         ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec"),
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec"),
 						},
 					},
 					"aerospikeAuthSecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AerospikeAuthSecret has secret info created by user. User needs to create this secret from password literal if aerospike cluster is security enabled. password key in secret has password for default aerospike user which user wants to set for cluster eg: kubectl create secret generic dev-db-secret --from-literal=password='password'",
-							Ref:         ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec"),
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec"),
 						},
 					},
 					"aerospikeConfig": {
@@ -153,12 +153,24 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"rack": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackSpec"),
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"size", "build", "aerospikeConfig", "resources"},
+				Required: []string{"size", "build", "aerospikeConfig", "resources", "rack"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec", "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackSpec", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -172,7 +184,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 					"AerospikeClusterSpec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The current state of Aerospike cluster.",
-							Ref:         ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec"),
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec"),
 						},
 					},
 					"nodes": {
@@ -182,7 +194,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"),
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"),
 									},
 								},
 							},
@@ -193,7 +205,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"},
 	}
 }
 
@@ -268,7 +280,7 @@ func schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref common.ReferenceCal
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"),
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"),
 									},
 								},
 							},
@@ -279,7 +291,7 @@ func schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"},
 	}
 }
 
@@ -304,7 +316,7 @@ func schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref common.ReferenceCall
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"),
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"),
 									},
 								},
 							},
@@ -315,7 +327,7 @@ func schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"},
 	}
 }
 

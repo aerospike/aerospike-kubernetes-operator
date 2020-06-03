@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	aerospikev1alpha1 "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -207,8 +208,15 @@ func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
 
 // LabelsForAerospikeCluster returns the labels for selecting the resources
 // belonging to the given AerospikeCluster CR name.
-func LabelsForAerospikeCluster(name string) map[string]string {
-	return map[string]string{"app": "aerospike-cluster", "aerospike-cluster_cr": name, "podName": ""}
+func LabelsForAerospikeCluster(clName string) map[string]string {
+	return map[string]string{"app": "aerospike-cluster", "aerospike-cluster_cr": clName}
+}
+
+// LabelsForAerospikeClusterRack returns the labels for specific rack
+func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string {
+	labels := LabelsForAerospikeCluster(clName)
+	labels["aerospike-cluster_rackID"] = strconv.Itoa(rackID)
+	return labels
 }
 
 // GetPodNames returns the pod names of the array of pods passed in

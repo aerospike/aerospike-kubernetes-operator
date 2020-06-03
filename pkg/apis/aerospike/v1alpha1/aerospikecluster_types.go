@@ -49,6 +49,20 @@ type AerospikeClusterSpec struct {
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources"`
+	Rack      []RackSpec                   `json:"rack"`
+}
+
+type RackSpec struct {
+	ID   int    `json:"ID"`
+	Zone string `json:"zone"`
+}
+
+// DeepCopy implement deepcopy func for Values
+func (v *RackSpec) DeepCopy() *RackSpec {
+	src := *v
+	var dst = RackSpec{}
+	lib.DeepCopy(dst, src)
+	return &dst
 }
 
 // AerospikeConfigSecretSpec has secret info created by user. User need to create secret having tls files, feature key for cluster

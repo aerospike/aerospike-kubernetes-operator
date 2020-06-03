@@ -92,16 +92,10 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	if config == nil {
 		return fmt.Errorf("aerospikeConfig cannot be empty")
 	}
+
 	// namespace conf
-	nsConf, ok := config["namespace"]
-	if !ok {
-		return fmt.Errorf("aerospikeConfig.namespace not a present. aerospikeConfig %v", config)
-	} else if nsConf == nil {
-		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
-	} else if nsList, ok := nsConf.([]interface{}); !ok {
-		return fmt.Errorf("aerospikeConfig.namespace not valid namespace list %v", nsConf)
-	} else if len(nsList) == 0 {
-		return fmt.Errorf("aerospikeConfig.namespace cannot be empty. aerospikeConfig %v", config)
+	if err := s.patchNsConf(); err != nil {
+		return err
 	}
 
 	// servic conf
@@ -128,6 +122,35 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	return nil
 }
 
+func (s *ClusterMutatingAdmissionWebhook) patchNsConf() error {
+	config := s.obj.Spec.AerospikeConfig
+	if config == nil {
+		return fmt.Errorf("aerospikeConfig cannot be empty")
+	}
+	// namespace conf
+	nsConf, ok := config["namespace"]
+	if !ok {
+		return fmt.Errorf("aerospikeConfig.namespace not a present. aerospikeConfig %v", config)
+	} else if nsConf == nil {
+		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
+	}
+	nsList, ok := nsConf.([]interface{})
+	if !ok {
+		return fmt.Errorf("aerospikeConfig.namespace not valid namespace list %v", nsConf)
+	} else if len(nsList) == 0 {
+		return fmt.Errorf("aerospikeConfig.namespace cannot be empty. aerospikeConfig %v", config)
+	}
+	for _, nsInt := range nsList {
+		nsMap, ok := nsInt.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("aerospikeConfig.namespace does not have valid namespace map. nsMap %v", nsInt)
+		}
+		// add dummy rack-id, should be replaced with actual rack-id by init-container script
+		nsMap["rack-id"] = 1000000
+	}
+	return nil
+}
+
 func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {
 	config := s.obj.Spec.AerospikeConfig
 	if _, ok := config["service"]; !ok {
@@ -138,7 +161,7 @@ func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {
 		return fmt.Errorf("aerospikeConfig.service not a valid map %v", config["service"])
 	}
 
-	serviceConf["node-id"] = "aENV_NODE_ID"
+	serviceConf["node-id"] = "ENV_NODE_ID"
 	serviceConf["cluster-name"] = s.obj.Name
 
 	log.Info("Set default template values in aerospikeConfig.service", log.Ctx{"aerospikeConfig.service": serviceConf})

@@ -46,11 +46,11 @@ const (
 // controller helper
 //------------------------------------------------------------------------------------
 
-func (r *ReconcileAerospikeCluster) isAeroClusterUpgradeNeeded(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
+func (r *ReconcileAerospikeCluster) isAeroClusterUpgradeNeeded(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) (bool, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	desiredImage := aeroCluster.Spec.Build
-	podList, err := r.getPodList(aeroCluster)
+	podList, err := r.getRackPodList(aeroCluster, rackID)
 	if err != nil {
 		return true, fmt.Errorf("Failed to list pods: %v", err)
 	}
@@ -80,7 +80,34 @@ func (r *ReconcileAerospikeCluster) isAnyPodInFailedState(aeroCluster *aerospike
 	return false
 }
 
-func (r *ReconcileAerospikeCluster) getPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*corev1.PodList, error) {
+func (r *ReconcileAerospikeCluster) getRackPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
+	// List the pods for this aeroCluster's statefulset
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackID))
+	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+
+	if err := r.client.List(context.TODO(), podList, listOps); err != nil {
+		return nil, err
+	}
+	return podList, nil
+}
+
+func (r *ReconcileAerospikeCluster) getOrderedRackPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) ([]corev1.Pod, error) {
+	podList, err := r.getRackPodList(aeroCluster, rackID)
+	if err != nil {
+		return nil, err
+	}
+	sortedList := make([]corev1.Pod, len(podList.Items))
+	for _, p := range podList.Items {
+		indexStr := strings.Split(p.Name, "-")
+		// Index is last, [1] can be rackID
+		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
+		sortedList[(len(podList.Items)-1)-indexInt] = p
+	}
+	return sortedList, nil
+}
+
+func (r *ReconcileAerospikeCluster) getClusterPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -92,8 +119,8 @@ func (r *ReconcileAerospikeCluster) getPodList(aeroCluster *aerospikev1alpha1.Ae
 	return podList, nil
 }
 
-func (r *ReconcileAerospikeCluster) getOrderedPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.Pod, error) {
-	podList, err := r.getPodList(aeroCluster)
+func (r *ReconcileAerospikeCluster) getOrderedClusterPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.Pod, error) {
+	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -106,16 +133,18 @@ func (r *ReconcileAerospikeCluster) getOrderedPodList(aeroCluster *aerospikev1al
 	return sortedList, nil
 }
 
-func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, namespacedName types.NamespacedName, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
-	logger.Info("Create statefulset for AerospikeCluster")
+	replicas := int32(rackState.Size)
+
+	logger.Info("Create statefulset for AerospikeCluster", log.Ctx{"size": replicas})
 
 	if aeroCluster.Spec.MultiPodPerHost {
 		// Create services for all statefulset pods
-		for i := 0; i < int(aeroCluster.Spec.Size); i++ {
+		for i := 0; i < rackState.Size; i++ {
 			// Statefulset name created from cr name
-			name := fmt.Sprintf("%s-%d", aeroCluster.Name, i)
+			name := fmt.Sprintf("%s-%d", namespacedName.Name, i)
 			if err := r.createServiceForPod(aeroCluster, name, aeroCluster.Namespace); err != nil {
 				return nil, err
 			}
@@ -124,9 +153,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 
 	ports := getAeroClusterContainerPort(aeroCluster.Spec.MultiPodPerHost)
 
-	ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
-
-	replicas := aeroCluster.Spec.Size
+	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
 
 	envVarList := []corev1.EnvVar{
 		newEnvVar("MY_POD_NAME", "metadata.name"),
@@ -140,8 +167,8 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      aeroCluster.Name,
-			Namespace: aeroCluster.Namespace,
+			Name:      namespacedName.Name,
+			Namespace: namespacedName.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			//PodManagementPolicy: appsv1.ParallelPodManagement,
@@ -231,7 +258,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 
 	updateStatefulSetSecretInfo(aeroCluster, st)
 
-	updateStatefulSetAffinity(aeroCluster, st, ls)
+	updateStatefulSetAffinity(aeroCluster, st, ls, rackState)
 	// Set AerospikeCluster instance as the owner and controller
 	controllerutil.SetControllerReference(aeroCluster, st, r.scheme)
 
@@ -240,7 +267,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 	}
 	logger.Info("Created new StatefulSet", log.Ctx{"StatefulSet.Namespace": st.Namespace, "StatefulSet.Name": st.Name})
 
-	if err := r.waitForStatefulSetToBeReady(aeroCluster, st); err != nil {
+	if err := r.waitForStatefulSetToBeReady(st); err != nil {
 		return st, fmt.Errorf("Failed to wait for statefulset to be ready: %v", err)
 	}
 
@@ -424,8 +451,8 @@ func (r *ReconcileAerospikeCluster) deleteServiceForPod(pName, pNamespace string
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) error {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.StatefulSet) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster statefulset": types.NamespacedName{Name: st.Name, Namespace: st.Namespace}})
 
 	const podStatusMaxRetry = 18
 	const podStatusRetryInterval = time.Second * 10
@@ -433,7 +460,7 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(aeroCluster *aer
 	logger.Info("Waiting for statefulset to be ready", log.Ctx{"WaitTimePerPod": podStatusRetryInterval * time.Duration(podStatusMaxRetry)})
 
 	var podIndex int32
-	for podIndex = 0; podIndex < aeroCluster.Spec.Size; podIndex++ {
+	for podIndex = 0; podIndex < *st.Spec.Replicas; podIndex++ {
 		podName := getStatefulSetPodName(st.Name, podIndex)
 
 		var isReady bool
@@ -476,7 +503,7 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(aeroCluster *aer
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) (bool, error) {
+func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackID int) (bool, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// Check if statefulset exist or not
@@ -487,7 +514,7 @@ func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1a
 	}
 
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getPodList(aeroCluster)
+	podList, err := r.getRackPodList(aeroCluster, rackID)
 	if err != nil {
 		return false, err
 	}
@@ -510,9 +537,9 @@ func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1a
 	return true, nil
 }
 
-func (r *ReconcileAerospikeCluster) getStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) getStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, found)
+	err := r.client.Get(context.TODO(), getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID), found)
 	if err != nil {
 		return nil, err
 	}
@@ -920,70 +947,53 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 			}
 		}
 	}
-
-	// // var volumeAdded bool
-	// nsList := aeroCluster.Spec.AerospikeConfig[utils.ConfKeyNamespace].([]interface{})
-	// for _, nsInterface := range nsList {
-	// 	ns, _ := nsInterface.(map[string]interface{})
-	// 	if _, ok := ns[utils.ConfKeyStorageEngine].(string); ok {
-	// 		// InMemory only namespace
-	// 		continue
-	// 	}
-	// 	storage := ns[utils.ConfKeyStorageEngine].(map[string]interface{})
-	// 	if filesInterface, ok := storage[utils.ConfKeyFile]; ok {
-	// 		var files []string
-	// 		for _, file := range filesInterface.([]interface{}) {
-	// 			files = append(files, filepath.Dir(file.(string)))
-	// 		}
-	// 		// mount file
-	// 		for _, filePath := range files {
-	// 			logger.Info("Add VolumeMounts for file", log.Ctx{"file": filePath})
-
-	// 			volume := corev1.VolumeMount{
-	// 				Name:      getPVCName(filePath),
-	// 				MountPath: filePath,
-	// 			}
-	// 			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volume)
-	// 		}
-	// 	} else if devicesInterface, ok := storage[utils.ConfKeyDevice]; ok {
-	// 		var devices []string
-	// 		for _, dev := range devicesInterface.([]interface{}) {
-	// 			// Parsing for shadow device
-	// 			devices = append(devices, strings.Fields(dev.(string))...)
-	// 		}
-	// 		// mount device
-	// 		for _, device := range devices {
-	// 			logger.Info("Add VolumeDevices for device", log.Ctx{"device": device})
-
-	// 			volume := corev1.VolumeDevice{
-	// 				Name:       getPVCName(device),
-	// 				DevicePath: device,
-	// 			}
-	// 			st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volume)
-	// 		}
-	// 	}
-	// }
 }
 
-func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string) {
+// calculateNodeAffinity provides a way to pin all pods within a statefulset to the same zone
+func updateNodeAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, zone string) {
+
+}
+
+func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	affinity := &corev1.Affinity{}
 
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
 	if !aeroCluster.Spec.MultiPodPerHost {
 		logger.Info("Adding pod affinity rules for statefulset pod")
-		st.Spec.Template.Spec.Affinity = &corev1.Affinity{
-			PodAntiAffinity: &corev1.PodAntiAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+		antiAffinity := &corev1.PodAntiAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: labels,
+					},
+					TopologyKey: "kubernetes.io/hostname",
+				},
+			},
+		}
+		affinity.PodAntiAffinity = antiAffinity
+	}
+
+	if rackState.Rack.Zone != "" {
+		nodeAffinity := &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
 					{
-						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: labels,
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "failure-domain.beta.kubernetes.io/zone",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{rackState.Rack.Zone},
+							},
 						},
-						TopologyKey: "kubernetes.io/hostname",
 					},
 				},
 			},
 		}
+		affinity.NodeAffinity = nodeAffinity
 	}
+	st.Spec.Template.Spec.Affinity = affinity
 }
 
 // Called while creating new cluster and also during rolling restart
@@ -1269,23 +1279,38 @@ func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string 
 	return aeroCluster.Name
 }
 
-// const (
-// 	// nodeIDPrefix is used as the prefix for node IDs so that they don't begin
-// 	// with a leading zero. "a" stands for Aerospike.
-// 	nodeIDPrefix = "a"
-// )
+func getNamespacedNameForStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Namespace: aeroCluster.Namespace,
+	}
+}
 
-// // computeNodeId computes the value to be used as the id of the aerospike node
-// // that corresponds to podName.
-// func computeNodeID(podName string) (string, error) {
-// 	// calculate the md5 hash of podName
-// 	podHash := md5.New()
-// 	_, err := io.WriteString(podHash, podName)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	// an aerospike node's id cannot exceed 16 characters, so we use the first
-// 	// 15 characters of the hash and a prefix to prevent the generated id from
-// 	// having leading zeros (which aerospike strips, causing trouble later on)
-// 	return fmt.Sprintf("%s%s", nodeIDPrefix, hex.EncodeToString(podHash.Sum(nil))[0:15]), nil
-// }
+// TODO: Update this
+func splitRacks(nodeCount, rackCount int) []int {
+	nodesPerRack, extraNodes := nodeCount/rackCount, nodeCount%rackCount
+
+	var topology []int
+
+	for rackIdx := 0; rackIdx < rackCount; rackIdx++ {
+		nodesForThisRack := nodesPerRack
+		if rackIdx < extraNodes {
+			nodesForThisRack++
+		}
+		topology = append(topology, nodesForThisRack)
+	}
+
+	return topology
+}
+
+func getRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []RackState {
+	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.Rack))
+	var rackStateList []RackState
+	for idx, rack := range aeroCluster.Spec.Rack {
+		rackStateList = append(rackStateList, RackState{
+			Rack: rack,
+			Size: topology[idx],
+		})
+	}
+	return rackStateList
+}

@@ -109,7 +109,7 @@ func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.A
 }
 
 func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]aerospikev1alpha1.AerospikeNodeSummary, error) {
-	podList, err := r.getPodList(aeroCluster)
+	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list pods: %v", err)
 	}
@@ -185,7 +185,7 @@ func (r *ReconcileAerospikeCluster) getServiceForPod(pod *corev1.Pod) (*corev1.S
 }
 
 func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]*deployment.HostConn, error) {
-	podList, err := r.getPodList(aeroCluster)
+	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, err
 	}
