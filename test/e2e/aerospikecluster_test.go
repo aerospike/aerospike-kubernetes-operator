@@ -10,8 +10,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis"
-	aerospikev1alpha1 "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"k8s.io/apimachinery/pkg/types"
 )

@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	aerospikev1alpha1 "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 )
 
 const (
@@ -55,4 +55,33 @@ func IsSecurityEnabled(aerospikeConfig aerospikev1alpha1.Values) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// ListAerospikeNamespaces returns the list of namespaecs in the input aerospikeConfig.
+// Assumes the namespace section is validated.
+func ListAerospikeNamespaces(aerospikeConfig aerospikev1alpha1.Values) ([]string, error) {
+	namespaces := make([]string, 5)
+	// Get namespace config.
+	if confs, ok := aerospikeConfig[ConfKeyNamespace]; ok {
+		namespaceConfs := confs.([]map[string]interface{})
+		for _, namespaceConf := range namespaceConfs {
+			namespaces = append(namespaces, namespaceConf["name"].(string))
+		}
+	}
+	return namespaces, nil
+}
+
+//IsAerospikeNamespacePresent indicates if the namespace is present in aerospikeConfig.
+// Assumes the namespace section is validated.
+func IsAerospikeNamespacePresent(aerospikeConfig aerospikev1alpha1.Values, namespaceName string) bool {
+	// Get namespace config.
+	if confs, ok := aerospikeConfig[ConfKeyNamespace]; ok {
+		namespaceConfs := confs.([]map[string]interface{})
+		for _, namespaceConf := range namespaceConfs {
+			if namespaceConf["name"] == namespaceName {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -31,6 +31,51 @@ spec:
         spec:
           description: AerospikeClusterSpec defines the desired state of AerospikeCluster
           properties:
+            accessControl:
+              description: AerospikeAccessControl has the Aerospike roles and users.
+                Required if aerospike cluster security is enabled.
+              properties:
+                roles:
+                  additionalProperties:
+                    description: AerospikeRoleSpec specifies an Aerospike database
+                      role and its associated privileges.
+                    properties:
+                      privileges:
+                        items:
+                          type: string
+                        type: array
+                      whitelist:
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - privileges
+                    - whitelist
+                    type: object
+                  type: object
+                users:
+                  additionalProperties:
+                    description: AerospikeUserSpec specifies an Aerospike database
+                      user, the secret name for the password and, associated roles.
+                    properties:
+                      roles:
+                        items:
+                          type: string
+                        type: array
+                      secretName:
+                        description: 'SecretName has secret info created by user.
+                          User needs to create this secret from password literal.
+                          eg: kubectl create secret generic dev-db-secret --from-literal=password=''password'''
+                        type: string
+                    required:
+                    - roles
+                    - secretName
+                    type: object
+                  type: object
+              required:
+              - roles
+              - users
+              type: object
             aerospikeAuthSecret:
               description: 'AerospikeAuthSecret has secret info created by user. User
                 needs to create this secret from password literal if aerospike cluster
@@ -127,15 +172,15 @@ spec:
                 type: object
               type: array
             multiPodPerHost:
-              description: "If set true then multiple pods can be created per kubernetes
-                Host. This will create a NodePort service for each Pod. NodePort,
-                as the name implies, opens a specific port on all the kubernetes Hosts
+              description: "If set true then multiple pods can be created per Kubernetes
+                Node. This will create a NodePort service for each Pod. NodePort,
+                as the name implies, opens a specific port on all the Kubernetes Nodes
                 , and any traffic that is sent to this port is forwarded to the service.
                 Here service picks a random port in range (30000–32767), so these
                 port should be open. \n If set false then only single pod can be created
-                per kubernetes Host. This will create Pods using hostPort setting.
+                per Kubernetes Node. This will create Pods using hostPort setting.
                 The container port will be exposed to the external network at <hostIP>:<hostPort>,
-                where the hostIP is the IP address of the Kubernetes Host where the
+                where the hostIP is the IP address of the Kubernetes Node where the
                 container is running and the hostPort is the port requested by the
                 user."
               type: boolean
@@ -177,6 +222,7 @@ spec:
               format: int32
               type: integer
           required:
+          - accessControl
           - aerospikeConfig
           - build
           - rack

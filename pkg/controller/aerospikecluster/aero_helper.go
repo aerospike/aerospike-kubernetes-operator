@@ -23,9 +23,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	aerospikev1alpha1 "github.com/citrusleaf/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	"github.com/citrusleaf/aerospike-kubernetes-operator/pkg/controller/utils"
-	"github.com/citrusleaf/aerospike-management-lib/deployment"
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/travelaudience/aerospike-operator/pkg/meta"
 )
 

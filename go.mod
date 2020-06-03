@@ -1,37 +1,22 @@
-module github.com/citrusleaf/aerospike-kubernetes-operator
+module github.com/aerospike/aerospike-kubernetes-operator
 
 go 1.13
 
 require (
 	github.com/aerospike/aerospike-client-go v1.35.2
-	github.com/blang/semver v3.5.1+incompatible
-	github.com/citrusleaf/aerospike-management-lib v0.0.0-20200320171348-52b8915b91c6
-	github.com/coreos/etcd v3.3.13+incompatible
-	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a // indirect
+	github.com/aerospike/aerospike-management-lib v0.0.0-20200528173737-15a61cc66106
+	github.com/citrusleaf/aerospike-management-lib v0.0.0-20200528172332-61872b659822 // indirect
 	github.com/go-openapi/spec v0.19.0
-	github.com/gogo/protobuf v1.2.1
 	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/operator-framework/operator-sdk v0.12.1-0.20191113210304-dc4b52186933
-	github.com/pkg/errors v0.8.1
-	github.com/prometheus/client_golang v1.0.0
-	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
-	github.com/prometheus/common v0.4.1
-	github.com/spf13/cobra v0.0.5
-	github.com/spf13/pflag v1.0.3
-	github.com/stretchr/testify v1.3.0
-	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
+	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
 	github.com/travelaudience/aerospike-operator v0.0.0-20191002090530-354c1a4e7e2a
-	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
-	google.golang.org/grpc v1.21.0
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
-	k8s.io/apiserver v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
-	k8s.io/kubernetes v1.15.4
 	sigs.k8s.io/controller-runtime v0.3.0
 )
 
