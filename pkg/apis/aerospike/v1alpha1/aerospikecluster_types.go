@@ -83,10 +83,25 @@ func (v *AerospikeUserSpec) DeepCopy() *AerospikeUserSpec {
 	return &dst
 }
 
+// AerospikeClientAdminPolicy specify the aerospike client admin policy for access control operations.
+type AerospikeClientAdminPolicy struct {
+	// Timeout for admin client policy in milliseconds.
+	Timeout int `json:"timeout"`
+}
+
+// DeepCopy implements deepcopy func for AerospikeClientAdminPolicy
+func (v *AerospikeClientAdminPolicy) DeepCopy() *AerospikeClientAdminPolicy {
+	src := *v
+	var dst = AerospikeClientAdminPolicy{Timeout: 2000}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
 // AerspikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
 type AerospikeAccessControlSpec struct {
-	Roles map[string]AerospikeRoleSpec `json:"roles"`
-	Users map[string]AerospikeUserSpec `json:"users"`
+	AdminPolicy *AerospikeClientAdminPolicy  `json:"adminPolicy,omitempty"`
+	Roles       map[string]AerospikeRoleSpec `json:"roles"`
+	Users       map[string]AerospikeUserSpec `json:"users"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeAccessControlSpec

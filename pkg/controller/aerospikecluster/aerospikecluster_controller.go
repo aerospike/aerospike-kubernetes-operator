@@ -635,6 +635,8 @@ func (r *ReconcileAerospikeCluster) updateAuthInCluster(aeroCluster *aerospikev1
 		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
 	}
 
+	defer clnt.Close()
+
 	logger.Info("Grant sys-admin role to default user in aerospike cluster")
 
 	// Grant sys-admin role to admin user
@@ -664,7 +666,7 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 
 	logger.Info("Update status for AerospikeCluster")
 
-	// Get the old object, it may have been update in between.
+	// Get the old object, it may have been updated in between.
 	newAeroCluster := &aerospikev1alpha1.AerospikeCluster{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
 	if err != nil {

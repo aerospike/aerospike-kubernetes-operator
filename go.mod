@@ -3,9 +3,8 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.13
 
 require (
-	github.com/aerospike/aerospike-client-go v1.35.2
+	github.com/aerospike/aerospike-client-go v2.12.0+incompatible
 	github.com/aerospike/aerospike-management-lib v0.0.0-20200528173737-15a61cc66106
-	github.com/citrusleaf/aerospike-management-lib v0.0.0-20200528172332-61872b659822 // indirect
 	github.com/go-openapi/spec v0.19.0
 	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
