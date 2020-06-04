@@ -183,16 +183,28 @@ func reconcileUsers(desired map[string]aerospikev1alpha1.AerospikeUserSpec, curr
 		userReconcileCmds = append(userReconcileCmds, AerospikeUserDrop{name: userToDrop})
 	}
 
+	// Admin user update command should be execute last to ensure admin password
+	// update does not disrupt reconciliation.
+	var adminUpdateCmd *AerospikeUserCreateUpdate = nil
 	for userName, userSpec := range desired {
 		password, err := passwordProvider.Get(userName, &userSpec)
 		if err != nil {
 			return err
 		}
 
-		userReconcileCmds = append(userReconcileCmds, AerospikeUserCreateUpdate{name: userName, password: &password, roles: userSpec.Roles})
+		cmd := AerospikeUserCreateUpdate{name: userName, password: &password, roles: userSpec.Roles}
+		if userName == adminUsername {
+			adminUpdateCmd = &cmd
+		} else {
+			userReconcileCmds = append(userReconcileCmds, cmd)
+		}
 	}
 
-	// Execute all commands.
+	if adminUpdateCmd != nil {
+		// Append admin user update command the last.
+		userReconcileCmds = append(userReconcileCmds, *adminUpdateCmd)
+	}
+
 	for _, cmd := range userReconcileCmds {
 		err = cmd.Execute(client, &adminPolicy, logger)
 
