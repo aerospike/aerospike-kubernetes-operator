@@ -1,361 +1,23 @@
 package asconfig
 
-//  Aerospike access control functions provides validation and reconciliation of access control.
+// Aerospike access control reconciliation of access control.
 
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
 	as "github.com/aerospike/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	log "github.com/inconshreveable/log15"
 )
-
-// Logger
-type Logger log.Logger
-
-// Access control Privilege scopes.
-type PrivilegeScope int
-
-const (
-	Global PrivilegeScope = iota
-	NamespaceSet
-)
-
-const (
-	// Maximum length for role name.
-	roleNameLengthMax int = 63
-
-	// Maximum allowed length for a username.
-	userNameLengthMax int = 63
-
-	// Maximum allowed length for a user password.
-	userPasswordLengthMax int = 60
-
-	// Error marker for user not found errors.
-	userNotFoundErr = "Invalid user"
-
-	// Error marker for role not found errors.
-	roleNotFoundErr = "Invalid role"
-
-	// The admin username.
-	adminUsername = "admin"
-
-	// The default admin user password.
-	defaultAdminPAssword = "admin"
-)
-
-// Chacacters forbidden in role name.
-var roleNameForbiddenChars []string = []string{";", ":"}
-
-// Chacacters forbidden in username.
-var userNameForbiddenChars []string = []string{";", ":"}
-
-// Predefined roles names.
-var predefinedRoles = map[string]struct{}{
-	"user-admin":     struct{}{},
-	"sys-admin":      struct{}{},
-	"data-admin":     struct{}{},
-	"read":           struct{}{},
-	"read-write":     struct{}{},
-	"read-write-udf": struct{}{},
-	"write":          struct{}{},
-}
-
-// Expect at least one user with these required roles.
-var requiredRoles = []string{
-	"sys-admin",
-	"user-admin",
-}
-
-// Privilege string allowed in the spec and associated scopes.
-var privileges = map[string][]PrivilegeScope{
-	"read":           []PrivilegeScope{Global, NamespaceSet},
-	"write":          []PrivilegeScope{Global, NamespaceSet},
-	"read-write":     []PrivilegeScope{Global, NamespaceSet},
-	"read-write-udf": []PrivilegeScope{Global, NamespaceSet},
-	"data-admin":     []PrivilegeScope{Global},
-	"sys-admin":      []PrivilegeScope{Global},
-	"user-admin":     []PrivilegeScope{Global},
-}
-
-// ValidateAerospikeAccessControlSpec validates the accessControl speciication in the clusterSpec.
-//
-// Asserts that the Aerospikeaccesscontrolspec
-//    has correct references to other objects like namespaces
-//    follows rules defined https://www.aerospike.com/docs/guide/limitations.html
-//    follows rules found through server code inspection for e.g. predefined roles
-//    meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
-func IsAerospikeAccessControlValid(aerospikeCluster *aerospikev1alpha1.AerospikeClusterSpec) (bool, error) {
-	enabled, err := isSecurityEnabled(aerospikeCluster)
-	if err != nil {
-		return false, err
-	}
-
-	if !enabled && aerospikeCluster.AerospikeAccessControl != nil {
-		// Security is disabled however access control is specified.
-		return false, fmt.Errorf("Security is disabled but access control is specified")
-	}
-
-	if !enabled {
-		return true, nil
-	}
-
-	// Validate roles.
-	_, err = isRoleSpecValid(aerospikeCluster.AerospikeAccessControl.Roles, aerospikeCluster.AerospikeConfig)
-	if err != nil {
-		return false, err
-	}
-
-	// Validate users.
-	_, err = isUserSpecValid(aerospikeCluster.AerospikeAccessControl.Users, aerospikeCluster.AerospikeAccessControl.Roles)
-
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-// isSecurityEnabled indicates if clusterSpec has security enabled.
-func isSecurityEnabled(aerospikeCluster *aerospikev1alpha1.AerospikeClusterSpec) (bool, error) {
-	if len(aerospikeCluster.AerospikeConfig) == 0 {
-		return false, fmt.Errorf("Missing aerospike configuration in cluster state")
-	}
-
-	enabled, err := utils.IsSecurityEnabled(aerospikeCluster.AerospikeConfig)
-
-	if err != nil {
-		return false, fmt.Errorf("Failed to get cluster security status: %v", err)
-	}
-
-	return enabled, err
-}
-
-// isRoleSpecValid indicates if input role spec is valid.
-func isRoleSpecValid(roles map[string]aerospikev1alpha1.AerospikeRoleSpec, aerospikeConfig aerospikev1alpha1.Values) (bool, error) {
-	for roleName, roleSpec := range roles {
-		_, ok := predefinedRoles[roleName]
-		if ok {
-			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf("Cannot create or modify predefined role: %s", roleName)
-		}
-
-		_, err := isRoleNameValid(roleName)
-
-		if err != nil {
-			return false, err
-		}
-
-		// Validate privileges.
-		for _, privilege := range roleSpec.Privileges {
-			_, err = isPrivilegeValid(privilege, aerospikeConfig)
-
-			if err != nil {
-				return false, fmt.Errorf("Role '%s' has invalid privilege: %v", roleName, err)
-			}
-		}
-
-		// Validate whitelist.
-		for _, netAddress := range roleSpec.Whitelist {
-			_, err = isNetAddressValid(netAddress)
-
-			if err != nil {
-				return false, fmt.Errorf("Role '%s' has invalid whitelist: %v", roleName, err)
-			}
-		}
-
-	}
-
-	return true, nil
-}
-
-// Indicates if a role name is valid.
-func isRoleNameValid(roleName string) (bool, error) {
-	if len(strings.TrimSpace(roleName)) == 0 {
-		return false, fmt.Errorf("Role name cannot be empty")
-	}
-
-	if len(roleName) > roleNameLengthMax {
-		return false, fmt.Errorf("Role name '%s' cannot have more than %d characters", roleName, roleNameLengthMax)
-	}
-
-	for _, forbiddenChar := range roleNameForbiddenChars {
-		if strings.Index(roleName, forbiddenChar) > -1 {
-			return false, fmt.Errorf("Role name '%s' cannot contain  %s", roleName, forbiddenChar)
-
-		}
-	}
-
-	return true, nil
-}
-
-// Indicates if privilege is a valid privilege.
-func isPrivilegeValid(privilege string, aerospikeConfig aerospikev1alpha1.Values) (bool, error) {
-	parts := strings.Split(privilege, ".")
-
-	_, ok := privileges[parts[0]]
-	if !ok {
-		// First part of the privilege is not part of defined privileges.
-		return false, fmt.Errorf("Invalid privilege %s", privilege)
-	}
-
-	nParts := len(parts)
-
-	if nParts > 3 {
-		return false, fmt.Errorf("Invalid privilege %s", privilege)
-	}
-
-	if nParts > 1 {
-		// This privilege should necessarily have NamespaceSet scope.
-		scopes := privileges[parts[0]]
-		if !scopeContains(scopes, NamespaceSet) {
-			return false, fmt.Errorf("Privilege %s cannot have namespace or set scope.", privilege)
-		}
-
-		namespaceName := parts[1]
-
-		if !utils.IsAerospikeNamespacePresent(aerospikeConfig, namespaceName) {
-			return false, fmt.Errorf("For privilege %s, namespace %s not configured", privilege, namespaceName)
-		}
-
-		if nParts == 3 {
-			// TODO Validate set name
-			setName := parts[2]
-
-			if len(strings.TrimSpace(setName)) == 0 {
-				return false, fmt.Errorf("For privilege %s invalid set name", privilege)
-			}
-		}
-	}
-
-	return true, nil
-}
-
-// isNetAddressValid Indicates if networ/address sspecification is valid.
-func isNetAddressValid(address string) (bool, error) {
-	ip := net.ParseIP(address)
-
-	if ip != nil {
-		// This is a valid IP address.
-		return true, nil
-	}
-
-	// Try parsing as CIDR
-	_, _, err := net.ParseCIDR(address)
-
-	if err != nil {
-		return false, fmt.Errorf("Invalid address %s", address)
-	}
-
-	return true, nil
-}
-
-// scopeContains indicates if scopes contains the queryScope.
-func scopeContains(scopes []PrivilegeScope, queryScope PrivilegeScope) bool {
-	for _, scope := range scopes {
-		if scope == queryScope {
-			return true
-		}
-	}
-
-	return false
-}
-
-// subset returns true if the first array is completely
-// contained in the second array. There must be at least
-// the same number of duplicate values in second as there
-// are in first.
-func subset(first, second []string) bool {
-	set := make(map[string]int)
-	for _, value := range second {
-		set[value] += 1
-	}
-
-	for _, value := range first {
-		if count, found := set[value]; !found {
-			return false
-		} else if count < 1 {
-			return false
-		} else {
-			set[value] = count - 1
-		}
-	}
-
-	return true
-}
-
-// isUserSpecValid indicates if input user specification is valid.
-func isUserSpecValid(users map[string]aerospikev1alpha1.AerospikeUserSpec, roles map[string]aerospikev1alpha1.AerospikeRoleSpec) (bool, error) {
-	requiredRolesUserFound := false
-	for userName, userSpec := range users {
-		_, err := isUserNameValid(userName)
-
-		if err != nil {
-			return false, err
-		}
-
-		// Validate roles.
-		for _, roleName := range userSpec.Roles {
-			_, ok := roles[roleName]
-			if !ok {
-				// Check is this is a predefined role.
-				_, ok = predefinedRoles[roleName]
-				if !ok {
-					// Neither a specified role nor a predefined role.
-					return false, fmt.Errorf("User '%s' has non-existent role %s", userName, roleName)
-				}
-			}
-		}
-
-		// TODO Should validate actual password here but we cannot read the secret here.
-		// Will have to be done at the time of creating the user!
-		if len(strings.TrimSpace(userSpec.SecretName)) == 0 {
-			return false, fmt.Errorf("User %s has empty secret name", userName)
-		}
-
-		if subset(requiredRoles, userSpec.Roles) && userName == adminUsername {
-			// We found admin user that has the required roles.
-			requiredRolesUserFound = true
-		}
-	}
-
-	if !requiredRolesUserFound {
-		return false, fmt.Errorf("No admin user with required roles: %v found", requiredRoles)
-	}
-
-	return true, nil
-}
-
-// isUserNameValid Indicates if a user name is valid.
-func isUserNameValid(userName string) (bool, error) {
-	if len(strings.TrimSpace(userName)) == 0 {
-		return false, fmt.Errorf("Username cannot be empty")
-	}
-
-	if len(userName) > userNameLengthMax {
-		return false, fmt.Errorf("Username '%s' cannot have more than %d characters", userName, userNameLengthMax)
-	}
-
-	for _, forbiddenChar := range userNameForbiddenChars {
-		if strings.Index(userName, forbiddenChar) > -1 {
-			return false, fmt.Errorf("Username '%s' cannot contain  %s", userName, forbiddenChar)
-
-		}
-	}
-
-	return true, nil
-}
 
 // AerospikeAdminCredentials to use for aerospike clients.
 //
 // Returns a tuple of admin username and password to use. If the cluster is not security
 // enabled both username and password will be zero strings.
-func AerospikeAdminCredentials(currentState *aerospikev1alpha1.AerospikeClusterSpec, desiredState *aerospikev1alpha1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
+func AerospikeAdminCredentials(desiredState *aerospikev1alpha1.AerospikeClusterSpec, currentState *aerospikev1alpha1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
 	enabled, err := isSecurityEnabled(currentState)
 	if err != nil {
 		// Its possible this is a new cluster and current state is empty.
@@ -615,7 +277,6 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 
 // aerospikePrivilegeToPrivilegeString converts aerospikePrivilege to controller spec privilege string.
 func aerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]string, error) {
-
 	privileges := []string{}
 	for _, aerospikePrivilege := range aerospikePrivileges {
 		var buffer bytes.Buffer
@@ -666,26 +327,6 @@ func aerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]
 
 	}
 	return privileges, nil
-}
-
-// sliceSubtract removes slice2 from s1 and returns the result.
-func sliceSubtract(slice1 []string, slice2 []string) []string {
-	result := []string{}
-	for _, s1 := range slice1 {
-		found := false
-		for _, toSubtract := range slice2 {
-			if s1 == toSubtract {
-				found = true
-				break
-			}
-		}
-		if !found {
-			// s1 not found. Should be retained.
-			result = append(result, s1)
-		}
-	}
-
-	return result
 }
 
 // AerospikeUserPasswordProvider provides password for a give user..
@@ -933,4 +574,24 @@ func (roledrop AerospikeRoleDrop) Execute(client *as.Client, adminPolicy *as.Adm
 
 	logger.Info("Dropped role", log.Ctx{"role": roledrop.name})
 	return nil
+}
+
+// sliceSubtract removes elements of slice2 from slice1 and returns the result.
+func sliceSubtract(slice1 []string, slice2 []string) []string {
+	result := []string{}
+	for _, s1 := range slice1 {
+		found := false
+		for _, toSubtract := range slice2 {
+			if s1 == toSubtract {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// s1 not found. Should be retained.
+			result = append(result, s1)
+		}
+	}
+
+	return result
 }

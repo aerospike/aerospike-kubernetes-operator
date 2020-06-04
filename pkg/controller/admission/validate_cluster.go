@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -366,7 +367,9 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("Resource.Limits cannot be less than Resource.Requests. Resources %v", res)
 	}
 
-	return nil
+	// Validate access control
+	err = s.validateAccessControl(s.obj)
+	return err
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validateAerospikeConfig() error {
@@ -473,6 +476,11 @@ func (s *ClusterValidatingAdmissionWebhook) validateNsConfUpdate(old aerospikev1
 	}
 	// Check for namespace name len
 	return nil
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validateAccessControl(aeroCluster aerospikev1alpha1.AerospikeCluster) error {
+	_, err := accessControl.IsAerospikeAccessControlValid(&aeroCluster.Spec)
+	return err
 }
 
 func isEnterprise(build string) bool {

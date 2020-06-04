@@ -31,9 +31,11 @@ spec:
         spec:
           description: AerospikeClusterSpec defines the desired state of AerospikeCluster
           properties:
-            accessControl:
-              description: AerospikeAccessControl has the Aerospike roles and users.
-                Required if aerospike cluster security is enabled.
+            aerospikeAccessControl:
+              description: AerospikeAuthSecret has secret info created by user. User
+                needs to create this secret from password literal AerospikeAccessControl
+                has the Aerospike roles and users. Required if aerospike cluster security
+                is enabled.
               properties:
                 adminPolicy:
                   description: AerospikeClientAdminPolicy specify the aerospike client
@@ -60,7 +62,6 @@ spec:
                         type: array
                     required:
                     - privileges
-                    - whitelist
                     type: object
                   type: object
                 users:
@@ -83,20 +84,7 @@ spec:
                     type: object
                   type: object
               required:
-              - roles
               - users
-              type: object
-            aerospikeAuthSecret:
-              description: 'AerospikeAuthSecret has secret info created by user. User
-                needs to create this secret from password literal if aerospike cluster
-                is security enabled. password key in secret has password for default
-                aerospike user which user wants to set for cluster eg: kubectl create
-                secret generic dev-db-secret --from-literal=password=''password'''
-              properties:
-                secretName:
-                  type: string
-              required:
-              - secretName
               type: object
             aerospikeConfig:
               description: AerospikeConfig sets config in aerospike.conf file. Other
@@ -220,7 +208,6 @@ spec:
               format: int32
               type: integer
           required:
-          - accessControl
           - aerospikeConfig
           - build
           - resources

@@ -693,23 +693,7 @@ func TestAccessControlCreate(t *testing.T) {
 		"userToDrop":  "secretThatDoesNotMatter",
 	}}
 
-	// Create a client using the admin pivileges.
-	clientP, err := getClient(&currentSpec, &desiredSpec, pp)
-	if err != nil {
-		t.Errorf("Error creating client: %v", err)
-	}
-
-	defer (*clientP).Close()
-
-	// Apply access control on a new cluster.
-	err = ReconcileAccessControl(&desiredSpec, &currentSpec, clientP, pp, logger)
-	if err != nil {
-		t.Errorf("Error reconciling: %v", err)
-		return
-	}
-
-	// Ensure the desired spec access control is correctly applied.
-	validateAccessControl(&desiredSpec, pp, t)
+	testAccessControlReconcile(&desiredSpec, &currentSpec, pp, t)
 
 	// Desired spec is now the current spec.
 	currentSpec = desiredSpec
@@ -753,15 +737,28 @@ func TestAccessControlCreate(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
+	testAccessControlReconcile(&desiredSpec, &currentSpec, pp, t)
+}
+
+func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeClusterSpec, current *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider, t *testing.T) {
+	// Create a client using the admin pivileges.
+	clientP, err := getClient(current, desired, pp)
+	if err != nil {
+		t.Errorf("Error creating client: %v", err)
+		return
+	}
+
+	defer (*clientP).Close()
+
 	// Apply access control on a new cluster.
-	err = ReconcileAccessControl(&desiredSpec, &currentSpec, clientP, pp, logger)
+	err = ReconcileAccessControl(desired, current, clientP, pp, logger)
 	if err != nil {
 		t.Errorf("Error reconciling: %v", err)
 		return
 	}
 
 	// Ensure the desired spec access control is correctly applied.
-	validateAccessControl(&desiredSpec, pp, t)
+	validateAccessControl(desired, pp, t)
 }
 
 // validateAccessControl validates that the new acccess control have been applied correctly.
@@ -931,7 +928,7 @@ func (pp StaticPasswordProvider) Get(username string, userSpec *aerospikev1alpha
 }
 
 func getClient(currentSpec *aerospikev1alpha1.AerospikeClusterSpec, desiredSpec *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider) (*as.Client, error) {
-	username, password, err := AerospikeAdminCredentials(currentSpec, desiredSpec, &pp)
+	username, password, err := AerospikeAdminCredentials(desiredSpec, currentSpec, &pp)
 
 	if err != nil {
 		return nil, err
@@ -942,6 +939,10 @@ func getClient(currentSpec *aerospikev1alpha1.AerospikeClusterSpec, desiredSpec 
 
 func getClientForUser(username string, password string) (*as.Client, error) {
 	env := os.Getenv("AEROSPIKE_HOSTS")
+
+	if env == "" {
+		return nil, fmt.Errorf("Aerospike cluster seeds not configured")
+	}
 
 	hostStrings := strings.Split(env, ",")
 

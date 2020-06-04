@@ -9,6 +9,7 @@ import (
 	aero "github.com/aerospike/aerospike-client-go"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	log "github.com/inconshreveable/log15"
@@ -175,9 +176,9 @@ func (r *ReconcileAerospikeCluster) createCluster(aeroCluster *aerospikev1alpha1
 		return reconcile.Result{}, err
 	}
 
-	// Update admin user pass if authSecret is given
-	if err := r.updateAuthInCluster(aeroCluster); err != nil {
-		logger.Error("Failed to update password in aerospike cluster for default user", log.Ctx{"err": err})
+	// Setup access control.
+	if err := r.reconcileAccessControl(aeroCluster); err != nil {
+		logger.Error("Failed to reconcile access control", log.Ctx{"err": err})
 		return reconcile.Result{}, err
 	}
 
@@ -271,13 +272,10 @@ func (r *ReconcileAerospikeCluster) reconcileCluster(aeroCluster *aerospikev1alp
 		}
 	}
 
-	// AerospikeConfig nil means status not updated yet
-	if aeroCluster.Status.AerospikeConfig == nil ||
-		(aeroCluster.Spec.AerospikeAuthSecret.SecretName != aeroCluster.Status.AerospikeAuthSecret.SecretName) {
-		// Set auth at the end, so that upper info calls can use auth info stored in aeroCluster.status
-		// Update admin user pass if authSecret is given
-		if err := r.updateAuthInCluster(aeroCluster); err != nil {
-			logger.Error("Failed to update password in aerospike cluster for default user", log.Ctx{"err": err})
+	if !reflect.DeepEqual(aeroCluster.Spec.AerospikeAccessControl, aeroCluster.Status.AerospikeAccessControl) {
+		// Set access control at the end, so that previous info calls can use auth info stored in aeroCluster.status
+		if err := r.reconcileAccessControl(aeroCluster); err != nil {
+			logger.Error("Failed reconcile access control", log.Ctx{"err": err})
 			return reconcile.Result{}, err
 		}
 	}
@@ -602,17 +600,15 @@ func (r *ReconcileAerospikeCluster) scaleDown(aeroCluster *aerospikev1alpha1.Aer
 	return found, nil
 }
 
-func (r *ReconcileAerospikeCluster) updateAuthInCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-	logger.Info("Update password for default user and grant `sys-admin` role if needed")
 
 	enabled, err := utils.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
 	if err != nil {
 		return fmt.Errorf("Failed to get cluster security status: %v", err)
 	}
 	if !enabled {
-		logger.Info("Cluster is not security enabled, please enable it in aerospikeConfig section to secure your cluster")
+		logger.Info("Cluster is not security enabled, please enable it in aerospikeConfig section to secure your cluster.")
 		return nil
 	}
 
@@ -630,35 +626,16 @@ func (r *ReconcileAerospikeCluster) updateAuthInCluster(aeroCluster *aerospikev1
 		})
 	}
 	// Create policy using status, status has current connection info
-	clnt, err := aero.NewClientWithPolicyAndHost(r.getClientPolicyFromStatus(aeroCluster), hosts...)
+	aeroClient, err := aero.NewClientWithPolicyAndHost(r.getClientPolicy(aeroCluster), hosts...)
 	if err != nil {
 		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
 	}
 
-	defer clnt.Close()
+	defer aeroClient.Close()
 
-	logger.Info("Grant sys-admin role to default user in aerospike cluster")
-
-	// Grant sys-admin role to admin user
-	if err := clnt.GrantRoles(clnt.DefaultAdminPolicy, defaultUser, []string{"sys-admin"}); err != nil {
-		return fmt.Errorf("Failed to grant sys-admin role to default user: %v", err)
-	}
-
-	// Update new password
-	if aeroCluster.Spec.AerospikeAuthSecret.SecretName != aeroCluster.Status.AerospikeAuthSecret.SecretName {
-
-		logger.Info("Update new password for default user in aerospike cluster")
-
-		user, newpass, err := r.getAuthInfoFromSpec(aeroCluster)
-		if err != nil {
-			return fmt.Errorf("Failed to get cluster auth info to be set: %v", err)
-		}
-		err = clnt.ChangePassword(clnt.DefaultAdminPolicy, user, newpass)
-		if err != nil {
-			return fmt.Errorf("Failed to change password for aerospike cluster: %v", err)
-		}
-	}
-	return nil
+	pp := r.getPasswordProvider(aeroCluster)
+	err = accessControl.ReconcileAccessControl(&aeroCluster.Spec, &aeroCluster.Status.AerospikeClusterSpec, aeroClient, pp, logger)
+	return err
 }
 
 func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
@@ -677,7 +654,7 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 		return err
 	}
 
-	summary, err := r.getAerospikeClusterNodeSummary(aeroCluster)
+	summary, err := r.getAerospikeClusterNodeSummary(newAeroCluster)
 	if err != nil {
 		logger.Error("Failed to get nodes summary", log.Ctx{"err": err})
 	}
