@@ -38,8 +38,7 @@ type AerospikeClusterSpec struct {
 	FileStorage []FileStorageSpec `json:"fileStorage,omitempty"`
 	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
 	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
-	// AerospikeAuthSecret has secret info created by user. User needs to create this secret from password literal
-	// AerospikeAccessControl has the Aerospike roles and users. Required if aerospike cluster security is enabled.
+	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	AerospikeConfig Values `json:"aerospikeConfig"`

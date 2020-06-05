@@ -606,12 +606,12 @@ func (pp FromSecretPasswordProvider) Get(username string, userSpec *aerospikev1a
 	// Assuming secret is in same namespace
 	err := (*pp.client).Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret)
 	if err != nil {
-		return "", fmt.Errorf("Failed to get AerospikeAuthSecret secret %s: %v", secretName, err)
+		return "", fmt.Errorf("Failed to get secret %s: %v", secretName, err)
 	}
 
 	passbyte, ok := secret.Data["password"]
 	if !ok {
-		return "", fmt.Errorf("Failed to get password in AerospikeAuthSecret. Please check your secret %s", secretName)
+		return "", fmt.Errorf("Failed to get password from secret. Please check your secret %s", secretName)
 	}
 	return string(passbyte), nil
 }

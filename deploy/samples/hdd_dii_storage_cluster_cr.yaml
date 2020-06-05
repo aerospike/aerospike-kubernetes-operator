@@ -7,19 +7,28 @@ spec:
   # Add fields here
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
-  fileStorage: 
+
+  fileStorage:
     - storageClass: ssd
       volumeMounts:
         - mountPath: /opt/aerospike/data/test
           sizeInGB: 3
         - mountPath: /opt/aerospike/data/bar
-          sizeInGB: 3        
-  multiPodPerHost: true 
-  aerospikeAuthSecret:
-    secretName: auth-secret
+          sizeInGB: 3
+
+  multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      admin:
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret
+
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
@@ -32,7 +41,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
-          file: 
+          file:
             - /opt/aerospike/data/test/test.dat
           filesize: 2000000000
           data-in-memory: true
@@ -42,11 +51,12 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
-          file: 
+          file:
             - /opt/aerospike/data/bar/bar.dat
           filesize: 2000000000
           data-in-memory: true
+
   resources:
-    requests: 
+    requests:
       memory: 8Gi
       cpu: 200m

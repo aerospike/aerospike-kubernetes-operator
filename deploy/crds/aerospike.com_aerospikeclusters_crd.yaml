@@ -32,10 +32,8 @@ spec:
           description: AerospikeClusterSpec defines the desired state of AerospikeCluster
           properties:
             aerospikeAccessControl:
-              description: AerospikeAuthSecret has secret info created by user. User
-                needs to create this secret from password literal AerospikeAccessControl
-                has the Aerospike roles and users. Required if aerospike cluster security
-                is enabled.
+              description: AerospikeAccessControl has the Aerospike roles and users
+                definitions. Required if aerospike cluster security is enabled.
               properties:
                 adminPolicy:
                   description: AerospikeClientAdminPolicy specify the aerospike client
