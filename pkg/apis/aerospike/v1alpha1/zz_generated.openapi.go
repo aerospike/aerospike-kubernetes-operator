@@ -89,7 +89,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					},
 					"multiPodPerHost": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set true then multiple pods can be created per kubernetes Host. This will create a NodePort service for each Pod. NodePort, as the name implies, opens a specific port on all the kubernetes Hosts , and any traffic that is sent to this port is forwarded to the service. Here service picks a random port in range (30000–32767), so these port should be open.\n\nIf set false then only single pod can be created per kubernetes Host. This will create Pods using hostPort setting. The container port will be exposed to the external network at <hostIP>:<hostPort>, where the hostIP is the IP address of the Kubernetes Host where the container is running and the hostPort is the port requested by the user.",
+							Description: "If set true then multiple pods can be created per Kubernetes Node. This will create a NodePort service for each Pod. NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes , and any traffic that is sent to this port is forwarded to the service. Here service picks a random port in range (30000-32767), so these port should be open.\n\nIf set false then only single pod can be created per Kubernetes Node. This will create Pods using hostPort setting. The container port will be exposed to the external network at <hostIP>:<hostPort>, where the hostIP is the IP address of the Kubernetes Node where the container is running and the hostPort is the port requested by the user.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -126,10 +126,10 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec"),
 						},
 					},
-					"aerospikeAuthSecret": {
+					"aerospikeAccessControl": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AerospikeAuthSecret has secret info created by user. User needs to create this secret from password literal if aerospike cluster is security enabled. password key in secret has password for default aerospike user which user wants to set for cluster eg: kubectl create secret generic dev-db-secret --from-literal=password='password'",
-							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec"),
+							Description: "AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec"),
 						},
 					},
 					"aerospikeConfig": {
@@ -158,7 +158,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAuthSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 

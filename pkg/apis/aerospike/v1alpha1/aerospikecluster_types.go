@@ -38,13 +38,8 @@ type AerospikeClusterSpec struct {
 	FileStorage []FileStorageSpec `json:"fileStorage,omitempty"`
 	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
 	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
-	// AerospikeAuthSecret has secret info created by user. User needs to create this secret from password literal
-	// if aerospike cluster is security enabled.
-	// password key in secret has password for default aerospike user which user wants to set for cluster
-	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
-	AerospikeAuthSecret AerospikeAuthSecretSpec `json:"aerospikeAuthSecret,omitempty"`
-	// AerospikeAccessControl has the Aerospike roles and users. Required if aerospike cluster security is enabled.
-	AerospikeAccessControl *AerospikeAccessControlSpec `json:"accessControl"`
+	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
+	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	AerospikeConfig Values `json:"aerospikeConfig"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
@@ -56,7 +51,7 @@ type AerospikeClusterSpec struct {
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
 type AerospikeRoleSpec struct {
 	Privileges []string `json:"privileges"`
-	Whitelist  []string `json:"whitelist"`
+	Whitelist  []string `json:"whitelist,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeRoleSpec
@@ -83,10 +78,25 @@ func (v *AerospikeUserSpec) DeepCopy() *AerospikeUserSpec {
 	return &dst
 }
 
+// AerospikeClientAdminPolicy specify the aerospike client admin policy for access control operations.
+type AerospikeClientAdminPolicy struct {
+	// Timeout for admin client policy in milliseconds.
+	Timeout int `json:"timeout"`
+}
+
+// DeepCopy implements deepcopy func for AerospikeClientAdminPolicy
+func (v *AerospikeClientAdminPolicy) DeepCopy() *AerospikeClientAdminPolicy {
+	src := *v
+	var dst = AerospikeClientAdminPolicy{Timeout: 2000}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
 // AerspikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
 type AerospikeAccessControlSpec struct {
-	Roles map[string]AerospikeRoleSpec `json:"roles"`
-	Users map[string]AerospikeUserSpec `json:"users"`
+	AdminPolicy *AerospikeClientAdminPolicy  `json:"adminPolicy,omitempty"`
+	Roles       map[string]AerospikeRoleSpec `json:"roles,omitempty"`
+	Users       map[string]AerospikeUserSpec `json:"users"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeAccessControlSpec
@@ -101,12 +111,6 @@ func (v *AerospikeAccessControlSpec) DeepCopy() *AerospikeAccessControlSpec {
 type AerospikeConfigSecretSpec struct {
 	SecretName string `json:"secretName"`
 	MountPath  string `json:"mountPath"`
-}
-
-// AerospikeAuthSecretSpec has secret info created by user. User needs to create this secret from password literal
-// if aerospike cluster is security enabled.
-type AerospikeAuthSecretSpec struct {
-	SecretName string `json:"secretName"`
 }
 
 // DeepCopy implements deepcopy func for Values
