@@ -655,7 +655,10 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 	}
 
 	// Commit important access control information since getting node summary could take time.
-	newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
+	if newAeroCluster.Status.Nodes == nil {
+		newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
+	}
+
 	if err = r.client.Status().Update(context.Background(), newAeroCluster); err != nil {
 		return err
 	}
