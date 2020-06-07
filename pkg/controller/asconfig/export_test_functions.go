@@ -1,4 +1,5 @@
-// +build test-only
+// +build test
+
 package asconfig
 
 var GetAdminPolicy = getAdminPolicy

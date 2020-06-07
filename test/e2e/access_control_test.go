@@ -639,10 +639,10 @@ func TestInvalidGlobalScopeOnlyPrivilege(t *testing.T) {
 	}
 }
 
-func TestAccessControlIntegration(t *testing.T) {
+func TestNoSecurityIntegration(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
 	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
-		t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
+		t.Errorf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
 	}
 
 	ctx := framework.NewTestCtx(t)
@@ -704,10 +704,139 @@ func TestAccessControlIntegration(t *testing.T) {
 			},
 		}
 
-		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAccessControl(&accessControl, false, ctx)
+		err := aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
+		if err == nil || !strings.Contains(err.Error(), "Security is disabled but access control is specified") {
+			t.Error(err)
+		}
+	})
+
+	t.Run("NoAccessControlCreate", func(t *testing.T) {
+		var accessControl *aerospikev1alpha1.AerospikeAccessControlSpec = nil
+
+		// Save cluster variable as well for cleanup.
+		aeroCluster = getAerospikeClusterSpecWithAccessControl(accessControl, false, ctx)
+		err := aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
+		if err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("SecurityUpdateReject", func(t *testing.T) {
+		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
+				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write-udf.test.users",
+						"write",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+			},
+			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+				"admin": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretNameForUpdate,
+					Roles: []string{
+						"sys-admin",
+						"user-admin",
+					},
+				},
+
+				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretNameForUpdate,
+					Roles: []string{
+						"data-admin",
+						"read-write-udf",
+						"write",
+					},
+				},
+			},
+		}
+
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, true, ctx)
+		err := testAccessControlReconcile(aeroCluster, ctx, t)
+		if err == nil || !strings.Contains(err.Error(), "Cannot update cluster security config") {
+			t.Error(err)
+		}
+	})
+
+	if aeroCluster != nil {
+		deleteCluster(t, f, ctx, aeroCluster)
+	}
+}
+
+func TestAccessControlIntegration(t *testing.T) {
+	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
+	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
+		t.Errorf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
+	}
+
+	ctx := framework.NewTestCtx(t)
+	defer ctx.Cleanup()
+
+	// get global framework variables
+	f := framework.Global
+
+	initializeOperator(t, f, ctx)
+
+	var aeroCluster *aerospikev1alpha1.AerospikeCluster = nil
+
+	t.Run("AccessControlValidation", func(t *testing.T) {
+		// Just a smoke test to ensure validation hook works.
+		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
+				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+			},
+			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+				"admin": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						// Missing required user admin role.
+						"sys-admin",
+					},
+				},
+
+				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+						"sys-admin",
+					},
+				},
+
+				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+					},
+				},
+			},
+		}
+
+		// Save cluster variable as well for cleanup.
+		aeroCluster = getAerospikeClusterSpecWithAccessControl(&accessControl, true, ctx)
 		err := testAccessControlReconcile(aeroCluster, ctx, t)
 		if err == nil || !strings.Contains(err.Error(), "required roles") {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	})
 
@@ -759,10 +888,10 @@ func TestAccessControlIntegration(t *testing.T) {
 			},
 		}
 
-		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, true, ctx)
 		err := testAccessControlReconcile(aeroCluster, ctx, t)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	})
 
@@ -800,10 +929,18 @@ func TestAccessControlIntegration(t *testing.T) {
 			},
 		}
 
-		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, true, ctx)
 		err := testAccessControlReconcile(aeroCluster, ctx, t)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+		}
+	})
+
+	t.Run("SecurityUpdateReject", func(t *testing.T) {
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(nil, false, ctx)
+		err := testAccessControlReconcile(aeroCluster, ctx, t)
+		if err == nil || !strings.Contains(err.Error(), "Cannot update cluster security config") {
+			t.Error(err)
 		}
 	})
 
@@ -812,7 +949,7 @@ func TestAccessControlIntegration(t *testing.T) {
 	}
 }
 
-func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.AerospikeAccessControlSpec, ctx *framework.TestCtx) *aerospikev1alpha1.AerospikeCluster {
+func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.AerospikeAccessControlSpec, enableSecurity bool, ctx *framework.TestCtx) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
@@ -847,7 +984,7 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 					"feature-key-file": "/etc/aerospike/secret/features.conf",
 				},
 				"security": map[string]interface{}{
-					"enable-security": true,
+					"enable-security": enableSecurity,
 				},
 				"namespace": []interface{}{
 					map[string]interface{}{
@@ -862,7 +999,7 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 	}
 }
 
-func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
+func aerospikeClusterCreateUpdate(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
 
 	current := &aerospikev1alpha1.AerospikeCluster{}
 	err := framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
@@ -876,8 +1013,14 @@ func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx
 		err = waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, getTimeout(1))
 	} else {
 		// Apply the update.
-		current.Spec.AerospikeAccessControl = &aerospikev1alpha1.AerospikeAccessControlSpec{}
-		lib.DeepCopy(&current.Spec, &desired.Spec)
+		if desired.Spec.AerospikeAccessControl != nil {
+			current.Spec.AerospikeAccessControl = &aerospikev1alpha1.AerospikeAccessControlSpec{}
+			lib.DeepCopy(&current.Spec, &desired.Spec)
+		} else {
+			current.Spec.AerospikeAccessControl = nil
+		}
+		lib.DeepCopy(&current.Spec.AerospikeConfig, &desired.Spec.AerospikeConfig)
+
 		err := framework.Global.Client.Update(context.TODO(), current)
 		if err != nil {
 			return err
@@ -887,7 +1030,16 @@ func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx
 		time.Sleep(5 * time.Second)
 	}
 
-	current = &aerospikev1alpha1.AerospikeCluster{}
+	return nil
+}
+
+func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
+	err := aerospikeClusterCreateUpdate(desired, ctx, t)
+	if err != nil {
+		return err
+	}
+
+	current := &aerospikev1alpha1.AerospikeCluster{}
 	err = framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
 		return err
