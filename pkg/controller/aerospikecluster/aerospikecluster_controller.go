@@ -608,7 +608,7 @@ func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospik
 		return fmt.Errorf("Failed to get cluster security status: %v", err)
 	}
 	if !enabled {
-		logger.Info("Cluster is not security enabled, please enable it in aerospikeConfig section to secure your cluster.")
+		logger.Info("Cluster is not security enabled, please enable security for this cluster.")
 		return nil
 	}
 
@@ -651,6 +651,12 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 	}
 
 	if err := lib.DeepCopy(&newAeroCluster.Status.AerospikeClusterSpec, &aeroCluster.Spec); err != nil {
+		return err
+	}
+
+	// Commit important access control information since getting node summary could take time.
+	newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
+	if err = r.client.Status().Update(context.Background(), newAeroCluster); err != nil {
 		return err
 	}
 

@@ -1,25 +1,34 @@
-package asconfig
+package e2e
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
-	"os"
-	"strconv"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	as "github.com/aerospike/aerospike-client-go"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	log "github.com/inconshreveable/log15"
+	asConfig "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
+	lib "github.com/aerospike/aerospike-management-lib"
+	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
-var pkglog = log.New(log.Ctx{"module": "test_access_control"})
-var logger = pkglog.New(log.Ctx{"AerospikeCluster": "test"})
+const (
+	testClusterSize = 2
+)
 
 var aerospikeConfigWithSecurity = map[string]interface{}{
 	"security": map[string]interface{}{"enable-security": true},
-	"namespace": []map[string]interface{}{
+	"namespace": []interface{}{
 		map[string]interface{}{
 			"name": "profileNs",
 		},
@@ -31,7 +40,7 @@ var aerospikeConfigWithSecurity = map[string]interface{}{
 
 var aerospikeConfigWithoutSecurity = map[string]interface{}{
 	"security": map[string]interface{}{"enable-security": false},
-	"namespace": []map[string]interface{}{
+	"namespace": []interface{}{
 		map[string]interface{}{
 			"name": "profileNs",
 		},
@@ -78,7 +87,7 @@ func TestValidAccessControl(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if !valid {
 		t.Errorf("Valid aerospike spec marked invalid: %v", err)
@@ -119,7 +128,7 @@ func TestMissingRequiredUserRoles(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -165,7 +174,7 @@ func TestInvalidUserRole(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -215,7 +224,7 @@ func TestInvalidUserSecretName(t *testing.T) {
 			AerospikeConfig: aerospikeConfigWithSecurity,
 		}
 
-		valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+		valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 		if valid || err == nil {
 			t.Errorf("InValid aerospike spec validated")
@@ -271,7 +280,7 @@ func TestInvalidUserName(t *testing.T) {
 			AerospikeConfig: aerospikeConfigWithSecurity,
 		}
 
-		valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+		valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 		if valid || err == nil {
 			t.Errorf("InValid aerospike spec validated")
@@ -327,7 +336,7 @@ func TestInvalidRoleName(t *testing.T) {
 			AerospikeConfig: aerospikeConfigWithSecurity,
 		}
 
-		valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+		valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 		if valid || err == nil {
 			t.Errorf("InValid aerospike spec validated")
@@ -385,7 +394,7 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -439,7 +448,7 @@ func TestInvalidRoleWhitelist(t *testing.T) {
 			AerospikeConfig: aerospikeConfigWithSecurity,
 		}
 
-		valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+		valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 		if valid || err == nil {
 			t.Errorf("InValid aerospike spec validated")
@@ -484,7 +493,7 @@ func TestMissingNamespacePrivilege(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -528,7 +537,7 @@ func TestMissingSetPrivilege(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -573,7 +582,7 @@ func TestInvalidPrivilege(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -619,7 +628,7 @@ func TestInvalidGlobalScopeOnlyPrivilege(t *testing.T) {
 		AerospikeConfig: aerospikeConfigWithSecurity,
 	}
 
-	valid, err := IsAerospikeAccessControlValid(&clusterSpec)
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
 
 	if valid || err == nil {
 		t.Errorf("InValid aerospike spec validated")
@@ -630,166 +639,302 @@ func TestInvalidGlobalScopeOnlyPrivilege(t *testing.T) {
 	}
 }
 
-func TestAccessControlCreate(t *testing.T) {
-	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
-				Privileges: []string{
-					"read-write.test",
-					"read-write-udf.test.users",
-				},
-				Whitelist: []string{
-					"0.0.0.0/32",
-				},
-			},
-			"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
-				Privileges: []string{
-					"read-write.test",
-					"read-write-udf.test.users",
-				},
-				Whitelist: []string{
-					"0.0.0.0/32",
-				},
-			},
-		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"admin": aerospikev1alpha1.AerospikeUserSpec{
-				SecretName: "someSecret",
-				Roles: []string{
-					"sys-admin",
-					"user-admin",
-				},
-			},
-
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
-				SecretName: "someOtherSecret",
-				Roles: []string{
-					"profiler",
-					"sys-admin",
-				},
-			},
-
-			"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
-				SecretName: "someOtherSecret",
-				Roles: []string{
-					"profiler",
-				},
-			},
-		},
+func TestAccessControlIntegration(t *testing.T) {
+	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
+	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
+		t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
 	}
 
-	desiredSpec := aerospikev1alpha1.AerospikeClusterSpec{
-		AerospikeAccessControl: &accessControl,
+	ctx := framework.NewTestCtx(t)
+	defer ctx.Cleanup()
 
-		AerospikeConfig: aerospikeConfigWithSecurity,
-	}
+	// get global framework variables
+	f := framework.Global
 
-	currentSpec := aerospikev1alpha1.AerospikeClusterSpec{}
+	initializeOperator(t, f, ctx)
 
-	// Password provider.
-	pp := StaticPasswordProvider{usernameToPasswordMap: map[string]string{
-		"admin":       "secretadminpassword",
-		"profileUser": "secretprofileuserpassword",
-		"userToDrop":  "secretThatDoesNotMatter",
-	}}
+	var aeroCluster *aerospikev1alpha1.AerospikeCluster = nil
 
-	testAccessControlReconcile(&desiredSpec, &currentSpec, pp, t)
-
-	// Desired spec is now the current spec.
-	currentSpec = desiredSpec
-
-	// Apply updates to drop users, drop roles, update privileges for roles and update roles for users.
-	accessControl = aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
-				Privileges: []string{
-					"read-write-udf.test.users",
-					"write",
+	t.Run("AccessControlValidation", func(t *testing.T) {
+		// Just a smoke test to ensure validation hook works.
+		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
+				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
 				},
-				Whitelist: []string{
-					"0.0.0.0/32",
-				},
-			},
-		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"admin": aerospikev1alpha1.AerospikeUserSpec{
-				SecretName: "someSecret",
-				Roles: []string{
-					"sys-admin",
-					"user-admin",
+				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
 				},
 			},
+			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+				"admin": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						// Missing required user admin role.
+						"sys-admin",
+					},
+				},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
-				SecretName: "someOtherSecret",
-				Roles: []string{
-					"data-admin",
-					"read-write-udf",
-					"write",
+				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+						"sys-admin",
+					},
+				},
+
+				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+					},
 				},
 			},
-		},
+		}
+
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		err := testAccessControlReconcile(aeroCluster, ctx, t)
+		if err == nil || !strings.Contains(err.Error(), "required roles") {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("AccessControlCreate", func(t *testing.T) {
+		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
+				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write.test",
+						"read-write-udf.test.users",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+			},
+			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+				"admin": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"sys-admin",
+						"user-admin",
+					},
+				},
+
+				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+						"sys-admin",
+					},
+				},
+
+				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretName,
+					Roles: []string{
+						"profiler",
+					},
+				},
+			},
+		}
+
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		err := testAccessControlReconcile(aeroCluster, ctx, t)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("AccessControlUpdate", func(t *testing.T) {
+		// Apply updates to drop users, drop roles, update privileges for roles and update roles for users.
+		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
+				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+					Privileges: []string{
+						"read-write-udf.test.users",
+						"write",
+					},
+					Whitelist: []string{
+						"0.0.0.0/32",
+					},
+				},
+			},
+			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+				"admin": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretNameForUpdate,
+					Roles: []string{
+						"sys-admin",
+						"user-admin",
+					},
+				},
+
+				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+					SecretName: authSecretNameForUpdate,
+					Roles: []string{
+						"data-admin",
+						"read-write-udf",
+						"write",
+					},
+				},
+			},
+		}
+
+		aeroCluster := getAerospikeClusterSpecWithAccessControl(&accessControl, ctx)
+		err := testAccessControlReconcile(aeroCluster, ctx, t)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if aeroCluster != nil {
+		deleteCluster(t, f, ctx, aeroCluster)
 	}
-
-	desiredSpec = aerospikev1alpha1.AerospikeClusterSpec{
-		AerospikeAccessControl: &accessControl,
-
-		AerospikeConfig: aerospikeConfigWithSecurity,
-	}
-
-	testAccessControlReconcile(&desiredSpec, &currentSpec, pp, t)
 }
 
-func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeClusterSpec, current *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider, t *testing.T) {
-	// Create a client using the admin pivileges.
-	clientP, err := getClient(current, desired, pp)
+func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.AerospikeAccessControlSpec, ctx *framework.TestCtx) *aerospikev1alpha1.AerospikeCluster {
+	mem := resource.MustParse("2Gi")
+	cpu := resource.MustParse("200m")
+
+	kubeNs, _ := ctx.GetNamespace()
+	// create memcached custom resource
+	return &aerospikev1alpha1.AerospikeCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "accesscontroltest",
+			Namespace: kubeNs,
+		},
+		Spec: aerospikev1alpha1.AerospikeClusterSpec{
+			Size:                   testClusterSize,
+			Build:                  latestClusterBuild,
+			AerospikeAccessControl: accessControl,
+			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
+				SecretName: tlsSecretName,
+				MountPath:  "/etc/aerospike/secret",
+			},
+			MultiPodPerHost: true,
+			Resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    cpu,
+					corev1.ResourceMemory: mem,
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    cpu,
+					corev1.ResourceMemory: mem,
+				},
+			},
+			AerospikeConfig: aerospikev1alpha1.Values{
+				"service": map[string]interface{}{
+					"feature-key-file": "/etc/aerospike/secret/features.conf",
+				},
+				"security": map[string]interface{}{
+					"enable-security": true,
+				},
+				"namespace": []interface{}{
+					map[string]interface{}{
+						"name":               "test",
+						"memory-size":        1000955200,
+						"replication-factor": 1,
+						"storage-engine":     "memory",
+					},
+				},
+			},
+		},
+	}
+}
+
+func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
+
+	current := &aerospikev1alpha1.AerospikeCluster{}
+	err := framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
-		t.Errorf("Error creating client: %v", err)
-		return
+		// Deploy the cluster.
+		if err := deployCluster(t, framework.Global, ctx, desired); err != nil {
+			return err
+		}
+
+		// Wait for aerocluster to be up.
+		err = waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, getTimeout(1))
+	} else {
+		// Apply the update.
+		current.Spec.AerospikeAccessControl = &aerospikev1alpha1.AerospikeAccessControlSpec{}
+		lib.DeepCopy(&current.Spec, &desired.Spec)
+		err := framework.Global.Client.Update(context.TODO(), current)
+		if err != nil {
+			return err
+		}
+
+		// Wait for changes to be applied.
+		time.Sleep(5 * time.Second)
 	}
 
-	defer (*clientP).Close()
-
-	// Apply access control on a new cluster.
-	err = ReconcileAccessControl(desired, current, clientP, pp, logger)
+	current = &aerospikev1alpha1.AerospikeCluster{}
+	err = framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
-		t.Errorf("Error reconciling: %v", err)
-		return
+		return err
+	}
+
+	// Ensure desired cluster spec is applied.
+	if !reflect.DeepEqual(desired.Spec.AerospikeAccessControl, current.Spec.AerospikeAccessControl) {
+		return fmt.Errorf("Cluster state not applied. Desired: %v Current: %v", desired.Spec.AerospikeAccessControl, current.Spec.AerospikeAccessControl)
 	}
 
 	// Ensure the desired spec access control is correctly applied.
-	validateAccessControl(desired, pp, t)
+	return validateAccessControl(current)
 }
 
-// validateAccessControl validates that the new acccess control have been applied correctly.
-func validateAccessControl(clusterSpec *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider, t *testing.T) {
-	clientP, err := getClient(clusterSpec, clusterSpec, pp)
+// validateAccessControl validates that the new access control have been applied correctly.
+func validateAccessControl(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	clientP, err := getClient(aeroCluster, &framework.Global.Client.Client)
 	if err != nil {
-		t.Errorf("Error creating client: %v", err)
-		return
+		return fmt.Errorf("Error creating client: %v", err)
 	}
 
 	client := *clientP
 	defer client.Close()
 
-	validateRoles(clientP, clusterSpec, t)
-	validateUsers(clientP, clusterSpec, pp, t)
+	err = validateRoles(clientP, &aeroCluster.Spec)
+	if err != nil {
+		return fmt.Errorf("Error creating client: %v", err)
+	}
+
+	pp := getPasswordProvider(aeroCluster, &framework.Global.Client.Client)
+	err = validateUsers(clientP, aeroCluster, pp)
+	return err
 }
 
 // validateRoles validates that the new roles have been applied correctly.
-func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeClusterSpec, t *testing.T) {
+func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeClusterSpec) error {
 	client := *clientP
-	adminPolicy := getAdminPolicy(clusterSpec)
+	adminPolicy := asConfig.GetAdminPolicy(clusterSpec)
 	asRoles, err := client.QueryRoles(&adminPolicy)
 	if err != nil {
-		t.Errorf("Error querying roles: %v", err)
-		return
+		return fmt.Errorf("Error querying roles: %v", err)
 	}
 
 	currentRoleNames := []string{}
 
 	for _, role := range asRoles {
-		_, isPredefined := predefinedRoles[role.Name]
+		_, isPredefined := asConfig.PredefinedRoles[role.Name]
 
 		if !isPredefined {
 			currentRoleNames = append(currentRoleNames, role.Name)
@@ -803,19 +948,17 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 	}
 
 	if len(currentRoleNames) != len(expectedRoleNames) {
-		t.Errorf("Actual roles %v do not match expected roles %v", currentRoleNames, expectedRoleNames)
-		return
+		return fmt.Errorf("Actual roles %v do not match expected roles %v", currentRoleNames, expectedRoleNames)
 	}
 
 	// Check values.
-	if len(sliceSubtract(expectedRoleNames, currentRoleNames)) != 0 {
-		t.Errorf("Actual roles %v do not match expected roles %v", currentRoleNames, expectedRoleNames)
-		return
+	if len(asConfig.SliceSubtract(expectedRoleNames, currentRoleNames)) != 0 {
+		return fmt.Errorf("Actual roles %v do not match expected roles %v", currentRoleNames, expectedRoleNames)
 	}
 
 	// Verify the privileges are correct.
 	for _, asRole := range asRoles {
-		_, isPredefined := predefinedRoles[asRole.Name]
+		_, isPredefined := asConfig.PredefinedRoles[asRole.Name]
 
 		if isPredefined {
 			continue
@@ -826,30 +969,32 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 
 		currentPrivilegeNames := []string{}
 		for _, privilege := range asRole.Privileges {
-			temp, _ := aerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
+			temp, _ := asConfig.AerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
 			currentPrivilegeNames = append(currentPrivilegeNames, temp[0])
 		}
 
 		if len(currentPrivilegeNames) != len(expectedPrivilegeNames) {
-			t.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
+			return fmt.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
 		}
 
 		// Check values.
-		if len(sliceSubtract(expectedPrivilegeNames, currentPrivilegeNames)) != 0 {
-			t.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
+		if len(asConfig.SliceSubtract(expectedPrivilegeNames, currentPrivilegeNames)) != 0 {
+			return fmt.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
 		}
 	}
+
+	return nil
 }
 
 // validateUsers validates that the new users have been applied correctly.
-func validateUsers(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider, t *testing.T) {
+func validateUsers(clientP *as.Client, aeroCluster *aerospikev1alpha1.AerospikeCluster, pp asConfig.AerospikeUserPasswordProvider) error {
+	clusterSpec := &aeroCluster.Spec
 	client := *clientP
 
-	adminPolicy := getAdminPolicy(clusterSpec)
+	adminPolicy := asConfig.GetAdminPolicy(clusterSpec)
 	asUsers, err := client.QueryUsers(&adminPolicy)
 	if err != nil {
-		t.Errorf("Error querying users: %v", err)
-		return
+		return fmt.Errorf("Error querying users: %v", err)
 	}
 
 	currentUserNames := []string{}
@@ -865,14 +1010,12 @@ func validateUsers(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 	}
 
 	if len(currentUserNames) != len(expectedUserNames) {
-		t.Errorf("Actual users %v do not match expected users %v", currentUserNames, expectedUserNames)
-		return
+		return fmt.Errorf("Actual users %v do not match expected users %v", currentUserNames, expectedUserNames)
 	}
 
 	// Check values.
-	if len(sliceSubtract(expectedUserNames, currentUserNames)) != 0 {
-		t.Errorf("Actual users %v do not match expected users %v", currentUserNames, expectedUserNames)
-		return
+	if len(asConfig.SliceSubtract(expectedUserNames, currentUserNames)) != 0 {
+		return fmt.Errorf("Actual users %v do not match expected users %v", currentUserNames, expectedUserNames)
 	}
 
 	// Verify the roles are correct.
@@ -882,14 +1025,12 @@ func validateUsers(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 		password, err := pp.Get(asUser.User, &expectedUserSpec)
 
 		if err != nil {
-			t.Errorf("For user %s cannot get password %v", asUser.User, err)
-			return
+			return fmt.Errorf("For user %s cannot get password %v", asUser.User, err)
 		}
 
-		userClient, err := getClientForUser(asUser.User, password)
+		userClient, err := getClientForUser(asUser.User, password, aeroCluster, &framework.Global.Client.Client)
 		if err != nil {
-			t.Errorf("For user %s cannot get client. Possible auth error :%v", asUser.User, err)
-			return
+			return fmt.Errorf("For user %s cannot get client. Possible auth error :%v", asUser.User, err)
 		}
 		(*userClient).Close()
 
@@ -900,74 +1041,15 @@ func validateUsers(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 		}
 
 		if len(currentRoleNames) != len(expectedRoleNames) {
-			t.Errorf("For user %s actual roles %v do not match expected roles %v", asUser.User, currentRoleNames, expectedRoleNames)
-			return
+			return fmt.Errorf("For user %s actual roles %v do not match expected roles %v", asUser.User, currentRoleNames, expectedRoleNames)
 		}
 
 		// Check values.
-		if len(sliceSubtract(expectedRoleNames, currentRoleNames)) != 0 {
-			t.Errorf("For user %s actual roles %v do not match expected roles %v", asUser.User, currentRoleNames, expectedRoleNames)
-			return
+		if len(asConfig.SliceSubtract(expectedRoleNames, currentRoleNames)) != 0 {
+			return fmt.Errorf("For user %s actual roles %v do not match expected roles %v", asUser.User, currentRoleNames, expectedRoleNames)
 		}
 	}
-}
-
-type StaticPasswordProvider struct {
-	// Map from username to password.
-	usernameToPasswordMap map[string]string
-}
-
-func (pp StaticPasswordProvider) Get(username string, userSpec *aerospikev1alpha1.AerospikeUserSpec) (string, error) {
-	password, ok := pp.usernameToPasswordMap[username]
-
-	if !ok {
-		return "", fmt.Errorf("Could not get password for user %s", username)
-	}
-
-	return password, nil
-}
-
-func getClient(currentSpec *aerospikev1alpha1.AerospikeClusterSpec, desiredSpec *aerospikev1alpha1.AerospikeClusterSpec, pp StaticPasswordProvider) (*as.Client, error) {
-	username, password, err := AerospikeAdminCredentials(desiredSpec, currentSpec, &pp)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return getClientForUser(username, password)
-}
-
-func getClientForUser(username string, password string) (*as.Client, error) {
-	env := os.Getenv("AEROSPIKE_HOSTS")
-
-	if env == "" {
-		return nil, fmt.Errorf("Aerospike cluster seeds not configured")
-	}
-
-	hostStrings := strings.Split(env, ",")
-
-	var hosts []*as.Host
-	for _, hostString := range hostStrings {
-		parts := strings.Split(hostString, ":")
-		port, _ := strconv.ParseInt(parts[1], 10, 0)
-		hosts = append(hosts, &as.Host{
-			Name: parts[0],
-			Port: int(port),
-		})
-	}
-
-	cp := as.NewClientPolicy()
-	cp.User = username
-	cp.Password = password
-	cp.Timeout = 3 * time.Second
-
-	client, err := as.NewClientWithPolicyAndHost(cp, hosts...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	return nil
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
