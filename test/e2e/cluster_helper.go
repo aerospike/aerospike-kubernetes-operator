@@ -32,8 +32,16 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 					},
 				},
 			},
-			AerospikeAuthSecret: aerospikev1alpha1.AerospikeAuthSecretSpec{
-				SecretName: authSecretName,
+			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
+				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+					"admin": aerospikev1alpha1.AerospikeUserSpec{
+						SecretName: authSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+						},
+					},
+				},
 			},
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
@@ -128,6 +136,17 @@ func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aer
 					},
 				},
 			},
+			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
+				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+					"admin": aerospikev1alpha1.AerospikeUserSpec{
+						SecretName: authSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+						},
+					},
+				},
+			},
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
@@ -179,9 +198,18 @@ func createBasicTLSCluster(clusterName, namespace string, size int32) *aerospike
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
 			Build: latestClusterBuild,
-			AerospikeAuthSecret: aerospikev1alpha1.AerospikeAuthSecretSpec{
-				SecretName: authSecretName,
+			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
+				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
+					"admin": aerospikev1alpha1.AerospikeUserSpec{
+						SecretName: authSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+						},
+					},
+				},
 			},
+
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",

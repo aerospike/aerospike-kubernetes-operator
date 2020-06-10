@@ -62,9 +62,14 @@ func IsSecurityEnabled(aerospikeConfig aerospikev1alpha1.Values) (bool, error) {
 func ListAerospikeNamespaces(aerospikeConfig aerospikev1alpha1.Values) ([]string, error) {
 	namespaces := make([]string, 5)
 	// Get namespace config.
-	if confs, ok := aerospikeConfig[ConfKeyNamespace]; ok {
-		namespaceConfs := confs.([]map[string]interface{})
-		for _, namespaceConf := range namespaceConfs {
+	if confs, ok := aerospikeConfig[ConfKeyNamespace].([]interface{}); ok {
+		for _, nsConf := range confs {
+			namespaceConf, ok := nsConf.(map[string]interface{})
+
+			if !ok {
+				// Should never happen
+				return nil, fmt.Errorf("Invalid namespaces config: %v", nsConf)
+			}
 			namespaces = append(namespaces, namespaceConf["name"].(string))
 		}
 	}
@@ -75,9 +80,15 @@ func ListAerospikeNamespaces(aerospikeConfig aerospikev1alpha1.Values) ([]string
 // Assumes the namespace section is validated.
 func IsAerospikeNamespacePresent(aerospikeConfig aerospikev1alpha1.Values, namespaceName string) bool {
 	// Get namespace config.
-	if confs, ok := aerospikeConfig[ConfKeyNamespace]; ok {
-		namespaceConfs := confs.([]map[string]interface{})
-		for _, namespaceConf := range namespaceConfs {
+	if confs, ok := aerospikeConfig[ConfKeyNamespace].([]interface{}); ok {
+		for _, nsConf := range confs {
+			namespaceConf, ok := nsConf.(map[string]interface{})
+
+			if !ok {
+				// Should never happen
+				return false
+			}
+
 			if namespaceConf["name"] == namespaceName {
 				return true
 			}

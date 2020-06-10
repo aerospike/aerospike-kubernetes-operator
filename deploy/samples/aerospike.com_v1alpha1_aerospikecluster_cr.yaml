@@ -13,6 +13,13 @@ spec:
       zone: us-central1-a
     - ID: 2
       zone: us-central1-b
+  aerospikeAccessControl:
+    users:
+      admin:
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
   fileStorage: 
     - storageClass: ssd
       volumeMounts:

@@ -21,8 +21,13 @@ spec:
 
   multiPodPerHost: true
 
-  aerospikeAuthSecret:
-    secretName: auth-secret
+  aerospikeAccessControl:
+    users:
+      admin:
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret

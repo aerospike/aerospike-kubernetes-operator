@@ -13,6 +13,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	log "github.com/inconshreveable/log15"
@@ -617,125 +618,36 @@ func (r *ReconcileAerospikeCluster) getClientCertificate(aeroCluster *aerospikev
 	return nil, fmt.Errorf("Failed to get tls config for creating client certificate")
 }
 
-func (r *ReconcileAerospikeCluster) getAuthInfoFromStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) (string, string, error) {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+// FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
+type FromSecretPasswordProvider struct {
+	// Client to read secrets.
+	client *client.Client
 
-	if aeroCluster.Status.AerospikeConfig == nil {
-		logger.Debug("Its new cluster, no status available yet. Check security configuration in spec")
-		// Here status is not updated yet, so its cluster created for first time
-		// Get if security is enabled or not from spec,
-		// If enabled then return default user, pass. If not then return empty user, pass
-		enabled, err := utils.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
-		if err != nil {
-			return "", "", fmt.Errorf("Failed to get cluster security status: %v", err)
-		}
-		if !enabled {
-			logger.Debug("Security not enabled, Please secure your cluster")
-			return "", "", nil
-		}
-		logger.Debug("Security is enabled, using default username and password for now")
-		return defaultUser, defaultPass, nil
-	}
+	// The secret namespace.
+	namespace string
+}
 
-	logger.Debug("Getting current username, password for aerospike cluster from status")
-	// Check with aeroCluster.Status.AerospikeConfig, not by config of spec as current config should be used to connect
-	// Return empty user, pass if security not enabled
-	enabled, err := utils.IsSecurityEnabled(aeroCluster.Status.AerospikeConfig)
-	if err != nil {
-		return "", "", fmt.Errorf("Failed to get cluster security status: %v", err)
-	}
-	if !enabled {
-		return "", "", nil
-	}
-	// Default user, pass when security is enabled
-	user := defaultUser
-	pass := defaultPass
-
-	if aeroCluster.Status.AerospikeAuthSecret.SecretName == "" {
-		logger.Debug("Security enabled but password not changed for default user yet. Using default username, password. Please update auth info by providing AerospikeAuthSecret")
-		return user, pass, nil
-	}
-
+func (pp FromSecretPasswordProvider) Get(username string, userSpec *aerospikev1alpha1.AerospikeUserSpec) (string, error) {
 	secret := &corev1.Secret{}
+	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Status.AerospikeAuthSecret.SecretName, Namespace: aeroCluster.Namespace}, secret)
+	err := (*pp.client).Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret)
 	if err != nil {
-		return user, pass, fmt.Errorf("Failed to get AerospikeAuthSecret. secretName %s: %v", aeroCluster.Status.AerospikeAuthSecret.SecretName, err)
+		return "", fmt.Errorf("Failed to get secret %s: %v", secretName, err)
 	}
 
 	passbyte, ok := secret.Data["password"]
 	if !ok {
-		return user, pass, fmt.Errorf("Failed to get password in AerospikeAuthSecret. Please check your secret. secretName %s", aeroCluster.Status.AerospikeAuthSecret.SecretName)
+		return "", fmt.Errorf("Failed to get password from secret. Please check your secret %s", secretName)
 	}
-	return user, string(passbyte), nil
+	return string(passbyte), nil
 }
 
-func (r *ReconcileAerospikeCluster) getAuthInfoFromSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster) (string, string, error) {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-	// TODO: remove it
-	logger.Debug("Getting username, password for aerospike cluster from spec")
-	// Return empty user, pass if security not enabled
-	enabled, err := utils.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
-	if err != nil {
-		return "", "", fmt.Errorf("Failed to get cluster security status: %v", err)
-	}
-	if !enabled {
-		return "", "", nil
-	}
-
-	// Default user, pass when security is enabled
-	user := defaultUser
-	pass := defaultPass
-	if aeroCluster.Spec.AerospikeAuthSecret.SecretName == "" {
-		logger.Debug("Security enabled but password not changed for default user yet. Using default username, password. Please update auth info by providing AerospikeAuthSecret")
-		return user, pass, nil
-	}
-
-	secret := &corev1.Secret{}
-	// Assuming secret is in same namespace
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Spec.AerospikeAuthSecret.SecretName, Namespace: aeroCluster.Namespace}, secret)
-	if err != nil {
-		return user, pass, fmt.Errorf("Failed to get AerospikeAuthSecret. secretName %s: %v", aeroCluster.Spec.AerospikeAuthSecret.SecretName, err)
-	}
-
-	passbyte, ok := secret.Data["password"]
-	if !ok {
-		return user, pass, fmt.Errorf("Failed to get password in AerospikeAuthSecret. Please check your secret. secretName %s", aeroCluster.Spec.AerospikeAuthSecret.SecretName)
-	}
-	return user, string(passbyte), nil
+func (r *ReconcileAerospikeCluster) getPasswordProvider(aeroCluster *aerospikev1alpha1.AerospikeCluster) FromSecretPasswordProvider {
+	return FromSecretPasswordProvider{client: &r.client, namespace: aeroCluster.Namespace}
 }
 
-func (r *ReconcileAerospikeCluster) getClientPolicyFromStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) *as.ClientPolicy {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-	policy := r.getClientPolicyWithoutAuthInfo(aeroCluster)
-
-	user, pass, err := r.getAuthInfoFromStatus(aeroCluster)
-	if err != nil {
-		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
-	}
-
-	policy.User = user
-	policy.Password = pass
-	return policy
-}
-
-func (r *ReconcileAerospikeCluster) getClientPolicyFromSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster) *as.ClientPolicy {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-	policy := r.getClientPolicyWithoutAuthInfo(aeroCluster)
-
-	user, pass, err := r.getAuthInfoFromSpec(aeroCluster)
-	if err != nil {
-		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
-	}
-
-	policy.User = user
-	policy.Password = pass
-	return policy
-}
-
-func (r *ReconcileAerospikeCluster) getClientPolicyWithoutAuthInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster) *as.ClientPolicy {
+func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alpha1.AerospikeCluster) *as.ClientPolicy {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	policy := as.NewClientPolicy()
@@ -744,138 +656,36 @@ func (r *ReconcileAerospikeCluster) getClientPolicyWithoutAuthInfo(aeroCluster *
 	policy.ClusterName = aeroCluster.Name
 
 	// tls config
-	if tlsName := getServiceTLSName(aeroCluster); tlsName == "" {
-		return policy
+	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
+		logger.Debug("Set tls config in aeospike client policy")
+		tlsConf := tls.Config{
+			RootCAs:                  r.getClusterServerPool(aeroCluster),
+			Certificates:             []tls.Certificate{},
+			PreferServerCipherSuites: true,
+			// used only in testing
+			// InsecureSkipVerify: true,
+		}
+
+		cert, err := r.getClientCertificate(aeroCluster)
+		if err != nil {
+			logger.Error("Failed to get client certificate. Using basic clientPolicy", log.Ctx{"err": err})
+			return policy
+		}
+		tlsConf.Certificates = append(tlsConf.Certificates, *cert)
+
+		tlsConf.BuildNameToCertificate()
+		policy.TlsConfig = &tlsConf
 	}
 
-	logger.Debug("Set tls config in aeospike client policy")
-	tlsConf := tls.Config{
-		RootCAs:                  r.getClusterServerPool(aeroCluster),
-		Certificates:             []tls.Certificate{},
-		PreferServerCipherSuites: true,
-		// used only in testing
-		// InsecureSkipVerify: true,
-	}
-
-	cert, err := r.getClientCertificate(aeroCluster)
+	user, pass, err := accessControl.AerospikeAdminCredentials(&aeroCluster.Spec, &aeroCluster.Status.AerospikeClusterSpec, r.getPasswordProvider(aeroCluster))
 	if err != nil {
-		logger.Error("Failed to get client certificate. Using basic clientPolicy", log.Ctx{"err": err})
-		return policy
+		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
 	}
-	tlsConf.Certificates = append(tlsConf.Certificates, *cert)
 
-	tlsConf.BuildNameToCertificate()
-	policy.TlsConfig = &tlsConf
-
+	policy.User = user
+	policy.Password = pass
 	return policy
 }
-
-// // Called only when new cluster is created
-// func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-// 	// TODO: Add validation. device, file, both should not exist in same storage class
-// 	var pvcList []corev1.PersistentVolumeClaim
-// 	for _, storage := range aeroCluster.Spec.BlockStorage {
-// 		if storage.StorageClass != "" {
-// 			for _, device := range storage.Devices {
-// 				logger.Info("Add PVC for block device", log.Ctx{"device": device})
-// 				volumeMode := corev1.PersistentVolumeBlock
-
-// 				pvc := corev1.PersistentVolumeClaim{
-// 					ObjectMeta: metav1.ObjectMeta{
-// 						Name:      getPVCName(device.Name),
-// 						Namespace: aeroCluster.Namespace,
-// 					},
-// 					Spec: corev1.PersistentVolumeClaimSpec{
-// 						VolumeMode:  &volumeMode,
-// 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-// 						Resources: corev1.ResourceRequirements{
-// 							Requests: corev1.ResourceList{
-// 								corev1.ResourceStorage: resource.MustParse(fmt.Sprintf("%dGi", device.SizeInGB)),
-// 							},
-// 						},
-// 						StorageClassName: &storage.StorageClass,
-// 					},
-// 				}
-// 				pvcList = append(pvcList, pvc)
-// 			}
-// 			st.Spec.VolumeClaimTemplates = pvcList
-// 		}
-// 	}
-
-// 	const filesystemPVCName = "filesystem-datadir"
-// 	if aeroCluster.Spec.FileStorage.StorageClass != "" {
-// 		sz := computeFilesizeRequest(aeroCluster)
-// 		// sz may be zero for InMemory only namespace
-// 		if !sz.IsZero() {
-// 			logger.Info("Add PVC for filesystem size")
-// 			pvc := corev1.PersistentVolumeClaim{
-// 				ObjectMeta: metav1.ObjectMeta{
-// 					Name:      filesystemPVCName,
-// 					Namespace: aeroCluster.Namespace,
-// 				},
-// 				Spec: corev1.PersistentVolumeClaimSpec{
-// 					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-// 					Resources: corev1.ResourceRequirements{
-// 						Requests: corev1.ResourceList{
-// 							corev1.ResourceStorage: sz,
-// 						},
-// 					},
-// 					StorageClassName: &aeroCluster.Spec.FileStorage.StorageClass,
-// 				},
-// 			}
-// 			st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
-// 		}
-// 	}
-
-// 	var volumeAdded bool
-// 	nsList := aeroCluster.Spec.AerospikeConfig[utils.ConfKeyNamespace].([]interface{})
-// 	for _, nsInterface := range nsList {
-// 		ns, _ := nsInterface.(map[string]interface{})
-// 		if _, ok := ns[utils.ConfKeyStorageEngine].(string); ok {
-// 			// InMemory only namespace
-// 			continue
-// 		}
-// 		storage := ns[utils.ConfKeyStorageEngine].(map[string]interface{})
-// 		if filesInterface, ok := storage[utils.ConfKeyFile]; ok {
-// 			files := filesInterface.([]interface{})
-// 			if len(files) == 0 {
-// 				// files Cannot be empty
-// 				continue
-// 			}
-// 			if !volumeAdded {
-// 				// TODO: Only /opt/aerospike/data/ dir path works. There are other files needed by aerospike so other mount point wont work
-// 				filePath := files[0].(string)
-// 				dirPath := filepath.Dir(filePath)
-
-// 				logger.Info("Add VolumeMounts for file", log.Ctx{"file": filePath})
-// 				volume := corev1.VolumeMount{
-// 					Name:      filesystemPVCName,
-// 					MountPath: dirPath,
-// 				}
-// 				st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volume)
-// 				volumeAdded = true
-// 			}
-// 		} else if devicesInterface, ok := storage[utils.ConfKeyDevice]; ok {
-// 			var devices []string
-// 			for _, dev := range devicesInterface.([]interface{}) {
-// 				// Parsing for shadow device
-// 				devices = append(devices, strings.Fields(dev.(string))...)
-// 			}
-// 			// mount device
-// 			for _, device := range devices {
-// 				logger.Info("Add VolumeDevices for device", log.Ctx{"device": device})
-
-// 				volume := corev1.VolumeDevice{
-// 					Name:       getPVCName(device),
-// 					DevicePath: device,
-// 				}
-// 				st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volume)
-// 			}
-// 		}
-// 	}
-// }
 
 // Called only when new cluster is created
 func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
@@ -947,11 +757,6 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 			}
 		}
 	}
-}
-
-// calculateNodeAffinity provides a way to pin all pods within a statefulset to the same zone
-func updateNodeAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, zone string) {
-
 }
 
 func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
@@ -1137,107 +942,6 @@ func newEnvVar(name, fieldPath string) corev1.EnvVar {
 		},
 	}
 }
-
-// // computeCPURequest computes the amount of cpu to be requested for the aerospike-server container and returns the
-// // corresponding resource.Quantity. It currently returns aerospikeServerContainerDefaultCPURequest parsed as a quantity
-// // or requested CPU provided by user if it exists as a quantity.
-// func computeCPURequest(aeroCluster *aerospikev1alpha1.AerospikeCluster) resource.Quantity {
-// 	if aeroCluster.Spec.Resources != nil && aeroCluster.Spec.Resources.Requests.Cpu() != nil {
-// 		return *aeroCluster.Spec.Resources.Requests.Cpu()
-// 	}
-// 	return resource.MustParse(strconv.Itoa(aerospikeServerContainerDefaultCPURequest))
-// }
-
-// // computeMemoryRequest computes the amount of memory to be requested for the aerospike-server container based on the
-// // value of the memorySize field of each namespace. Compares computed amount of memory with user provided memory request and
-// // returns the biggest amount as a resource.Quantity.
-// func computeMemoryRequest(aeroCluster *aerospikev1alpha1.AerospikeCluster) resource.Quantity {
-// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-// 	var sum int64
-// 	nsConfList := aeroCluster.Spec.AerospikeConfig[utils.ConfKeyNamespace].([]interface{})
-// 	for _, nsConfInterface := range nsConfList {
-// 		nsConf := nsConfInterface.(map[string]interface{})
-// 		if nsConf[utils.ConfKeyMemorySize] == 0 {
-// 			// ns.MemorySize is nil, which means we need to set a value that
-// 			// matches the aerospike default for namespace.memory-size
-// 			sum += (aerospikeServerContainerDefaultMemoryRequestGi * 1024 * 1024 * 1024)
-// 			continue
-// 		} else {
-// 			sum += nsConf[utils.ConfKeyMemorySize].(int64)
-// 		}
-// 	}
-
-// 	// TODO: how to calculate. Do we need some extra buffer momory for other apps in container. Adding 1GB extra memory
-// 	sum += (1 * 1024 * 1024 * 1024)
-
-// 	memoryInGB := int64(math.Ceil(float64(sum) / (1024 * 1024 * 1024)))
-// 	computedMemory := resource.MustParse(fmt.Sprintf("%dGi", memoryInGB))
-// 	// user may want to setup manual memory requests bigger than computed ones
-// 	if aeroCluster.Spec.Resources != nil && aeroCluster.Spec.Resources.Requests.Memory() != nil && aeroCluster.Spec.Resources.Requests.Memory().Cmp(computedMemory) > 0 {
-// 		computedMemory = *aeroCluster.Spec.Resources.Requests.Memory()
-// 	}
-// 	logger.Debug("Requested total memory for all namespaces", log.Ctx{"inGB": computedMemory.String()})
-// 	return computedMemory
-// }
-
-// func computeFilesizeRequest(aeroCluster *aerospikev1alpha1.AerospikeCluster) resource.Quantity {
-// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-// 	var sum int64
-
-// 	nsConfList := aeroCluster.Spec.AerospikeConfig[utils.ConfKeyNamespace].([]interface{})
-// 	for _, nsConfInterface := range nsConfList {
-// 		nsConf, _ := nsConfInterface.(map[string]interface{})
-// 		if _, ok := nsConf[utils.ConfKeyStorageEngine].(string); ok {
-// 			// InMemory only, no allocation
-// 			continue
-// 		}
-// 		storage := nsConf[utils.ConfKeyStorageEngine].(map[string]interface{})
-// 		if filesize, ok := storage[utils.ConfKeyFilesize]; ok {
-// 			sum += filesize.(int64)
-// 		} else {
-// 			sum += (aerospikeServerNamespaceDefaultFilesizeMemoryRequestGi * 1024 * 1024 * 1024)
-// 		}
-// 	}
-// 	// Adding 1GB extra
-// 	sum += (1 * 1024 * 1024 * 1024)
-
-// 	sizeInGB := int64(math.Ceil(float64(sum) / (1024 * 1024 * 1024)))
-// 	computedSz := resource.MustParse(fmt.Sprintf("%dGi", sizeInGB))
-
-// 	logger.Debug("Requested total fileSystem size for all namespaces", log.Ctx{"inBytes": sum, "inGB": sizeInGB})
-// 	return computedSz
-// }
-
-// // computeResourceLimits computes the limit amounts of cpu and memory to be used by the aerospike-server container
-// // and returns the corresponding ResourceList.
-// func computeResourceLimits(aeroCluster *aerospikev1alpha1.AerospikeCluster) corev1.ResourceList {
-// 	// compute configured resource limits, if any
-// 	if aeroCluster.Spec.Resources != nil && aeroCluster.Spec.Resources.Limits != nil {
-// 		// setup limits for memory and cpu if user provides request limit values for both
-// 		if aeroCluster.Spec.Resources.Limits.Cpu() != nil && !aeroCluster.Spec.Resources.Limits.Cpu().IsZero() &&
-// 			aeroCluster.Spec.Resources.Limits.Memory() != nil && !aeroCluster.Spec.Resources.Limits.Memory().IsZero() {
-// 			return corev1.ResourceList{
-// 				corev1.ResourceCPU:    *aeroCluster.Spec.Resources.Limits.Cpu(),
-// 				corev1.ResourceMemory: *aeroCluster.Spec.Resources.Limits.Memory(),
-// 			}
-// 		}
-// 		// setup limits for cpu if user provides request limit values for cpu only
-// 		if aeroCluster.Spec.Resources.Limits.Cpu() != nil && !aeroCluster.Spec.Resources.Limits.Cpu().IsZero() {
-// 			return corev1.ResourceList{
-// 				corev1.ResourceCPU: *aeroCluster.Spec.Resources.Limits.Cpu(),
-// 			}
-// 		}
-// 		// setup limits for memory if user provides request limit values for memory only
-// 		if aeroCluster.Spec.Resources.Limits.Memory() != nil && !aeroCluster.Spec.Resources.Limits.Memory().IsZero() {
-// 			return corev1.ResourceList{
-// 				corev1.ResourceMemory: *aeroCluster.Spec.Resources.Limits.Memory(),
-// 			}
-// 		}
-// 	}
-// 	return corev1.ResourceList{}
-// }
 
 func isClusterResourceUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
 

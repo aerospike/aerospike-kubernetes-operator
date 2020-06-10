@@ -206,7 +206,7 @@ func main() {
 
 	// Setup all Controllers
 	if err := controller.AddToManager(mgr); err != nil {
-		logger.Error("Failed to setup all controller", log.Ctx{"err": err})
+		logger.Error("Failed to setup controller", log.Ctx{"err": err})
 		os.Exit(1)
 	}
 

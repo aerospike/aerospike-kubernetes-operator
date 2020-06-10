@@ -39,7 +39,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 		return "", err
 	}
 
-	res, err := deployment.RunInfo(r.getClientPolicyFromStatus(aeroCluster), asConn, "build")
+	res, err := deployment.RunInfo(r.getClientPolicy(aeroCluster), asConn, "build")
 	if err != nil {
 		return "", err
 	}
@@ -63,7 +63,7 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 		logger.Info("Waiting for migrations to be zero")
 		time.Sleep(time.Second * 2)
 
-		isStable, err := deployment.IsClusterAndStable(r.getClientPolicyFromStatus(aeroCluster), allHostConns)
+		isStable, err := deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 	if err != nil {
 		return fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err)
 	}
-	if err := deployment.InfoQuiesce(r.getClientPolicyFromStatus(aeroCluster), allHostConns, selectedHostConn); err != nil {
+	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
 		return err
 	}
 	return nil
@@ -89,7 +89,7 @@ func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alp
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicyFromStatus(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
@@ -97,7 +97,7 @@ func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return err
 	}
-	return deployment.TipHostname(r.getClientPolicyFromStatus(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) error {
@@ -105,7 +105,7 @@ func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return err
 	}
-	return deployment.AlumniReset(r.getClientPolicyFromStatus(aeroCluster), asConn)
+	return deployment.AlumniReset(r.getClientPolicy(aeroCluster), asConn)
 }
 
 func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]aerospikev1alpha1.AerospikeNodeSummary, error) {
@@ -121,7 +121,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 		}
 		// This func is only called while updating status at the end.
 		// Cluster will have updated auth according to spec hence use spec auth info
-		cp := r.getClientPolicyFromSpec(aeroCluster)
+		cp := r.getClientPolicy(aeroCluster)
 
 		res, err := deployment.RunInfo(cp, asConn, "build", "cluster-name", "name")
 		if err != nil {

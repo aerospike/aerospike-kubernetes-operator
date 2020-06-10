@@ -30,6 +30,7 @@ const secretDir = "deploy/secrets"
 
 const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"
+const authSecretNameForUpdate = "auth-update"
 
 func cleanupOption(ctx *framework.TestCtx) *framework.CleanupOptions {
 	return &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
@@ -132,6 +133,23 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
 	err = f.Client.Create(goctx.TODO(), as, cleanupOption(ctx))
+	if err != nil {
+		return err
+	}
+
+	passUpdate := "admin321"
+	asUpdate := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      authSecretNameForUpdate,
+			Namespace: namespace,
+		},
+		Type: v1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"password": []byte(passUpdate),
+		},
+	}
+	// use TestCtx's create helper to create the object and add a cleanup function for the new object
+	err = f.Client.Create(goctx.TODO(), asUpdate, cleanupOption(ctx))
 	if err != nil {
 		return err
 	}
