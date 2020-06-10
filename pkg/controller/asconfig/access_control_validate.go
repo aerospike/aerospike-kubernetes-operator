@@ -12,14 +12,17 @@ import (
 	log "github.com/inconshreveable/log15"
 )
 
-// Logger
-type Logger log.Logger
+// Logger type alias.
+type Logger = log.Logger
 
-// Access control Privilege scopes.
+// PrivilegeScope enumerates valid scopes for privileges.
 type PrivilegeScope int
 
 const (
+	// Global scoped privileges.
 	Global PrivilegeScope = iota
+
+	// NamespaceSet is namespace and optional set scoped privilege.
 	NamespaceSet
 )
 
@@ -80,7 +83,7 @@ var privileges = map[string][]PrivilegeScope{
 	"user-admin":     []PrivilegeScope{Global},
 }
 
-// ValidateAerospikeAccessControlSpec validates the accessControl speciication in the clusterSpec.
+// IsAerospikeAccessControlValid validates the accessControl speciication in the clusterSpec.
 //
 // Asserts that the Aerospikeaccesscontrolspec
 //    has correct references to other objects like namespaces
@@ -215,7 +218,7 @@ func isPrivilegeValid(privilege string, aerospikeConfig aerospikev1alpha1.Values
 		// This privilege should necessarily have NamespaceSet scope.
 		scopes := privileges[parts[0]]
 		if !scopeContains(scopes, NamespaceSet) {
-			return false, fmt.Errorf("Privilege %s cannot have namespace or set scope.", privilege)
+			return false, fmt.Errorf("Privilege %s cannot have namespace or set scope", privilege)
 		}
 
 		namespaceName := parts[1]
@@ -274,7 +277,7 @@ func scopeContains(scopes []PrivilegeScope, queryScope PrivilegeScope) bool {
 func subset(first, second []string) bool {
 	set := make(map[string]int)
 	for _, value := range second {
-		set[value] += 1
+		set[value]++
 	}
 
 	for _, value := range first {

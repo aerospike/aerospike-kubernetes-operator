@@ -1,6 +1,6 @@
 package configmap
 
-const install_sh = `
+const installSh = `
 #! /bin/bash
 
 # ------------------------------------------------------------------------------
@@ -40,8 +40,6 @@ done
 echo installing aerospike.conf into "${CONFIG_VOLUME}"
 mkdir -p "${CONFIG_VOLUME}"
 #chown -R aerospike:aerospike "${CONFIG_VOLUME}"
-apt-get update && apt-get install -y wget
-wget https://github.com/kmodules/peer-finder/releases/download/v1.0.0/peer-finder -O /peer-finder
 
 cp /configs/on-start.sh /on-start.sh
 cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
@@ -53,7 +51,7 @@ chmod +x /peer-finder
 /peer-finder -on-start=/on-start.sh -service=$K8_SERVICE -ns=${NAMESPACE} -domain=cluster.local
 `
 
-const on_start_sh = `
+const onStartSh = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
 # Copyright 2012-2017 Aerospike, Inc.
@@ -111,8 +109,6 @@ for PEER in "${PEERS[@]}"; do
 done
 
 # Get External nodeIP
-apt-get update
-apt-get install curl -y
 
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -177,5 +173,5 @@ cat ${CFG}
 `
 
 var confData = map[string]string{
-	"on-start.sh": on_start_sh,
+	"on-start.sh": onStartSh,
 }

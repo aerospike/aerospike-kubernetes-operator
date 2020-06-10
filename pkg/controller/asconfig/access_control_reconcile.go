@@ -118,7 +118,7 @@ func reconcileRoles(desired map[string]aerospikev1alpha1.AerospikeRoleSpec, curr
 	requiredRoleNames := []string{}
 
 	// List roles needed in the desired list.
-	for roleName, _ := range desired {
+	for roleName := range desired {
 		requiredRoleNames = append(requiredRoleNames, roleName)
 	}
 
@@ -170,7 +170,7 @@ func reconcileUsers(desired map[string]aerospikev1alpha1.AerospikeUserSpec, curr
 	requiredUserNames := []string{}
 
 	// List users needed in the desired list.
-	for userName, _ := range desired {
+	for userName := range desired {
 		requiredUserNames = append(requiredUserNames, userName)
 	}
 
@@ -380,9 +380,9 @@ func (roleCreate AerospikeRoleCreateUpdate) Execute(client *as.Client, adminPoli
 
 	if isCreate {
 		return roleCreate.createRole(client, adminPolicy, logger)
-	} else {
-		return roleCreate.updateRole(client, adminPolicy, role, logger)
 	}
+
+	return roleCreate.updateRole(client, adminPolicy, role, logger)
 }
 
 // createRole creates a new Aerospike role.
@@ -427,7 +427,7 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 		err = client.RevokePrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
 
 		if err != nil {
-			return fmt.Errorf("Error revoking privileges for role %s.", roleCreate.name)
+			return fmt.Errorf("Error revoking privileges for role %s", roleCreate.name)
 		}
 
 		logger.Info("Revoked privileges for role", log.Ctx{"rolename": roleCreate.name, "privileges": privilegesToRevoke})
@@ -442,7 +442,7 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 		err = client.GrantPrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
 
 		if err != nil {
-			return fmt.Errorf("Error granting privileges for role %s.", roleCreate.name)
+			return fmt.Errorf("Error granting privileges for role %s", roleCreate.name)
 		}
 
 		logger.Info("Granted privileges to role", log.Ctx{"rolename": roleCreate.name, "privileges": privilegesToGrant})
@@ -480,9 +480,9 @@ func (userCreate AerospikeUserCreateUpdate) Execute(client *as.Client, adminPoli
 
 	if isCreate {
 		return userCreate.createUser(client, adminPolicy, logger)
-	} else {
-		return userCreate.updateUser(client, adminPolicy, user, logger)
 	}
+
+	return userCreate.updateUser(client, adminPolicy, user, logger)
 }
 
 // createUser creates a new Aerospike user.
@@ -524,7 +524,7 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke)
 
 		if err != nil {
-			return fmt.Errorf("Error revoking roles for user %s.", userCreate.name)
+			return fmt.Errorf("Error revoking roles for user %s", userCreate.name)
 		}
 
 		logger.Info("Revoked roles for user", log.Ctx{"username": userCreate.name, "roles": rolesToRevoke})
@@ -534,7 +534,7 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		err := client.GrantRoles(adminPolicy, userCreate.name, rolesToGrant)
 
 		if err != nil {
-			return fmt.Errorf("Error granting roles for user %s.", userCreate.name)
+			return fmt.Errorf("Error granting roles for user %s", userCreate.name)
 		}
 
 		logger.Info("Granted roles to user", log.Ctx{"username": userCreate.name, "roles": rolesToGrant})

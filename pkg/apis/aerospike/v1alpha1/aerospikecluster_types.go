@@ -92,7 +92,7 @@ func (v *AerospikeClientAdminPolicy) DeepCopy() *AerospikeClientAdminPolicy {
 	return &dst
 }
 
-// AerspikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
+// AerospikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
 type AerospikeAccessControlSpec struct {
 	AdminPolicy *AerospikeClientAdminPolicy  `json:"adminPolicy,omitempty"`
 	Roles       map[string]AerospikeRoleSpec `json:"roles,omitempty"`

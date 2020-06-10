@@ -35,6 +35,7 @@ type FromSecretPasswordProvider struct {
 
 var pkglog = log.New(log.Ctx{"module": "test_aerospike_cluster"})
 
+// Get returns the password for the username using userSpec.
 func (pp FromSecretPasswordProvider) Get(username string, userSpec *aerospikev1alpha1.AerospikeUserSpec) (string, error) {
 	secret := &corev1.Secret{}
 	secretName := userSpec.SecretName

@@ -1095,7 +1095,7 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 
 	expectedRoleNames := []string{}
 	accessControl := clusterSpec.AerospikeAccessControl
-	for roleName, _ := range accessControl.Roles {
+	for roleName := range accessControl.Roles {
 		expectedRoleNames = append(expectedRoleNames, roleName)
 	}
 
@@ -1157,7 +1157,7 @@ func validateUsers(clientP *as.Client, aeroCluster *aerospikev1alpha1.AerospikeC
 
 	expectedUserNames := []string{}
 	accessControl := clusterSpec.AerospikeAccessControl
-	for userName, _ := range accessControl.Users {
+	for userName := range accessControl.Users {
 		expectedUserNames = append(expectedUserNames, userName)
 	}
 
