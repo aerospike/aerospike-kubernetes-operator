@@ -3114,9 +3114,6 @@ const conf5_0_0 = `
     "xdr": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "xdr-digestlog-path"
-      ],
       "properties": {
         "dc": {
           "type": "array",
@@ -3142,7 +3139,6 @@ const conf5_0_0 = `
               },
               "namespace": {
                 "type": "array",
-                "minItems": 1,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,

@@ -3111,9 +3111,6 @@
     "xdr": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "xdr-digestlog-path"
-      ],
       "properties": {
         "dc": {
           "type": "array",
@@ -3139,7 +3136,6 @@
               },
               "namespace": {
                 "type": "array",
-                "minItems": 1,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
