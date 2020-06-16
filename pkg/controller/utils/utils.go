@@ -149,7 +149,7 @@ func isTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// IsFailed returns true if pod is running and the aerospike container has crashed.
+// IsCrashed returns true if pod is running and the aerospike container has crashed.
 func IsCrashed(pod *v1.Pod) bool {
 	if pod.Status.Phase != v1.PodRunning {
 		// Assume a pod that is not running has not crashed.
