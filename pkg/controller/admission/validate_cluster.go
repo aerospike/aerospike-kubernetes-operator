@@ -177,7 +177,7 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", s.obj.Spec.Build)
 	}
 	version := build[1]
-	val, err := compareVersions(version, baseVersion)
+	val, err := asconfig.CompareVersions(version, baseVersion)
 	if err != nil {
 		return fmt.Errorf("Failed to check build version: %v", err)
 	}
@@ -328,28 +328,34 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
 	}
 
-	// validate xdr digestlog path
-	if _, ok := config["xdr"]; ok {
-		xdrConf, ok := config["xdr"].(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("aerospikeConfig.xdr not a valid map %v", config["xdr"])
-		}
-		dglog, ok := xdrConf["xdr-digestlog-path"]
-		if !ok {
-			return fmt.Errorf("xdr-digestlog-path is missing in aerospikeConfig.xdr %v", xdrConf)
-		}
-		if _, ok := dglog.(string); !ok {
-			return fmt.Errorf("xdr-digestlog-path is not a valid string in aerospikeConfig.xdr %v", xdrConf)
-		}
-		if len(strings.Fields(dglog.(string))) != 2 {
-			return fmt.Errorf("xdr-digestlog-path is not in valid format (/opt/aerospike/xdr/digestlog 100G) in aerospikeConfig.xdr %v", xdrConf)
-		}
+	val, err = asconfig.CompareVersions(version, "5.0.0")
+	if err != nil {
+		return fmt.Errorf("Failed to check build version: %v", err)
+	}
+	if val < 0 {
+		// Validate xdr-digestlog-path for pre-5.0.0 versions.
+		if _, ok := config["xdr"]; ok {
+			xdrConf, ok := config["xdr"].(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("aerospikeConfig.xdr not a valid map %v", config["xdr"])
+			}
+			dglog, ok := xdrConf["xdr-digestlog-path"]
+			if !ok {
+				return fmt.Errorf("xdr-digestlog-path is missing in aerospikeConfig.xdr %v", xdrConf)
+			}
+			if _, ok := dglog.(string); !ok {
+				return fmt.Errorf("xdr-digestlog-path is not a valid string in aerospikeConfig.xdr %v", xdrConf)
+			}
+			if len(strings.Fields(dglog.(string))) != 2 {
+				return fmt.Errorf("xdr-digestlog-path is not in valid format (/opt/aerospike/xdr/digestlog 100G) in aerospikeConfig.xdr %v", xdrConf)
+			}
 
-		// "/opt/aerospike/xdr/digestlog 100G"
-		dglogFilePath := filepath.Dir(strings.Fields(dglog.(string))[0])
+			// "/opt/aerospike/xdr/digestlog 100G"
+			dglogFilePath := filepath.Dir(strings.Fields(dglog.(string))[0])
 
-		if !utils.ContainsString(fileStorageList, dglogFilePath) {
-			return fmt.Errorf("xdr-digestlog-path related mountPath %v not found in FileStorage config %v", dglogFilePath, s.obj.Spec.FileStorage)
+			if !utils.ContainsString(fileStorageList, dglogFilePath) {
+				return fmt.Errorf("xdr-digestlog-path related mountPath %v not found in FileStorage config %v", dglogFilePath, s.obj.Spec.FileStorage)
+			}
 		}
 	}
 

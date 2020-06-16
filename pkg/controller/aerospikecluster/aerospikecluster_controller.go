@@ -223,16 +223,15 @@ func (r *ReconcileAerospikeCluster) reconcileCluster(aeroCluster *aerospikev1alp
 				needRollingRestart = true
 			}
 		}
+	} else {
+		// The cluster is not new but maybe unreachable or down. There could be a configuration error, warranting a rolling restart in case the user has fixed the configuration. Rolling restart is the only way forward .
+		logger.Info("Forcing a rolling restart as status is nil. The cluster could be unreachable due to bad configuration.")
+		needRollingRestart = true
+		if err := r.updateConfigMap(aeroCluster, aerospikeConfConfigMapName); err != nil {
+			logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
+			return reconcile.Result{}, err
+		}
 	}
-	// TODO: For which case it is needed? This cannot be considered rolling restart. It can be scale up/down also
-	// } else {
-	// 	if aeroCluster.Generation != 1 {
-	// 		// TODO: check if its correct
-	// 		// If status is nil but generation is greater than 1,
-	// 		// it means user has updated it and wants a rolling restart with new conf
-	// 		needRollingRestart = true
-	// 	}
-	// }
 
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
@@ -450,7 +449,7 @@ func (r *ReconcileAerospikeCluster) rollingRestart(aeroCluster *aerospikev1alpha
 
 		logger.Info("Rolling restart pod", log.Ctx{"podName": pod.Name})
 		var pFound *corev1.Pod
-
+		hasCrashed := false
 		for i := 0; i < 5; i++ {
 			logger.Debug("Waiting for pod to be ready", log.Ctx{"podName": pod.Name})
 
@@ -465,14 +464,27 @@ func (r *ReconcileAerospikeCluster) rollingRestart(aeroCluster *aerospikev1alpha
 			if ps.Ready {
 				break
 			}
+
+			if utils.IsCrashed(pFound) {
+				logger.Error("Pod has crashed", log.Ctx{"podName": pFound.Name})
+				hasCrashed = true
+				break
+			}
+
 			logger.Error("Pod containerStatus is not ready, try after 5 sec")
 			time.Sleep(time.Second * 5)
 		}
 
 		// Check for migration
-		if err := r.waitForNodeSafeStopReady(aeroCluster, pFound); err != nil {
-			return found, err
+		if !hasCrashed {
+			if err := r.waitForNodeSafeStopReady(aeroCluster, pFound); err != nil {
+				return found, err
+			}
+		} else {
+			// TODO: Check a user flag to restart crashed pods.
+			logger.Info("Restarting crashed pod", log.Ctx{"podName": pFound.Name})
 		}
+
 		// Delete pod
 		if err := r.client.Delete(context.TODO(), pFound); err != nil {
 			logger.Error("Failed to delete pod", log.Ctx{"err": err})

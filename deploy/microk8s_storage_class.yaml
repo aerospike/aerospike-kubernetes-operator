@@ -1,0 +1,13 @@
+# Storage classes for microk8s
+# You need to enable the storage add-on for microk8s
+# and configure the host path for filesystem storages.
+#
+# $ microk8s enable storage
+#
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ssd
+provisioner: microk8s.io/hostpath
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
