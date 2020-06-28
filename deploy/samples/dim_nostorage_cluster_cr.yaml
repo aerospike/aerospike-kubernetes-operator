@@ -4,10 +4,16 @@ metadata:
   name: aerocluster
   namespace: aerospike
 spec:
-  # Add fields here
   size: 2
-  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  build: aerospike/aerospike-server-enterprise:4.9.0.8
   multiPodPerHost: true
+
+  storage:
+    volumes:
+      - path: /opt/aerospike
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
 
   aerospikeAccessControl:
     users:
@@ -26,17 +32,42 @@ spec:
       - name: /var/log/aerospike/aerospike.log
         any: info
         clustering: debug
+
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
+
     security:
       enable-security: true
+
+    #namespace:
+    #  - name: test
+    #    memory-size: 3000000000
+    #    replication-factor: 2
+    #    storage-engine: memory
+
+    #xdr:
+    #  dc:
+    #    - name: test_dc
+    #      use-alternate-access-address: true
+    #      namespace:
+    #        - name: test
+    #          delay-ms: 10
+
+    xdr:
+      enable-xdr: true
+      xdr-digestlog-path: /opt/aerospike/xdr/digestlog 5G
+      xdr-compression-threshold: 1000
+      datacenter:
+        - name: REMOTE_DC_1
     namespace:
       - name: test
+        enable-xdr: true
+        xdr-remote-datacenter: REMOTE_DC_1
         memory-size: 3000000000
         replication-factor: 2
         storage-engine: memory
 
   resources:
     requests:
-      memory: 5Gi
+      memory: 2Gi
       cpu: 200m

@@ -39,6 +39,49 @@ done
 echo installing aerospike.conf into "${CONFIG_VOLUME}"
 mkdir -p "${CONFIG_VOLUME}"
 
+# Create required directories.
+DEFAULT_WORK_DIR="/file-storage/opt/aerospike"
+REQUIRED_DIRS=("smd"  "usr/udf/lua" "xdr")
+
+for d in ${REQUIRED_DIRS[*]}; do
+    TO_CREATE="$DEFAULT_WORK_DIR/$d"
+    echo creating directory "${TO_CREATE}"
+    mkdir -p "$TO_CREATE"
+done
+
+# Initialize persistent volumes.
+echo "searching for $MY_POD_NAME in /configs/podList.json"
+grep "\"$MY_POD_NAME\"" /configs/podList.json > /dev/null
+if [ $? -eq 0 ]; then
+    # This pod has been restarted.
+    echo "pod restarted - skipping volume initialization"
+else
+	# This pod is being created.
+    echo "pod created - initializing volumes"
+
+    echo "deleting files from file storage mounts"
+    find /filesystem-volumes/ -type f -delete
+
+    # TODO: block storage initialization.
+fi
+
+CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+NAMESPACE=$MY_POD_NAMESPACE
+curl -sSk \
+     -X PATCH \
+     -d @- \
+     -H "Authorization: Bearer $KUBE_TOKEN" \
+     -H 'Accept: application/json' \
+     -H'Content-Type: application/strategic-merge-patch+json' \
+     https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE//configmaps/$CONFIGMAP_NAME <<'EOF'
+{
+  "kind": "ConfigMap",
+  "apiVersion": "v1",
+
+}
+EOF
+
 cp /configs/on-start.sh /usr/bin/on-start.sh
 cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
 if [ -f /configs/features.conf ]; then

@@ -7,11 +7,14 @@ spec:
   # Add fields here
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
-  fileStorage:
-    - storageClass: ssd
-      volumeMounts:
-        - mountPath: /opt/aerospike/data
-          sizeInGB: 3
+
+  storage:
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 3
+
   multiPodPerHost: true
 
   aerospikeAccessControl:
@@ -37,7 +40,7 @@ spec:
         replication-factor: 2
         storage-engine:
           file:
-            - /opt/aerospike/data/test.dat
+            - /opt/aerospike/test/test.dat
           filesize: 2000000000
           data-in-memory: true
 

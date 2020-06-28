@@ -1,11 +1,18 @@
 package e2e
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // feature-key file needed
@@ -410,4 +417,38 @@ func createShadowDeviceStorageCluster(clusterName, namespace string, size int32,
 
 func createPMEMStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	return nil
+}
+
+func aerospikeClusterCreateUpdateWithTO(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, retryInterval, timeout time.Duration, t *testing.T) error {
+	current := &aerospikev1alpha1.AerospikeCluster{}
+	err := framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
+	if err != nil {
+		// Deploy the cluster.
+		t.Logf("Deploying cluster at %v", time.Now().Format(time.RFC850))
+		if err := deployClusterWithTO(t, framework.Global, ctx, desired, retryInterval, timeout); err != nil {
+			return err
+		}
+		t.Logf("Deployed cluster at %v", time.Now().Format(time.RFC850))
+		return nil
+	}
+	// Apply the update.
+	if desired.Spec.AerospikeAccessControl != nil {
+		current.Spec.AerospikeAccessControl = &aerospikev1alpha1.AerospikeAccessControlSpec{}
+		lib.DeepCopy(&current.Spec, &desired.Spec)
+	} else {
+		current.Spec.AerospikeAccessControl = nil
+	}
+	lib.DeepCopy(&current.Spec.AerospikeConfig, &desired.Spec.AerospikeConfig)
+
+	err = framework.Global.Client.Update(context.TODO(), current)
+	if err != nil {
+		return err
+	}
+
+	waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, timeout)
+	return nil
+}
+
+func aerospikeClusterCreateUpdate(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
+	return aerospikeClusterCreateUpdateWithTO(desired, ctx, retryInterval, getTimeout(1), t)
 }

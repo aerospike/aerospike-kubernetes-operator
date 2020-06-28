@@ -374,7 +374,7 @@ func (roleCreate AerospikeRoleCreateUpdate) Execute(client *as.Client, adminPoli
 			isCreate = true
 		} else {
 			// Failure to query for the role.
-			return fmt.Errorf("Error querying role %s", roleCreate.name)
+			return fmt.Errorf("Error querying role %s: %v", roleCreate.name, err)
 		}
 	}
 
@@ -427,7 +427,7 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 		err = client.RevokePrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
 
 		if err != nil {
-			return fmt.Errorf("Error revoking privileges for role %s", roleCreate.name)
+			return fmt.Errorf("Error revoking privileges for role %s: %v", roleCreate.name, err)
 		}
 
 		logger.Info("Revoked privileges for role", log.Ctx{"rolename": roleCreate.name, "privileges": privilegesToRevoke})
@@ -442,7 +442,7 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 		err = client.GrantPrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
 
 		if err != nil {
-			return fmt.Errorf("Error granting privileges for role %s", roleCreate.name)
+			return fmt.Errorf("Error granting privileges for role %s: %v", roleCreate.name, err)
 		}
 
 		logger.Info("Granted privileges to role", log.Ctx{"rolename": roleCreate.name, "privileges": privilegesToGrant})
@@ -474,7 +474,7 @@ func (userCreate AerospikeUserCreateUpdate) Execute(client *as.Client, adminPoli
 			isCreate = true
 		} else {
 			// Failure to query for the user.
-			return fmt.Errorf("Error querying user %s", userCreate.name)
+			return fmt.Errorf("Error querying user %s: %v", userCreate.name, err)
 		}
 	}
 
@@ -514,7 +514,7 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		logger.Info("Updated password for user", log.Ctx{"username": userCreate.name})
 	}
 
-	// Find the roles to drop.
+	// Find the roles to grant and revoke.
 	currentRoles := user.Roles
 	desiredRoles := userCreate.roles
 	rolesToRevoke := sliceSubtract(currentRoles, desiredRoles)
@@ -524,7 +524,7 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke)
 
 		if err != nil {
-			return fmt.Errorf("Error revoking roles for user %s", userCreate.name)
+			return fmt.Errorf("Error revoking roles for user %s: %v", userCreate.name, err)
 		}
 
 		logger.Info("Revoked roles for user", log.Ctx{"username": userCreate.name, "roles": rolesToRevoke})
@@ -534,7 +534,7 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		err := client.GrantRoles(adminPolicy, userCreate.name, rolesToGrant)
 
 		if err != nil {
-			return fmt.Errorf("Error granting roles for user %s", userCreate.name)
+			return fmt.Errorf("Error granting roles for user %s: %v", userCreate.name, err)
 		}
 
 		logger.Info("Granted roles to user", log.Ctx{"username": userCreate.name, "roles": rolesToGrant})
@@ -558,7 +558,7 @@ func (userdrop AerospikeUserDrop) Execute(client *as.Client, adminPolicy *as.Adm
 	if err != nil {
 		if !strings.Contains(err.Error(), userNotFoundErr) {
 			// Failure to drop for the user.
-			return fmt.Errorf("Error dropping user %s", userdrop.name)
+			return fmt.Errorf("Error dropping user %s: %v", userdrop.name, err)
 		}
 	}
 
@@ -580,7 +580,7 @@ func (roledrop AerospikeRoleDrop) Execute(client *as.Client, adminPolicy *as.Adm
 	if err != nil {
 		if !strings.Contains(err.Error(), roleNotFoundErr) {
 			// Failure to drop for the role.
-			return fmt.Errorf("Error dropping role %s", roledrop.name)
+			return fmt.Errorf("Error dropping role %s: %v", roledrop.name, err)
 		}
 	}
 

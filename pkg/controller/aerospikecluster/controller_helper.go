@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 
 const (
 	aeroClusterServiceAccountName string = "aerospike-cluster"
+	configMaPodListKey            string = "podList.json"
 )
 
 // the default cpu request for the aerospike-server container
@@ -72,7 +74,7 @@ func (r *ReconcileAerospikeCluster) isAnyPodInFailedState(aeroCluster *aerospike
 
 	for _, p := range podList {
 		for _, ps := range p.Status.ContainerStatuses {
-			if err := utils.PodFailedStatus(&p); err != nil {
+			if err := utils.CheckPodFailed(&p); err != nil {
 				logger.Info("AerospikeCluster Pod is in failed state", log.Ctx{"currentImage": ps.Image, "podName": p.Name, "err": err})
 				return true
 			}
@@ -164,7 +166,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:            "aerospike-init",
-						Image:           "aerospike/aerospike-kubernetes-init:0.0.9",
+						Image:           "aerospike/aerospike-kubernetes-init:0.0.10",
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts: []corev1.VolumeMount{
 							{
@@ -181,6 +183,11 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 								// Headless service has same name as AerospikeCluster
 								Name:  "SERVICE",
 								Value: getHeadLessSvcName(aeroCluster),
+							},
+							corev1.EnvVar{
+								// Headless service has same name as AerospikeCluster
+								Name:  "CONFIG_MAP_NAME",
+								Value: utils.ConfigMapName(aeroCluster),
 							},
 							corev1.EnvVar{
 								Name:  "MULTI_POD_PER_HOST",
@@ -215,7 +222,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: aerospikeConfConfigMapName,
+										Name: utils.ConfigMapName(aeroCluster),
 									},
 								},
 							},
@@ -256,7 +263,9 @@ func (r *ReconcileAerospikeCluster) deleteStatefulSet(aeroCluster *aerospikev1al
 	return r.client.Delete(context.TODO(), st)
 }
 
-func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, name string) error {
+func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	name := utils.ConfigMapName(aeroCluster)
+
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Creating a new ConfigMap for statefulSet")
 
@@ -292,11 +301,27 @@ func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha
 		}
 		return err
 	}
-	logger.Info("Configmap already exist for statefulSet. Using existing configmap", log.Ctx{"name": utils.NamespacedName(confMap.Namespace, confMap.Name)})
+
+	logger.Info("Configmap already exists for statefulSet - using existing configmap", log.Ctx{"name": utils.NamespacedName(confMap.Namespace, confMap.Name)})
+
+	// Update existing configmap as it might not be current.
+	configMapData, err := configmap.CreateConfigMapData(aeroCluster)
+	if err != nil {
+		return fmt.Errorf("Failed to build config map data: %v", err)
+	}
+
+	// Replace config map data since we are supposed to create a new config map.
+	confMap.Data = configMapData
+
+	if err := r.client.Update(context.TODO(), confMap, updateOption); err != nil {
+		return fmt.Errorf("Failed to update ConfigMap for StatefulSet: %v", err)
+	}
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) updateConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, name string) error {
+func (r *ReconcileAerospikeCluster) updateConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	name := utils.ConfigMapName(aeroCluster)
+
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	logger.Info("Updating ConfigMap", log.Ctx{"ConfigMap.Namespace": aeroCluster.Namespace, "ConfigMap.Name": name})
@@ -307,15 +332,41 @@ func (r *ReconcileAerospikeCluster) updateConfigMap(aeroCluster *aerospikev1alph
 		return err
 	}
 
-	// build the aerospike config file based on the current spec
+	// Build the aerospike config file based on the current spec
 	configMapData, err := configmap.CreateConfigMapData(aeroCluster)
 	if err != nil {
 		return fmt.Errorf("Failed to build dotConfig from map: %v", err)
 	}
-	confMap.Data = configMapData
+
+	// Overwrite only spec based keys. Do not touch other keys like pod metadata.
+	for k, v := range configMapData {
+		confMap.Data[k] = v
+	}
 
 	if err := r.client.Update(context.TODO(), confMap, updateOption); err != nil {
 		return fmt.Errorf("Failed to update confMap for StatefulSet: %v", err)
+	}
+	return nil
+}
+
+func (r *ReconcileAerospikeCluster) updateConfigMapPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string) error {
+	name := utils.ConfigMapName(aeroCluster)
+
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	logger.Info("Updating ConfigMap pod names", log.Ctx{"ConfigMap.Namespace": aeroCluster.Namespace, "ConfigMap.Name": name})
+
+	confMap := &corev1.ConfigMap{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: aeroCluster.Namespace}, confMap)
+	if err != nil {
+		return err
+	}
+
+	podNamesJSON, _ := json.Marshal(podNames)
+	confMap.Data[configMaPodListKey] = string(podNamesJSON)
+
+	if err := r.client.Update(context.TODO(), confMap, updateOption); err != nil {
+		return fmt.Errorf("Failed to update confMap for pod names: %v", err)
 	}
 	return nil
 }
@@ -457,7 +508,7 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(aeroCluster *aer
 			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: st.Namespace}, pod); err != nil {
 				return fmt.Errorf("Failed to get statefulSet pod %s: %v", podName, err)
 			}
-			if err := utils.PodFailedStatus(pod); err != nil {
+			if err := utils.CheckPodFailed(pod); err != nil {
 				return fmt.Errorf("StatefulSet pod %s failed: %v", podName, err)
 			}
 			if utils.IsPodRunningAndReady(pod) {
@@ -495,7 +546,7 @@ func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1a
 
 	for _, p := range podList.Items {
 		logger.Debug("Check pod running and ready", log.Ctx{"pod": p.Name})
-		if err := utils.PodFailedStatus(&p); err != nil {
+		if err := utils.CheckPodFailed(&p); err != nil {
 			return false, fmt.Errorf("Pod %s failed: %v", p.Name, err)
 		}
 		if !utils.IsPodRunningAndReady(&p) {
@@ -666,70 +717,62 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	for _, storage := range aeroCluster.Spec.BlockStorage {
-		if storage.StorageClass != "" {
-			for _, device := range storage.VolumeDevices {
+	for _, volume := range aeroCluster.Spec.Storage.Volumes {
+		logger.Info("Add PVC for volume", log.Ctx{"volume": volume})
+		var volumeMode corev1.PersistentVolumeMode
+		var initContainerVolumePathPrefix string
 
-				logger.Info("Add PVC for block device", log.Ctx{"device": device})
-				volumeMode := corev1.PersistentVolumeBlock
-				pvc := corev1.PersistentVolumeClaim{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      getPVCName(device.DevicePath),
-						Namespace: aeroCluster.Namespace,
-					},
-					Spec: corev1.PersistentVolumeClaimSpec{
-						VolumeMode:  &volumeMode,
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse(fmt.Sprintf("%dGi", device.SizeInGB)),
-							},
-						},
-						StorageClassName: &storage.StorageClass,
-					},
-				}
-				st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
+		if volume.VolumeMode == aerospikev1alpha1.AerospikeVolumeModeBlock {
+			volumeMode = corev1.PersistentVolumeBlock
+			initContainerVolumePathPrefix = "/block-volumes/"
 
-				logger.Info("Add VolumeDevice for device", log.Ctx{"device": device})
-				volume := corev1.VolumeDevice{
-					Name:       getPVCName(device.DevicePath),
-					DevicePath: device.DevicePath,
-				}
-				st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volume)
+			logger.Info("Add volume device for volume", log.Ctx{"volume": volume})
+			volumeDevice := corev1.VolumeDevice{
+				Name:       getPVCName(volume.Path),
+				DevicePath: volume.Path,
 			}
-		}
-	}
+			st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volumeDevice)
 
-	// TODO: Add validation. device, file, both should not exist in same storage class
-	for _, storage := range aeroCluster.Spec.FileStorage {
-		if storage.StorageClass != "" {
-			for _, volumeMount := range storage.VolumeMounts {
-				logger.Info("Add PVC for volumeMount", log.Ctx{"volumeMount": volumeMount})
-				pvc := corev1.PersistentVolumeClaim{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      getPVCName(volumeMount.MountPath),
-						Namespace: aeroCluster.Namespace,
-					},
-					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse(fmt.Sprintf("%dGi", volumeMount.SizeInGB)),
-							},
-						},
-						StorageClassName: &storage.StorageClass,
-					},
-				}
-				st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
-
-				logger.Info("Add VolumeMounts for file", log.Ctx{"file": volumeMount})
-				volume := corev1.VolumeMount{
-					Name:      getPVCName(volumeMount.MountPath),
-					MountPath: volumeMount.MountPath,
-				}
-				st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volume)
+			initVolumeDevice := corev1.VolumeDevice{
+				Name:       getPVCName(volume.Path),
+				DevicePath: initContainerVolumePathPrefix + volume.Path,
 			}
+			st.Spec.Template.Spec.InitContainers[0].VolumeDevices = append(st.Spec.Template.Spec.InitContainers[0].VolumeDevices, initVolumeDevice)
+		} else {
+			volumeMode = corev1.PersistentVolumeFilesystem
+			initContainerVolumePathPrefix = "/filesystem-volumes/"
+
+			logger.Info("Add volume mount for volume", log.Ctx{"volume": volume})
+			volumeMount := corev1.VolumeMount{
+				Name:      getPVCName(volume.Path),
+				MountPath: volume.Path,
+			}
+			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volumeMount)
+
+			initVolumeMount := corev1.VolumeMount{
+				Name:      getPVCName(volume.Path),
+				MountPath: initContainerVolumePathPrefix + volume.Path,
+			}
+			st.Spec.Template.Spec.InitContainers[0].VolumeMounts = append(st.Spec.Template.Spec.InitContainers[0].VolumeMounts, initVolumeMount)
 		}
+
+		pvc := corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      getPVCName(volume.Path),
+				Namespace: aeroCluster.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				VolumeMode:  &volumeMode,
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(fmt.Sprintf("%dGi", volume.SizeInGB)),
+					},
+				},
+				StorageClassName: &volume.StorageClass,
+			},
+		}
+		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
 	}
 }
 

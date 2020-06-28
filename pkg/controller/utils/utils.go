@@ -35,20 +35,26 @@ const (
 	InfoPort     = 3003
 	InfoPortName = "info"
 
-	// terminal state reasons when pod status is Pending
-	// container image pull failed
+	// ReasonImagePullBackOff when pod status is Pending as container image pull failed.
 	ReasonImagePullBackOff = "ImagePullBackOff"
-	// unable to inspect image
+	// ReasonImageInspectError is error inspecting image.
 	ReasonImageInspectError = "ImageInspectError"
-	// general image pull error
+	// ReasonErrImagePull is general image pull error.
 	ReasonErrImagePull = "ErrImagePull"
-	// get http error when pulling image from registry
+	// ReasonRegistryUnavailable is the http error when pulling image from registry.
 	ReasonRegistryUnavailable = "RegistryUnavailable"
+
+	aerospikeConfConfigMapPrefix = "aerospike-conf"
 )
 
 // ClusterNamespacedName return namespaced name
 func ClusterNamespacedName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
+}
+
+// ConfigMapName returns the name to use for a aeroCluster cluster's config map.
+func ConfigMapName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
+	return fmt.Sprintf("%s-%s", aerospikeConfConfigMapPrefix, aeroCluster.Name)
 }
 
 // NamespacedName return namespaced name
@@ -62,8 +68,39 @@ func IsPodRunningAndReady(pod *v1.Pod) bool {
 	return !isTerminating(pod) && pod.Status.Phase == v1.PodRunning
 }
 
-// PodFailedStatus check if pod is in failed status
-func PodFailedStatus(pod *v1.Pod) error {
+// CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
+func CheckPodFailed(pod *v1.Pod) error {
+	if isTerminating(pod) {
+		return nil
+	}
+
+	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
+	if pod.Status.Phase == v1.PodFailed {
+		return fmt.Errorf("Pod has failed status")
+	}
+
+	// grab the status of every container in the pod (including its init containers)
+	containerStatus := append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...)
+
+	// inspect the status of each individual container for common failure states
+	for _, container := range containerStatus {
+		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
+		// a container that has terminated successfully (such as an init container)
+		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
+		// 	return fmt.Errorf("Pod has terminated status")
+		// }
+		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
+		if waiting := container.State.Waiting; waiting != nil && (isImageError(waiting.Reason) || isCrashError(waiting.Reason)) {
+			return fmt.Errorf("Pod failed message: %s reason: %s", waiting.Message, waiting.Reason)
+		}
+	}
+
+	// no failure state was found
+	return nil
+}
+
+// CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an image related error.
+func CheckPodImageFailed(pod *v1.Pod) error {
 	if isTerminating(pod) {
 		return nil
 	}
@@ -93,45 +130,34 @@ func PodFailedStatus(pod *v1.Pod) error {
 	return nil
 }
 
-// IsPodInFailureState attempts to checks if the specified pod has reached an error condition from which it is not
-// expected to recover.
-func isPodInFailureState(pod *v1.Pod) bool {
-	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
-	if pod.Status.Phase == v1.PodFailed {
-		return true
+// IsCrashed returns true if pod is running and the aerospike container has crashed.
+func IsCrashed(pod *v1.Pod) bool {
+	if pod.Status.Phase != v1.PodRunning {
+		// Assume a pod that is not running has not crashed.
+		return false
 	}
 
-	// grab the status of every container in the pod (including its init containers)
-	containerStatus := append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...)
-
-	// inspect the status of each individual container for common failure states
-	for _, container := range containerStatus {
-		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
-		// a container that has terminated successfully (such as an init container)
-		if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-			return true
-		}
-		// if the container is marked as "Waiting", check for common image-related errors
-		if waiting := container.State.Waiting; waiting != nil && isImageError(waiting.Reason) {
-			return true
-		}
-	}
-
-	// no failure state was found
-	return false
+	// Get aerospike server container status.
+	ps := pod.Status.ContainerStatuses[0]
+	return ps.State.Waiting != nil && isCrashError(ps.State.Waiting.Reason)
 }
 
-//  IsImageEqual returns true if image name image1 is equal to image name image2.
+// IsImageEqual returns true if image name image1 is equal to image name image2.
 func IsImageEqual(image1 string, image2 string) bool {
 	desiredImage := strings.TrimPrefix(image1, DockerHubImagePrefix)
 	actualImage := strings.TrimPrefix(image2, DockerHubImagePrefix)
 	return actualImage == desiredImage
 }
 
-// isImageError indicated whether the specified reason corresponds to an error while pulling or inspecting a container
+// isImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a container
 // image.
 func isImageError(reason string) bool {
 	return reason == ReasonErrImagePull || reason == ReasonImageInspectError || reason == ReasonImagePullBackOff || reason == ReasonRegistryUnavailable
+}
+
+// isCrashError indicates whether the specified reason corresponds to an crash of the container.
+func isCrashError(reason string) bool {
+	return strings.HasPrefix(reason, "Crash")
 }
 
 // isCreated returns true if pod has been created and is maintained by the API server
@@ -147,18 +173,6 @@ func isFailed(pod *v1.Pod) bool {
 // isTerminating returns true if pod's DeletionTimestamp has been set
 func isTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
-}
-
-// IsCrashed returns true if pod is running and the aerospike container has crashed.
-func IsCrashed(pod *v1.Pod) bool {
-	if pod.Status.Phase != v1.PodRunning {
-		// Assume a pod that is not running has not crashed.
-		return false
-	}
-
-	// Get aerospike server container status.
-	ps := pod.Status.ContainerStatuses[0]
-	return ps.State.Waiting != nil && strings.HasPrefix(ps.State.Waiting.Reason, "Crash")
 }
 
 // IsPodUpgraded assume that all container have same image or take containerID
@@ -196,7 +210,8 @@ func ContainsString(list []string, ele string) bool {
 	return false
 }
 
-func removeString(list []string, ele string) []string {
+// RemoveString removes ele from list if ele is present in the list. The original order is preserved.
+func RemoveString(list []string, ele string) []string {
 	var newList []string
 	for _, listEle := range list {
 		if ele == listEle {

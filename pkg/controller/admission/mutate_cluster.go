@@ -44,6 +44,8 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 }
 
 // MutateCreate mutate create
+// Add storage policy defaults
+// Add validation policy defaults
 // Add required config in AerospikeConfig object if not give by user
 //
 // Required network, namespace
@@ -55,7 +57,7 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 // 		port
 // 	fabric
 // 		port
-// namespace (Required storage-engin)
+// namespace (Required storage-engine)
 // 	storage-engine
 // 		memory or
 // 		{device,file}
@@ -65,11 +67,18 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 func (s *ClusterMutatingAdmissionWebhook) MutateCreate() webhook.AdmissionResponse {
 	log.Info("Mutate AerospikeCluster create")
 
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster create failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
-	return webhook.Patched("Patched aerospikeConfig with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig})
+
+	response := webhook.Patched("Patched aerospikeConfig with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/spec/validationPolicy", Value: s.obj.Spec.ValidationPolicy},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/spec/storage", Value: s.obj.Spec.Storage},
+	)
+
+	log.Info("Mutate AerospikeCluster response", log.Ctx{"response": response})
+	return response
 }
 
 // MutateUpdate mutate update
@@ -77,15 +86,18 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 	log.Info("Mutate AerospikeCluster update")
 
 	// This will insert the defaults also
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster update failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
-	return webhook.Patched("Patched aerospikeConfig with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig})
-	//return webhook.Allowed("Mutated update AerospikeCluster object")
+
+	return webhook.Patched("Patched aerospikeConfig with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/spec/validationPolicy", Value: s.obj.Spec.ValidationPolicy},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/spec/storage", Value: s.obj.Spec.Storage},
+	)
 }
 
-func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
+func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
 	config := s.obj.Spec.AerospikeConfig
@@ -125,7 +137,39 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 			return err
 		}
 	}
+
+	// validation policy
+	if s.obj.Spec.ValidationPolicy == nil {
+		validationPolicy := aerospikev1alpha1.ValidationPolicySpec{}
+
+		log.Info("Set default validation policy", log.Ctx{"validationPolicy": validationPolicy})
+		s.obj.Spec.ValidationPolicy = &validationPolicy
+	}
+
+	// volume policy defaults.
+	setVolumePolicyDefaults(&s.obj.Spec.Storage.AerospikePersistentVolumePolicySpec)
+	for i := range s.obj.Spec.Storage.Volumes {
+		setVolumePolicyDefaults(&s.obj.Spec.Storage.Volumes[i].AerospikePersistentVolumePolicySpec)
+	}
+
 	return nil
+}
+
+func setVolumePolicyDefaults(volumepolicy *aerospikev1alpha1.AerospikePersistentVolumePolicySpec) {
+	if volumepolicy.BlockInitType == nil {
+		defaultInitType := aerospikev1alpha1.AerospikeBlockVolumeInitTypeNone
+		volumepolicy.BlockInitType = &defaultInitType
+	}
+
+	if volumepolicy.FilesystemInitType == nil {
+		defaultInitType := aerospikev1alpha1.AerospikeFilesystemVolumeInitTypeDeleteFiles
+		volumepolicy.FilesystemInitType = &defaultInitType
+	}
+
+	if volumepolicy.CascadeDelete == nil {
+		defaultTrue := true
+		volumepolicy.CascadeDelete = &defaultTrue
+	}
 }
 
 func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {

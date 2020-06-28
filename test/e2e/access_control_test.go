@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,7 +17,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	asConfig "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
-	lib "github.com/aerospike/aerospike-management-lib"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
@@ -961,8 +959,12 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 			Namespace: kubeNs,
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
-			Size:                   testClusterSize,
-			Build:                  latestClusterBuild,
+			Size:  testClusterSize,
+			Build: latestClusterBuild,
+			ValidationPolicy: &aerospikev1alpha1.ValidationPolicySpec{
+				ValidateWorkDirectory:    false,
+				ValidateXdrDigestLogFile: false,
+			},
 			AerospikeAccessControl: accessControl,
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
@@ -997,40 +999,6 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 			},
 		},
 	}
-}
-
-func aerospikeClusterCreateUpdate(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {
-
-	current := &aerospikev1alpha1.AerospikeCluster{}
-	err := framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
-	if err != nil {
-		// Deploy the cluster.
-		if err := deployCluster(t, framework.Global, ctx, desired); err != nil {
-			return err
-		}
-
-		// Wait for aerocluster to be up.
-		err = waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, getTimeout(1))
-	} else {
-		// Apply the update.
-		if desired.Spec.AerospikeAccessControl != nil {
-			current.Spec.AerospikeAccessControl = &aerospikev1alpha1.AerospikeAccessControlSpec{}
-			lib.DeepCopy(&current.Spec, &desired.Spec)
-		} else {
-			current.Spec.AerospikeAccessControl = nil
-		}
-		lib.DeepCopy(&current.Spec.AerospikeConfig, &desired.Spec.AerospikeConfig)
-
-		err := framework.Global.Client.Update(context.TODO(), current)
-		if err != nil {
-			return err
-		}
-
-		// Wait for changes to be applied.
-		time.Sleep(5 * time.Second)
-	}
-
-	return nil
 }
 
 func testAccessControlReconcile(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {

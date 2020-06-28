@@ -84,11 +84,8 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 		return fmt.Errorf("Failed to start upgrade: %v", err)
 	}
 
-	if !reflect.DeepEqual(s.obj.Spec.BlockStorage, old.Spec.BlockStorage) {
-		return fmt.Errorf("BlockStorage config cannot be updated. Old %v, new %v", old.Spec.BlockStorage, s.obj.Spec.BlockStorage)
-	}
-	if !reflect.DeepEqual(s.obj.Spec.FileStorage, old.Spec.FileStorage) {
-		return fmt.Errorf("FileStorage config cannot be updated. Old %v, new %v", old.Spec.FileStorage, s.obj.Spec.FileStorage)
+	if !reflect.DeepEqual(s.obj.Spec.Storage, old.Spec.Storage) {
+		return fmt.Errorf("Storage config cannot be updated. Old %v, new %v", old.Spec.Storage, s.obj.Spec.Storage)
 	}
 	if s.obj.Spec.MultiPodPerHost != old.Spec.MultiPodPerHost {
 		return fmt.Errorf("Cannot update MultiPodPerHost setting")
@@ -186,37 +183,26 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	}
 
 	// Get list of all devices used in namespace. match it with namespace device list
-	blockStorageDevices := map[string]int{}
-	for _, storage := range s.obj.Spec.BlockStorage {
-		if storage.StorageClass != "" {
-			for _, device := range storage.VolumeDevices {
-				if _, ok := blockStorageDevices[device.DevicePath]; ok {
-					return fmt.Errorf("Invalid BlockStorage. DevicePath %s, is repeated", device.DevicePath)
-				}
-				blockStorageDevices[device.DevicePath] = 1
-			}
-		}
-	}
+	storagePaths := map[string]int{}
 	var blockStorageDeviceList []string
-	for dev := range blockStorageDevices {
-		blockStorageDeviceList = append(blockStorageDeviceList, dev)
-	}
-
-	// Get list of all volumeMounts. match it with namespace files list
-	fileStorages := map[string]int{}
-	for _, storage := range s.obj.Spec.FileStorage {
-		if storage.StorageClass != "" {
-			for _, mount := range storage.VolumeMounts {
-				if _, ok := fileStorages[mount.MountPath]; ok {
-					return fmt.Errorf("Invalid FileStorage. MountPath %s, is repeated", mount.MountPath)
-				}
-				fileStorages[mount.MountPath] = 1
-			}
-		}
-	}
 	var fileStorageList []string
-	for file := range fileStorages {
-		fileStorageList = append(fileStorageList, file)
+
+	for _, volume := range s.obj.Spec.Storage.Volumes {
+		if volume.StorageClass == "" {
+			return fmt.Errorf("Mising storage class. Invalid volume: %v", volume)
+		}
+
+		if _, ok := storagePaths[volume.Path]; ok {
+			return fmt.Errorf("Invalid volume. Path %s, is repeated", volume.Path)
+		}
+
+		storagePaths[volume.Path] = 1
+
+		if volume.VolumeMode == aerospikev1alpha1.AerospikeVolumeModeBlock {
+			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
+		} else {
+			fileStorageList = append(fileStorageList, volume.Path)
+		}
 	}
 
 	if err := s.validateAerospikeConfig(); err != nil {
@@ -281,7 +267,7 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 						for _, dev := range dList {
 							// Namespace device should be present in BlockStorage config section
 							if !utils.ContainsString(blockStorageDeviceList, dev) {
-								return fmt.Errorf("Namespace storage device related devicePath %v not found in BlockStorage config %v", dev, s.obj.Spec.BlockStorage)
+								return fmt.Errorf("Namespace storage device related devicePath %v not found in Storage config %v", dev, s.obj.Spec.Storage)
 							}
 						}
 						logger.Debug("Valid namespace storage device", log.Ctx{"device": device})
@@ -302,8 +288,8 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 							return fmt.Errorf("namespace storage file not valid string %v", file)
 						}
 						dirPath := filepath.Dir(file.(string))
-						if !utils.ContainsString(fileStorageList, dirPath) {
-							return fmt.Errorf("Namespace storage file related mountPath %v not found in FileStorage config %v", dirPath, s.obj.Spec.FileStorage)
+						if !isFileStorageConfiguredForDir(fileStorageList, dirPath) {
+							return fmt.Errorf("Namespace storage file related mountPath %v not found in storage config %v", dirPath, s.obj.Spec.Storage)
 						}
 						logger.Debug("Valid namespace storage file", log.Ctx{"file": file})
 					}
@@ -328,37 +314,6 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
 	}
 
-	val, err = asconfig.CompareVersions(version, "5.0.0")
-	if err != nil {
-		return fmt.Errorf("Failed to check build version: %v", err)
-	}
-	if val < 0 {
-		// Validate xdr-digestlog-path for pre-5.0.0 versions.
-		if _, ok := config["xdr"]; ok {
-			xdrConf, ok := config["xdr"].(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("aerospikeConfig.xdr not a valid map %v", config["xdr"])
-			}
-			dglog, ok := xdrConf["xdr-digestlog-path"]
-			if !ok {
-				return fmt.Errorf("xdr-digestlog-path is missing in aerospikeConfig.xdr %v", xdrConf)
-			}
-			if _, ok := dglog.(string); !ok {
-				return fmt.Errorf("xdr-digestlog-path is not a valid string in aerospikeConfig.xdr %v", xdrConf)
-			}
-			if len(strings.Fields(dglog.(string))) != 2 {
-				return fmt.Errorf("xdr-digestlog-path is not in valid format (/opt/aerospike/xdr/digestlog 100G) in aerospikeConfig.xdr %v", xdrConf)
-			}
-
-			// "/opt/aerospike/xdr/digestlog 100G"
-			dglogFilePath := filepath.Dir(strings.Fields(dglog.(string))[0])
-
-			if !utils.ContainsString(fileStorageList, dglogFilePath) {
-				return fmt.Errorf("xdr-digestlog-path related mountPath %v not found in FileStorage config %v", dglogFilePath, s.obj.Spec.FileStorage)
-			}
-		}
-	}
-
 	// Validate resource and limit
 	res := s.obj.Spec.Resources
 	if res == nil || res.Requests == nil {
@@ -371,6 +326,11 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
 			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
 		return fmt.Errorf("Resource.Limits cannot be less than Resource.Requests. Resources %v", res)
+	}
+
+	err = s.validateRequiredFileStorage(fileStorageList, version)
+	if err != nil {
+		return err
 	}
 
 	// Validate access control
@@ -423,6 +383,51 @@ func (s *ClusterValidatingAdmissionWebhook) validateAerospikeConfig() error {
 			}
 		}
 	}
+	return nil
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validateRequiredFileStorage(fileStorageList []string, version string) error {
+	config := s.obj.Spec.AerospikeConfig
+
+	// Validate work directory.
+	if !s.obj.Spec.ValidationPolicy.SkipWorkDirValidate {
+		workDirPath := utils.GetWorkDirectory(config)
+
+		if !filepath.IsAbs(workDirPath) {
+			return fmt.Errorf("Aerospike work directory path %v must be absolute", workDirPath, s.obj.Spec.Storage)
+		}
+
+		if !isFileStorageConfiguredForDir(fileStorageList, workDirPath) {
+			return fmt.Errorf("Aerospike work directory path %v not mounted in storage config %v", workDirPath, s.obj.Spec.Storage)
+		}
+	}
+
+	if !s.obj.Spec.ValidationPolicy.SkipXdrDlogFileValidate {
+		val, err := asconfig.CompareVersions(version, "5.0.0")
+		if err != nil {
+			return fmt.Errorf("Failed to check build version: %v", err)
+		}
+		if val < 0 {
+			// Validate xdr-digestlog-path for pre-5.0.0 versions.
+			if utils.IsXdrEnabled(config) {
+				dglogFilePath, err := utils.GetDigestLogFile(config)
+				if err != nil {
+					return err
+				}
+
+				if !filepath.IsAbs(*dglogFilePath) {
+					return fmt.Errorf("xdr digestlog path %v must be absolute", dglogFilePath, s.obj.Spec.Storage)
+				}
+
+				dglogDirPath := filepath.Dir(*dglogFilePath)
+
+				if !isFileStorageConfiguredForDir(fileStorageList, dglogDirPath) {
+					return fmt.Errorf("xdr digestlog path %v not mounted in fileStorage config %v", dglogFilePath, s.obj.Spec.Storage)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -504,5 +509,27 @@ func isSecretNeeded(aerospikeConfig aerospikev1alpha1.Values) bool {
 	if utils.IsTLS(aerospikeConfig) {
 		return true
 	}
+	return false
+}
+
+// isFileStorageConfiguredForDir indicates if file storage is configured for dir.
+func isFileStorageConfiguredForDir(fileStorageList []string, dir string) bool {
+	for _, storageMount := range fileStorageList {
+		if isPathParentOrSame(storageMount, dir) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isPathParentOrSame indicates if dir1 is a parent or same as dir2.
+func isPathParentOrSame(dir1 string, dir2 string) bool {
+	if relPath, err := filepath.Rel(dir1, dir2); err == nil {
+		// If dir1 is not a parent directory then relative path will have to climb up directory hierarchy of dir1.
+		return !strings.HasPrefix(relPath, "..")
+	}
+
+	// Paths are unrelated.
 	return false
 }

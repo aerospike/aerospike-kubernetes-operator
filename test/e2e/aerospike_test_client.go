@@ -90,9 +90,11 @@ func getClientForUser(username string, password string, aeroCluster *aerospikev1
 }
 
 func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
-	networkConf := aeroCluster.Spec.AerospikeConfig["network"].(map[string]interface{})
-	if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-		return tlsName.(string)
+	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig["network"]; ok {
+		networkConf := networkConfTmp.(map[string]interface{})
+		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
+			return tlsName.(string)
+		}
 	}
 	return ""
 }

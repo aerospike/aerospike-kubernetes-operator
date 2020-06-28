@@ -682,13 +682,17 @@ func validateCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCt
 }
 
 func deployCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	return deployClusterWithTO(t, f, ctx, aeroCluster, retryInterval, getTimeout(aeroCluster.Spec.Size))
+}
+
+func deployClusterWithTO(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster, retryInterval, timeout time.Duration) error {
 	// Use TestCtx's create helper to create the object and add a cleanup function for the new object
 	err := f.Client.Create(goctx.TODO(), aeroCluster, cleanupOption(ctx))
 	if err != nil {
 		return err
 	}
-	// Wait for aerocluster to reach 1 replicas
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	// Wait for aerocluster to reach desired cluster size.
+	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
 }
 
 func deleteCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {

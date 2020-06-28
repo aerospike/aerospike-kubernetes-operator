@@ -32,10 +32,8 @@ type AerospikeClusterSpec struct {
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
-	// BlockStorage has block storage info.
-	BlockStorage []BlockStorageSpec `json:"blockStorage,omitempty"`
-	// FileStorage has filesystem storage info.
-	FileStorage []FileStorageSpec `json:"fileStorage,omitempty"`
+	// Storage specified persistent storage to use for the Aerospike pods.
+	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
 	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
@@ -46,6 +44,26 @@ type AerospikeClusterSpec struct {
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources"`
+
+	// ValidationPolicy controls validation of the Aerospike cluster resource.
+	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
+}
+
+// ValidationPolicySpec controls validation of the Aerospike cluster resource.
+type ValidationPolicySpec struct {
+	// skipWorkDirValidate validates that Aerospike work directory is mounted on a persistent file storage. Defaults to false.
+	SkipWorkDirValidate bool `json:"skipWorkDirValidate"`
+
+	// ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage. Defaults to false.
+	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
+}
+
+// DeepCopy implements deepcopy func for ValidationPolicy.
+func (v *ValidationPolicySpec) DeepCopy() *ValidationPolicySpec {
+	src := *v
+	var dst = ValidationPolicySpec{}
+	lib.DeepCopy(dst, src)
+	return &dst
 }
 
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
@@ -121,70 +139,113 @@ func (v *AerospikeConfigSecretSpec) DeepCopy() *AerospikeConfigSecretSpec {
 	return &dst
 }
 
-// BlockStorageSpec has storage info. StorageClass for devices
+// AerospikeVolumeMode specifies if the volume is a block/raw or filesystem.
+// +kubebuilder:validation:Enum=filesystem;block
 // +k8s:openapi-gen=true
-type BlockStorageSpec struct {
-	// StorageClass should be created by user
-	StorageClass string `json:"storageClass"`
-	// VolumeDevices is the list of block devices to be used by the container. Devices should be provisioned by user
-	VolumeDevices []VolumeDevice `json:"volumeDevices"`
+type AerospikeVolumeMode string
+
+const (
+	// AerospikeVolumeModeFilesystem specifies a volume that has a filesystem.
+	AerospikeVolumeModeFilesystem AerospikeVolumeMode = "filesystem"
+
+	// AerospikeVolumeModeBlock specifies the volume is a block/raw device.
+	AerospikeVolumeModeBlock AerospikeVolumeMode = "block"
+)
+
+// AerospikeBlockVolumeInitType specifies how block volumes should be initialized.
+// +kubebuilder:validation:Enum=none;dd;blkdiscard
+// +k8s:openapi-gen=true
+type AerospikeBlockVolumeInitType string
+
+const (
+	// AerospikeBlockVolumeInitTypeNone specifies the block volume should not be initialized.
+	AerospikeBlockVolumeInitTypeNone AerospikeBlockVolumeInitType = "none"
+
+	// AerospikeBlockVolumeInitTypeDD specifies the block volume should be zeroed using dd command.
+	AerospikeBlockVolumeInitTypeDD AerospikeBlockVolumeInitType = "dd"
+
+	// AerospikeBlockVolumeInitTypeBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
+	AerospikeBlockVolumeInitTypeBlkdiscard AerospikeBlockVolumeInitType = "blkdiscard"
+)
+
+// AerospikeFilesystemVolumeInitType specifies how filesystem volumes should be initialized.
+// +kubebuilder:validation:Enum=none;deleteFiles
+// +k8s:openapi-gen=true
+type AerospikeFilesystemVolumeInitType string
+
+const (
+	// AerospikeFilesystemVolumeInitTypeNone specifies the filesystem should not be initialized.
+	AerospikeFilesystemVolumeInitTypeNone AerospikeFilesystemVolumeInitType = "none"
+
+	// AerospikeFilesystemVolumeInitTypeDeleteFiles specifies the volume should be zeroed using blkdiscard command.
+	AerospikeFilesystemVolumeInitTypeDeleteFiles AerospikeFilesystemVolumeInitType = "deleteFiles"
+)
+
+// AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
+type AerospikePersistentVolumePolicySpec struct {
+	// BlockInitType determines how block volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
+	BlockInitType *AerospikeBlockVolumeInitType `json:"blockInitType"`
+
+	// FilesystemInitType determines how filesystem volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "deleteFiles".
+	FilesystemInitType *AerospikeFilesystemVolumeInitType `json:"filesystemInitType"`
+
+	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
+	CascadeDelete *bool `json:"cascadeDelete"`
 }
 
-// VolumeDevice is device to be used by the container
+// DeepCopy implements deepcopy func for AerospikePersistentVolumePolicySpec.
+func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVolumePolicySpec {
+	src := *v
+	var dst = AerospikePersistentVolumePolicySpec{}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// AerospikePersistentVolumeSpec describes a persistent volume to claim and attach to Aerospike pods.
 // +k8s:openapi-gen=true
-type VolumeDevice struct {
-	// DevicePath is the path inside of the container that the device will be mapped to
-	DevicePath string `json:"devicePath"`
-	// SizeInGB Size of device in GB
+type AerospikePersistentVolumeSpec struct {
+	// Contains  policies for this volumes.
+	AerospikePersistentVolumePolicySpec
+
+	// StorageClass should be pre-created by user.
+	StorageClass string `json:"storageClass"`
+
+	// VolumeMode specifies if the volume is block/raw or a filesystem.
+	VolumeMode AerospikeVolumeMode `json:"volumeMode"`
+
+	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
+	Path string `json:"path"`
+
+	// SizeInGB Size of volume in GB.
 	SizeInGB int32 `json:"sizeInGB"`
 }
 
-// DeepCopy implements deepcopy func for Values
-func (v *BlockStorageSpec) DeepCopy() *BlockStorageSpec {
+// DeepCopy implements deepcopy func for AerospikePersistentVolumeSpec.
+func (v *AerospikePersistentVolumeSpec) DeepCopy() *AerospikePersistentVolumeSpec {
 	src := *v
-	var dst = BlockStorageSpec{VolumeDevices: []VolumeDevice{}}
+	var dst = AerospikePersistentVolumeSpec{}
 	lib.DeepCopy(dst, src)
 	return &dst
 }
 
-// DeepCopy implements deepcopy func for Values
-func (v *VolumeDevice) DeepCopy() *VolumeDevice {
-	src := *v
-	var dst = VolumeDevice{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// FileStorageSpec has storage info. StorageClass for fileSystems
+// AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
 // +k8s:openapi-gen=true
-type FileStorageSpec struct {
-	// StorageClass should be created by user
-	StorageClass string `json:"storageClass"`
-	// Pod volumes to mount into the container's filesystem.
-	VolumeMounts []VolumeMount `json:"volumeMounts"`
+type AerospikeStorageSpec struct {
+	// Contains default policies for all volumes.
+	AerospikePersistentVolumePolicySpec
+
+	// Volumes is the list of to attach to created pods.
+	// +patchMergeKey=path
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=path
+	Volumes []AerospikePersistentVolumeSpec `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"path"`
 }
 
-// VolumeMount is Pod volume to mount into the container's filesystem
-// +k8s:openapi-gen=true
-type VolumeMount struct {
-	// Path within the container at which the volume should be mounted
-	MountPath string `json:"mountPath"`
-	// SizeInGB Size of mount volume
-	SizeInGB int32 `json:"sizeInGB"`
-}
-
-// DeepCopy implements deepcopy func for Values
-func (v *FileStorageSpec) DeepCopy() *FileStorageSpec {
+// DeepCopy implements deepcopy func for AerospikeStorageSpec.
+func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
 	src := *v
-	var dst = FileStorageSpec{VolumeMounts: []VolumeMount{}}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for Values
-func (v *VolumeMount) DeepCopy() *VolumeMount {
-	src := *v
-	var dst = VolumeMount{}
+	var dst = AerospikeStorageSpec{}
 	lib.DeepCopy(dst, src)
 	return &dst
 }
@@ -214,6 +275,10 @@ type AerospikeClusterStatus struct {
 	// Details about the current condition of the AerospikeCluster resource.
 	//Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 
+	// PodStatus has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its status. The map key is the name of the pod.
+	// +patchStrategy=strategic
+	PodStatus map[string]AerospikePodStatus `json:"podStatus" patchStrategy:"strategic"`
+
 	// TODO:
 	// Give asadm info
 	// Give pod specific summary
@@ -224,6 +289,7 @@ type AerospikeClusterStatus struct {
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode
 // +k8s:openapi-gen=true
 type AerospikeNodeSummary struct {
+	PodName     string `json:"podName"`
 	ClusterName string `json:"clusterName"`
 	NodeID      string `json:"nodeID"`
 	IP          string `json:"ip"`
@@ -236,6 +302,21 @@ type AerospikeNodeSummary struct {
 func (v *AerospikeNodeSummary) DeepCopy() *AerospikeNodeSummary {
 	src := *v
 	var dst = AerospikeNodeSummary{}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.
+// +k8s:openapi-gen=true
+type AerospikePodStatus struct {
+	// AttachedVolumes indicates if this pod has initialized devices.
+	AttachedVolumes bool `json:"devicesInitialized"`
+}
+
+// DeepCopy implements deepcopy func for AerospikePodStatus
+func (v *AerospikePodStatus) DeepCopy() *AerospikePodStatus {
+	src := *v
+	var dst = AerospikePodStatus{}
 	lib.DeepCopy(dst, src)
 	return &dst
 }

@@ -100,73 +100,9 @@ spec:
               - mountPath
               - secretName
               type: object
-            blockStorage:
-              description: BlockStorage has block storage info.
-              items:
-                description: BlockStorageSpec has storage info. StorageClass for devices
-                properties:
-                  storageClass:
-                    description: StorageClass should be created by user
-                    type: string
-                  volumeDevices:
-                    description: VolumeDevices is the list of block devices to be
-                      used by the container. Devices should be provisioned by user
-                    items:
-                      description: VolumeDevice is device to be used by the container
-                      properties:
-                        devicePath:
-                          description: DevicePath is the path inside of the container
-                            that the device will be mapped to
-                          type: string
-                        sizeInGB:
-                          description: SizeInGB Size of device in GB
-                          format: int32
-                          type: integer
-                      required:
-                      - devicePath
-                      - sizeInGB
-                      type: object
-                    type: array
-                required:
-                - storageClass
-                - volumeDevices
-                type: object
-              type: array
             build:
               description: Aerospike cluster build
               type: string
-            fileStorage:
-              description: FileStorage has filesystem storage info.
-              items:
-                description: FileStorageSpec has storage info. StorageClass for fileSystems
-                properties:
-                  storageClass:
-                    description: StorageClass should be created by user
-                    type: string
-                  volumeMounts:
-                    description: Pod volumes to mount into the container's filesystem.
-                    items:
-                      description: VolumeMount is Pod volume to mount into the container's
-                        filesystem
-                      properties:
-                        mountPath:
-                          description: Path within the container at which the volume
-                            should be mounted
-                          type: string
-                        sizeInGB:
-                          description: SizeInGB Size of mount volume
-                          format: int32
-                          type: integer
-                      required:
-                      - mountPath
-                      - sizeInGB
-                      type: object
-                    type: array
-                required:
-                - storageClass
-                - volumeMounts
-                type: object
-              type: array
             multiPodPerHost:
               description: "If set true then multiple pods can be created per Kubernetes
                 Node. This will create a NodePort service for each Pod. NodePort,
@@ -205,6 +141,60 @@ spec:
               description: Aerospike cluster size
               format: int32
               type: integer
+            storage:
+              description: Storage specified persistent storage to use for the Aerospike
+                pods.
+              properties:
+                volumes:
+                  description: Volumes is the list of to attach to created pods.
+                  items:
+                    description: AerospikePersistentVolumeSpec describes a persistent
+                      volume to claim and attach to Aerospike pods.
+                    properties:
+                      path:
+                        description: Path is the device path where block 'block' mode
+                          volumes are attached to the pod or the mount path for 'filesystem'
+                          mode.
+                        type: string
+                      sizeInGB:
+                        description: SizeInGB Size of volume in GB.
+                        format: int32
+                        type: integer
+                      storageClass:
+                        description: StorageClass should be pre-created by user.
+                        type: string
+                      volumeMode:
+                        description: VolumeMode specifies if the volume is block/raw
+                          or a filesystem.
+                        enum:
+                        - filesystem
+                        - block
+                        type: string
+                    required:
+                    - path
+                    - sizeInGB
+                    - storageClass
+                    - volumeMode
+                    type: object
+                  type: array
+              type: object
+            validationPolicy:
+              description: ValidationPolicy controls validation of the Aerospike cluster
+                resource.
+              properties:
+                skipWorkDirValidate:
+                  description: skipWorkDirValidate validates that Aerospike work directory
+                    is mounted on a persistent file storage. Defaults to false.
+                  type: boolean
+                skipXdrDlogFileValidate:
+                  description: ValidateXdrDigestLogFile validates that xdr digest
+                    log file is mounted on a persistent file storage. Defaults to
+                    false.
+                  type: boolean
+              required:
+              - skipWorkDirValidate
+              - skipXdrDlogFileValidate
+              type: object
           required:
           - aerospikeConfig
           - build
@@ -227,6 +217,8 @@ spec:
                     type: string
                   nodeID:
                     type: string
+                  podName:
+                    type: string
                   port:
                     type: integer
                   tlsname:
@@ -236,12 +228,31 @@ spec:
                 - clusterName
                 - ip
                 - nodeID
+                - podName
                 - port
                 - tlsname
                 type: object
               type: array
+            podStatus:
+              additionalProperties:
+                description: AerospikePodStatus contains the Aerospike specific status
+                  of the Aerospike serverpods.
+                properties:
+                  devicesInitialized:
+                    description: AttachedVolumes indicates if this pod has initialized
+                      devices.
+                    type: boolean
+                required:
+                - devicesInitialized
+                type: object
+              description: PodStatus has Aerospike specific status of the pods. This
+                is map instead of the conventional map as list convention to allow
+                each pod to patch update its status. The map key is the name of the
+                pod.
+              type: object
           required:
           - nodes
+          - podStatus
           type: object
       type: object
   version: v1alpha1

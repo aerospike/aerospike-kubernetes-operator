@@ -1,10 +1,9 @@
 package configmap
 
-const installSh = `
+const initializeSh = `
 #! /bin/bash
-
 # ------------------------------------------------------------------------------
-# Copyright 2012-2017 Aerospike, Inc.
+# Copyright 2012-2020 Aerospike, Inc.
 #
 # Portions may be licensed to Aerospike, Inc. under one or more contributor
 # license agreements.
@@ -20,41 +19,88 @@ const installSh = `
 # the License.
 # ------------------------------------------------------------------------------
 
+# This script writes out an aerospike config using a list of newline seperated
+# peer DNS names it accepts through stdin.
 
-CONFIG_VOLUME="/etc/aerospike"
-NAMESPACE=${MY_POD_NAMESPACE:-default}
-K8_SERVICE=${SERVICE:-aerospike}
-for i in "$@"
-do
-case $i in
-    -c=*|--config=*)
-    CONFIG_VOLUME="${i#*=}"
-    shift
-    ;;
-    *)
-    # unknown option
-    ;;
-esac
-done
+# /etc/aerospike is assumed to be a shared volume so we can modify aerospike.conf as required
+set -e
+set -x
 
-echo installing aerospike.conf into "${CONFIG_VOLUME}"
-mkdir -p "${CONFIG_VOLUME}"
-#chown -R aerospike:aerospike "${CONFIG_VOLUME}"
+# Kubernetes API details.
+CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+KUBE_API_SERVER=https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_PORT_443_TCP_PORT/
 
-cp /configs/on-start.sh /on-start.sh
-cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
-if [ -f /configs/features.conf ]; then
-        cp /configs/features.conf "${CONFIG_VOLUME}"/
+echo $KUBE_BASE_PATH
+# Read this pod's Aerospike pod status from the cluster status.
+NAMESPACE=$MY_POD_NAMESPACE
+AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
+
+if [ $? -ne 0 ]
+then
+   echo "ERROR: failed to read status for $AERO_CLUSTER_NAME"
+   exit 1
 fi
-chmod +x /on-start.sh
-chmod +x /peer-finder
-/peer-finder -on-start=/on-start.sh -service=$K8_SERVICE -ns=${NAMESPACE} -domain=cluster.local
-`
 
+PORTSTRING="$(echo $AERO_CLUSTER_JSON | python -c "import sys, json
+data = json.load(sys.stdin);
+podname = '${MY_POD_NAME}';
+def getport(data, podname):
+    for item in data['items']:
+        if item['metadata']['name'] == podname:
+            infoport = ''
+            tlsport = ''
+            for port in item['spec']['ports']:
+                if port['name'] == 'info':
+                    infoport = port['nodePort']
+                 if port['name'] == 'tls':
+                    tlsport = port['nodePort']
+            return infoport, tlsport
+print getport(data, podname)")"
+PORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $2}')"
+TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
+
+# Get nodeIP
+DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "https://kubernetes.default.svc/api/v1/nodes")"
+EXTERNALIP="$(echo $DATA | python -c "import sys, json
+data = json.load(sys.stdin);
+host = '${MY_HOST_IP}';
+def gethost(data, host):
+        for item in data['items']:
+                externalIP = ''
+                for add in item['status']['addresses']:
+                        if add['type'] == 'InternalIP':
+                                internalIP = add['address']
+                                continue
+                        if add['type'] == 'ExternalIP':
+                                externalIP = add['address']
+                                continue
+                        if internalIP != '' and externalIP != '':
+                                break
+                if internalIP == host and externalIP != '':
+                        return externalIP
+        return host
+print gethost(data, host)")"
+
+if [ "true" == "${MULTI_POD_PER_HOST}" ]
+then
+    sed -i "s/access-port.*3000/access-port    ${PORT}/" ${CFG}
+    # No need for alternate-access-port replace, access-port will replace both
+    # sed -i "s/alternate-access-port.*3000/alternate-access-port    ${PORT}/" ${CFG}
+    sed -i "s/tls-access-port.*4333/tls-access-port    ${TLSPORT}/" ${CFG}
+    sed -i "s/tls-alternate-access-port.*4333/tls-alternate-access-port    ${TLSPORT}/" ${CFG}
+fi
+sed -i "s/access-address.*<access_address>/access-address    ${EXTERNALIP}/" ${CFG}
+sed -i "s/alternate-access-address.*<alternate_access_address>/alternate-access-address    ${EXTERNALIP}/" ${CFG}
+sed -i "s/tls-access-address.*<tls-access-address>/tls-access-address    ${EXTERNALIP}/" ${CFG}
+sed -i "s/tls-alternate-access-address.*<tls-alternate-access-address>/tls-alternate-access-address    ${EXTERNALIP}/" ${CFG}
+
+cat ${CFG}
+`
 const onStartSh = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
-# Copyright 2012-2017 Aerospike, Inc.
+# Copyright 2012-2020 Aerospike, Inc.
 #
 # Portions may be licensed to Aerospike, Inc. under one or more contributor
 # license agreements.
@@ -173,5 +219,6 @@ cat ${CFG}
 `
 
 var confData = map[string]string{
-	"on-start.sh": onStartSh,
+	"initialize.sh": initializeSh,
+	"on-start.sh":   onStartSh,
 }
