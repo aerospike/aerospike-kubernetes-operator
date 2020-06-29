@@ -60,12 +60,12 @@ func NamespacedName(namespace, name string) string {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !isTerminating(pod) && pod.Status.Phase == v1.PodRunning
+	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning
 }
 
 // PodFailedStatus check if pod is in failed status
 func PodFailedStatus(pod *v1.Pod) error {
-	if isTerminating(pod) {
+	if IsTerminating(pod) {
 		return nil
 	}
 
@@ -145,8 +145,8 @@ func isFailed(pod *v1.Pod) bool {
 	return pod.Status.Phase == v1.PodFailed
 }
 
-// isTerminating returns true if pod's DeletionTimestamp has been set
-func isTerminating(pod *v1.Pod) bool {
+// IsTerminating returns true if pod's DeletionTimestamp has been set
+func IsTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 

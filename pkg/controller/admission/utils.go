@@ -56,6 +56,8 @@ const (
 	// whReadyTimeout is the time to wait until the validating webhook service
 	// endpoints are ready
 	whReadyTimeout = time.Second * 30
+	// default rackID
+	defaultRackID = 1000000
 )
 
 var pkglog = log.New(log.Ctx{"module": "admissionWebhook"})

@@ -780,24 +780,52 @@ func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, 
 		affinity.PodAntiAffinity = antiAffinity
 	}
 
+	var matchExpressions []corev1.NodeSelectorRequirement
+
 	if rackState.Rack.Zone != "" {
+		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
+			Key:      "failure-domain.beta.kubernetes.io/zone",
+			Operator: corev1.NodeSelectorOpIn,
+			Values:   []string{rackState.Rack.Zone},
+		})
+	}
+	if rackState.Rack.Region != "" {
+		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
+			Key:      "failure-domain.beta.kubernetes.io/region",
+			Operator: corev1.NodeSelectorOpIn,
+			Values:   []string{rackState.Rack.Region},
+		})
+	}
+	if rackState.Rack.RackLabel != "" {
+		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
+			Key:      "RackLabel",
+			Operator: corev1.NodeSelectorOpIn,
+			Values:   []string{rackState.Rack.RackLabel},
+		})
+	}
+
+	if rackState.Rack.NodeName != "" {
+		// st.Spec.Template.Spec.NodeName = rackState.Rack.NodeName
+		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
+			Key:      "kubernetes.io/hostname",
+			Operator: corev1.NodeSelectorOpIn,
+			Values:   []string{rackState.Rack.NodeName},
+		})
+	}
+
+	if len(matchExpressions) != 0 {
 		nodeAffinity := &corev1.NodeAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{
 					{
-						MatchExpressions: []corev1.NodeSelectorRequirement{
-							{
-								Key:      "failure-domain.beta.kubernetes.io/zone",
-								Operator: corev1.NodeSelectorOpIn,
-								Values:   []string{rackState.Rack.Zone},
-							},
-						},
+						MatchExpressions: matchExpressions,
 					},
 				},
 			},
 		}
 		affinity.NodeAffinity = nodeAffinity
 	}
+
 	st.Spec.Template.Spec.Affinity = affinity
 }
 
@@ -1007,14 +1035,22 @@ func splitRacks(nodeCount, rackCount int) []int {
 	return topology
 }
 
-func getRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []RackState {
-	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.Rack))
+func getNewRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []RackState {
+	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
-	for idx, rack := range aeroCluster.Spec.Rack {
+	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
 		rackStateList = append(rackStateList, RackState{
 			Rack: rack,
 			Size: topology[idx],
 		})
 	}
 	return rackStateList
+}
+
+func getOldRackIDList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []int {
+	var rackIDList []int
+	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+		rackIDList = append(rackIDList, rack.ID)
+	}
+	return rackIDList
 }

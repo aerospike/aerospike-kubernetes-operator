@@ -8,11 +8,17 @@ spec:
   size: 4
   build: aerospike/aerospike-server-enterprise:4.7.0.10
   #build: aerospike/aerospike-server-enterprise:4.9.0.5
-  rack: 
-    - ID: 1
-      zone: us-central1-a
-    - ID: 2
-      zone: us-central1-b
+  racks:
+    rackPolicy:
+      - zone
+      # - nodeName
+    rackConfigs: 
+      - ID: 1
+        zone: us-central1-b
+        # nodeName: kubernetes-minion-group-qp3m
+      # - ID: 2
+      #   zone: us-central1-a
+      #   # nodeName: kubernetes-minion-group-tft3
   aerospikeAccessControl:
     users:
       admin:

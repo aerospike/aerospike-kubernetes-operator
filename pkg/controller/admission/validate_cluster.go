@@ -129,6 +129,10 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 	if err := s.validateNsConfUpdate(old); err != nil {
 		return err
 	}
+
+	if err := s.validateRackUpdate(old); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -368,8 +372,22 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	}
 
 	// Validate access control
-	err = s.validateAccessControl(s.obj)
-	return err
+	if err := s.validateAccessControl(s.obj); err != nil {
+		return err
+	}
+
+	// Validate rackConfig
+	if err := s.validateRackConfig(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
+	if len(s.obj.Spec.RackConfig.Racks) != 0 && (int(s.obj.Spec.Size) < len(s.obj.Spec.RackConfig.Racks)) {
+		return fmt.Errorf("Cluster size can not be less than number of Racks")
+	}
+	return nil
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validateAerospikeConfig() error {
@@ -482,6 +500,37 @@ func (s *ClusterValidatingAdmissionWebhook) validateAccessControl(aeroCluster ae
 	_, err := accessControl.IsAerospikeAccessControlValid(&aeroCluster.Spec)
 	return err
 }
+
+func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1alpha1.AerospikeCluster) error {
+	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
+		return nil
+	}
+	for _, newRack := range s.obj.Spec.RackConfig.Racks {
+		// Check for defaultRackID in mutate.
+		if newRack.ID < 1 || newRack.ID > 1000000 {
+			return fmt.Errorf("Invalid rackID. RackID range (1, 1000000)")
+		}
+	}
+	// Old racks can not be updated
+	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
+	// Also when user add new rackIDs old default will be removed by reconciler.
+	for _, oldRack := range old.Spec.RackConfig.Racks {
+		for _, newRack := range s.obj.Spec.RackConfig.Racks {
+			if oldRack.ID == newRack.ID && !reflect.DeepEqual(oldRack, newRack) {
+				return fmt.Errorf("Old RackConfig can not be updated. Old rack %v, new rack %v", oldRack, newRack)
+			}
+		}
+	}
+	return nil
+}
+
+// func rackListToMap(rackList []aerospikev1alpha1.RackConfig) map[int]aerospikev1alpha1.RackConfig {
+// 	rackMap := map[int]aerospikev1alpha1.RackConfig{}
+// 	for _, rack := range rackList {
+// 		rackMap[rack.ID] = rack
+// 	}
+// 	return rackMap
+// }
 
 func isEnterprise(build string) bool {
 	return strings.Contains(strings.ToLower(build), "enterprise")

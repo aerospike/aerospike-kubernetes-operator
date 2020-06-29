@@ -153,24 +153,18 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
-					"rack": {
+					"rackConfig": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackSpec"),
-									},
-								},
-							},
+							Description: "RackConfig",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig"),
 						},
 					},
 				},
-				Required: []string{"size", "build", "aerospikeConfig", "resources", "rack"},
+				Required: []string{"size", "build", "aerospikeConfig", "resources"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackSpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 

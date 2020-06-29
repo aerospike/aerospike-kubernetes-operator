@@ -180,18 +180,36 @@ spec:
                 container is running and the hostPort is the port requested by the
                 user."
               type: boolean
-            rack:
-              items:
-                properties:
-                  ID:
-                    type: integer
-                  zone:
+            rackConfig:
+              description: RackConfig
+              properties:
+                rackPolicy:
+                  items:
                     type: string
-                required:
-                - ID
-                - zone
-                type: object
-              type: array
+                  type: array
+                racks:
+                  items:
+                    description: Rack specifies single rack config
+                    properties:
+                      ID:
+                        type: integer
+                      nodeName:
+                        type: string
+                      rackLabel:
+                        description: Node should have a label {key:RackLabel, value:<RackLable>}
+                        type: string
+                      region:
+                        type: string
+                      zone:
+                        type: string
+                    required:
+                    - ID
+                    type: object
+                  type: array
+              required:
+              - rackPolicy
+              - racks
+              type: object
             resources:
               description: Define resources requests and limits for Aerospike Server
                 Container. Please contact aerospike for proper sizing exercise Only
@@ -220,7 +238,6 @@ spec:
           required:
           - aerospikeConfig
           - build
-          - rack
           - resources
           - size
           type: object

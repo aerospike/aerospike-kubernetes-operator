@@ -46,18 +46,59 @@ type AerospikeClusterSpec struct {
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources"`
-	Rack      []RackSpec                   `json:"rack"`
+	// RackConfig
+	RackConfig RackConfig `json:"rackConfig,omitempty"`
 }
 
-type RackSpec struct {
-	ID   int    `json:"ID"`
-	Zone string `json:"zone"`
+// rackConfig:
+//   policy:
+//     - region
+//     - zone
+//   racks:
+//     - id: 0
+//       region: us-east1
+//       zone: use-east1-1a
+//     - id: 2
+//       region: us-east1
+//       zone: use-east1-1b
+
+// RackConfig specifies all racks and related policies
+type RackConfig struct {
+	RackPolicy []RackPolicy `json:"rackPolicy"`
+	Racks      []Rack       `json:"racks"`
 }
 
-// DeepCopy implement deepcopy func for Values
-func (v *RackSpec) DeepCopy() *RackSpec {
+type RackPolicy string
+
+const (
+	Zone      RackPolicy = "zone"
+	Region    RackPolicy = "region"
+	RackLabel RackPolicy = "rackLabel"
+	NodeName  RackPolicy = "nodeName"
+)
+
+// Rack specifies single rack config
+type Rack struct {
+	ID     int    `json:"ID"`
+	Zone   string `json:"zone,omitempty"`
+	Region string `json:"region,omitempty"`
+	// Node should have a label {key:RackLabel, value:<RackLable>}
+	RackLabel string `json:"rackLabel,omitempty"`
+	NodeName  string `json:"nodeName,omitempty"`
+}
+
+// DeepCopy implements deepcopy func for RackConfig
+func (v *RackConfig) DeepCopy() *RackConfig {
 	src := *v
-	var dst = RackSpec{}
+	var dst = RackConfig{Racks: []Rack{}, RackPolicy: []RackPolicy{}}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// DeepCopy implements deepcopy func for Rack
+func (v *Rack) DeepCopy() *Rack {
+	src := *v
+	var dst = Rack{}
 	lib.DeepCopy(dst, src)
 	return &dst
 }

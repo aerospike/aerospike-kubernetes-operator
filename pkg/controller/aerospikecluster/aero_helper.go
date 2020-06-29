@@ -115,6 +115,9 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 	}
 	var summary []aerospikev1alpha1.AerospikeNodeSummary
 	for _, pod := range podList.Items {
+		if utils.IsTerminating(&pod) {
+			continue
+		}
 		asConn, err := r.newAsConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err
@@ -195,6 +198,9 @@ func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha
 
 	var hostConns []*deployment.HostConn
 	for _, pod := range podList.Items {
+		if utils.IsTerminating(&pod) {
+			continue
+		}
 		hostConn, err := r.newHostConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err

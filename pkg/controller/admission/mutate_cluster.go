@@ -69,7 +69,7 @@ func (s *ClusterMutatingAdmissionWebhook) MutateCreate() webhook.AdmissionRespon
 		log.Error("Mutate AerospikeCluster create failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
-	return webhook.Patched("Patched aerospikeConfig with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig})
+	return webhook.Patched("Patched aerospike spec with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
 // MutateUpdate mutate update
@@ -81,12 +81,16 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 		log.Error("Mutate AerospikeCluster update failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
-	return webhook.Patched("Patched aerospikeConfig with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec/aerospikeConfig", Value: s.obj.Spec.AerospikeConfig})
-	//return webhook.Allowed("Mutated update AerospikeCluster object")
+	return webhook.Patched("Patched aerospike spec with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
 func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
+
+	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
+	if err := s.patchRackConf(); err != nil {
+		return err
+	}
 
 	config := s.obj.Spec.AerospikeConfig
 	if config == nil {
@@ -117,6 +121,25 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	if _, ok := config["xdr"]; ok {
 		if err := s.patchXDRConf(); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (s *ClusterMutatingAdmissionWebhook) patchRackConf() error {
+	if len(s.obj.Spec.RackConfig.Racks) == 0 {
+		s.obj.Spec.RackConfig = aerospikev1alpha1.RackConfig{
+			RackPolicy: []aerospikev1alpha1.RackPolicy{},
+			Racks:      []aerospikev1alpha1.Rack{{ID: defaultRackID}},
+		}
+		log.Info("No rack given. Added default rack-id 0 for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig})
+	} else {
+		for _, rack := range s.obj.Spec.RackConfig.Racks {
+			if rack.ID == defaultRackID {
+				if rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" {
+					return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved, Zone, Region, RackLabel and NodeName should be empty", s.obj.Spec.RackConfig, defaultRackID)
+				}
+			}
 		}
 	}
 	return nil
