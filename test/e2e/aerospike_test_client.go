@@ -246,14 +246,41 @@ func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod,
 			port = utils.ServiceTlsPort
 		}
 	}
-	host := pod.Status.HostIP
+	host, err := getNodeIP(pod, client)
+
+	if err != nil {
+		return nil, err
+	}
+
 	asConn := &deployment.ASConn{
-		AerospikeHostName: host,
+		AerospikeHostName: *host,
 		AerospikePort:     int(port),
 		AerospikeTLSName:  tlsName,
 	}
 
 	return asConn, nil
+}
+
+func getNodeIP(pod *corev1.Pod, client *kubeClient.Client) (*string, error) {
+	ip := pod.Status.HostIP
+
+	k8sNode := &corev1.Node{}
+	err := (*client).Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+	}
+
+	// TODO: when refactoring this to use this as main code, this might need to be the
+	// internal hostIP instead of the external IP. Tests run outside the k8s cluster so
+	// we should to use the external IP if present.
+
+	// If externalIP is present than give external ip
+	for _, add := range k8sNode.Status.Addresses {
+		if add.Type == corev1.NodeExternalIP && add.Address != "" {
+			ip = add.Address
+		}
+	}
+	return &ip, nil
 }
 
 func newHostConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod, client *kubeClient.Client) (*deployment.HostConn, error) {

@@ -962,8 +962,8 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 			Size:  testClusterSize,
 			Build: latestClusterBuild,
 			ValidationPolicy: &aerospikev1alpha1.ValidationPolicySpec{
-				ValidateWorkDirectory:    false,
-				ValidateXdrDigestLogFile: false,
+				SkipWorkDirValidate:     true,
+				SkipXdrDlogFileValidate: true,
 			},
 			AerospikeAccessControl: accessControl,
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{

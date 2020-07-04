@@ -28,14 +28,19 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
 			Build: build,
-			BlockStorage: []aerospikev1alpha1.BlockStorageSpec{
-				aerospikev1alpha1.BlockStorageSpec{
-					StorageClass: "ssd",
-					VolumeDevices: []aerospikev1alpha1.VolumeDevice{
-						aerospikev1alpha1.VolumeDevice{
-							DevicePath: "/test/dev/xvdf",
-							SizeInGB:   1,
-						},
+			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/test/dev/xvdf",
+						SizeInGB:     1,
+						StorageClass: "ssd",
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+					},
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/opt/aerospike",
+						SizeInGB:     1,
+						StorageClass: "ssd",
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 					},
 				},
 			},
@@ -132,14 +137,19 @@ func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aer
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
 			Build: latestClusterBuild,
-			BlockStorage: []aerospikev1alpha1.BlockStorageSpec{
-				aerospikev1alpha1.BlockStorageSpec{
-					StorageClass: "ssd",
-					VolumeDevices: []aerospikev1alpha1.VolumeDevice{
-						aerospikev1alpha1.VolumeDevice{
-							DevicePath: "/test/dev/xvdf",
-							SizeInGB:   1,
-						},
+			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/test/dev/xvdf",
+						SizeInGB:     1,
+						StorageClass: "ssd",
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+					},
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/opt/aerospike",
+						SizeInGB:     1,
+						StorageClass: "ssd",
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 					},
 				},
 			},
@@ -280,17 +290,23 @@ func createBasicTLSCluster(clusterName, namespace string, size int32) *aerospike
 func createSSDStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.BlockStorage = []aerospikev1alpha1.BlockStorageSpec{
-		aerospikev1alpha1.BlockStorageSpec{
-			StorageClass: "ssd",
-			VolumeDevices: []aerospikev1alpha1.VolumeDevice{
-				aerospikev1alpha1.VolumeDevice{
-					DevicePath: "/test/dev/xvdf",
-					SizeInGB:   1,
-				},
+	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/test/dev/xvdf",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+			},
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
+
 	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -307,17 +323,18 @@ func createSSDStorageCluster(clusterName, namespace string, size int32, repFact 
 func createHDDAndDataInMemStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.FileStorage = []aerospikev1alpha1.FileStorageSpec{
-		aerospikev1alpha1.FileStorageSpec{
-			StorageClass: "ssd",
-			VolumeMounts: []aerospikev1alpha1.VolumeMount{
-				aerospikev1alpha1.VolumeMount{
-					MountPath: "/opt/aerospike/data",
-					SizeInGB:  1,
-				},
+
+	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
+
 	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -336,15 +353,24 @@ func createHDDAndDataInMemStorageCluster(clusterName, namespace string, size int
 func createHDDAndDataInIndexStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.FileStorage = []aerospikev1alpha1.FileStorageSpec{
-		aerospikev1alpha1.FileStorageSpec{
+	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+		aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			Path:         "/dev/xvdf1",
+			SizeInGB:     1,
 			StorageClass: "ssd",
-			VolumeMounts: []aerospikev1alpha1.VolumeMount{
-				aerospikev1alpha1.VolumeMount{
-					MountPath: "/opt/aerospike/data",
-					SizeInGB:  1,
-				},
-			},
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+		},
+		aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			Path:         "/opt/aerospike",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+		},
+		aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			Path:         "/opt/aerospike/data",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
@@ -382,26 +408,30 @@ func createDataInMemWithoutPersistentStorageCluster(clusterName, namespace strin
 func createShadowDeviceStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.BlockStorage = []aerospikev1alpha1.BlockStorageSpec{
-		aerospikev1alpha1.BlockStorageSpec{
-			StorageClass: "ssd",
-			VolumeDevices: []aerospikev1alpha1.VolumeDevice{
-				aerospikev1alpha1.VolumeDevice{
-					DevicePath: "/test/dev/xvdf",
-					SizeInGB:   1,
-				},
+
+	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/test/dev/xvdf",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
-		},
-		aerospikev1alpha1.BlockStorageSpec{
-			StorageClass: "local-scsi",
-			VolumeDevices: []aerospikev1alpha1.VolumeDevice{
-				aerospikev1alpha1.VolumeDevice{
-					DevicePath: "/dev/nvme0n1",
-					SizeInGB:   1,
-				},
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/dev/nvme0n1",
+				SizeInGB:     1,
+				StorageClass: "local-ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+			},
+			aerospikev1alpha1.AerospikePersistentVolumeSpec{
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
+
 	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",

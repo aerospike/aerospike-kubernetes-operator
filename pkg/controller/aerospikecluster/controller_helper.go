@@ -165,9 +165,10 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 					ServiceAccountName: aeroClusterServiceAccountName,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
-						Name:            "aerospike-init",
-						Image:           "aerospike/aerospike-kubernetes-init:0.0.10",
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						Name:  "aerospike-init",
+						Image: "aerospike/aerospike-kubernetes-init:0.0.11",
+						// TODO: Change make this ifnotpresent after finalization
+						ImagePullPolicy: corev1.PullAlways,
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      confDirName,

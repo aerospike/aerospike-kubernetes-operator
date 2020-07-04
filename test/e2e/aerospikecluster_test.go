@@ -442,37 +442,26 @@ func UpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Test
 				aeroCluster.Spec.MultiPodPerHost = old
 			})
 
-			t.Run("BlockStorage", func(t *testing.T) {
-				old := aeroCluster.Spec.BlockStorage[0].VolumeDevices
-				new := []aerospikev1alpha1.VolumeDevice{
-					aerospikev1alpha1.VolumeDevice{
-						DevicePath: "/dev/xvdf2",
-						SizeInGB:   1,
-					},
-				}
-				aeroCluster.Spec.BlockStorage[0].VolumeDevices = new
-				err = f.Client.Update(goctx.TODO(), aeroCluster)
-				validateError(t, err, "should fail for updating BlockStorage. Cannot be updated")
-				aeroCluster.Spec.BlockStorage[0].VolumeDevices = old
-			})
-
-			t.Run("FileStorage", func(t *testing.T) {
-				old := aeroCluster.Spec.FileStorage
-				new := []aerospikev1alpha1.FileStorageSpec{
-					aerospikev1alpha1.FileStorageSpec{
+			t.Run("StorageValidation", func(t *testing.T) {
+				old := aeroCluster.Spec.Storage.Volumes
+				new := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/dev/xvdf2",
 						StorageClass: "ssd",
-						VolumeMounts: []aerospikev1alpha1.VolumeMount{
-							aerospikev1alpha1.VolumeMount{
-								MountPath: "/etc/aerospike/data",
-								SizeInGB:  1,
-							},
-						},
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+						SizeInGB:     1,
+					},
+					aerospikev1alpha1.AerospikePersistentVolumeSpec{
+						Path:         "/opt/aeropsike/ns1",
+						StorageClass: "ssd",
+						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+						SizeInGB:     1,
 					},
 				}
-				aeroCluster.Spec.FileStorage = new
+				aeroCluster.Spec.Storage.Volumes = new
 				err = f.Client.Update(goctx.TODO(), aeroCluster)
-				validateError(t, err, "should fail for updating FileStorage. Cannot be updated")
-				aeroCluster.Spec.FileStorage = old
+				validateError(t, err, "should fail for updating Storage. Cannot be updated")
+				aeroCluster.Spec.Storage.Volumes = old
 			})
 
 			t.Run("AerospikeConfig", func(t *testing.T) {
@@ -596,18 +585,24 @@ func validateCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCt
 					t.Run("InvalidStorageEngineDevice", func(t *testing.T) {
 						c = createDummyAerospikeCluster(clusterName, namespace, 1)
 						if _, ok := c.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							c.Spec.BlockStorage[0].VolumeDevices = []aerospikev1alpha1.VolumeDevice{
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf1",
-									SizeInGB:   1,
+							c.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:         "/dev/xvdf1",
+									SizeInGB:     1,
+									StorageClass: "ssd",
+									VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf2",
-									SizeInGB:   1,
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:         "/dev/xvdf2",
+									SizeInGB:     1,
+									StorageClass: "ssd",
+									VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf3",
-									SizeInGB:   1,
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:         "/dev/xvdf3",
+									SizeInGB:     1,
+									StorageClass: "ssd",
+									VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
 							}
 
@@ -633,20 +628,20 @@ func validateCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCt
 							devList = append(devList, "andRandomDevice")
 							c.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = devList
 							err = deployCluster(t, f, ctx, c)
-							validateError(t, err, "should fail for invalid storage-engine.device, cannot a device which doesn't exist in BlockStorage")
+							validateError(t, err, "should fail for invalid storage-engine.device, cannot a device which doesn't exist in storage")
 						}
 					})
 
 					t.Run("InvalidxdrConfig", func(t *testing.T) {
 						c = createDummyAerospikeCluster(clusterName, namespace, 1)
 						if _, ok := c.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							c.Spec.FileStorage = nil
+							c.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{}
 							c.Spec.AerospikeConfig["xdr"] = map[string]interface{}{
 								"enable-xdr":         false,
 								"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
 							}
 							err = deployCluster(t, f, ctx, c)
-							validateError(t, err, "should fail for invalid xdr config. mountPath for digestlog not present in fileStorage")
+							validateError(t, err, "should fail for invalid xdr config. mountPath for digestlog not present in storage")
 						}
 					})
 				})

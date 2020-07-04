@@ -40,7 +40,7 @@ echo installing aerospike.conf into "${CONFIG_VOLUME}"
 mkdir -p "${CONFIG_VOLUME}"
 
 # Create required directories.
-DEFAULT_WORK_DIR="/file-storage/opt/aerospike"
+DEFAULT_WORK_DIR="/filesystem-volumes/opt/aerospike"
 REQUIRED_DIRS=("smd"  "usr/udf/lua" "xdr")
 
 for d in ${REQUIRED_DIRS[*]}; do

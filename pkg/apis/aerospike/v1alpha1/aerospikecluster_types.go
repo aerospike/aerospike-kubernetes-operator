@@ -207,14 +207,14 @@ type AerospikePersistentVolumeSpec struct {
 	// Contains  policies for this volumes.
 	AerospikePersistentVolumePolicySpec
 
+	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
+	Path string `json:"path"`
+
 	// StorageClass should be pre-created by user.
 	StorageClass string `json:"storageClass"`
 
 	// VolumeMode specifies if the volume is block/raw or a filesystem.
 	VolumeMode AerospikeVolumeMode `json:"volumeMode"`
-
-	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
-	Path string `json:"path"`
 
 	// SizeInGB Size of volume in GB.
 	SizeInGB int32 `json:"sizeInGB"`
