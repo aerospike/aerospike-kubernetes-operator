@@ -8,23 +8,31 @@ spec:
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
 
-  fileStorage:
-    - storageClass: ssd
-      volumeMounts:
-        - mountPath: /opt/aerospike/data
-          sizeInGB: 3
-        - mountPath: /opt/aerospike/xdr
-          sizeInGB: 5
+  storage:
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+      - path: /opt/aerospike/xdr
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
 
   multiPodPerHost: true
 
   aerospikeAccessControl:
     users:
-      admin:
+      - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
           - user-admin
+
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret
@@ -43,7 +51,7 @@ spec:
       xdr-compression-threshold: 1000
       datacenter:
         - name: REMOTE_DC_1
-          dc-node-address-port: "IP PORT"
+          dc-node-address-port: "192.168.15.250 8080"
           dc-security-config-file: /etc/aerospike/secret/security_credentials_DC1.txt
     namespace:
       - name: test
@@ -59,5 +67,5 @@ spec:
 
   resources:
     requests:
-      memory: 5Gi
+      memory: 2Gi
       cpu: 200m

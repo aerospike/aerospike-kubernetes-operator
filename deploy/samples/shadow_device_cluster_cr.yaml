@@ -3,26 +3,36 @@ kind: AerospikeCluster
 metadata:
   name: aerocluster
   namespace: aerospike
+
 spec:
   # Add fields here
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
 
-  blockStorage:
-    - storageClass: local-ssd
-      volumeDevices:
-        - devicePath: "/dev/nvme0n1"
-          sizeInGB: 5
-    - storageClass: ssd
-      volumeDevices:
-        - devicePath: "/dev/sdf"
-          sizeInGB: 5
+  storage:
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+      - path: /dev/nvme0n1
+        storageClass: local-ssd
+        volumeMode: block
+        sizeInGB: 5
+      - path: /dev/sdf
+        storageClass: ssd
+        volumeMode: block
+        sizeInGB: 5
 
   multiPodPerHost: true
 
   aerospikeAccessControl:
     users:
-      admin:
+      - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
@@ -47,5 +57,5 @@ spec:
 
   resources:
     requests:
-      memory: 5Gi
+      memory: 2Gi
       cpu: 200m

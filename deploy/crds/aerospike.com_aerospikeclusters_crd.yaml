@@ -46,28 +46,42 @@ spec:
                   - timeout
                   type: object
                 roles:
-                  additionalProperties:
+                  description: Roles is the set of roles to allow on the Aerospike
+                    cluster.
+                  items:
                     description: AerospikeRoleSpec specifies an Aerospike database
                       role and its associated privileges.
                     properties:
+                      name:
+                        description: Name of this role.
+                        type: string
                       privileges:
+                        description: Privileges granted to this role.
                         items:
                           type: string
                         type: array
                       whitelist:
+                        description: Whitelist of host address allowed for this role.
                         items:
                           type: string
                         type: array
                     required:
+                    - name
                     - privileges
                     type: object
-                  type: object
+                  type: array
                 users:
-                  additionalProperties:
+                  description: Users is the set of users to allow on the Aerospike
+                    cluster.
+                  items:
                     description: AerospikeUserSpec specifies an Aerospike database
                       user, the secret name for the password and, associated roles.
                     properties:
+                      name:
+                        description: Name is the user's username.
+                        type: string
                       roles:
+                        description: Roles is the list of roles granted to the user.
                         items:
                           type: string
                         type: array
@@ -77,10 +91,11 @@ spec:
                           eg: kubectl create secret generic dev-db-secret --from-literal=password=''password'''
                         type: string
                     required:
+                    - name
                     - roles
                     - secretName
                     type: object
-                  type: object
+                  type: array
               required:
               - users
               type: object

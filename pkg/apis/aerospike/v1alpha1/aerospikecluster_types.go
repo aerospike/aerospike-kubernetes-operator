@@ -68,8 +68,16 @@ func (v *ValidationPolicySpec) DeepCopy() *ValidationPolicySpec {
 
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
 type AerospikeRoleSpec struct {
+	// Name of this role.
+	Name string `json:"name"`
+
+	// Privileges granted to this role.
+	// +listType=set
 	Privileges []string `json:"privileges"`
-	Whitelist  []string `json:"whitelist,omitempty"`
+
+	// Whitelist of host address allowed for this role.
+	// +listType=set
+	Whitelist []string `json:"whitelist,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeRoleSpec
@@ -82,10 +90,16 @@ func (v *AerospikeRoleSpec) DeepCopy() *AerospikeRoleSpec {
 
 // AerospikeUserSpec specifies an Aerospike database user, the secret name for the password and, associated roles.
 type AerospikeUserSpec struct {
+	// Name is the user's username.
+	Name string `json:"name"`
+
 	// SecretName has secret info created by user. User needs to create this secret from password literal.
 	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
-	SecretName string   `json:"secretName"`
-	Roles      []string `json:"roles"`
+	SecretName string `json:"secretName"`
+
+	// Roles is the list of roles granted to the user.
+	// +listType=set
+	Roles []string `json:"roles"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeUserSpec
@@ -112,15 +126,27 @@ func (v *AerospikeClientAdminPolicy) DeepCopy() *AerospikeClientAdminPolicy {
 
 // AerospikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
 type AerospikeAccessControlSpec struct {
-	AdminPolicy *AerospikeClientAdminPolicy  `json:"adminPolicy,omitempty"`
-	Roles       map[string]AerospikeRoleSpec `json:"roles,omitempty"`
-	Users       map[string]AerospikeUserSpec `json:"users"`
+	AdminPolicy *AerospikeClientAdminPolicy `json:"adminPolicy,omitempty"`
+
+	// Roles is the set of roles to allow on the Aerospike cluster.
+	// +patchMergeKey=name
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=name
+	Roles []AerospikeRoleSpec `json:"roles,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+
+	// Users is the set of users to allow on the Aerospike cluster.
+	// +patchMergeKey=name
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=name
+	Users []AerospikeUserSpec `json:"users" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeAccessControlSpec
 func (v *AerospikeAccessControlSpec) DeepCopy() *AerospikeAccessControlSpec {
 	src := *v
-	var dst = AerospikeAccessControlSpec{Roles: map[string]AerospikeRoleSpec{}, Users: map[string]AerospikeUserSpec{}}
+	var dst = AerospikeAccessControlSpec{Roles: []AerospikeRoleSpec{}, Users: []AerospikeUserSpec{}}
 	lib.DeepCopy(dst, src)
 	return &dst
 }

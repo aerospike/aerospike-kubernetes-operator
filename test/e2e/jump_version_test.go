@@ -275,8 +275,9 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 				MountPath:  "/etc/aerospike/secret",
 			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
-				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-					"admin": aerospikev1alpha1.AerospikeUserSpec{
+				Users: []aerospikev1alpha1.AerospikeUserSpec{
+					aerospikev1alpha1.AerospikeUserSpec{
+						Name:       "admin",
 						SecretName: authSecretName,
 						Roles: []string{
 							"sys-admin",

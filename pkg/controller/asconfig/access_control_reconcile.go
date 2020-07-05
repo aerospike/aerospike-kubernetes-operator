@@ -38,7 +38,13 @@ func AerospikeAdminCredentials(desiredState *aerospikev1alpha1.AerospikeClusterS
 		return adminUsername, defaultAdminPAssword, nil
 	}
 
-	adminUserSpec := currentState.AerospikeAccessControl.Users[adminUsername]
+	adminUserSpec, ok := getUsersFromSpec(currentState)[adminUsername]
+
+	if !ok {
+		// Should not happen on a validated spec.
+		return "", "", fmt.Errorf("%s user missing in access control", adminUsername)
+	}
+
 	password, err := passwordProvider.Get(adminUsername, &adminUserSpec)
 
 	if err != nil {
@@ -68,25 +74,23 @@ func ReconcileAccessControl(desired *aerospikev1alpha1.AerospikeClusterSpec, cur
 
 // getRolesFromSpec returns roles or an empty map from the spec.
 func getRolesFromSpec(spec *aerospikev1alpha1.AerospikeClusterSpec) map[string]aerospikev1alpha1.AerospikeRoleSpec {
-	var roles map[string]aerospikev1alpha1.AerospikeRoleSpec
+	var roles map[string]aerospikev1alpha1.AerospikeRoleSpec = map[string]aerospikev1alpha1.AerospikeRoleSpec{}
 	if spec.AerospikeAccessControl != nil {
-		roles = spec.AerospikeAccessControl.Roles
-	} else {
-		roles = map[string]aerospikev1alpha1.AerospikeRoleSpec{}
+		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
+			roles[roleSpec.Name] = roleSpec
+		}
 	}
-
 	return roles
 }
 
 // getUsersFromSpec returns users or an empty map from the spec.
 func getUsersFromSpec(spec *aerospikev1alpha1.AerospikeClusterSpec) map[string]aerospikev1alpha1.AerospikeUserSpec {
-	var users map[string]aerospikev1alpha1.AerospikeUserSpec
+	var users map[string]aerospikev1alpha1.AerospikeUserSpec = map[string]aerospikev1alpha1.AerospikeUserSpec{}
 	if spec.AerospikeAccessControl != nil {
-		users = spec.AerospikeAccessControl.Users
-	} else {
-		users = map[string]aerospikev1alpha1.AerospikeUserSpec{}
+		for _, userSpec := range spec.AerospikeAccessControl.Users {
+			users[userSpec.Name] = userSpec
+		}
 	}
-
 	return users
 }
 

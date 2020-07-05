@@ -270,6 +270,13 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
 						},
 					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"storageClass": {
 						SchemaProps: spec.SchemaProps{
 							Description: "StorageClass should be pre-created by user.",
@@ -284,13 +291,6 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 							Format:      "",
 						},
 					},
-					"path": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"sizeInGB": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SizeInGB Size of volume in GB.",
@@ -299,7 +299,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 						},
 					},
 				},
-				Required: []string{"AerospikePersistentVolumePolicySpec", "storageClass", "volumeMode", "path", "sizeInGB"},
+				Required: []string{"AerospikePersistentVolumePolicySpec", "path", "storageClass", "volumeMode", "sizeInGB"},
 			},
 		},
 		Dependencies: []string{

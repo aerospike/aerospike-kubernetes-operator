@@ -50,8 +50,9 @@ var aerospikeConfigWithoutSecurity = map[string]interface{}{
 
 func TestValidAccessControl(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs",
 					"read.userNs",
@@ -61,8 +62,9 @@ func TestValidAccessControl(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"admin": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "admin",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
@@ -70,7 +72,8 @@ func TestValidAccessControl(t *testing.T) {
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -94,8 +97,9 @@ func TestValidAccessControl(t *testing.T) {
 
 func TestMissingRequiredUserRoles(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs",
 					"read-write.profileNs.set",
@@ -103,15 +107,17 @@ func TestMissingRequiredUserRoles(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -139,8 +145,9 @@ func TestMissingRequiredUserRoles(t *testing.T) {
 
 func TestInvalidUserRole(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs",
 					"read-write.profileNs.set",
@@ -148,15 +155,17 @@ func TestInvalidUserRole(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -190,8 +199,9 @@ func TestInvalidUserSecretName(t *testing.T) {
 
 	for _, invalidSecretName := range invalidSecretNames {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.profileNs",
 						"read-write.profileNs.set",
@@ -199,15 +209,17 @@ func TestInvalidUserSecretName(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "aerospike",
 					SecretName: "someSecret",
 					Roles: []string{
 						"sys-admin",
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: invalidSecretName,
 					Roles: []string{
 						"profiler",
@@ -246,8 +258,9 @@ func TestInvalidUserName(t *testing.T) {
 
 	for _, invalidUserName := range invalidUserNames {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.profileNs",
 						"read-write.profileNs.set",
@@ -255,15 +268,17 @@ func TestInvalidUserName(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "aerospike",
 					SecretName: "someSecret",
 					Roles: []string{
 						"sys-admin",
 					},
 				},
 
-				invalidUserName: aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       invalidUserName,
 					SecretName: "someOtherSecret",
 					Roles: []string{
 						"profiler",
@@ -302,8 +317,9 @@ func TestInvalidRoleName(t *testing.T) {
 
 	for _, invalidRoleName := range invalidRoleNames {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				invalidRoleName: aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: invalidRoleName,
 					Privileges: []string{
 						"read-write.profileNs",
 						"read-write.profileNs.set",
@@ -311,15 +327,17 @@ func TestInvalidRoleName(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "aerospike",
 					SecretName: "someSecret",
 					Roles: []string{
 						"sys-admin",
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: "someOtherSecret",
 					Roles: []string{
 						"profiler",
@@ -348,8 +366,9 @@ func TestInvalidRoleName(t *testing.T) {
 
 func TestPredefinedRoleUpdate(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs",
 					"read.userNs",
@@ -358,7 +377,8 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 					"0.0.0.0/32",
 				},
 			},
-			"sys-admin": aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "sys-admin",
 				Privileges: []string{
 					"read-write.profileNs",
 					"read.userNs",
@@ -368,8 +388,9 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
@@ -377,7 +398,8 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -413,8 +435,9 @@ func TestInvalidRoleWhitelist(t *testing.T) {
 
 	for _, invalidWhitelist := range invalidWhitelists {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.profileNs",
 						"read-write.profileNs.set",
@@ -423,15 +446,17 @@ func TestInvalidRoleWhitelist(t *testing.T) {
 					Whitelist: []string{invalidWhitelist},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "aerospike",
 					SecretName: "someSecret",
 					Roles: []string{
 						"sys-admin",
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: "someOtherSecret",
 					Roles: []string{
 						"profiler",
@@ -460,23 +485,26 @@ func TestInvalidRoleWhitelist(t *testing.T) {
 
 func TestMissingNamespacePrivilege(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.missingNs",
 					"read.userNs",
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -504,23 +532,26 @@ func TestMissingNamespacePrivilege(t *testing.T) {
 
 func TestMissingSetPrivilege(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs.",
 					"read.userNs",
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -548,8 +579,9 @@ func TestMissingSetPrivilege(t *testing.T) {
 
 func TestInvalidPrivilege(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs.setname",
 					"read.userNs",
@@ -557,15 +589,17 @@ func TestInvalidPrivilege(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -593,8 +627,9 @@ func TestInvalidPrivilege(t *testing.T) {
 
 func TestInvalidGlobalScopeOnlyPrivilege(t *testing.T) {
 	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-		Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-			"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
 				Privileges: []string{
 					"read-write.profileNs.setname",
 					"read.userNs",
@@ -603,15 +638,17 @@ func TestInvalidGlobalScopeOnlyPrivilege(t *testing.T) {
 				},
 			},
 		},
-		Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-			"aerospike": aerospikev1alpha1.AerospikeUserSpec{
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
 				SecretName: "someSecret",
 				Roles: []string{
 					"sys-admin",
 				},
 			},
 
-			"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
 				SecretName: "someOtherSecret",
 				Roles: []string{
 					"profiler",
@@ -656,8 +693,9 @@ func TestNoSecurityIntegration(t *testing.T) {
 	t.Run("AccessControlValidation", func(t *testing.T) {
 		// Just a smoke test to ensure validation hook works.
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -666,7 +704,8 @@ func TestNoSecurityIntegration(t *testing.T) {
 						"0.0.0.0/32",
 					},
 				},
-				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "roleToDrop",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -676,8 +715,9 @@ func TestNoSecurityIntegration(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"admin": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "admin",
 					SecretName: authSecretName,
 					Roles: []string{
 						// Missing required user admin role.
@@ -685,7 +725,8 @@ func TestNoSecurityIntegration(t *testing.T) {
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -693,7 +734,8 @@ func TestNoSecurityIntegration(t *testing.T) {
 					},
 				},
 
-				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "userToDrop",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -722,8 +764,9 @@ func TestNoSecurityIntegration(t *testing.T) {
 
 	t.Run("SecurityUpdateReject", func(t *testing.T) {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write-udf.test.users",
 						"write",
@@ -733,8 +776,9 @@ func TestNoSecurityIntegration(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"admin": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "admin",
 					SecretName: authSecretNameForUpdate,
 					Roles: []string{
 						"sys-admin",
@@ -742,7 +786,8 @@ func TestNoSecurityIntegration(t *testing.T) {
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: authSecretNameForUpdate,
 					Roles: []string{
 						"data-admin",
@@ -784,8 +829,9 @@ func TestAccessControlIntegration(t *testing.T) {
 	t.Run("AccessControlValidation", func(t *testing.T) {
 		// Just a smoke test to ensure validation hook works.
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -794,7 +840,8 @@ func TestAccessControlIntegration(t *testing.T) {
 						"0.0.0.0/32",
 					},
 				},
-				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "roleToDrop",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -804,8 +851,9 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"admin": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "admin",
 					SecretName: authSecretName,
 					Roles: []string{
 						// Missing required user admin role.
@@ -813,7 +861,8 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -821,7 +870,8 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 
-				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "userToDrop",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -840,8 +890,9 @@ func TestAccessControlIntegration(t *testing.T) {
 
 	t.Run("AccessControlCreate", func(t *testing.T) {
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -850,7 +901,8 @@ func TestAccessControlIntegration(t *testing.T) {
 						"0.0.0.0/32",
 					},
 				},
-				"roleToDrop": aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "roleToDrop",
 					Privileges: []string{
 						"read-write.test",
 						"read-write-udf.test.users",
@@ -860,8 +912,9 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"admin": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "admin",
 					SecretName: authSecretName,
 					Roles: []string{
 						"sys-admin",
@@ -869,7 +922,8 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -877,7 +931,8 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 
-				"userToDrop": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "userToDrop",
 					SecretName: authSecretName,
 					Roles: []string{
 						"profiler",
@@ -896,8 +951,9 @@ func TestAccessControlIntegration(t *testing.T) {
 	t.Run("AccessControlUpdate", func(t *testing.T) {
 		// Apply updates to drop users, drop roles, update privileges for roles and update roles for users.
 		accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
-			Roles: map[string]aerospikev1alpha1.AerospikeRoleSpec{
-				"profiler": aerospikev1alpha1.AerospikeRoleSpec{
+			Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+				aerospikev1alpha1.AerospikeRoleSpec{
+					Name: "profiler",
 					Privileges: []string{
 						"read-write-udf.test.users",
 						"write",
@@ -907,8 +963,9 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 			},
-			Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-				"admin": aerospikev1alpha1.AerospikeUserSpec{
+			Users: []aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "admin",
 					SecretName: authSecretNameForUpdate,
 					Roles: []string{
 						"sys-admin",
@@ -916,7 +973,8 @@ func TestAccessControlIntegration(t *testing.T) {
 					},
 				},
 
-				"profileUser": aerospikev1alpha1.AerospikeUserSpec{
+				aerospikev1alpha1.AerospikeUserSpec{
+					Name:       "profileUser",
 					SecretName: authSecretNameForUpdate,
 					Roles: []string{
 						"data-admin",
@@ -1042,6 +1100,26 @@ func validateAccessControl(aeroCluster *aerospikev1alpha1.AerospikeCluster) erro
 	return err
 }
 
+func getRole(roles []aerospikev1alpha1.AerospikeRoleSpec, roleName string) *aerospikev1alpha1.AerospikeRoleSpec {
+	for _, role := range roles {
+		if role.Name == roleName {
+			return &role
+		}
+	}
+
+	return nil
+}
+
+func getUser(users []aerospikev1alpha1.AerospikeUserSpec, userName string) *aerospikev1alpha1.AerospikeUserSpec {
+	for _, user := range users {
+		if user.Name == userName {
+			return &user
+		}
+	}
+
+	return nil
+}
+
 // validateRoles validates that the new roles have been applied correctly.
 func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeClusterSpec) error {
 	client := *clientP
@@ -1063,8 +1141,8 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 
 	expectedRoleNames := []string{}
 	accessControl := clusterSpec.AerospikeAccessControl
-	for roleName := range accessControl.Roles {
-		expectedRoleNames = append(expectedRoleNames, roleName)
+	for _, role := range accessControl.Roles {
+		expectedRoleNames = append(expectedRoleNames, role.Name)
 	}
 
 	if len(currentRoleNames) != len(expectedRoleNames) {
@@ -1084,7 +1162,7 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 			continue
 		}
 
-		expectedRoleSpec, _ := accessControl.Roles[asRole.Name]
+		expectedRoleSpec := *getRole(accessControl.Roles, asRole.Name)
 		expectedPrivilegeNames := expectedRoleSpec.Privileges
 
 		currentPrivilegeNames := []string{}
@@ -1125,8 +1203,8 @@ func validateUsers(clientP *as.Client, aeroCluster *aerospikev1alpha1.AerospikeC
 
 	expectedUserNames := []string{}
 	accessControl := clusterSpec.AerospikeAccessControl
-	for userName := range accessControl.Users {
-		expectedUserNames = append(expectedUserNames, userName)
+	for _, user := range accessControl.Users {
+		expectedUserNames = append(expectedUserNames, user.Name)
 	}
 
 	if len(currentUserNames) != len(expectedUserNames) {
@@ -1140,7 +1218,7 @@ func validateUsers(clientP *as.Client, aeroCluster *aerospikev1alpha1.AerospikeC
 
 	// Verify the roles are correct.
 	for _, asUser := range asUsers {
-		expectedUserSpec, _ := accessControl.Users[asUser.User]
+		expectedUserSpec := *getUser(accessControl.Users, asUser.User)
 		// Validate that the new user password is applied
 		password, err := pp.Get(asUser.User, &expectedUserSpec)
 

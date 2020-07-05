@@ -10,24 +10,34 @@ spec:
 
   resources:
     requests:
-      memory: 1Gi
+      memory: 2Gi
       cpu: 200m
 
-  blockStorage:
-    - storageClass: ssd
-      volumeDevices:
-        - devicePath: /test/dev/xvdf
-          sizeInGB: 2
+  storage:
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+      - path: /test/dev/xvdf
+        storageClass: ssd
+        volumeMode: block
+        sizeInGB: 5
 
   multiPodPerHost: true
 
   aerospikeAccessControl:
     users:
-      admin:
+      - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
           - user-admin
+
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret

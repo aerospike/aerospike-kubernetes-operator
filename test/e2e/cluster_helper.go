@@ -45,8 +45,9 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 				},
 			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
-				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-					"admin": aerospikev1alpha1.AerospikeUserSpec{
+				Users: []aerospikev1alpha1.AerospikeUserSpec{
+					aerospikev1alpha1.AerospikeUserSpec{
+						Name:       "admin",
 						SecretName: authSecretName,
 						Roles: []string{
 							"sys-admin",
@@ -154,8 +155,9 @@ func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aer
 				},
 			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
-				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-					"admin": aerospikev1alpha1.AerospikeUserSpec{
+				Users: []aerospikev1alpha1.AerospikeUserSpec{
+					aerospikev1alpha1.AerospikeUserSpec{
+						Name:       "admin",
 						SecretName: authSecretName,
 						Roles: []string{
 							"sys-admin",
@@ -216,8 +218,9 @@ func createBasicTLSCluster(clusterName, namespace string, size int32) *aerospike
 			Size:  size,
 			Build: latestClusterBuild,
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
-				Users: map[string]aerospikev1alpha1.AerospikeUserSpec{
-					"admin": aerospikev1alpha1.AerospikeUserSpec{
+				Users: []aerospikev1alpha1.AerospikeUserSpec{
+					aerospikev1alpha1.AerospikeUserSpec{
+						Name:       "admin",
 						SecretName: authSecretName,
 						Roles: []string{
 							"sys-admin",
