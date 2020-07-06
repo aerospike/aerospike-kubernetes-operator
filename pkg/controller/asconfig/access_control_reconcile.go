@@ -5,6 +5,7 @@ package asconfig
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -141,7 +142,7 @@ func reconcileRoles(desired map[string]aerospikev1alpha1.AerospikeRoleSpec, curr
 	}
 
 	for roleName, roleSpec := range desired {
-		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges})
+		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist})
 	}
 
 	// Execute all commands.
@@ -359,13 +360,15 @@ type AerospikeAccessControlReconcileCmd interface {
 }
 
 // AerospikeRoleCreateUpdate creates or updates an Aerospike role.
-// TODO: Deal with whitelist as well when go client support it.
 type AerospikeRoleCreateUpdate struct {
 	// The role's name.
 	name string
 
 	// The privileges to set for the role. These privileges and only these privileges will be granted to the role after this operation.
 	privileges []string
+
+	// The whitelist to set for the role. These whitelist addresses and only these whitelist addresses will be granted to the role after this operation.
+	whitelist []string
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
@@ -398,7 +401,7 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("Could not create role %s: %v", roleCreate.name, err)
 	}
 
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges)
+	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist)
 	if err != nil {
 		return fmt.Errorf("Could not create role %s: %v", roleCreate.name, err)
 	}
@@ -450,6 +453,16 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 		}
 
 		logger.Info("Granted privileges to role", log.Ctx{"rolename": roleCreate.name, "privileges": privilegesToGrant})
+	}
+
+	if !reflect.DeepEqual(role.Whitelist, roleCreate.whitelist) {
+		// Set whitelist.
+		err = client.SetWhitelist(adminPolicy, roleCreate.name, roleCreate.whitelist)
+
+		if err != nil {
+			return fmt.Errorf("Error setting whitelist for role %s: %v", roleCreate.name, err)
+		}
+
 	}
 
 	logger.Info("Updated role", log.Ctx{"rolename": roleCreate.name})

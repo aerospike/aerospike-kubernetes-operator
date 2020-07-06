@@ -33,6 +33,8 @@ github.com/aerospike/aerospike-client-go v1.35.2 h1:TWV2Bn59Ig7SM4Zue84fFsPGlfFJ
 github.com/aerospike/aerospike-client-go v1.35.2/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-client-go v2.12.0+incompatible h1:us93nA5rG6OtLN5Kstk8hy79JX9Ucnd+PE+iEkbrOkQ=
 github.com/aerospike/aerospike-client-go v2.12.0+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
+github.com/aerospike/aerospike-client-go v3.0.3+incompatible h1:UEuPV2ldaVyUeBphqKvz7JkM0mMSKImwA7BNGJ64Vu4=
+github.com/aerospike/aerospike-client-go v3.0.3+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200604213606-457ff7f6a12a h1:A6f8SAvAI7ZOToBIa+GI9NFkhFzuUKBmsaKYvwz2kJc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200604213606-457ff7f6a12a/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0 h1:r5QkY/rnu3dtCr/J1JIuar1AI4a/Xc097J4I44Le56U=

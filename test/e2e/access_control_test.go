@@ -192,6 +192,95 @@ func TestInvalidUserRole(t *testing.T) {
 	}
 }
 
+func TestDuplicateUser(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "aeropsike") {
+		t.Errorf("Error: %v should contain 'Duplicate' and 'aerospike'", err)
+	}
+}
+
+func TestDuplicateUserRole(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+					"sys-admin",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "sys-admin") {
+		t.Errorf("Error: %v should contain 'Duplicate' and 'sys-admin'", err)
+	}
+}
+
 func TestInvalidUserSecretName(t *testing.T) {
 	invalidSecretNames := []string{
 		"", "   ",
@@ -361,6 +450,163 @@ func TestInvalidRoleName(t *testing.T) {
 		if !strings.Contains(err.Error(), "Role name") && !strings.Contains(err.Error(), "empty") {
 			t.Errorf("Error: %v should contain 'Role name' or 'empty'", err)
 		}
+	}
+}
+
+func TestDuplicateRole(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+			},
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
+				SecretName: "someOtherSecret",
+				Roles: []string{
+					"profiler",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "profiler") {
+		t.Errorf("Error: %v should contain 'Duplicate' and 'profiler'", err)
+	}
+}
+
+func TestDuplicateRolePrivilege(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
+				SecretName: "someOtherSecret",
+				Roles: []string{
+					"profiler",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "read-write.profileNs") {
+		t.Errorf("Error: %v should contain 'Duplicate' and 'read-write.profileNs'", err)
+	}
+}
+
+func TestDuplicateRoleWhitelist(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+				Whitelist: []string{
+					"0.0.0.0/32",
+					"0.0.0.0/32",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
+				SecretName: "someOtherSecret",
+				Roles: []string{
+					"profiler",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "0.0.0.0/32") {
+		t.Errorf("Error: %v should contain 'Duplicate' and '0.0.0.0/32'", err)
 	}
 }
 
@@ -897,9 +1143,6 @@ func TestAccessControlIntegration(t *testing.T) {
 						"read-write.test",
 						"read-write-udf.test.users",
 					},
-					Whitelist: []string{
-						"0.0.0.0/32",
-					},
 				},
 				aerospikev1alpha1.AerospikeRoleSpec{
 					Name: "roleToDrop",
@@ -1154,7 +1397,7 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 		return fmt.Errorf("Actual roles %v do not match expected roles %v", currentRoleNames, expectedRoleNames)
 	}
 
-	// Verify the privileges are correct.
+	// Verify the privileges and whitelists are correct.
 	for _, asRole := range asRoles {
 		_, isPredefined := asConfig.PredefinedRoles[asRole.Name]
 
@@ -1178,6 +1421,11 @@ func validateRoles(clientP *as.Client, clusterSpec *aerospikev1alpha1.AerospikeC
 		// Check values.
 		if len(asConfig.SliceSubtract(expectedPrivilegeNames, currentPrivilegeNames)) != 0 {
 			return fmt.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
+		}
+
+		// Validate whitelists.
+		if !reflect.DeepEqual(expectedRoleSpec.Whitelist, asRole.Whitelist) {
+			return fmt.Errorf("For role %s actual whitelist %v does not match expected whitelist %v", asRole.Name, asRole.Whitelist, expectedRoleSpec.Whitelist)
 		}
 	}
 

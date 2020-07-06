@@ -314,15 +314,22 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref common.ReferenceC
 				Description: "AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"devicesInitialized": {
+					"initializedVolumePaths": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AttachedVolumes indicates if this pod has initialized devices.",
-							Type:        []string{"boolean"},
-							Format:      "",
+							Description: "InitializedVolumePaths is the list of device path that have already been initialized.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
 						},
 					},
 				},
-				Required: []string{"devicesInitialized"},
+				Required: []string{"initializedVolumePaths"},
 			},
 		},
 	}

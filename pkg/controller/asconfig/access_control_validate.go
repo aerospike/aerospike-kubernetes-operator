@@ -144,7 +144,15 @@ func isSecurityEnabled(aerospikeCluster *aerospikev1alpha1.AerospikeClusterSpec)
 
 // isRoleSpecValid indicates if input role spec is valid.
 func isRoleSpecValid(roles []aerospikev1alpha1.AerospikeRoleSpec, aerospikeConfig aerospikev1alpha1.Values) (bool, error) {
+	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
+		_, isSeen := seenRoles[roleSpec.Name]
+		if isSeen {
+			// Cannot have duplicate role entries.
+			return false, fmt.Errorf("Duplicate entry for role: %s", roleSpec.Name)
+		}
+		seenRoles[roleSpec.Name] = true
+
 		_, ok := predefinedRoles[roleSpec.Name]
 		if ok {
 			// Cannot modify or add predefined roles.
@@ -158,7 +166,15 @@ func isRoleSpecValid(roles []aerospikev1alpha1.AerospikeRoleSpec, aerospikeConfi
 		}
 
 		// Validate privileges.
+		seenPrivileges := map[string]bool{}
 		for _, privilege := range roleSpec.Privileges {
+			_, isSeen := seenPrivileges[privilege]
+			if isSeen {
+				// Cannot have duplicate privilege entries.
+				return false, fmt.Errorf("Duplicate privilege: %s for role: %s", privilege, roleSpec.Name)
+			}
+			seenPrivileges[privilege] = true
+
 			_, err = isPrivilegeValid(privilege, aerospikeConfig)
 
 			if err != nil {
@@ -167,7 +183,15 @@ func isRoleSpecValid(roles []aerospikev1alpha1.AerospikeRoleSpec, aerospikeConfi
 		}
 
 		// Validate whitelist.
+		seenNetAddresses := map[string]bool{}
 		for _, netAddress := range roleSpec.Whitelist {
+			_, isSeen := seenNetAddresses[netAddress]
+			if isSeen {
+				// Cannot have duplicate whitelist entries.
+				return false, fmt.Errorf("Duplicate whitelist: %s for role: %s", netAddress, roleSpec.Name)
+			}
+			seenNetAddresses[netAddress] = true
+
 			_, err = isNetAddressValid(netAddress)
 
 			if err != nil {
@@ -298,7 +322,15 @@ func subset(first, second []string) bool {
 // isUserSpecValid indicates if input user specification is valid.
 func isUserSpecValid(users []aerospikev1alpha1.AerospikeUserSpec, roles map[string]aerospikev1alpha1.AerospikeRoleSpec) (bool, error) {
 	requiredRolesUserFound := false
+	seenUsers := map[string]bool{}
 	for _, userSpec := range users {
+		_, isSeen := seenUsers[userSpec.Name]
+		if isSeen {
+			// Cannot have duplicate user entries.
+			return false, fmt.Errorf("Duplicate entry for user: %s", userSpec.Name)
+		}
+		seenUsers[userSpec.Name] = true
+
 		_, err := isUserNameValid(userSpec.Name)
 
 		if err != nil {
@@ -306,7 +338,15 @@ func isUserSpecValid(users []aerospikev1alpha1.AerospikeUserSpec, roles map[stri
 		}
 
 		// Validate roles.
+		seenRoles := map[string]bool{}
 		for _, roleName := range userSpec.Roles {
+			_, isSeen := seenRoles[roleName]
+			if isSeen {
+				// Cannot have duplicate roles.
+				return false, fmt.Errorf("Duplicate role: %s for user: %s", roleName, userSpec.Name)
+			}
+			seenRoles[roleName] = true
+
 			_, ok := roles[roleName]
 			if !ok {
 				// Check is this is a predefined role.
@@ -318,7 +358,7 @@ func isUserSpecValid(users []aerospikev1alpha1.AerospikeUserSpec, roles map[stri
 			}
 		}
 
-		// TODO Should validate actual password here but we cannot read the secret here.
+		// TODO We should validate actual password here but we cannot read the secret here.
 		// Will have to be done at the time of creating the user!
 		if len(strings.TrimSpace(userSpec.SecretName)) == 0 {
 			return false, fmt.Errorf("User %s has empty secret name", userSpec.Name)

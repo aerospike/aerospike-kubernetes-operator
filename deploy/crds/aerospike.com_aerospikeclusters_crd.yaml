@@ -253,12 +253,14 @@ spec:
                 description: AerospikePodStatus contains the Aerospike specific status
                   of the Aerospike serverpods.
                 properties:
-                  devicesInitialized:
-                    description: AttachedVolumes indicates if this pod has initialized
-                      devices.
-                    type: boolean
+                  initializedVolumePaths:
+                    description: InitializedVolumePaths is the list of device path
+                      that have already been initialized.
+                    items:
+                      type: string
+                    type: array
                 required:
-                - devicesInitialized
+                - initializedVolumePaths
                 type: object
               description: PodStatus has Aerospike specific status of the pods. This
                 is map instead of the conventional map as list convention to allow

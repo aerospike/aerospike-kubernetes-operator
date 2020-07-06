@@ -335,8 +335,8 @@ func (v *AerospikeNodeSummary) DeepCopy() *AerospikeNodeSummary {
 // AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.
 // +k8s:openapi-gen=true
 type AerospikePodStatus struct {
-	// AttachedVolumes indicates if this pod has initialized devices.
-	AttachedVolumes bool `json:"devicesInitialized"`
+	// InitializedVolumePaths is the list of device path that have already been initialized.
+	InitializedVolumePaths []string `json:"initializedVolumePaths"`
 }
 
 // DeepCopy implements deepcopy func for AerospikePodStatus

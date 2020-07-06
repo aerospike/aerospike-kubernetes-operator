@@ -74,7 +74,7 @@ curl -sSk \
      -H "Authorization: Bearer $KUBE_TOKEN" \
      -H 'Accept: application/json' \
      -H'Content-Type: application/strategic-merge-patch+json' \
-     https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE//configmaps/$CONFIGMAP_NAME <<'EOF'
+     https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/configmaps/$CONFIGMAP_NAME <<'EOF'
 {
   "kind": "ConfigMap",
   "apiVersion": "v1",
