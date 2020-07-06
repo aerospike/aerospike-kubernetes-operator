@@ -276,10 +276,14 @@ func isNetAddressValid(address string) (bool, error) {
 	}
 
 	// Try parsing as CIDR
-	_, _, err := net.ParseCIDR(address)
+	_, ipNet, err := net.ParseCIDR(address)
 
 	if err != nil {
 		return false, fmt.Errorf("Invalid address %s", address)
+	}
+
+	if ipNet.String() != address {
+		return false, fmt.Errorf("Invalid CIDR %s - suggested CIDR %v", address, ipNet)
 	}
 
 	return true, nil

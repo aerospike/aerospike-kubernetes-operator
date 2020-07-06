@@ -58,7 +58,7 @@ func TestValidAccessControl(t *testing.T) {
 					"read.userNs",
 				},
 				Whitelist: []string{
-					"0.0.0.0/32",
+					"8.8.0.0/16",
 				},
 			},
 		},
@@ -569,8 +569,8 @@ func TestDuplicateRoleWhitelist(t *testing.T) {
 					"read.userNs",
 				},
 				Whitelist: []string{
-					"0.0.0.0/32",
-					"0.0.0.0/32",
+					"8.8.0.0/16",
+					"8.8.0.0/16",
 				},
 			},
 		},
@@ -605,8 +605,59 @@ func TestDuplicateRoleWhitelist(t *testing.T) {
 		t.Errorf("InValid aerospike spec validated")
 	}
 
-	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "0.0.0.0/32") {
-		t.Errorf("Error: %v should contain 'Duplicate' and '0.0.0.0/32'", err)
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "8.8.0.0/16") {
+		t.Errorf("Error: %v should contain 'Duplicate' and '8.8.0.0/16'", err)
+	}
+}
+
+func TestInvalidWhitelist(t *testing.T) {
+	accessControl := aerospikev1alpha1.AerospikeAccessControlSpec{
+		Roles: []aerospikev1alpha1.AerospikeRoleSpec{
+			aerospikev1alpha1.AerospikeRoleSpec{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.profileNs",
+					"read-write.profileNs.set",
+					"read.userNs",
+				},
+				Whitelist: []string{
+					"8.8.8.8/16",
+				},
+			},
+		},
+		Users: []aerospikev1alpha1.AerospikeUserSpec{
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "aerospike",
+				SecretName: "someSecret",
+				Roles: []string{
+					"sys-admin",
+				},
+			},
+
+			aerospikev1alpha1.AerospikeUserSpec{
+				Name:       "profileUser",
+				SecretName: "someOtherSecret",
+				Roles: []string{
+					"profiler",
+				},
+			},
+		},
+	}
+
+	clusterSpec := aerospikev1alpha1.AerospikeClusterSpec{
+		AerospikeAccessControl: &accessControl,
+
+		AerospikeConfig: aerospikeConfigWithSecurity,
+	}
+
+	valid, err := asConfig.IsAerospikeAccessControlValid(&clusterSpec)
+
+	if valid || err == nil {
+		t.Errorf("InValid aerospike spec validated")
+	}
+
+	if !strings.Contains(err.Error(), "Invalid CIDR") || !strings.Contains(err.Error(), "8.8.8.8/16") {
+		t.Errorf("Error: %v should contain 'Duplicate' and '8.8.8.8/16'", err)
 	}
 }
 
@@ -620,7 +671,7 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 					"read.userNs",
 				},
 				Whitelist: []string{
-					"0.0.0.0/32",
+					"8.8.0.0/16",
 				},
 			},
 			aerospikev1alpha1.AerospikeRoleSpec{
@@ -630,7 +681,7 @@ func TestPredefinedRoleUpdate(t *testing.T) {
 					"read.userNs",
 				},
 				Whitelist: []string{
-					"0.0.0.0/32",
+					"8.8.0.0/16",
 				},
 			},
 		},
@@ -947,7 +998,7 @@ func TestNoSecurityIntegration(t *testing.T) {
 						"read-write-udf.test.users",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 				aerospikev1alpha1.AerospikeRoleSpec{
@@ -957,7 +1008,7 @@ func TestNoSecurityIntegration(t *testing.T) {
 						"read-write-udf.test.users",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 			},
@@ -1018,7 +1069,7 @@ func TestNoSecurityIntegration(t *testing.T) {
 						"write",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 			},
@@ -1083,7 +1134,7 @@ func TestAccessControlIntegration(t *testing.T) {
 						"read-write-udf.test.users",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 				aerospikev1alpha1.AerospikeRoleSpec{
@@ -1093,7 +1144,7 @@ func TestAccessControlIntegration(t *testing.T) {
 						"read-write-udf.test.users",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 			},
@@ -1151,7 +1202,7 @@ func TestAccessControlIntegration(t *testing.T) {
 						"read-write-udf.test.users",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 			},
@@ -1202,7 +1253,7 @@ func TestAccessControlIntegration(t *testing.T) {
 						"write",
 					},
 					Whitelist: []string{
-						"0.0.0.0/32",
+						"8.8.0.0/16",
 					},
 				},
 			},
