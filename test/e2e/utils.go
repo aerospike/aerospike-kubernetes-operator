@@ -22,6 +22,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var (
+	cleanupRetryInterval = time.Second * 1
+	cleanupTimeout       = time.Second * 100
+)
+
 var schemas map[string]string
 var secrets map[string][]byte
 

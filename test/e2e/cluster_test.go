@@ -17,10 +17,8 @@ import (
 )
 
 var (
-	retryInterval        = time.Second * 5
-	timeout              = time.Second * 120
-	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Second * 10
+	retryInterval = time.Second * 5
+	timeout       = time.Second * 120
 )
 
 const latestClusterBuild = "aerospike/aerospike-server-enterprise:4.8.0.6"
@@ -56,12 +54,19 @@ func TestAerospikeCluster(t *testing.T) {
 	// 	CommonNegativeClusterValidationTest(t, f, ctx)
 	// })
 
-	t.Run("UpdateCluster", func(t *testing.T) {
-		UpdateClusterTest(t, f, ctx)
-	})
+	// t.Run("UpdateCluster", func(t *testing.T) {
+	// 	UpdateClusterTest(t, f, ctx)
+	// })
 
 	// t.Run("ClusterResources", func(t *testing.T) {
 	// 	ClusterResourceTest(t, f, ctx)
+	// })
+	t.Run("RackManagement", func(t *testing.T) {
+		RackManagementTest(t, f, ctx)
+	})
+
+	// t.Run("RackEnabledCluster", func(t *testing.T) {
+	// 	RackEnabledClusterTest(t, f, ctx)
 	// })
 }
 
