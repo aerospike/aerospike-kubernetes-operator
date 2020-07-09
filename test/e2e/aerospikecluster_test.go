@@ -452,7 +452,10 @@ func UpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Test
 						SizeInGB:     1,
 					},
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
-						Path:         "/opt/aeropsike/ns1",
+						Path: "/opt/aeropsike/ns1",
+						AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+							InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+						},
 						StorageClass: "ssd",
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 						SizeInGB:     1,

@@ -14,6 +14,7 @@ spec:
       - path: /opt/aerospike
         storageClass: ssd
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 3
 
   aerospikeAccessControl:

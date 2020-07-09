@@ -12,14 +12,17 @@ spec:
       - path: /opt/aerospike
         storageClass: ssd
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 1
       - path: /opt/aerospike/data/test
         storageClass: ssd
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 3
       - path: /opt/aerospike/data/bar
         storageClass: ssd
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 3
 
   multiPodPerHost: true

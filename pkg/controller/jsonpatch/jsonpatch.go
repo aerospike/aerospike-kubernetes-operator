@@ -209,8 +209,9 @@ func handleValues(av, bv interface{}, p string, patch []JsonPatchOperation) ([]J
 				}
 			}
 
-			for i := minLen; i < len(at); i++ {
-				// Remove deleted indices.
+			for i := len(at) - 1; i >= minLen; i-- {
+				// Deleting in ascending order changes indices of remaining elements.
+				// Remove deleted indices in reverse order so that each delete operation acts on correct indices.
 				patch = append(patch, NewPatch("remove", makePath(p, i), nil))
 			}
 

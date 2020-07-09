@@ -37,7 +37,10 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 					},
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
-						Path:         "/opt/aerospike",
+						Path: "/opt/aerospike",
+						AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+							InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+						},
 						SizeInGB:     1,
 						StorageClass: "ssd",
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
@@ -147,7 +150,10 @@ func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aer
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 					},
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
-						Path:         "/opt/aerospike",
+						Path: "/opt/aerospike",
+						AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+							InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+						},
 						SizeInGB:     1,
 						StorageClass: "ssd",
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
@@ -302,7 +308,10 @@ func createSSDStorageCluster(clusterName, namespace string, size int32, repFact 
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			aerospikev1alpha1.AerospikePersistentVolumeSpec{
-				Path:         "/opt/aerospike",
+				Path: "/opt/aerospike",
+				AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				SizeInGB:     1,
 				StorageClass: "ssd",
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
@@ -330,7 +339,10 @@ func createHDDAndDataInMemStorageCluster(clusterName, namespace string, size int
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 			aerospikev1alpha1.AerospikePersistentVolumeSpec{
-				Path:         "/opt/aerospike",
+				Path: "/opt/aerospike",
+				AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				SizeInGB:     1,
 				StorageClass: "ssd",
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
@@ -364,13 +376,19 @@ func createHDDAndDataInIndexStorageCluster(clusterName, namespace string, size i
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 		},
 		aerospikev1alpha1.AerospikePersistentVolumeSpec{
-			Path:         "/opt/aerospike",
+			Path: "/opt/aerospike",
+			AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+				InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+			},
 			SizeInGB:     1,
 			StorageClass: "ssd",
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 		aerospikev1alpha1.AerospikePersistentVolumeSpec{
-			Path:         "/opt/aerospike/data",
+			Path: "/opt/aerospike/data",
+			AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+				InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+			},
 			SizeInGB:     1,
 			StorageClass: "ssd",
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
@@ -427,7 +445,10 @@ func createShadowDeviceStorageCluster(clusterName, namespace string, size int32,
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			aerospikev1alpha1.AerospikePersistentVolumeSpec{
-				Path:         "/opt/aerospike",
+				Path: "/opt/aerospike",
+				AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				SizeInGB:     1,
 				StorageClass: "ssd",
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,

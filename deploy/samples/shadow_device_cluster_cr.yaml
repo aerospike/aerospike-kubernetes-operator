@@ -14,10 +14,12 @@ spec:
       - storageClass: ssd
         path: /opt/aerospike
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 1
       - path: /opt/aerospike/data
         storageClass: ssd
         volumeMode: filesystem
+        initMethod: deleteFiles
         sizeInGB: 3
       - path: /dev/nvme0n1
         storageClass: local-ssd

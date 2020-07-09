@@ -18,6 +18,11 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster) (map[s
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
+	confData, err := getBaseConfData(aeroCluster)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build config template: %v", err)
+	}
+
 	confData["aerospike.template.conf"] = temp
 
 	return confData, nil

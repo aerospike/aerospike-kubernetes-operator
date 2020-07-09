@@ -156,14 +156,9 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 }
 
 func setVolumePolicyDefaults(volumepolicy *aerospikev1alpha1.AerospikePersistentVolumePolicySpec) {
-	if volumepolicy.BlockInitType == nil {
-		defaultInitType := aerospikev1alpha1.AerospikeBlockVolumeInitTypeNone
-		volumepolicy.BlockInitType = &defaultInitType
-	}
-
-	if volumepolicy.FilesystemInitType == nil {
-		defaultInitType := aerospikev1alpha1.AerospikeFilesystemVolumeInitTypeDeleteFiles
-		volumepolicy.FilesystemInitType = &defaultInitType
+	if volumepolicy.InitMethod == nil {
+		defaultInitMethod := aerospikev1alpha1.AerospikeVolumeInitMethodNone
+		volumepolicy.InitMethod = &defaultInitMethod
 	}
 
 	if volumepolicy.CascadeDelete == nil {

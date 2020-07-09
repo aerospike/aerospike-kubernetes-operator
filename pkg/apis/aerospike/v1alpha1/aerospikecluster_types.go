@@ -178,42 +178,29 @@ const (
 	AerospikeVolumeModeBlock AerospikeVolumeMode = "block"
 )
 
-// AerospikeBlockVolumeInitType specifies how block volumes should be initialized.
-// +kubebuilder:validation:Enum=none;dd;blkdiscard
+// AerospikeVolumeInitMethod specifies how block volumes should be initialized.
+// +kubebuilder:validation:Enum=none;dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
-type AerospikeBlockVolumeInitType string
+type AerospikeVolumeInitMethod string
 
 const (
-	// AerospikeBlockVolumeInitTypeNone specifies the block volume should not be initialized.
-	AerospikeBlockVolumeInitTypeNone AerospikeBlockVolumeInitType = "none"
+	// AerospikeVolumeInitMethodNone specifies the block volume should not be initialized.
+	AerospikeVolumeInitMethodNone AerospikeVolumeInitMethod = "none"
 
-	// AerospikeBlockVolumeInitTypeDD specifies the block volume should be zeroed using dd command.
-	AerospikeBlockVolumeInitTypeDD AerospikeBlockVolumeInitType = "dd"
+	// AerospikeVolumeInitMethodDD specifies the block volume should be zeroed using dd command.
+	AerospikeVolumeInitMethodDD AerospikeVolumeInitMethod = "dd"
 
-	// AerospikeBlockVolumeInitTypeBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
-	AerospikeBlockVolumeInitTypeBlkdiscard AerospikeBlockVolumeInitType = "blkdiscard"
-)
+	// AerospikeVolumeInitMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
+	AerospikeVolumeInitMethodBlkdiscard AerospikeVolumeInitMethod = "blkdiscard"
 
-// AerospikeFilesystemVolumeInitType specifies how filesystem volumes should be initialized.
-// +kubebuilder:validation:Enum=none;deleteFiles
-// +k8s:openapi-gen=true
-type AerospikeFilesystemVolumeInitType string
-
-const (
-	// AerospikeFilesystemVolumeInitTypeNone specifies the filesystem should not be initialized.
-	AerospikeFilesystemVolumeInitTypeNone AerospikeFilesystemVolumeInitType = "none"
-
-	// AerospikeFilesystemVolumeInitTypeDeleteFiles specifies the volume should be zeroed using blkdiscard command.
-	AerospikeFilesystemVolumeInitTypeDeleteFiles AerospikeFilesystemVolumeInitType = "deleteFiles"
+	// AerospikeVolumeInitMethodDeleteFiles specifies the filesystem volume should initialized by deleting files.
+	AerospikeVolumeInitMethodDeleteFiles AerospikeVolumeInitMethod = "deleteFiles"
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
-	// BlockInitType determines how block volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	BlockInitType *AerospikeBlockVolumeInitType `json:"blockInitType"`
-
-	// FilesystemInitType determines how filesystem volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "deleteFiles".
-	FilesystemInitType *AerospikeFilesystemVolumeInitType `json:"filesystemInitType"`
+	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
+	InitMethod *AerospikeVolumeInitMethod `json:"initMethod"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
 	CascadeDelete *bool `json:"cascadeDelete"`

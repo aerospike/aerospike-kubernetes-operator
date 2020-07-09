@@ -192,15 +192,26 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 			return fmt.Errorf("Mising storage class. Invalid volume: %v", volume)
 		}
 
+		if !filepath.IsAbs(volume.Path) {
+			return fmt.Errorf("Volume path should be absolute: %s", volume.Path)
+		}
+
 		if _, ok := storagePaths[volume.Path]; ok {
-			return fmt.Errorf("Invalid volume. Path %s, is repeated", volume.Path)
+			return fmt.Errorf("Duplicate volume path %s", volume.Path)
 		}
 
 		storagePaths[volume.Path] = 1
 
 		if volume.VolumeMode == aerospikev1alpha1.AerospikeVolumeModeBlock {
+			if volume.InitMethod == nil || *volume.InitMethod == aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf("Invalid init method %v for block volume: %v", *volume.InitMethod, volume)
+			}
+
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 		} else {
+			if volume.InitMethod == nil || (*volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodNone && *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles) {
+				return fmt.Errorf("Invalid init method %v for filesystem volume: %v", *volume.InitMethod, volume)
+			}
 			fileStorageList = append(fileStorageList, volume.Path)
 		}
 	}

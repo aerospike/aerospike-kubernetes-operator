@@ -971,6 +971,18 @@ func getStatefulSetPodName(statefulSetName string, index int32) string {
 	return fmt.Sprintf("%s-%d", statefulSetName, index)
 }
 
+func getStatefulSetPodOrdinal(podName string) (*int32, error) {
+	parts := strings.Split(podName, "-")
+	ordinalStr := parts[len(parts)-1]
+	fmt.Println(ordinalStr)
+	ordinal, err := strconv.Atoi(ordinalStr)
+	if err != nil {
+		return nil, err
+	}
+	result := int32(ordinal)
+	return &result, nil
+}
+
 func getPVCName(path string) string {
 	path = strings.Trim(path, "/")
 	return strings.Replace(path, "/", "-", -1)
