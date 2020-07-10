@@ -11,14 +11,13 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeCluster":       schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec":   schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus": schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary":   schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec":       schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec":        schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice":           schema_pkg_apis_aerospike_v1alpha1_VolumeDevice(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount":            schema_pkg_apis_aerospike_v1alpha1_VolumeMount(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeCluster":              schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec":          schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus":        schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary":          schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumeSpec": schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus":            schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec":          schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref),
 	}
 }
 
@@ -94,30 +93,10 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"blockStorage": {
+					"storage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BlockStorage has block storage info.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec"),
-									},
-								},
-							},
-						},
-					},
-					"fileStorage": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FileStorage has filesystem storage info.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec"),
-									},
-								},
-							},
+							Description: "Storage specified persistent storage to use for the Aerospike pods.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec"),
 						},
 					},
 					"aerospikeConfigSecret": {
@@ -153,12 +132,18 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"validationPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ValidationPolicy controls validation of the Aerospike cluster resource.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec"),
+						},
+					},
 				},
 				Required: []string{"size", "build", "aerospikeConfig", "resources"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.BlockStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.FileStorageSpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -177,7 +162,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 					},
 					"nodes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Nodes tells the observed state of AerospikeClusterNodes",
+							Description: "Nodes contains Aerospike node specific  state of cluster.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -188,12 +173,31 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 							},
 						},
 					},
+					"podStatus": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-strategy": "strategic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "PodStatus has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its status. The map key is the name of the pod.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus"),
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"AerospikeClusterSpec", "nodes"},
+				Required: []string{"AerospikeClusterSpec", "nodes", "podStatus"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus"},
 	}
 }
 
@@ -204,6 +208,12 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 				Description: "AerospikeNodeSummary defines the observed state of AerospikeClusterNode",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"podName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"clusterName": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
@@ -241,136 +251,134 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"clusterName", "nodeID", "ip", "port", "tlsname", "build"},
+				Required: []string{"podName", "clusterName", "nodeID", "ip", "port", "tlsname", "build"},
 			},
 		},
 	}
 }
 
-func schema_pkg_apis_aerospike_v1alpha1_BlockStorageSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BlockStorageSpec has storage info. StorageClass for devices",
+				Description: "AerospikePersistentVolumeSpec describes a persistent volume to claim and attach to Aerospike pods.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"storageClass": {
+					"AerospikePersistentVolumePolicySpec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "StorageClass should be created by user",
+							Description: "Contains  policies for this volumes.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"volumeDevices": {
-						SchemaProps: spec.SchemaProps{
-							Description: "VolumeDevices is the list of block devices to be used by the container. Devices should be provisioned by user",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"storageClass", "volumeDevices"},
-			},
-		},
-		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeDevice"},
-	}
-}
-
-func schema_pkg_apis_aerospike_v1alpha1_FileStorageSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "FileStorageSpec has storage info. StorageClass for fileSystems",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
 					"storageClass": {
 						SchemaProps: spec.SchemaProps{
-							Description: "StorageClass should be created by user",
+							Description: "StorageClass should be pre-created by user.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"volumeMounts": {
+					"volumeMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Pod volumes to mount into the container's filesystem.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"storageClass", "volumeMounts"},
-			},
-		},
-		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.VolumeMount"},
-	}
-}
-
-func schema_pkg_apis_aerospike_v1alpha1_VolumeDevice(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "VolumeDevice is device to be used by the container",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"devicePath": {
-						SchemaProps: spec.SchemaProps{
-							Description: "DevicePath is the path inside of the container that the device will be mapped to",
+							Description: "VolumeMode specifies if the volume is block/raw or a filesystem.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"sizeInGB": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SizeInGB Size of device in GB",
+							Description: "SizeInGB Size of volume in GB.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
 				},
-				Required: []string{"devicePath", "sizeInGB"},
+				Required: []string{"AerospikePersistentVolumePolicySpec", "path", "storageClass", "volumeMode", "sizeInGB"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"},
+	}
+}
+
+func schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"initializedVolumePaths": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InitializedVolumePaths is the list of device path that have already been initialized.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"initializedVolumePaths"},
 			},
 		},
 	}
 }
 
-func schema_pkg_apis_aerospike_v1alpha1_VolumeMount(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "VolumeMount is Pod volume to mount into the container's filesystem",
+				Description: "AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"mountPath": {
+					"filesystemVolumePolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Path within the container at which the volume should be mounted",
-							Type:        []string{"string"},
-							Format:      "",
+							Description: "FileSystemVolumePolicy contains default policies for filesystem volumes.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
 						},
 					},
-					"sizeInGB": {
+					"blockVolumePolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SizeInGB Size of mount volume",
-							Type:        []string{"integer"},
-							Format:      "int32",
+							Description: "BlockVolumePolicy contains default policies for block volumes.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
+						},
+					},
+					"volumes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys":   "path",
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "path",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Volumes is the list of to attach to created pods.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumeSpec"),
+									},
+								},
+							},
 						},
 					},
 				},
-				Required: []string{"mountPath", "sizeInGB"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumeSpec"},
 	}
 }
