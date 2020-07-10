@@ -84,9 +84,10 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 		return fmt.Errorf("Failed to start upgrade: %v", err)
 	}
 
-	if !reflect.DeepEqual(s.obj.Spec.Storage, old.Spec.Storage) {
-		return fmt.Errorf("Storage config cannot be updated. Old %v, new %v", old.Spec.Storage, s.obj.Spec.Storage)
+	if err := old.Spec.Storage.ValidateStorageSpecChange(s.obj.Spec.Storage); err != nil {
+		return fmt.Errorf("Storage config cannot be updated: %v", err)
 	}
+
 	if s.obj.Spec.MultiPodPerHost != old.Spec.MultiPodPerHost {
 		return fmt.Errorf("Cannot update MultiPodPerHost setting")
 	}
@@ -409,7 +410,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRequiredFileStorage(fileStor
 		}
 
 		if !isFileStorageConfiguredForDir(fileStorageList, workDirPath) {
-			return fmt.Errorf("Aerospike work directory path %v not mounted in storage config %v", workDirPath, s.obj.Spec.Storage)
+			return fmt.Errorf("Aerospike work directory path %v not mounted on a filesystem in storage config %v", workDirPath, s.obj.Spec.Storage)
 		}
 	}
 

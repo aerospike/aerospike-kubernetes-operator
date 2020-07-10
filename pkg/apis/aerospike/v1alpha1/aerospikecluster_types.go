@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -241,6 +243,11 @@ func (v *AerospikePersistentVolumeSpec) DeepCopy() *AerospikePersistentVolumeSpe
 	return &dst
 }
 
+// IsSafeChange indicates if a change to a volume is safe to allow.
+func (v *AerospikePersistentVolumeSpec) IsSafeChange(new AerospikePersistentVolumeSpec) bool {
+	return v.Path == new.Path && v.StorageClass == new.StorageClass && v.VolumeMode == new.VolumeMode && v.SizeInGB == new.SizeInGB
+}
+
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
 // +k8s:openapi-gen=true
 type AerospikeStorageSpec struct {
@@ -253,6 +260,23 @@ type AerospikeStorageSpec struct {
 	// +listType=map
 	// +listMapKey=path
 	Volumes []AerospikePersistentVolumeSpec `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"path"`
+}
+
+// ValidateStorageSpecChange indicates if a change to to storage spec is safe to apply.
+func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
+	if len(new.Volumes) != len(v.Volumes) {
+		return fmt.Errorf("Cannot add or remove storage volumes dynamically")
+	}
+
+	// Only allow changes to
+	for i, newVolume := range new.Volumes {
+		oldVolume := v.Volumes[i]
+		if !oldVolume.IsSafeChange(newVolume) {
+			return fmt.Errorf("Cannot change volumes old: %v new %v", oldVolume, newVolume)
+		}
+	}
+
+	return nil
 }
 
 // DeepCopy implements deepcopy func for AerospikeStorageSpec.
