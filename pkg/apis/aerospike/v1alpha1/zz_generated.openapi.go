@@ -162,7 +162,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 					},
 					"nodes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Nodes tells the observed state of AerospikeClusterNodes",
+							Description: "Nodes contains Aerospike node specific  state of cluster.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -342,9 +342,15 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref common.Referenc
 				Description: "AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"AerospikePersistentVolumePolicySpec": {
+					"filesystemVolumePolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Contains default policies for all volumes.",
+							Description: "FileSystemVolumePolicy contains default policies for filesystem volumes.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
+						},
+					},
+					"blockVolumePolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BlockVolumePolicy contains default policies for block volumes.",
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
 						},
 					},
@@ -370,7 +376,6 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"AerospikePersistentVolumePolicySpec"},
 			},
 		},
 		Dependencies: []string{

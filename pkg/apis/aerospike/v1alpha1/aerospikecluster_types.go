@@ -208,6 +208,17 @@ type AerospikePersistentVolumePolicySpec struct {
 	CascadeDelete *bool `json:"cascadeDelete"`
 }
 
+// SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
+func (v *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
+	if v.InitMethod == nil {
+		v.InitMethod = defaultPolicy.InitMethod
+	}
+
+	if v.CascadeDelete == nil {
+		v.CascadeDelete = defaultPolicy.CascadeDelete
+	}
+}
+
 // DeepCopy implements deepcopy func for AerospikePersistentVolumePolicySpec.
 func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVolumePolicySpec {
 	src := *v
@@ -251,8 +262,11 @@ func (v *AerospikePersistentVolumeSpec) IsSafeChange(new AerospikePersistentVolu
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
 // +k8s:openapi-gen=true
 type AerospikeStorageSpec struct {
-	// Contains default policies for all volumes.
-	AerospikePersistentVolumePolicySpec
+	// FileSystemVolumePolicy contains default policies for filesystem volumes.
+	FileSystemVolumePolicy AerospikePersistentVolumePolicySpec `json:"filesystemVolumePolicy,omitempty"`
+
+	// BlockVolumePolicy contains default policies for block volumes.
+	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
 	// Volumes is the list of to attach to created pods.
 	// +patchMergeKey=path
@@ -268,7 +282,6 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 		return fmt.Errorf("Cannot add or remove storage volumes dynamically")
 	}
 
-	// Only allow changes to
 	for i, newVolume := range new.Volumes {
 		oldVolume := v.Volumes[i]
 		if !oldVolume.IsSafeChange(newVolume) {
@@ -277,6 +290,26 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 	}
 
 	return nil
+}
+
+// SetDefaults sets default values for storage spec fields.
+func (v *AerospikeStorageSpec) SetDefaults() {
+	defaultFilesystemInitMethod := AerospikeVolumeInitMethodDeleteFiles
+	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
+	defaultCascadeDelete := true
+
+	// Set storage level defaults.
+	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultFilesystemInitMethod, CascadeDelete: &defaultCascadeDelete})
+	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultBlockInitMethod, CascadeDelete: &defaultCascadeDelete})
+
+	for i := range v.Volumes {
+		// Use storage spec values as defaults for the volumes.
+		if v.Volumes[i].VolumeMode == AerospikeVolumeModeBlock {
+			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.BlockVolumePolicy)
+		} else {
+			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
+		}
+	}
 }
 
 // DeepCopy implements deepcopy func for AerospikeStorageSpec.
@@ -307,8 +340,10 @@ type AerospikeClusterStatus struct {
 
 	// The current state of Aerospike cluster.
 	AerospikeClusterSpec
-	// Nodes tells the observed state of AerospikeClusterNodes
+
+	// Nodes contains Aerospike node specific  state of cluster.
 	Nodes []AerospikeNodeSummary `json:"nodes"`
+
 	// Details about the current condition of the AerospikeCluster resource.
 	//Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 

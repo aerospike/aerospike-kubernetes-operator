@@ -146,25 +146,9 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 		s.obj.Spec.ValidationPolicy = &validationPolicy
 	}
 
-	// volume policy defaults.
-	setVolumePolicyDefaults(&s.obj.Spec.Storage.AerospikePersistentVolumePolicySpec)
-	for i := range s.obj.Spec.Storage.Volumes {
-		setVolumePolicyDefaults(&s.obj.Spec.Storage.Volumes[i].AerospikePersistentVolumePolicySpec)
-	}
-
+	// storage defaults.
+	s.obj.Spec.Storage.SetDefaults()
 	return nil
-}
-
-func setVolumePolicyDefaults(volumepolicy *aerospikev1alpha1.AerospikePersistentVolumePolicySpec) {
-	if volumepolicy.InitMethod == nil {
-		defaultInitMethod := aerospikev1alpha1.AerospikeVolumeInitMethodNone
-		volumepolicy.InitMethod = &defaultInitMethod
-	}
-
-	if volumepolicy.CascadeDelete == nil {
-		defaultTrue := true
-		volumepolicy.CascadeDelete = &defaultTrue
-	}
 }
 
 func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {

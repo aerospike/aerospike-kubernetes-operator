@@ -210,8 +210,8 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 		} else {
-			if volume.InitMethod == nil || (*volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodNone && *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles) {
-				return fmt.Errorf("Invalid init method %v for filesystem volume: %v", *volume.InitMethod, volume)
+			if *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodNone && *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)
 			}
 			fileStorageList = append(fileStorageList, volume.Path)
 		}

@@ -257,19 +257,13 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
-						Path: "/opt/aerospike",
-						AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-							InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
-						},
+						Path:         "/opt/aerospike",
 						SizeInGB:     1,
 						StorageClass: "ssd",
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 					},
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
-						Path: "/opt/aerospike/data",
-						AerospikePersistentVolumePolicySpec: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-							InitMethod: &aerospikeVolumeInitMethodDeleteFiles,
-						},
+						Path:         "/opt/aerospike/data",
 						SizeInGB:     1,
 						StorageClass: "ssd",
 						VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
