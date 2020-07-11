@@ -49,7 +49,7 @@ spec:
         replication-factor: 1
         storage-engine:
           file:
-            - /opt/aerospike/data/test/test.dat
+            - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true
       - name: bar
@@ -59,7 +59,7 @@ spec:
         replication-factor: 1
         storage-engine:
           file:
-            - /opt/aerospike/data/bar/bar.dat
+            - /opt/aerospike/data/bar.dat
           filesize: 2000000000
           data-in-memory: true
 
