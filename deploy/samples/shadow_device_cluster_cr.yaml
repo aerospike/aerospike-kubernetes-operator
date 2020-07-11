@@ -15,10 +15,6 @@ spec:
         path: /opt/aerospike
         volumeMode: filesystem
         sizeInGB: 1
-      - path: /opt/aerospike/data
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
       - path: /dev/nvme0n1
         storageClass: local-ssd
         volumeMode: block
