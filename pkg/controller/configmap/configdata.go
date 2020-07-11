@@ -49,7 +49,7 @@ done
 # Kubernetes API details.
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-KUBE_API_SERVER=https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_PORT_443_TCP_PORT
+KUBE_API_SERVER=https://kubernetes.default.svc
 
 # Parse out cluster name, formatted as: petset_name-index
 IFS='-' read -ra ADDR <<< "$(hostname)"

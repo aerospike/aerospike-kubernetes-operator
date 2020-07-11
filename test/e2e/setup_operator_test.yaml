@@ -190,7 +190,12 @@ rules:
   verbs:
   - get
   - list
-
+- apiGroups:
+  - aerospike.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
 ---
 
 # RoleBinding
