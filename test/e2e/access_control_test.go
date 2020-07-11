@@ -235,7 +235,7 @@ func TestDuplicateUser(t *testing.T) {
 		t.Errorf("InValid aerospike spec validated")
 	}
 
-	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "aeropsike") {
+	if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "aerospike") {
 		t.Errorf("Error: %v should contain 'Duplicate' and 'aerospike'", err)
 	}
 }
