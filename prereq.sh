@@ -19,11 +19,11 @@ sleep 10
 
 # prereq for cluster
 
-kubectl create secret generic aerospike-secret --from-file=deploy/secrets -n aerospike
-sleep 2
+# kubectl create secret generic aerospike-secret --from-file=deploy/secrets -n aerospike
+# sleep 2
 
-kubectl create secret generic auth-secret --from-literal=password='admin123' -n aerospike
-sleep 2
+# kubectl create secret generic auth-secret --from-literal=password='admin123' -n aerospike
+# sleep 2
 
 #### DataInMemory without persistent Cluster
 # kubectl apply -f deploy/samples/dim_nostorage_cluster_cr.yaml

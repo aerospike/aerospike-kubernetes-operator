@@ -176,11 +176,16 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	}
 
 	// Check Build
-	build := strings.Split(s.obj.Spec.Build, ":")
-	if len(build) != 2 {
-		return fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", s.obj.Spec.Build)
+	// build := strings.Split(s.obj.Spec.Build, ":")
+	// if len(build) != 2 {
+	// 	return fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", s.obj.Spec.Build)
+	// }
+	// version := build[1]
+
+	version, err := getBuildVersion(s.obj.Spec.Build)
+	if err != nil {
+		return err
 	}
-	version := build[1]
 	val, err := compareVersions(version, baseVersion)
 	if err != nil {
 		return fmt.Errorf("Failed to check build version: %v", err)
@@ -383,9 +388,48 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	return nil
 }
 
+func getBuildVersion(buildStr string) (string, error) {
+	build := strings.Split(buildStr, ":")
+	if len(build) != 2 {
+		return "", fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", buildStr)
+	}
+	version := build[1]
+	return version, nil
+}
+
 func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 	if len(s.obj.Spec.RackConfig.Racks) != 0 && (int(s.obj.Spec.Size) < len(s.obj.Spec.RackConfig.Racks)) {
 		return fmt.Errorf("Cluster size can not be less than number of Racks")
+	}
+	version, err := getBuildVersion(s.obj.Spec.Build)
+	if err != nil {
+		return err
+	}
+	for _, rack := range s.obj.Spec.RackConfig.Racks {
+		if len(rack.AerospikeConfig) == 0 {
+			// For this default config will be used
+			continue
+		}
+		if err := s.validateAerospikeConfigSchema(version, rack.AerospikeConfig); err != nil {
+			return fmt.Errorf("AerospikeConfig not valid for rack %v", rack)
+		}
+	}
+	return nil
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validateAerospikeConfigSchema(version string, config aerospikev1alpha1.Values) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(&s.obj)})
+
+	asConf, err := asconfig.NewMapAsConfig(version, config)
+	if err != nil {
+		return fmt.Errorf("Failed to load config map by lib: %v", err)
+	}
+	valid, validationErr, err := asConf.IsValid(version)
+	if !valid {
+		for _, e := range validationErr {
+			logger.Info("validation failed", log.Ctx{"err": *e})
+		}
+		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
 	}
 	return nil
 }
@@ -516,8 +560,14 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 	// Also when user add new rackIDs old default will be removed by reconciler.
 	for _, oldRack := range old.Spec.RackConfig.Racks {
 		for _, newRack := range s.obj.Spec.RackConfig.Racks {
-			if oldRack.ID == newRack.ID && !reflect.DeepEqual(oldRack, newRack) {
-				return fmt.Errorf("Old RackConfig can not be updated. Old rack %v, new rack %v", oldRack, newRack)
+			//	if oldRack.ID == newRack.ID && !reflect.DeepEqual(oldRack, newRack) {
+			if oldRack.ID == newRack.ID &&
+				(oldRack.NodeName != newRack.NodeName ||
+					oldRack.RackLabel != newRack.RackLabel ||
+					oldRack.Region != newRack.Region ||
+					oldRack.Zone != newRack.Zone) {
+
+				return fmt.Errorf("Old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v", oldRack, newRack)
 			}
 		}
 	}

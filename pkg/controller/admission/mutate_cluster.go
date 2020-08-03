@@ -87,14 +87,14 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
-	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
-	if err := s.patchRackConf(); err != nil {
-		return err
-	}
-
 	config := s.obj.Spec.AerospikeConfig
 	if config == nil {
 		return fmt.Errorf("aerospikeConfig cannot be empty")
+	}
+
+	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
+	if err := s.patchRackConf(); err != nil {
+		return err
 	}
 
 	// namespace conf
@@ -122,6 +122,11 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 		if err := s.patchXDRConf(); err != nil {
 			return err
 		}
+	}
+
+	// Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
+	if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -299,6 +304,20 @@ func (s *ClusterMutatingAdmissionWebhook) patchLoggingConf() error {
 func (s *ClusterMutatingAdmissionWebhook) patchXDRConf() error {
 	// Nothing to update for now
 
+	return nil
+}
+
+func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault() error {
+	for i, rack := range s.obj.Spec.RackConfig.Racks {
+		if len(rack.AerospikeConfig) != 0 {
+			m, err := merge(s.obj.Spec.AerospikeConfig, rack.AerospikeConfig)
+			if err != nil {
+				return err
+			}
+			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
+			log.Info("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		}
+	}
 	return nil
 }
 

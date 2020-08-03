@@ -193,6 +193,9 @@ spec:
                     properties:
                       ID:
                         type: integer
+                      aerospikeConfig:
+                        description: AerospikeConfig override the common AerospikeConfig
+                          for this Rack
                       nodeName:
                         type: string
                       rackLabel:
@@ -204,6 +207,7 @@ spec:
                         type: string
                     required:
                     - ID
+                    - aerospikeConfig
                     type: object
                   type: array
               required:

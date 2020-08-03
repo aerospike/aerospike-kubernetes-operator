@@ -204,12 +204,12 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 							},
 						},
 						Env: append(envVarList, []corev1.EnvVar{
-							corev1.EnvVar{
+							{
 								// Headless service has same name as AerospikeCluster
 								Name:  "SERVICE",
 								Value: getHeadLessSvcName(aeroCluster),
 							},
-							corev1.EnvVar{
+							{
 								Name:  "MULTI_POD_PER_HOST",
 								Value: strconv.FormatBool(aeroCluster.Spec.MultiPodPerHost),
 							},
@@ -242,7 +242,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: aerospikeConfConfigMapName,
+										Name: getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID).Name,
 									},
 								},
 							},
@@ -283,16 +283,16 @@ func (r *ReconcileAerospikeCluster) deleteStatefulSet(aeroCluster *aerospikev1al
 	return r.client.Delete(context.TODO(), st)
 }
 
-func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, name string) error {
+func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, namespacedName types.NamespacedName, rack aerospikev1alpha1.Rack) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Creating a new ConfigMap for statefulSet")
 
 	confMap := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: aeroCluster.Namespace}, confMap)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: namespacedName.Name, Namespace: namespacedName.Namespace}, confMap)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
-			configMapData, err := configmap.CreateConfigMapData(aeroCluster)
+			configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
 			if err != nil {
 				return fmt.Errorf("Failed to build dotConfig from map: %v", err)
 			}
@@ -301,9 +301,9 @@ func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha
 			// return a configmap object containing aerospikeConfig
 			confMap = &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
+					Name:      namespacedName.Name,
 					Labels:    ls,
-					Namespace: aeroCluster.Namespace,
+					Namespace: namespacedName.Namespace,
 				},
 				Data: configMapData,
 			}
@@ -323,19 +323,19 @@ func (r *ReconcileAerospikeCluster) buildConfigMap(aeroCluster *aerospikev1alpha
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) updateConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, name string) error {
+func (r *ReconcileAerospikeCluster) updateConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, namespacedName types.NamespacedName, rack aerospikev1alpha1.Rack) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
-	logger.Info("Updating ConfigMap", log.Ctx{"ConfigMap.Namespace": aeroCluster.Namespace, "ConfigMap.Name": name})
+	logger.Info("Updating ConfigMap", log.Ctx{"ConfigMap": namespacedName})
 
 	confMap := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: aeroCluster.Namespace}, confMap)
+	err := r.client.Get(context.TODO(), namespacedName, confMap)
 	if err != nil {
 		return err
 	}
 
 	// build the aerospike config file based on the current spec
-	configMapData, err := configmap.CreateConfigMapData(aeroCluster)
+	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
 		return fmt.Errorf("Failed to build dotConfig from map: %v", err)
 	}
@@ -1012,6 +1012,13 @@ func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string 
 }
 
 func getNamespacedNameForStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Namespace: aeroCluster.Namespace,
+	}
+}
+
+func getNamespacedNameForConfigMap(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
 		Namespace: aeroCluster.Namespace,

@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const aerospikeConfConfigMapName = "aerospike-conf"
+// const aerospikeConfConfigMapName = "aerospike-conf"
 
 const defaultUser = "admin"
 const defaultPass = "admin"
@@ -182,6 +182,75 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Reconciling rack for AerospikeCluster")
 
+	var scaledDownRackSTSList []appsv1.StatefulSet
+	var scaledDownRackList []RackState
+
+	rackStateList := getNewRackStateList(aeroCluster)
+	for _, state := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, state.Rack.ID)
+		if err := r.client.Get(context.TODO(), stsName, found); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+			// Create statefulset for rack
+			if err := r.createSTSForCluster(aeroCluster, state); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Scale down
+		if *found.Spec.Replicas > int32(state.Size) {
+			scaledDownRackSTSList = append(scaledDownRackSTSList, *found)
+			scaledDownRackList = append(scaledDownRackList, state)
+		} else {
+			// Reconcile other statefulset
+			if err := r.reconcileClusterSTS(aeroCluster, found, state); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Reconcile scaledDownRacks after all other racks are reconciled
+	for idx, state := range scaledDownRackList {
+		if err := r.reconcileClusterSTS(aeroCluster, &scaledDownRackSTSList[idx], state); err != nil {
+			return err
+		}
+	}
+
+	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
+		// remove removed racks
+		if err := r.deleteSTSForRemovedRacks(aeroCluster, rackStateList); err != nil {
+			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": err})
+			return err
+		}
+	}
+
+	// Pod termination in above call will take some time. Should we wait here for sometime or
+	// Just check if Pod isTerminating in below calls?
+	time.Sleep(time.Second * 2)
+
+	// Setup access control.
+	if err := r.reconcileAccessControl(aeroCluster); err != nil {
+		logger.Error("Failed to reconcile access control", log.Ctx{"err": err})
+		return err
+	}
+
+	// Update the AerospikeCluster status with the pod names
+	if err := r.updateStatus(aeroCluster); err != nil {
+		logger.Error("Failed to update AerospikeCluster status", log.Ctx{"err": err})
+		return err
+	}
+
+	return nil
+}
+
+// ReconcileRacks reconcile all racks
+func (r *ReconcileAerospikeCluster) ReconcileRacksOld(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+	logger.Info("Reconciling rack for AerospikeCluster")
+
 	rackStateList := getNewRackStateList(aeroCluster)
 
 	for _, state := range rackStateList {
@@ -278,7 +347,8 @@ func (r *ReconcileAerospikeCluster) createSTSForCluster(aeroCluster *aerospikev1
 		return err
 	}
 	// Bad config should not come here. It should be validated in validation hook
-	if err := r.buildConfigMap(aeroCluster, aerospikeConfConfigMapName); err != nil {
+	cmName := getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID)
+	if err := r.buildConfigMap(aeroCluster, cmName, rackState.Rack); err != nil {
 		logger.Error("Failed to create configMap from AerospikeConfig", log.Ctx{"err": err})
 		return err
 	}
@@ -415,13 +485,23 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig != nil {
 		needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfig, aeroCluster.Status.AerospikeConfig)
+		if !needRollingRestart {
+			// Check if rack aerospikeConfig has changed
+			for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
+				if rackState.Rack.ID == statusRack.ID && !reflect.DeepEqual(rackState.Rack.AerospikeConfig, statusRack.AerospikeConfig) {
+					needRollingRestart = true
+					break
+				}
+			}
+		}
 		if needRollingRestart {
 			logger.Info("AerospikeConfig changed. Need rolling restart")
-			if err := r.updateConfigMap(aeroCluster, aerospikeConfConfigMapName); err != nil {
+			if err := r.updateConfigMap(aeroCluster, getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
 				logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
 				return err
 			}
 		}
+
 		if !needRollingRestart {
 			// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
 			needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret)

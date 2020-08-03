@@ -3,8 +3,11 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.13
 
 require (
+	github.com/RaveNoX/go-jsonmerge v1.0.0
 	github.com/aerospike/aerospike-client-go v2.12.0+incompatible
 	github.com/aerospike/aerospike-management-lib v0.0.0-20200604213606-457ff7f6a12a
+	github.com/cameront/go-jsonpatch v0.0.0-20180223123257-a8710867776e
+	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-openapi/spec v0.19.0
 	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect

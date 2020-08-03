@@ -16,9 +16,15 @@ spec:
       - ID: 1
         zone: us-central1-b
         # nodeName: kubernetes-minion-group-qp3m
+        aerospikeConfig:
+          service:
+            proto-fd-max: 18000
       - ID: 2
         zone: us-central1-a
         # nodeName: kubernetes-minion-group-tft3
+        # aerospikeConfig:
+        #   service:
+        #     proto-fd-max: 16000        
   aerospikeAccessControl:
     users:
       admin:

@@ -85,6 +85,8 @@ type Rack struct {
 	// Node should have a label {key:RackLabel, value:<RackLable>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
+	// AerospikeConfig override the common AerospikeConfig for this Rack
+	AerospikeConfig Values `json:"aerospikeConfig"`
 }
 
 // DeepCopy implements deepcopy func for RackConfig
