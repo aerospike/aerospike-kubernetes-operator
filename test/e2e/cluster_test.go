@@ -61,10 +61,12 @@ func TestAerospikeCluster(t *testing.T) {
 	// t.Run("ClusterResources", func(t *testing.T) {
 	// 	ClusterResourceTest(t, f, ctx)
 	// })
-	t.Run("RackManagement", func(t *testing.T) {
-		RackManagementTest(t, f, ctx)
+	// t.Run("RackManagement", func(t *testing.T) {
+	// 	RackManagementTest(t, f, ctx)
+	// })
+	t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
+		RackAerospikeConfigUpdateTest(t, f, ctx)
 	})
-
 	// t.Run("RackEnabledCluster", func(t *testing.T) {
 	// 	RackEnabledClusterTest(t, f, ctx)
 	// })

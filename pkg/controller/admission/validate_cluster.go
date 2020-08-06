@@ -325,17 +325,20 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 
 	// Check if passed aerospikeConfig is valid or not
 	config := s.obj.Spec.AerospikeConfig
-	asConf, err := asconfig.NewMapAsConfig(version, config)
-	if err != nil {
-		return fmt.Errorf("Failed to load config map by lib: %v", err)
+	if err := s.validateAerospikeConfigSchema(version, s.obj.Spec.AerospikeConfig); err != nil {
+		return fmt.Errorf("AerospikeConfig not valid %v", err)
 	}
-	valid, validationErr, err := asConf.IsValid(version)
-	if !valid {
-		for _, e := range validationErr {
-			logger.Info("validation failed", log.Ctx{"err": *e})
-		}
-		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
-	}
+	// asConf, err := asconfig.NewMapAsConfig(version, config)
+	// if err != nil {
+	// 	return fmt.Errorf("Failed to load config map by lib: %v", err)
+	// }
+	// valid, validationErr, err := asConf.IsValid(version)
+	// if !valid {
+	// 	for _, e := range validationErr {
+	// 		logger.Info("validation failed", log.Ctx{"err": *e})
+	// 	}
+	// 	return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
+	// }
 
 	// validate xdr digestlog path
 	if _, ok := config["xdr"]; ok {
@@ -405,15 +408,25 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 	if err != nil {
 		return err
 	}
+	rackMap := map[int]bool{}
 	for _, rack := range s.obj.Spec.RackConfig.Racks {
+		if _, ok := rackMap[rack.ID]; ok {
+			return fmt.Errorf("Duplicate rackID %d not allowed, racks %v", rack.ID, s.obj.Spec.RackConfig.Racks)
+		}
+		rackMap[rack.ID] = true
+
 		if len(rack.AerospikeConfig) == 0 {
 			// For this default config will be used
 			continue
 		}
+		// TODO:
+		// network.tls conf, ca-path not allowed, please use ca-file
+		// Validate namespace replication factor, storage-engine
 		if err := s.validateAerospikeConfigSchema(version, rack.AerospikeConfig); err != nil {
 			return fmt.Errorf("AerospikeConfig not valid for rack %v", rack)
 		}
 	}
+
 	return nil
 }
 

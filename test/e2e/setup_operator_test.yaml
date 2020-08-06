@@ -39,7 +39,8 @@ spec:
       containers:
         - name: aerospike-kubernetes-operator-test
           # Replace this with the built image name
-          image: aerospike/aerospike-kubernetes-operator:v0.0.2-beta
+          #image: aerospike/aerospike-kubernetes-operator:v0.0.2-beta
+          image: sud82/test-operator:v2.0.0
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always
@@ -74,7 +75,6 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: aerospike-kubernetes-operator-test
 rules:
 - apiGroups:

@@ -113,6 +113,20 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 	return aeroCluster
 }
 
+func createDummyRackAwareAerospikeCluster(clusterName, namespace string, size int32) *aerospikev1alpha1.AerospikeCluster {
+	// Will be used in Update also
+	aeroCluster := createDummyAerospikeCluster(clusterName, namespace, 2)
+	// This needs to be changed based on setup. update zone, region, nodeName according to setup
+	racks := []aerospikev1alpha1.Rack{
+		{ID: 1}}
+	rackConf := aerospikev1alpha1.RackConfig{
+		RackPolicy: []aerospikev1alpha1.RackPolicy{},
+		Racks:      racks,
+	}
+	aeroCluster.Spec.RackConfig = rackConf
+	return aeroCluster
+}
+
 func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")

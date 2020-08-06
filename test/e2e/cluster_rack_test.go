@@ -3,10 +3,16 @@ package e2e
 import (
 	"context"
 	goctx "context"
+	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
+	as "github.com/aerospike/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/info"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +29,283 @@ import (
 // - ID: 2
 //   zone: us-central1-a
 //   # nodeName: kubernetes-minion-group-tft3
+
+func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
+	namespace, err := ctx.GetNamespace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clusterName := "aerocluster"
+
+	// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
+
+	t.Run("Positive", func(t *testing.T) {
+		// Will be used in Update also
+		aeroCluster := createDummyAerospikeCluster(clusterName, namespace, 2)
+		// This needs to be changed based on setup. update zone, region, nodeName according to setup
+		var pfd int64 = 10000
+		racks := []aerospikev1alpha1.Rack{
+			{
+				ID:     1,
+				Region: "us-central1",
+				AerospikeConfig: map[string]interface{}{
+					"service": map[string]interface{}{
+						"proto-fd-max": pfd,
+					},
+				},
+			},
+			{
+				ID:     2,
+				Region: "us-central1",
+			},
+		}
+		rackConf := aerospikev1alpha1.RackConfig{
+			RackPolicy: []aerospikev1alpha1.RackPolicy{},
+			Racks:      []aerospikev1alpha1.Rack{},
+		}
+		if err := lib.DeepCopy(&rackConf.Racks, &racks); err != nil {
+			t.Fatal(err)
+		}
+		aeroCluster.Spec.RackConfig = rackConf
+
+		clusterNamespacedName := getClusterNamespacedName(aeroCluster)
+
+		t.Run("Deploy", func(t *testing.T) {
+			if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
+				t.Fatal(err)
+			}
+
+			validateRackEnabledCluster(t, f, clusterNamespacedName)
+
+			if err := validateAerospikeConfigServiceUpdate(t, f, clusterNamespacedName, racks[0]); err != nil {
+				t.Fatal(err)
+			}
+		})
+
+		t.Run("AddAerospikeConfigInRack", func(t *testing.T) {
+			aeroConfig := map[string]interface{}{
+				"service": map[string]interface{}{
+					"proto-fd-max": 12000,
+				},
+			}
+			if err := updateAerospikeConfigInRack(t, f, ctx, aeroCluster.Name, aeroCluster.Namespace, aeroConfig); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateAerospikeConfigServiceUpdate(t, f, clusterNamespacedName, racks[0]); err != nil {
+				t.Fatal(err)
+			}
+		})
+		t.Run("UpdateAerospikeConfigInRack", func(t *testing.T) {
+			aeroConfig := map[string]interface{}{
+				"service": map[string]interface{}{
+					"proto-fd-max": 14000,
+				},
+			}
+			if err := updateAerospikeConfigInRack(t, f, ctx, aeroCluster.Name, aeroCluster.Namespace, aeroConfig); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateAerospikeConfigServiceUpdate(t, f, clusterNamespacedName, racks[0]); err != nil {
+				t.Fatal(err)
+			}
+		})
+		t.Run("RemoveAerospikeConfigInRack", func(t *testing.T) {
+			aeroConfig := map[string]interface{}{}
+			if err := updateAerospikeConfigInRack(t, f, ctx, aeroCluster.Name, aeroCluster.Namespace, aeroConfig); err != nil {
+				t.Fatal(err)
+			}
+		})
+		// Only updated rack's node should undergo rolling restart
+		// test for namespace storage replace
+		deleteCluster(t, f, ctx, aeroCluster)
+	})
+
+	t.Run("Negative", func(t *testing.T) {
+		// Will be used in Update also
+		t.Run("InvalidAerospikeConfig", func(t *testing.T) {
+
+			aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+			aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aerospikev1alpha1.Values{"namespace": "invalidConf"}
+			err = deployCluster(t, f, ctx, aeroCluster)
+			validateError(t, err, "should fail for invalid aerospikeConfig")
+
+			t.Run("InvalidNamespace", func(t *testing.T) {
+
+				t.Run("InvalidReplicationFactor", func(t *testing.T) {
+					aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					aeroConfig := aerospikev1alpha1.Values{
+						"namespace": []interface{}{
+							map[string]interface{}{
+								"name":               "test",
+								"replication-factor": 3,
+							},
+						},
+					}
+					aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+					err = deployCluster(t, f, ctx, aeroCluster)
+					validateError(t, err, "should fail for replication-factor greater than node sz")
+				})
+
+				// Should we test for overridden fields
+				t.Run("InvalidStorage", func(t *testing.T) {
+					t.Run("InvalidStorageEngineDevice", func(t *testing.T) {
+						aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+							vd := []aerospikev1alpha1.VolumeDevice{
+								aerospikev1alpha1.VolumeDevice{
+									DevicePath: "/dev/xvdf1",
+									SizeInGB:   1,
+								},
+								aerospikev1alpha1.VolumeDevice{
+									DevicePath: "/dev/xvdf2",
+									SizeInGB:   1,
+								},
+								aerospikev1alpha1.VolumeDevice{
+									DevicePath: "/dev/xvdf3",
+									SizeInGB:   1,
+								},
+							}
+							aeroCluster.Spec.BlockStorage[0].VolumeDevices = append(aeroCluster.Spec.BlockStorage[0].VolumeDevices, vd...)
+
+							aeroConfig := aerospikev1alpha1.Values{
+								"namespace": []interface{}{
+									map[string]interface{}{
+										"name": "test",
+										"storage-engine": map[string]interface{}{
+											"device": []interface{}{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"},
+										},
+									},
+								},
+							}
+							aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+							err = deployCluster(t, f, ctx, aeroCluster)
+							validateError(t, err, "should fail for invalid storage-engine.device, cannot have 3 devices in single device string")
+						}
+					})
+
+					t.Run("ExtraStorageEngineDevice", func(t *testing.T) {
+						aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+							aeroConfig := aerospikev1alpha1.Values{
+								"namespace": []interface{}{
+									map[string]interface{}{
+										"name": "test",
+										"storage-engine": map[string]interface{}{
+											"device": []interface{}{"andRandomDevice"},
+										},
+									},
+								},
+							}
+							aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+							err = deployCluster(t, f, ctx, aeroCluster)
+							validateError(t, err, "should fail for invalid storage-engine.device, cannot a device which doesn't exist in BlockStorage")
+						}
+					})
+				})
+
+				t.Run("InvalidxdrConfig", func(t *testing.T) {
+					aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+						aeroCluster.Spec.FileStorage = nil
+						aeroConfig := aerospikev1alpha1.Values{
+							"xdr": map[string]interface{}{
+								"enable-xdr":         false,
+								"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
+							},
+						}
+						aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+						err = deployCluster(t, f, ctx, aeroCluster)
+						validateError(t, err, "should fail for invalid xdr config. mountPath for digestlog not present in fileStorage")
+					}
+				})
+				// Replication-factor can not be updated
+				// storage-engine can not be updated
+			})
+		})
+	})
+}
+
+func updateAerospikeConfigInRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterName, namespace string, aeroConfig map[string]interface{}) error {
+	aeroCluster := &aerospikev1alpha1.AerospikeCluster{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: clusterName, Namespace: namespace}, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+	err = f.Client.Update(goctx.TODO(), aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	// Wait for aerocluster to reach 2 replicas
+	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+}
+
+func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, namespacedName types.NamespacedName, rack aerospikev1alpha1.Rack) error {
+	aeroCluster := &aerospikev1alpha1.AerospikeCluster{}
+	err := f.Client.Get(goctx.TODO(), namespacedName, aeroCluster)
+	if err != nil {
+		return err
+	}
+	kclient := &framework.Global.Client.Client
+
+	for _, node := range aeroCluster.Status.Nodes {
+
+		if isNodePartOfRack(node.NodeID, strconv.Itoa(rack.ID)) {
+			// TODO:
+			// We may need to check for all keys in aerospikeConfig in rack
+			// but we know that we are changing for service only for now
+			host := &as.Host{Name: node.IP, Port: node.Port, TLSName: node.TLSName}
+			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
+			confs, err := asinfo.GetAsConfig("service")
+			svcConfs := confs["service"].(lib.Stats)
+			if err != nil {
+				return err
+			}
+			for k, v := range rack.AerospikeConfig["service"].(map[string]interface{}) {
+				t.Logf("Matching rack key %s, value %v", k, v)
+				cv, ok := svcConfs[k]
+				if !ok {
+					return fmt.Errorf("Config %s missing in aerospikeConfig %v", k, svcConfs)
+				}
+				if !reflect.DeepEqual(cv, getParsedValue(v)) {
+					return fmt.Errorf("Config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+				}
+
+			}
+		}
+	}
+	return nil
+}
+
+func getParsedValue(val interface{}) interface{} {
+
+	valStr, ok := val.(string)
+	if !ok {
+		return val
+	}
+
+	if value, err := strconv.ParseInt(valStr, 10, 64); err == nil {
+		return value
+	} else if value, err := strconv.ParseFloat(valStr, 64); err == nil {
+		return value
+	} else if value, err := strconv.ParseBool(valStr); err == nil {
+		return value
+	} else {
+		return valStr
+	}
+}
+
+func isNodePartOfRack(nodeID string, rackID string) bool {
+	// NODE_ID="$RACK_ID$NODE_ID",  NODE_ID -> aINT
+	lnodeID := strings.ToLower(nodeID)
+	toks := strings.Split(lnodeID, "a")
+	// len(toks) can not be less than 2 if rack is there
+	if rackID == toks[0] {
+		return true
+	}
+	return false
+}
 
 // Test cluster cr updation
 func RackEnabledClusterTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {

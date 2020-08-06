@@ -66,6 +66,7 @@ func getClient(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClie
 	return getClientForUser(username, password, aeroCluster, client)
 }
 
+// TODO: username, password not used. check the use of this function
 func getClientForUser(username string, password string, aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClient.Client) (*as.Client, error) {
 	conns, err := newAllHostConn(aeroCluster, client)
 	if err != nil {

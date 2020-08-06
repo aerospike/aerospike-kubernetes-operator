@@ -24,7 +24,7 @@ import (
 
 var (
 	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Second * 100
+	cleanupTimeout       = time.Second * 200
 )
 
 var schemas map[string]string
