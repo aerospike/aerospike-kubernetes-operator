@@ -183,6 +183,12 @@ spec:
             rackConfig:
               description: RackConfig
               properties:
+                namespaces:
+                  description: List of Aerospike namespaces for which rack feature
+                    will be enabled If list empty then all namespaces are rack enabled
+                  items:
+                    type: string
+                  type: array
                 rackPolicy:
                   items:
                     type: string
@@ -211,6 +217,7 @@ spec:
                     type: object
                   type: array
               required:
+              - namespaces
               - rackPolicy
               - racks
               type: object
