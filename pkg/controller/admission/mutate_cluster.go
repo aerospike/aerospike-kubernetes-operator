@@ -97,37 +97,87 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 		return err
 	}
 
-	// namespace conf
-	if err := s.patchNsConf(); err != nil {
+	if err := s.setDefaultAerospikeConfigs(config); err != nil {
 		return err
 	}
+	// // namespace conf
+	// if err := s.patchNsConf(); err != nil {
+	// 	return err
+	// }
 
-	// servic conf
-	if err := s.patchServiceConf(); err != nil {
-		return err
-	}
+	// // servic conf
+	// if err := s.patchServiceConf(); err != nil {
+	// 	return err
+	// }
 
-	// network conf
-	if err := s.patchNetworkConf(); err != nil {
-		return err
-	}
+	// // network conf
+	// if err := s.patchNetworkConf(); err != nil {
+	// 	return err
+	// }
 
-	// logging conf
-	if err := s.patchLoggingConf(); err != nil {
-		return err
-	}
+	// // logging conf
+	// if err := s.patchLoggingConf(); err != nil {
+	// 	return err
+	// }
 
-	// xdr conf
-	if _, ok := config["xdr"]; ok {
-		if err := s.patchXDRConf(); err != nil {
-			return err
-		}
-	}
+	// // xdr conf
+	// if _, ok := config["xdr"]; ok {
+	// 	if err := s.patchXDRConf(); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	// Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
 	if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *ClusterMutatingAdmissionWebhook) setDefaultAerospikeConfigs(config aerospikev1alpha1.Values) error {
+	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
+
+	// config := s.obj.Spec.AerospikeConfig
+	// if config == nil {
+	// 	return fmt.Errorf("aerospikeConfig cannot be empty")
+	// }
+
+	// // Add default rackConfig if not already given. Disallow use of defautRackID by user.
+	// if err := s.patchRackConf(); err != nil {
+	// 	return err
+	// }
+
+	// namespace conf
+	if err := patchNsConf(config, s.obj.Spec.RackConfig.Namespaces); err != nil {
+		return err
+	}
+
+	// servic conf
+	if err := patchServiceConf(config, s.obj.Name); err != nil {
+		return err
+	}
+
+	// network conf
+	if err := patchNetworkConf(config); err != nil {
+		return err
+	}
+
+	// logging conf
+	if err := patchLoggingConf(config); err != nil {
+		return err
+	}
+
+	// xdr conf
+	if _, ok := config["xdr"]; ok {
+		if err := patchXDRConf(config); err != nil {
+			return err
+		}
+	}
+
+	// // Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
+	// if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -150,11 +200,11 @@ func (s *ClusterMutatingAdmissionWebhook) patchRackConf() error {
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) patchNsConf() error {
-	config := s.obj.Spec.AerospikeConfig
-	if config == nil {
-		return fmt.Errorf("aerospikeConfig cannot be empty")
-	}
+func patchNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []string) error {
+	// config := s.obj.Spec.AerospikeConfig
+	// if config == nil {
+	// 	return fmt.Errorf("aerospikeConfig cannot be empty")
+	// }
 	// namespace conf
 	nsConf, ok := config["namespace"]
 	if !ok {
@@ -173,14 +223,39 @@ func (s *ClusterMutatingAdmissionWebhook) patchNsConf() error {
 		if !ok {
 			return fmt.Errorf("aerospikeConfig.namespace does not have valid namespace map. nsMap %v", nsInt)
 		}
-		// add dummy rack-id, should be replaced with actual rack-id by init-container script
-		nsMap["rack-id"] = 1000000
+
+		defaultConfs := map[string]interface{}{"rack-id": defaultRackID}
+		if rackEnabledNsList == nil {
+			// If rackEnabledNsList empty then all namespaces are rackEnabled
+			if err := addDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
+				return err
+			}
+		} else if nsName, ok := nsMap["name"]; ok {
+			if _, ok := nsName.(string); ok &&
+				isNameExist(rackEnabledNsList, nsName.(string)) {
+				// add dummy rack-id, should be replaced with actual rack-id by init-container script
+				if err := addDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
+					return err
+				}
+			}
+		}
+		// If namespace map doesn't have valid name, it will fail in validation layer
+
 	}
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {
-	config := s.obj.Spec.AerospikeConfig
+func isNameExist(names []string, name string) bool {
+	for _, lName := range names {
+		if lName == name {
+			return true
+		}
+	}
+	return false
+}
+
+func patchServiceConf(config aerospikev1alpha1.Values, crObjName string) error {
+	// config := s.obj.Spec.AerospikeConfig
 	if _, ok := config["service"]; !ok {
 		config["service"] = map[string]interface{}{}
 	}
@@ -189,17 +264,21 @@ func (s *ClusterMutatingAdmissionWebhook) patchServiceConf() error {
 		return fmt.Errorf("aerospikeConfig.service not a valid map %v", config["service"])
 	}
 
-	serviceConf["node-id"] = "ENV_NODE_ID"
-	serviceConf["cluster-name"] = s.obj.Name
-
+	defaultConfs := map[string]interface{}{
+		"node-id":      "ENV_NODE_ID",
+		"cluster-name": crObjName,
+	}
+	if err := addDefaultsInConfigMap(serviceConf, defaultConfs); err != nil {
+		return err
+	}
 	log.Info("Set default template values in aerospikeConfig.service", log.Ctx{"aerospikeConfig.service": serviceConf})
 
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) patchNetworkConf() error {
+func patchNetworkConf(config aerospikev1alpha1.Values) error {
 	// Network section
-	config := s.obj.Spec.AerospikeConfig
+	// config := s.obj.Spec.AerospikeConfig
 	if _, ok := config["network"]; !ok {
 		config["network"] = map[string]interface{}{}
 	}
@@ -219,18 +298,22 @@ func (s *ClusterMutatingAdmissionWebhook) patchNetworkConf() error {
 	// Override these sections
 	// TODO: These values lines will be replaces with runtime info by script in init-container
 	// See if we can get better way to make template
-	serviceConf["port"] = utils.ServicePort
-	serviceConf["access-port"] = utils.ServicePort // must be greater that or equal to 1024
-	serviceConf["access-address"] = []string{"<access_address>"}
-	serviceConf["alternate-access-port"] = utils.ServicePort // must be greater that or equal to 1024,
-	serviceConf["alternate-access-address"] = []string{"<alternate_access_address>"}
+	serviceDefaults := map[string]interface{}{}
+	serviceDefaults["port"] = utils.ServicePort
+	serviceDefaults["access-port"] = utils.ServicePort // must be greater that or equal to 1024
+	serviceDefaults["access-address"] = []string{"<access_address>"}
+	serviceDefaults["alternate-access-port"] = utils.ServicePort // must be greater that or equal to 1024,
+	serviceDefaults["alternate-access-address"] = []string{"<alternate_access_address>"}
 
 	if _, ok := serviceConf["tls-name"]; ok {
-		serviceConf["tls-port"] = utils.ServiceTlsPort
-		serviceConf["tls-access-port"] = utils.ServiceTlsPort
-		serviceConf["tls-access-address"] = []string{"<tls-access-address>"}
-		serviceConf["tls-alternate-access-port"] = utils.ServiceTlsPort // must be greater that or equal to 1024,
-		serviceConf["tls-alternate-access-address"] = []string{"<tls-alternate-access-address>"}
+		serviceDefaults["tls-port"] = utils.ServiceTlsPort
+		serviceDefaults["tls-access-port"] = utils.ServiceTlsPort
+		serviceDefaults["tls-access-address"] = []string{"<tls-access-address>"}
+		serviceDefaults["tls-alternate-access-port"] = utils.ServiceTlsPort // must be greater that or equal to 1024,
+		serviceDefaults["tls-alternate-access-address"] = []string{"<tls-alternate-access-address>"}
+	}
+	if err := addDefaultsInConfigMap(serviceConf, serviceDefaults); err != nil {
+		return err
 	}
 	log.Info("Set default template values in aerospikeConfig.network.service", log.Ctx{"aerospikeConfig.network.service": serviceConf})
 
@@ -242,10 +325,15 @@ func (s *ClusterMutatingAdmissionWebhook) patchNetworkConf() error {
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.network.heartbeat not a valid map %v", networkConf["heartbeat"])
 	}
-	heartbeatConf["mode"] = "mesh"
-	heartbeatConf["port"] = utils.HeartbeatPort
+
+	hbDefaults := map[string]interface{}{}
+	hbDefaults["mode"] = "mesh"
+	hbDefaults["port"] = utils.HeartbeatPort
 	if _, ok := heartbeatConf["tls-name"]; ok {
-		heartbeatConf["tls-port"] = utils.HeartbeatTlsPort
+		hbDefaults["tls-port"] = utils.HeartbeatTlsPort
+	}
+	if err := addDefaultsInConfigMap(serviceConf, hbDefaults); err != nil {
+		return err
 	}
 	log.Info("Set default template values in aerospikeConfig.network.heartbeat", log.Ctx{"aerospikeConfig.network.heartbeat": heartbeatConf})
 
@@ -257,17 +345,22 @@ func (s *ClusterMutatingAdmissionWebhook) patchNetworkConf() error {
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.network.fabric not a valid map %v", networkConf["fabric"])
 	}
-	fabricConf["port"] = utils.FabricPort
+
+	fabricDefaults := map[string]interface{}{}
+	fabricDefaults["port"] = utils.FabricPort
 	if _, ok := fabricConf["tls-name"]; ok {
-		fabricConf["tls-port"] = utils.FabricTlsPort
+		fabricDefaults["tls-port"] = utils.FabricTlsPort
+	}
+	if err := addDefaultsInConfigMap(serviceConf, fabricDefaults); err != nil {
+		return err
 	}
 	log.Info("Set default template values in aerospikeConfig.network.fabric", log.Ctx{"aerospikeConfig.network.fabric": fabricConf})
 
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) patchLoggingConf() error {
-	config := s.obj.Spec.AerospikeConfig
+func patchLoggingConf(config aerospikev1alpha1.Values) error {
+	// config := s.obj.Spec.AerospikeConfig
 	if _, ok := config["logging"]; !ok {
 		config["logging"] = []interface{}{}
 	}
@@ -301,7 +394,7 @@ func (s *ClusterMutatingAdmissionWebhook) patchLoggingConf() error {
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) patchXDRConf() error {
+func patchXDRConf(config aerospikev1alpha1.Values) error {
 	// Nothing to update for now
 
 	return nil
@@ -314,18 +407,27 @@ func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault(
 			if err != nil {
 				return err
 			}
+			// Set defaults in updated rack config
+			// Above merge function may have overwritten defaults
+			if err := s.setDefaultAerospikeConfigs(m); err != nil {
+				return err
+			}
 			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
+
 			log.Info("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
 		}
 	}
 	return nil
 }
 
-func updateMap(baseMap, opMap map[string]interface{}) map[string]interface{} {
-	for k, v := range opMap {
-		baseMap[k] = v
+func addDefaultsInConfigMap(baseConfigs, defaultConfigs map[string]interface{}) error {
+	for k, v := range defaultConfigs {
+		if _, ok := baseConfigs[k]; ok {
+			return fmt.Errorf("Config %s can not be given. It will be set internally", k)
+		}
+		baseConfigs[k] = v
 	}
-	return baseMap
+	return nil
 }
 
 func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {

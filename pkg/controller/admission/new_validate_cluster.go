@@ -501,6 +501,9 @@ func (s *ClusterValidatingAdmissionWebhook) newvalidateRackUpdate(old aerospikev
 	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
 		return nil
 	}
+	if !reflect.DeepEqual(s.obj.Spec.RackConfig.Namespaces, old.Spec.RackConfig.Namespaces) {
+		return fmt.Errorf("Rack namespaces cannot be updated. Old %v, new %v", old.Spec.RackConfig.Namespaces, s.obj.Spec.RackConfig.Namespaces)
+	}
 	for _, newRack := range s.obj.Spec.RackConfig.Racks {
 		// Check for defaultRackID in mutate.
 		if newRack.ID < 1 || newRack.ID > 1000000 {

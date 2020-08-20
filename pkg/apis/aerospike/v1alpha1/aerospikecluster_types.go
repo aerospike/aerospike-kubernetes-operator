@@ -65,7 +65,10 @@ type AerospikeClusterSpec struct {
 // RackConfig specifies all racks and related policies
 type RackConfig struct {
 	RackPolicy []RackPolicy `json:"rackPolicy"`
-	Racks      []Rack       `json:"racks"`
+	// List of Aerospike namespaces for which rack feature will be enabled
+	// If list empty then all namespaces are rack enabled
+	Namespaces []string `json:"namespaces"`
+	Racks      []Rack   `json:"racks"`
 }
 
 type RackPolicy string
