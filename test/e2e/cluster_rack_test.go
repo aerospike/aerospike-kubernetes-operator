@@ -121,6 +121,9 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 	t.Run("Negative", func(t *testing.T) {
 		// Will be used in Update also
+		t.Run("InvalidClusterName", func(t *testing.T) {
+
+		})
 		t.Run("InvalidAerospikeConfig", func(t *testing.T) {
 
 			aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
@@ -219,6 +222,142 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 				})
 				// Replication-factor can not be updated
 				// storage-engine can not be updated
+			})
+			t.Run("DeployWithNonDefaultConfig", func(t *testing.T) {
+				t.Run("NsConf", func(t *testing.T) {
+					// Ns conf
+					// Rack-id
+					c := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting rack-id")
+				})
+
+				t.Run("ServiceConf", func(t *testing.T) {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					c := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["service"].(map[string]interface{})["node-id"] = "a1"
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting node-id")
+
+					c = createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					err = deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting cluster-name")
+				})
+
+				t.Run("NetworkConf", func(t *testing.T) {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-address"
+					// "alternate-access-port"
+					// "alternate-access-address"
+					c := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":           3000,
+							"access-address": []string{"<access_address>"},
+						},
+					}
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["network"] = networkConf
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting network conf")
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-address"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-address"
+					c = createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":           "bob-cluster-a",
+							"tls-port":           3001,
+							"tls-access-address": []string{"<tls-access-address>"},
+						},
+					}
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["network"] = networkConf
+					err = deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting tls network conf")
+				})
+
+				// Logging conf
+				// XDR conf
+			})
+			t.Run("UpdateDefaultConfig", func(t *testing.T) {
+				clusterName := "UpdateDefaultConfig"
+				c := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
+				if err := deployCluster(t, f, ctx, c); err != nil {
+					t.Fatal(err)
+				}
+
+				t.Run("NsConf", func(t *testing.T) {
+					// Ns conf
+					// Rack-id
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting rack-id")
+				})
+
+				t.Run("ServiceConf", func(t *testing.T) {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["service"].(map[string]interface{})["node-id"] = "a10"
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting node-id")
+
+					c = getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting cluster-name")
+				})
+
+				t.Run("NetworkConf", func(t *testing.T) {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-address"
+					// "alternate-access-port"
+					// "alternate-access-address"
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":           3000,
+							"access-address": []string{"<access_address>"},
+						},
+					}
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["network"] = networkConf
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting network conf")
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-address"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-address"
+					c = getCluster(t, f, ctx, clusterName, namespace)
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":           "bob-cluster-a",
+							"tls-port":           3001,
+							"tls-access-address": []string{"<tls-access-address>"},
+						},
+					}
+					c.Spec.RackConfig.Racks[0].AerospikeConfig["network"] = networkConf
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting tls network conf")
+				})
+
+				// Logging conf
+				// XDR conf
 			})
 		})
 	})

@@ -637,6 +637,72 @@ func validateDeployClusterTest(t *testing.T, f *framework.Framework, ctx *framew
 					})
 				})
 			})
+
+			t.Run("ChangeDefaultConfig", func(t *testing.T) {
+				t.Run("NsConf", func(t *testing.T) {
+					// Ns conf
+					// Rack-id
+					c := createDummyAerospikeCluster(clusterName, namespace, 1)
+					c.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting rack-id")
+				})
+
+				t.Run("ServiceConf", func(t *testing.T) {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					c := createDummyAerospikeCluster(clusterName, namespace, 1)
+					c.Spec.AerospikeConfig["service"].(map[string]interface{})["node-id"] = "a1"
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting node-id")
+
+					c = createDummyAerospikeCluster(clusterName, namespace, 1)
+					c.Spec.AerospikeConfig["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					err = deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting cluster-name")
+				})
+
+				t.Run("NetworkConf", func(t *testing.T) {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-address"
+					// "alternate-access-port"
+					// "alternate-access-address"
+					c := createDummyAerospikeCluster(clusterName, namespace, 1)
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":           3000,
+							"access-address": []string{"<access_address>"},
+						},
+					}
+					c.Spec.AerospikeConfig["network"] = networkConf
+					err := deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting network conf")
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-address"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-address"
+					c = createDummyAerospikeCluster(clusterName, namespace, 1)
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":           "bob-cluster-a",
+							"tls-port":           3001,
+							"tls-access-address": []string{"<tls-access-address>"},
+						},
+					}
+					c.Spec.AerospikeConfig["network"] = networkConf
+					err = deployCluster(t, f, ctx, c)
+					validateError(t, err, "should fail for setting tls network conf")
+				})
+
+				// Logging conf
+				// XDR conf
+			})
 		})
 
 		t.Run("InvalidAerospikeConfigSecret", func(t *testing.T) {
@@ -772,6 +838,72 @@ func validateUpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framew
 						}
 					})
 				})
+			})
+
+			t.Run("ChangeDefaultConfig", func(t *testing.T) {
+				t.Run("NsConf", func(t *testing.T) {
+					// Ns conf
+					// Rack-id
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting rack-id")
+				})
+
+				t.Run("ServiceConf", func(t *testing.T) {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.AerospikeConfig["service"].(map[string]interface{})["node-id"] = "a10"
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting node-id")
+
+					c = getCluster(t, f, ctx, clusterName, namespace)
+					c.Spec.AerospikeConfig["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting cluster-name")
+				})
+
+				t.Run("NetworkConf", func(t *testing.T) {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-address"
+					// "alternate-access-port"
+					// "alternate-access-address"
+					c := getCluster(t, f, ctx, clusterName, namespace)
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":           3000,
+							"access-address": []string{"<access_address>"},
+						},
+					}
+					c.Spec.AerospikeConfig["network"] = networkConf
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting network conf")
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-address"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-address"
+					c = getCluster(t, f, ctx, clusterName, namespace)
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":           "bob-cluster-a",
+							"tls-port":           3001,
+							"tls-access-address": []string{"<tls-access-address>"},
+						},
+					}
+					c.Spec.AerospikeConfig["network"] = networkConf
+					err = f.Client.Update(goctx.TODO(), aeroCluster)
+					validateError(t, err, "should fail for setting tls network conf")
+				})
+
+				// Logging conf
+				// XDR conf
 			})
 		})
 

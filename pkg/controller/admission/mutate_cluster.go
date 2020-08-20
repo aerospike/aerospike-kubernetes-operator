@@ -2,6 +2,7 @@ package admission
 
 import (
 	"fmt"
+	"reflect"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
@@ -200,6 +201,26 @@ func (s *ClusterMutatingAdmissionWebhook) patchRackConf() error {
 	return nil
 }
 
+func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault() error {
+	for i, rack := range s.obj.Spec.RackConfig.Racks {
+		if len(rack.AerospikeConfig) != 0 {
+			m, err := merge(s.obj.Spec.AerospikeConfig, rack.AerospikeConfig)
+			if err != nil {
+				return err
+			}
+			// Set defaults in updated rack config
+			// Above merge function may have overwritten defaults
+			if err := s.setDefaultAerospikeConfigs(m); err != nil {
+				return err
+			}
+			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
+
+			log.Info("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		}
+	}
+	return nil
+}
+
 func patchNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []string) error {
 	// config := s.obj.Spec.AerospikeConfig
 	// if config == nil {
@@ -243,15 +264,6 @@ func patchNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []string) er
 
 	}
 	return nil
-}
-
-func isNameExist(names []string, name string) bool {
-	for _, lName := range names {
-		if lName == name {
-			return true
-		}
-	}
-	return false
 }
 
 func patchServiceConf(config aerospikev1alpha1.Values, crObjName string) error {
@@ -400,30 +412,11 @@ func patchXDRConf(config aerospikev1alpha1.Values) error {
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault() error {
-	for i, rack := range s.obj.Spec.RackConfig.Racks {
-		if len(rack.AerospikeConfig) != 0 {
-			m, err := merge(s.obj.Spec.AerospikeConfig, rack.AerospikeConfig)
-			if err != nil {
-				return err
-			}
-			// Set defaults in updated rack config
-			// Above merge function may have overwritten defaults
-			if err := s.setDefaultAerospikeConfigs(m); err != nil {
-				return err
-			}
-			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
-
-			log.Info("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
-		}
-	}
-	return nil
-}
-
 func addDefaultsInConfigMap(baseConfigs, defaultConfigs map[string]interface{}) error {
 	for k, v := range defaultConfigs {
-		if _, ok := baseConfigs[k]; ok {
-			return fmt.Errorf("Config %s can not be given. It will be set internally", k)
+		if bv, ok := baseConfigs[k]; ok &&
+			!reflect.DeepEqual(bv, v) {
+			return fmt.Errorf("Config %s can not have non-default value. It will be set internally", k)
 		}
 		baseConfigs[k] = v
 	}
@@ -434,4 +427,13 @@ func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 	val1, _ := m1[key]
 	val2, _ := m2[key]
 	return val1 != val2
+}
+
+func isNameExist(names []string, name string) bool {
+	for _, lName := range names {
+		if lName == name {
+			return true
+		}
+	}
+	return false
 }
