@@ -156,7 +156,7 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 			return reconcile.Result{}, fmt.Errorf("Error determining if cluster has failed: %v", err)
 		}
 
-		if hasFailed{
+		if hasFailed {
 			return r.recoverFailedCreate(aeroCluster)
 		}
 	}
@@ -217,7 +217,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 
 	// Pod termination in above call will take some time. Should we wait here for sometime or
 	// Just check if Pod isTerminating in below calls?
-    // TODO: Replace the sleep.
+	// TODO: Replace the sleep.
 	time.Sleep(time.Second * 2)
 
 	return nil
@@ -229,8 +229,7 @@ func (r *ReconcileAerospikeCluster) isNewCluster(aeroCluster *aerospikev1alpha1.
 		return false, nil
 	}
 
-	// TODO: use stateful set list as an indicator.
-	podList, err := r.getClusterPodList(aeroCluster)
+	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
 
 	if err != nil {
 		return false, err
@@ -238,7 +237,7 @@ func (r *ReconcileAerospikeCluster) isNewCluster(aeroCluster *aerospikev1alpha1.
 
 	// Cluster can have status nil and still have pods on failures.
 	// For cluster to be new there should be no pods in the cluster.
-	return len(podList.Items) == 0, nil
+	return len(statefulSetList.Items) == 0, nil
 }
 
 func (r *ReconcileAerospikeCluster) hasClusterFailed(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
@@ -538,7 +537,7 @@ func (r *ReconcileAerospikeCluster) upgrade(aeroCluster *aerospikev1alpha1.Aeros
 						return found, err
 					}
 				}
- 
+
 				// Delete pod
 				if err := r.client.Delete(context.TODO(), &p); err != nil {
 					return found, err
@@ -1007,7 +1006,7 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 		return reconcile.Result{}, fmt.Errorf("Error getting statefulsets while forcing recreate of the cluster as status is nil: %v", err)
 	}
 
-	for _,statefulset := range statefulSetList.Items {
+	for _, statefulset := range statefulSetList.Items {
 		if err := r.deleteStatefulSet(aeroCluster, &statefulset); err != nil {
 			return reconcile.Result{}, fmt.Errorf("Error deleting statefulset while forcing recreate of the cluster as status is nil: %v", err)
 		}
