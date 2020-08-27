@@ -37,6 +37,8 @@ const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"
 const authSecretNameForUpdate = "auth-update"
 
+var aerospikeVolumeInitMethodDeleteFiles = aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles
+
 func cleanupOption(ctx *framework.TestCtx) *framework.CleanupOptions {
 	return &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
 }

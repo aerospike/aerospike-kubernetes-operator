@@ -179,7 +179,6 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: aerospike-cluster
 rules:
 - apiGroups:
@@ -190,7 +189,12 @@ rules:
   verbs:
   - get
   - list
-
+- apiGroups:
+  - aerospike.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
 ---
 
 # RoleBinding

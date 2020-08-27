@@ -153,6 +153,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 			Build:       build,
 			ClusterName: clName,
 			NodeID:      nodeID,
+			PodName:     pod.Name,
 			Port:        asConn.AerospikePort,
 			TLSName:     asConn.AerospikeTLSName,
 		}
@@ -220,9 +221,11 @@ func (r *ReconcileAerospikeCluster) newHostConn(aeroCluster *aerospikev1alpha1.A
 }
 
 func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
-	networkConf := aeroCluster.Spec.AerospikeConfig["network"].(map[string]interface{})
-	if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-		return tlsName.(string)
+	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig["network"]; ok {
+		networkConf := networkConfTmp.(map[string]interface{})
+		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
+			return tlsName.(string)
+		}
 	}
 	return ""
 }

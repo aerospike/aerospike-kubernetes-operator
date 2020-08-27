@@ -36,8 +36,14 @@ github.com/aerospike/aerospike-client-go v1.35.2 h1:TWV2Bn59Ig7SM4Zue84fFsPGlfFJ
 github.com/aerospike/aerospike-client-go v1.35.2/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-client-go v2.12.0+incompatible h1:us93nA5rG6OtLN5Kstk8hy79JX9Ucnd+PE+iEkbrOkQ=
 github.com/aerospike/aerospike-client-go v2.12.0+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
+github.com/aerospike/aerospike-client-go v3.0.3+incompatible h1:UEuPV2ldaVyUeBphqKvz7JkM0mMSKImwA7BNGJ64Vu4=
+github.com/aerospike/aerospike-client-go v3.0.3+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
+github.com/aerospike/aerospike-client-go v3.0.4+incompatible h1:LSfy1v82+y91jqezCoPnZ57OpXlQkQQLfMhUG19fVLQ=
+github.com/aerospike/aerospike-client-go v3.0.4+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200604213606-457ff7f6a12a h1:A6f8SAvAI7ZOToBIa+GI9NFkhFzuUKBmsaKYvwz2kJc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200604213606-457ff7f6a12a/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0 h1:r5QkY/rnu3dtCr/J1JIuar1AI4a/Xc097J4I44Le56U=
+github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf h1:qet1QNfXsQxTZqLG4oE62mJzwPIB8+Tee4RNCL9ulrY=
@@ -367,6 +373,7 @@ github.com/markbates/inflect v1.0.4 h1:5fh1gzTFhfae06u3hzHYO9xe3l3v3nW5Pwt3naLTP
 github.com/markbates/inflect v1.0.4/go.mod h1:1fR9+pO2KHEO9ZRtto13gDwwZaAKstQzferVeWqbgNs=
 github.com/marstr/guid v0.0.0-20170427235115-8bdf7d1a087c/go.mod h1:74gB1z2wpxxInTG6yaqA7KrtM0NZ+RbrcqDvYHefzho=
 github.com/martinlindhe/base36 v0.0.0-20180729042928-5cda0030da17/go.mod h1:+AtEs8xrBpCeYgSLoY/aJ6Wf37jtBuR0s35750M27+8=
+github.com/mattbaird/jsonpatch v0.0.0-20171005235357-81af80346b1a h1:+J2gw7Bw77w/fbK7wnNJJDKmw1IbWft2Ul5BzrG1Qm8=
 github.com/mattbaird/jsonpatch v0.0.0-20171005235357-81af80346b1a/go.mod h1:M1qoD/MqPgTZIk0EWKB38wE28ACRfVcn+cU08jyArI0=
 github.com/mattn/go-colorable v0.1.2 h1:/bC9yWikZXAL9uJdulbSfyVNIR3n3trXl+v8+1sx8mU=
 github.com/mattn/go-colorable v0.1.2/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
@@ -766,6 +773,7 @@ k8s.io/gengo v0.0.0-20181113154421-fd15ee9cc2f7/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8
 k8s.io/gengo v0.0.0-20190116091435-f8a0810f38af/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/gengo v0.0.0-20190128074634-0689ccc1d7d6/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/gengo v0.0.0-20190327210449-e17681d19d3a/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
+k8s.io/gengo v0.0.0-20191010091904-7fa3014cb28f h1:eW/6wVuHNZgQJmFesyAxu0cvj0WAHHUuGaLbPcmNY3Q=
 k8s.io/gengo v0.0.0-20191010091904-7fa3014cb28f/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/heapster v1.2.0-beta.1/go.mod h1:h1uhptVXMwC8xtZBYsPXKVi8fpdlYkTs6k949KozGrM=
 k8s.io/helm v2.15.0+incompatible/go.mod h1:LZzlS4LQBHfciFOurYBFkCMTaZ0D1l+p0teMg7TSULI=

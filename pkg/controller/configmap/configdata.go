@@ -1,10 +1,17 @@
 package configmap
 
-const install_sh = `
-#! /bin/bash
+import (
+	"bytes"
+	"text/template"
 
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
+)
+
+const initializeShTemplateStr = `
+#! /bin/bash
 # ------------------------------------------------------------------------------
-# Copyright 2012-2017 Aerospike, Inc.
+# Copyright 2012-2020 Aerospike, Inc.
 #
 # Portions may be licensed to Aerospike, Inc. under one or more contributor
 # license agreements.
@@ -20,43 +27,171 @@ const install_sh = `
 # the License.
 # ------------------------------------------------------------------------------
 
+# This script writes out an aerospike config using a list of newline seperated
+# peer DNS names it accepts through stdin.
 
-CONFIG_VOLUME="/etc/aerospike"
-NAMESPACE=${MY_POD_NAMESPACE:-default}
-K8_SERVICE=${SERVICE:-aerospike}
-for i in "$@"
-do
-case $i in
-    -c=*|--config=*)
-    CONFIG_VOLUME="${i#*=}"
-    shift
-    ;;
-    *)
-    # unknown option
-    ;;
-esac
+# /etc/aerospike is assumed to be a shared volume so we can modify aerospike.conf as required
+set -e
+
+
+{{- if .WorkDir }}
+# Create required directories.
+DEFAULT_WORK_DIR="/filesystem-volumes{{.WorkDir}}"
+REQUIRED_DIRS=("smd"  "usr/udf/lua" "xdr")
+
+for d in ${REQUIRED_DIRS[*]}; do
+    TO_CREATE="$DEFAULT_WORK_DIR/$d"
+    echo creating directory "${TO_CREATE}"
+    mkdir -p "$TO_CREATE"
 done
+{{- end }}
 
-echo installing aerospike.conf into "${CONFIG_VOLUME}"
-mkdir -p "${CONFIG_VOLUME}"
-#chown -R aerospike:aerospike "${CONFIG_VOLUME}"
-apt-get update && apt-get install -y wget
-wget https://github.com/kmodules/peer-finder/releases/download/v1.0.0/peer-finder -O /peer-finder
+# Kubernetes API details.
+CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+KUBE_API_SERVER=https://kubernetes.default.svc
 
-cp /configs/on-start.sh /on-start.sh
-cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
-if [ -f /configs/features.conf ]; then
-        cp /configs/features.conf "${CONFIG_VOLUME}"/
+# Parse out cluster name, formatted as: petset_name-index
+IFS='-' read -ra ADDR <<< "$(hostname)"
+AERO_CLUSTER_NAME="${ADDR[0]}"
+
+# Read this pod's Aerospike pod status from the cluster status.
+NAMESPACE=$MY_POD_NAMESPACE
+AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
+
+if [ $? -ne 0 ]
+then
+   echo "ERROR: failed to read status for $AERO_CLUSTER_NAME"
+   exit 1
 fi
-chmod +x /on-start.sh
-chmod +x /peer-finder
-/peer-finder -on-start=/on-start.sh -service=$K8_SERVICE -ns=${NAMESPACE} -domain=cluster.local
+
+IS_NEW="$(echo $AERO_CLUSTER_JSON | python -c "import sys, json
+data = json.load(sys.stdin)
+
+if 'status' in data:
+   status = data['status']
+else:
+   status = {}
+
+podname = '${MY_POD_NAME}';
+def isNew(status, podname):
+    if  not 'podStatus' in status:
+      return True
+    return podname not in status['podStatus']
+print isNew(status, podname)")"
+
+if [ "$IS_NEW" == "True" ]
+then
+    echo "Pod first run - initializing"
+
+else
+    echo "Pod restarted"
+fi
+
+cat << EOF > initVolumes.py
+import sys
+import json
+import os
+
+# Constants
+fileSystemMountPoint = '/filesystem-volumes'
+blockMountPoint = '/block-volumes'
+
+
+def executeCommand(command):
+    print 'Executing command\n\t' + command
+    exit = os.system(command)
+    if exit != 0:
+        raise Exception('Error executing command')
+
+
+podname = sys.argv[1]
+data = json.load(sys.stdin)
+
+if 'status' in data:
+    status = data['status']
+else:
+    status = {}
+
+if 'spec' in data:
+    spec = data['spec']
+else:
+    spec = {}
+
+
+if 'storage' in spec and 'volumes' in spec['storage']:
+    volumes = spec['storage']['volumes']
+else:
+    volumes = []
+
+if 'podStatus' in status and podname in status['podStatus'] and 'initializedVolumePaths' in status['podStatus'][podname]:
+    alreadyInitialized = status['podStatus'][podname]['initializedVolumePaths']
+else:
+    alreadyInitialized = []
+
+# Initialize unintialized volumes.
+initialized = []
+for volume in volumes:
+    # volume path is always absolute.
+    if volume['volumeMode'] == 'block':
+        localVolumePath = blockMountPoint + volume['path']
+    elif volume['volumeMode'] == 'filesystem':
+        localVolumePath = fileSystemMountPoint + volume['path']
+
+    if not os.path.exists(localVolumePath):
+        raise Exception(
+            'Volume ' + volume['path'] + ' not attached to path ' + localVolumePath)
+
+    if volume['path'] not in alreadyInitialized:
+        if volume['volumeMode'] == 'block':
+            localVolumePath = blockMountPoint + volume['path']
+            if volume['initMethod'] == 'dd':
+                executeCommand('dd if=/dev/zero of=' +
+                               localVolumePath + ' bs=1M')
+            elif volume['initMethod'] == 'blkdiscard':
+                executeCommand('blkdiscard ' + localVolumePath + ' bs=1M')
+        elif volume['volumeMode'] == 'filesystem':
+            # volume path is always absolute.
+            localVolumePath = fileSystemMountPoint + volume['path']
+            if volume['initMethod'] == 'deleteFiles':
+                executeCommand(
+                    'find ' + localVolumePath + ' -type f -delete')
+        print 'device ' + volume['path'] + ' initialized'
+
+    else:
+        print 'device ' + volume['path'] + ' already initialized'
+
+    initialized.append(volume['path'])
+
+
+# Create the patch payload for updating pod status.
+pathPayload = [{'op': 'replace', 'path': '/status/podStatus/' +
+                podname, 'value': {'initializedVolumePaths': initialized}}]
+
+
+with open('/tmp/patch.json', 'w') as outfile:
+    json.dump(pathPayload, outfile)
+EOF
+
+echo $AERO_CLUSTER_JSON | python initVolumes.py $MY_POD_NAME
+
+if [ $? -ne 0 ]
+then
+   echo "ERROR: failed to initialize volumes"
+   exit 1
+fi
+
+# Patch the pod status.
+cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
+     -H 'Accept: application/json' \
+     -H 'Content-Type: application/json-patch+json' \
+     "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
 `
 
-const on_start_sh = `
+const onStartSh = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
-# Copyright 2012-2017 Aerospike, Inc.
+# Copyright 2012-2020 Aerospike, Inc.
 #
 # Portions may be licensed to Aerospike, Inc. under one or more contributor
 # license agreements.
@@ -121,8 +256,6 @@ for PEER in "${PEERS[@]}"; do
 done
 
 # Get External nodeIP
-apt-get update
-apt-get install curl -y
 
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -183,9 +316,33 @@ sed -i "s/alternate-access-address.*<alternate_access_address>/alternate-access-
 sed -i "s/tls-access-address.*<tls-access-address>/tls-access-address    ${EXTERNALIP}/" ${CFG}
 sed -i "s/tls-alternate-access-address.*<tls-alternate-access-address>/tls-alternate-access-address    ${EXTERNALIP}/" ${CFG}
 
+echo "Generated Aerospike Configuration "
+echo "---------------------------------"
 cat ${CFG}
+echo "---------------------------------"
 `
 
-var confData = map[string]string{
-	"on-start.sh": on_start_sh,
+type initializeTemplateInput struct {
+	WorkDir string
+}
+
+var initializeShTemplate, _ = template.New("initializeSh").Parse(initializeShTemplateStr)
+
+// getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
+func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster) (map[string]string, error) {
+	config := aeroCluster.Spec.AerospikeConfig
+	workDir := utils.GetWorkDirectory(config)
+
+	templateInput := initializeTemplateInput{WorkDir: workDir}
+
+	var initializeSh bytes.Buffer
+	err := initializeShTemplate.Execute(&initializeSh, templateInput)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"initialize.sh": initializeSh.String(),
+		"on-start.sh":   onStartSh,
+	}, nil
 }

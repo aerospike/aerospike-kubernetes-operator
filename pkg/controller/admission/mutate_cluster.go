@@ -45,6 +45,8 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 }
 
 // MutateCreate mutate create
+// Add storage policy defaults
+// Add validation policy defaults
 // Add required config in AerospikeConfig object if not give by user
 //
 // Required network, namespace
@@ -56,7 +58,7 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 // 		port
 // 	fabric
 // 		port
-// namespace (Required storage-engin)
+// namespace (Required storage-engine)
 // 	storage-engine
 // 		memory or
 // 		{device,file}
@@ -66,10 +68,11 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 func (s *ClusterMutatingAdmissionWebhook) MutateCreate() webhook.AdmissionResponse {
 	log.Info("Mutate AerospikeCluster create")
 
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster create failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
+
 	return webhook.Patched("Patched aerospike spec with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
@@ -78,14 +81,15 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 	log.Info("Mutate AerospikeCluster update")
 
 	// This will insert the defaults also
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster update failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
+
 	return webhook.Patched("Patched aerospike spec with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
-func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
+func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
 	config := s.obj.Spec.AerospikeConfig
@@ -101,52 +105,27 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 	if err := s.setDefaultAerospikeConfigs(config); err != nil {
 		return err
 	}
-	// // namespace conf
-	// if err := s.patchNsConf(); err != nil {
-	// 	return err
-	// }
-
-	// // servic conf
-	// if err := s.patchServiceConf(); err != nil {
-	// 	return err
-	// }
-
-	// // network conf
-	// if err := s.patchNetworkConf(); err != nil {
-	// 	return err
-	// }
-
-	// // logging conf
-	// if err := s.patchLoggingConf(); err != nil {
-	// 	return err
-	// }
-
-	// // xdr conf
-	// if _, ok := config["xdr"]; ok {
-	// 	if err := s.patchXDRConf(); err != nil {
-	// 		return err
-	// 	}
-	// }
 
 	// Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
 	if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
 		return err
 	}
+
+	// validation policy
+	if s.obj.Spec.ValidationPolicy == nil {
+		validationPolicy := aerospikev1alpha1.ValidationPolicySpec{}
+
+		log.Info("Set default validation policy", log.Ctx{"validationPolicy": validationPolicy})
+		s.obj.Spec.ValidationPolicy = &validationPolicy
+	}
+
+	// storage defaults.
+	s.obj.Spec.Storage.SetDefaults()
+
 	return nil
 }
 
 func (s *ClusterMutatingAdmissionWebhook) setDefaultAerospikeConfigs(config aerospikev1alpha1.Values) error {
-	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
-
-	// config := s.obj.Spec.AerospikeConfig
-	// if config == nil {
-	// 	return fmt.Errorf("aerospikeConfig cannot be empty")
-	// }
-
-	// // Add default rackConfig if not already given. Disallow use of defautRackID by user.
-	// if err := s.patchRackConf(); err != nil {
-	// 	return err
-	// }
 
 	// namespace conf
 	if err := patchNsConf(config, s.obj.Spec.RackConfig.Namespaces); err != nil {
@@ -175,10 +154,6 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultAerospikeConfigs(config aero
 		}
 	}
 
-	// // Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
-	// if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
-	// 	return err
-	// }
 	return nil
 }
 
@@ -249,14 +224,14 @@ func patchNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []string) er
 		if rackEnabledNsList == nil {
 			// If rackEnabledNsList empty then all namespaces are rackEnabled
 			if err := addDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
-				return err
+				return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
 			}
 		} else if nsName, ok := nsMap["name"]; ok {
 			if _, ok := nsName.(string); ok &&
 				isNameExist(rackEnabledNsList, nsName.(string)) {
 				// add dummy rack-id, should be replaced with actual rack-id by init-container script
 				if err := addDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
-					return err
+					return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
 				}
 			}
 		}
@@ -281,7 +256,7 @@ func patchServiceConf(config aerospikev1alpha1.Values, crObjName string) error {
 		"cluster-name": crObjName,
 	}
 	if err := addDefaultsInConfigMap(serviceConf, defaultConfs); err != nil {
-		return err
+		return fmt.Errorf("Failed to set default aerospikeConfig.service config: %v", err)
 	}
 	log.Info("Set default template values in aerospikeConfig.service", log.Ctx{"aerospikeConfig.service": serviceConf})
 
@@ -325,7 +300,7 @@ func patchNetworkConf(config aerospikev1alpha1.Values) error {
 		serviceDefaults["tls-alternate-access-address"] = []string{"<tls-alternate-access-address>"}
 	}
 	if err := addDefaultsInConfigMap(serviceConf, serviceDefaults); err != nil {
-		return err
+		return fmt.Errorf("Failed to set default aerospikeConfig.network.service config: %v", err)
 	}
 	log.Info("Set default template values in aerospikeConfig.network.service", log.Ctx{"aerospikeConfig.network.service": serviceConf})
 
@@ -344,8 +319,8 @@ func patchNetworkConf(config aerospikev1alpha1.Values) error {
 	if _, ok := heartbeatConf["tls-name"]; ok {
 		hbDefaults["tls-port"] = utils.HeartbeatTlsPort
 	}
-	if err := addDefaultsInConfigMap(serviceConf, hbDefaults); err != nil {
-		return err
+	if err := addDefaultsInConfigMap(heartbeatConf, hbDefaults); err != nil {
+		return fmt.Errorf("Failed to set default aerospikeConfig.network.heartbeat config: %v", err)
 	}
 	log.Info("Set default template values in aerospikeConfig.network.heartbeat", log.Ctx{"aerospikeConfig.network.heartbeat": heartbeatConf})
 
@@ -363,8 +338,8 @@ func patchNetworkConf(config aerospikev1alpha1.Values) error {
 	if _, ok := fabricConf["tls-name"]; ok {
 		fabricDefaults["tls-port"] = utils.FabricTlsPort
 	}
-	if err := addDefaultsInConfigMap(serviceConf, fabricDefaults); err != nil {
-		return err
+	if err := addDefaultsInConfigMap(fabricConf, fabricDefaults); err != nil {
+		return fmt.Errorf("Failed to set default aerospikeConfig.network.fabric config: %v", err)
 	}
 	log.Info("Set default template values in aerospikeConfig.network.fabric", log.Ctx{"aerospikeConfig.network.fabric": fabricConf})
 

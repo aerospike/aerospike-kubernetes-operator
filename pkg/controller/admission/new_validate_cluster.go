@@ -10,7 +10,6 @@ import (
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -63,7 +62,7 @@ func (s *ClusterValidatingAdmissionWebhook) newvalidate() error {
 	if err != nil {
 		return err
 	}
-	val, err := compareVersions(version, baseVersion)
+	val, err := asconfig.CompareVersions(version, baseVersion)
 	if err != nil {
 		return fmt.Errorf("Failed to check build version: %v", err)
 	}
@@ -284,52 +283,54 @@ func (s *ClusterValidatingAdmissionWebhook) validateXDRDigestLogPath(aeroConfig 
 		}
 
 		if !utils.ContainsString(fileStorageList, dglogFilePath) {
-			return fmt.Errorf("xdr-digestlog-path related mountPath %v not found in FileStorage config %v", dglogFilePath, s.obj.Spec.FileStorage)
+			return fmt.Errorf("xdr-digestlog-path related mountPath %v not found in FileStorage config %v", dglogFilePath, s.obj.Spec.Storage)
 		}
 	}
 	return nil
 }
 
 func (s *ClusterValidatingAdmissionWebhook) getFileStorageList() ([]string, error) {
-	// Get list of all volumeMounts. match it with namespace files list
-	fileStorages := map[string]int{}
-	for _, storage := range s.obj.Spec.FileStorage {
-		if storage.StorageClass != "" {
-			for _, mount := range storage.VolumeMounts {
-				if _, ok := fileStorages[mount.MountPath]; ok {
-					return nil, fmt.Errorf("Invalid FileStorage. MountPath %s, is repeated", mount.MountPath)
-				}
-				fileStorages[mount.MountPath] = 1
-			}
-		}
-	}
-	var fileStorageList []string
-	for file := range fileStorages {
-		fileStorageList = append(fileStorageList, file)
-	}
+	// // Get list of all volumeMounts. match it with namespace files list
+	// fileStorages := map[string]int{}
+	// for _, storage := range s.obj.Spec.FileStorage {
+	// 	if storage.StorageClass != "" {
+	// 		for _, mount := range storage.VolumeMounts {
+	// 			if _, ok := fileStorages[mount.MountPath]; ok {
+	// 				return nil, fmt.Errorf("Invalid FileStorage. MountPath %s, is repeated", mount.MountPath)
+	// 			}
+	// 			fileStorages[mount.MountPath] = 1
+	// 		}
+	// 	}
+	// }
+	// var fileStorageList []string
+	// for file := range fileStorages {
+	// 	fileStorageList = append(fileStorageList, file)
+	// }
 
-	return fileStorageList, nil
+	// return fileStorageList, nil
+	return nil, nil
 }
 
 func (s *ClusterValidatingAdmissionWebhook) getBlockStorageDeviceList() ([]string, error) {
-	// Get list of all devices used in namespace. match it with namespace device list
-	blockStorageDevices := map[string]int{}
-	for _, storage := range s.obj.Spec.BlockStorage {
-		if storage.StorageClass != "" {
-			for _, device := range storage.VolumeDevices {
-				if _, ok := blockStorageDevices[device.DevicePath]; ok {
-					return nil, fmt.Errorf("Invalid BlockStorage. DevicePath %s, is repeated", device.DevicePath)
-				}
-				blockStorageDevices[device.DevicePath] = 1
-			}
-		}
-	}
-	var blockStorageDeviceList []string
-	for dev := range blockStorageDevices {
-		blockStorageDeviceList = append(blockStorageDeviceList, dev)
-	}
+	// // Get list of all devices used in namespace. match it with namespace device list
+	// blockStorageDevices := map[string]int{}
+	// for _, storage := range s.obj.Spec.BlockStorage {
+	// 	if storage.StorageClass != "" {
+	// 		for _, device := range storage.VolumeDevices {
+	// 			if _, ok := blockStorageDevices[device.DevicePath]; ok {
+	// 				return nil, fmt.Errorf("Invalid BlockStorage. DevicePath %s, is repeated", device.DevicePath)
+	// 			}
+	// 			blockStorageDevices[device.DevicePath] = 1
+	// 		}
+	// 	}
+	// }
+	// var blockStorageDeviceList []string
+	// for dev := range blockStorageDevices {
+	// 	blockStorageDeviceList = append(blockStorageDeviceList, dev)
+	// }
 
-	return blockStorageDeviceList, nil
+	// return blockStorageDeviceList, nil
+	return nil, nil
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validateNamespaceStorageEngineConfig(storage interface{}) error {
@@ -366,7 +367,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateNamespaceStorageEngineConfig
 			for _, dev := range dList {
 				// Namespace device should be present in BlockStorage config section
 				if !utils.ContainsString(blockStorageDeviceList, dev) {
-					return fmt.Errorf("Namespace storage device related devicePath %v not found in BlockStorage config %v", dev, s.obj.Spec.BlockStorage)
+					return fmt.Errorf("Namespace storage device related devicePath %v not found in BlockStorage config %v", dev, s.obj.Spec.Storage)
 				}
 			}
 			logger.Debug("Valid namespace storage device", log.Ctx{"device": device})
@@ -393,7 +394,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateNamespaceStorageEngineConfig
 			}
 			dirPath := filepath.Dir(file.(string))
 			if !utils.ContainsString(fileStorageList, dirPath) {
-				return fmt.Errorf("Namespace storage file related mountPath %v not found in FileStorage config %v", dirPath, s.obj.Spec.FileStorage)
+				return fmt.Errorf("Namespace storage file related mountPath %v not found in FileStorage config %v", dirPath, s.obj.Spec.Storage)
 			}
 			logger.Debug("Valid namespace storage file", log.Ctx{"file": file})
 		}
@@ -464,38 +465,38 @@ func getBuildVersion(buildStr string) (string, error) {
 //************************************************************
 
 // ValidateUpdate validate update
-func (s *ClusterValidatingAdmissionWebhook) newValidateUpdate(old aerospikev1alpha1.AerospikeCluster) error {
-	log.Info("Validate AerospikeCluster update")
-	if err := s.newvalidate(); err != nil {
-		return err
-	}
+// func (s *ClusterValidatingAdmissionWebhook) newValidateUpdate(old aerospikev1alpha1.AerospikeCluster) error {
+// 	log.Info("Validate AerospikeCluster update")
+// 	if err := s.newvalidate(); err != nil {
+// 		return err
+// 	}
 
-	// Jump version should not be allowed
-	newVersion := strings.Split(s.obj.Spec.Build, ":")[1]
-	oldVersion := strings.Split(old.Spec.Build, ":")[1]
-	if err := deployment.IsValidUpgrade(oldVersion, newVersion); err != nil {
-		return fmt.Errorf("Failed to start upgrade: %v", err)
-	}
+// 	// Jump version should not be allowed
+// 	newVersion := strings.Split(s.obj.Spec.Build, ":")[1]
+// 	oldVersion := strings.Split(old.Spec.Build, ":")[1]
+// 	if err := deployment.IsValidUpgrade(oldVersion, newVersion); err != nil {
+// 		return fmt.Errorf("Failed to start upgrade: %v", err)
+// 	}
 
-	if !reflect.DeepEqual(s.obj.Spec.BlockStorage, old.Spec.BlockStorage) {
-		return fmt.Errorf("BlockStorage config cannot be updated. Old %v, new %v", old.Spec.BlockStorage, s.obj.Spec.BlockStorage)
-	}
-	if !reflect.DeepEqual(s.obj.Spec.FileStorage, old.Spec.FileStorage) {
-		return fmt.Errorf("FileStorage config cannot be updated. Old %v, new %v", old.Spec.FileStorage, s.obj.Spec.FileStorage)
-	}
-	if s.obj.Spec.MultiPodPerHost != old.Spec.MultiPodPerHost {
-		return fmt.Errorf("Cannot update MultiPodPerHost setting")
-	}
+// 	if !reflect.DeepEqual(s.obj.Spec.BlockStorage, old.Spec.BlockStorage) {
+// 		return fmt.Errorf("BlockStorage config cannot be updated. Old %v, new %v", old.Spec.BlockStorage, s.obj.Spec.BlockStorage)
+// 	}
+// 	if !reflect.DeepEqual(s.obj.Spec.FileStorage, old.Spec.FileStorage) {
+// 		return fmt.Errorf("FileStorage config cannot be updated. Old %v, new %v", old.Spec.FileStorage, s.obj.Spec.FileStorage)
+// 	}
+// 	if s.obj.Spec.MultiPodPerHost != old.Spec.MultiPodPerHost {
+// 		return fmt.Errorf("Cannot update MultiPodPerHost setting")
+// 	}
 
-	if err := validateAerospikeConfigUpdate(s.obj.Spec.AerospikeConfig, old.Spec.AerospikeConfig); err != nil {
-		return err
-	}
+// 	if err := validateAerospikeConfigUpdate(s.obj.Spec.AerospikeConfig, old.Spec.AerospikeConfig); err != nil {
+// 		return err
+// 	}
 
-	if err := s.validateRackUpdate(old); err != nil {
-		return err
-	}
-	return nil
-}
+// 	if err := s.validateRackUpdate(old); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
 func (s *ClusterValidatingAdmissionWebhook) newvalidateRackUpdate(old aerospikev1alpha1.AerospikeCluster) error {
 	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
