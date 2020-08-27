@@ -14,6 +14,11 @@ spec:
       cpu: 200m
 
   storage:
+    filesystemVolumePolicy:
+      # initMethod: none
+      cascadeDelete: true
+    blockVolumePolicy:
+      cascadeDelete: true
     volumes:
       - storageClass: ssd
         path: /opt/aerospike
@@ -23,6 +28,8 @@ spec:
         storageClass: ssd
         volumeMode: block
         sizeInGB: 5
+        # initMethod: randomnone
+        # cascadeDelete: true
 
   multiPodPerHost: true
 

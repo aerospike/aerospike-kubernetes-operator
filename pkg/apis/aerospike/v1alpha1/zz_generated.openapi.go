@@ -264,10 +264,18 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 				Description: "AerospikePersistentVolumeSpec describes a persistent volume to claim and attach to Aerospike pods.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"AerospikePersistentVolumePolicySpec": {
+					"initMethod": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Contains  policies for this volumes.",
-							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"),
+							Description: "InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to \"none\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"cascadeDelete": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"path": {
@@ -299,11 +307,9 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 						},
 					},
 				},
-				Required: []string{"AerospikePersistentVolumePolicySpec", "path", "storageClass", "volumeMode", "sizeInGB"},
+				Required: []string{"initMethod", "cascadeDelete", "path", "storageClass", "volumeMode", "sizeInGB"},
 			},
 		},
-		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumePolicySpec"},
 	}
 }
 

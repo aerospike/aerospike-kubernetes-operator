@@ -113,6 +113,120 @@ type ReconcileAerospikeCluster struct {
 	scheme *runtime.Scheme
 }
 
+// func (r *ReconcileAerospikeCluster) reconcileFinalizer(request reconcile.Request) (reconcile.Result, error) {
+// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": request.NamespacedName})
+// 	logger.Info("Reconciling AerospikeCluster")
+
+// 	// Fetch the AerospikeCluster instance
+// 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{}
+// 	err := r.client.Get(context.TODO(), request.NamespacedName, aeroCluster)
+// 	if err != nil {
+// 		if errors.IsNotFound(err) {
+// 			// Request object not found, could have been deleted after reconcile request.
+// 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+// 			// Return and don't requeue
+// 			return reconcile.Result{}, nil
+// 		}
+// 		// Error reading the object - requeue the request.
+// 		return reconcile.Result{Requeue: true}, err
+// 	}
+
+// 	// name of our custom storage finalizer
+// 	finalizerName := "storage.finalizer"
+
+// 	// examine DeletionTimestamp to determine if object is under deletion
+// 	if aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
+// 		// The object is not being deleted, add finalizer
+// 		if err := r.addFinalizer(aeroCluster, finalizerName); err != nil {
+// 			return reconcile.Result{}, err
+// 		}
+// 	} else {
+// 		// The object is being deleted
+// 		if err := r.cleanUpAndremoveFinalizer(aeroCluster, finalizerName); err != nil {
+// 			return reconcile.Result{}, err
+// 		}
+// 		// Stop reconciliation as the item is being deleted
+// 		return reconcile.Result{}, nil
+// 	}
+
+// 	// Your reconcile logic
+
+// 	return reconcile.Result{}, nil
+// }
+
+func (r *ReconcileAerospikeCluster) addFinalizer(aeroCluster *aerospikev1alpha1.AerospikeCluster, finalizerName string) error {
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object. This is equivalent
+	// registering our finalizer.
+	if !containsString(aeroCluster.ObjectMeta.Finalizers, finalizerName) {
+		aeroCluster.ObjectMeta.Finalizers = append(aeroCluster.ObjectMeta.Finalizers, finalizerName)
+		if err := r.client.Update(context.TODO(), aeroCluster); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileAerospikeCluster) cleanUpAndremoveFinalizer(aeroCluster *aerospikev1alpha1.AerospikeCluster, finalizerName string) error {
+	// The object is being deleted
+	if containsString(aeroCluster.ObjectMeta.Finalizers, finalizerName) {
+		// Handle any external dependency
+		if err := r.deleteExternalResources(aeroCluster); err != nil {
+			// If fail to delete the external dependency here, return with error
+			// so that it can be retried
+			return err
+		}
+
+		// Remove finalizer from the list
+		aeroCluster.ObjectMeta.Finalizers = removeString(aeroCluster.ObjectMeta.Finalizers, finalizerName)
+		if err := r.client.Update(context.TODO(), aeroCluster); err != nil {
+			return err
+		}
+	}
+
+	// Stop reconciliation as the item is being deleted
+	return nil
+}
+
+func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	// Delete should be idempotent
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	// Delete PVCs if cascaseDelete
+
+	pvcItems, err := r.getAeroClusterPVCList(aeroCluster)
+	if err != nil {
+		return fmt.Errorf("Could not find pvc for cluster: %v", err)
+	}
+	logger.Info("Removing pvc for removed cluster")
+
+	if err := r.removePVCs(aeroCluster, pvcItems); err != nil {
+		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
+	}
+
+	return nil
+}
+
+// Helper functions to check and remove string from a slice of strings.
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
+}
+
 // Reconcile AerospikeCluster object
 func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": request.NamespacedName})
@@ -132,6 +246,27 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{Requeue: true}, err
 	}
 	logger.Info("AerospikeCluster", log.Ctx{"Spec": aeroCluster.Spec, "Status": aeroCluster.Status})
+
+	// Check finalizer
+	// name of our custom storage finalizer
+	finalizerName := "storage.finalizer"
+
+	// Check DeletionTimestamp to see if cluster is being deleted
+	if aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The cluster is not being deleted, add finalizer
+		if err := r.addFinalizer(aeroCluster, finalizerName); err != nil {
+			logger.Error("Failed to add finalizer", log.Ctx{"err": err})
+			return reconcile.Result{}, err
+		}
+	} else {
+		// The cluster is being deleted
+		if err := r.cleanUpAndremoveFinalizer(aeroCluster, finalizerName); err != nil {
+			logger.Error("Failed to remove finalizer", log.Ctx{"err": err})
+			return reconcile.Result{}, err
+		}
+		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
+	}
 
 	// Get/Create statefulset
 	logger.Info("Check if the StatefulSet already exists, if not create a new one")
@@ -335,6 +470,8 @@ func (r *ReconcileAerospikeCluster) removePodStatus(aeroCluster *aerospikev1alph
 
 // cleanupPods checks pods and status before scaleup to detect and fix any status anomalies.
 func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
 	needStatusCleanup := []string{}
 	for _, podName := range podNames {
 		_, ok := aeroCluster.Status.PodStatus[podName]
@@ -344,14 +481,100 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	}
 
 	if len(needStatusCleanup) > 0 {
-		err := r.removePodStatus(aeroCluster, needStatusCleanup)
-		if err != nil {
+		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
 			return fmt.Errorf("Could not cleanup pod status: %v", err)
 		}
 	}
 
-	// TODO: Remove dangling volumes that should have been cascade deleted on pod termination.
+	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
 
+	// Delete PVCs if cascaseDelete
+	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames)
+	if err != nil {
+		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
+	}
+	if err := r.removePVCs(aeroCluster, pvcItems); err != nil {
+		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
+	}
+
+	return nil
+}
+
+// func isBlockCascadeDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
+// 	return aeroCluster.Spec.Storage.BlockVolumePolicy.CascadeDelete != nil && *aeroCluster.Spec.Storage.BlockVolumePolicy.CascadeDelete
+// }
+
+// func isFileSystemCascadeDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
+// 	return aeroCluster.Spec.Storage.FileSystemVolumePolicy.CascadeDelete != nil && *aeroCluster.Spec.Storage.FileSystemVolumePolicy.CascadeDelete
+// }
+
+// func isPVCCascadeDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster, pvc corev1.PersistentVolumeClaim) (*bool, error) {
+// 	volumes := aeroCluster.Spec.Storage.Volumes
+// 	for _, v := range volumes {
+// 		// e.g. opt-aerospike-aerocluster-0
+// 		pvcName := getPVCName(v.Path) + "-" + aeroCluster.Name
+// 		if strings.HasPrefix(pvc.Name, pvcName) {
+// 			return v.CascadeDelete, nil
+// 		}
+// 	}
+// 	// TODO: It should not happen. PVC should be in volumes.
+// 	return nil, fmt.Errorf("PVC %s, not found in configured cluster storage volumes %v. It should not happen", pvc.Name, volumes)
+// }
+
+func getVolumeConfigForPVC(aeroCluster *aerospikev1alpha1.AerospikeCluster, pvc corev1.PersistentVolumeClaim) (*aerospikev1alpha1.AerospikePersistentVolumeSpec, error) {
+	volumes := aeroCluster.Spec.Storage.Volumes
+	for _, v := range volumes {
+		// e.g. opt-aerospike-aerocluster-0
+		pvcName := getPVCName(v.Path) + "-" + aeroCluster.Name
+		if strings.HasPrefix(pvc.Name, pvcName) {
+			return &v, nil
+		}
+	}
+	return nil, fmt.Errorf("PVC %s, not found in configured cluster storage volumes %v. It should not happen. This PVC may not be part of cluster", pvc.Name, volumes)
+}
+
+func (r *ReconcileAerospikeCluster) removePVCs(aeroCluster *aerospikev1alpha1.AerospikeCluster, pvcItems []corev1.PersistentVolumeClaim) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	// pvcItems, err := r.getPodsPVCList(aeroCluster, podNames)
+	// if err != nil {
+	// 	return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
+	// }
+
+	for _, pvc := range pvcItems {
+		// Should we wait for delete?
+		// Can we do it async in scaleDown
+		v, err := getVolumeConfigForPVC(aeroCluster, pvc)
+		if err != nil {
+			// Only not found err
+			logger.Info("Can not remove PVC", log.Ctx{"pvc": pvc.Name, "err": err})
+			continue
+		}
+
+		cd := v.CascadeDelete
+		if cd == nil {
+			return fmt.Errorf("CascadeDelete policy is nil for volume %v. It should have been set internally", *v)
+
+			// if ((*pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock) && isBlockCascadeDelete(aeroCluster)) ||
+			// 	((*pvc.Spec.VolumeMode == corev1.PersistentVolumeFilesystem) && isFileSystemCascadeDelete(aeroCluster)) {
+			// 	if err := r.client.Delete(context.TODO(), &pvc); err != nil {
+			// 		return fmt.Errorf("Could not delete pvc %s for pods %v: %v", pvc.Name, podNames, err)
+			// 	}
+			// 	logger.Debug("PVC removed. Using global cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "volumeMode": *pvc.Spec.VolumeMode})
+			// } else {
+			// 	logger.Debug("PVC not removed. Using global cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "volumeMode": *pvc.Spec.VolumeMode})
+			// }
+		}
+
+		if *cd {
+			if err := r.client.Delete(context.TODO(), &pvc); err != nil {
+				return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
+			}
+			logger.Debug("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cd})
+		} else {
+			logger.Debug("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cd})
+		}
+	}
 	return nil
 }
 

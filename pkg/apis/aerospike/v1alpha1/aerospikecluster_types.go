@@ -231,7 +231,7 @@ func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVol
 // +k8s:openapi-gen=true
 type AerospikePersistentVolumeSpec struct {
 	// Contains  policies for this volumes.
-	AerospikePersistentVolumePolicySpec
+	AerospikePersistentVolumePolicySpec `json:",inline"`
 
 	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
 	Path string `json:"path"`

@@ -209,6 +209,7 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 			}
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
+			// TODO: Add validation for invalid initMethod (e.g. any random value)
 		} else {
 			if *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodNone && *volume.InitMethod != aerospikev1alpha1.AerospikeVolumeInitMethodDeleteFiles {
 				return fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)

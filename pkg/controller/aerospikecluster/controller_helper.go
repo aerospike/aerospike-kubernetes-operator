@@ -83,12 +83,43 @@ func (r *ReconcileAerospikeCluster) isAnyPodInFailedState(aeroCluster *aerospike
 	return false
 }
 
+func (r *ReconcileAerospikeCluster) getAeroClusterPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
+	// List the pvc for this aeroCluster's statefulset
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+
+	if err := r.client.List(context.TODO(), pvcList, listOps); err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+func (r *ReconcileAerospikeCluster) getPodsPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
+	pvcListItems, err := r.getAeroClusterPVCList(aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+	// https://github.com/kubernetes/kubernetes/issues/72196
+	// No regex support in field-selector
+	// Can not get pvc having matching podName. Need to check more.
+	var newPVCItems []corev1.PersistentVolumeClaim
+	for _, pvc := range pvcListItems {
+		for _, podName := range podNames {
+			// Get PVC belonging to pod only
+			if strings.HasSuffix(pvc.Name, podName) {
+				newPVCItems = append(newPVCItems, pvc)
+			}
+		}
+	}
+	return newPVCItems, nil
+}
+
 func (r *ReconcileAerospikeCluster) getPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
 	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
-
 	if err := r.client.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
