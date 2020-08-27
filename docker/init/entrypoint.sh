@@ -1,6 +1,4 @@
 #!/bin/bash
-#set -x
-#set -e
 
 # ------------------------------------------------------------------------------
 # Copyright 2012-2020 Aerospike, Inc.
@@ -19,6 +17,7 @@
 # the License.
 # ------------------------------------------------------------------------------
 
+set -e
 
 CONFIG_VOLUME="/etc/aerospike"
 NAMESPACE=${MY_POD_NAMESPACE:-default}
@@ -38,6 +37,9 @@ done
 
 echo installing aerospike.conf into "${CONFIG_VOLUME}"
 mkdir -p "${CONFIG_VOLUME}"
+
+# Initialize the pod.
+bash /configs/initialize.sh
 
 cp /configs/on-start.sh /usr/bin/on-start.sh
 cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/

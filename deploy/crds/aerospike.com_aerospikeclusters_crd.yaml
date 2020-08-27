@@ -46,28 +46,42 @@ spec:
                   - timeout
                   type: object
                 roles:
-                  additionalProperties:
+                  description: Roles is the set of roles to allow on the Aerospike
+                    cluster.
+                  items:
                     description: AerospikeRoleSpec specifies an Aerospike database
                       role and its associated privileges.
                     properties:
+                      name:
+                        description: Name of this role.
+                        type: string
                       privileges:
+                        description: Privileges granted to this role.
                         items:
                           type: string
                         type: array
                       whitelist:
+                        description: Whitelist of host address allowed for this role.
                         items:
                           type: string
                         type: array
                     required:
+                    - name
                     - privileges
                     type: object
-                  type: object
+                  type: array
                 users:
-                  additionalProperties:
+                  description: Users is the set of users to allow on the Aerospike
+                    cluster.
+                  items:
                     description: AerospikeUserSpec specifies an Aerospike database
                       user, the secret name for the password and, associated roles.
                     properties:
+                      name:
+                        description: Name is the user's username.
+                        type: string
                       roles:
+                        description: Roles is the list of roles granted to the user.
                         items:
                           type: string
                         type: array
@@ -77,10 +91,11 @@ spec:
                           eg: kubectl create secret generic dev-db-secret --from-literal=password=''password'''
                         type: string
                     required:
+                    - name
                     - roles
                     - secretName
                     type: object
-                  type: object
+                  type: array
               required:
               - users
               type: object
@@ -100,73 +115,9 @@ spec:
               - mountPath
               - secretName
               type: object
-            blockStorage:
-              description: BlockStorage has block storage info.
-              items:
-                description: BlockStorageSpec has storage info. StorageClass for devices
-                properties:
-                  storageClass:
-                    description: StorageClass should be created by user
-                    type: string
-                  volumeDevices:
-                    description: VolumeDevices is the list of block devices to be
-                      used by the container. Devices should be provisioned by user
-                    items:
-                      description: VolumeDevice is device to be used by the container
-                      properties:
-                        devicePath:
-                          description: DevicePath is the path inside of the container
-                            that the device will be mapped to
-                          type: string
-                        sizeInGB:
-                          description: SizeInGB Size of device in GB
-                          format: int32
-                          type: integer
-                      required:
-                      - devicePath
-                      - sizeInGB
-                      type: object
-                    type: array
-                required:
-                - storageClass
-                - volumeDevices
-                type: object
-              type: array
             build:
               description: Aerospike cluster build
               type: string
-            fileStorage:
-              description: FileStorage has filesystem storage info.
-              items:
-                description: FileStorageSpec has storage info. StorageClass for fileSystems
-                properties:
-                  storageClass:
-                    description: StorageClass should be created by user
-                    type: string
-                  volumeMounts:
-                    description: Pod volumes to mount into the container's filesystem.
-                    items:
-                      description: VolumeMount is Pod volume to mount into the container's
-                        filesystem
-                      properties:
-                        mountPath:
-                          description: Path within the container at which the volume
-                            should be mounted
-                          type: string
-                        sizeInGB:
-                          description: SizeInGB Size of mount volume
-                          format: int32
-                          type: integer
-                      required:
-                      - mountPath
-                      - sizeInGB
-                      type: object
-                    type: array
-                required:
-                - storageClass
-                - volumeMounts
-                type: object
-              type: array
             multiPodPerHost:
               description: "If set true then multiple pods can be created per Kubernetes
                 Node. This will create a NodePort service for each Pod. NodePort,
@@ -185,6 +136,7 @@ spec:
               properties:
                 rackPolicy:
                   items:
+                    description: RackPolicy controls how racks are identified.
                     type: string
                   type: array
                 racks:
@@ -235,6 +187,106 @@ spec:
               description: Aerospike cluster size
               format: int32
               type: integer
+            storage:
+              description: Storage specified persistent storage to use for the Aerospike
+                pods.
+              properties:
+                blockVolumePolicy:
+                  description: BlockVolumePolicy contains default policies for block
+                    volumes.
+                  properties:
+                    cascadeDelete:
+                      description: CascadeDelete determines if the persistent volumes
+                        are deleted after the pod this volume binds to is terminated
+                        and removed from the cluster. Defaults to true.
+                      type: boolean
+                    initMethod:
+                      description: InitMethod determines how volumes attached to Aerospike
+                        server pods are initialized when the pods comes up the first
+                        time. Defaults to "none".
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
+                  required:
+                  - cascadeDelete
+                  - initMethod
+                  type: object
+                filesystemVolumePolicy:
+                  description: FileSystemVolumePolicy contains default policies for
+                    filesystem volumes.
+                  properties:
+                    cascadeDelete:
+                      description: CascadeDelete determines if the persistent volumes
+                        are deleted after the pod this volume binds to is terminated
+                        and removed from the cluster. Defaults to true.
+                      type: boolean
+                    initMethod:
+                      description: InitMethod determines how volumes attached to Aerospike
+                        server pods are initialized when the pods comes up the first
+                        time. Defaults to "none".
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
+                  required:
+                  - cascadeDelete
+                  - initMethod
+                  type: object
+                volumes:
+                  description: Volumes is the list of to attach to created pods.
+                  items:
+                    description: AerospikePersistentVolumeSpec describes a persistent
+                      volume to claim and attach to Aerospike pods.
+                    properties:
+                      path:
+                        description: Path is the device path where block 'block' mode
+                          volumes are attached to the pod or the mount path for 'filesystem'
+                          mode.
+                        type: string
+                      sizeInGB:
+                        description: SizeInGB Size of volume in GB.
+                        format: int32
+                        type: integer
+                      storageClass:
+                        description: StorageClass should be pre-created by user.
+                        type: string
+                      volumeMode:
+                        description: VolumeMode specifies if the volume is block/raw
+                          or a filesystem.
+                        enum:
+                        - filesystem
+                        - block
+                        type: string
+                    required:
+                    - path
+                    - sizeInGB
+                    - storageClass
+                    - volumeMode
+                    type: object
+                  type: array
+              type: object
+            validationPolicy:
+              description: ValidationPolicy controls validation of the Aerospike cluster
+                resource.
+              properties:
+                skipWorkDirValidate:
+                  description: skipWorkDirValidate validates that Aerospike work directory
+                    is mounted on a persistent file storage. Defaults to false.
+                  type: boolean
+                skipXdrDlogFileValidate:
+                  description: ValidateXdrDigestLogFile validates that xdr digest
+                    log file is mounted on a persistent file storage. Defaults to
+                    false.
+                  type: boolean
+              required:
+              - skipWorkDirValidate
+              - skipXdrDlogFileValidate
+              type: object
           required:
           - aerospikeConfig
           - build
@@ -245,7 +297,7 @@ spec:
           description: AerospikeClusterStatus defines the observed state of AerospikeCluster
           properties:
             nodes:
-              description: Nodes tells the observed state of AerospikeClusterNodes
+              description: Nodes contains Aerospike node specific  state of cluster.
               items:
                 description: AerospikeNodeSummary defines the observed state of AerospikeClusterNode
                 properties:
@@ -257,6 +309,8 @@ spec:
                     type: string
                   nodeID:
                     type: string
+                  podName:
+                    type: string
                   port:
                     type: integer
                   tlsname:
@@ -266,12 +320,33 @@ spec:
                 - clusterName
                 - ip
                 - nodeID
+                - podName
                 - port
                 - tlsname
                 type: object
               type: array
+            podStatus:
+              additionalProperties:
+                description: AerospikePodStatus contains the Aerospike specific status
+                  of the Aerospike serverpods.
+                properties:
+                  initializedVolumePaths:
+                    description: InitializedVolumePaths is the list of device path
+                      that have already been initialized.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - initializedVolumePaths
+                type: object
+              description: PodStatus has Aerospike specific status of the pods. This
+                is map instead of the conventional map as list convention to allow
+                each pod to patch update its status. The map key is the name of the
+                pod.
+              type: object
           required:
           - nodes
+          - podStatus
           type: object
       type: object
   version: v1alpha1

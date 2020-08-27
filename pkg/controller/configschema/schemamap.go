@@ -15,4 +15,5 @@ var SchemaMap = map[string]string{
 	"4.7.0": conf4_7_0,
 	"4.8.0": conf4_8_0,
 	"4.9.0": conf4_9_0,
+	"5.0.0": conf5_0_0,
 }

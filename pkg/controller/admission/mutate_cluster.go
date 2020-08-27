@@ -44,6 +44,8 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 }
 
 // MutateCreate mutate create
+// Add storage policy defaults
+// Add validation policy defaults
 // Add required config in AerospikeConfig object if not give by user
 //
 // Required network, namespace
@@ -55,7 +57,7 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 // 		port
 // 	fabric
 // 		port
-// namespace (Required storage-engin)
+// namespace (Required storage-engine)
 // 	storage-engine
 // 		memory or
 // 		{device,file}
@@ -65,10 +67,11 @@ func MutateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionRespo
 func (s *ClusterMutatingAdmissionWebhook) MutateCreate() webhook.AdmissionResponse {
 	log.Info("Mutate AerospikeCluster create")
 
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster create failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
+
 	return webhook.Patched("Patched aerospike spec with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
@@ -77,14 +80,15 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 	log.Info("Mutate AerospikeCluster update")
 
 	// This will insert the defaults also
-	if err := s.setDefaultConfigs(); err != nil {
+	if err := s.setDefaults(); err != nil {
 		log.Error("Mutate AerospikeCluster update failed", log.Ctx{"err": err})
 		return webhook.Denied(err.Error())
 	}
+
 	return webhook.Patched("Patched aerospike spec with updated spec", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: s.obj.Spec})
 }
 
-func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
+func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
 	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
@@ -123,6 +127,17 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultConfigs() error {
 			return err
 		}
 	}
+
+	// validation policy
+	if s.obj.Spec.ValidationPolicy == nil {
+		validationPolicy := aerospikev1alpha1.ValidationPolicySpec{}
+
+		log.Info("Set default validation policy", log.Ctx{"validationPolicy": validationPolicy})
+		s.obj.Spec.ValidationPolicy = &validationPolicy
+	}
+
+	// storage defaults.
+	s.obj.Spec.Storage.SetDefaults()
 	return nil
 }
 
