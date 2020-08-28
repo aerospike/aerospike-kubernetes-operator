@@ -244,7 +244,7 @@ func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod,
 		if tlsName == "" {
 			port = utils.ServicePort
 		} else {
-			port = utils.ServiceTlsPort
+			port = utils.ServiceTLSPort
 		}
 	}
 	host, err := getNodeIP(pod, client)

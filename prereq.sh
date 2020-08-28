@@ -19,6 +19,17 @@ sleep 10
 
 # prereq for cluster
 
+kubectl apply -f deploy/storage_class.yaml
+sleep 2
+
+kubectl create secret generic aerospike-secret --from-file=deploy/secrets -n aerospike
+sleep 2
+
+kubectl create secret generic auth-secret --from-literal=password='admin123' -n aerospike
+sleep 2
+
+kubectl apply -f deploy/samples/hdd_dim_storage_cluster_cr.yaml
+
 # kubectl create secret generic aerospike-secret --from-file=deploy/secrets -n aerospike
 # sleep 2
 

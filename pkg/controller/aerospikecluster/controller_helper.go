@@ -172,6 +172,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSetForAerospikeCluster(aeroClu
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
 			Namespace: namespacedName.Namespace,
+			Labels:    ls,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy: appsv1.ParallelPodManagement,
@@ -488,7 +489,7 @@ func (r *ReconcileAerospikeCluster) createServiceForPod(aeroCluster *aerospikev1
 	if name := getServiceTLSName(aeroCluster); name != "" {
 		service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{
 			Name: "tls",
-			Port: utils.ServiceTlsPort,
+			Port: utils.ServiceTLSPort,
 		})
 	}
 	// Set AerospikeCluster instance as the owner and controller.
@@ -947,23 +948,23 @@ func getAeroClusterContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 				ContainerPort: utils.ServicePort,
 			},
 			{
-				Name:          utils.ServiceTlsPortName,
-				ContainerPort: utils.ServiceTlsPort,
+				Name:          utils.ServiceTLSPortName,
+				ContainerPort: utils.ServiceTLSPort,
 			},
 			{
 				Name:          utils.HeartbeatPortName,
 				ContainerPort: utils.HeartbeatPort,
 			},
 			{
-				Name:          utils.HeartbeatTlsPortName,
-				ContainerPort: utils.HeartbeatTlsPort,
+				Name:          utils.HeartbeatTLSPortName,
+				ContainerPort: utils.HeartbeatTLSPort,
 			},
 			{
 				Name:          utils.FabricPortName,
 				ContainerPort: utils.FabricPort,
 			},
 			{
-				Name:          utils.FabricTlsPortName,
+				Name:          utils.FabricTLSPortName,
 				ContainerPort: utils.FabricPort,
 			},
 			{
@@ -984,24 +985,24 @@ func getAeroClusterContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 				HostPort:      utils.ServicePort,
 			},
 			{
-				Name:          utils.ServiceTlsPortName,
-				ContainerPort: utils.ServiceTlsPort,
-				HostPort:      utils.ServiceTlsPort,
+				Name:          utils.ServiceTLSPortName,
+				ContainerPort: utils.ServiceTLSPort,
+				HostPort:      utils.ServiceTLSPort,
 			},
 			{
 				Name:          utils.HeartbeatPortName,
 				ContainerPort: utils.HeartbeatPort,
 			},
 			{
-				Name:          utils.HeartbeatTlsPortName,
-				ContainerPort: utils.HeartbeatTlsPort,
+				Name:          utils.HeartbeatTLSPortName,
+				ContainerPort: utils.HeartbeatTLSPort,
 			},
 			{
 				Name:          utils.FabricPortName,
 				ContainerPort: utils.FabricPort,
 			},
 			{
-				Name:          utils.FabricTlsPortName,
+				Name:          utils.FabricTLSPortName,
 				ContainerPort: utils.FabricPort,
 			},
 			{

@@ -153,21 +153,24 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 					t.Run("InvalidStorageEngineDevice", func(t *testing.T) {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
 						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							vd := []aerospikev1alpha1.VolumeDevice{
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf1",
+							vd := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:       "/dev/xvdf1",
 									SizeInGB:   1,
+									VolumeMode: aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf2",
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:       "/dev/xvdf2",
 									SizeInGB:   1,
+									VolumeMode: aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
-								aerospikev1alpha1.VolumeDevice{
-									DevicePath: "/dev/xvdf3",
+								aerospikev1alpha1.AerospikePersistentVolumeSpec{
+									Path:       "/dev/xvdf3",
 									SizeInGB:   1,
+									VolumeMode: aerospikev1alpha1.AerospikeVolumeModeBlock,
 								},
 							}
-							aeroCluster.Spec.BlockStorage[0].VolumeDevices = append(aeroCluster.Spec.BlockStorage[0].VolumeDevices, vd...)
+							aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vd...)
 
 							aeroConfig := aerospikev1alpha1.Values{
 								"namespace": []interface{}{
@@ -208,7 +211,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 				t.Run("InvalidxdrConfig", func(t *testing.T) {
 					aeroCluster := createDummyRackAwareAerospikeCluster(clusterName, namespace, 2)
 					if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-						aeroCluster.Spec.FileStorage = nil
+						aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{}
 						aeroConfig := aerospikev1alpha1.Values{
 							"xdr": map[string]interface{}{
 								"enable-xdr":         false,
@@ -537,6 +540,16 @@ func RackEnabledClusterTest(t *testing.T, f *framework.Framework, ctx *framework
 					aeroCluster.Spec.RackConfig = rackConf
 					err := deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for OutOfRangeRackID")
+				})
+				t.Run("UseDefaultRackID", func(t *testing.T) {
+					aeroCluster := createDummyAerospikeCluster(clusterName, namespace, 2)
+					rackConf := aerospikev1alpha1.RackConfig{
+						RackPolicy: []aerospikev1alpha1.RackPolicy{},
+						Racks:      []aerospikev1alpha1.Rack{{ID: 1}, {ID: 1000000}},
+					}
+					aeroCluster.Spec.RackConfig = rackConf
+					err := deployCluster(t, f, ctx, aeroCluster)
+					validateError(t, err, "should fail for using defaultRackID")
 				})
 			})
 		})

@@ -16,20 +16,20 @@ import (
 var pkglog = log.New(log.Ctx{"module": "utils"})
 
 const (
-	ServiceTlsPort     = 4333
-	ServiceTlsPortName = "svc-tls-port"
+	ServiceTLSPort     = 4333
+	ServiceTLSPortName = "svc-tls-port"
 	ServicePort        = 3000
 	ServicePortName    = "service"
 
 	DockerHubImagePrefix = "docker.io/"
 
-	HeartbeatTlsPort     = 3012
-	HeartbeatTlsPortName = "hb-tls-port"
+	HeartbeatTLSPort     = 3012
+	HeartbeatTLSPortName = "hb-tls-port"
 	HeartbeatPort        = 3002
 	HeartbeatPortName    = "heartbeat"
 
-	FabricTlsPort     = 3011
-	FabricTlsPortName = "fb-tls-port"
+	FabricTLSPort     = 3011
+	FabricTLSPortName = "fb-tls-port"
 	FabricPort        = 3001
 	FabricPortName    = "fabric"
 

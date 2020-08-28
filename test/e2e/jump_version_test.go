@@ -1,3 +1,5 @@
+// +build !noac
+
 package e2e
 
 import (
@@ -68,7 +70,7 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 		"datacenter": []interface{}{
 			map[string]interface{}{
 				"name":                 "REMOTE_DC_1",
-				"dc-node-address-port": "IP 3050",
+				"dc-node-address-port": "IP NODE",
 			},
 		},
 	},

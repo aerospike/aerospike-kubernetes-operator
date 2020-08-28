@@ -254,7 +254,7 @@ func (r *ReconcileAerospikeCluster) newAsConn(aeroCluster *aerospikev1alpha1.Aer
 		if tlsName == "" {
 			port = utils.ServicePort
 		} else {
-			port = utils.ServiceTlsPort
+			port = utils.ServiceTLSPort
 		}
 	}
 	host := pod.Status.HostIP

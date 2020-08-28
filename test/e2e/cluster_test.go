@@ -61,15 +61,16 @@ func TestAerospikeCluster(t *testing.T) {
 	// t.Run("ClusterResources", func(t *testing.T) {
 	// 	ClusterResourceTest(t, f, ctx)
 	// })
+	t.Run("RackEnabledCluster", func(t *testing.T) {
+		RackEnabledClusterTest(t, f, ctx)
+	})
 	// t.Run("RackManagement", func(t *testing.T) {
 	// 	RackManagementTest(t, f, ctx)
 	// })
-	t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
-		RackAerospikeConfigUpdateTest(t, f, ctx)
-	})
-	// t.Run("RackEnabledCluster", func(t *testing.T) {
-	// 	RackEnabledClusterTest(t, f, ctx)
+	// t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
+	// 	RackAerospikeConfigUpdateTest(t, f, ctx)
 	// })
+
 }
 
 func initializeOperator(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
@@ -728,20 +729,6 @@ func validateDeployClusterTest(t *testing.T, f *framework.Framework, ctx *framew
 	})
 }
 
-func deployCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	return deployClusterWithTO(t, f, ctx, aeroCluster, retryInterval, getTimeout(aeroCluster.Spec.Size))
-}
-
-func deployClusterWithTO(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster, retryInterval, timeout time.Duration) error {
-	// Use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err := f.Client.Create(goctx.TODO(), aeroCluster, cleanupOption(ctx))
-	if err != nil {
-		return err
-	}
-	// Wait for aerocluster to reach desired cluster size.
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
-}
-
 func validateUpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterName, namespace string) {
 	// Will be used in Update
 	aeroCluster := createDummyAerospikeCluster(clusterName, namespace, 3)
@@ -1030,16 +1017,6 @@ func getCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, cl
 	return aeroCluster
 }
 
-func deployCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	// Use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err := f.Client.Create(goctx.TODO(), aeroCluster, cleanupOption(ctx))
-	if err != nil {
-		return err
-	}
-	// Wait for aerocluster to reach 1 replicas
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
-}
-
 func deleteCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	if err := f.Client.Delete(goctx.TODO(), aeroCluster); err != nil {
 		return err
@@ -1048,6 +1025,20 @@ func deleteCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx,
 	time.Sleep(time.Second * 12)
 	// TODO: do we need to do anything more
 	return nil
+}
+
+func deployCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	return deployClusterWithTO(t, f, ctx, aeroCluster, retryInterval, getTimeout(aeroCluster.Spec.Size))
+}
+
+func deployClusterWithTO(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster, retryInterval, timeout time.Duration) error {
+	// Use TestCtx's create helper to create the object and add a cleanup function for the new object
+	err := f.Client.Create(goctx.TODO(), aeroCluster, cleanupOption(ctx))
+	if err != nil {
+		return err
+	}
+	// Wait for aerocluster to reach desired cluster size.
+	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
 }
 
 func updateCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {

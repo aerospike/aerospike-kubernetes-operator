@@ -146,11 +146,12 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 	}
 
 	if isNew {
-		// Create an empty status object.
+		logger.Debug("It's new cluster, create empty status object")
 		if err := r.createStatus(aeroCluster); err != nil {
 			return reconcile.Result{}, err
 		}
 	} else {
+		logger.Debug("It's not a new cluster, check if it is failed and needs recovery")
 		hasFailed, err := r.hasClusterFailed(aeroCluster)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("Error determining if cluster has failed: %v", err)
@@ -203,7 +204,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 			continue
 		}
 
-		// Scale down
+		// Get list of scaled down racks
 		if *found.Spec.Replicas > int32(state.Size) {
 			scaledDownRackSTSList = append(scaledDownRackSTSList, *found)
 			scaledDownRackList = append(scaledDownRackList, state)
@@ -232,61 +233,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 
 	// Pod termination in above call will take some time. Should we wait here for sometime or
 	// Just check if Pod isTerminating in below calls?
-	time.Sleep(time.Second * 2)
-
-	// Setup access control.
-	if err := r.reconcileAccessControl(aeroCluster); err != nil {
-		logger.Error("Failed to reconcile access control", log.Ctx{"err": err})
-		return err
-	}
-
-	// Update the AerospikeCluster status with the pod names
-	if err := r.updateStatus(aeroCluster); err != nil {
-		logger.Error("Failed to update AerospikeCluster status", log.Ctx{"err": err})
-		return err
-	}
-
-	return nil
-}
-
-// ReconcileRacks reconcile all racks
-func (r *ReconcileAerospikeCluster) ReconcileRacksOld(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-	logger.Info("Reconciling rack for AerospikeCluster")
-
-	rackStateList := getNewRackStateList(aeroCluster)
-
-	for _, state := range rackStateList {
-		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, state.Rack.ID)
-		if err := r.client.Get(context.TODO(), stsName, found); err != nil {
-			if !errors.IsNotFound(err) {
-				return err
-			}
-			// Create statefulset for rack
-			// TODO create stateful set without zero pods.
-			if err := r.createSTSForCluster(aeroCluster, state); err != nil {
-				return err
-			}
-			continue
-		}
-		// reconcile statefulset
-		if err := r.reconcileClusterSTS(aeroCluster, found, state); err != nil {
-			return err
-		}
-	}
-
-	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
-		// remove racks
-		if err := r.deleteSTSForRemovedRacks(aeroCluster, rackStateList); err != nil {
-			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": err})
-			return err
-		}
-	}
-
-	// Pod termination in above call will take some time. Should we wait here for sometime or
-	// Just check if Pod isTerminating in below calls?
-	// TODO: Replace the sleep.
+	// TODO: remove sleep
 	time.Sleep(time.Second * 2)
 
 	return nil
@@ -964,6 +911,8 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 
 	summary, err := r.getAerospikeClusterNodeSummary(newAeroCluster)
 	if err != nil {
+		// This should not be error. Before status update, we already try reconcileAccessControl
+		// This error may be because of few nodes, That should not be cosidered as full cluster error
 		logger.Error("Failed to get nodes summary", log.Ctx{"err": err})
 	}
 
@@ -1083,10 +1032,11 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
 	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
-
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("Error getting statefulsets while forcing recreate of the cluster as status is nil: %v", err)
 	}
+
+	logger.Debug("Found statefulset for cluster. Need to delete them", log.Ctx{"sts": statefulSetList})
 
 	for _, statefulset := range statefulSetList.Items {
 		if err := r.deleteStatefulSet(aeroCluster, &statefulset); err != nil {
