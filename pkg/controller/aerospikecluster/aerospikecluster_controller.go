@@ -362,13 +362,15 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 			for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
 				if rackState.Rack.ID == statusRack.ID && !reflect.DeepEqual(rackState.Rack.AerospikeConfig, statusRack.AerospikeConfig) {
 					needRollingRestart = true
+					logger.Info("Rack AerospikeConfig changed. Need rolling restart", log.Ctx{"oldRackConfig": statusRack, "newRackConfig": rackState.Rack})
 					break
 				}
 			}
-		}
-		if needRollingRestart {
+		} else {
 			logger.Info("AerospikeConfig changed. Need rolling restart")
+		}
 
+		if needRollingRestart {
 			if err := r.updateConfigMap(aeroCluster, getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
 				logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
 				return err
@@ -799,9 +801,12 @@ func (r *ReconcileAerospikeCluster) scaleDown(aeroCluster *aerospikev1alpha1.Aer
 		// So this will be no op.
 		// We should tip in all nodes the same seed list,
 		// then only this will have any impact. Is it really necessary?
-		// for _, rp := range removedPods {
-		//	r.tipClearHostname(aeroCluster, &np, rp)
-		// }
+
+		// TODO: tip after scaleup and create
+		// All nodes from other rack
+		for _, rp := range removedPods {
+			r.tipClearHostname(aeroCluster, &np, rp)
+		}
 		r.alumniReset(aeroCluster, &np)
 	}
 
@@ -939,7 +944,7 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 		return fmt.Errorf("Error creating json patch: %v", err)
 	}
 
-	// Pick changed to the status object only.
+	// Pick changes to the status object only.
 	filteredPatch := []jsonpatch.JsonPatchOperation{}
 	for _, operation := range jsonpatchPatch {
 		if strings.HasPrefix(operation.Path, "/status") {

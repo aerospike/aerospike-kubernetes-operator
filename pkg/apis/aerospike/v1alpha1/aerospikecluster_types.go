@@ -66,26 +66,11 @@ type AerospikeClusterSpec struct {
 
 // RackConfig specifies all racks and related policies
 type RackConfig struct {
-	RackPolicy []RackPolicy `json:"rackPolicy"`
 	// List of Aerospike namespaces for which rack feature will be enabled
 	// If list empty then all namespaces are rack enabled
 	Namespaces []string `json:"namespaces,omitempty"`
 	Racks      []Rack   `json:"racks"`
 }
-
-// RackPolicy controls how racks are identified.
-type RackPolicy string
-
-const (
-	// Zone for creating pods.
-	Zone RackPolicy = "zone"
-	// Region for creating pods.
-	Region RackPolicy = "region"
-	// RackLabel for creating pods.
-	RackLabel RackPolicy = "rackLabel"
-	// NodeName for creating pods.
-	NodeName RackPolicy = "nodeName"
-)
 
 // Rack specifies single rack config
 type Rack struct {
@@ -102,7 +87,7 @@ type Rack struct {
 // DeepCopy implements deepcopy func for RackConfig
 func (v *RackConfig) DeepCopy() *RackConfig {
 	src := *v
-	var dst = RackConfig{Racks: []Rack{}, RackPolicy: []RackPolicy{}}
+	var dst = RackConfig{Racks: []Rack{}}
 	lib.DeepCopy(dst, src)
 	return &dst
 }
@@ -425,13 +410,18 @@ type AerospikeClusterStatus struct {
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode
 // +k8s:openapi-gen=true
 type AerospikeNodeSummary struct {
-	PodName     string `json:"podName"`
+	PodName string `json:"podName"`
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	TLSName string `json:"tlsname"`
+
 	ClusterName string `json:"clusterName"`
 	NodeID      string `json:"nodeID"`
-	IP          string `json:"ip"`
-	Port        int    `json:"port"`
-	TLSName     string `json:"tlsname"`
 	Build       string `json:"build"`
+	// RackID of rack to which this node belongs
+	RackID int `json:"rackID"`
+	// Features    []string `json:"features"`
+	// Principal   string   `json:"principal"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeNodeSummary

@@ -198,9 +198,11 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
 		return nil
 	}
-	if !reflect.DeepEqual(s.obj.Spec.RackConfig.Namespaces, old.Spec.RackConfig.Namespaces) {
-		return fmt.Errorf("Rack namespaces cannot be updated. Old %v, new %v", old.Spec.RackConfig.Namespaces, s.obj.Spec.RackConfig.Namespaces)
-	}
+
+	// Allow updating namespace list to dynamically enable, disable rack on namespaces
+	// if !reflect.DeepEqual(s.obj.Spec.RackConfig.Namespaces, old.Spec.RackConfig.Namespaces) {
+	// 	return fmt.Errorf("Rack namespaces cannot be updated. Old %v, new %v", old.Spec.RackConfig.Namespaces, s.obj.Spec.RackConfig.Namespaces)
+	// }
 
 	// Old racks can not be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
@@ -535,7 +537,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 
 		// Check out of range rackID
 		// Check for defaultRackID is in mutate (user can not use defaultRackID).
-		if rack.ID < 1 || rack.ID > defaultRackID {
+		if rack.ID < 1 || rack.ID > utils.DefaultRackID {
 			return fmt.Errorf("Invalid rackID. RackID range (1, 1000000)")
 		}
 

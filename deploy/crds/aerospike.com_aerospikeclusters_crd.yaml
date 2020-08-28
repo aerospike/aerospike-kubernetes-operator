@@ -140,11 +140,6 @@ spec:
                   items:
                     type: string
                   type: array
-                rackPolicy:
-                  items:
-                    description: RackPolicy controls how racks are identified.
-                    type: string
-                  type: array
                 racks:
                   items:
                     description: Rack specifies single rack config
@@ -165,12 +160,9 @@ spec:
                         type: string
                     required:
                     - ID
-                    - aerospikeConfig
                     type: object
                   type: array
               required:
-              - namespaces
-              - rackPolicy
               - racks
               type: object
             resources:
@@ -323,6 +315,8 @@ spec:
                   podName:
                     type: string
                   port:
+                    type: integer
+                  rackID:
                     type: integer
                   tlsname:
                     type: string

@@ -128,18 +128,18 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 	if len(s.obj.Spec.RackConfig.Racks) == 0 {
 		s.obj.Spec.RackConfig = aerospikev1alpha1.RackConfig{
-			RackPolicy: []aerospikev1alpha1.RackPolicy{},
-			Racks:      []aerospikev1alpha1.Rack{{ID: defaultRackID}},
+			Racks: []aerospikev1alpha1.Rack{{ID: utils.DefaultRackID}},
 		}
-		log.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig, "defaultRackID": defaultRackID})
+		log.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig, "utils.DefaultRackID": utils.DefaultRackID})
 	} else {
 		for _, rack := range s.obj.Spec.RackConfig.Racks {
-			if rack.ID == defaultRackID {
-				return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved", s.obj.Spec.RackConfig, defaultRackID)
-
-				// if rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" {
-				// 	return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved, Zone, Region, RackLabel and NodeName should be empty", s.obj.Spec.RackConfig, defaultRackID)
-				// }
+			if rack.ID == utils.DefaultRackID {
+				// User has modified defaultRackConfig or used defaultRackID
+				if len(s.obj.Spec.RackConfig.Racks) > 1 ||
+					rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" ||
+					rack.AerospikeConfig != nil {
+					return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved", s.obj.Spec.RackConfig, utils.DefaultRackID)
+				}
 			}
 		}
 	}
@@ -220,13 +220,9 @@ func setDefaultNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []strin
 			return fmt.Errorf("aerospikeConfig.namespace does not have valid namespace map. nsMap %v", nsInt)
 		}
 
-		defaultConfs := map[string]interface{}{"rack-id": defaultRackID}
-		if rackEnabledNsList == nil {
-			// If rackEnabledNsList empty then all namespaces are rackEnabled
-			if err := setDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
-				return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
-			}
-		} else if nsName, ok := nsMap["name"]; ok {
+		// Add dummy rack-id only for rackEnabled namespaces
+		defaultConfs := map[string]interface{}{"rack-id": utils.DefaultRackID}
+		if nsName, ok := nsMap["name"]; ok {
 			if _, ok := nsName.(string); ok &&
 				isNameExist(rackEnabledNsList, nsName.(string)) {
 				// add dummy rack-id, should be replaced with actual rack-id by init-container script

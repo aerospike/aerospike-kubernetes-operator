@@ -16,6 +16,8 @@ package aerospikecluster
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/inconshreveable/log15"
@@ -113,15 +115,18 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list pods: %v", err)
 	}
+
 	var summary []aerospikev1alpha1.AerospikeNodeSummary
 	for _, pod := range podList.Items {
 		if utils.IsTerminating(&pod) {
 			continue
 		}
+
 		asConn, err := r.newAsConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err
 		}
+
 		// This func is only called while updating status at the end.
 		// Cluster will have updated auth according to spec hence use spec auth info
 		cp := r.getClientPolicy(aeroCluster)
@@ -130,6 +135,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 		if err != nil {
 			return nil, err
 		}
+
 		build, ok := res["build"]
 		if !ok {
 			return nil, fmt.Errorf("Failed to get aerospike build from pod %v", pod.Name)
@@ -142,11 +148,16 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 		if !ok {
 			return nil, fmt.Errorf("Failed to get aerospike nodeId from pod %v", pod.Name)
 		}
-
 		ip, err := r.getNodeIP(&pod)
 		if err != nil {
 			return nil, err
 		}
+
+		rackID, err := getRackIDFromPodName(pod.Name)
+		if err != nil {
+			return nil, err
+		}
+
 		//return version, nil
 		nodeSummary := aerospikev1alpha1.AerospikeNodeSummary{
 			IP:          *ip,
@@ -157,9 +168,26 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 			Port:        asConn.AerospikePort,
 			TLSName:     asConn.AerospikeTLSName,
 		}
+		if *rackID != utils.DefaultRackID {
+			nodeSummary.RackID = *rackID
+		}
+
 		summary = append(summary, nodeSummary)
 	}
 	return summary, nil
+}
+
+func getRackIDFromPodName(podName string) (*int, error) {
+	parts := strings.Split(podName, "-")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
+	}
+	rackStr := parts[len(parts)-2]
+	rackID, err := strconv.Atoi(rackStr)
+	if err != nil {
+		return nil, err
+	}
+	return &rackID, nil
 }
 
 func (r *ReconcileAerospikeCluster) getNodeIP(pod *corev1.Pod) (*string, error) {
@@ -220,16 +248,6 @@ func (r *ReconcileAerospikeCluster) newHostConn(aeroCluster *aerospikev1alpha1.A
 	return deployment.NewHostConn(host, asConn, nil), nil
 }
 
-func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
-	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig["network"]; ok {
-		networkConf := networkConfTmp.(map[string]interface{})
-		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-			return tlsName.(string)
-		}
-	}
-	return ""
-}
-
 func (r *ReconcileAerospikeCluster) newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
 	var port int32
 
@@ -265,6 +283,16 @@ func (r *ReconcileAerospikeCluster) newAsConn(aeroCluster *aerospikev1alpha1.Aer
 	}
 
 	return asConn, nil
+}
+
+func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
+	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig["network"]; ok {
+		networkConf := networkConfTmp.(map[string]interface{})
+		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
+			return tlsName.(string)
+		}
+	}
+	return ""
 }
 
 func hostNameForTip(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {

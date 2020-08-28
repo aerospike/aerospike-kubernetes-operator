@@ -1060,7 +1060,6 @@ func getStatefulSetPodName(statefulSetName string, index int32) string {
 func getStatefulSetPodOrdinal(podName string) (*int32, error) {
 	parts := strings.Split(podName, "-")
 	ordinalStr := parts[len(parts)-1]
-	fmt.Println(ordinalStr)
 	ordinal, err := strconv.Atoi(ordinalStr)
 	if err != nil {
 		return nil, err
