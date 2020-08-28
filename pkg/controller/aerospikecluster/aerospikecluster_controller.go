@@ -947,7 +947,11 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 	// Pick changes to the status object only.
 	filteredPatch := []jsonpatch.JsonPatchOperation{}
 	for _, operation := range jsonpatchPatch {
-		if strings.HasPrefix(operation.Path, "/status") {
+		// podStatus should never be updated here
+		// podStatus is updated only from 2 places
+		// 1: While pod init, it will add pod in podStatus
+		// 2: While pod cleanup, it will remove pod from podStatus
+		if strings.HasPrefix(operation.Path, "/status") && !strings.HasPrefix(operation.Path, "/status/podStatus") {
 			filteredPatch = append(filteredPatch, operation)
 		}
 	}
