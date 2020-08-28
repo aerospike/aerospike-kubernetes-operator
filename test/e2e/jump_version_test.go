@@ -70,7 +70,7 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 		"datacenter": []interface{}{
 			map[string]interface{}{
 				"name":                 "REMOTE_DC_1",
-				"dc-node-address-port": "IP NODE",
+				"dc-node-address-port": "IP PORT",
 			},
 		},
 	},
