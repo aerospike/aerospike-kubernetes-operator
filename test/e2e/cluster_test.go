@@ -64,14 +64,13 @@ func TestAerospikeCluster(t *testing.T) {
 	t.Run("RackEnabledCluster", func(t *testing.T) {
 		RackEnabledClusterTest(t, f, ctx)
 	})
-	// t.Run("RackManagement", func(t *testing.T) {
-	// 	RackManagementTest(t, f, ctx)
-	// })
-	// t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
-	// 	// RackAerospikeConfigUpdateTest(t, f, ctx)
-	// 	RackAerospikeConfigUpdateTest(t, f, ctx)
-	// })
-
+	t.Run("RackManagement", func(t *testing.T) {
+		RackManagementTest(t, f, ctx)
+	})
+	t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
+		// RackAerospikeConfigUpdateTest(t, f, ctx)
+		RackAerospikeConfigUpdateTest(t, f, ctx)
+	})
 }
 
 func initializeOperator(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
