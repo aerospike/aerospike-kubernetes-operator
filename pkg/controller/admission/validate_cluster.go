@@ -120,10 +120,18 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		// Few parsing logic depend on this
 		return fmt.Errorf("AerospikeCluster name cannot have char '-'")
 	}
+	if strings.Contains(s.obj.Name, " ") {
+		// Few parsing logic depend on this
+		return fmt.Errorf("AerospikeCluster name cannot have spaces")
+	}
 
 	// Validate obj namespace
 	if s.obj.Namespace == "" {
 		return fmt.Errorf("AerospikeCluster namespace name cannot be empty")
+	}
+	if strings.Contains(s.obj.Namespace, " ") {
+		// Few parsing logic depend on this
+		return fmt.Errorf("AerospikeCluster name cannot have spaces")
 	}
 
 	// Validate build type. Only enterprise build allowed for now
@@ -195,6 +203,8 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1alpha1.AerospikeCluster) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(&s.obj)})
+
 	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
 		return nil
 	}
@@ -219,8 +229,29 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 					return fmt.Errorf("Old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v", oldRack, newRack)
 				}
 
+				if len(oldRack.AerospikeConfig) == 0 && len(newRack.AerospikeConfig) == 0 {
+					// Both empty. No need to check for update
+					continue
+				}
+				// New rackConf is empty
+				newConf := newRack.AerospikeConfig
+				if len(newConf) == 0 {
+					// Do not use empty rackAeroConfig
+					// User may have added rackAeroConfig having options like namespace storage,
+					// which should not be update and later remove rackAeroConfig.
+					// Hence if defaultAeroConfig will be used in place of empty rackAeroConfig,
+					// then rackAeroConfig change can be detected
+					logger.Info("new rack's aerospikeConfig is empty, using new default aerospikeConfig to validate", log.Ctx{"rackID": newRack.ID})
+					newConf = s.obj.Spec.AerospikeConfig
+				}
+				// Old rackconf is empty
+				oldConf := oldRack.AerospikeConfig
+				if len(oldConf) == 0 {
+					logger.Info("old rack's aerospikeConfig is empty, using old default aerospikeConfig to validate", log.Ctx{"rackID": newRack.ID})
+					oldConf = old.Spec.AerospikeConfig
+				}
 				// Validate aerospikeConfig update
-				if err := validateAerospikeConfigUpdate(newRack.AerospikeConfig, oldRack.AerospikeConfig); err != nil {
+				if err := validateAerospikeConfigUpdate(newConf, oldConf); err != nil {
 					return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
 				}
 			}
@@ -522,6 +553,14 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 		return fmt.Errorf("Cluster size can not be less than number of Racks")
 	}
 
+	// Validate namespace names
+	// TODO: Add more validation for namespace name
+	for _, nsName := range s.obj.Spec.RackConfig.Namespaces {
+		if strings.Contains(nsName, " ") {
+			return fmt.Errorf("Namespace name `%s` cannot have spaces, Namespaces %v", nsName, s.obj.Spec.RackConfig.Namespaces)
+		}
+	}
+
 	version, err := getBuildVersion(s.obj.Spec.Build)
 	if err != nil {
 		return err
@@ -537,8 +576,9 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 
 		// Check out of range rackID
 		// Check for defaultRackID is in mutate (user can not use defaultRackID).
-		if rack.ID < 1 || rack.ID > utils.DefaultRackID {
-			return fmt.Errorf("Invalid rackID. RackID range (1, 1000000)")
+		// Allow utils.DefaultRackID
+		if rack.ID > utils.MaxRackID {
+			return fmt.Errorf("Invalid rackID. RackID range (%d, %d)", utils.MinRackID, utils.MaxRackID)
 		}
 
 		// Validate rack aerospike config

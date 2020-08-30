@@ -17,7 +17,9 @@ var pkglog = log.New(log.Ctx{"module": "utils"})
 
 const (
 	// default rackID
-	DefaultRackID = 1000000
+	DefaultRackID = 0
+	MaxRackID     = 1000000
+	MinRackID     = 1
 
 	ServiceTLSPort     = 4333
 	ServiceTLSPortName = "svc-tls-port"

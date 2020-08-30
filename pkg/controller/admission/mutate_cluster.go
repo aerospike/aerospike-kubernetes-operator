@@ -130,7 +130,7 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 		s.obj.Spec.RackConfig = aerospikev1alpha1.RackConfig{
 			Racks: []aerospikev1alpha1.Rack{{ID: utils.DefaultRackID}},
 		}
-		log.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig, "utils.DefaultRackID": utils.DefaultRackID})
+		log.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig, "DefaultRackID": utils.DefaultRackID})
 	} else {
 		for _, rack := range s.obj.Spec.RackConfig.Racks {
 			if rack.ID == utils.DefaultRackID {
@@ -161,15 +161,6 @@ func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault(
 			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
 
 			log.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
-		} else {
-			// Do not keep rackAeroConfig as empty.
-			// User may have added rackAeroConfig having options like namespace storage,
-			// which should not be update and later remove rackAeroConfig.
-			// Hence if defaultAeroConfig will be used in place of empty rackAeroConfig,
-			// then rackAeroConfig change can be detected
-			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = s.obj.Spec.AerospikeConfig
-
-			log.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": s.obj.Spec.AerospikeConfig})
 		}
 	}
 	return nil
@@ -242,12 +233,16 @@ func setDefaultNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []strin
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
+					log.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. removing defaultRackID from config", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
+
 					delete(nsMap, "rack-id")
 				}
 			}
 		}
 		// If namespace map doesn't have valid name, it will fail in validation layer
 	}
+	log.Info("Set default template values in aerospikeConfig.namespace")
+
 	return nil
 }
 

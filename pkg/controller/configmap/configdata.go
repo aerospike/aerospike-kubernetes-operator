@@ -233,7 +233,7 @@ NODE_ID="a${ADDR[-1]}"
 len=${#ADDR[@]}
 if [ ${#ADDR[@]} == 3 ]; then
     RACK_ID="${ADDR[1]}"
-    sed -i "s/rack-id.*1000000/rack-id    ${RACK_ID}/" ${CFG}
+    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
     NODE_ID="$RACK_ID$NODE_ID"
 fi
 
