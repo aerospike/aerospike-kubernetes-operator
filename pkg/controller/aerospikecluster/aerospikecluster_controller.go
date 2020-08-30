@@ -910,7 +910,7 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 	// Commit important access control information since getting node summary could take time.
 	err = r.patchStatus(aeroCluster, newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error patching status: %v", err)
+		return fmt.Errorf("Error updating status: %v", err)
 	}
 
 	summary, err := r.getAerospikeClusterNodeSummary(newAeroCluster)
@@ -921,9 +921,13 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 	}
 
 	newAeroCluster.Status.Nodes = summary
-	logger.Info("Updated status", log.Ctx{"status": newAeroCluster.Status})
 
-	return r.patchStatus(aeroCluster, newAeroCluster)
+	err = r.patchStatus(aeroCluster, newAeroCluster)
+	if err != nil {
+		return fmt.Errorf("Error updating status: %v", err)
+	}
+	logger.Info("Updated status", log.Ctx{"status": newAeroCluster.Status})
+	return nil
 }
 
 func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *aerospikev1alpha1.AerospikeCluster) error {
@@ -960,6 +964,7 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 		logger.Info("No status change required")
 		return nil
 	}
+	logger.Debug("Filterd status patch ", log.Ctx{"patch": filteredPatch, "oldObj.status": oldAeroCluster.Status, "newObj.status": newAeroCluster.Status})
 
 	jsonpatchJSON, err := json.Marshal(filteredPatch)
 
@@ -969,10 +974,11 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 
 	patch := client.ConstantPatch(types.JSONPatchType, jsonpatchJSON)
 
-	if err = r.client.Status().Patch(context.TODO(), newAeroCluster, patch, client.FieldOwner(patchFieldOwner)); err != nil {
-		return fmt.Errorf("Error updating status: %v", err)
+	if err = r.client.Status().Patch(context.TODO(), oldAeroCluster, patch, client.FieldOwner(patchFieldOwner)); err != nil {
+		return fmt.Errorf("Error patching status: %v", err)
 	}
-	return nil
+
+	return lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
 }
 
 // removePodStatus removes podNames from the cluster's pod status.

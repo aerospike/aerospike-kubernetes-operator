@@ -6,6 +6,10 @@ import (
 )
 
 func merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
+	if len(patch) == 0 {
+		return base, nil
+	}
+
 	res := map[string]interface{}{}
 
 	for key, patchValue := range patch {
@@ -75,7 +79,7 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 		pvt := patchValue.(map[string]interface{})
 		return merge(bvt, pvt)
 
-	case string, float64, bool, int:
+	case string, float64, bool, int, int64, int32:
 		return patchValue, nil
 
 	case []interface{}:
@@ -109,7 +113,7 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 func isPrimList(list []interface{}) bool {
 	for _, e := range list {
 		switch e.(type) {
-		case string, float64, bool, int:
+		case string, float64, bool, int, int64, int32:
 			continue
 		default:
 			return false

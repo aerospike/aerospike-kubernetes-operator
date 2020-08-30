@@ -221,7 +221,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 
 				// Validate aerospikeConfig update
 				if err := validateAerospikeConfigUpdate(newRack.AerospikeConfig, oldRack.AerospikeConfig); err != nil {
-					return fmt.Errorf("Invalid update in Rack(ID-%d) aerospikeConfig: %v", oldRack.ID, err)
+					return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
 				}
 			}
 		}

@@ -160,7 +160,16 @@ func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault(
 			}
 			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
 
-			log.Info("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+			log.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		} else {
+			// Do not keep rackAeroConfig as empty.
+			// User may have added rackAeroConfig having options like namespace storage,
+			// which should not be update and later remove rackAeroConfig.
+			// Hence if defaultAeroConfig will be used in place of empty rackAeroConfig,
+			// then rackAeroConfig change can be detected
+			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = s.obj.Spec.AerospikeConfig
+
+			log.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": s.obj.Spec.AerospikeConfig})
 		}
 	}
 	return nil
@@ -223,11 +232,17 @@ func setDefaultNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []strin
 		// Add dummy rack-id only for rackEnabled namespaces
 		defaultConfs := map[string]interface{}{"rack-id": utils.DefaultRackID}
 		if nsName, ok := nsMap["name"]; ok {
-			if _, ok := nsName.(string); ok &&
-				isNameExist(rackEnabledNsList, nsName.(string)) {
-				// add dummy rack-id, should be replaced with actual rack-id by init-container script
-				if err := setDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
-					return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
+			if _, ok := nsName.(string); ok {
+				if isNameExist(rackEnabledNsList, nsName.(string)) {
+					// Add dummy rack-id, should be replaced with actual rack-id by init-container script
+					if err := setDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
+						return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
+					}
+				} else {
+					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
+					// but left namespace defaults. This key should be removed then only controller will detect
+					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
+					delete(nsMap, "rack-id")
 				}
 			}
 		}
