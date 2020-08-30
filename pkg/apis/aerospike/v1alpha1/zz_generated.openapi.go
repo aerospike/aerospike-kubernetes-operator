@@ -258,12 +258,13 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 					},
 					"rackID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "RackID of rack to which this node belongs",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
-				Required: []string{"podName", "ip", "port", "tlsname", "clusterName", "nodeID", "build"},
+				Required: []string{"podName", "ip", "port", "tlsname", "clusterName", "nodeID", "build", "rackID"},
 			},
 		},
 	}

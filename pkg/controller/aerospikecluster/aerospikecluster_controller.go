@@ -964,7 +964,7 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 		logger.Info("No status change required")
 		return nil
 	}
-	logger.Debug("Filterd status patch ", log.Ctx{"patch": filteredPatch, "oldObj.status": oldAeroCluster.Status, "newObj.status": newAeroCluster.Status})
+	logger.Debug("Filtered status patch ", log.Ctx{"patch": filteredPatch, "oldObj.status": oldAeroCluster.Status, "newObj.status": newAeroCluster.Status})
 
 	jsonpatchJSON, err := json.Marshal(filteredPatch)
 
@@ -978,6 +978,9 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 		return fmt.Errorf("Error patching status: %v", err)
 	}
 
+	// FIXME: Json unmarshal used by above client.Status(),Patch()  does not convert empty lists in the new JSON to empty lists in the target. Seems like a bug in encoding/json/Unmarshall.
+	//
+	// Workaround by force copying new object's status to old object's status.
 	return lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
 }
 
