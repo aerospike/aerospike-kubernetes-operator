@@ -317,6 +317,7 @@ spec:
                   port:
                     type: integer
                   rackID:
+                    description: RackID of rack to which this node belongs
                     type: integer
                   tlsname:
                     type: string
@@ -327,6 +328,7 @@ spec:
                 - nodeID
                 - podName
                 - port
+                - rackID
                 - tlsname
                 type: object
               type: array
