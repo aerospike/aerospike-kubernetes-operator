@@ -16,14 +16,14 @@ import (
 )
 
 // feature-key file needed
-func createAerospikeClusterPost460(clusterName, namespace string, size int32, build string) *aerospikev1alpha1.AerospikeCluster {
+func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, size int32, build string) *aerospikev1alpha1.AerospikeCluster {
 	// create memcached custom resource
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: namespace,
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
@@ -126,28 +126,24 @@ func createAerospikeClusterPost460(clusterName, namespace string, size int32, bu
 	return aeroCluster
 }
 
-func createDummyRackAwareAerospikeCluster(clusterName, namespace string, size int32) *aerospikev1alpha1.AerospikeCluster {
+func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	// Will be used in Update also
-	aeroCluster := createDummyAerospikeCluster(clusterName, namespace, 2)
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 	// This needs to be changed based on setup. update zone, region, nodeName according to setup
-	racks := []aerospikev1alpha1.Rack{
-		{ID: 1}}
-	rackConf := aerospikev1alpha1.RackConfig{
-		RackPolicy: []aerospikev1alpha1.RackPolicy{},
-		Racks:      racks,
-	}
+	racks := []aerospikev1alpha1.Rack{{ID: 1}}
+	rackConf := aerospikev1alpha1.RackConfig{Racks: racks}
 	aeroCluster.Spec.RackConfig = rackConf
 	return aeroCluster
 }
 
-func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aerospikev1alpha1.AerospikeCluster {
+func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	// create memcached custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: namespace,
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
@@ -219,14 +215,14 @@ func createDummyAerospikeCluster(clusterName, namespace string, size int32) *aer
 }
 
 // feature-key file needed
-func createBasicTLSCluster(clusterName, namespace string, size int32) *aerospikev1alpha1.AerospikeCluster {
+func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	// create memcached custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: namespace,
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
@@ -304,8 +300,8 @@ func createBasicTLSCluster(clusterName, namespace string, size int32) *aerospike
 	return aeroCluster
 }
 
-func createSSDStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
+func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -337,8 +333,8 @@ func createSSDStorageCluster(clusterName, namespace string, size int32, repFact 
 	return aeroCluster
 }
 
-func createHDDAndDataInMemStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
+func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
@@ -367,8 +363,8 @@ func createHDDAndDataInMemStorageCluster(clusterName, namespace string, size int
 	return aeroCluster
 }
 
-func createHDDAndDataInIndexStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
+func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 		aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -407,8 +403,8 @@ func createHDDAndDataInIndexStorageCluster(clusterName, namespace string, size i
 	return aeroCluster
 }
 
-func createDataInMemWithoutPersistentStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
+func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
 		map[string]interface{}{
@@ -422,8 +418,8 @@ func createDataInMemWithoutPersistentStorageCluster(clusterName, namespace strin
 	return aeroCluster
 }
 
-func createShadowDeviceStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterName, namespace, size)
+func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
@@ -462,7 +458,7 @@ func createShadowDeviceStorageCluster(clusterName, namespace string, size int32,
 	return aeroCluster
 }
 
-func createPMEMStorageCluster(clusterName, namespace string, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
+func createPMEMStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	return nil
 }
 

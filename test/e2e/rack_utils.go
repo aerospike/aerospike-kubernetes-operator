@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -54,10 +55,10 @@ func getNamespacedNameForStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeClu
 	}
 }
 
-func getClusterNamespacedName(aeroCluster *aerospikev1alpha1.AerospikeCluster) types.NamespacedName {
+func getClusterNamespacedName(name, namespace string) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      aeroCluster.Name,
-		Namespace: aeroCluster.Namespace,
+		Name:      name,
+		Namespace: namespace,
 	}
 }
 
@@ -71,4 +72,41 @@ func getRackPodList(f *framework.Framework, found *appsv1.StatefulSet) (*corev1.
 		return nil, err
 	}
 	return podList, nil
+}
+
+func getParsedValue(val interface{}) interface{} {
+
+	valStr, ok := val.(string)
+	if !ok {
+		return val
+	}
+
+	if value, err := strconv.ParseInt(valStr, 10, 64); err == nil {
+		return value
+	} else if value, err := strconv.ParseFloat(valStr, 64); err == nil {
+		return value
+	} else if value, err := strconv.ParseBool(valStr); err == nil {
+		return value
+	} else {
+		return valStr
+	}
+}
+
+func isNodePartOfRack(nodeID string, rackID string) bool {
+	// NODE_ID="$RACK_ID$NODE_ID",  NODE_ID -> aINT
+	lnodeID := strings.ToLower(nodeID)
+	toks := strings.Split(lnodeID, "a")
+	// len(toks) can not be less than 2 if rack is there
+	if rackID == toks[0] {
+		return true
+	}
+	return false
+}
+
+func getDummyRackConf(rackIDs ...int) []aerospikev1alpha1.Rack {
+	var racks []aerospikev1alpha1.Rack
+	for _, rID := range rackIDs {
+		racks = append(racks, aerospikev1alpha1.Rack{ID: rID})
+	}
+	return racks
 }
