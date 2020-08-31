@@ -12,9 +12,9 @@ import (
 var pkglog = log.New(log.Ctx{"module": "lib.asconfig"})
 
 // CreateConfigMapData create configMap data
-func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster) (map[string]string, error) {
+func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (map[string]string, error) {
 	// Add config template
-	temp, err := buildConfigTemplate(aeroCluster)
+	temp, err := buildConfigTemplate(aeroCluster, rack)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
@@ -28,24 +28,25 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster) (map[s
 	return confData, nil
 }
 
-func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster) (string, error) {
+func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
 	version := strings.Split(aeroCluster.Spec.Build, ":")
 
 	// Check if passed aerospikeConfig is valid or not
 	config := aeroCluster.Spec.AerospikeConfig
+	// Use rack config if available
+	if len(rack.AerospikeConfig) != 0 {
+		pkglog.Debug("Using rackLevel AerospikeConfig")
+		config = rack.AerospikeConfig
+	}
 	pkglog.Debug("AerospikeConfig", log.Ctx{"config": config, "build": aeroCluster.Spec.Build})
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], config)
 	if err != nil {
 		return "", fmt.Errorf("Failed to load config map by lib: %v", err)
 	}
-	valid, validationErr, err := asConf.IsValid(version[1])
-	if !valid {
-		for _, e := range validationErr {
-			pkglog.Info("validation failed", log.Ctx{"err": *e})
-		}
-		return "", fmt.Errorf("generated config not valid for version %s: %v", version, err)
-	}
+
+	// No need for asConf version validation, it's already validated in admission webhook
+
 	confFile := asConf.ToConfFile()
 	pkglog.Debug("AerospikeConfig", log.Ctx{"conf": confFile})
 

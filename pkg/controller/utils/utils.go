@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -15,20 +16,25 @@ import (
 var pkglog = log.New(log.Ctx{"module": "utils"})
 
 const (
-	ServiceTlsPort     = 4333
-	ServiceTlsPortName = "svc-tls-port"
+	// default rackID
+	DefaultRackID = 0
+	MaxRackID     = 1000000
+	MinRackID     = 1
+
+	ServiceTLSPort     = 4333
+	ServiceTLSPortName = "svc-tls-port"
 	ServicePort        = 3000
 	ServicePortName    = "service"
 
 	DockerHubImagePrefix = "docker.io/"
 
-	HeartbeatTlsPort     = 3012
-	HeartbeatTlsPortName = "hb-tls-port"
+	HeartbeatTLSPort     = 3012
+	HeartbeatTLSPortName = "hb-tls-port"
 	HeartbeatPort        = 3002
 	HeartbeatPortName    = "heartbeat"
 
-	FabricTlsPort     = 3011
-	FabricTlsPortName = "fb-tls-port"
+	FabricTLSPort     = 3011
+	FabricTLSPortName = "fb-tls-port"
 	FabricPort        = 3001
 	FabricPortName    = "fabric"
 
@@ -65,12 +71,12 @@ func NamespacedName(namespace, name string) string {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !isTerminating(pod) && pod.Status.Phase == v1.PodRunning
+	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
 func CheckPodFailed(pod *v1.Pod) error {
-	if isTerminating(pod) {
+	if IsTerminating(pod) {
 		return nil
 	}
 
@@ -101,7 +107,7 @@ func CheckPodFailed(pod *v1.Pod) error {
 
 // CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an image related error.
 func CheckPodImageFailed(pod *v1.Pod) error {
-	if isTerminating(pod) {
+	if IsTerminating(pod) {
 		return nil
 	}
 
@@ -170,8 +176,8 @@ func isFailed(pod *v1.Pod) bool {
 	return pod.Status.Phase == v1.PodFailed
 }
 
-// isTerminating returns true if pod's DeletionTimestamp has been set
-func isTerminating(pod *v1.Pod) bool {
+// IsTerminating returns true if pod's DeletionTimestamp has been set
+func IsTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
@@ -234,8 +240,15 @@ func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
 
 // LabelsForAerospikeCluster returns the labels for selecting the resources
 // belonging to the given AerospikeCluster CR name.
-func LabelsForAerospikeCluster(name string) map[string]string {
-	return map[string]string{"app": "aerospike-cluster", "aerospike-cluster_cr": name, "podName": ""}
+func LabelsForAerospikeCluster(clName string) map[string]string {
+	return map[string]string{"app": "aerospike-cluster", "aerospike.com/cr": clName}
+}
+
+// LabelsForAerospikeClusterRack returns the labels for specific rack
+func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string {
+	labels := LabelsForAerospikeCluster(clName)
+	labels["aerospike.com/rack-id"] = strconv.Itoa(rackID)
+	return labels
 }
 
 // GetPodNames returns the pod names of the array of pods passed in
