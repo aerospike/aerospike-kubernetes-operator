@@ -515,16 +515,3 @@ func isNamespaceRackEnabled(t *testing.T, f *framework.Framework, ctx *framework
 
 	return false
 }
-
-// func updateAerospikeConfigInRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName, aeroConfig map[string]interface{}) error {
-// 	aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-
-// 	aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
-// 	err := f.Client.Update(goctx.TODO(), aeroCluster)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	// Wait for aerocluster to reach 2 replicas
-// 	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
-// }

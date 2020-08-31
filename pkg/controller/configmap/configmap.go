@@ -44,14 +44,9 @@ func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 	if err != nil {
 		return "", fmt.Errorf("Failed to load config map by lib: %v", err)
 	}
-	// No need for this validation, it's already validated in admission webhook
-	// valid, validationErr, err := asConf.IsValid(version[1])
-	// if !valid {
-	// 	for _, e := range validationErr {
-	// 		pkglog.Info("validation failed", log.Ctx{"err": *e})
-	// 	}
-	// 	return "", fmt.Errorf("generated config not valid for version %s: %v", version, err)
-	// }
+
+	// No need for asConf version validation, it's already validated in admission webhook
+
 	confFile := asConf.ToConfFile()
 	pkglog.Debug("AerospikeConfig", log.Ctx{"conf": confFile})
 

@@ -198,7 +198,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 				return err
 			}
 			// Create statefulset for rack
-			if err := r.createSTSForCluster(aeroCluster, state); err != nil {
+			if err := r.createRack(aeroCluster, state); err != nil {
 				return err
 			}
 			continue
@@ -210,7 +210,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 			scaledDownRackList = append(scaledDownRackList, state)
 		} else {
 			// Reconcile other statefulset
-			if err := r.reconcileClusterSTS(aeroCluster, found, state); err != nil {
+			if err := r.reconcileRack(aeroCluster, found, state); err != nil {
 				return err
 			}
 		}
@@ -218,56 +218,23 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 
 	// Reconcile scaledDownRacks after all other racks are reconciled
 	for idx, state := range scaledDownRackList {
-		if err := r.reconcileClusterSTS(aeroCluster, &scaledDownRackSTSList[idx], state); err != nil {
+		if err := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); err != nil {
 			return err
 		}
 	}
 
 	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
 		// remove removed racks
-		if err := r.deleteSTSForRemovedRacks(aeroCluster, rackStateList); err != nil {
+		if err := r.deleteRacks(aeroCluster, rackStateList); err != nil {
 			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": err})
 			return err
 		}
 	}
 
-	// Pod termination in above call will take some time. Should we wait here for sometime or
-	// Just check if Pod isTerminating in below calls?
-	// TODO: Replace the sleep.
-	time.Sleep(time.Second * 2)
-
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) isNewCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
-	if aeroCluster.Status.AerospikeConfig != nil {
-		// We have valid status, cluster cannot be new.
-		return false, nil
-	}
-
-	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
-
-	if err != nil {
-		return false, err
-	}
-
-	// Cluster can have status nil and still have pods on failures.
-	// For cluster to be new there should be no pods in the cluster.
-	return len(statefulSetList.Items) == 0, nil
-}
-
-func (r *ReconcileAerospikeCluster) hasClusterFailed(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
-	isNew, err := r.isNewCluster(aeroCluster)
-
-	if err != nil {
-		// Checking cluster status failed.
-		return false, err
-	}
-
-	return !isNew && aeroCluster.Status.AerospikeConfig == nil, nil
-}
-
-func (r *ReconcileAerospikeCluster) createSTSForCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) error {
+func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Create new Aerospike cluster if needed")
 
@@ -284,14 +251,9 @@ func (r *ReconcileAerospikeCluster) createSTSForCluster(aeroCluster *aerospikev1
 		return err
 	}
 
-	// _, err := r.createClusterSTS(aeroCluster, rackStateList)
-	// if err != nil {
-	// 	return err
-	// }
-
 	found := &appsv1.StatefulSet{}
 	stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
-	found, err := r.createStatefulSetForAerospikeCluster(aeroCluster, stsName, rackState)
+	found, err := r.createStatefulSet(aeroCluster, stsName, rackState)
 	if err != nil {
 		logger.Error("Statefulset setup failed. Deleting statefulset", log.Ctx{"name": stsName, "err": err})
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
@@ -301,7 +263,7 @@ func (r *ReconcileAerospikeCluster) createSTSForCluster(aeroCluster *aerospikev1
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) deleteSTSForRemovedRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) error {
+func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) error {
 	oldRackIDList := getOldRackIDList(aeroCluster)
 
 	for _, rackID := range oldRackIDList {
@@ -328,8 +290,7 @@ func (r *ReconcileAerospikeCluster) deleteSTSForRemovedRacks(aeroCluster *aerosp
 			return err
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, err = r.scaleDown(aeroCluster, found, RackState{Size: 0, Rack: aerospikev1alpha1.Rack{ID: rackID}})
-		//removedPods, err := r.getRackPodList(aeroCluster, rackID)
+		found, err = r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: aerospikev1alpha1.Rack{ID: rackID}})
 		if err != nil {
 			return err
 		}
@@ -342,14 +303,11 @@ func (r *ReconcileAerospikeCluster) deleteSTSForRemovedRacks(aeroCluster *aerosp
 	return nil
 }
 
-// TODO: rename to reflect this reconciles a rack.
-func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) error {
+func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 	logger.Info("Reconcile existing Aerospike cluster statefulset")
 
 	logger.Info("Ensure the StatefulSet size is the same as the spec")
-
-	//desiredSize := rackState.Size
 
 	var err error
 	// nil aerospikeConfig in status indicate that AerospikeCluster object is created but status is not successfully updated even once
@@ -370,6 +328,7 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 			logger.Info("AerospikeConfig changed. Need rolling restart")
 		}
 
+		// Update config map if config is updated
 		if needRollingRestart {
 			if err := r.updateConfigMap(aeroCluster, getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
 				logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
@@ -377,10 +336,12 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 			}
 		}
 
+		// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
 		if !needRollingRestart {
-			// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
 			needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret)
 		}
+
+		// Resource are updated, need rolling restart
 		if aeroCluster.Spec.Resources != nil || aeroCluster.Status.Resources != nil {
 			if !needRollingRestart && isClusterResourceUpdated(aeroCluster) {
 				logger.Info("Resources changed. Need rolling restart")
@@ -390,19 +351,10 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 		}
 	}
 
-	// TODO: For which case it is needed? This cannot be considered rolling restart. It can be scale up/down also
-	// } else {
-	// 	if aeroCluster.Generation != 1 {
-	// 		// TODO: check if its correct
-	// 		// If status is nil but generation is greater than 1,
-	// 		// it means user has updated it and wants a rolling restart with new conf
-	// 		needRollingRestart = true
-	// 	}
-	// }
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
-		found, err = r.scaleDown(aeroCluster, found, rackState)
+		found, err = r.scaleDownRack(aeroCluster, found, rackState)
 		if err != nil {
 			logger.Error("Failed to scaleDown StatefulSet pods", log.Ctx{"err": err})
 			return err
@@ -416,13 +368,13 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 	}
 
 	if upgradeNeeded {
-		found, err = r.upgrade(aeroCluster, found, aeroCluster.Spec.Build, rackState)
+		found, err = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Build, rackState)
 		if err != nil {
 			logger.Error("Failed to update StatefulSet image", log.Ctx{"err": err})
 			return err
 		}
 	} else if needRollingRestart {
-		found, err = r.rollingRestart(aeroCluster, found, rackState)
+		found, err = r.rollingRestartRack(aeroCluster, found, rackState)
 		if err != nil {
 			logger.Error("Failed to do rolling restart", log.Ctx{"err": err})
 			return err
@@ -431,7 +383,7 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 
 	// Scale up after upgrading, so that new pods comeup with new image
 	if *found.Spec.Replicas < desiredSize {
-		found, err = r.scaleUp(aeroCluster, found, rackState)
+		found, err = r.scaleUpRack(aeroCluster, found, rackState)
 		if err != nil {
 			logger.Error("Failed to scaleUp StatefulSet pods", log.Ctx{"err": err})
 			return err
@@ -441,7 +393,7 @@ func (r *ReconcileAerospikeCluster) reconcileClusterSTS(aeroCluster *aerospikev1
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) scaleUp(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	desiredSize := int32(rackState.Size)
@@ -521,7 +473,7 @@ func (r *ReconcileAerospikeCluster) scaleUp(aeroCluster *aerospikev1alpha1.Aeros
 	return r.getStatefulSet(aeroCluster, rackState)
 }
 
-func (r *ReconcileAerospikeCluster) upgrade(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	currentBuild := found.Spec.Template.Spec.Containers[0].Image
@@ -612,7 +564,7 @@ func (r *ReconcileAerospikeCluster) upgrade(aeroCluster *aerospikev1alpha1.Aeros
 	return r.getStatefulSet(aeroCluster, rackState)
 }
 
-func (r *ReconcileAerospikeCluster) rollingRestart(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	logger.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -728,7 +680,7 @@ func (r *ReconcileAerospikeCluster) rollingRestart(aeroCluster *aerospikev1alpha
 	return r.getStatefulSet(aeroCluster, rackState)
 }
 
-func (r *ReconcileAerospikeCluster) scaleDown(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	desiredSize := int32(rackState.Size)
@@ -862,33 +814,6 @@ func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospik
 	return err
 }
 
-func (r *ReconcileAerospikeCluster) createStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-	logger.Info("Creating status for AerospikeCluster")
-
-	// Get the old object, it may have been updated in between.
-	newAeroCluster := &aerospikev1alpha1.AerospikeCluster{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
-	if err != nil {
-		return err
-	}
-
-	if newAeroCluster.Status.Nodes == nil {
-		newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
-	}
-
-	if newAeroCluster.Status.PodStatus == nil {
-		newAeroCluster.Status.PodStatus = map[string]aerospikev1alpha1.AerospikePodStatus{}
-	}
-
-	if err = r.client.Status().Update(context.TODO(), newAeroCluster); err != nil {
-		return fmt.Errorf("Error creating status: %v", err)
-	}
-
-	return nil
-}
-
 func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
@@ -928,6 +853,61 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 	}
 	logger.Info("Updated status", log.Ctx{"status": newAeroCluster.Status})
 	return nil
+}
+
+func (r *ReconcileAerospikeCluster) createStatus(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	logger.Info("Creating status for AerospikeCluster")
+
+	// Get the old object, it may have been updated in between.
+	newAeroCluster := &aerospikev1alpha1.AerospikeCluster{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
+	if err != nil {
+		return err
+	}
+
+	if newAeroCluster.Status.Nodes == nil {
+		newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
+	}
+
+	if newAeroCluster.Status.PodStatus == nil {
+		newAeroCluster.Status.PodStatus = map[string]aerospikev1alpha1.AerospikePodStatus{}
+	}
+
+	if err = r.client.Status().Update(context.TODO(), newAeroCluster); err != nil {
+		return fmt.Errorf("Error creating status: %v", err)
+	}
+
+	return nil
+}
+
+func (r *ReconcileAerospikeCluster) isNewCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
+	if aeroCluster.Status.AerospikeConfig != nil {
+		// We have valid status, cluster cannot be new.
+		return false, nil
+	}
+
+	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
+
+	if err != nil {
+		return false, err
+	}
+
+	// Cluster can have status nil and still have pods on failures.
+	// For cluster to be new there should be no pods in the cluster.
+	return len(statefulSetList.Items) == 0, nil
+}
+
+func (r *ReconcileAerospikeCluster) hasClusterFailed(aeroCluster *aerospikev1alpha1.AerospikeCluster) (bool, error) {
+	isNew, err := r.isNewCluster(aeroCluster)
+
+	if err != nil {
+		// Checking cluster status failed.
+		return false, err
+	}
+
+	return !isNew && aeroCluster.Status.AerospikeConfig == nil, nil
 }
 
 func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *aerospikev1alpha1.AerospikeCluster) error {

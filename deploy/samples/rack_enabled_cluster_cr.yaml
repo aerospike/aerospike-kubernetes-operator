@@ -3,44 +3,51 @@ kind: AerospikeCluster
 metadata:
   name: aerocluster
   namespace: aerospike
+
 spec:
-  # Add fields here
   size: 2
-  build: aerospike/aerospike-server-enterprise:4.7.0.10
-  #build: aerospike/aerospike-server-enterprise:4.9.0.5
+  build: aerospike/aerospike-server-enterprise:4.8.0.6
   rackConfig:
-    rackPolicy:
-      - zone
-      # - nodeName
+    namespaces:
+      - test
     racks: 
-      - ID: 1
+      - id: 1
         zone: us-central1-b
-        # nodeName: kubernetes-minion-group-qp3m
         aerospikeConfig:
           service:
             proto-fd-max: 18000
-      - ID: 2
+        # nodeName: kubernetes-minion-group-qp3m
+      - id: 2
         zone: us-central1-a
         # nodeName: kubernetes-minion-group-tft3
-        # aerospikeConfig:
-        #   service:
-        #     proto-fd-max: 16000        
+        aerospikeConfig:
+          service:
+            proto-fd-max: 16000 
+  storage:
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+
+  multiPodPerHost: true
+
   aerospikeAccessControl:
     users:
-      admin:
+      - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
           - user-admin
-  fileStorage: 
-    - storageClass: ssd
-      volumeMounts:
-        - mountPath: /opt/aerospike/data
-          sizeInGB: 3
-  multiPodPerHost: true 
+
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret
+
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
@@ -49,14 +56,18 @@ spec:
     namespace:
       - name: test
         memory-size: 3000000000
-        replication-factor: 2
+        replication-factor: 1
         storage-engine:
-          file: 
+          file:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
-          data-in-memory: true        
+          data-in-memory: true
+      - name: testMem
+        memory-size: 3000000000
+        replication-factor: 1
+        storage-engine: memory
+
   resources:
-    requests: 
+    requests:
       memory: 2Gi
       cpu: 200m
-    

@@ -298,17 +298,3 @@ func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 func hostNameForTip(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
-
-// For load balancer service
-// func (r *ReconcileAerospikeCluster) getServiceClusterIPForPod(pod *corev1.Pod) (string, error) {
-// 	service := &corev1.Service{}
-// 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
-// 	if err != nil {
-// 		return "", fmt.Errorf("Failed to get service for pod %s: %v", pod.Name, err)
-// 	}
-// 	// ClusterIP for NodePort service
-// 	return service.Spec.ClusterIP, nil
-
-// 	// ClusterIP for LoadBalancer service
-// 	// return service.Status.LoadBalancer.Ingress[0].IP, nil
-// }

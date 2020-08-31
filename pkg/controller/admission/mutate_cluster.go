@@ -173,7 +173,7 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultAerospikeConfigs(config aero
 		return err
 	}
 
-	// servic conf
+	// service conf
 	if err := setDefaultServiceConf(config, s.obj.Name); err != nil {
 		return err
 	}

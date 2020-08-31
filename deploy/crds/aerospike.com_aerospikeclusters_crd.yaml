@@ -144,11 +144,11 @@ spec:
                   items:
                     description: Rack specifies single rack config
                     properties:
-                      ID:
-                        type: integer
                       aerospikeConfig:
                         description: AerospikeConfig override the common AerospikeConfig
                           for this Rack
+                      id:
+                        type: integer
                       nodeName:
                         type: string
                       rackLabel:
@@ -159,7 +159,7 @@ spec:
                       zone:
                         type: string
                     required:
-                    - ID
+                    - id
                     type: object
                   type: array
               required:

@@ -241,13 +241,13 @@ func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
 // LabelsForAerospikeCluster returns the labels for selecting the resources
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
-	return map[string]string{"app": "aerospike-cluster", "aerospike-cluster_cr": clName}
+	return map[string]string{"app": "aerospike-cluster", "aerospike.com/cr": clName}
 }
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
 func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
-	labels["aerospike-cluster_rackID"] = strconv.Itoa(rackID)
+	labels["aerospike.com/rack-id"] = strconv.Itoa(rackID)
 	return labels
 }
 

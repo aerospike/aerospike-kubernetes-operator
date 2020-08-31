@@ -74,7 +74,7 @@ type RackConfig struct {
 
 // Rack specifies single rack config
 type Rack struct {
-	ID     int    `json:"ID"`
+	ID     int    `json:"id"`
 	Zone   string `json:"zone,omitempty"`
 	Region string `json:"region,omitempty"`
 	// Node should have a label {key:RackLabel, value:<RackLable>}

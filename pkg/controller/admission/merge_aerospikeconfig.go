@@ -5,6 +5,26 @@ import (
 	"reflect"
 )
 
+// merge (base, patch)
+// merge will create a map by merging the patch map in base map recursively
+// - If a new key/value is added in patch map then it will be added in result map
+// - If a old key/value in base map is not updated in patch map then it will be added in result map
+// - If a old key/value in base map is updated in patch map then
+//    - if value type is changed then key/value from the patch map will be added in result map
+//	  - if key is `storage-engine` then storage-engine can be of 3 type device, file and memory.
+//		if its type has been changed then key/value from patch map will be added in result map
+//
+// 	  - if value type is same then
+//    	- if values are of primitive type then key/value from the patch map will be added in result map
+//		- if values are of map type then they will be recursively merged
+//		- if values are list of primitive type then key/value from the patch map will be added in result map
+//		- if values are list of map then a new list will be created
+// 			where New entries in patch will be appended to base list. corresponding entries will be merged using the same merge algorithm
+//      	here order of elements in base will be maintained. This list will be added in result map
+//			(corresponding maps are found by matching special `name` key in maps.
+// 			Here this list of map is actually a map of map and main map keys are added in submap
+//			with key as `name` to convert map of map to list of map).
+
 func merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 	if len(patch) == 0 {
 		return base, nil
