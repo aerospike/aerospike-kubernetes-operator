@@ -86,30 +86,71 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 		if isPrimList(baseValue.([]interface{})) && isPrimList(patchValue.([]interface{})) {
 			return patchValue, nil
 		}
-		// merge
-		bMap, err := listToMap(baseValue.([]interface{}))
-		if err != nil {
-			return nil, err
+
+		var patchedList []interface{}
+
+		// merge and append ele from base
+		for _, bEleInt := range baseValue.([]interface{}) {
+			bEle, ok := bEleInt.(map[string]interface{})
+			if !ok {
+				return "", fmt.Errorf("object %v should be map", bEleInt)
+			}
+			// get namespace name in base
+			bName, ok := bEle["name"]
+			if !ok {
+				return "", fmt.Errorf("object %v should have `name` key", bEle)
+			}
+
+			var found bool
+			for _, pEleInt := range patchValue.([]interface{}) {
+				pEle, ok := pEleInt.(map[string]interface{})
+				if !ok {
+					return "", fmt.Errorf("object %v should be map", pEleInt)
+				}
+				// get namespace name in patch
+				pName, ok := pEle["name"]
+				if !ok {
+					return "", fmt.Errorf("object %v should have `name` key", pEle)
+				}
+
+				if pName == bName {
+					mMap, err := merge(bEle, pEle)
+					if err != nil {
+						return nil, err
+					}
+					found = true
+					patchedList = append(patchedList, mMap)
+					break
+				}
+			}
+			if !found {
+				patchedList = append(patchedList, bEle)
+			}
 		}
-		pMap, err := listToMap(patchValue.([]interface{}))
-		if err != nil {
-			return nil, err
+
+		for _, pEleInt := range patchValue.([]interface{}) {
+			pName := pEleInt.(map[string]interface{})["name"]
+
+			var found bool
+			for _, bEleInt := range baseValue.([]interface{}) {
+				bName := bEleInt.(map[string]interface{})["name"]
+
+				if pName == bName {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				patchedList = append(patchedList, pEleInt)
+			}
 		}
-		mMap, err := merge(bMap, pMap)
-		if err != nil {
-			return nil, err
-		}
-		// Map to List
-		var mList []interface{}
-		for _, m := range mMap {
-			mList = append(mList, m)
-		}
-		return mList, nil
+
+		return patchedList, nil
 	default:
 		panic(fmt.Sprintf("Unknown type:%T, value:%v ", baseValue, baseValue))
 	}
 }
-
 func isPrimList(list []interface{}) bool {
 	for _, e := range list {
 		switch e.(type) {
@@ -134,25 +175,4 @@ func isMapList(list []interface{}) bool {
 		}
 	}
 	return true
-}
-
-func listToMap(list []interface{}) (map[string]interface{}, error) {
-	res := map[string]interface{}{}
-	for _, e := range list {
-		me, ok := e.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("Invalid list, list object %v should be map", e)
-		}
-		// Check name key and type
-		name, ok := me["name"]
-		if !ok {
-			return nil, fmt.Errorf("Invalid list object, object %v should have `name` key", e)
-		}
-		nameStr, ok := name.(string)
-		if !ok {
-			return nil, fmt.Errorf("Invalid list object, object %v should have `name` key having string value", e)
-		}
-		res[nameStr] = e
-	}
-	return res, nil
 }
