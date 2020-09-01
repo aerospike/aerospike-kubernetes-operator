@@ -1,3 +1,5 @@
+// +build !noac
+
 package e2e
 
 import (

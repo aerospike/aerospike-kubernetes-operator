@@ -67,6 +67,7 @@ func getClient(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClie
 	return getClientForUser(username, password, aeroCluster, client)
 }
 
+// TODO: username, password not used. check the use of this function
 func getClientForUser(username string, password string, aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClient.Client) (*as.Client, error) {
 	conns, err := newAllHostConn(aeroCluster, client)
 	if err != nil {
@@ -243,7 +244,7 @@ func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod,
 		if tlsName == "" {
 			port = utils.ServicePort
 		} else {
-			port = utils.ServiceTlsPort
+			port = utils.ServiceTLSPort
 		}
 	}
 	host, err := getNodeIP(pod, client)

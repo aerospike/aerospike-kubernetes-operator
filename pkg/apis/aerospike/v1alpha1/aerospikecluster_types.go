@@ -46,9 +46,58 @@ type AerospikeClusterSpec struct {
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources"`
-
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
+	// RackConfig
+	RackConfig RackConfig `json:"rackConfig,omitempty"`
+}
+
+// rackConfig:
+//   policy:
+//     - region
+//     - zone
+//   racks:
+//     - id: 0
+//       region: us-east1
+//       zone: use-east1-1a
+//     - id: 2
+//       region: us-east1
+//       zone: use-east1-1b
+
+// RackConfig specifies all racks and related policies
+type RackConfig struct {
+	// List of Aerospike namespaces for which rack feature will be enabled
+	// If list empty then all namespaces are rack enabled
+	Namespaces []string `json:"namespaces,omitempty"`
+	Racks      []Rack   `json:"racks"`
+}
+
+// Rack specifies single rack config
+type Rack struct {
+	ID     int    `json:"id"`
+	Zone   string `json:"zone,omitempty"`
+	Region string `json:"region,omitempty"`
+	// Node should have a label {key:RackLabel, value:<RackLable>}
+	RackLabel string `json:"rackLabel,omitempty"`
+	NodeName  string `json:"nodeName,omitempty"`
+	// AerospikeConfig override the common AerospikeConfig for this Rack
+	AerospikeConfig Values `json:"aerospikeConfig,omitempty"`
+}
+
+// DeepCopy implements deepcopy func for RackConfig
+func (v *RackConfig) DeepCopy() *RackConfig {
+	src := *v
+	var dst = RackConfig{Racks: []Rack{}}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// DeepCopy implements deepcopy func for Rack
+func (v *Rack) DeepCopy() *Rack {
+	src := *v
+	var dst = Rack{}
+	lib.DeepCopy(dst, src)
+	return &dst
 }
 
 // ValidationPolicySpec controls validation of the Aerospike cluster resource.
@@ -361,13 +410,18 @@ type AerospikeClusterStatus struct {
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode
 // +k8s:openapi-gen=true
 type AerospikeNodeSummary struct {
-	PodName     string `json:"podName"`
+	PodName string `json:"podName"`
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	TLSName string `json:"tlsname"`
+
 	ClusterName string `json:"clusterName"`
 	NodeID      string `json:"nodeID"`
-	IP          string `json:"ip"`
-	Port        int    `json:"port"`
-	TLSName     string `json:"tlsname"`
 	Build       string `json:"build"`
+	// RackID of rack to which this node belongs
+	RackID int `json:"rackID"`
+	// Features    []string `json:"features"`
+	// Principal   string   `json:"principal"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeNodeSummary

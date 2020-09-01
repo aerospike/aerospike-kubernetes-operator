@@ -131,6 +131,40 @@ spec:
                 container is running and the hostPort is the port requested by the
                 user."
               type: boolean
+            rackConfig:
+              description: RackConfig
+              properties:
+                namespaces:
+                  description: List of Aerospike namespaces for which rack feature
+                    will be enabled If list empty then all namespaces are rack enabled
+                  items:
+                    type: string
+                  type: array
+                racks:
+                  items:
+                    description: Rack specifies single rack config
+                    properties:
+                      aerospikeConfig:
+                        description: AerospikeConfig override the common AerospikeConfig
+                          for this Rack
+                      id:
+                        type: integer
+                      nodeName:
+                        type: string
+                      rackLabel:
+                        description: Node should have a label {key:RackLabel, value:<RackLable>}
+                        type: string
+                      region:
+                        type: string
+                      zone:
+                        type: string
+                    required:
+                    - id
+                    type: object
+                  type: array
+              required:
+              - racks
+              type: object
             resources:
               description: Define resources requests and limits for Aerospike Server
                 Container. Please contact aerospike for proper sizing exercise Only
@@ -299,6 +333,9 @@ spec:
                     type: string
                   port:
                     type: integer
+                  rackID:
+                    description: RackID of rack to which this node belongs
+                    type: integer
                   tlsname:
                     type: string
                 required:
@@ -308,6 +345,7 @@ spec:
                 - nodeID
                 - podName
                 - port
+                - rackID
                 - tlsname
                 type: object
               type: array

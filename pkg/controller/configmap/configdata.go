@@ -223,15 +223,25 @@ function join {
 
 HOSTNAME=$(hostname)
 
-# Parse out cluster name, formatted as: petset_name-index
+# Parse out cluster name, formatted as: petset_name-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
 CLUSTER_NAME="${ADDR[0]}"
 
+NODE_ID="a${ADDR[-1]}"
+
+# Find rack-id, if given
+len=${#ADDR[@]}
+if [ ${#ADDR[@]} == 3 ]; then
+    RACK_ID="${ADDR[1]}"
+    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+    NODE_ID="$RACK_ID$NODE_ID"
+fi
+
 # TODO: get the ordinal, this will be used as nodeid.
 # This looks hacky way but no other way found yet
-NODE_ID="${ADDR[-1]}"
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
+# Parse lines to insert peer-list
 while read -ra LINE; do
     if [[ "${LINE}" == *"${HOSTNAME}"* ]]; then
         MY_NAME=$LINE
