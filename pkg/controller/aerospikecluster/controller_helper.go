@@ -194,7 +194,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 		return st, fmt.Errorf("Failed to wait for statefulset to be ready: %v", err)
 	}
 
-	return st, nil
+	return r.getStatefulSet(aeroCluster, rackState)
 }
 
 // TODO: Cascade delete storage as well.
@@ -202,7 +202,9 @@ func (r *ReconcileAerospikeCluster) deleteStatefulSet(aeroCluster *aerospikev1al
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	logger.Info("Delete statefulset")
-
+	// No need to do cleanup pods after deleting sts
+	// It is only deleted while its creation is failed
+	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
 	return r.client.Delete(context.TODO(), st)
 }
 
@@ -253,44 +255,72 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 			return statusErr
 		}
 	}
+
+	// Check for statfulset at the end,
+	// if we check if before pods then we would not know status of individual pods
+	const stsStatusMaxRetry = 10
+	const stsStatusRetryInterval = time.Second * 1
+
+	var updated bool
+	for i := 0; i < stsStatusMaxRetry; i++ {
+		time.Sleep(stsStatusRetryInterval)
+
+		logger.Debug("Check statefulSet status is updated or not")
+
+		err := r.client.Get(context.TODO(), types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, st)
+		if err != nil {
+			return err
+		}
+		if *st.Spec.Replicas == st.Status.Replicas {
+			updated = true
+			break
+		}
+		logger.Debug("Statefulset spec.replica not matching status.replica", log.Ctx{"staus": st.Status.Replicas, "spec": *st.Spec.Replicas})
+	}
+	if !updated {
+		return fmt.Errorf("Statefulset status is not updated")
+	}
+
 	logger.Info("Statefulset is ready")
 
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackID int) (bool, error) {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+// func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackID int) (bool, error) {
+// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
-	// Check if statefulset exist or not
-	newSt := &appsv1.StatefulSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, newSt)
-	if err != nil {
-		return false, err
-	}
+// 	// Check if statefulset exist or not
+// 	newSt := &appsv1.StatefulSet{}
+// 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, newSt)
+// 	if err != nil {
+// 		return false, err
+// 	}
 
-	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getRackPodList(aeroCluster, rackID)
-	if err != nil {
-		return false, err
-	}
+// 	if *st.Spec.Replicas != newSt.Status.Replicas {
+// 		logger.Debug("Statefulset spec.replica not matching status.replica", log.Ctx{"staus": newSt.Status.Replicas, "spec": *st.Spec.Replicas})
+// 		return false, nil
+// 	}
 
-	for _, p := range podList.Items {
-		logger.Debug("Check pod running and ready", log.Ctx{"pod": p.Name})
-		if err := utils.CheckPodFailed(&p); err != nil {
-			return false, fmt.Errorf("Pod %s failed: %v", p.Name, err)
-		}
-		if !utils.IsPodRunningAndReady(&p) {
-			return false, nil
-		}
-	}
+// 	// List the pods for this aeroCluster's statefulset
+// 	podList, err := r.getRackPodList(aeroCluster, rackID)
+// 	if err != nil {
+// 		return false, err
+// 	}
 
-	logger.Debug("StatefulSet status", log.Ctx{"spec.replica": *st.Spec.Replicas, "status.replica": newSt.Status.Replicas})
+// 	for _, p := range podList.Items {
+// 		logger.Debug("Check pod running and ready", log.Ctx{"pod": p.Name})
+// 		if err := utils.CheckPodFailed(&p); err != nil {
+// 			return false, fmt.Errorf("Pod %s failed: %v", p.Name, err)
+// 		}
+// 		if !utils.IsPodRunningAndReady(&p) {
+// 			return false, nil
+// 		}
+// 	}
 
-	if *st.Spec.Replicas != newSt.Status.Replicas {
-		return false, nil
-	}
-	return true, nil
-}
+// 	logger.Debug("StatefulSet status", log.Ctx{"spec.replica": *st.Spec.Replicas, "status.replica": newSt.Status.Replicas})
+
+// 	return true, nil
+// }
 
 func (r *ReconcileAerospikeCluster) getStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}

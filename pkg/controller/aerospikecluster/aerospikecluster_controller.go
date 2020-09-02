@@ -203,6 +203,12 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 	return reconcile.Result{}, nil
 }
 
+func (r *ReconcileAerospikeCluster) getResourceVersion(stsName types.NamespacedName) string {
+	found := &appsv1.StatefulSet{}
+	r.client.Get(context.TODO(), stsName, found)
+	return found.ObjectMeta.ResourceVersion
+}
+
 // ReconcileRacks reconcile all racks
 func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
@@ -219,11 +225,12 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 			if !errors.IsNotFound(err) {
 				return err
 			}
-			// Create statefulset for rack
-			if err := r.createRack(aeroCluster, state); err != nil {
+			// Create statefulset with 0 size rack and then scaleUp later in reconcile
+			zeroSizedRack := RackState{Rack: state.Rack, Size: 0}
+			found, err = r.createRack(aeroCluster, zeroSizedRack)
+			if err != nil {
 				return err
 			}
-			continue
 		}
 
 		// Get list of scaled down racks
@@ -256,7 +263,7 @@ func (r *ReconcileAerospikeCluster) ReconcileRacks(aeroCluster *aerospikev1alpha
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) error {
+func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Create new Aerospike cluster if needed")
 
@@ -264,25 +271,24 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 	logger.Info("AerospikeCluster", log.Ctx{"Spec": aeroCluster.Spec})
 	if err := r.createHeadlessSvc(aeroCluster); err != nil {
 		logger.Error("Failed to create headless service", log.Ctx{"err": err})
-		return err
+		return nil, err
 	}
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID)
 	if err := r.buildConfigMap(aeroCluster, cmName, rackState.Rack); err != nil {
 		logger.Error("Failed to create configMap from AerospikeConfig", log.Ctx{"err": err})
-		return err
+		return nil, err
 	}
 
-	found := &appsv1.StatefulSet{}
 	stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
 	found, err := r.createStatefulSet(aeroCluster, stsName, rackState)
 	if err != nil {
 		logger.Error("Statefulset setup failed. Deleting statefulset", log.Ctx{"name": stsName, "err": err})
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
 		r.deleteStatefulSet(aeroCluster, found)
-		return err
+		return nil, err
 	}
-	return nil
+	return found, nil
 }
 
 func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) error {
