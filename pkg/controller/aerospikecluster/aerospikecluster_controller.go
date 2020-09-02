@@ -474,7 +474,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 		}
 	}
 
-	err = r.cleanupPods(aeroCluster, cleanupPods)
+	err = r.cleanupPods(aeroCluster, cleanupPods, rackState)
 	if err != nil {
 		return found, fmt.Errorf("Failed scale up pre-check: %v", err)
 	}
@@ -762,7 +762,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		}
 		found = nFound
 
-		err = r.cleanupPods(aeroCluster, []string{podName})
+		err = r.cleanupPods(aeroCluster, []string{podName}, rackState)
 		if err != nil {
 			return nFound, fmt.Errorf("Failed to cleanup pod %s: %v", podName, err)
 		}
@@ -1050,7 +1050,7 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 }
 
 // cleanupPods checks pods and status before scaleup to detect and fix any status anomalies.
-func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string) error {
+func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	needStatusCleanup := []string{}
@@ -1074,7 +1074,8 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
 	}
-	if err := r.removePVCs(aeroCluster, pvcItems); err != nil {
+	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
+	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, pvcItems); err != nil {
 		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
 	}
 
@@ -1127,15 +1128,25 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 	}
 	logger.Info("Removing pvc for removed cluster")
 
-	if err := r.removePVCs(aeroCluster, pvcItems); err != nil {
+	// Delete pvc for commmon storage
+	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &aeroCluster.Spec.Storage, pvcItems); err != nil {
 		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 	}
 
+	// Delete pvc for all rack storage
+	for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+		if len(rack.Storage.Volumes) == 0 {
+			continue
+		}
+		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &rack.Storage, pvcItems); err != nil {
+			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
+		}
+	}
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) removePVCs(aeroCluster *aerospikev1alpha1.AerospikeCluster, pvcItems []corev1.PersistentVolumeClaim) error {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.NamespacedName, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": aeroClusterNamespacedName})
 
 	// pvcItems, err := r.getPodsPVCList(aeroCluster, podNames)
 	// if err != nil {
@@ -1145,7 +1156,7 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroCluster *aerospikev1alpha1.Ae
 	for _, pvc := range pvcItems {
 		// Should we wait for delete?
 		// Can we do it async in scaleDown
-		v, err := getVolumeConfigForPVC(aeroCluster, pvc)
+		v, err := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, pvc)
 		if err != nil {
 			// Only not found err
 			logger.Info("Can not remove PVC", log.Ctx{"pvc": pvc.Name, "err": err})
@@ -1179,11 +1190,11 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroCluster *aerospikev1alpha1.Ae
 	return nil
 }
 
-func getVolumeConfigForPVC(aeroCluster *aerospikev1alpha1.AerospikeCluster, pvc corev1.PersistentVolumeClaim) (*aerospikev1alpha1.AerospikePersistentVolumeSpec, error) {
-	volumes := aeroCluster.Spec.Storage.Volumes
+func getVolumeConfigForPVC(aeroClusterName string, storage *aerospikev1alpha1.AerospikeStorageSpec, pvc corev1.PersistentVolumeClaim) (*aerospikev1alpha1.AerospikePersistentVolumeSpec, error) {
+	volumes := storage.Volumes
 	for _, v := range volumes {
 		// e.g. opt-aerospike-aerocluster-0
-		pvcName := getPVCName(v.Path) + "-" + aeroCluster.Name
+		pvcName := getPVCName(v.Path) + "-" + aeroClusterName
 		if strings.HasPrefix(pvc.Name, pvcName) {
 			return &v, nil
 		}

@@ -177,7 +177,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 
 	updateStatefulSetAerospikeServerContainerResources(aeroCluster, st)
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	updateStatefulSetStorage(aeroCluster, st)
+	updateStatefulSetStorage(aeroCluster, st, rackState)
 
 	updateStatefulSetSecretInfo(aeroCluster, st)
 
@@ -840,11 +840,11 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 }
 
 // Called only when new cluster is created
-func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
+func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
+	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	for _, volume := range aeroCluster.Spec.Storage.Volumes {
+	for _, volume := range storage.Volumes {
 		logger.Info("Add PVC for volume", log.Ctx{"volume": volume})
 		var volumeMode corev1.PersistentVolumeMode
 		var initContainerVolumePathPrefix string
@@ -1164,6 +1164,13 @@ func getPVCName(path string) string {
 
 func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	return aeroCluster.Name
+}
+
+func getNamespacedNameForCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      aeroCluster.Name,
+		Namespace: aeroCluster.Namespace,
+	}
 }
 
 func getNamespacedNameForStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) types.NamespacedName {

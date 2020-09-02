@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"path/filepath"
 
 	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
@@ -82,6 +83,8 @@ type Rack struct {
 	NodeName  string `json:"nodeName,omitempty"`
 	// AerospikeConfig override the common AerospikeConfig for this Rack
 	AerospikeConfig Values `json:"aerospikeConfig,omitempty"`
+	// Storage specified persistent storage to use for the Aerospike pods in this rack
+	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for RackConfig
@@ -359,6 +362,43 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
 		}
 	}
+}
+
+// GetStorageList gives blockStorageDeviceList and fileStorageList
+func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string, fileStorageList []string, err error) {
+	storagePaths := map[string]int{}
+
+	for _, volume := range v.Volumes {
+		if volume.StorageClass == "" {
+			return nil, nil, fmt.Errorf("Mising storage class. Invalid volume: %v", volume)
+		}
+
+		if !filepath.IsAbs(volume.Path) {
+			return nil, nil, fmt.Errorf("Volume path should be absolute: %s", volume.Path)
+		}
+
+		if _, ok := storagePaths[volume.Path]; ok {
+			return nil, nil, fmt.Errorf("Duplicate volume path %s", volume.Path)
+		}
+
+		storagePaths[volume.Path] = 1
+
+		if volume.VolumeMode == AerospikeVolumeModeBlock {
+			if volume.InitMethod == nil || *volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", *volume.InitMethod, volume)
+			}
+
+			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
+			// TODO: Add validation for invalid initMethod (e.g. any random value)
+		} else {
+			if *volume.InitMethod != AerospikeVolumeInitMethodNone && *volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)
+			}
+
+			fileStorageList = append(fileStorageList, volume.Path)
+		}
+	}
+	return blockStorageDeviceList, fileStorageList, nil
 }
 
 // DeepCopy implements deepcopy func for AerospikeStorageSpec.

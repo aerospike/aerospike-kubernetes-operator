@@ -329,8 +329,8 @@ type initializeTemplateInput struct {
 var initializeShTemplate, _ = template.New("initializeSh").Parse(initializeShTemplateStr)
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster) (map[string]string, error) {
-	config := aeroCluster.Spec.AerospikeConfig
+func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (map[string]string, error) {
+	config := utils.GetRackAerospikeConfig(aeroCluster, rack)
 	workDir := utils.GetWorkDirectory(config)
 
 	templateInput := initializeTemplateInput{WorkDir: workDir}
