@@ -15,7 +15,7 @@ spec:
 
   storage:
     filesystemVolumePolicy:
-      # initMethod: none
+      initMethod: deleteFiles
       cascadeDelete: true
     blockVolumePolicy:
       cascadeDelete: true
@@ -28,8 +28,6 @@ spec:
         storageClass: ssd
         volumeMode: block
         sizeInGB: 5
-        # initMethod: randomnone
-        # cascadeDelete: true
 
   multiPodPerHost: true
 
