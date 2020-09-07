@@ -138,7 +138,7 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{Requeue: true}, err
 	}
 
-	logger.Debug("AerospikeCluster", log.Ctx{"Spec": aeroCluster.Spec, "Status": aeroCluster.Status})
+	logger.Debug("AerospikeCluster", log.Ctx{"Spec": utils.PrettyPrint(aeroCluster.Spec), "Status": utils.PrettyPrint(aeroCluster.Status)})
 
 	// Check finalizer
 	// name of our custom storage finalizer
@@ -1148,11 +1148,6 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.NamespacedName, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": aeroClusterNamespacedName})
 
-	// pvcItems, err := r.getPodsPVCList(aeroCluster, podNames)
-	// if err != nil {
-	// 	return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
-	// }
-
 	for _, pvc := range pvcItems {
 		// Should we wait for delete?
 		// Can we do it async in scaleDown
@@ -1166,16 +1161,6 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 		cd := v.CascadeDelete
 		if cd == nil {
 			return fmt.Errorf("CascadeDelete policy is nil for volume %v. It should have been set internally", *v)
-
-			// if ((*pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock) && isBlockCascadeDelete(aeroCluster)) ||
-			// 	((*pvc.Spec.VolumeMode == corev1.PersistentVolumeFilesystem) && isFileSystemCascadeDelete(aeroCluster)) {
-			// 	if err := r.client.Delete(context.TODO(), &pvc); err != nil {
-			// 		return fmt.Errorf("Could not delete pvc %s for pods %v: %v", pvc.Name, podNames, err)
-			// 	}
-			// 	logger.Debug("PVC removed. Using global cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "volumeMode": *pvc.Spec.VolumeMode})
-			// } else {
-			// 	logger.Debug("PVC not removed. Using global cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "volumeMode": *pvc.Spec.VolumeMode})
-			// }
 		}
 
 		if *cd {

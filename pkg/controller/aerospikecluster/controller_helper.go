@@ -259,7 +259,7 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 	// Check for statfulset at the end,
 	// if we check if before pods then we would not know status of individual pods
 	const stsStatusMaxRetry = 10
-	const stsStatusRetryInterval = time.Second * 1
+	const stsStatusRetryInterval = time.Second * 2
 
 	var updated bool
 	for i := 0; i < stsStatusMaxRetry; i++ {

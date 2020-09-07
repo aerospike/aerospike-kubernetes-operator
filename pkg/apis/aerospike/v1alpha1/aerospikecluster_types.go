@@ -254,10 +254,10 @@ const (
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InitMethod *AerospikeVolumeInitMethod `json:"initMethod"`
+	InitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
-	CascadeDelete *bool `json:"cascadeDelete"`
+	CascadeDelete *bool `json:"cascadeDelete,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -346,9 +346,9 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 
 // SetDefaults sets default values for storage spec fields.
 func (v *AerospikeStorageSpec) SetDefaults() {
-	defaultFilesystemInitMethod := AerospikeVolumeInitMethodDeleteFiles
+	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
 	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
-	defaultCascadeDelete := true
+	defaultCascadeDelete := false
 
 	// Set storage level defaults.
 	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultFilesystemInitMethod, CascadeDelete: &defaultCascadeDelete})

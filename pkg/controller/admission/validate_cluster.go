@@ -203,6 +203,7 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1alpha1.AerospikeCluster) error {
+	log.Info("Validate rack update")
 
 	if reflect.DeepEqual(s.obj.Spec.RackConfig, old.Spec.RackConfig) {
 		return nil
@@ -220,6 +221,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 		for _, newRack := range s.obj.Spec.RackConfig.Racks {
 
 			if oldRack.ID == newRack.ID {
+
 				if oldRack.NodeName != newRack.NodeName ||
 					oldRack.RackLabel != newRack.RackLabel ||
 					oldRack.Region != newRack.Region ||
@@ -228,24 +230,27 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackUpdate(old aerospikev1al
 					return fmt.Errorf("Old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v", oldRack, newRack)
 				}
 
-				if len(oldRack.AerospikeConfig) == 0 && len(newRack.AerospikeConfig) == 0 {
-					// Both empty. No need to check for update
-					continue
+				if len(oldRack.AerospikeConfig) != 0 || len(newRack.AerospikeConfig) != 0 {
+					// Config might have changed
+					newConf := utils.GetRackAerospikeConfig(&s.obj, newRack)
+					oldConf := utils.GetRackAerospikeConfig(&old, oldRack)
+					// Validate aerospikeConfig update
+					if err := validateAerospikeConfigUpdate(newConf, oldConf); err != nil {
+						return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
+					}
 				}
 
-				newConf := utils.GetRackAerospikeConfig(&s.obj, newRack)
-				oldConf := utils.GetRackAerospikeConfig(&old, oldRack)
-				// Validate aerospikeConfig update
-				if err := validateAerospikeConfigUpdate(newConf, oldConf); err != nil {
-					return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
+				if len(oldRack.Storage.Volumes) != 0 || len(newRack.Storage.Volumes) != 0 {
+					// Storage might have changed
+					oldStorage := utils.GetRackStorage(&old, oldRack)
+					newStorage := utils.GetRackStorage(&s.obj, newRack)
+					// Volume storage update is not allowed but cascadeDelete policy is allowed
+					if err := oldStorage.ValidateStorageSpecChange(newStorage); err != nil {
+						return fmt.Errorf("Rack storage config cannot be updated: %v", err)
+					}
 				}
 
-				oldStorage := utils.GetRackStorage(&old, oldRack)
-				newStorage := utils.GetRackStorage(&s.obj, newRack)
-				// Volume storage update is not allowed but cascadeDelete policy is allowed
-				if err := oldStorage.ValidateStorageSpecChange(newStorage); err != nil {
-					return fmt.Errorf("Rack storage config cannot be updated: %v", err)
-				}
+				break
 			}
 		}
 	}
@@ -310,21 +315,21 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 			return fmt.Errorf("Invalid rackID. RackID range (%d, %d)", utils.MinRackID, utils.MaxRackID)
 		}
 
+		if len(rack.AerospikeConfig) != 0 || len(rack.Storage.Volumes) != 0 {
+			config := utils.GetRackAerospikeConfig(&s.obj, rack)
+			// TODO:
+			// Replication-factor in rack and commonConfig can not be different
+			storage := utils.GetRackStorage(&s.obj, rack)
+			if err := validateAerospikeConfig(config, &storage, int(s.obj.Spec.Size)); err != nil {
+				return err
+			}
+		}
+
 		// Validate rack aerospike config
-		if len(rack.AerospikeConfig) == 0 {
-			// For this default config will be used
-			continue
-		}
-
-		// TODO:
-		// Replication-factor in rack and commonConfig can not be different
-		storage := utils.GetRackStorage(&s.obj, rack)
-		if err := validateAerospikeConfig(rack.AerospikeConfig, &storage, int(s.obj.Spec.Size)); err != nil {
-			return err
-		}
-
-		if err := validateAerospikeConfigSchema(version, rack.AerospikeConfig); err != nil {
-			return fmt.Errorf("AerospikeConfig not valid for rack %v", rack)
+		if len(rack.AerospikeConfig) != 0 {
+			if err := validateAerospikeConfigSchema(version, rack.AerospikeConfig); err != nil {
+				return fmt.Errorf("AerospikeConfig not valid for rack %v", rack)
+			}
 		}
 	}
 

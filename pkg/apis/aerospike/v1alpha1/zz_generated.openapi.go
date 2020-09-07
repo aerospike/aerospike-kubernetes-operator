@@ -320,7 +320,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 						},
 					},
 				},
-				Required: []string{"initMethod", "cascadeDelete", "path", "storageClass", "volumeMode", "sizeInGB"},
+				Required: []string{"path", "storageClass", "volumeMode", "sizeInGB"},
 			},
 		},
 	}

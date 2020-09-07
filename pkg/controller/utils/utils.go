@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -274,4 +275,10 @@ func GetPodNames(pods []corev1.Pod) []string {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
+}
+
+// PrettyPrint any data
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "    ")
+	return string(s)
 }

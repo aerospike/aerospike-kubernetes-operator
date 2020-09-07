@@ -96,6 +96,8 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	s.obj.Spec.Storage.SetDefaults()
 
 	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
+	// Need to set before setting defaults in aerospikeConfig
+	// aerospikeConfig.namespace checks for racks
 	if err := s.setDefaultRackConf(); err != nil {
 		return err
 	}
@@ -237,7 +239,7 @@ func setDefaultNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []strin
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
-					log.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. removing defaultRackID from config", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
+					log.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
 
 					delete(nsMap, "rack-id")
 				}

@@ -51,7 +51,7 @@ CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 KUBE_API_SERVER=https://kubernetes.default.svc
 
-# Parse out cluster name, formatted as: petset_name-index
+# Parse out cluster name, formatted as: petset_name-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
 AERO_CLUSTER_NAME="${ADDR[0]}"
 
@@ -104,6 +104,15 @@ def executeCommand(command):
     if exit != 0:
         raise Exception('Error executing command')
 
+def getRack(data, podname):
+    print ('Checking for rack in rackConfig')
+    # Assuming podname format petset_name-rackid-index
+    rackID = podname.split("-")[-2]
+    if 'rackConfig' in data and 'racks' in data['rackConfig']:
+        racks = data['rackConfig']['racks']
+        for rack in racks:
+            if rack['id'] == int(rackID):
+                return rack
 
 podname = sys.argv[1]
 data = json.load(sys.stdin)
@@ -118,11 +127,17 @@ if 'spec' in data:
 else:
     spec = {}
 
+rack = getRack(spec, podname)
+if rack is None:
+    raise Exception('Rack not found for pod ' + podname + ' spec ' + spec) 
 
-if 'storage' in spec and 'volumes' in spec['storage']:
-    volumes = spec['storage']['volumes']
+if 'storage' in rack and 'volumes' in rack['storage'] and len(rack['storage']['volumes']) > 0:
+    volumes = rack['storage']['volumes']
 else:
-    volumes = []
+    if 'storage' in spec and 'volumes' in spec['storage']:
+        volumes = spec['storage']['volumes']
+    else:
+        volumes = []
 
 if 'podStatus' in status and podname in status['podStatus'] and 'initializedVolumePaths' in status['podStatus'][podname]:
     alreadyInitialized = status['podStatus'][podname]['initializedVolumePaths']
