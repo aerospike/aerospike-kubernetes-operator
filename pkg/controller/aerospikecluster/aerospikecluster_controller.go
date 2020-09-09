@@ -1070,7 +1070,7 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
 
 	// Delete PVCs if cascaseDelete
-	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames)
+	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
 	}
@@ -1120,28 +1120,30 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 	// Delete should be idempotent
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
-	// Delete PVCs if cascaseDelete
+	logger.Info("Removing pvc for removed cluster")
 
-	pvcItems, err := r.getAeroClusterPVCList(aeroCluster)
+	// Delete pvc for all rack storage
+	for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+		rackPVCItems, err := r.getRackPVCList(aeroCluster, rack.ID)
+		if err != nil {
+			return fmt.Errorf("Could not find pvc for rack: %v", err)
+		}
+		storage := utils.GetRackStorage(aeroCluster, rack)
+		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, rackPVCItems); err != nil {
+			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
+		}
+	}
+
+	// Delete PVCs for any remaining old removed racks
+	pvcItems, err := r.getClusterPVCList(aeroCluster)
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for cluster: %v", err)
 	}
-	logger.Info("Removing pvc for removed cluster")
-
 	// Delete pvc for commmon storage
 	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &aeroCluster.Spec.Storage, pvcItems); err != nil {
 		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 	}
 
-	// Delete pvc for all rack storage
-	for _, rack := range aeroCluster.Spec.RackConfig.Racks {
-		if len(rack.Storage.Volumes) == 0 {
-			continue
-		}
-		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &rack.Storage, pvcItems); err != nil {
-			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
-		}
-	}
 	return nil
 }
 
@@ -1149,42 +1151,57 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": aeroClusterNamespacedName})
 
 	for _, pvc := range pvcItems {
+		if utils.IsPVCTerminating(&pvc) {
+			continue
+		}
 		// Should we wait for delete?
 		// Can we do it async in scaleDown
-		v, err := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, pvc)
-		if err != nil {
-			// Only not found err
-			logger.Info("Can not remove PVC", log.Ctx{"pvc": pvc.Name, "err": err})
+
+		// Check for path in pvc annotations. We put path annotation while creating statefulset
+		path, ok := pvc.Annotations[storagePathAnnotationKey]
+		if !ok {
+			logger.Error("PVC can not be removed, it does not have storage-path annotation", log.Ctx{"PVC": pvc.Name, "annotations": pvc.Annotations})
 			continue
 		}
 
-		cd := v.CascadeDelete
-		if cd == nil {
-			return fmt.Errorf("CascadeDelete policy is nil for volume %v. It should have been set internally", *v)
+		var cascadeDelete *bool
+		v := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, path)
+		if v == nil {
+			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+				cascadeDelete = storage.BlockVolumePolicy.CascadeDelete
+			} else {
+				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
+			}
+			logger.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "path": path, "cascadeDelete": *cascadeDelete})
+
+		} else {
+			cascadeDelete = v.CascadeDelete
+			if cascadeDelete == nil {
+				logger.Error("PVC can not be removed, cascadeDelete policy is nil for volume %v. It should have been set internally", log.Ctx{"volume": *v})
+				continue
+			}
 		}
 
-		if *cd {
+		if *cascadeDelete {
 			if err := r.client.Delete(context.TODO(), &pvc); err != nil {
 				return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
 			}
-			logger.Debug("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cd})
+			logger.Info("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
 		} else {
-			logger.Debug("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cd})
+			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
 		}
 	}
 	return nil
 }
 
-func getVolumeConfigForPVC(aeroClusterName string, storage *aerospikev1alpha1.AerospikeStorageSpec, pvc corev1.PersistentVolumeClaim) (*aerospikev1alpha1.AerospikePersistentVolumeSpec, error) {
+func getVolumeConfigForPVC(aeroClusterName string, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *aerospikev1alpha1.AerospikePersistentVolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
-		// e.g. opt-aerospike-aerocluster-0
-		pvcName := getPVCName(v.Path) + "-" + aeroClusterName
-		if strings.HasPrefix(pvc.Name, pvcName) {
-			return &v, nil
+		if pvcPathAnnotation == v.Path {
+			return &v
 		}
 	}
-	return nil, fmt.Errorf("PVC %s, not found in configured cluster storage volumes %v. It should not happen. This PVC may not be part of cluster", pvc.Name, volumes)
+	return nil
 }
 
 // Helper functions to check and remove string from a slice of strings.

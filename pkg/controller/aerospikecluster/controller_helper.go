@@ -35,14 +35,18 @@ const (
 	configMaPodListKey            string = "podList.json"
 )
 
-// the default cpu request for the aerospike-server container
+// The default cpu request for the aerospike-server container
 const (
 	aerospikeServerContainerDefaultCPURequest = 1
-	// the default memory request for the aerospike-server container
+	// The default memory request for the aerospike-server container
 	// matches the default value of namespace.memory-size
 	// https://www.aerospike.com/docs/reference/configuration#memory-size
 	aerospikeServerContainerDefaultMemoryRequestGi         = 4
 	aerospikeServerNamespaceDefaultFilesizeMemoryRequestGi = 1
+
+	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
+	// while deleting pvc
+	storagePathAnnotationKey = "storage-path"
 )
 
 //------------------------------------------------------------------------------------
@@ -286,42 +290,6 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 	return nil
 }
 
-// func (r *ReconcileAerospikeCluster) isStatefulSetReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackID int) (bool, error) {
-// 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
-// 	// Check if statefulset exist or not
-// 	newSt := &appsv1.StatefulSet{}
-// 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, newSt)
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	if *st.Spec.Replicas != newSt.Status.Replicas {
-// 		logger.Debug("Statefulset spec.replica not matching status.replica", log.Ctx{"staus": newSt.Status.Replicas, "spec": *st.Spec.Replicas})
-// 		return false, nil
-// 	}
-
-// 	// List the pods for this aeroCluster's statefulset
-// 	podList, err := r.getRackPodList(aeroCluster, rackID)
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	for _, p := range podList.Items {
-// 		logger.Debug("Check pod running and ready", log.Ctx{"pod": p.Name})
-// 		if err := utils.CheckPodFailed(&p); err != nil {
-// 			return false, fmt.Errorf("Pod %s failed: %v", p.Name, err)
-// 		}
-// 		if !utils.IsPodRunningAndReady(&p) {
-// 			return false, nil
-// 		}
-// 	}
-
-// 	logger.Debug("StatefulSet status", log.Ctx{"spec.replica": *st.Spec.Replicas, "status.replica": newSt.Status.Replicas})
-
-// 	return true, nil
-// }
-
 func (r *ReconcileAerospikeCluster) getStatefulSet(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
 	err := r.client.Get(context.TODO(), getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID), found)
@@ -540,7 +508,7 @@ func (r *ReconcileAerospikeCluster) deleteServiceForPod(pName, pNamespace string
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) getAeroClusterPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
+func (r *ReconcileAerospikeCluster) getClusterPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -552,8 +520,20 @@ func (r *ReconcileAerospikeCluster) getAeroClusterPVCList(aeroCluster *aerospike
 	return pvcList.Items, nil
 }
 
-func (r *ReconcileAerospikeCluster) getPodsPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := r.getAeroClusterPVCList(aeroCluster)
+func (r *ReconcileAerospikeCluster) getRackPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+	// List the pvc for this aeroCluster's statefulset
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackID))
+	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+
+	if err := r.client.List(context.TODO(), pvcList, listOps); err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+func (r *ReconcileAerospikeCluster) getPodsPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+	pvcListItems, err := r.getRackPVCList(aeroCluster, rackID)
 	if err != nil {
 		return nil, err
 	}
@@ -571,31 +551,6 @@ func (r *ReconcileAerospikeCluster) getPodsPVCList(aeroCluster *aerospikev1alpha
 	}
 	return newPVCItems, nil
 }
-
-// func (r *ReconcileAerospikeCluster) getPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*corev1.PodList, error) {
-// 	// List the pods for this aeroCluster's statefulset
-// 	podList := &corev1.PodList{}
-// 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
-// 	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
-// 	if err := r.client.List(context.TODO(), podList, listOps); err != nil {
-// 		return nil, err
-// 	}
-// 	return podList, nil
-// }
-
-// func (r *ReconcileAerospikeCluster) getOrderedPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.Pod, error) {
-// 	podList, err := r.getPodList(aeroCluster)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	sortedList := make([]corev1.Pod, len(podList.Items))
-// 	for _, p := range podList.Items {
-// 		indexStr := strings.Split(p.Name, "-")
-// 		indexInt, _ := strconv.Atoi(indexStr[1])
-// 		sortedList[(len(podList.Items)-1)-indexInt] = p
-// 	}
-// 	return sortedList, nil
-// }
 
 func (r *ReconcileAerospikeCluster) getRackPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
@@ -887,6 +842,10 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      getPVCName(volume.Path),
 				Namespace: aeroCluster.Namespace,
+				// Use this path annotation while matching pvc with storage volume
+				Annotations: map[string]string{
+					storagePathAnnotationKey: volume.Path,
+				},
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				VolumeMode:  &volumeMode,
@@ -942,14 +901,13 @@ func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, 
 	}
 	if rackState.Rack.RackLabel != "" {
 		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
-			Key:      "RackLabel",
+			Key:      "aerospike.com/rack-label",
 			Operator: corev1.NodeSelectorOpIn,
 			Values:   []string{rackState.Rack.RackLabel},
 		})
 	}
 
 	if rackState.Rack.NodeName != "" {
-		// st.Spec.Template.Spec.NodeName = rackState.Rack.NodeName
 		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
 			Key:      "kubernetes.io/hostname",
 			Operator: corev1.NodeSelectorOpIn,

@@ -78,7 +78,7 @@ type Rack struct {
 	ID     int    `json:"id"`
 	Zone   string `json:"zone,omitempty"`
 	Region string `json:"region,omitempty"`
-	// Node should have a label {key:RackLabel, value:<RackLable>}
+	// Node should have a label {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
 	// AerospikeConfig override the common AerospikeConfig for this Rack

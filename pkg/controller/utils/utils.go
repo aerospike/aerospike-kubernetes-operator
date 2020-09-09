@@ -198,6 +198,11 @@ func IsTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
+// IsPVCTerminating returns true if pvc's DeletionTimestamp has been set
+func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
+	return pvc.DeletionTimestamp != nil
+}
+
 // IsPodUpgraded assume that all container have same image or take containerID
 func IsPodUpgraded(pod *corev1.Pod, image string) bool {
 	pkglog.Info("Checking pod image")

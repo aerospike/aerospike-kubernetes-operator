@@ -152,7 +152,8 @@ spec:
                       nodeName:
                         type: string
                       rackLabel:
-                        description: Node should have a label {key:RackLabel, value:<RackLable>}
+                        description: 'Node should have a label {aerospike.com/rack-label:
+                          <rack-label>}'
                         type: string
                       region:
                         type: string

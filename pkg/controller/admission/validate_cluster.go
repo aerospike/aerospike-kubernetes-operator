@@ -27,7 +27,13 @@ type ClusterValidatingAdmissionWebhook struct {
 const maxCommunityClusterSz = 8
 
 // TODO: This should be version specific and part of management lib.
-const maxEnterpriseClusterSz = 128
+// max cluster size for pre-5.0 cluster
+const maxEnterpriseClusterSzLT5_0 = 128
+
+// max cluster size for 5.0+ cluster
+const maxEnterpriseClusterSzGT5_0 = 256
+
+const versionForSzCheck = "5.0.0"
 
 // ValidateAerospikeCluster validate cluster operation
 func ValidateAerospikeCluster(req webhook.AdmissionRequest) webhook.AdmissionResponse {
@@ -143,9 +149,6 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	if s.obj.Spec.Size == 0 {
 		return fmt.Errorf("Invalid cluster size 0")
 	}
-	if s.obj.Spec.Size > maxEnterpriseClusterSz {
-		return fmt.Errorf("Cluster size cannot be more than %d", maxEnterpriseClusterSz)
-	}
 
 	// TODO: Validate if multiPodPerHost is false then number of kubernetes host should be >= size
 
@@ -167,6 +170,11 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	}
 	if val < 0 {
 		return fmt.Errorf("Build version %s not supported. Base version %s", version, baseVersion)
+	}
+
+	err = validateClusterSize(version, int(s.obj.Spec.Size))
+	if err != nil {
+		return err
 	}
 
 	// Validate common aerospike config
@@ -333,6 +341,20 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 		}
 	}
 
+	return nil
+}
+
+func validateClusterSize(version string, sz int) error {
+	val, err := asconfig.CompareVersions(version, versionForSzCheck)
+	if err != nil {
+		return fmt.Errorf("Failed to validate cluster size limit from version: %v", err)
+	}
+	if val < 0 && sz > maxEnterpriseClusterSzLT5_0 {
+		return fmt.Errorf("Cluster size cannot be more than %d", maxEnterpriseClusterSzLT5_0)
+	}
+	if val > 0 && sz > maxEnterpriseClusterSzGT5_0 {
+		return fmt.Errorf("Cluster size cannot be more than %d", maxEnterpriseClusterSzGT5_0)
+	}
 	return nil
 }
 
