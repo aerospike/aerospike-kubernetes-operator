@@ -2,10 +2,14 @@ package e2e
 
 import (
 	goctx "context"
+	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/aerospike/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -116,7 +120,12 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 			lastRackID := racks[len(racks)-1].ID
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(lastRackID)
 			// This should not be removed
-			pvcNamePrefix := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Path) + "-" + stsName
+
+			pvcName, err := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pvcNamePrefix := pvcName + "-" + stsName
 
 			// remove Rack should remove all rack's pvc
 			aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
@@ -224,8 +233,12 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 				t.Fatal(err)
 			}
 			// There is only single rack
+			pvcName, err := getPVCName(devName)
+			if err != nil {
+				t.Fatal(err)
+			}
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(racks[0].ID)
-			pvcNamePrefix := getPVCName(devName) + "-" + stsName
+			pvcNamePrefix := pvcName + "-" + stsName
 
 			// If PVC is created and no error in deployment then it mean aerospikeConfig
 			// has successfully used rack storage
@@ -445,9 +458,39 @@ func getStorage(volumes []aerospikev1alpha1.AerospikePersistentVolumeSpec) aeros
 	return storage
 }
 
-func getPVCName(path string) string {
+func truncateString(str string, num int) string {
+	if len(str) > num {
+		return str[0:num]
+	}
+	return str
+}
+
+func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
-	return strings.Replace(path, "/", "-", -1)
+
+	hashPath, err := getHashForPVCPath(path)
+	if err != nil {
+		return "", err
+	}
+
+	reg, err := regexp.Compile("[^-a-z0-9]+")
+	if err != nil {
+		return "", err
+	}
+	newPath := reg.ReplaceAllString(path, "-")
+
+	return hashPath + "-" + truncateString(newPath, 50), nil
+}
+
+func getHashForPVCPath(path string) (string, error) {
+	var digest []byte
+	hash := ripemd160.New()
+	hash.Reset()
+	if _, err := hash.Write([]byte(path)); err != nil {
+		return "", err
+	}
+	res := hash.Sum(digest)
+	return hex.EncodeToString(res), nil
 }
 
 func matchPVCList(oldPVCList, newPVCList []corev1.PersistentVolumeClaim) error {

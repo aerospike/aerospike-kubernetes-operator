@@ -4,14 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	as "github.com/aerospike/aerospike-client-go"
+	"github.com/aerospike/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -181,7 +184,9 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 
 	updateStatefulSetAerospikeServerContainerResources(aeroCluster, st)
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	updateStatefulSetStorage(aeroCluster, st, rackState)
+	if err := updateStatefulSetStorage(aeroCluster, st, rackState); err != nil {
+		return nil, err
+	}
 
 	updateStatefulSetSecretInfo(aeroCluster, st)
 
@@ -795,7 +800,7 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 }
 
 // Called only when new cluster is created
-func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
 	// TODO: Add validation. device, file, both should not exist in same storage class
@@ -804,19 +809,24 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 		var volumeMode corev1.PersistentVolumeMode
 		var initContainerVolumePathPrefix string
 
+		pvcName, err := getPVCName(volume.Path)
+		if err != nil {
+			return fmt.Errorf("Failed to create ripemd hash for pvc name from volume.path %s", volume.Path)
+		}
+
 		if volume.VolumeMode == aerospikev1alpha1.AerospikeVolumeModeBlock {
 			volumeMode = corev1.PersistentVolumeBlock
 			initContainerVolumePathPrefix = "/block-volumes/"
 
 			logger.Info("Add volume device for volume", log.Ctx{"volume": volume})
 			volumeDevice := corev1.VolumeDevice{
-				Name:       getPVCName(volume.Path),
+				Name:       pvcName,
 				DevicePath: volume.Path,
 			}
 			st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volumeDevice)
 
 			initVolumeDevice := corev1.VolumeDevice{
-				Name:       getPVCName(volume.Path),
+				Name:       pvcName,
 				DevicePath: initContainerVolumePathPrefix + volume.Path,
 			}
 			st.Spec.Template.Spec.InitContainers[0].VolumeDevices = append(st.Spec.Template.Spec.InitContainers[0].VolumeDevices, initVolumeDevice)
@@ -826,13 +836,13 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 
 			logger.Info("Add volume mount for volume", log.Ctx{"volume": volume})
 			volumeMount := corev1.VolumeMount{
-				Name:      getPVCName(volume.Path),
+				Name:      pvcName,
 				MountPath: volume.Path,
 			}
 			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volumeMount)
 
 			initVolumeMount := corev1.VolumeMount{
-				Name:      getPVCName(volume.Path),
+				Name:      pvcName,
 				MountPath: initContainerVolumePathPrefix + volume.Path,
 			}
 			st.Spec.Template.Spec.InitContainers[0].VolumeMounts = append(st.Spec.Template.Spec.InitContainers[0].VolumeMounts, initVolumeMount)
@@ -840,7 +850,7 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 
 		pvc := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      getPVCName(volume.Path),
+				Name:      pvcName,
 				Namespace: aeroCluster.Namespace,
 				// Use this path annotation while matching pvc with storage volume
 				Annotations: map[string]string{
@@ -860,6 +870,7 @@ func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 		}
 		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
 	}
+	return nil
 }
 
 func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
@@ -1115,9 +1126,28 @@ func getStatefulSetPodOrdinal(podName string) (*int32, error) {
 	return &result, nil
 }
 
-func getPVCName(path string) string {
+func truncateString(str string, num int) string {
+	if len(str) > num {
+		return str[0:num]
+	}
+	return str
+}
+
+func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
-	return strings.Replace(path, "/", "-", -1)
+
+	hashPath, err := getHashForPVCPath(path)
+	if err != nil {
+		return "", err
+	}
+
+	reg, err := regexp.Compile("[^-a-z0-9]+")
+	if err != nil {
+		return "", err
+	}
+	newPath := reg.ReplaceAllString(path, "-")
+
+	return hashPath + "-" + truncateString(newPath, 50), nil
 }
 
 func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
@@ -1180,4 +1210,15 @@ func getOldRackIDList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []int {
 		rackIDList = append(rackIDList, rack.ID)
 	}
 	return rackIDList
+}
+
+func getHashForPVCPath(path string) (string, error) {
+	var digest []byte
+	hash := ripemd160.New()
+	hash.Reset()
+	if _, err := hash.Write([]byte(path)); err != nil {
+		return "", err
+	}
+	res := hash.Sum(digest)
+	return hex.EncodeToString(res), nil
 }

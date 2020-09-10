@@ -253,7 +253,7 @@ func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.Namespaced
 func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
-	cascadeDelete := true
+	cascadeDelete := false
 	// create memcached custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
