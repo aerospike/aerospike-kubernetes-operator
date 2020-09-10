@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"path/filepath"
 
 	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
@@ -77,11 +78,13 @@ type Rack struct {
 	ID     int    `json:"id"`
 	Zone   string `json:"zone,omitempty"`
 	Region string `json:"region,omitempty"`
-	// Node should have a label {key:RackLabel, value:<RackLable>}
+	// Node should have a label {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
 	// AerospikeConfig override the common AerospikeConfig for this Rack
 	AerospikeConfig Values `json:"aerospikeConfig,omitempty"`
+	// Storage specified persistent storage to use for the Aerospike pods in this rack
+	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for RackConfig
@@ -251,10 +254,10 @@ const (
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InitMethod *AerospikeVolumeInitMethod `json:"initMethod"`
+	InitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
-	CascadeDelete *bool `json:"cascadeDelete"`
+	CascadeDelete *bool `json:"cascadeDelete,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -280,7 +283,7 @@ func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVol
 // +k8s:openapi-gen=true
 type AerospikePersistentVolumeSpec struct {
 	// Contains  policies for this volumes.
-	AerospikePersistentVolumePolicySpec
+	AerospikePersistentVolumePolicySpec `json:",inline"`
 
 	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
 	Path string `json:"path"`
@@ -343,9 +346,9 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 
 // SetDefaults sets default values for storage spec fields.
 func (v *AerospikeStorageSpec) SetDefaults() {
-	defaultFilesystemInitMethod := AerospikeVolumeInitMethodDeleteFiles
+	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
 	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
-	defaultCascadeDelete := true
+	defaultCascadeDelete := false
 
 	// Set storage level defaults.
 	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultFilesystemInitMethod, CascadeDelete: &defaultCascadeDelete})
@@ -359,6 +362,43 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
 		}
 	}
+}
+
+// GetStorageList gives blockStorageDeviceList and fileStorageList
+func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string, fileStorageList []string, err error) {
+	storagePaths := map[string]int{}
+
+	for _, volume := range v.Volumes {
+		if volume.StorageClass == "" {
+			return nil, nil, fmt.Errorf("Mising storage class. Invalid volume: %v", volume)
+		}
+
+		if !filepath.IsAbs(volume.Path) {
+			return nil, nil, fmt.Errorf("Volume path should be absolute: %s", volume.Path)
+		}
+
+		if _, ok := storagePaths[volume.Path]; ok {
+			return nil, nil, fmt.Errorf("Duplicate volume path %s", volume.Path)
+		}
+
+		storagePaths[volume.Path] = 1
+
+		if volume.VolumeMode == AerospikeVolumeModeBlock {
+			if volume.InitMethod == nil || *volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", *volume.InitMethod, volume)
+			}
+
+			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
+			// TODO: Add validation for invalid initMethod (e.g. any random value)
+		} else {
+			if *volume.InitMethod != AerospikeVolumeInitMethodNone && *volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)
+			}
+
+			fileStorageList = append(fileStorageList, volume.Path)
+		}
+	}
+	return blockStorageDeviceList, fileStorageList, nil
 }
 
 // DeepCopy implements deepcopy func for AerospikeStorageSpec.

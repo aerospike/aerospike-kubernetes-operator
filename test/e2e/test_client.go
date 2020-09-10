@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	log "github.com/inconshreveable/log15"
 	corev1 "k8s.io/api/core/v1"
@@ -322,4 +323,36 @@ func newAllHostConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kub
 		hostConns = append(hostConns, hostConn)
 	}
 	return hostConns, nil
+}
+
+func getAeroClusterPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClient.Client) ([]corev1.PersistentVolumeClaim, error) {
+	// List the pvc for this aeroCluster's statefulset
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	listOps := &kubeClient.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+
+	if err := (*client).List(context.TODO(), pvcList, listOps); err != nil {
+		return nil, err
+	}
+	return pvcList.Items, nil
+}
+
+func getPodsPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kubeClient.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
+	pvcListItems, err := getAeroClusterPVCList(aeroCluster, client)
+	if err != nil {
+		return nil, err
+	}
+	// https://github.com/kubernetes/kubernetes/issues/72196
+	// No regex support in field-selector
+	// Can not get pvc having matching podName. Need to check more.
+	var newPVCItems []corev1.PersistentVolumeClaim
+	for _, pvc := range pvcListItems {
+		for _, podName := range podNames {
+			// Get PVC belonging to pod only
+			if strings.HasSuffix(pvc.Name, podName) {
+				newPVCItems = append(newPVCItems, pvc)
+			}
+		}
+	}
+	return newPVCItems, nil
 }

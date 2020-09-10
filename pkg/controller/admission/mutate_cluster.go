@@ -92,21 +92,26 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
-	config := s.obj.Spec.AerospikeConfig
-	if config == nil {
-		return fmt.Errorf("aerospikeConfig cannot be empty")
-	}
+	// Set common storage defaults.
+	s.obj.Spec.Storage.SetDefaults()
 
 	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
+	// Need to set before setting defaults in aerospikeConfig
+	// aerospikeConfig.namespace checks for racks
 	if err := s.setDefaultRackConf(); err != nil {
 		return err
 	}
 
+	// Set common aerospikeConfig defaults
+	config := s.obj.Spec.AerospikeConfig
+	if config == nil {
+		return fmt.Errorf("aerospikeConfig cannot be empty")
+	}
 	if err := s.setDefaultAerospikeConfigs(config); err != nil {
 		return err
 	}
 
-	// Update racks aerospikeConfig after default aerospikeConfig is patched with defaults
+	// Update racks aerospikeConfig after setting common aerospikeConfig defaults
 	if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
 		return err
 	}
@@ -118,9 +123,6 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 		log.Info("Set default validation policy", log.Ctx{"validationPolicy": validationPolicy})
 		s.obj.Spec.ValidationPolicy = &validationPolicy
 	}
-
-	// storage defaults.
-	s.obj.Spec.Storage.SetDefaults()
 
 	return nil
 }
@@ -140,6 +142,10 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 					rack.AerospikeConfig != nil {
 					return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved", s.obj.Spec.RackConfig, utils.DefaultRackID)
 				}
+			}
+			if len(rack.Storage.Volumes) != 0 {
+				// Set storage defaults if rack has storage section
+				rack.Storage.SetDefaults()
 			}
 		}
 	}
@@ -233,7 +239,7 @@ func setDefaultNsConf(config aerospikev1alpha1.Values, rackEnabledNsList []strin
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
-					log.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. removing defaultRackID from config", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
+					log.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
 
 					delete(nsMap, "rack-id")
 				}

@@ -4,9 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"testing"
-	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -15,14 +13,6 @@ import (
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"k8s.io/apimachinery/pkg/types"
 )
-
-var (
-	retryInterval = time.Second * 5
-	timeout       = time.Second * 120
-)
-
-const latestClusterBuild = "aerospike/aerospike-server-enterprise:4.8.0.6"
-const buildToUpgrade = "aerospike/aerospike-server-enterprise:4.8.0.1"
 
 func TestAerospikeCluster(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
@@ -68,8 +58,13 @@ func TestAerospikeCluster(t *testing.T) {
 		RackManagementTest(t, f, ctx)
 	})
 	t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
-		// RackAerospikeConfigUpdateTest(t, f, ctx)
 		RackAerospikeConfigUpdateTest(t, f, ctx)
+	})
+	t.Run("ClusterStorageCleanUpTest", func(t *testing.T) {
+		ClusterStorageCleanUpTest(t, f, ctx)
+	})
+	t.Run("RackUsingLocalStorageTest", func(t *testing.T) {
+		RackUsingLocalStorageTest(t, f, ctx)
 	})
 }
 
@@ -1010,89 +1005,4 @@ func upgradeClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Tes
 	}
 
 	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
-}
-
-func getCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName) *aerospikev1alpha1.AerospikeCluster {
-	aeroCluster := &aerospikev1alpha1.AerospikeCluster{}
-	err := f.Client.Get(goctx.TODO(), clusterNamespacedName, aeroCluster)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return aeroCluster
-}
-
-func deleteCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	if err := f.Client.Delete(goctx.TODO(), aeroCluster); err != nil {
-		return err
-	}
-	// wait for all pod to get deleted
-	time.Sleep(time.Second * 12)
-	// TODO: do we need to do anything more
-	return nil
-}
-
-func deployCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	return deployClusterWithTO(t, f, ctx, aeroCluster, retryInterval, getTimeout(aeroCluster.Spec.Size))
-}
-
-func deployClusterWithTO(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster, retryInterval, timeout time.Duration) error {
-	// Use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err := f.Client.Create(goctx.TODO(), aeroCluster, cleanupOption(ctx))
-	if err != nil {
-		return err
-	}
-	// Wait for aerocluster to reach desired cluster size.
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
-}
-
-func updateCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	err := f.Client.Update(goctx.TODO(), aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
-}
-
-func validateResource(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) {
-	found := &appsv1.StatefulSet{}
-	if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, found); err != nil {
-		t.Fatal(err)
-	}
-	mem := aeroCluster.Spec.Resources.Requests.Memory()
-	stMem := found.Spec.Template.Spec.Containers[0].Resources.Requests.Memory()
-	if !mem.Equal(*stMem) {
-		t.Fatal(fmt.Errorf("resource memory not matching. want %v, got %v", mem.String(), stMem.String()))
-	}
-	limitMem := found.Spec.Template.Spec.Containers[0].Resources.Limits.Memory()
-	if !mem.Equal(*limitMem) {
-		t.Fatal(fmt.Errorf("limit memory not matching. want %v, got %v", mem.String(), limitMem.String()))
-	}
-
-	cpu := aeroCluster.Spec.Resources.Requests.Cpu()
-	stCPU := found.Spec.Template.Spec.Containers[0].Resources.Requests.Cpu()
-	if !cpu.Equal(*stCPU) {
-		t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), stCPU.String()))
-	}
-	limitCPU := found.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu()
-	if !cpu.Equal(*limitCPU) {
-		t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), limitCPU.String()))
-	}
-}
-
-func CreateBasicCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
-	// get namespace
-	namespace, err := ctx.GetNamespace()
-	if err != nil {
-		t.Fatal(err)
-	}
-	clusterName := "aerocluster"
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
-	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-	t.Run("Positive", func(t *testing.T) {
-		if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
-			t.Fatal(err)
-		}
-	})
 }

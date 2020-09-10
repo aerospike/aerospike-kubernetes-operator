@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	as "github.com/aerospike/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -88,7 +87,7 @@ func RackManagementTest(t *testing.T, f *framework.Framework, ctx *framework.Tes
 		// Remove rack
 		t.Run("RemoveRack", func(t *testing.T) {
 			t.Run("RemoveSingleRack", func(t *testing.T) {
-				removeRack(t, f, ctx, clusterNamespacedName)
+				removeLastRack(t, f, ctx, clusterNamespacedName)
 				validateRackEnabledCluster(t, f, ctx, clusterNamespacedName)
 			})
 
@@ -413,7 +412,7 @@ func addRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clust
 	}
 }
 
-func removeRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName) {
+func removeLastRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName) {
 	aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
 
 	racks := aeroCluster.Spec.RackConfig.Racks
@@ -428,20 +427,6 @@ func removeRack(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, cl
 	if err := updateAndWait(t, f, ctx, aeroCluster); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func updateAndWait(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	err := f.Client.Update(goctx.TODO(), aeroCluster)
-	if err != nil {
-		return err
-	}
-	// Currently waitForAerospikeCluster doesn't check for config update
-	// How to validate if its old cluster or new cluster with new config
-	// Hence sleep.
-	// TODO: find another way or validate config also
-	time.Sleep(5 * time.Second)
-
-	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
 func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName, rack aerospikev1alpha1.Rack) {

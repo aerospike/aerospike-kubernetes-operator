@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -52,6 +53,22 @@ const (
 
 	aerospikeConfConfigMapPrefix = "aerospike-conf"
 )
+
+// GetRackStorage give storage
+func GetRackStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) aerospikev1alpha1.AerospikeStorageSpec {
+	if len(rack.Storage.Volumes) != 0 {
+		return rack.Storage
+	}
+	return aeroCluster.Spec.Storage
+}
+
+// GetRackAerospikeConfig give aerospikeConfig
+func GetRackAerospikeConfig(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) aerospikev1alpha1.Values {
+	if len(rack.AerospikeConfig) != 0 {
+		return rack.AerospikeConfig
+	}
+	return aeroCluster.Spec.AerospikeConfig
+}
 
 // ClusterNamespacedName return namespaced name
 func ClusterNamespacedName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
@@ -181,6 +198,11 @@ func IsTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
+// IsPVCTerminating returns true if pvc's DeletionTimestamp has been set
+func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
+	return pvc.DeletionTimestamp != nil
+}
+
 // IsPodUpgraded assume that all container have same image or take containerID
 func IsPodUpgraded(pod *corev1.Pod, image string) bool {
 	pkglog.Info("Checking pod image")
@@ -258,4 +280,10 @@ func GetPodNames(pods []corev1.Pod) []string {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
+}
+
+// PrettyPrint any data
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "    ")
+	return string(s)
 }

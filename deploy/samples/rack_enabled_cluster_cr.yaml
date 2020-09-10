@@ -13,16 +13,33 @@ spec:
     racks: 
       - id: 1
         zone: us-central1-b
+        # nodeName: kubernetes-minion-group-qp3m
         aerospikeConfig:
           service:
             proto-fd-max: 18000
-        # nodeName: kubernetes-minion-group-qp3m
+        # rack level storage, used by pods of this rack
+        storage:
+          filesystemVolumePolicy:
+            initMethod: deleteFiles
+            cascadeDelete: true
+          blockVolumePolicy:
+            cascadeDelete: true
+          volumes:
+            - storageClass: ssd
+              path: /opt/aerospike
+              volumeMode: filesystem
+              sizeInGB: 1
+            - path: /opt/aerospike/data
+              storageClass: ssd
+              volumeMode: filesystem
+              sizeInGB: 3
       - id: 2
         zone: us-central1-a
         # nodeName: kubernetes-minion-group-tft3
         aerospikeConfig:
           service:
             proto-fd-max: 16000 
+
   storage:
     volumes:
       - storageClass: ssd

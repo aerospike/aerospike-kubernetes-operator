@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	log "github.com/inconshreveable/log15"
 )
@@ -18,7 +19,7 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
-	confData, err := getBaseConfData(aeroCluster)
+	confData, err := getBaseConfData(aeroCluster, rack)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
@@ -31,13 +32,8 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
 	version := strings.Split(aeroCluster.Spec.Build, ":")
 
-	// Check if passed aerospikeConfig is valid or not
-	config := aeroCluster.Spec.AerospikeConfig
-	// Use rack config if available
-	if len(rack.AerospikeConfig) != 0 {
-		pkglog.Debug("Using rackLevel AerospikeConfig")
-		config = rack.AerospikeConfig
-	}
+	config := utils.GetRackAerospikeConfig(aeroCluster, rack)
+
 	pkglog.Debug("AerospikeConfig", log.Ctx{"config": config, "build": aeroCluster.Spec.Build})
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], config)
