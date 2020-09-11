@@ -1204,12 +1204,12 @@ func getNewRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []Rack
 	return rackStateList
 }
 
-func getOldRackIDList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []int {
-	var rackIDList []int
+func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospikev1alpha1.Rack {
+	var rackList []aerospikev1alpha1.Rack
 	for _, rack := range aeroCluster.Status.RackConfig.Racks {
-		rackIDList = append(rackIDList, rack.ID)
+		rackList = append(rackList, rack)
 	}
-	return rackIDList
+	return rackList
 }
 
 func getHashForPVCPath(path string) (string, error) {
