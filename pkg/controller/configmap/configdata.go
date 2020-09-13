@@ -129,7 +129,7 @@ else:
 
 rack = getRack(spec, podname)
 if rack is None:
-    raise Exception('Rack not found for pod ' + podname + ' spec ' + spec) 
+    raise Exception('Rack not found for pod ' + podname + ' spec ' + spec)
 
 if 'storage' in rack and 'volumes' in rack['storage'] and len(rack['storage']['volumes']) > 0:
     volumes = rack['storage']['volumes']
@@ -160,15 +160,15 @@ for volume in volumes:
     if volume['path'] not in alreadyInitialized:
         if volume['volumeMode'] == 'block':
             localVolumePath = blockMountPoint + volume['path']
-            if volume['initMethod'] == 'dd':
+            if volume['effectiveInitMethod'] == 'dd':
                 executeCommand('dd if=/dev/zero of=' +
                                localVolumePath + ' bs=1M')
-            elif volume['initMethod'] == 'blkdiscard':
+            elif volume['effectiveInitMethod'] == 'blkdiscard':
                 executeCommand('blkdiscard ' + localVolumePath + ' bs=1M')
         elif volume['volumeMode'] == 'filesystem':
             # volume path is always absolute.
             localVolumePath = fileSystemMountPoint + volume['path']
-            if volume['initMethod'] == 'deleteFiles':
+            if volume['effectiveInitMethod'] == 'deleteFiles':
                 executeCommand(
                     'find ' + localVolumePath + ' -type f -delete')
         print 'device ' + volume['path'] + ' initialized'

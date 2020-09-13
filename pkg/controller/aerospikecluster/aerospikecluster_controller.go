@@ -1047,6 +1047,8 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 	}
 
 	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
+	// This is not necessary since scale-up would cleanup danglin pod status. However done here for general
+	// cleanliness.
 	rackStateList := getNewRackStateList(aeroCluster)
 	for _, state := range rackStateList {
 		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
@@ -1081,6 +1083,8 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	}
 
 	if len(needStatusCleanup) > 0 {
+		logger.Info("Removing pod status for dangling pods", log.Ctx{"pods": podNames})
+
 		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
 			return fmt.Errorf("Could not cleanup pod status: %v", err)
 		}
@@ -1183,7 +1187,7 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 			continue
 		}
 
-		var cascadeDelete *bool
+		var cascadeDelete bool
 		v := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, path)
 		if v == nil {
 			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
@@ -1191,23 +1195,19 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 			} else {
 				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
 			}
-			logger.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "path": path, "cascadeDelete": *cascadeDelete})
+			logger.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "path": path, "cascadeDelete": cascadeDelete})
 
 		} else {
 			cascadeDelete = v.CascadeDelete
-			if cascadeDelete == nil {
-				logger.Error("PVC can not be removed, cascadeDelete policy is nil for volume %v. It should have been set internally", log.Ctx{"volume": *v})
-				continue
-			}
 		}
 
-		if *cascadeDelete {
+		if cascadeDelete {
 			if err := r.client.Delete(context.TODO(), &pvc); err != nil {
 				return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
 			}
-			logger.Info("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
+			logger.Info("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": cascadeDelete})
 		} else {
-			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
+			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": cascadeDelete})
 		}
 	}
 	return nil

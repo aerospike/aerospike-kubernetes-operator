@@ -171,6 +171,19 @@ spec:
                                   to is terminated and removed from the cluster. Defaults
                                   to true.
                                 type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
                               initMethod:
                                 description: InitMethod determines how volumes attached
                                   to Aerospike server pods are initialized when the
@@ -181,6 +194,8 @@ spec:
                                 - blkdiscard
                                 - deleteFiles
                                 type: string
+                            required:
+                            - effectiveCascadeDelete
                             type: object
                           filesystemVolumePolicy:
                             description: FileSystemVolumePolicy contains default policies
@@ -192,6 +207,19 @@ spec:
                                   to is terminated and removed from the cluster. Defaults
                                   to true.
                                 type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
                               initMethod:
                                 description: InitMethod determines how volumes attached
                                   to Aerospike server pods are initialized when the
@@ -202,6 +230,8 @@ spec:
                                 - blkdiscard
                                 - deleteFiles
                                 type: string
+                            required:
+                            - effectiveCascadeDelete
                             type: object
                           volumes:
                             description: Volumes is the list of to attach to created
@@ -217,6 +247,19 @@ spec:
                                     binds to is terminated and removed from the cluster.
                                     Defaults to true.
                                   type: boolean
+                                effectiveCascadeDelete:
+                                  description: Effective/operative value to use for
+                                    cascade delete after applying defaults.
+                                  type: boolean
+                                effectiveInitMethod:
+                                  description: Effective/operative value to use as
+                                    the volume init method after applying defaults.
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods are initialized when
@@ -249,6 +292,7 @@ spec:
                                   - block
                                   type: string
                               required:
+                              - effectiveCascadeDelete
                               - path
                               - sizeInGB
                               - storageClass
@@ -303,6 +347,19 @@ spec:
                         are deleted after the pod this volume binds to is terminated
                         and removed from the cluster. Defaults to true.
                       type: boolean
+                    effectiveCascadeDelete:
+                      description: Effective/operative value to use for cascade delete
+                        after applying defaults.
+                      type: boolean
+                    effectiveInitMethod:
+                      description: Effective/operative value to use as the volume
+                        init method after applying defaults.
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
                     initMethod:
                       description: InitMethod determines how volumes attached to Aerospike
                         server pods are initialized when the pods comes up the first
@@ -313,6 +370,8 @@ spec:
                       - blkdiscard
                       - deleteFiles
                       type: string
+                  required:
+                  - effectiveCascadeDelete
                   type: object
                 filesystemVolumePolicy:
                   description: FileSystemVolumePolicy contains default policies for
@@ -323,6 +382,19 @@ spec:
                         are deleted after the pod this volume binds to is terminated
                         and removed from the cluster. Defaults to true.
                       type: boolean
+                    effectiveCascadeDelete:
+                      description: Effective/operative value to use for cascade delete
+                        after applying defaults.
+                      type: boolean
+                    effectiveInitMethod:
+                      description: Effective/operative value to use as the volume
+                        init method after applying defaults.
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
                     initMethod:
                       description: InitMethod determines how volumes attached to Aerospike
                         server pods are initialized when the pods comes up the first
@@ -333,6 +405,8 @@ spec:
                       - blkdiscard
                       - deleteFiles
                       type: string
+                  required:
+                  - effectiveCascadeDelete
                   type: object
                 volumes:
                   description: Volumes is the list of to attach to created pods.
@@ -345,6 +419,19 @@ spec:
                           are deleted after the pod this volume binds to is terminated
                           and removed from the cluster. Defaults to true.
                         type: boolean
+                      effectiveCascadeDelete:
+                        description: Effective/operative value to use for cascade
+                          delete after applying defaults.
+                        type: boolean
+                      effectiveInitMethod:
+                        description: Effective/operative value to use as the volume
+                          init method after applying defaults.
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods are initialized when the pods comes
@@ -375,6 +462,7 @@ spec:
                         - block
                         type: string
                     required:
+                    - effectiveCascadeDelete
                     - path
                     - sizeInGB
                     - storageClass

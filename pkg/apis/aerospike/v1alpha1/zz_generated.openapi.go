@@ -291,6 +291,20 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 							Format:      "",
 						},
 					},
+					"effectiveInitMethod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Effective/operative value to use as the volume init method after applying defaults.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"effectiveCascadeDelete": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Effective/operative value to use for cascade delete after applying defaults.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"path": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.",
@@ -320,7 +334,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 						},
 					},
 				},
-				Required: []string{"path", "storageClass", "volumeMode", "sizeInGB"},
+				Required: []string{"effectiveCascadeDelete", "path", "storageClass", "volumeMode", "sizeInGB"},
 			},
 		},
 	}

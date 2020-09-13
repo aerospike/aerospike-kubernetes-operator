@@ -254,20 +254,30 @@ const (
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
+	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
-	CascadeDelete *bool `json:"cascadeDelete,omitempty"`
+	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
+
+	// Effective/operative value to use as the volume init method after applying defaults.
+	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
+
+	// Effective/operative value to use for cascade delete after applying defaults.
+	CascadeDelete bool `json:"effectiveCascadeDelete"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
 func (v *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
-	if v.InitMethod == nil {
+	if v.InputInitMethod == nil {
 		v.InitMethod = defaultPolicy.InitMethod
+	} else {
+		v.InitMethod = *v.InputInitMethod
 	}
 
-	if v.CascadeDelete == nil {
+	if v.InputCascadeDelete == nil {
 		v.CascadeDelete = defaultPolicy.CascadeDelete
+	} else {
+		v.CascadeDelete = *v.InputCascadeDelete
 	}
 }
 
@@ -351,8 +361,8 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 	defaultCascadeDelete := false
 
 	// Set storage level defaults.
-	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultFilesystemInitMethod, CascadeDelete: &defaultCascadeDelete})
-	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultBlockInitMethod, CascadeDelete: &defaultCascadeDelete})
+	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultFilesystemInitMethod, CascadeDelete: defaultCascadeDelete})
+	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultBlockInitMethod, CascadeDelete: defaultCascadeDelete})
 
 	for i := range v.Volumes {
 		// Use storage spec values as defaults for the volumes.
@@ -384,15 +394,15 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 		storagePaths[volume.Path] = 1
 
 		if volume.VolumeMode == AerospikeVolumeModeBlock {
-			if volume.InitMethod == nil || *volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", *volume.InitMethod, volume)
+			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", volume.InitMethod, volume)
 			}
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 			// TODO: Add validation for invalid initMethod (e.g. any random value)
 		} else {
-			if *volume.InitMethod != AerospikeVolumeInitMethodNone && *volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)
+			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
 			}
 
 			fileStorageList = append(fileStorageList, volume.Path)
