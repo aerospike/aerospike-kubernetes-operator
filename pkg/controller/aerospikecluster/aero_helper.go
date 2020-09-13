@@ -249,33 +249,17 @@ func (r *ReconcileAerospikeCluster) newHostConn(aeroCluster *aerospikev1alpha1.A
 }
 
 func (r *ReconcileAerospikeCluster) newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
+	// Use pod IP and direct service port from within the operator for info calls.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
-
-	if aeroCluster.Spec.MultiPodPerHost {
-		svc, err := r.getServiceForPod(pod)
-		if err != nil {
-			return nil, err
-		}
-		if tlsName == "" {
-			port = svc.Spec.Ports[0].NodePort
-		} else {
-			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
-					port = portInfo.NodePort
-					break
-				}
-			}
-		}
+	if tlsName == "" {
+		port = utils.ServicePort
 	} else {
-		if tlsName == "" {
-			port = utils.ServicePort
-		} else {
-			port = utils.ServiceTLSPort
-		}
+		port = utils.ServiceTLSPort
 	}
-	host := pod.Status.HostIP
+
+	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{
 		AerospikeHostName: host,
 		AerospikePort:     int(port),

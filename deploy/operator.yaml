@@ -33,7 +33,7 @@ spec:
       serviceAccountName: aerospike-kubernetes-operator
       containers:
         - name: aerospike-kubernetes-operator
-          image: aerospike/aerospike-kubernetes-operator:v0.0.5-beta
+          image: aerospike/aerospike-kubernetes-operator:v0.0.6-beta
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always

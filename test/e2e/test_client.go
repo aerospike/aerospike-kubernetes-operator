@@ -222,6 +222,7 @@ func getServiceForPod(pod *corev1.Pod, client *kubeClient.Client) (*corev1.Servi
 }
 
 func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod, client *kubeClient.Client) (*deployment.ASConn, error) {
+	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
 
 	tlsName := ""

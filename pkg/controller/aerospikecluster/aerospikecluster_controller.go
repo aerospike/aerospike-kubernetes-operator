@@ -1046,6 +1046,25 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 		}
 	}
 
+	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
+	rackStateList := getNewRackStateList(aeroCluster)
+	for _, state := range rackStateList {
+		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed recover failed cluster: %v", err)
+		}
+
+		newPodNames := []string{}
+		for i := 0; i < len(pods.Items); i++ {
+			newPodNames = append(newPodNames, pods.Items[i].Name)
+		}
+
+		err = r.cleanupPods(aeroCluster, newPodNames, state)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed recover failed cluster: %v", err)
+		}
+	}
+
 	return reconcile.Result{}, fmt.Errorf("Forcing recreate of the cluster as status is nil")
 }
 
@@ -1069,7 +1088,7 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 
 	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
 
-	// Delete PVCs if cascaseDelete
+	// Delete PVCs if cascadeDelete
 	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
