@@ -802,7 +802,7 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 // Called only when new cluster is created
 func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
+	storage := rackState.Rack.Storage
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	for _, volume := range storage.Volumes {
 		logger.Info("Add PVC for volume", log.Ctx{"volume": volume})

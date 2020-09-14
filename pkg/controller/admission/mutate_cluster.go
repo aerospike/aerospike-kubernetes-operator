@@ -111,12 +111,12 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 		return err
 	}
 
-	// Update racks aerospikeConfig after setting common aerospikeConfig defaults
-	if err := s.updateRacksAerospikeConfigFromDefault(); err != nil {
+	// Update racks configuration using global values where required.
+	if err := s.updateRacks(); err != nil {
 		return err
 	}
 
-	// validation policy
+	// Validation policy
 	if s.obj.Spec.ValidationPolicy == nil {
 		validationPolicy := aerospikev1alpha1.ValidationPolicySpec{}
 
@@ -127,6 +127,7 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	return nil
 }
 
+// setDefaultRackConf create the default rack if the spec has no racks configured.
 func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 	if len(s.obj.Spec.RackConfig.Racks) == 0 {
 		s.obj.Spec.RackConfig = aerospikev1alpha1.RackConfig{
@@ -139,35 +140,71 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 				// User has modified defaultRackConfig or used defaultRackID
 				if len(s.obj.Spec.RackConfig.Racks) > 1 ||
 					rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" ||
-					rack.AerospikeConfig != nil {
+					rack.InputAerospikeConfig != nil || rack.InputStorage != nil {
 					return fmt.Errorf("Invalid RackConfig %v. RackID %d is reserved", s.obj.Spec.RackConfig, utils.DefaultRackID)
 				}
-			}
-			if len(rack.Storage.Volumes) != 0 {
-				// Set storage defaults if rack has storage section
-				rack.Storage.SetDefaults()
 			}
 		}
 	}
 	return nil
 }
 
-func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromDefault() error {
+func (s *ClusterMutatingAdmissionWebhook) updateRacks() error {
+	err := s.updateRacksStorageFromGlobal()
+
+	if err != nil {
+		return fmt.Errorf("Error updating rack storage: %v", err)
+	}
+
+	err = s.updateRacksAerospikeConfigFromGlobal()
+
+	if err != nil {
+		return fmt.Errorf("Error updating rack aerospike config: %v", err)
+	}
+
+	return nil
+}
+
+func (s *ClusterMutatingAdmissionWebhook) updateRacksStorageFromGlobal() error {
 	for i, rack := range s.obj.Spec.RackConfig.Racks {
-		if len(rack.AerospikeConfig) != 0 {
-			m, err := merge(s.obj.Spec.AerospikeConfig, rack.AerospikeConfig)
+		if rack.InputStorage == nil {
+			rack.Storage = s.obj.Spec.Storage
+			log.Debug("Updated rack storage with global storage", log.Ctx{"rack id": rack.ID, "storage": rack.Storage})
+		} else {
+			rack.Storage = *rack.InputStorage
+		}
+
+		// Set storage defaults if rack has storage section
+		rack.Storage.SetDefaults()
+
+		// Copy over to the actual slice.
+		s.obj.Spec.RackConfig.Racks[i].Storage = rack.Storage
+	}
+	return nil
+}
+
+func (s *ClusterMutatingAdmissionWebhook) updateRacksAerospikeConfigFromGlobal() error {
+	for i, rack := range s.obj.Spec.RackConfig.Racks {
+		var m map[string]interface{}
+		var err error
+		if rack.InputAerospikeConfig != nil {
+			// Merge this rack's and global config.
+			m, err = merge(s.obj.Spec.AerospikeConfig, *rack.InputAerospikeConfig)
+			log.Debug("Merged rack config from global aerospikeConfig", log.Ctx{"rack id": rack.ID, "rackAerospikeConfig": m, "globalAerospikeConfig": s.obj.Spec.AerospikeConfig})
 			if err != nil {
 				return err
 			}
-			// Set defaults in updated rack config
-			// Above merge function may have overwritten defaults
-			if err := s.setDefaultAerospikeConfigs(m); err != nil {
-				return err
-			}
-			s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
-
-			log.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		} else {
+			// Use the global config.
+			m = s.obj.Spec.AerospikeConfig
 		}
+
+		// Set defaults in updated rack config
+		// Above merge function may have overwritten defaults.
+		if err := s.setDefaultAerospikeConfigs(m); err != nil {
+			return err
+		}
+		s.obj.Spec.RackConfig.Racks[i].AerospikeConfig = m
 	}
 	return nil
 }

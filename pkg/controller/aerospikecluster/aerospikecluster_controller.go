@@ -1097,7 +1097,7 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
 	}
-	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
+	storage := rackState.Rack.Storage
 	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, pvcItems); err != nil {
 		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
 	}
@@ -1151,7 +1151,7 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 		if err != nil {
 			return fmt.Errorf("Could not find pvc for rack: %v", err)
 		}
-		storage := utils.GetRackStorage(aeroCluster, rack)
+		storage := rack.Storage
 		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, rackPVCItems); err != nil {
 			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 		}

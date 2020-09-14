@@ -53,24 +53,12 @@ type AerospikeClusterSpec struct {
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 }
 
-// rackConfig:
-//   policy:
-//     - region
-//     - zone
-//   racks:
-//     - id: 0
-//       region: us-east1
-//       zone: use-east1-1a
-//     - id: 2
-//       region: us-east1
-//       zone: use-east1-1b
-
 // RackConfig specifies all racks and related policies
 type RackConfig struct {
 	// List of Aerospike namespaces for which rack feature will be enabled
-	// If list empty then all namespaces are rack enabled
 	Namespaces []string `json:"namespaces,omitempty"`
-	Racks      []Rack   `json:"racks"`
+	// Racks is the list of all racks
+	Racks []Rack `json:"racks"`
 }
 
 // Rack specifies single rack config
@@ -82,9 +70,13 @@ type Rack struct {
 	RackLabel string `json:"rackLabel,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
 	// AerospikeConfig override the common AerospikeConfig for this Rack
-	AerospikeConfig Values `json:"aerospikeConfig,omitempty"`
-	// Storage specified persistent storage to use for the Aerospike pods in this rack
-	Storage AerospikeStorageSpec `json:"storage,omitempty"`
+	InputAerospikeConfig *Values `json:"aerospikeConfig,omitempty"`
+	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config
+	AerospikeConfig Values `json:"effectiveAerospikeConfig"`
+	// Storage to use for the Aerospike pods in this rack. This value overwrites the global storage config
+	InputStorage *AerospikeStorageSpec `json:"storage,omitempty"`
+	// Effective/operative storage. The resultant is user input if specified else global storage
+	Storage AerospikeStorageSpec `json:"effectiveStorage"`
 }
 
 // DeepCopy implements deepcopy func for RackConfig
