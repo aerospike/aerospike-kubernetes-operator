@@ -95,7 +95,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					},
 					"storage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Storage specified persistent storage to use for the Aerospike pods.",
+							Description: "Storage specify persistent storage to use for the Aerospike pods.",
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec"),
 						},
 					},
@@ -140,7 +140,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					},
 					"rackConfig": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RackConfig",
+							Description: "RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration",
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig"),
 						},
 					},

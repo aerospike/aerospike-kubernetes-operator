@@ -132,34 +132,43 @@ spec:
                 user."
               type: boolean
             rackConfig:
-              description: RackConfig
+              description: RackConfig Configures the operator to deploy rack aware
+                Aerospike cluster. Pods will be deployed in given racks based on given
+                configuration
               properties:
                 namespaces:
                   description: List of Aerospike namespaces for which rack feature
-                    will be enabled If list empty then all namespaces are rack enabled
+                    will be enabled
                   items:
                     type: string
                   type: array
                 racks:
+                  description: List of rack groups
                   items:
                     description: Rack specifies single rack config
                     properties:
                       aerospikeConfig:
                         description: AerospikeConfig override the common AerospikeConfig
-                          for this Rack
+                          and use that for this Rack
                       id:
+                        description: Identifier for the rack
                         type: integer
                       nodeName:
+                        description: K8s Node name for setting rack affinity. Rack
+                          pods will be deployed in given k8s Node
                         type: string
                       rackLabel:
-                        description: 'Node should have a label {aerospike.com/rack-label:
+                        description: 'Racklabel for setting rack affinity. Rack pods
+                          will be deployed in k8s nodes having rackLable {aerospike.com/rack-label:
                           <rack-label>}'
                         type: string
                       region:
+                        description: Region name for setting rack affinity. Rack pods
+                          will be deployed to given Region
                         type: string
                       storage:
-                        description: Storage specified persistent storage to use for
-                          the Aerospike pods in this rack
+                        description: Storage specify persistent storage to use for
+                          the pods in this rack
                         properties:
                           blockVolumePolicy:
                             description: BlockVolumePolicy contains default policies
@@ -257,6 +266,8 @@ spec:
                             type: array
                         type: object
                       zone:
+                        description: Zone name for setting rack affinity. Rack pods
+                          will be deployed to given Zone
                         type: string
                     required:
                     - id
@@ -291,7 +302,7 @@ spec:
               format: int32
               type: integer
             storage:
-              description: Storage specified persistent storage to use for the Aerospike
+              description: Storage specify persistent storage to use for the Aerospike
                 pods.
               properties:
                 blockVolumePolicy:
