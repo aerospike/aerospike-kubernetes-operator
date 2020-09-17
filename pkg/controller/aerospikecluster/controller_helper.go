@@ -138,10 +138,6 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 								Name:  "CONFIG_MAP_NAME",
 								Value: getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID).Name,
 							},
-							{
-								Name:  "MULTI_POD_PER_HOST",
-								Value: strconv.FormatBool(aeroCluster.Spec.MultiPodPerHost),
-							},
 						}...),
 					}},
 

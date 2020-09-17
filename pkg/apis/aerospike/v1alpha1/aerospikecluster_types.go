@@ -51,6 +51,8 @@ type AerospikeClusterSpec struct {
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 	// RackConfig
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
+	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
+	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
 }
 
 // RackConfig specifies all racks and related policies
@@ -447,6 +449,71 @@ type AerospikeClusterStatus struct {
 	// Give pod specific summary
 	// Give service list, to be used by client
 	// Error status
+}
+
+// AerospikeNetworkType specifies the type of network address to use.
+// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal
+// +k8s:openapi-gen=true
+type AerospikeNetworkType string
+
+const (
+	// AerospikeNetworkTypeUnspecified implies using default access.
+	AerospikeNetworkTypeUnspecified AerospikeNetworkType = ""
+
+	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
+	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
+
+	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
+
+	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
+)
+
+// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
+type AerospikeNetworkPolicy struct {
+	// AccessType is the type of network address to use for Aerospike access address.
+	// Defaults to hostInternal.
+	AccessType AerospikeNetworkType `json:"access,omitempty"`
+
+	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
+	// Defaults to hostExternal.
+	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
+
+	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
+	// Defaults to hostInternal.
+	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
+
+	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
+	// Defaults to hostExternal.
+	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
+}
+
+// DeepCopy implements deepcopy func for RackConfig
+func (v *AerospikeNetworkPolicy) DeepCopy() *AerospikeNetworkPolicy {
+	src := *v
+	var dst = AerospikeNetworkPolicy{}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// SetDefaults applies default to unspecified fields on the network policy.
+func (v *AerospikeNetworkPolicy) SetDefaults() {
+	if v.AccessType == AerospikeNetworkTypeUnspecified {
+		v.AccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if v.AlternateAccessType == AerospikeNetworkTypeUnspecified {
+		v.AlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+
+	if v.TLSAccessType == AerospikeNetworkTypeUnspecified {
+		v.TLSAccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if v.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
+		v.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
 }
 
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode

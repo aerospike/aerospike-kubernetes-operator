@@ -115,6 +115,44 @@ spec:
               - mountPath
               - secretName
               type: object
+            aerospikeNetworkPolicy:
+              description: AerospikeNetworkPolicy specifies how clients and tools
+                access the Aerospike cluster.
+              properties:
+                access:
+                  description: AccessType is the type of network address to use for
+                    Aerospike access address. Defaults to hostInternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                alternateAccess:
+                  description: AlternateAccessType is the type of network address
+                    to use for Aerospike alternate access address. Defaults to hostExternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                tlsAccess:
+                  description: TLSAccessType is the type of network address to use
+                    for Aerospike TLS access address. Defaults to hostInternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                tlsAlternateAccess:
+                  description: TLSAlternateAccessType is the type of network address
+                    to use for Aerospike TLS alternate access address. Defaults to
+                    hostExternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+              type: object
             build:
               description: Aerospike cluster build
               type: string

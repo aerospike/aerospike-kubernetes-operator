@@ -203,7 +203,7 @@ cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization
      "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
 `
 
-const onStartSh = `
+const onStartShTemplateStr = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
 # Copyright 2012-2020 Aerospike, Inc.
@@ -270,8 +270,6 @@ for PEER in "${PEERS[@]}"; do
 	#sed -i "0,/mesh-seed-address-port.*<mesh_seed_address_port>/s/mesh-seed-address-port.*<mesh_seed_address_port>/mesh-seed-address-port    ${PEER} 3002/" ${CFG}
 done
 
-# Get External nodeIP
-
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 
@@ -293,10 +291,12 @@ def getport(data, podname):
                     tlsport = port['nodePort']
             return infoport, tlsport
 print getport(data, podname)")"
-PORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $2}')"
-TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
 
-# Get nodeIP
+# Get IPs
+PODIP="$MY_POD_IP"
+INTERNALIP="$MY_HOST_IP"
+
+# Get External IP
 DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "https://kubernetes.default.svc/api/v1/nodes")"
 EXTERNALIP="$(echo $DATA | python -c "import sys, json
 data = json.load(sys.stdin);
@@ -318,18 +318,62 @@ def gethost(data, host):
         return host
 print gethost(data, host)")"
 
-if [ "true" == "${MULTI_POD_PER_HOST}" ]
-then
-    sed -i "s/access-port.*3000/access-port    ${PORT}/" ${CFG}
-    # No need for alternate-access-port replace, access-port will replace both
-    # sed -i "s/alternate-access-port.*3000/alternate-access-port    ${PORT}/" ${CFG}
-    sed -i "s/tls-access-port.*4333/tls-access-port    ${TLSPORT}/" ${CFG}
-    sed -i "s/tls-alternate-access-port.*4333/tls-alternate-access-port    ${TLSPORT}/" ${CFG}
-fi
-sed -i "s/access-address.*<access_address>/access-address    ${EXTERNALIP}/" ${CFG}
-sed -i "s/alternate-access-address.*<alternate_access_address>/alternate-access-address    ${EXTERNALIP}/" ${CFG}
-sed -i "s/tls-access-address.*<tls-access-address>/tls-access-address    ${EXTERNALIP}/" ${CFG}
-sed -i "s/tls-alternate-access-address.*<tls-alternate-access-address>/tls-alternate-access-address    ${EXTERNALIP}/" ${CFG}
+
+POD_PORT="{{.PodPort}}"
+POD_TLSPORT="{{.PodTLSPort}}"
+
+# Compute the mapped access ports based on config.
+{{- if .MultiPodPerHost}}
+# Use mapped service ports.
+MAPPED_PORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $2}')"
+MAPPED_TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
+{{- else}}
+# Use the actual ports.
+MAPPED_PORT="$POD_PORT"
+MAPPED_TLSPORT="$POD_TLSPORT"
+{{- end}}
+
+# Compute the access endpoints based on network policy.
+substituteEndpoint() {
+    local addressType=$1
+    local networkType=$2
+    local podIP=$3
+    local internalIP=$4
+    local externalIP=$5
+    local podPort=$6
+    local mappedPort=$7
+
+    case $networkType in
+      pod)
+        accessAddress=$podIP
+        accessPort=$podPort
+        ;;
+
+      hostInternal)
+        accessAddress=$internalIP
+        accessPort=$mappedPort
+        ;;
+
+      hostExternal)
+        accessAddress=$externalIP
+        accessPort=$mappedPort
+        ;;
+
+      *)
+        accessAddress=$podIP
+        accessPort=$podPort
+        ;;
+    esac
+
+    # Substitute in the configuration file.
+    sed -i "s/^\(\s*\)${addressType}-address.*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}
+    sed -i "s/^\(\s*\)${addressType}-port.*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
+}
+
+substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
+substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
+substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
+substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
 
 echo "Generated Aerospike Configuration "
 echo "---------------------------------"
@@ -341,23 +385,37 @@ type initializeTemplateInput struct {
 	WorkDir string
 }
 
+type onStartTemplateInput struct {
+	MultiPodPerHost bool
+	NetworkPolicy   aerospikev1alpha1.AerospikeNetworkPolicy
+	PodPort         int32
+	PodTLSPort      int32
+}
+
 var initializeShTemplate, _ = template.New("initializeSh").Parse(initializeShTemplateStr)
+var onStartShTemplate, _ = template.New("onStartSh").Parse(onStartShTemplateStr)
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
 func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (map[string]string, error) {
 	config := rack.AerospikeConfig
 	workDir := utils.GetWorkDirectory(config)
 
-	templateInput := initializeTemplateInput{WorkDir: workDir}
-
+	initializeTemplateInput := initializeTemplateInput{WorkDir: workDir}
 	var initializeSh bytes.Buffer
-	err := initializeShTemplate.Execute(&initializeSh, templateInput)
+	err := initializeShTemplate.Execute(&initializeSh, initializeTemplateInput)
+	if err != nil {
+		return nil, err
+	}
+
+	onStartTemplateInput := onStartTemplateInput{MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost, NetworkPolicy: aeroCluster.Spec.AerospikeNetworkPolicy, PodPort: utils.ServicePort, PodTLSPort: utils.ServiceTLSPort}
+	var onStartSh bytes.Buffer
+	err = onStartShTemplate.Execute(&onStartSh, onStartTemplateInput)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]string{
 		"initialize.sh": initializeSh.String(),
-		"on-start.sh":   onStartSh,
+		"on-start.sh":   onStartSh.String(),
 	}, nil
 }

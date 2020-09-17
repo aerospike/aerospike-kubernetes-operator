@@ -92,6 +92,9 @@ func (s *ClusterMutatingAdmissionWebhook) MutateUpdate(old aerospikev1alpha1.Aer
 func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 	log.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": s.obj.Spec})
 
+	// Set network defaults
+	s.obj.Spec.AerospikeNetworkPolicy.SetDefaults()
+
 	// Set common storage defaults.
 	s.obj.Spec.Storage.SetDefaults()
 
@@ -336,9 +339,9 @@ func setDefaultNetworkConf(config aerospikev1alpha1.Values) error {
 	serviceDefaults := map[string]interface{}{}
 	serviceDefaults["port"] = utils.ServicePort
 	serviceDefaults["access-port"] = utils.ServicePort // must be greater that or equal to 1024
-	serviceDefaults["access-address"] = []string{"<access_address>"}
+	serviceDefaults["access-address"] = []string{"<access-address>"}
 	serviceDefaults["alternate-access-port"] = utils.ServicePort // must be greater that or equal to 1024,
-	serviceDefaults["alternate-access-address"] = []string{"<alternate_access_address>"}
+	serviceDefaults["alternate-access-address"] = []string{"<alternate-access-address>"}
 	if _, ok := serviceConf["tls-name"]; ok {
 		serviceDefaults["tls-port"] = utils.ServiceTLSPort
 		serviceDefaults["tls-access-port"] = utils.ServiceTLSPort

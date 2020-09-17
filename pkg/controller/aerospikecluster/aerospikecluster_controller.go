@@ -342,7 +342,11 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	var needRollingRestart bool
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig != nil {
-		needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfig, aeroCluster.Status.AerospikeConfig)
+		// If Aerospike configuration changes or network policy changes we need to regenerate aerospike.conf
+		// and rolling restart the pods.
+		needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfig, aeroCluster.Status.AerospikeConfig) ||
+			!reflect.DeepEqual(aeroCluster.Spec.AerospikeNetworkPolicy, aeroCluster.Status.AerospikeNetworkPolicy)
+
 		if !needRollingRestart {
 			// Check if rack aerospikeConfig has changed
 			for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
