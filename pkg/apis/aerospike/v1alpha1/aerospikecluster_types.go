@@ -519,18 +519,38 @@ func (v *AerospikeNetworkPolicy) SetDefaults() {
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode
 // +k8s:openapi-gen=true
 type AerospikeNodeSummary struct {
+	// PodName is the K8s pod name.
 	PodName string `json:"podName"`
-	IP      string `json:"ip"`
-	Port    int    `json:"port"`
-	TLSName string `json:"tlsname"`
+	// PodIP in the K8s network.
+	PodIP string `json:"podIP"`
+	// HostInternalIP of the K8s host this pod is scheduled on.
+	HostInternalIP string `json:"hostInternalIP,omitempty"`
+	// HostExternalIP of the K8s host this pod is scheduled on.
+	HostExternalIP string `json:"hostExternalIP,omitempty"`
+	// PodPort is the port K8s intenral Aerospike clients can connect to.
+	PodPort int `json:"podPort"`
+	// ServicePort is the port Aerospike clients outside K8s can connect to.
+	ServicePort int32 `json:"servicePort"`
 
+	// ClusterName is the name of the Aerospike cluster this pod belongs to.
 	ClusterName string `json:"clusterName"`
-	NodeID      string `json:"nodeID"`
-	Build       string `json:"build"`
+	// NodeID is the unique Aerospike ID for this pod.
+	NodeID string `json:"nodeID"`
+	// Build is the Aerospike build this pod is running.
+	Build string `json:"build"`
 	// RackID of rack to which this node belongs
 	RackID int `json:"rackID"`
-	// Features    []string `json:"features"`
-	// Principal   string   `json:"principal"`
+	// TLSName is the TLS name of this pod in the Aerospike cluster.
+	TLSName string `json:"tlsname,omitempty"`
+
+	// AccessEndpoints are the access endpoints for this pod.
+	AccessEndpoints []string `json:"accessEndpoints,omitempty"`
+	// AlternateAccessEndpoints are the alternate access endpoints for this pod.
+	AlternateAccessEndpoints []string `json:"alternateAccessEndpoints,omitempty"`
+	// TLSAccessEndpoints are the TLS access endpoints for this pod.
+	TLSAccessEndpoints []string `json:"tlsAccessEndpoints,omitempty"`
+	// TLSAlternateAccessEndpoints are the alternate TLS access endpoints for this pod.
+	TLSAlternateAccessEndpoints []string `json:"tlsAlternateAccessEndpoints,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeNodeSummary

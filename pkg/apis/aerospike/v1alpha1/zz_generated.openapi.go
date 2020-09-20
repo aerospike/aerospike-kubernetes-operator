@@ -222,44 +222,65 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"podName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "PodName is the K8s pod name.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"ip": {
+					"podIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "PodIP in the K8s network.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"port": {
+					"hostInternalIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "HostInternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"tlsname": {
+					"hostExternalIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "HostExternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"podPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodPort is the port K8s intenral Aerospike clients can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"servicePort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServicePort is the port Aerospike clients outside K8s can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"clusterName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "ClusterName is the name of the Aerospike cluster this pod belongs to.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"nodeID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "NodeID is the unique Aerospike ID for this pod.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"build": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Build is the Aerospike build this pod is running.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"rackID": {
@@ -269,8 +290,71 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"tlsname": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSName is the TLS name of this pod in the Aerospike cluster.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"accessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AccessEndpoints are the access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"alternateAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AlternateAccessEndpoints are the alternate access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"tlsAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSAccessEndpoints are the TLS access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"tlsAlternateAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSAlternateAccessEndpoints are the alternate TLS access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"podName", "ip", "port", "tlsname", "clusterName", "nodeID", "build", "rackID"},
+				Required: []string{"podName", "podIP", "podPort", "servicePort", "clusterName", "nodeID", "build", "rackID"},
 			},
 		},
 	}

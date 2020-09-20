@@ -298,26 +298,29 @@ INTERNALIP="$MY_HOST_IP"
 
 # Get External IP
 DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "https://kubernetes.default.svc/api/v1/nodes")"
-EXTERNALIP="$(echo $DATA | python -c "import sys, json
+
+# Note: the IPs returned from here should match the IPs used in the node summary.
+HOSTIPS="$(echo $DATA | python -c "import sys, json
 data = json.load(sys.stdin);
 host = '${MY_HOST_IP}';
 def gethost(data, host):
-        for item in data['items']:
-                externalIP = ''
-                for add in item['status']['addresses']:
-                        if add['type'] == 'InternalIP':
-                                internalIP = add['address']
-                                continue
-                        if add['type'] == 'ExternalIP':
-                                externalIP = add['address']
-                                continue
-                        if internalIP != '' and externalIP != '':
-                                break
-                if internalIP == host and externalIP != '':
-                        return externalIP
-        return host
+    internalIP = host
+    externalIP = host
+    for item in data['items']:
+        for add in item['status']['addresses']:
+            if add['type'] == 'InternalIP':
+                internalIP = add['address']
+                continue
+            if add['type'] == 'ExternalIP':
+                externalIP = add['address']
+                continue
+
+    return internalIP + ' ' + externalIP
+
 print gethost(data, host)")"
 
+INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
+EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
 
 POD_PORT="{{.PodPort}}"
 POD_TLSPORT="{{.PodTLSPort}}"
