@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	as "github.com/aerospike/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -834,7 +834,9 @@ func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospik
 		})
 	}
 	// Create policy using status, status has current connection info
-	aeroClient, err := as.NewClientWithPolicyAndHost(r.getClientPolicy(aeroCluster), hosts...)
+	clientPolicy := r.getClientPolicy(aeroCluster)
+	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
+
 	if err != nil {
 		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
 	}

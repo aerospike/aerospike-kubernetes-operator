@@ -92,7 +92,7 @@ func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alp
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
@@ -100,7 +100,7 @@ func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return err
 	}
-	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) error {
@@ -347,7 +347,7 @@ func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	return ""
 }
 
-func hostNameForTip(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
+func getFQDNForPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 

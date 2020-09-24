@@ -306,14 +306,30 @@ host = '${MY_HOST_IP}';
 def gethost(data, host):
     internalIP = host
     externalIP = host
+
+    # Iterate over all nodes and find this pod's node IPs.
     for item in data['items']:
+        nodeInternalIP = ''
+        nodeExternalip = ''
+        matchFound = False
         for add in item['status']['addresses']:
+            if add['address'] == host:
+               matchFound = True
             if add['type'] == 'InternalIP':
-                internalIP = add['address']
+                nodeInternalIP = add['address']
                 continue
             if add['type'] == 'ExternalIP':
-                externalIP = add['address']
+                nodeExternalIP = add['address']
                 continue
+
+        if matchFound:
+           # Matching node for this pod found.
+           if nodeInternalIP != '':
+               internalIP = nodeInternalIP
+
+           if nodeExternalIP != '':
+               externalIP = nodeExternalIP
+           break
 
     return internalIP + ' ' + externalIP
 

@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	as "github.com/aerospike/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	asConfig "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"

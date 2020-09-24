@@ -260,7 +260,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 			Build: "aerospike/aerospike-server-enterprise:" + version,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					CascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{

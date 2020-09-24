@@ -265,10 +265,10 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 			Build: latestClusterBuild,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					CascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					CascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{

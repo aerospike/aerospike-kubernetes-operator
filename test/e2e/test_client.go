@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kubeClient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	as "github.com/aerospike/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
