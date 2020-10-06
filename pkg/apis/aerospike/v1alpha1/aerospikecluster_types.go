@@ -260,7 +260,7 @@ type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
 	InitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
-	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
+	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	CascadeDelete *bool `json:"cascadeDelete,omitempty"`
 }
 

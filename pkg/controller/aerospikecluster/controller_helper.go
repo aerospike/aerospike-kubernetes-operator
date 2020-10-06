@@ -1175,13 +1175,13 @@ func getNamespacedNameForConfigMap(aeroCluster *aerospikev1alpha1.AerospikeClust
 	}
 }
 
-// TODO: Update this
-func splitRacks(nodeCount, rackCount int) []int {
-	nodesPerRack, extraNodes := nodeCount/rackCount, nodeCount%rackCount
+func splitRacks(nodes, racks int) []int {
+	nodesPerRack, extraNodes := nodes/racks, nodes%racks
 
+	// Distributing nodes in given racks
 	var topology []int
 
-	for rackIdx := 0; rackIdx < rackCount; rackIdx++ {
+	for rackIdx := 0; rackIdx < racks; rackIdx++ {
 		nodesForThisRack := nodesPerRack
 		if rackIdx < extraNodes {
 			nodesForThisRack++
