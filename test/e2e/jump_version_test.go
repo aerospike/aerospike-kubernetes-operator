@@ -249,7 +249,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 	kubeNs, _ := ctx.GetNamespace()
 	cascadeDelete := true
 
-	// create memcached custom resource
+	// create Aerospike custom resource
 	return &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "jumpversiontest",
