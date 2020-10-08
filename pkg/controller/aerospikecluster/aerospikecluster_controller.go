@@ -36,6 +36,9 @@ const defaultUser = "admin"
 const defaultPass = "admin"
 const patchFieldOwner = "aerospike-kuberneter-operator"
 
+// Number of reconcile threads to run reconcile operations
+const maxConcurrentReconciles = 3
+
 var (
 	updateOption = &client.UpdateOptions{
 		FieldManager: "aerospike-operator",
@@ -59,19 +62,17 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("aerospikecluster-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("aerospikecluster-controller", mgr, controller.Options{Reconciler: r, MaxConcurrentReconciles: maxConcurrentReconciles})
 	if err != nil {
 		return err
 	}
-	var pred predicate.Predicate
 
-	pred = predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-		},
-	}
 	// Watch for changes to primary resource AerospikeCluster
-	err = c.Watch(&source.Kind{Type: &aerospikev1alpha1.AerospikeCluster{}}, &handler.EnqueueRequestForObject{}, pred)
+	err = c.Watch(
+		&source.Kind{Type: &aerospikev1alpha1.AerospikeCluster{}},
+		&handler.EnqueueRequestForObject{},
+		// Skip where cluster object generation is not changed
+		predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
 	}
@@ -81,18 +82,19 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Think all possible situation
 
 	// Watch for changes to secondary resource StatefulSet and requeue the owner AerospikeCluster
-	err = c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
-	}, predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return false
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			//return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-			return false
-		},
-	})
+	err = c.Watch(
+		&source.Kind{Type: &appsv1.StatefulSet{}},
+		&handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
+		}, predicate.Funcs{
+			CreateFunc: func(e event.CreateEvent) bool {
+				return false
+			},
+			UpdateFunc: func(e event.UpdateEvent) bool {
+				return false
+			},
+		})
 	if err != nil {
 		return err
 	}

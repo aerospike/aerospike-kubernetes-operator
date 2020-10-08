@@ -1146,8 +1146,7 @@ func getPVCName(path string) (string, error) {
 		return "", err
 	}
 	newPath := reg.ReplaceAllString(path, "-")
-
-	return hashPath + "-" + truncateString(newPath, 50), nil
+	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
 }
 
 func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
