@@ -11,7 +11,6 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: aerospike-kubernetes-operator
 rules:
 - apiGroups:
@@ -98,54 +97,4 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: aerospike-kubernetes-operator
-  apiGroup: rbac.authorization.k8s.io
-
----
-
-# Service account used by the pods to obtain pod metadata.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  # Do not change name, its hard-coded in operator
-  name: aerospike-cluster
-  namespace: aerospike
-
----
-
-# Role
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  creationTimestamp: null
-  name: aerospike-cluster
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  - services
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - aerospike.com
-  resources:
-  - '*'
-  verbs:
-  - '*'
-
----
-
-# RoleBinding
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: aerospike-cluster
-subjects:
-- kind: ServiceAccount
-  name: aerospike-cluster
-  namespace: aerospike
-roleRef:
-  kind: ClusterRole
-  name: aerospike-cluster
   apiGroup: rbac.authorization.k8s.io
