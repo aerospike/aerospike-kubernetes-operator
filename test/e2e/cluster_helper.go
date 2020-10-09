@@ -131,7 +131,7 @@ func CreateBasicCluster(t *testing.T, f *framework.Framework, ctx *framework.Tes
 
 // feature-key file needed
 func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, size int32, build string) *aerospikev1alpha1.AerospikeCluster {
-	// create memcached custom resource
+	// create Aerospike custom resource
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
@@ -254,7 +254,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	cascadeDelete := false
-	// create memcached custom resource
+	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
@@ -265,10 +265,10 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 			Build: latestClusterBuild,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					CascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					CascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -339,7 +339,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
-	// create memcached custom resource
+	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,

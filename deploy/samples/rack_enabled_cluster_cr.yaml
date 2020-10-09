@@ -10,7 +10,7 @@ spec:
   rackConfig:
     namespaces:
       - test
-    racks: 
+    racks:
       - id: 1
         zone: us-central1-b
         # nodeName: kubernetes-minion-group-qp3m
@@ -38,9 +38,12 @@ spec:
         # nodeName: kubernetes-minion-group-tft3
         aerospikeConfig:
           service:
-            proto-fd-max: 16000 
+            proto-fd-max: 16000
 
   storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
     volumes:
       - storageClass: ssd
         path: /opt/aerospike

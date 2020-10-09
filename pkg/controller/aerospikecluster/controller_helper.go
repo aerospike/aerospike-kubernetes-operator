@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	as "github.com/aerospike/aerospike-client-go"
-	"github.com/aerospike/aerospike-client-go/pkg/ripemd160"
+	as "github.com/ashishshinde/aerospike-client-go"
+	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -137,10 +137,6 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 							{
 								Name:  "CONFIG_MAP_NAME",
 								Value: getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID).Name,
-							},
-							{
-								Name:  "MULTI_POD_PER_HOST",
-								Value: strconv.FormatBool(aeroCluster.Spec.MultiPodPerHost),
 							},
 						}...),
 					}},
@@ -764,6 +760,8 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 
 	policy := as.NewClientPolicy()
 
+	policy.SeedOnlyCluster = true
+
 	// cluster name
 	policy.ClusterName = aeroCluster.Name
 
@@ -802,7 +800,7 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 // Called only when new cluster is created
 func updateStatefulSetStorage(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
+	storage := rackState.Rack.Storage
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	for _, volume := range storage.Volumes {
 		logger.Info("Add PVC for volume", log.Ctx{"volume": volume})

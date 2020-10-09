@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	as "github.com/aerospike/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -342,7 +342,11 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	var needRollingRestart bool
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig != nil {
-		needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfig, aeroCluster.Status.AerospikeConfig)
+		// If Aerospike configuration changes or network policy changes we need to regenerate aerospike.conf
+		// and rolling restart the pods.
+		needRollingRestart = !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfig, aeroCluster.Status.AerospikeConfig) ||
+			!reflect.DeepEqual(aeroCluster.Spec.AerospikeNetworkPolicy, aeroCluster.Status.AerospikeNetworkPolicy)
+
 		if !needRollingRestart {
 			// Check if rack aerospikeConfig has changed
 			for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
@@ -830,7 +834,9 @@ func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospik
 		})
 	}
 	// Create policy using status, status has current connection info
-	aeroClient, err := as.NewClientWithPolicyAndHost(r.getClientPolicy(aeroCluster), hosts...)
+	clientPolicy := r.getClientPolicy(aeroCluster)
+	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
+
 	if err != nil {
 		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
 	}
@@ -1046,6 +1052,27 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 		}
 	}
 
+	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
+	// This is not necessary since scale-up would cleanup danglin pod status. However done here for general
+	// cleanliness.
+	rackStateList := getNewRackStateList(aeroCluster)
+	for _, state := range rackStateList {
+		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed recover failed cluster: %v", err)
+		}
+
+		newPodNames := []string{}
+		for i := 0; i < len(pods.Items); i++ {
+			newPodNames = append(newPodNames, pods.Items[i].Name)
+		}
+
+		err = r.cleanupPods(aeroCluster, newPodNames, state)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed recover failed cluster: %v", err)
+		}
+	}
+
 	return reconcile.Result{}, fmt.Errorf("Forcing recreate of the cluster as status is nil")
 }
 
@@ -1062,6 +1089,8 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 	}
 
 	if len(needStatusCleanup) > 0 {
+		logger.Info("Removing pod status for dangling pods", log.Ctx{"pods": podNames})
+
 		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
 			return fmt.Errorf("Could not cleanup pod status: %v", err)
 		}
@@ -1069,12 +1098,12 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 
 	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
 
-	// Delete PVCs if cascaseDelete
+	// Delete PVCs if cascadeDelete
 	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
 	}
-	storage := utils.GetRackStorage(aeroCluster, rackState.Rack)
+	storage := rackState.Rack.Storage
 	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, pvcItems); err != nil {
 		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
 	}
@@ -1128,7 +1157,7 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 		if err != nil {
 			return fmt.Errorf("Could not find pvc for rack: %v", err)
 		}
-		storage := utils.GetRackStorage(aeroCluster, rack)
+		storage := rack.Storage
 		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, rackPVCItems); err != nil {
 			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 		}
@@ -1164,7 +1193,7 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 			continue
 		}
 
-		var cascadeDelete *bool
+		var cascadeDelete bool
 		v := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, path)
 		if v == nil {
 			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
@@ -1172,23 +1201,19 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 			} else {
 				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
 			}
-			logger.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "path": path, "cascadeDelete": *cascadeDelete})
+			logger.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", log.Ctx{"PVC": pvc.Name, "path": path, "cascadeDelete": cascadeDelete})
 
 		} else {
 			cascadeDelete = v.CascadeDelete
-			if cascadeDelete == nil {
-				logger.Error("PVC can not be removed, cascadeDelete policy is nil for volume %v. It should have been set internally", log.Ctx{"volume": *v})
-				continue
-			}
 		}
 
-		if *cascadeDelete {
+		if cascadeDelete {
 			if err := r.client.Delete(context.TODO(), &pvc); err != nil {
 				return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
 			}
-			logger.Info("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
+			logger.Info("PVC removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": cascadeDelete})
 		} else {
-			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": *cascadeDelete})
+			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": cascadeDelete})
 		}
 	}
 	return nil

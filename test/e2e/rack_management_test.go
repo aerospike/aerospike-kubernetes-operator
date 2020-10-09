@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	as "github.com/aerospike/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -442,7 +442,7 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 			// TODO:
 			// We may need to check for all keys in aerospikeConfig in rack
 			// but we know that we are changing for service only for now
-			host := &as.Host{Name: node.IP, Port: node.Port, TLSName: node.TLSName}
+			host := &as.Host{Name: node.HostExternalIP, Port: int(node.ServicePort), TLSName: node.TLSName}
 			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 			confs, err := asinfo.GetAsConfig("service")
 			if err != nil {
@@ -481,7 +481,7 @@ func isNamespaceRackEnabled(t *testing.T, f *framework.Framework, ctx *framework
 	}
 	node := aeroCluster.Status.Nodes[0]
 
-	host := &as.Host{Name: node.IP, Port: node.Port, TLSName: node.TLSName}
+	host := &as.Host{Name: node.HostExternalIP, Port: int(node.ServicePort), TLSName: node.TLSName}
 	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 
 	confs, err := asinfo.GetAsConfig("racks")

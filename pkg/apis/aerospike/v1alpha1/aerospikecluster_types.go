@@ -51,26 +51,16 @@ type AerospikeClusterSpec struct {
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 	// RackConfig
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
+	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
+	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
 }
-
-// rackConfig:
-//   policy:
-//     - region
-//     - zone
-//   racks:
-//     - id: 0
-//       region: us-east1
-//       zone: use-east1-1a
-//     - id: 2
-//       region: us-east1
-//       zone: use-east1-1b
 
 // RackConfig specifies all racks and related policies
 type RackConfig struct {
 	// List of Aerospike namespaces for which rack feature will be enabled
-	// If list empty then all namespaces are rack enabled
 	Namespaces []string `json:"namespaces,omitempty"`
-	Racks      []Rack   `json:"racks"`
+	// Racks is the list of all racks
+	Racks []Rack `json:"racks"`
 }
 
 // Rack specifies single rack config
@@ -82,9 +72,13 @@ type Rack struct {
 	RackLabel string `json:"rackLabel,omitempty"`
 	NodeName  string `json:"nodeName,omitempty"`
 	// AerospikeConfig override the common AerospikeConfig for this Rack
-	AerospikeConfig Values `json:"aerospikeConfig,omitempty"`
-	// Storage specified persistent storage to use for the Aerospike pods in this rack
-	Storage AerospikeStorageSpec `json:"storage,omitempty"`
+	InputAerospikeConfig *Values `json:"aerospikeConfig,omitempty"`
+	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config
+	AerospikeConfig Values `json:"effectiveAerospikeConfig"`
+	// Storage to use for the Aerospike pods in this rack. This value overwrites the global storage config
+	InputStorage *AerospikeStorageSpec `json:"storage,omitempty"`
+	// Effective/operative storage. The resultant is user input if specified else global storage
+	Storage AerospikeStorageSpec `json:"effectiveStorage"`
 }
 
 // DeepCopy implements deepcopy func for RackConfig
@@ -254,20 +248,30 @@ const (
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
+	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
-	CascadeDelete *bool `json:"cascadeDelete,omitempty"`
+	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
+
+	// Effective/operative value to use as the volume init method after applying defaults.
+	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
+
+	// Effective/operative value to use for cascade delete after applying defaults.
+	CascadeDelete bool `json:"effectiveCascadeDelete"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
 func (v *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
-	if v.InitMethod == nil {
+	if v.InputInitMethod == nil {
 		v.InitMethod = defaultPolicy.InitMethod
+	} else {
+		v.InitMethod = *v.InputInitMethod
 	}
 
-	if v.CascadeDelete == nil {
+	if v.InputCascadeDelete == nil {
 		v.CascadeDelete = defaultPolicy.CascadeDelete
+	} else {
+		v.CascadeDelete = *v.InputCascadeDelete
 	}
 }
 
@@ -351,8 +355,8 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 	defaultCascadeDelete := false
 
 	// Set storage level defaults.
-	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultFilesystemInitMethod, CascadeDelete: &defaultCascadeDelete})
-	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: &defaultBlockInitMethod, CascadeDelete: &defaultCascadeDelete})
+	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultFilesystemInitMethod, CascadeDelete: defaultCascadeDelete})
+	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultBlockInitMethod, CascadeDelete: defaultCascadeDelete})
 
 	for i := range v.Volumes {
 		// Use storage spec values as defaults for the volumes.
@@ -384,15 +388,15 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 		storagePaths[volume.Path] = 1
 
 		if volume.VolumeMode == AerospikeVolumeModeBlock {
-			if volume.InitMethod == nil || *volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", *volume.InitMethod, volume)
+			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", volume.InitMethod, volume)
 			}
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 			// TODO: Add validation for invalid initMethod (e.g. any random value)
 		} else {
-			if *volume.InitMethod != AerospikeVolumeInitMethodNone && *volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", *volume.InitMethod, volume)
+			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
 			}
 
 			fileStorageList = append(fileStorageList, volume.Path)
@@ -447,21 +451,106 @@ type AerospikeClusterStatus struct {
 	// Error status
 }
 
+// AerospikeNetworkType specifies the type of network address to use.
+// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal
+// +k8s:openapi-gen=true
+type AerospikeNetworkType string
+
+const (
+	// AerospikeNetworkTypeUnspecified implies using default access.
+	AerospikeNetworkTypeUnspecified AerospikeNetworkType = ""
+
+	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
+	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
+
+	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
+
+	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
+)
+
+// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
+type AerospikeNetworkPolicy struct {
+	// AccessType is the type of network address to use for Aerospike access address.
+	// Defaults to hostInternal.
+	AccessType AerospikeNetworkType `json:"access,omitempty"`
+
+	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
+	// Defaults to hostExternal.
+	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
+
+	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
+	// Defaults to hostInternal.
+	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
+
+	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
+	// Defaults to hostExternal.
+	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
+}
+
+// DeepCopy implements deepcopy func for RackConfig
+func (v *AerospikeNetworkPolicy) DeepCopy() *AerospikeNetworkPolicy {
+	src := *v
+	var dst = AerospikeNetworkPolicy{}
+	lib.DeepCopy(dst, src)
+	return &dst
+}
+
+// SetDefaults applies default to unspecified fields on the network policy.
+func (v *AerospikeNetworkPolicy) SetDefaults() {
+	if v.AccessType == AerospikeNetworkTypeUnspecified {
+		v.AccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if v.AlternateAccessType == AerospikeNetworkTypeUnspecified {
+		v.AlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+
+	if v.TLSAccessType == AerospikeNetworkTypeUnspecified {
+		v.TLSAccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if v.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
+		v.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+}
+
 // AerospikeNodeSummary defines the observed state of AerospikeClusterNode
 // +k8s:openapi-gen=true
 type AerospikeNodeSummary struct {
+	// PodName is the K8s pod name.
 	PodName string `json:"podName"`
-	IP      string `json:"ip"`
-	Port    int    `json:"port"`
-	TLSName string `json:"tlsname"`
+	// PodIP in the K8s network.
+	PodIP string `json:"podIP"`
+	// HostInternalIP of the K8s host this pod is scheduled on.
+	HostInternalIP string `json:"hostInternalIP,omitempty"`
+	// HostExternalIP of the K8s host this pod is scheduled on.
+	HostExternalIP string `json:"hostExternalIP,omitempty"`
+	// PodPort is the port K8s intenral Aerospike clients can connect to.
+	PodPort int `json:"podPort"`
+	// ServicePort is the port Aerospike clients outside K8s can connect to.
+	ServicePort int32 `json:"servicePort"`
 
+	// ClusterName is the name of the Aerospike cluster this pod belongs to.
 	ClusterName string `json:"clusterName"`
-	NodeID      string `json:"nodeID"`
-	Build       string `json:"build"`
+	// NodeID is the unique Aerospike ID for this pod.
+	NodeID string `json:"nodeID"`
+	// Build is the Aerospike build this pod is running.
+	Build string `json:"build"`
 	// RackID of rack to which this node belongs
 	RackID int `json:"rackID"`
-	// Features    []string `json:"features"`
-	// Principal   string   `json:"principal"`
+	// TLSName is the TLS name of this pod in the Aerospike cluster.
+	TLSName string `json:"tlsname,omitempty"`
+
+	// AccessEndpoints are the access endpoints for this pod.
+	AccessEndpoints []string `json:"accessEndpoints,omitempty"`
+	// AlternateAccessEndpoints are the alternate access endpoints for this pod.
+	AlternateAccessEndpoints []string `json:"alternateAccessEndpoints,omitempty"`
+	// TLSAccessEndpoints are the TLS access endpoints for this pod.
+	TLSAccessEndpoints []string `json:"tlsAccessEndpoints,omitempty"`
+	// TLSAlternateAccessEndpoints are the alternate TLS access endpoints for this pod.
+	TLSAlternateAccessEndpoints []string `json:"tlsAlternateAccessEndpoints,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeNodeSummary

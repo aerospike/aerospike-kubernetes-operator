@@ -10,6 +10,9 @@ spec:
   multiPodPerHost: true
 
   storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
     volumes:
       - path: /opt/aerospike
         storageClass: ssd

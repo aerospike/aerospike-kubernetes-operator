@@ -247,7 +247,9 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 	cpu := resource.MustParse("200m")
 
 	kubeNs, _ := ctx.GetNamespace()
-	// create memcached custom resource
+	cascadeDelete := true
+
+	// create Aerospike custom resource
 	return &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "jumpversiontest",
@@ -257,6 +259,9 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 			Size:  jumpTestClusterSize,
 			Build: "aerospike/aerospike-server-enterprise:" + version,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDelete,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
 						Path:         "/opt/aerospike",
