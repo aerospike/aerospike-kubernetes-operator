@@ -35,6 +35,8 @@ github.com/aerospike/aerospike-client-go v3.0.4+incompatible h1:LSfy1v82+y91jqez
 github.com/aerospike/aerospike-client-go v3.0.4+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0 h1:r5QkY/rnu3dtCr/J1JIuar1AI4a/Xc097J4I44Le56U=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67 h1:/hLp4b5/MzTUFPmaLe8AiqaMvDWPlBA+pMGwRoidxlw=
+github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf h1:qet1QNfXsQxTZqLG4oE62mJzwPIB8+Tee4RNCL9ulrY=
@@ -43,6 +45,14 @@ github.com/appscode/kutil v0.0.0-20180809044522-b50ebf9375cc/go.mod h1:fN+3rudjm
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
+github.com/ashishshinde/aerospike-client-go v3.0.3+incompatible h1:BDQX5rj2NvE8qdm/fdHY16692GAQLT+jSdurgCiAVV8=
+github.com/ashishshinde/aerospike-client-go v3.0.3+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200922165532-a4b88b5fd23b+incompatible h1:HDIgESkTJSWDh9ycFDkQ6MzsRxpHkhnIXXQ4YqDBQmQ=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200922165532-a4b88b5fd23b+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924014938-7dec71fbd37a+incompatible h1:95DHE8Ywh1xahzOZzTbcN6E0vQan0wpZqFTeXpvBIi8=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924014938-7dec71fbd37a+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible h1:YR55AqDYBTAvQFCOf9Ip3JbTwDzdjwwBnk8WlP4UEO0=
+github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
 github.com/auth0/go-jwt-middleware v0.0.0-20170425171159-5493cabe49f7/go.mod h1:LWMyo4iOLWXHGdBki7NIht1kHru/0wM179h+d3g8ATM=
 github.com/aws/aws-sdk-go v1.16.26/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/bazelbuild/bazel-gazelle v0.0.0-20181012220611-c728ce9f663e/go.mod h1:uHBSeeATKpVazAACZBDPL/Nk/UhQDDsJWDlqYJo8/Us=

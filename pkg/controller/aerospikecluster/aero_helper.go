@@ -16,6 +16,7 @@ package aerospikecluster
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -91,7 +92,7 @@ func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alp
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
@@ -99,7 +100,7 @@ func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return err
 	}
-	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, hostNameForTip(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) error {
@@ -131,7 +132,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 		// Cluster will have updated auth according to spec hence use spec auth info
 		cp := r.getClientPolicy(aeroCluster)
 
-		res, err := deployment.RunInfo(cp, asConn, "build", "cluster-name", "name")
+		res, err := deployment.RunInfo(cp, asConn, "build", "cluster-name", "name", "endpoints")
 		if err != nil {
 			return nil, err
 		}
@@ -140,15 +141,18 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 		if !ok {
 			return nil, fmt.Errorf("Failed to get aerospike build from pod %v", pod.Name)
 		}
+
 		clName, ok := res["cluster-name"]
 		if !ok {
 			return nil, fmt.Errorf("Failed to get aerospike cluster-name from pod %v", pod.Name)
 		}
+
 		nodeID, ok := res["name"]
 		if !ok {
 			return nil, fmt.Errorf("Failed to get aerospike nodeId from pod %v", pod.Name)
 		}
-		ip, err := r.getNodeIP(&pod)
+
+		podIP, hostInternalIP, hostExternalIP, err := r.getIPs(&pod)
 		if err != nil {
 			return nil, err
 		}
@@ -158,16 +162,43 @@ func (r *ReconcileAerospikeCluster) getAerospikeClusterNodeSummary(aeroCluster *
 			return nil, err
 		}
 
-		//return version, nil
-		nodeSummary := aerospikev1alpha1.AerospikeNodeSummary{
-			IP:          *ip,
-			Build:       build,
-			ClusterName: clName,
-			NodeID:      nodeID,
-			PodName:     pod.Name,
-			Port:        asConn.AerospikePort,
-			TLSName:     asConn.AerospikeTLSName,
+		servicePort, err := r.getServicePortForPod(aeroCluster, &pod)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting node summary: %v", err)
 		}
+
+		endpointsStr, ok := res["endpoints"]
+		if !ok {
+			return nil, fmt.Errorf("Failed to get aerospike endpoints from pod %v", pod.Name)
+		}
+
+		endpointsMap, err := parseInfoIntoMap(endpointsStr, ";", "=")
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse aerospike endpoints from pod %v: %v", pod.Name, err)
+		}
+
+		nodeSummary := aerospikev1alpha1.AerospikeNodeSummary{
+			PodName:                     pod.Name,
+			PodIP:                       podIP,
+			HostInternalIP:              hostInternalIP,
+			HostExternalIP:              hostExternalIP,
+			PodPort:                     asConn.AerospikePort,
+			ServicePort:                 servicePort,
+			ClusterName:                 clName,
+			NodeID:                      nodeID,
+			Build:                       build,
+			TLSName:                     asConn.AerospikeTLSName,
+			AccessEndpoints:             getEndpointsFromInfo("access", endpointsMap),
+			AlternateAccessEndpoints:    getEndpointsFromInfo("alternate-access", endpointsMap),
+			TLSAccessEndpoints:          getEndpointsFromInfo("tls-access", endpointsMap),
+			TLSAlternateAccessEndpoints: getEndpointsFromInfo("tls-alternate-access", endpointsMap),
+		}
+
+		if len(nodeSummary.AccessEndpoints) == 0 {
+			// At the least access endpoint should be present for this pod
+			return nil, fmt.Errorf("Something went wrong - access endpoint should not be empty for pod %v. Info result: %v", pod.Name, endpointsStr)
+		}
+
 		if *rackID != utils.DefaultRackID {
 			nodeSummary.RackID = *rackID
 		}
@@ -190,21 +221,28 @@ func getRackIDFromPodName(podName string) (*int, error) {
 	return &rackID, nil
 }
 
-func (r *ReconcileAerospikeCluster) getNodeIP(pod *corev1.Pod) (*string, error) {
-	ip := pod.Status.HostIP
+// getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
+// Note: the IPs returned from here should match the IPs generated in the pod intialization script for the init container.
+func (r *ReconcileAerospikeCluster) getIPs(pod *corev1.Pod) (string, string, string, error) {
+	podIP := pod.Status.PodIP
+	hostInternalIP := pod.Status.HostIP
+	hostExternalIP := hostInternalIP
 
 	k8sNode := &corev1.Node{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return "", "", "", fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
 	}
 	// If externalIP is present than give external ip
 	for _, add := range k8sNode.Status.Addresses {
 		if add.Type == corev1.NodeExternalIP && add.Address != "" {
-			ip = add.Address
+			hostExternalIP = add.Address
+		} else if add.Type == corev1.NodeInternalIP && add.Address != "" {
+			hostInternalIP = add.Address
 		}
 	}
-	return &ip, nil
+
+	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
 func (r *ReconcileAerospikeCluster) getServiceForPod(pod *corev1.Pod) (*corev1.Service, error) {
@@ -214,6 +252,36 @@ func (r *ReconcileAerospikeCluster) getServiceForPod(pod *corev1.Pod) (*corev1.S
 		return nil, fmt.Errorf("Failed to get service for pod %s: %v", pod.Name, err)
 	}
 	return service, nil
+}
+
+func (r *ReconcileAerospikeCluster) getServicePortForPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod) (int32, error) {
+	var port int32
+	tlsName := getServiceTLSName(aeroCluster)
+
+	if aeroCluster.Spec.MultiPodPerHost {
+		svc, err := r.getServiceForPod(pod)
+		if err != nil {
+			return 0, fmt.Errorf("Error getting service port: %v", err)
+		}
+		if tlsName == "" {
+			port = svc.Spec.Ports[0].NodePort
+		} else {
+			for _, portInfo := range svc.Spec.Ports {
+				if portInfo.Name == "tls" {
+					port = portInfo.NodePort
+					break
+				}
+			}
+		}
+	} else {
+		if tlsName == "" {
+			port = utils.ServicePort
+		} else {
+			port = utils.ServiceTLSPort
+		}
+	}
+
+	return port, nil
 }
 
 func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]*deployment.HostConn, error) {
@@ -249,33 +317,17 @@ func (r *ReconcileAerospikeCluster) newHostConn(aeroCluster *aerospikev1alpha1.A
 }
 
 func (r *ReconcileAerospikeCluster) newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
+	// Use pod IP and direct service port from within the operator for info calls.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
-
-	if aeroCluster.Spec.MultiPodPerHost {
-		svc, err := r.getServiceForPod(pod)
-		if err != nil {
-			return nil, err
-		}
-		if tlsName == "" {
-			port = svc.Spec.Ports[0].NodePort
-		} else {
-			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
-					port = portInfo.NodePort
-					break
-				}
-			}
-		}
+	if tlsName == "" {
+		port = utils.ServicePort
 	} else {
-		if tlsName == "" {
-			port = utils.ServicePort
-		} else {
-			port = utils.ServiceTLSPort
-		}
+		port = utils.ServiceTLSPort
 	}
-	host := pod.Status.HostIP
+
+	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{
 		AerospikeHostName: host,
 		AerospikePort:     int(port),
@@ -295,6 +347,59 @@ func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	return ""
 }
 
-func hostNameForTip(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
+func getFQDNForPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
+}
+
+// getEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
+//
+// E.g. addressName are access, alternate-access
+func getEndpointsFromInfo(addressName string, endpointsMap map[string]interface{}) []string {
+	endpoints := []string{}
+
+	portStr, ok := endpointsMap["service."+addressName+"-port"]
+	if !ok {
+		return endpoints
+	}
+
+	port, err := strconv.ParseInt(fmt.Sprintf("%v", portStr), 10, 32)
+
+	if err != nil || port == 0 {
+		return endpoints
+	}
+
+	hostsStr, ok := endpointsMap["service."+addressName+"-addresses"]
+	if !ok {
+		return endpoints
+	}
+
+	hosts := strings.Split(fmt.Sprintf("%v", hostsStr), ",")
+
+	for _, host := range hosts {
+		endpoints = append(endpoints, net.JoinHostPort(host, strconv.Itoa(int(port))))
+	}
+	return endpoints
+}
+
+// parseInfoIntoMap parses info string into a map.
+// TODO adapted from management lib. Should be made public there.
+func parseInfoIntoMap(str string, del string, sep string) (map[string]interface{}, error) {
+	m := make(map[string]interface{})
+	if str == "" {
+		return m, nil
+	}
+	items := strings.Split(str, del)
+	for _, item := range items {
+		if item == "" {
+			continue
+		}
+		kv := strings.Split(item, sep)
+		if len(kv) < 2 {
+			return nil, fmt.Errorf("Error parsing info item %s", item)
+		}
+
+		m[kv[0]] = strings.Join(kv[1:len(kv)], sep)
+	}
+
+	return m, nil
 }

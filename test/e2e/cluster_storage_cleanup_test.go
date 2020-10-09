@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aerospike/aerospike-client-go/pkg/ripemd160"
+	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -69,13 +69,10 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 
 			// Set common FileSystemVolumePolicy, BlockVolumePolicy to true
 			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-			// Set all volume nil, they would have been set default
-			for i := range aeroCluster.Spec.Storage.Volumes {
-				aeroCluster.Spec.Storage.Volumes[i].CascadeDelete = nil
-			}
+
 			remove := true
-			aeroCluster.Spec.Storage.BlockVolumePolicy.CascadeDelete = &remove
-			aeroCluster.Spec.Storage.FileSystemVolumePolicy.CascadeDelete = &remove
+			aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &remove
+			aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &remove
 
 			// RackID to be used to check if pvc are removed
 			racks := aeroCluster.Spec.RackConfig.Racks
@@ -105,15 +102,11 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 		t.Run("CleanupSelectedVolumes", func(t *testing.T) {
 			// Set common FileSystemVolumePolicy, BlockVolumePolicy to false and true for selected volumes
 			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-			// Set all volume nil, they would have been set default
-			for i := range aeroCluster.Spec.Storage.Volumes {
-				aeroCluster.Spec.Storage.Volumes[i].CascadeDelete = nil
-			}
 			remove := true
-			aeroCluster.Spec.Storage.BlockVolumePolicy.CascadeDelete = &remove
-			aeroCluster.Spec.Storage.FileSystemVolumePolicy.CascadeDelete = &remove
+			aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &remove
+			aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &remove
 			vRemove := false
-			aeroCluster.Spec.Storage.Volumes[0].CascadeDelete = &vRemove
+			aeroCluster.Spec.Storage.Volumes[0].InputCascadeDelete = &vRemove
 
 			// RackID to be used to check if pvc are removed
 			racks := aeroCluster.Spec.RackConfig.Racks
@@ -200,10 +193,10 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		// Rack is completely replaced
 		racks[0].Storage = aerospikev1alpha1.AerospikeStorageSpec{
 			BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-				CascadeDelete: &remove,
+				InputCascadeDelete: &remove,
 			},
 			FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-				CascadeDelete: &remove,
+				InputCascadeDelete: &remove,
 			},
 			Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 				{
@@ -448,10 +441,10 @@ func getStorage(volumes []aerospikev1alpha1.AerospikePersistentVolumeSpec) aeros
 	cascadeDelete := true
 	storage := aerospikev1alpha1.AerospikeStorageSpec{
 		BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-			CascadeDelete: &cascadeDelete,
+			InputCascadeDelete: &cascadeDelete,
 		},
 		FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-			CascadeDelete: &cascadeDelete,
+			InputCascadeDelete: &cascadeDelete,
 		},
 		Volumes: volumes,
 	}

@@ -17,11 +17,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kubeClient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	as "github.com/aerospike/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	as "github.com/ashishshinde/aerospike-client-go"
 )
 
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -94,6 +94,10 @@ func getClientForUser(username string, password string, aeroCluster *aerospikev1
 func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig["network"]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
+		if _, ok := networkConf["service"]; !ok {
+			// Service section will be missing if the spec is not obtained from server but is generated locally from test code.
+			return ""
+		}
 		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
 			return tlsName.(string)
 		}
@@ -180,15 +184,27 @@ func getClientPolicy(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *ku
 	// cluster name
 	policy.ClusterName = aeroCluster.Name
 
+	tlsName := getServiceTLSName(aeroCluster)
+
+	if tlsName != "" {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != aerospikev1alpha1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == aerospikev1alpha1.AerospikeNetworkTypeHostExternal {
+			policy.UseServicesAlternate = true
+		}
+	} else {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != aerospikev1alpha1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == aerospikev1alpha1.AerospikeNetworkTypeHostExternal {
+			policy.UseServicesAlternate = true
+		}
+	}
+
 	// tls config
-	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
+	if tlsName != "" {
 		logger.Debug("Set tls config in aeospike client policy")
 		tlsConf := tls.Config{
 			RootCAs:                  getClusterServerPool(aeroCluster, client),
 			Certificates:             []tls.Certificate{},
 			PreferServerCipherSuites: true,
 			// used only in testing
-			// InsecureSkipVerify: true,
+			InsecureSkipVerify: true,
 		}
 
 		cert, err := getClientCertificate(aeroCluster, client)
@@ -222,9 +238,10 @@ func getServiceForPod(pod *corev1.Pod, client *kubeClient.Client) (*corev1.Servi
 }
 
 func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod, client *kubeClient.Client) (*deployment.ASConn, error) {
+	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
 
-	tlsName := ""
+	tlsName := getServiceTLSName(aeroCluster)
 
 	if aeroCluster.Spec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, client)
@@ -248,6 +265,7 @@ func newAsConn(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *corev1.Pod,
 			port = utils.ServiceTLSPort
 		}
 	}
+
 	host, err := getNodeIP(pod, client)
 
 	if err != nil {

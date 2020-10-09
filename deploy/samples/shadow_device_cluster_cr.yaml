@@ -10,6 +10,11 @@ spec:
   build: aerospike/aerospike-server-enterprise:4.7.0.10
 
   storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    blockVolumePolicy:
+      cascadeDelete: true
     volumes:
       - storageClass: ssd
         path: /opt/aerospike
