@@ -292,12 +292,12 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 }
 
 func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) error {
-	oldRackIDList := getOldRackIDList(aeroCluster)
+	oldRackList := getOldRackList(aeroCluster)
 
-	for _, rackID := range oldRackIDList {
+	for _, rack := range oldRackList {
 		var rackFound bool
 		for _, newRack := range rackStateList {
-			if rackID == newRack.Rack.ID {
+			if rack.ID == newRack.Rack.ID {
 				rackFound = true
 				break
 			}
@@ -308,7 +308,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 		}
 
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackID)
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
 		err := r.client.Get(context.TODO(), stsName, found)
 		if err != nil {
 			// If not found then go to next
@@ -318,7 +318,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 			return err
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, err = r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: aerospikev1alpha1.Rack{ID: rackID}})
+		found, err = r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack})
 		if err != nil {
 			return err
 		}
@@ -1168,8 +1168,25 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 	if err != nil {
 		return fmt.Errorf("Could not find pvc for cluster: %v", err)
 	}
+
+	// removePVCs should be passed only filtered pvc otherwise rack pvc may be removed using global storage cascadeDelete
+	var fileredPVCItems []corev1.PersistentVolumeClaim
+	for _, pvc := range pvcItems {
+		var found bool
+		for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+			rackLables := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rack.ID)
+			if reflect.DeepEqual(pvc.Labels, rackLables) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fileredPVCItems = append(fileredPVCItems, pvc)
+		}
+	}
+
 	// Delete pvc for commmon storage
-	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &aeroCluster.Spec.Storage, pvcItems); err != nil {
+	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &aeroCluster.Spec.Storage, fileredPVCItems); err != nil {
 		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 	}
 

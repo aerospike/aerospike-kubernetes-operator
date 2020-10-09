@@ -1143,9 +1143,9 @@ func getPVCName(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	newPath := reg.ReplaceAllString(path, "-")
 
-	return hashPath + "-" + truncateString(newPath, 50), nil
+	newPath := reg.ReplaceAllString(path, "-")
+	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
 }
 
 func getHeadLessSvcName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
@@ -1173,13 +1173,13 @@ func getNamespacedNameForConfigMap(aeroCluster *aerospikev1alpha1.AerospikeClust
 	}
 }
 
-// TODO: Update this
-func splitRacks(nodeCount, rackCount int) []int {
-	nodesPerRack, extraNodes := nodeCount/rackCount, nodeCount%rackCount
+func splitRacks(nodes, racks int) []int {
+	nodesPerRack, extraNodes := nodes/racks, nodes%racks
 
+	// Distributing nodes in given racks
 	var topology []int
 
-	for rackIdx := 0; rackIdx < rackCount; rackIdx++ {
+	for rackIdx := 0; rackIdx < racks; rackIdx++ {
 		nodesForThisRack := nodesPerRack
 		if rackIdx < extraNodes {
 			nodesForThisRack++
@@ -1202,12 +1202,12 @@ func getNewRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []Rack
 	return rackStateList
 }
 
-func getOldRackIDList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []int {
-	var rackIDList []int
+func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospikev1alpha1.Rack {
+	var rackList []aerospikev1alpha1.Rack
 	for _, rack := range aeroCluster.Status.RackConfig.Racks {
-		rackIDList = append(rackIDList, rack.ID)
+		rackList = append(rackList, rack)
 	}
-	return rackIDList
+	return rackList
 }
 
 func getHashForPVCPath(path string) (string, error) {

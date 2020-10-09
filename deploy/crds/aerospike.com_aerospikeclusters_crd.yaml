@@ -170,7 +170,9 @@ spec:
                 user."
               type: boolean
             rackConfig:
-              description: RackConfig
+              description: RackConfig Configures the operator to deploy rack aware
+                Aerospike cluster. Pods will be deployed in given racks based on given
+                configuration
               properties:
                 namespaces:
                   description: List of Aerospike namespaces for which rack feature
@@ -184,8 +186,8 @@ spec:
                     description: Rack specifies single rack config
                     properties:
                       aerospikeConfig:
-                        description: AerospikeConfig override the common AerospikeConfig
-                          for this Rack
+                        description: AerospikeConfig overrides the common AerospikeConfig
+                          for this Rack. This is merged with global Aerospike config.
                       effectiveAerospikeConfig:
                         description: Effective/operative Aerospike config. The resultant
                           is merge of rack Aerospike config and the global Aerospike
@@ -201,8 +203,7 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
                               effectiveCascadeDelete:
                                 description: Effective/operative value to use for
@@ -237,8 +238,7 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
                               effectiveCascadeDelete:
                                 description: Effective/operative value to use for
@@ -278,7 +278,6 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after the pod this volume
                                     binds to is terminated and removed from the cluster.
-                                    Defaults to true.
                                   type: boolean
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
@@ -334,18 +333,25 @@ spec:
                             type: array
                         type: object
                       id:
+                        description: Identifier for the rack
                         type: integer
                       nodeName:
+                        description: K8s Node name for setting rack affinity. Rack
+                          pods will be deployed in given k8s Node
                         type: string
                       rackLabel:
-                        description: 'Node should have a label {aerospike.com/rack-label:
+                        description: 'Racklabel for setting rack affinity. Rack pods
+                          will be deployed in k8s nodes having rackLable {aerospike.com/rack-label:
                           <rack-label>}'
                         type: string
                       region:
+                        description: Region name for setting rack affinity. Rack pods
+                          will be deployed to given Region
                         type: string
                       storage:
-                        description: Storage to use for the Aerospike pods in this
-                          rack. This value overwrites the global storage config
+                        description: Storage specify persistent storage to use for
+                          the pods in this rack. This value overwrites the global
+                          storage config
                         properties:
                           blockVolumePolicy:
                             description: BlockVolumePolicy contains default policies
@@ -354,8 +360,7 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
                               effectiveCascadeDelete:
                                 description: Effective/operative value to use for
@@ -390,8 +395,7 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
                               effectiveCascadeDelete:
                                 description: Effective/operative value to use for
@@ -431,7 +435,6 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after the pod this volume
                                     binds to is terminated and removed from the cluster.
-                                    Defaults to true.
                                   type: boolean
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
@@ -487,6 +490,8 @@ spec:
                             type: array
                         type: object
                       zone:
+                        description: Zone name for setting rack affinity. Rack pods
+                          will be deployed to given Zone
                         type: string
                     required:
                     - effectiveAerospikeConfig
@@ -523,7 +528,7 @@ spec:
               format: int32
               type: integer
             storage:
-              description: Storage specified persistent storage to use for the Aerospike
+              description: Storage specify persistent storage to use for the Aerospike
                 pods.
               properties:
                 blockVolumePolicy:
@@ -533,7 +538,7 @@ spec:
                     cascadeDelete:
                       description: CascadeDelete determines if the persistent volumes
                         are deleted after the pod this volume binds to is terminated
-                        and removed from the cluster. Defaults to true.
+                        and removed from the cluster.
                       type: boolean
                     effectiveCascadeDelete:
                       description: Effective/operative value to use for cascade delete
@@ -568,7 +573,7 @@ spec:
                     cascadeDelete:
                       description: CascadeDelete determines if the persistent volumes
                         are deleted after the pod this volume binds to is terminated
-                        and removed from the cluster. Defaults to true.
+                        and removed from the cluster.
                       type: boolean
                     effectiveCascadeDelete:
                       description: Effective/operative value to use for cascade delete
@@ -605,7 +610,7 @@ spec:
                       cascadeDelete:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after the pod this volume binds to is terminated
-                          and removed from the cluster. Defaults to true.
+                          and removed from the cluster.
                         type: boolean
                       effectiveCascadeDelete:
                         description: Effective/operative value to use for cascade

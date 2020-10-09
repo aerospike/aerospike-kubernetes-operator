@@ -35,7 +35,7 @@ type AerospikeClusterSpec struct {
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
-	// Storage specified persistent storage to use for the Aerospike pods.
+	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
 	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
@@ -49,7 +49,7 @@ type AerospikeClusterSpec struct {
 	Resources *corev1.ResourceRequirements `json:"resources"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
-	// RackConfig
+	// RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
@@ -65,17 +65,21 @@ type RackConfig struct {
 
 // Rack specifies single rack config
 type Rack struct {
-	ID     int    `json:"id"`
-	Zone   string `json:"zone,omitempty"`
+	// Identifier for the rack
+	ID int `json:"id"`
+	// Zone name for setting rack affinity. Rack pods will be deployed to given Zone
+	Zone string `json:"zone,omitempty"`
+	// Region name for setting rack affinity. Rack pods will be deployed to given Region
 	Region string `json:"region,omitempty"`
-	// Node should have a label {aerospike.com/rack-label: <rack-label>}
+	// Racklabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLable {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
+	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
 	NodeName  string `json:"nodeName,omitempty"`
-	// AerospikeConfig override the common AerospikeConfig for this Rack
+	// AerospikeConfig overrides the common AerospikeConfig for this Rack. This is merged with global Aerospike config.
 	InputAerospikeConfig *Values `json:"aerospikeConfig,omitempty"`
 	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config
 	AerospikeConfig Values `json:"effectiveAerospikeConfig"`
-	// Storage to use for the Aerospike pods in this rack. This value overwrites the global storage config
+	// Storage specify persistent storage to use for the pods in this rack. This value overwrites the global storage config
 	InputStorage *AerospikeStorageSpec `json:"storage,omitempty"`
 	// Effective/operative storage. The resultant is user input if specified else global storage
 	Storage AerospikeStorageSpec `json:"effectiveStorage"`
@@ -250,7 +254,7 @@ type AerospikePersistentVolumePolicySpec struct {
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
 	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
 
-	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.
+	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
