@@ -2,3 +2,7 @@ features.conf
 *~
 \#*\#
 .\#*
+GPATH
+GRTAGS
+GTAGS
+godef

@@ -1,11 +1,13 @@
 package e2e
 
 import (
+	"bytes"
 	goctx "context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 var (
@@ -108,6 +112,8 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		return fmt.Errorf("Could not get namespace: %v", err)
 	}
 
+	labels := map[string]string{"app": "aerospike-cluster"}
+
 	// Create configSecret
 	if err := initConfigSecret(secretDir); err != nil {
 		return fmt.Errorf("Failed to init secrets: %v", err)
@@ -116,6 +122,7 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      tlsSecretName,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 		Type: v1.SecretTypeOpaque,
 		Data: secrets,
@@ -132,6 +139,7 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      authSecretName,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 		Type: v1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -149,6 +157,7 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      authSecretNameForUpdate,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 		Type: v1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -259,4 +268,47 @@ func validateError(t *testing.T, err error, msg string) {
 	} else {
 		t.Log(err)
 	}
+}
+
+// ExecuteCommandOnPod executes a command in the specified container,
+// returning stdout, stderr and error.
+func ExecuteCommandOnPod(pod *v1.Pod, containerName string, cmd ...string) (string, string, error) {
+	f := framework.Global
+	req := f.KubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.GetNamespace()).
+		SubResource("exec").
+		Param("container", containerName)
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: containerName,
+		Command:   cmd,
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+
+	var stdout, stderr bytes.Buffer
+
+	exec, err := remotecommand.NewSPDYExecutor(f.KubeConfig, "POST", req.URL())
+	if err != nil {
+		return "", "", err
+	}
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+
+	return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), err
+}
+
+func getRackID(pod *v1.Pod) (int, error) {
+	rack, ok := pod.ObjectMeta.Labels["aerospike.com/rack-id"]
+	if !ok {
+		return 0, nil
+	}
+
+	return strconv.Atoi(rack)
 }
