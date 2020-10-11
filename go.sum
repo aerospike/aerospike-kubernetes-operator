@@ -31,10 +31,6 @@ github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdko
 github.com/Rican7/retry v0.1.0/go.mod h1:FgOROf8P5bebcC1DS0PdOQiqGUridaZvikzUmkFW6gg=
 github.com/aerospike/aerospike-client-go v1.35.2 h1:TWV2Bn59Ig7SM4Zue84fFsPGlfFJX/6xbuGHyYFS/ag=
 github.com/aerospike/aerospike-client-go v1.35.2/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
-github.com/aerospike/aerospike-client-go v3.0.4+incompatible h1:LSfy1v82+y91jqezCoPnZ57OpXlQkQQLfMhUG19fVLQ=
-github.com/aerospike/aerospike-client-go v3.0.4+incompatible/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
-github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0 h1:r5QkY/rnu3dtCr/J1JIuar1AI4a/Xc097J4I44Le56U=
-github.com/aerospike/aerospike-management-lib v0.0.0-20200616042004-cf0d9ab614f0/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67 h1:/hLp4b5/MzTUFPmaLe8AiqaMvDWPlBA+pMGwRoidxlw=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
@@ -45,12 +41,6 @@ github.com/appscode/kutil v0.0.0-20180809044522-b50ebf9375cc/go.mod h1:fN+3rudjm
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
-github.com/ashishshinde/aerospike-client-go v3.0.3+incompatible h1:BDQX5rj2NvE8qdm/fdHY16692GAQLT+jSdurgCiAVV8=
-github.com/ashishshinde/aerospike-client-go v3.0.3+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
-github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200922165532-a4b88b5fd23b+incompatible h1:HDIgESkTJSWDh9ycFDkQ6MzsRxpHkhnIXXQ4YqDBQmQ=
-github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200922165532-a4b88b5fd23b+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
-github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924014938-7dec71fbd37a+incompatible h1:95DHE8Ywh1xahzOZzTbcN6E0vQan0wpZqFTeXpvBIi8=
-github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924014938-7dec71fbd37a+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
 github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible h1:YR55AqDYBTAvQFCOf9Ip3JbTwDzdjwwBnk8WlP4UEO0=
 github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible/go.mod h1:GZBUnRRrGRNPfKxVHjIv2Nv04a8s/xIVDVajpJ67Ieo=
 github.com/auth0/go-jwt-middleware v0.0.0-20170425171159-5493cabe49f7/go.mod h1:LWMyo4iOLWXHGdBki7NIht1kHru/0wM179h+d3g8ATM=
@@ -67,8 +57,6 @@ github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx2
 github.com/cespare/prettybench v0.0.0-20150116022406-03b8cfe5406c/go.mod h1:Xe6ZsFhtM8HrDku0pxJ3/Lr51rwykrzgFwpmTzleatY=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/chai2010/gettext-go v0.0.0-20160711120539-c6fed771bfd5/go.mod h1:/iP1qXHoty45bqomnu2LM+VVyAEdWN+vtSHGlQgyxbw=
-github.com/citrusleaf/aerospike-management-lib v0.0.0-20200830140144-1c66ea895fce h1:alxOPKwuE/EfvNE7vwpjqGrO28uDzS5/Pk2yKdazMso=
-github.com/citrusleaf/aerospike-management-lib v0.0.0-20200830140144-1c66ea895fce/go.mod h1:fqrIYOgHg00s8iZpBwP+yP+9PC607X/GeANomeomWIo=
 github.com/client9/misspell v0.0.0-20170928000206-9ce5d979ffda/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cloudflare/cfssl v0.0.0-20180726162950-56268a613adf/go.mod h1:yMWuSON2oQp+43nFtAV/uvKQIFpSPerB57DCt9t8sSA=
@@ -132,11 +120,14 @@ github.com/docker/go-connections v0.3.0/go.mod h1:Gbd7IOopHjR8Iph03tsViu4nIes5Xh
 github.com/docker/go-units v0.3.3/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/docker/libnetwork v0.0.0-20180830151422-a9cd636e3789/go.mod h1:93m0aTqz6z+g32wla4l4WxTrdtvBRmVzYRkYvasA5Z8=
 github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
+github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c h1:ZfSZ3P3BedhKGUhzj7BQlPSU4OvT6tfOKe3DVHzOA7s=
 github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c/go.mod h1:Qh8CwZgvJUkLughtfhJv5dyTYa91l1fOUCrgjqmcifM=
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
 github.com/elazarl/go-bindata-assetfs v1.0.0/go.mod h1:v+YaWX3bdea5J/mo8dSETolEo7R71Vk1u8bnjau5yw4=
 github.com/elazarl/goproxy v0.0.0-20170405201442-c4fc26588b6e/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
+github.com/elazarl/goproxy v0.0.0-20190421051319-9d40249d3c2f h1:8GDPb0tCY8LQ+OJ3dbHb5sA6YZWXFORQYZx5sdsTlMs=
 github.com/elazarl/goproxy v0.0.0-20190421051319-9d40249d3c2f/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
+github.com/elazarl/goproxy/ext v0.0.0-20190421051319-9d40249d3c2f h1:AUj1VoZUfhPhOPHULCQQDnGhRelpFWHMLhQVWDsS0v4=
 github.com/elazarl/goproxy/ext v0.0.0-20190421051319-9d40249d3c2f/go.mod h1:gNh8nYJoAm43RfaxurUnxr+N1PwuFV3ZMl/efxlIlY8=
 github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633/go.mod h1:otzb+WCGbkyDHkqmQmT5YD2WR4BBwUdeQoFo8l/7tVs=
 github.com/emicklei/go-restful v2.8.0+incompatible/go.mod h1:otzb+WCGbkyDHkqmQmT5YD2WR4BBwUdeQoFo8l/7tVs=

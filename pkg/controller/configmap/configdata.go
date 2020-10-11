@@ -161,10 +161,11 @@ for volume in volumes:
         if volume['volumeMode'] == 'block':
             localVolumePath = blockMountPoint + volume['path']
             if volume['effectiveInitMethod'] == 'dd':
+                # If device size and block size are not exact multiples or there os overhead on the device we will get "no space left on device". Ignore that error.
                 executeCommand('dd if=/dev/zero of=' +
-                               localVolumePath + ' bs=1M')
+                               localVolumePath + ' bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" /tmp/init-stderr')
             elif volume['effectiveInitMethod'] == 'blkdiscard':
-                executeCommand('blkdiscard ' + localVolumePath + ' bs=1M')
+                executeCommand('blkdiscard ' + localVolumePath)
         elif volume['volumeMode'] == 'filesystem':
             # volume path is always absolute.
             localVolumePath = fileSystemMountPoint + volume['path']
