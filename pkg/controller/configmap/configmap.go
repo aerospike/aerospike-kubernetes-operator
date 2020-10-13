@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	log "github.com/inconshreveable/log15"
 )
@@ -32,7 +31,7 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
 	version := strings.Split(aeroCluster.Spec.Build, ":")
 
-	config := utils.GetRackAerospikeConfig(aeroCluster, rack)
+	config := rack.AerospikeConfig
 
 	pkglog.Debug("AerospikeConfig", log.Ctx{"config": config, "build": aeroCluster.Spec.Build})
 

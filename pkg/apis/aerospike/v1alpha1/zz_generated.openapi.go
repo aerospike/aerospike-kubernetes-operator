@@ -95,7 +95,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					},
 					"storage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Storage specified persistent storage to use for the Aerospike pods.",
+							Description: "Storage specify persistent storage to use for the Aerospike pods.",
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec"),
 						},
 					},
@@ -140,8 +140,14 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 					},
 					"rackConfig": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RackConfig",
+							Description: "RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration",
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig"),
+						},
+					},
+					"aerospikeNetworkPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNetworkPolicy"),
 						},
 					},
 				},
@@ -149,7 +155,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNetworkPolicy", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -216,44 +222,65 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"podName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "PodName is the K8s pod name.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"ip": {
+					"podIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "PodIP in the K8s network.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"port": {
+					"hostInternalIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "HostInternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"tlsname": {
+					"hostExternalIP": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "HostExternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"podPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodPort is the port K8s intenral Aerospike clients can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"servicePort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServicePort is the port Aerospike clients outside K8s can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"clusterName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "ClusterName is the name of the Aerospike cluster this pod belongs to.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"nodeID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "NodeID is the unique Aerospike ID for this pod.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"build": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Build is the Aerospike build this pod is running.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"rackID": {
@@ -263,8 +290,71 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"tlsname": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSName is the TLS name of this pod in the Aerospike cluster.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"accessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AccessEndpoints are the access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"alternateAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AlternateAccessEndpoints are the alternate access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"tlsAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSAccessEndpoints are the TLS access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"tlsAlternateAccessEndpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLSAlternateAccessEndpoints are the alternate TLS access endpoints for this pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"podName", "ip", "port", "tlsname", "clusterName", "nodeID", "build", "rackID"},
+				Required: []string{"podName", "podIP", "podPort", "servicePort", "clusterName", "nodeID", "build", "rackID"},
 			},
 		},
 	}
@@ -286,7 +376,21 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 					},
 					"cascadeDelete": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster. Defaults to true.",
+							Description: "CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"effectiveInitMethod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Effective/operative value to use as the volume init method after applying defaults.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"effectiveCascadeDelete": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Effective/operative value to use for cascade delete after applying defaults.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -320,7 +424,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 						},
 					},
 				},
-				Required: []string{"path", "storageClass", "volumeMode", "sizeInGB"},
+				Required: []string{"effectiveCascadeDelete", "path", "storageClass", "volumeMode", "sizeInGB"},
 			},
 		},
 	}

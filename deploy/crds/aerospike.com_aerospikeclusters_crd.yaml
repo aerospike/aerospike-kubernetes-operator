@@ -115,6 +115,44 @@ spec:
               - mountPath
               - secretName
               type: object
+            aerospikeNetworkPolicy:
+              description: AerospikeNetworkPolicy specifies how clients and tools
+                access the Aerospike cluster.
+              properties:
+                access:
+                  description: AccessType is the type of network address to use for
+                    Aerospike access address. Defaults to hostInternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                alternateAccess:
+                  description: AlternateAccessType is the type of network address
+                    to use for Aerospike alternate access address. Defaults to hostExternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                tlsAccess:
+                  description: TLSAccessType is the type of network address to use
+                    for Aerospike TLS access address. Defaults to hostInternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+                tlsAlternateAccess:
+                  description: TLSAlternateAccessType is the type of network address
+                    to use for Aerospike TLS alternate access address. Defaults to
+                    hostExternal.
+                  enum:
+                  - pod
+                  - hostInternal
+                  - hostExternal
+                  type: string
+              type: object
             build:
               description: Aerospike cluster build
               type: string
@@ -132,34 +170,31 @@ spec:
                 user."
               type: boolean
             rackConfig:
-              description: RackConfig
+              description: RackConfig Configures the operator to deploy rack aware
+                Aerospike cluster. Pods will be deployed in given racks based on given
+                configuration
               properties:
                 namespaces:
                   description: List of Aerospike namespaces for which rack feature
-                    will be enabled If list empty then all namespaces are rack enabled
+                    will be enabled
                   items:
                     type: string
                   type: array
                 racks:
+                  description: Racks is the list of all racks
                   items:
                     description: Rack specifies single rack config
                     properties:
                       aerospikeConfig:
-                        description: AerospikeConfig override the common AerospikeConfig
-                          for this Rack
-                      id:
-                        type: integer
-                      nodeName:
-                        type: string
-                      rackLabel:
-                        description: 'Node should have a label {aerospike.com/rack-label:
-                          <rack-label>}'
-                        type: string
-                      region:
-                        type: string
-                      storage:
-                        description: Storage specified persistent storage to use for
-                          the Aerospike pods in this rack
+                        description: AerospikeConfig overrides the common AerospikeConfig
+                          for this Rack. This is merged with global Aerospike config.
+                      effectiveAerospikeConfig:
+                        description: Effective/operative Aerospike config. The resultant
+                          is merge of rack Aerospike config and the global Aerospike
+                          config
+                      effectiveStorage:
+                        description: Effective/operative storage. The resultant is
+                          user input if specified else global storage
                         properties:
                           blockVolumePolicy:
                             description: BlockVolumePolicy contains default policies
@@ -168,9 +203,21 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
                               initMethod:
                                 description: InitMethod determines how volumes attached
                                   to Aerospike server pods are initialized when the
@@ -181,6 +228,8 @@ spec:
                                 - blkdiscard
                                 - deleteFiles
                                 type: string
+                            required:
+                            - effectiveCascadeDelete
                             type: object
                           filesystemVolumePolicy:
                             description: FileSystemVolumePolicy contains default policies
@@ -189,9 +238,21 @@ spec:
                               cascadeDelete:
                                 description: CascadeDelete determines if the persistent
                                   volumes are deleted after the pod this volume binds
-                                  to is terminated and removed from the cluster. Defaults
-                                  to true.
+                                  to is terminated and removed from the cluster.
                                 type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
                               initMethod:
                                 description: InitMethod determines how volumes attached
                                   to Aerospike server pods are initialized when the
@@ -202,6 +263,8 @@ spec:
                                 - blkdiscard
                                 - deleteFiles
                                 type: string
+                            required:
+                            - effectiveCascadeDelete
                             type: object
                           volumes:
                             description: Volumes is the list of to attach to created
@@ -215,8 +278,20 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after the pod this volume
                                     binds to is terminated and removed from the cluster.
-                                    Defaults to true.
                                   type: boolean
+                                effectiveCascadeDelete:
+                                  description: Effective/operative value to use for
+                                    cascade delete after applying defaults.
+                                  type: boolean
+                                effectiveInitMethod:
+                                  description: Effective/operative value to use as
+                                    the volume init method after applying defaults.
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods are initialized when
@@ -249,6 +324,164 @@ spec:
                                   - block
                                   type: string
                               required:
+                              - effectiveCascadeDelete
+                              - path
+                              - sizeInGB
+                              - storageClass
+                              - volumeMode
+                              type: object
+                            type: array
+                        type: object
+                      id:
+                        description: Identifier for the rack
+                        type: integer
+                      nodeName:
+                        description: K8s Node name for setting rack affinity. Rack
+                          pods will be deployed in given k8s Node
+                        type: string
+                      rackLabel:
+                        description: 'Racklabel for setting rack affinity. Rack pods
+                          will be deployed in k8s nodes having rackLable {aerospike.com/rack-label:
+                          <rack-label>}'
+                        type: string
+                      region:
+                        description: Region name for setting rack affinity. Rack pods
+                          will be deployed to given Region
+                        type: string
+                      storage:
+                        description: Storage specify persistent storage to use for
+                          the pods in this rack. This value overwrites the global
+                          storage config
+                        properties:
+                          blockVolumePolicy:
+                            description: BlockVolumePolicy contains default policies
+                              for block volumes.
+                            properties:
+                              cascadeDelete:
+                                description: CascadeDelete determines if the persistent
+                                  volumes are deleted after the pod this volume binds
+                                  to is terminated and removed from the cluster.
+                                type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
+                              initMethod:
+                                description: InitMethod determines how volumes attached
+                                  to Aerospike server pods are initialized when the
+                                  pods comes up the first time. Defaults to "none".
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
+                            required:
+                            - effectiveCascadeDelete
+                            type: object
+                          filesystemVolumePolicy:
+                            description: FileSystemVolumePolicy contains default policies
+                              for filesystem volumes.
+                            properties:
+                              cascadeDelete:
+                                description: CascadeDelete determines if the persistent
+                                  volumes are deleted after the pod this volume binds
+                                  to is terminated and removed from the cluster.
+                                type: boolean
+                              effectiveCascadeDelete:
+                                description: Effective/operative value to use for
+                                  cascade delete after applying defaults.
+                                type: boolean
+                              effectiveInitMethod:
+                                description: Effective/operative value to use as the
+                                  volume init method after applying defaults.
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
+                              initMethod:
+                                description: InitMethod determines how volumes attached
+                                  to Aerospike server pods are initialized when the
+                                  pods comes up the first time. Defaults to "none".
+                                enum:
+                                - none
+                                - dd
+                                - blkdiscard
+                                - deleteFiles
+                                type: string
+                            required:
+                            - effectiveCascadeDelete
+                            type: object
+                          volumes:
+                            description: Volumes is the list of to attach to created
+                              pods.
+                            items:
+                              description: AerospikePersistentVolumeSpec describes
+                                a persistent volume to claim and attach to Aerospike
+                                pods.
+                              properties:
+                                cascadeDelete:
+                                  description: CascadeDelete determines if the persistent
+                                    volumes are deleted after the pod this volume
+                                    binds to is terminated and removed from the cluster.
+                                  type: boolean
+                                effectiveCascadeDelete:
+                                  description: Effective/operative value to use for
+                                    cascade delete after applying defaults.
+                                  type: boolean
+                                effectiveInitMethod:
+                                  description: Effective/operative value to use as
+                                    the volume init method after applying defaults.
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                initMethod:
+                                  description: InitMethod determines how volumes attached
+                                    to Aerospike server pods are initialized when
+                                    the pods comes up the first time. Defaults to
+                                    "none".
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                path:
+                                  description: Path is the device path where block
+                                    'block' mode volumes are attached to the pod or
+                                    the mount path for 'filesystem' mode.
+                                  type: string
+                                sizeInGB:
+                                  description: SizeInGB Size of volume in GB.
+                                  format: int32
+                                  type: integer
+                                storageClass:
+                                  description: StorageClass should be pre-created
+                                    by user.
+                                  type: string
+                                volumeMode:
+                                  description: VolumeMode specifies if the volume
+                                    is block/raw or a filesystem.
+                                  enum:
+                                  - filesystem
+                                  - block
+                                  type: string
+                              required:
+                              - effectiveCascadeDelete
                               - path
                               - sizeInGB
                               - storageClass
@@ -257,8 +490,12 @@ spec:
                             type: array
                         type: object
                       zone:
+                        description: Zone name for setting rack affinity. Rack pods
+                          will be deployed to given Zone
                         type: string
                     required:
+                    - effectiveAerospikeConfig
+                    - effectiveStorage
                     - id
                     type: object
                   type: array
@@ -291,7 +528,7 @@ spec:
               format: int32
               type: integer
             storage:
-              description: Storage specified persistent storage to use for the Aerospike
+              description: Storage specify persistent storage to use for the Aerospike
                 pods.
               properties:
                 blockVolumePolicy:
@@ -301,8 +538,21 @@ spec:
                     cascadeDelete:
                       description: CascadeDelete determines if the persistent volumes
                         are deleted after the pod this volume binds to is terminated
-                        and removed from the cluster. Defaults to true.
+                        and removed from the cluster.
                       type: boolean
+                    effectiveCascadeDelete:
+                      description: Effective/operative value to use for cascade delete
+                        after applying defaults.
+                      type: boolean
+                    effectiveInitMethod:
+                      description: Effective/operative value to use as the volume
+                        init method after applying defaults.
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
                     initMethod:
                       description: InitMethod determines how volumes attached to Aerospike
                         server pods are initialized when the pods comes up the first
@@ -313,6 +563,8 @@ spec:
                       - blkdiscard
                       - deleteFiles
                       type: string
+                  required:
+                  - effectiveCascadeDelete
                   type: object
                 filesystemVolumePolicy:
                   description: FileSystemVolumePolicy contains default policies for
@@ -321,8 +573,21 @@ spec:
                     cascadeDelete:
                       description: CascadeDelete determines if the persistent volumes
                         are deleted after the pod this volume binds to is terminated
-                        and removed from the cluster. Defaults to true.
+                        and removed from the cluster.
                       type: boolean
+                    effectiveCascadeDelete:
+                      description: Effective/operative value to use for cascade delete
+                        after applying defaults.
+                      type: boolean
+                    effectiveInitMethod:
+                      description: Effective/operative value to use as the volume
+                        init method after applying defaults.
+                      enum:
+                      - none
+                      - dd
+                      - blkdiscard
+                      - deleteFiles
+                      type: string
                     initMethod:
                       description: InitMethod determines how volumes attached to Aerospike
                         server pods are initialized when the pods comes up the first
@@ -333,6 +598,8 @@ spec:
                       - blkdiscard
                       - deleteFiles
                       type: string
+                  required:
+                  - effectiveCascadeDelete
                   type: object
                 volumes:
                   description: Volumes is the list of to attach to created pods.
@@ -343,8 +610,21 @@ spec:
                       cascadeDelete:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after the pod this volume binds to is terminated
-                          and removed from the cluster. Defaults to true.
+                          and removed from the cluster.
                         type: boolean
+                      effectiveCascadeDelete:
+                        description: Effective/operative value to use for cascade
+                          delete after applying defaults.
+                        type: boolean
+                      effectiveInitMethod:
+                        description: Effective/operative value to use as the volume
+                          init method after applying defaults.
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods are initialized when the pods comes
@@ -375,6 +655,7 @@ spec:
                         - block
                         type: string
                     required:
+                    - effectiveCascadeDelete
                     - path
                     - sizeInGB
                     - storageClass
@@ -413,32 +694,79 @@ spec:
               items:
                 description: AerospikeNodeSummary defines the observed state of AerospikeClusterNode
                 properties:
+                  accessEndpoints:
+                    description: AccessEndpoints are the access endpoints for this
+                      pod.
+                    items:
+                      type: string
+                    type: array
+                  alternateAccessEndpoints:
+                    description: AlternateAccessEndpoints are the alternate access
+                      endpoints for this pod.
+                    items:
+                      type: string
+                    type: array
                   build:
+                    description: Build is the Aerospike build this pod is running.
                     type: string
                   clusterName:
+                    description: ClusterName is the name of the Aerospike cluster
+                      this pod belongs to.
                     type: string
-                  ip:
+                  hostExternalIP:
+                    description: HostExternalIP of the K8s host this pod is scheduled
+                      on.
+                    type: string
+                  hostInternalIP:
+                    description: HostInternalIP of the K8s host this pod is scheduled
+                      on.
                     type: string
                   nodeID:
+                    description: NodeID is the unique Aerospike ID for this pod.
+                    type: string
+                  podIP:
+                    description: PodIP in the K8s network.
                     type: string
                   podName:
+                    description: PodName is the K8s pod name.
                     type: string
-                  port:
+                  podPort:
+                    description: PodPort is the port K8s intenral Aerospike clients
+                      can connect to.
                     type: integer
                   rackID:
                     description: RackID of rack to which this node belongs
                     type: integer
+                  servicePort:
+                    description: ServicePort is the port Aerospike clients outside
+                      K8s can connect to.
+                    format: int32
+                    type: integer
+                  tlsAccessEndpoints:
+                    description: TLSAccessEndpoints are the TLS access endpoints for
+                      this pod.
+                    items:
+                      type: string
+                    type: array
+                  tlsAlternateAccessEndpoints:
+                    description: TLSAlternateAccessEndpoints are the alternate TLS
+                      access endpoints for this pod.
+                    items:
+                      type: string
+                    type: array
                   tlsname:
+                    description: TLSName is the TLS name of this pod in the Aerospike
+                      cluster.
                     type: string
                 required:
                 - build
                 - clusterName
-                - ip
                 - nodeID
+                - podIP
                 - podName
-                - port
+                - podPort
                 - rackID
-                - tlsname
+                - servicePort
                 type: object
               type: array
             podStatus:
