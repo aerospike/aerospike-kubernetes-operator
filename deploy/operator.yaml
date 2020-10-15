@@ -41,7 +41,9 @@ spec:
           - containerPort: 8443
           env:
           - name: WATCH_NAMESPACE
-            value: aerospike,aerospike1,aerospike2
+            value: aerospike
+            # Use below value for watching multiple namespaces by operator
+            # value: aerospike,aerospike1,aerospike2
           - name: POD_NAME
             valueFrom:
               fieldRef:
