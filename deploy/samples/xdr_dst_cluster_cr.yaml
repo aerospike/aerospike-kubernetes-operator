@@ -2,7 +2,7 @@ apiVersion: aerospike.com/v1alpha1
 kind: AerospikeCluster
 metadata:
   name: aeroclusterdst
-  namespace: aerospike2
+  namespace: aerospike
 
 spec:
   size: 2

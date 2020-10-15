@@ -11,7 +11,7 @@ sleep 2
 kubectl apply -f deploy/crds/aerospike.com_aerospikeclusters_crd.yaml
 sleep 2
 
-kubectl apply -f deploy/rbac_operator.yaml
+kubectl apply -f deploy/rbac.yaml
 sleep 2
 
 kubectl apply -f deploy/operator.yaml
