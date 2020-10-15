@@ -51,20 +51,27 @@ func TestAerospikeCluster(t *testing.T) {
 	// t.Run("ClusterResources", func(t *testing.T) {
 	// 	ClusterResourceTest(t, f, ctx)
 	// })
-	t.Run("RackEnabledCluster", func(t *testing.T) {
-		RackEnabledClusterTest(t, f, ctx)
+	// t.Run("RackEnabledCluster", func(t *testing.T) {
+	// 	RackEnabledClusterTest(t, f, ctx)
+	// })
+	// t.Run("RackManagement", func(t *testing.T) {
+	// 	RackManagementTest(t, f, ctx)
+	// })
+	// t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
+	// 	RackAerospikeConfigUpdateTest(t, f, ctx)
+	// })
+	// t.Run("ClusterStorageCleanUpTest", func(t *testing.T) {
+	// 	ClusterStorageCleanUpTest(t, f, ctx)
+	// })
+	// t.Run("RackUsingLocalStorageTest", func(t *testing.T) {
+	// 	RackUsingLocalStorageTest(t, f, ctx)
+	// })
+	t.Run("DeployMultiClusterMultiNsTest", func(t *testing.T) {
+		DeployMultiClusterMultiNsTest(t, f, ctx)
 	})
-	t.Run("RackManagement", func(t *testing.T) {
-		RackManagementTest(t, f, ctx)
-	})
-	t.Run("RackAerospikeConfigUpdateTest", func(t *testing.T) {
-		RackAerospikeConfigUpdateTest(t, f, ctx)
-	})
-	t.Run("ClusterStorageCleanUpTest", func(t *testing.T) {
-		ClusterStorageCleanUpTest(t, f, ctx)
-	})
-	t.Run("RackUsingLocalStorageTest", func(t *testing.T) {
-		RackUsingLocalStorageTest(t, f, ctx)
+
+	t.Run("DeployMultiClusterSingleNsTest", func(t *testing.T) {
+		DeployMultiClusterSingleNsTest(t, f, ctx)
 	})
 }
 

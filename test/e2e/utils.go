@@ -112,12 +112,61 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		return fmt.Errorf("Could not get namespace: %v", err)
 	}
 
-	labels := map[string]string{"app": "aerospike-cluster"}
+	labels := getLabels()
 
 	// Create configSecret
 	if err := initConfigSecret(secretDir); err != nil {
 		return fmt.Errorf("Failed to init secrets: %v", err)
 	}
+
+	if err := createConfigSecret(f, ctx, namespace, labels); err != nil {
+		return err
+	}
+
+	// Create authSecret
+	pass := "admin123"
+	if err := createAuthSecret(f, ctx, namespace, labels, authSecretName, pass); err != nil {
+		return err
+	}
+
+	// Create another authSecret. Used in access-control tests
+	passUpdate := "admin321"
+	if err := createAuthSecret(f, ctx, namespace, labels, authSecretNameForUpdate, passUpdate); err != nil {
+		return err
+	}
+
+	// Create preReq for multiclusters
+	if err := createClusterResource(f, ctx); err != nil {
+		return err
+	}
+	if err := createClusterPreReq(f, ctx, multiClusterNs1); err != nil {
+		return err
+	}
+	if err := createClusterPreReq(f, ctx, multiClusterNs2); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createClusterPreReq(f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+	labels := getLabels()
+
+	if err := createConfigSecret(f, ctx, namespace, labels); err != nil {
+		return err
+	}
+
+	// Create authSecret
+	pass := "admin123"
+	if err := createAuthSecret(f, ctx, namespace, labels, authSecretName, pass); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createConfigSecret(f *framework.Framework, ctx *framework.TestCtx, namespace string, labels map[string]string) error {
+	// Create configSecret
 	s := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      tlsSecretName,
@@ -128,16 +177,19 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		Data: secrets,
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err = f.Client.Create(goctx.TODO(), s, cleanupOption(ctx))
+	err := f.Client.Create(goctx.TODO(), s, cleanupOption(ctx))
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func createAuthSecret(f *framework.Framework, ctx *framework.TestCtx, namespace string, labels map[string]string, secretName, pass string) error {
 
 	// Create authSecret
-	pass := "admin123"
 	as := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      authSecretName,
+			Name:      secretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
@@ -147,35 +199,16 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 		},
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err = f.Client.Create(goctx.TODO(), as, cleanupOption(ctx))
+	err := f.Client.Create(goctx.TODO(), as, cleanupOption(ctx))
 	if err != nil {
 		return err
 	}
 
-	passUpdate := "admin321"
-	asUpdate := &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      authSecretNameForUpdate,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Type: v1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"password": []byte(passUpdate),
-		},
-	}
-	// use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err = f.Client.Create(goctx.TODO(), asUpdate, cleanupOption(ctx))
-	if err != nil {
-		return err
-	}
-
-	// // Create rbac
-	// err = createServiceAccountWithPermission(f, ctx, namespace)
-	// if err != nil {
-	// 	return err
-	// }
 	return nil
+}
+
+func getLabels() map[string]string {
+	return map[string]string{"app": "aerospike-cluster"}
 }
 
 // WaitForOperatorDeployment has the same functionality as WaitForDeployment but will no wait for the deployment if the
@@ -235,7 +268,10 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 			//t.Logf("Cluster status not updated. cluster.Status.Spec %v, cluster.Spec %v", newCluster.Status.AerospikeClusterSpec, newCluster.Spec)
 			return false, nil
 		}
-		if newCluster.Status.Nodes != nil && len(newCluster.Status.Nodes) == replicas {
+		if len(newCluster.Status.Nodes) != replicas {
+			t.Logf("Cluster status doesn't have node summary for all nodes. Cluster status may not have fully updated")
+			return false, nil
+		} else {
 			for _, node := range newCluster.Status.Nodes {
 				if node.NodeID == "" {
 					t.Logf("Cluster nodes nodeID is empty")
@@ -247,6 +283,7 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 				}
 			}
 		}
+
 		return true, nil
 	})
 	if err != nil {

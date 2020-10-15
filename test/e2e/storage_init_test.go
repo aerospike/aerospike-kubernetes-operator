@@ -1,3 +1,5 @@
+// +build !noac
+
 // Tests storage initialization works as expected.
 // If specifed devices should be initialized only on first use.
 
