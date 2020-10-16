@@ -1,8 +1,9 @@
 apiVersion: aerospike.com/v1alpha1
 kind: AerospikeCluster
 metadata:
-  name: aeroclustersrc
+  name: aeroclusterdst
   namespace: aerospike
+
 spec:
   size: 2
   build: aerospike/aerospike-server-enterprise:4.7.0.10
@@ -20,10 +21,6 @@ spec:
         storageClass: ssd
         volumeMode: filesystem
         sizeInGB: 3
-      - path: /opt/aerospike/xdr
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
 
   multiPodPerHost: true
 
@@ -35,31 +32,20 @@ spec:
           - sys-admin
           - user-admin
           - read-write
+  aerospikeNetworkPolicy:
+    access: "pod"
 
   aerospikeConfigSecret:
     secretName: aerospike-secret
     mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
-    logging:
-      - name: /var/log/aerospike/aerospike.log
-        any: info
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
       enable-security: true
-    xdr:
-      enable-xdr: true
-      xdr-digestlog-path: /opt/aerospike/xdr/digestlog 5G
-      xdr-compression-threshold: 1000
-      datacenter:
-        - name: dc1
-          dc-node-address-port: "aeroclusterdst-0-0 3000"
-          dc-security-config-file: /etc/aerospike/secret/security_credentials_DC1.txt
     namespace:
       - name: test
-        enable-xdr: true
-        xdr-remote-datacenter: dc1
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:

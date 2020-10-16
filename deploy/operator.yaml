@@ -33,7 +33,7 @@ spec:
       serviceAccountName: aerospike-kubernetes-operator
       containers:
         - name: aerospike-kubernetes-operator
-          image: aerospike/aerospike-kubernetes-operator:v0.0.7-beta
+          image: aerospike/aerospike-kubernetes-operator:v0.0.8-beta
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always
@@ -41,9 +41,9 @@ spec:
           - containerPort: 8443
           env:
           - name: WATCH_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
+            value: aerospike
+            # Use below value for watching multiple namespaces by operator
+            # value: aerospike,aerospike1,aerospike2
           - name: POD_NAME
             valueFrom:
               fieldRef:

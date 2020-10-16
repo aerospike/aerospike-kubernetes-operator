@@ -39,7 +39,7 @@ spec:
       containers:
         - name: aerospike-kubernetes-operator-test
           # Replace this with the built image name
-          image: aerospike/aerospike-kubernetes-operator:v0.0.7-beta
+          image: aerospike/aerospike-kubernetes-operator:v0.0.8-beta
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always
@@ -47,9 +47,7 @@ spec:
           - containerPort: 8443
           env:
           - name: WATCH_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
+            value: test,test1,test2
           - name: POD_NAME
             valueFrom:
               fieldRef:
@@ -162,50 +160,52 @@ roleRef:
   name: aerospike-kubernetes-operator-test
   apiGroup: rbac.authorization.k8s.io
 
----
+# ---
+# Resources for clusters
+# These are moved inside code. From here we can not create objects for multiple namespaces
 
-# Service account used by the pods to obtain pod metadata.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  # Do not change name, its hard-coded in operator
-  name: aerospike-cluster
-  namespace: test
+# # Service account used by the pods to obtain pod metadata.
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   # Do not change name, its hard-coded in operator
+#   name: aerospike-cluster
+#   namespace: test
 
----
+# ---
 
-# Role
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: aerospike-cluster
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  - services
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - aerospike.com
-  resources:
-  - '*'
-  verbs:
-  - '*'
----
+# # Role
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: aerospike-cluster
+# rules:
+# - apiGroups:
+#   - ""
+#   resources:
+#   - nodes
+#   - services
+#   verbs:
+#   - get
+#   - list
+# - apiGroups:
+#   - aerospike.com
+#   resources:
+#   - '*'
+#   verbs:
+#   - '*'
+# ---
 
-# RoleBinding
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: aerospike-cluster
-subjects:
-- kind: ServiceAccount
-  name: aerospike-cluster
-  namespace: test
-roleRef:
-  kind: ClusterRole
-  name: aerospike-cluster
-  apiGroup: rbac.authorization.k8s.io
+# # RoleBinding
+# kind: ClusterRoleBinding
+# apiVersion: rbac.authorization.k8s.io/v1
+# metadata:
+#   name: aerospike-cluster
+# subjects:
+# - kind: ServiceAccount
+#   name: aerospike-cluster
+#   namespace: test
+# roleRef:
+#   kind: ClusterRole
+#   name: aerospike-cluster
+#   apiGroup: rbac.authorization.k8s.io

@@ -1143,7 +1143,6 @@ func getPVCName(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	newPath := reg.ReplaceAllString(path, "-")
 	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"runtime"
@@ -131,7 +132,7 @@ func main() {
 
 	printVersion()
 
-	namespace, err := k8sutil.GetWatchNamespace()
+	watchNs, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		logger.Error("Failed to get watch namespace", log.Ctx{"err": err})
 		os.Exit(1)
@@ -183,14 +184,23 @@ func main() {
 	logger.Info("Set sync period", log.Ctx{"period": d})
 
 	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err = manager.New(cfg, manager.Options{
+	options := manager.Options{
 		Scheme:             scheme,
-		Namespace:          namespace,
 		MapperProvider:     restmapper.NewDynamicRESTMapper,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 		NewClient:          newClient,
 		SyncPeriod:         d,
-	})
+	}
+
+	// Add support for multiple namespaces given in WATCH_NAMESPACE (e.g. ns1,ns2)
+	// For more Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
+	if strings.Contains(watchNs, ",") {
+		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(watchNs, ","))
+	} else {
+		options.Namespace = watchNs
+	}
+
+	mgr, err = manager.New(cfg, options)
 	if err != nil {
 		logger.Error("Failed to create manager", log.Ctx{"err": err})
 		os.Exit(1)
@@ -238,15 +248,21 @@ func main() {
 	// 	}
 	// }
 
+	operatorNs, err := k8sutil.GetOperatorNamespace()
+	if err != nil {
+		logger.Error("Failed to get operator namespace", log.Ctx{"err": err})
+		os.Exit(1)
+	}
+
 	logger.Info("Setup secret for admission webhook")
-	err = ctrAdmission.SetupSecret(certDir, namespace)
+	err = ctrAdmission.SetupSecret(certDir, operatorNs)
 	if err != nil {
 		logger.Error("Failed to setup secret for webhook", log.Ctx{"err": err})
 		os.Exit(1)
 	}
 
 	logger.Info("Setup webhook")
-	if err := setupWebhookServer(cfg, namespace); err != nil {
+	if err := setupWebhookServer(cfg, operatorNs); err != nil {
 		logger.Error("Failed to setup admission webhook server", log.Ctx{"err": err})
 		os.Exit(1)
 	}
@@ -292,7 +308,7 @@ func serveCRMetrics(cfg *rest.Config) error {
 	return nil
 }
 
-func setupWebhookServer(cfg *rest.Config, namespace string) error {
+func setupWebhookServer(cfg *rest.Config, operatorNs string) error {
 
 	logger.Info("Add validating webhook handler")
 	validatingHook := &webhook.Admission{
@@ -321,13 +337,13 @@ func setupWebhookServer(cfg *rest.Config, namespace string) error {
 	hookServer.Register(ctrAdmission.AerospikeClusterMutationWebhookPath, mutatingHook)
 
 	logger.Info("Register validation webhook")
-	wh1 := ctrAdmission.NewValidatingAdmissionWebhook(namespace, mgr, mgr.GetClient())
+	wh1 := ctrAdmission.NewValidatingAdmissionWebhook(operatorNs, mgr, mgr.GetClient())
 	if err := wh1.Register(certDir); err != nil {
 		return err
 	}
 
 	logger.Info("Register mutation webhook")
-	wh2 := ctrAdmission.NewMutatingAdmissionWebhook(namespace, mgr, mgr.GetClient())
+	wh2 := ctrAdmission.NewMutatingAdmissionWebhook(operatorNs, mgr, mgr.GetClient())
 	if err := wh2.Register(certDir); err != nil {
 		return err
 	}

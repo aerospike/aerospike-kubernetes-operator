@@ -254,6 +254,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 	cascadeDelete := false
+
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -268,6 +269,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{

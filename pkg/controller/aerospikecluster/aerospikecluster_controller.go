@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,10 +18,12 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	log "github.com/inconshreveable/log15"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -35,6 +38,9 @@ import (
 const defaultUser = "admin"
 const defaultPass = "admin"
 const patchFieldOwner = "aerospike-kuberneter-operator"
+
+// Number of reconcile threads to run reconcile operations
+var maxConcurrentReconciles = runtime.NumCPU() * 2
 
 var (
 	updateOption = &client.UpdateOptions{
@@ -59,19 +65,17 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("aerospikecluster-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("aerospikecluster-controller", mgr, controller.Options{Reconciler: r, MaxConcurrentReconciles: maxConcurrentReconciles})
 	if err != nil {
 		return err
 	}
-	var pred predicate.Predicate
 
-	pred = predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-		},
-	}
 	// Watch for changes to primary resource AerospikeCluster
-	err = c.Watch(&source.Kind{Type: &aerospikev1alpha1.AerospikeCluster{}}, &handler.EnqueueRequestForObject{}, pred)
+	err = c.Watch(
+		&source.Kind{Type: &aerospikev1alpha1.AerospikeCluster{}},
+		&handler.EnqueueRequestForObject{},
+		// Skip where cluster object generation is not changed
+		predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
 	}
@@ -81,18 +85,19 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Think all possible situation
 
 	// Watch for changes to secondary resource StatefulSet and requeue the owner AerospikeCluster
-	err = c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
-	}, predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return false
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			//return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
-			return false
-		},
-	})
+	err = c.Watch(
+		&source.Kind{Type: &appsv1.StatefulSet{}},
+		&handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
+		}, predicate.Funcs{
+			CreateFunc: func(e event.CreateEvent) bool {
+				return false
+			},
+			UpdateFunc: func(e event.UpdateEvent) bool {
+				return false
+			},
+		})
 	if err != nil {
 		return err
 	}
@@ -110,7 +115,7 @@ type ReconcileAerospikeCluster struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
-	scheme *runtime.Scheme
+	scheme *k8sRuntime.Scheme
 }
 
 // RackState contains the rack configuration and rack size.
