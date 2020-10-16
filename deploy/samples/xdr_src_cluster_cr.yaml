@@ -34,6 +34,7 @@ spec:
         roles:
           - sys-admin
           - user-admin
+          - read-write
 
   aerospikeConfigSecret:
     secretName: aerospike-secret
@@ -53,7 +54,7 @@ spec:
       xdr-compression-threshold: 1000
       datacenter:
         - name: dc1
-          dc-node-address-port: "192.168.15.250 8080"
+          dc-node-address-port: "aeroclusterdst-0-0 3000"
           dc-security-config-file: /etc/aerospike/secret/security_credentials_DC1.txt
     namespace:
       - name: test

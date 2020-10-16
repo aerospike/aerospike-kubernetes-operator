@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,10 +18,12 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	log "github.com/inconshreveable/log15"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,7 +40,7 @@ const defaultPass = "admin"
 const patchFieldOwner = "aerospike-kuberneter-operator"
 
 // Number of reconcile threads to run reconcile operations
-const maxConcurrentReconciles = 3
+var maxConcurrentReconciles = runtime.NumCPU() * 2
 
 var (
 	updateOption = &client.UpdateOptions{
@@ -112,7 +115,7 @@ type ReconcileAerospikeCluster struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
-	scheme *runtime.Scheme
+	scheme *k8sRuntime.Scheme
 }
 
 // RackState contains the rack configuration and rack size.

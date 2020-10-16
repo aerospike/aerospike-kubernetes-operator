@@ -31,6 +31,9 @@ spec:
         roles:
           - sys-admin
           - user-admin
+          - read-write
+  aerospikeNetworkPolicy:
+    access: "pod"
 
   aerospikeConfigSecret:
     secretName: aerospike-secret
