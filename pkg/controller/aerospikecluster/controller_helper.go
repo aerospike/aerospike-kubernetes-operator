@@ -1083,7 +1083,9 @@ func newEnvVar(name, fieldPath string) corev1.EnvVar {
 }
 
 func isClusterResourceUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
-
+	if aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources == nil {
+		return false
+	}
 	// TODO: What should be the convention, should we allow removing these things once added in spec?
 	// Should removing be the no op or change the cluster also for these changes? Check for the other also, like auth, secret
 	if (aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources != nil) ||
