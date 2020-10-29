@@ -53,38 +53,45 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 	return version, nil
 }
 
-func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) error {
+func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	allHostConns, err := r.newAllHostConn(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err)
+		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
 
-	// Wait for migration to finish
-	for {
-		logger.Info("Waiting for migrations to be zero")
-		time.Sleep(time.Second * 2)
+	const maxRetry = 10
+	const retryInterval = time.Second * 60
 
-		isStable, err := deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
+	var isStable bool
+	// Wait for migration to finish. Wait for 10 min for now
+	for idx := 1; idx <= maxRetry; idx++ {
+		logger.Debug("Waiting for migrations to be zero")
+		time.Sleep(retryInterval)
+
+		isStable, err = deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
 		if err != nil {
-			return err
+			return reconcileError(err)
 		}
 		if isStable {
 			break
 		}
 	}
-	time.Sleep(time.Second * 10)
+	// TODO: Requeue after how much time. 3 min for now
+	if !isStable {
+		return reconcileRequeueAfter(180)
+	}
 
 	// Quiesce node
 	selectedHostConn, err := r.newHostConn(aeroCluster, pod)
 	if err != nil {
-		return fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err)
+		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err))
 	}
 	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
-		return err
+		return reconcileError(err)
 	}
-	return nil
+	return reconcileContinue()
 }
 
 func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {

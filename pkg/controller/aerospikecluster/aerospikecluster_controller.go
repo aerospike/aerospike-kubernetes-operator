@@ -167,8 +167,8 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 	}
 
 	// Reconcile all racks
-	if err := r.reconcileRacks(aeroCluster); err != nil {
-		return reconcile.Result{}, err
+	if res := r.reconcileRacks(aeroCluster); !res.isContinue {
+		return res.result, res.err
 	}
 
 	// Setup access control.
@@ -232,12 +232,13 @@ func (r *ReconcileAerospikeCluster) getResourceVersion(stsName types.NamespacedN
 	return found.ObjectMeta.ResourceVersion
 }
 
-func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Reconciling rack for AerospikeCluster")
 
 	var scaledDownRackSTSList []appsv1.StatefulSet
 	var scaledDownRackList []RackState
+	var res reconcileResult
 
 	rackStateList := getNewRackStateList(aeroCluster)
 	for _, state := range rackStateList {
@@ -245,13 +246,14 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 		stsName := getNamespacedNameForStatefulSet(aeroCluster, state.Rack.ID)
 		if err := r.client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
-				return err
+				return reconcileError(err)
 			}
+
 			// Create statefulset with 0 size rack and then scaleUp later in reconcile
 			zeroSizedRack := RackState{Rack: state.Rack, Size: 0}
-			found, err = r.createRack(aeroCluster, zeroSizedRack)
-			if err != nil {
-				return err
+			found, res = r.createRack(aeroCluster, zeroSizedRack)
+			if !res.isContinue {
+				return res
 			}
 		}
 
@@ -261,31 +263,31 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 			scaledDownRackList = append(scaledDownRackList, state)
 		} else {
 			// Reconcile other statefulset
-			if err := r.reconcileRack(aeroCluster, found, state); err != nil {
-				return err
+			if res := r.reconcileRack(aeroCluster, found, state); !res.isContinue {
+				return res
 			}
 		}
 	}
 
 	// Reconcile scaledDownRacks after all other racks are reconciled
 	for idx, state := range scaledDownRackList {
-		if err := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); err != nil {
-			return err
+		if res := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); !res.isContinue {
+			return res
 		}
 	}
 
 	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
-		// remove removed racks
-		if err := r.deleteRacks(aeroCluster, rackStateList); err != nil {
-			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": err})
-			return err
+		// Remove removed racks
+		if res := r.deleteRacks(aeroCluster, rackStateList); !res.isContinue {
+			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": res.err})
+			return res
 		}
 	}
 
-	return nil
+	return reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 	logger.Info("Create new Aerospike cluster if needed")
 
@@ -293,13 +295,14 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 	logger.Info("AerospikeCluster", log.Ctx{"Spec": aeroCluster.Spec})
 	if err := r.createHeadlessSvc(aeroCluster); err != nil {
 		logger.Error("Failed to create headless service", log.Ctx{"err": err})
-		return nil, err
+		return nil, reconcileError(err)
 	}
+
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID)
 	if err := r.buildConfigMap(aeroCluster, cmName, rackState.Rack); err != nil {
 		logger.Error("Failed to create configMap from AerospikeConfig", log.Ctx{"err": err})
-		return nil, err
+		return nil, reconcileError(err)
 	}
 
 	stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
@@ -308,12 +311,12 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 		logger.Error("Statefulset setup failed. Deleting statefulset", log.Ctx{"name": stsName, "err": err})
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
 		r.deleteStatefulSet(aeroCluster, found)
-		return nil, err
+		return nil, reconcileError(err)
 	}
-	return found, nil
+	return found, reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) error {
+func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) reconcileResult {
 	oldRackList := getOldRackList(aeroCluster)
 
 	for _, rack := range oldRackList {
@@ -337,37 +340,37 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 			if errors.IsNotFound(err) {
 				continue
 			}
-			return err
+			return reconcileError(err)
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, err = r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack})
-		if err != nil {
-			return err
+		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack})
+		if !res.isContinue {
+			return res
 		}
 
 		// Delete sts
 		if err := r.deleteStatefulSet(aeroCluster, found); err != nil {
-			return err
+			return reconcileError(err)
 		}
 	}
-	return nil
+	return reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) error {
+func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 	logger.Info("Reconcile existing Aerospike cluster statefulset")
 
 	logger.Info("Ensure the StatefulSet size is the same as the spec")
 
-	var err error
+	var res reconcileResult
 
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
-		found, err = r.scaleDownRack(aeroCluster, found, rackState)
-		if err != nil {
-			logger.Error("Failed to scaleDown StatefulSet pods", log.Ctx{"err": err})
-			return err
+		found, res = r.scaleDownRack(aeroCluster, found, rackState)
+		if !res.isContinue {
+			logger.Error("Failed to scaleDown StatefulSet pods", log.Ctx{"err": res.err})
+			return res
 		}
 	}
 
@@ -376,42 +379,42 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	if isRackAerospikeConfigUpdated {
 		if err := r.updateConfigMap(aeroCluster, getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
 			logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
-			return err
+			return reconcileError(err)
 		}
 	}
 
 	// Upgrade
 	upgradeNeeded, err := r.isAeroClusterUpgradeNeeded(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return err
+		return reconcileError(err)
 	}
 
 	if upgradeNeeded {
-		found, err = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Build, rackState)
-		if err != nil {
-			logger.Error("Failed to update StatefulSet image", log.Ctx{"err": err})
-			return err
+		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Build, rackState)
+		if !res.isContinue {
+			logger.Error("Failed to update StatefulSet image", log.Ctx{"err": res.err})
+			return res
 		}
 	} else {
 		if isRackAerospikeConfigUpdated || r.needRollingRestart(aeroCluster, rackState) {
-			found, err = r.rollingRestartRack(aeroCluster, found, rackState)
-			if err != nil {
-				logger.Error("Failed to do rolling restart", log.Ctx{"err": err})
-				return err
+			found, res = r.rollingRestartRack(aeroCluster, found, rackState)
+			if !res.isContinue {
+				logger.Error("Failed to do rolling restart", log.Ctx{"err": res.err})
+				return res
 			}
 		}
 	}
 
 	// Scale up after upgrading, so that new pods comeup with new image
 	if *found.Spec.Replicas < desiredSize {
-		found, err = r.scaleUpRack(aeroCluster, found, rackState)
-		if err != nil {
-			logger.Error("Failed to scaleUp StatefulSet pods", log.Ctx{"err": err})
-			return err
+		found, res = r.scaleUpRack(aeroCluster, found, rackState)
+		if !res.isContinue {
+			logger.Error("Failed to scaleUp StatefulSet pods", log.Ctx{"err": res.err})
+			return res
 		}
 	}
 
-	return nil
+	return reconcileContinue()
 }
 
 func isAerospikeConfigSecretUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
@@ -471,7 +474,7 @@ func (r *ReconcileAerospikeCluster) isRackAerospikeConfigUpdated(aeroCluster *ae
 	return false
 }
 
-func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	desiredSize := int32(rackState.Size)
@@ -484,10 +487,10 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 	// No need for this? But if image is bad then new pod will also comeup with bad node.
 	podList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return found, fmt.Errorf("Failed to list pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 	if r.isAnyPodInFailedState(aeroCluster, podList.Items) {
-		return found, fmt.Errorf("Cannot scale up AerospikeCluster. A pod is already in failed state")
+		return found, reconcileError(fmt.Errorf("Cannot scale up AerospikeCluster. A pod is already in failed state"))
 	}
 
 	newPodNames := []string{}
@@ -499,7 +502,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 	for _, newPodName := range newPodNames {
 		for _, pod := range podList.Items {
 			if pod.Name == newPodName {
-				return found, fmt.Errorf("Pod %s yet to be launched is still present", newPodName)
+				return found, reconcileError(fmt.Errorf("Pod %s yet to be launched is still present", newPodName))
 			}
 		}
 	}
@@ -515,7 +518,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 		for podName := range aeroCluster.Status.PodStatus {
 			ordinal, err := getStatefulSetPodOrdinal(podName)
 			if err != nil {
-				return found, fmt.Errorf("Invalid pod name: %s", podName)
+				return found, reconcileError(fmt.Errorf("Invalid pod name: %s", podName))
 			}
 
 			if *ordinal >= desiredSize {
@@ -526,32 +529,36 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 
 	err = r.cleanupPods(aeroCluster, cleanupPods, rackState)
 	if err != nil {
-		return found, fmt.Errorf("Failed scale up pre-check: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed scale up pre-check: %v", err))
 	}
 
 	if aeroCluster.Spec.MultiPodPerHost {
 		// Create services for each pod
 		for _, podName := range newPodNames {
 			if err := r.createServiceForPod(aeroCluster, podName, aeroCluster.Namespace); err != nil {
-				return found, err
+				return found, reconcileError(err)
 			}
 		}
 	}
 
 	// Scale up the statefulset
 	if err := r.client.Update(context.TODO(), found, updateOption); err != nil {
-		return found, fmt.Errorf("Failed to update StatefulSet pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to update StatefulSet pods: %v", err))
 	}
 
 	if err := r.waitForStatefulSetToBeReady(found); err != nil {
-		return found, fmt.Errorf("Failed to wait for statefulset to be ready: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to wait for statefulset to be ready: %v", err))
 	}
 
 	// return a fresh copy
-	return r.getStatefulSet(aeroCluster, rackState)
+	found, err = r.getStatefulSet(aeroCluster, rackState)
+	if err != nil {
+		return found, reconcileError(err)
+	}
+	return found, reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	currentBuild := found.Spec.Template.Spec.Containers[0].Image
@@ -560,7 +567,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return found, fmt.Errorf("Failed to list pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 
 	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
@@ -572,77 +579,94 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 		logger.Info("Updating image in statefulset spec", log.Ctx{"desiredImage": aeroCluster.Spec.Build, "currentImage": currentBuild})
 		err = r.client.Update(context.TODO(), found, updateOption)
 		if err != nil {
-			return found, fmt.Errorf("Failed to update image for StatefulSet %s: %v", found.Name, err)
+			return found, reconcileError(fmt.Errorf("Failed to update image for StatefulSet %s: %v", found.Name, err))
 		}
 	}
 
 	for _, p := range podList {
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		for _, ps := range p.Status.ContainerStatuses {
-			logger.Info("Upgrading/downgrading pod", log.Ctx{"podName": p.Name, "currentImage": ps.Image, "desiredImage": desiredImage})
+		if res := r.checkPodImageUpdated(aeroCluster, desiredImage, rackState, p); !res.isContinue {
+			return found, res
+		}
+	}
 
-			// Looks like bad image
-			if ps.Image == desiredImage {
-				if err := utils.CheckPodFailed(&p); err != nil {
-					return found, err
+	// return a fresh copy
+	found, err = r.getStatefulSet(aeroCluster, rackState)
+	if err != nil {
+		return found, reconcileError(err)
+	}
+	return found, reconcileContinue()
+}
+
+func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod) reconcileResult {
+	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
+
+	for _, ps := range p.Status.ContainerStatuses {
+		logger.Info("Upgrading/downgrading pod", log.Ctx{"podName": p.Name, "currentImage": ps.Image, "desiredImage": desiredImage})
+
+		// Looks like bad image
+		if ps.Image == desiredImage {
+			if err := utils.CheckPodFailed(&p); err != nil {
+				return reconcileError(err)
+			}
+		}
+		if ps.Image != desiredImage {
+			logger.Debug("Delete the Pod", log.Ctx{"podName": p.Name})
+
+			// If already dead node, so no need to check node safety, migration
+			if err := utils.CheckPodFailed(&p); err == nil {
+				if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isContinue {
+					return res
 				}
 			}
-			if ps.Image != desiredImage {
-				logger.Debug("Delete the Pod", log.Ctx{"podName": p.Name})
 
-				// If already dead node, so no need to check node safety, migration
-				if err := utils.CheckPodFailed(&p); err == nil {
-					if err := r.waitForNodeSafeStopReady(aeroCluster, &p); err != nil {
-						return found, err
+			// Delete pod
+			if err := r.client.Delete(context.TODO(), &p); err != nil {
+				return reconcileError(err)
+			}
+			logger.Debug("Pod deleted", log.Ctx{"podName": p.Name})
+
+			// Wait for pod to come up
+			for {
+				logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": p.Name})
+
+				pFound := &corev1.Pod{}
+
+				err := r.client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
+				if err != nil {
+					logger.Error("Failed to get pod", log.Ctx{"podName": p.Name, "err": err})
+
+					if _, err = r.getStatefulSet(aeroCluster, rackState); err != nil {
+						// Stateful set has been deleted.
+						// TODO Ashish to rememeber which scenario this can happen.
+						logger.Error("Statefulset has been deleted for pod", log.Ctx{"podName": p.Name, "err": err})
+						return reconcileError(err)
 					}
+
+					time.Sleep(time.Second * 5)
+					continue
 				}
 
-				// Delete pod
-				if err := r.client.Delete(context.TODO(), &p); err != nil {
-					return found, err
+				if err := utils.CheckPodFailed(pFound); err != nil {
+					return reconcileError(err)
 				}
-				logger.Debug("Pod deleted", log.Ctx{"podName": p.Name})
 
-				// Wait for pod to come up
-				for {
-					logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": p.Name})
-
-					pFound := &corev1.Pod{}
-					err = r.client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
-					if err != nil {
-						logger.Error("Failed to get pod", log.Ctx{"podName": p.Name, "err": err})
-
-						if found, err = r.getStatefulSet(aeroCluster, rackState); err != nil {
-							// Stateful set has been deleted.
-							// TODO Ashish to rememeber which scenario this can happen.
-							logger.Error("Statefulset has been deleted for pod", log.Ctx{"podName": p.Name, "err": err})
-							return nil, err
-						}
-
-						time.Sleep(time.Second * 5)
-						continue
-					}
-					if err := utils.CheckPodFailed(pFound); err != nil {
-						return found, err
-					}
-					if !utils.IsPodUpgraded(pFound, desiredImage) {
-						logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
-						time.Sleep(time.Second * 5)
-						continue
-					}
-
-					logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
-					break
+				if !utils.IsPodUpgraded(pFound, desiredImage) {
+					logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
+					time.Sleep(time.Second * 5)
+					continue
 				}
+
+				logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
+				break
 			}
 		}
 	}
-	// return a fresh copy
-	return r.getStatefulSet(aeroCluster, rackState)
+	return reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	logger.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -650,10 +674,10 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return found, fmt.Errorf("Failed to list pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 	if r.isAnyPodInFailedState(aeroCluster, podList) {
-		return found, fmt.Errorf("Cannot Rolling restart AerospikeCluster. A pod is already in failed state")
+		return found, reconcileError(fmt.Errorf("Cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
 	// Can we optimize this? Update stateful set only if there is any update for it.
@@ -665,100 +689,117 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 
 	logger.Info("Updating statefulset spec")
 	if err := r.client.Update(context.TODO(), found, updateOption); err != nil {
-		return found, fmt.Errorf("Failed to update StatefulSet %s: %v", found.Name, err)
+		return found, reconcileError(fmt.Errorf("Failed to update StatefulSet %s: %v", found.Name, err))
 	}
 	logger.Info("Statefulset spec updated. Doing rolling restart with new config")
 
 	for _, pod := range podList {
-		// Also check if statefulSet is in stable condition
-		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		if pod.Status.ContainerStatuses == nil {
-			return found, fmt.Errorf("Pod %s containerStatus is nil, pod may be in unscheduled state", pod.Name)
+		if res := r.rollingRestartPod(aeroCluster, rackState, pod); !res.isContinue {
+			return found, res
 		}
+	}
 
-		logger.Info("Rolling restart pod", log.Ctx{"podName": pod.Name})
-		var pFound *corev1.Pod
+	// return a fresh copy
+	found, err = r.getStatefulSet(aeroCluster, rackState)
+	if err != nil {
+		return found, reconcileError(err)
+	}
+	return found, reconcileContinue()
+}
 
-		for i := 0; i < 5; i++ {
-			logger.Debug("Waiting for pod to be ready", log.Ctx{"podName": pod.Name})
+func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) reconcileResult {
+	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
-			pFound = &corev1.Pod{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, pFound)
-			if err != nil {
-				logger.Error("Failed to get pod, try retry after 5 sec", log.Ctx{"err": err})
-				time.Sleep(time.Second * 5)
-				continue
-			}
-			ps := pFound.Status.ContainerStatuses[0]
-			if ps.Ready {
-				break
-			}
+	// Also check if statefulSet is in stable condition
+	// Check for all containers. Status.ContainerStatuses doesn't include init container
+	if pod.Status.ContainerStatuses == nil {
+		return reconcileError(fmt.Errorf("Pod %s containerStatus is nil, pod may be in unscheduled state", pod.Name))
+	}
 
-			if utils.IsCrashed(pFound) {
-				logger.Error("Pod has crashed", log.Ctx{"podName": pFound.Name})
-				break
-			}
+	logger.Info("Rolling restart pod", log.Ctx{"podName": pod.Name})
+	var pFound *corev1.Pod
 
-			logger.Error("Pod containerStatus is not ready, try after 5 sec")
+	for i := 0; i < 5; i++ {
+		logger.Debug("Waiting for pod to be ready", log.Ctx{"podName": pod.Name})
+
+		pFound = &corev1.Pod{}
+		err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, pFound)
+		if err != nil {
+			logger.Error("Failed to get pod, try retry after 5 sec", log.Ctx{"err": err})
 			time.Sleep(time.Second * 5)
-		}
-
-		err = utils.CheckPodFailed(pFound)
-		if err == nil {
-			// Check for migration
-			if err := r.waitForNodeSafeStopReady(aeroCluster, pFound); err != nil {
-				return found, err
-			}
-		} else {
-			// TODO: Check a user flag to restart failed pods.
-			logger.Info("Restarting failed pod", log.Ctx{"podName": pFound.Name, "error": err})
-		}
-
-		// Delete pod
-		if err := r.client.Delete(context.TODO(), pFound); err != nil {
-			logger.Error("Failed to delete pod", log.Ctx{"err": err})
 			continue
 		}
-		logger.Debug("Pod deleted", log.Ctx{"podName": pFound.Name})
-
-		// Wait for pod to come up
-		var started bool
-		for i := 0; i < 20; i++ {
-			logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": pFound.Name, "status": pFound.Status.Phase, "DeletionTimestamp": pFound.DeletionTimestamp})
-
-			pod := &corev1.Pod{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: pFound.Name, Namespace: pFound.Namespace}, pod)
-			if err != nil {
-				logger.Error("Failed to get pod", log.Ctx{"err": err})
-				time.Sleep(time.Second * 5)
-				continue
-			}
-
-			if err := utils.CheckPodFailed(pod); err != nil {
-				return found, err
-			}
-
-			if !utils.IsPodRunningAndReady(pod) {
-				logger.Debug("Waiting for pod to be ready", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
-				time.Sleep(time.Second * 5)
-				continue
-			}
-
-			logger.Info("Pod is restarted", log.Ctx{"podName": pod.Name})
-			started = true
+		ps := pFound.Status.ContainerStatuses[0]
+		if ps.Ready {
 			break
 		}
 
-		if !started {
-			logger.Error("Pos is not running or ready. Pod might also be terminating", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
+		if utils.IsCrashed(pFound) {
+			logger.Error("Pod has crashed", log.Ctx{"podName": pFound.Name})
+			break
 		}
 
+		logger.Error("Pod containerStatus is not ready, try after 5 sec")
+		time.Sleep(time.Second * 5)
 	}
-	// return a fresh copy
-	return r.getStatefulSet(aeroCluster, rackState)
+
+	// TODO: What if pod is still not found
+
+	err := utils.CheckPodFailed(pFound)
+	if err == nil {
+		// Check for migration
+		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound); !res.isContinue {
+			return res
+		}
+	} else {
+		// TODO: Check a user flag to restart failed pods.
+		logger.Info("Restarting failed pod", log.Ctx{"podName": pFound.Name, "error": err})
+	}
+
+	// Delete pod
+	if err := r.client.Delete(context.TODO(), pFound); err != nil {
+		logger.Error("Failed to delete pod", log.Ctx{"err": err})
+		return reconcileError(err)
+	}
+	logger.Debug("Pod deleted", log.Ctx{"podName": pFound.Name})
+
+	// Wait for pod to come up
+	var started bool
+	for i := 0; i < 20; i++ {
+		logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": pFound.Name, "status": pFound.Status.Phase, "DeletionTimestamp": pFound.DeletionTimestamp})
+
+		pod := &corev1.Pod{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: pFound.Name, Namespace: pFound.Namespace}, pod)
+		if err != nil {
+			logger.Error("Failed to get pod", log.Ctx{"err": err})
+			time.Sleep(time.Second * 5)
+			continue
+		}
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			return reconcileError(err)
+		}
+
+		if !utils.IsPodRunningAndReady(pod) {
+			logger.Debug("Waiting for pod to be ready", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
+			time.Sleep(time.Second * 5)
+			continue
+		}
+
+		logger.Info("Pod is restarted", log.Ctx{"podName": pod.Name})
+		started = true
+		break
+	}
+
+	// TODO: In what situation this can happen?
+	if !started {
+		logger.Error("Pos is not running or ready. Pod might also be terminating", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
+	}
+
+	return reconcileContinue()
 }
 
-func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, error) {
+func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	desiredSize := int32(rackState.Size)
@@ -767,11 +808,11 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 	oldPodList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return found, fmt.Errorf("Failed to list pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 
 	if r.isAnyPodInFailedState(aeroCluster, oldPodList.Items) {
-		return found, fmt.Errorf("Cannot scale down AerospikeCluster. A pod is already in failed state")
+		return found, reconcileError(fmt.Errorf("Cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
 	var removedPods []*corev1.Pod
@@ -787,9 +828,9 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 		// Ignore safe stop check on pod not in running state.
 		if utils.IsPodRunningAndReady(pod) {
-			if err := r.waitForNodeSafeStopReady(aeroCluster, pod); err != nil {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, pod); !res.isContinue {
 				// The pod is running and is unsafe to terminate.
-				return found, err
+				return found, res
 			}
 		}
 
@@ -797,24 +838,24 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		newSize := *found.Spec.Replicas - 1
 		found.Spec.Replicas = &newSize
 		if err := r.client.Update(context.TODO(), found, updateOption); err != nil {
-			return found, fmt.Errorf("Failed to update pod size %d StatefulSet pods: %v", newSize, err)
+			return found, reconcileError(fmt.Errorf("Failed to update pod size %d StatefulSet pods: %v", newSize, err))
 		}
 
 		// Wait for pods to get terminated
 		if err := r.waitForStatefulSetToBeReady(found); err != nil {
-			return found, fmt.Errorf("Failed to wait for statefulset to be ready: %v", err)
+			return found, reconcileError(fmt.Errorf("Failed to wait for statefulset to be ready: %v", err))
 		}
 
 		// Fetch new object
 		nFound, err := r.getStatefulSet(aeroCluster, rackState)
 		if err != nil {
-			return found, fmt.Errorf("Failed to get StatefulSet pods: %v", err)
+			return found, reconcileError(fmt.Errorf("Failed to get StatefulSet pods: %v", err))
 		}
 		found = nFound
 
 		err = r.cleanupPods(aeroCluster, []string{podName}, rackState)
 		if err != nil {
-			return nFound, fmt.Errorf("Failed to cleanup pod %s: %v", podName, err)
+			return nFound, reconcileError(fmt.Errorf("Failed to cleanup pod %s: %v", podName, err))
 		}
 
 		logger.Info("Pod Removed", log.Ctx{"podName": podName})
@@ -822,7 +863,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 	newPodList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
-		return found, fmt.Errorf("Failed to list pods: %v", err)
+		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 
 	// Do post-remove-node info calls
@@ -845,13 +886,13 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		for _, rp := range removedPods {
 			// TODO: make it more roboust, what if it fails
 			if err := r.deleteServiceForPod(rp.Name, aeroCluster.Namespace); err != nil {
-				return found, err
+				return found, reconcileError(err)
 			}
 		}
 	}
 
 	// This is alredy new copy, no need to fetch again
-	return found, nil
+	return found, reconcileContinue()
 }
 
 func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
