@@ -100,6 +100,12 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 	if err := s.validateRackUpdate(old); err != nil {
 		return err
 	}
+
+	// Validate changes to pod spec
+	if err := old.Spec.PodSpec.ValidatePodSpecChange(s.obj.Spec.PodSpec); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -147,7 +153,7 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	}
 
 	// Validate Build version
-	version, err := getBuildVersion(s.obj.Spec.Build)
+	version, err := getImageVersion(s.obj.Spec.Build)
 	if err != nil {
 		return err
 	}
@@ -173,10 +179,15 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 
 	// Validate if passed aerospikeConfig
 	if err := validateAerospikeConfigSchema(s.logger, version, s.obj.Spec.AerospikeConfig); err != nil {
-		return fmt.Errorf("AerospikeConfig not valid %v", err)
+		return fmt.Errorf("AerospikeConfig not valid: %v", err)
 	}
 
 	err = validateRequiredFileStorage(s.logger, aeroConfig, &s.obj.Spec.Storage, s.obj.Spec.ValidationPolicy, version)
+	if err != nil {
+		return err
+	}
+
+	err = validateConfigMapVolumes(s.logger, aeroConfig, &s.obj.Spec.Storage, s.obj.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
@@ -195,6 +206,12 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	if err := s.validateRackConfig(); err != nil {
 		return err
 	}
+
+	// Validate Sidecars
+	if err := s.validatePodSpec(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -291,7 +308,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 		}
 	}
 
-	version, err := getBuildVersion(s.obj.Spec.Build)
+	version, err := getImageVersion(s.obj.Spec.Build)
 	if err != nil {
 		return err
 	}

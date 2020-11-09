@@ -150,12 +150,18 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNetworkPolicy"),
 						},
 					},
+					"podSpec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Additional configuration for create Aerospike pods.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodSpec"),
+						},
+					},
 				},
 				Required: []string{"size", "build", "aerospikeConfig", "resources"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNetworkPolicy", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeAccessControlSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeConfigSecretSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNetworkPolicy", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.RackConfig", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.ValidationPolicySpec", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -402,6 +408,13 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref common
 							Format:      "",
 						},
 					},
+					"configMap": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the configmap for 'configmap' mode volumes.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"storageClass": {
 						SchemaProps: spec.SchemaProps{
 							Description: "StorageClass should be pre-created by user.",
@@ -487,7 +500,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref common.Referenc
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Volumes is the list of to attach to created pods.",
+							Description: "Volumes list to attach to created pods.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

@@ -326,7 +326,7 @@ func validateAerospikeConfigSchema(logger log.Logger, version string, config aer
 		for _, e := range validationErr {
 			logger.Info("Validation failed for aerospikeConfig", log.Ctx{"err": *e})
 		}
-		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
+		return fmt.Errorf("Generated config not valid for version %s: %v", version, validationErr)
 	}
 
 	return nil
@@ -381,13 +381,17 @@ func validateRequiredFileStorage(logger log.Logger, config aerospikev1alpha1.Val
 	return nil
 }
 
-func getBuildVersion(buildStr string) (string, error) {
-	build := strings.Split(buildStr, ":")
-	if len(build) != 2 {
-		return "", fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", buildStr)
-	}
+func validateConfigMapVolumes(logger log.Logger, config aerospikev1alpha1.Values, storage *aerospikev1alpha1.AerospikeStorageSpec, validationPolicy *aerospikev1alpha1.ValidationPolicySpec, version string) error {
+	_, err := storage.GetConfigMaps()
+	return err
+}
 
-	version := build[1]
+func getImageVersion(buildStr string) (string, error) {
+	_, _, version := utils.ParseDockerImageTag(buildStr)
+
+	if version == "" || strings.ToLower(version) == "latest" {
+		return nil, fmt.Errorf("Image version is mandatory for image: %v", buildStr)
+	}
 
 	return version, nil
 }
@@ -439,4 +443,21 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 
 	// Paths are unrelated.
 	return false
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
+	for _, sidecar := range s.obj.Spec.PodSpec.Sidecars {
+		// Check for reserved sidecar name
+		if sidecar.Name == "aeropsike-server" || sidecar.Name == "aerospike-init" {
+			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
+		}
+
+		version, err := getImageVersion(sidecar.Image)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

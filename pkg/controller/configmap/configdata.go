@@ -152,6 +152,8 @@ for volume in volumes:
         localVolumePath = blockMountPoint + volume['path']
     elif volume['volumeMode'] == 'filesystem':
         localVolumePath = fileSystemMountPoint + volume['path']
+    else:
+        continue
 
     if not os.path.exists(localVolumePath):
         raise Exception(
@@ -311,7 +313,7 @@ def gethost(data, host):
     # Iterate over all nodes and find this pod's node IPs.
     for item in data['items']:
         nodeInternalIP = ''
-        nodeExternalip = ''
+        nodeExternalIP = ''
         matchFound = False
         for add in item['status']['addresses']:
             if add['address'] == host:

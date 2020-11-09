@@ -53,6 +53,22 @@ type AerospikeClusterSpec struct {
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
+	// Additional configuration for create Aerospike pods.
+	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
+}
+
+// AerospikePodSpec contain configuration for created Aeropsike cluster pods.
+type AerospikePodSpec struct {
+	// Sidecars to add to pods.
+	Sidecars []corev1.Container `json:"sidecars,omitempty"`
+
+	// TODO: Add affinity and tolerations.
+}
+
+// ValidatePodSpecChange indicates if a change to to pod spec is safe to apply.
+func (v *AerospikePodSpec) ValidatePodSpecChange(new AerospikePodSpec) error {
+	//TODO: verify if this is ok.
+	return nil
 }
 
 // RackConfig specifies all racks and related policies
@@ -74,7 +90,7 @@ type Rack struct {
 	// Racklabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLable {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
-	NodeName  string `json:"nodeName,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
 	// AerospikeConfig overrides the common AerospikeConfig for this Rack. This is merged with global Aerospike config.
 	InputAerospikeConfig *Values `json:"aerospikeConfig,omitempty"`
 	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config
@@ -218,7 +234,7 @@ func (v *AerospikeConfigSecretSpec) DeepCopy() *AerospikeConfigSecretSpec {
 }
 
 // AerospikeVolumeMode specifies if the volume is a block/raw or filesystem.
-// +kubebuilder:validation:Enum=filesystem;block
+// +kubebuilder:validation:Enum=filesystem;block;configMap
 // +k8s:openapi-gen=true
 type AerospikeVolumeMode string
 
@@ -228,6 +244,9 @@ const (
 
 	// AerospikeVolumeModeBlock specifies the volume is a block/raw device.
 	AerospikeVolumeModeBlock AerospikeVolumeMode = "block"
+
+	// AerospikeVolumeModeConfigMap specifies the volume is a k8s config map.
+	AerospikeVolumeModeConfigMap AerospikeVolumeMode = "configMap"
 )
 
 // AerospikeVolumeInitMethod specifies how block volumes should be initialized.
@@ -296,6 +315,9 @@ type AerospikePersistentVolumeSpec struct {
 	// Path is the device path where block 'block' mode volumes are attached to the pod or the mount path for 'filesystem' mode.
 	Path string `json:"path"`
 
+	// Name of the configmap for 'configmap' mode volumes.
+	ConfigMapName string `json:"configMap,omitempty"`
+
 	// StorageClass should be pre-created by user.
 	StorageClass string `json:"storageClass"`
 
@@ -316,7 +338,7 @@ func (v *AerospikePersistentVolumeSpec) DeepCopy() *AerospikePersistentVolumeSpe
 
 // IsSafeChange indicates if a change to a volume is safe to allow.
 func (v *AerospikePersistentVolumeSpec) IsSafeChange(new AerospikePersistentVolumeSpec) bool {
-	return v.Path == new.Path && v.StorageClass == new.StorageClass && v.VolumeMode == new.VolumeMode && v.SizeInGB == new.SizeInGB
+	return v.Path == new.Path && v.StorageClass == new.StorageClass && v.VolumeMode == new.VolumeMode && v.SizeInGB == new.SizeInGB && v.ConfigMapName == new.ConfigMapName
 }
 
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
@@ -328,7 +350,7 @@ type AerospikeStorageSpec struct {
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
-	// Volumes is the list of to attach to created pods.
+	// Volumes list to attach to created pods.
 	// +patchMergeKey=path
 	// +patchStrategy=merge
 	// +listType=map
@@ -336,20 +358,69 @@ type AerospikeStorageSpec struct {
 	Volumes []AerospikePersistentVolumeSpec `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"path"`
 }
 
-// ValidateStorageSpecChange indicates if a change to to storage spec is safe to apply.
+// ValidateStorageSpecChange indicates if a change to storage spec is safe to apply.
 func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
-	if len(new.Volumes) != len(v.Volumes) {
-		return fmt.Errorf("Cannot add or remove storage volumes dynamically")
-	}
-
-	for i, newVolume := range new.Volumes {
-		oldVolume := v.Volumes[i]
-		if !oldVolume.IsSafeChange(newVolume) {
-			return fmt.Errorf("Cannot change volumes old: %v new %v", oldVolume, newVolume)
+	for _, newVolume := range new.Volumes {
+		for _, oldVolume := range v.Volumes {
+			if oldVolume.Path == newVolume.Path {
+				if !oldVolume.IsSafeChange(newVolume) {
+					// Validate same volumes
+					return fmt.Errorf("Cannot change volumes old: %v new %v", oldVolume, newVolume)
+				}
+				break
+			}
 		}
 	}
 
-	return nil
+	a, r, err := v.validateAddedOrRemovedVolumes(new)
+	fmt.Printf("@@@@@@ %v %v %v", a, r, err)
+
+	return err
+}
+
+// NeedsRollingRestart indicates if a change to needs rolling restart..
+func (v *AerospikeStorageSpec) NeedsRollingRestart(new AerospikeStorageSpec) bool {
+	addedVolumes, removedVolumes, _ := v.validateAddedOrRemovedVolumes(new)
+	fmt.Printf("@@@@@@ %v %v", addedVolumes, removedVolumes)
+	return len(addedVolumes) != 0 || len(removedVolumes) != 0
+}
+
+// validateAddedOrRemovedVolumes returns volumes that were added or removed.
+func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (addedVolumes []AerospikePersistentVolumeSpec, removedVolumes []AerospikePersistentVolumeSpec, err error) {
+	for _, newVolume := range new.Volumes {
+		matched := false
+		for _, oldVolume := range v.Volumes {
+			if oldVolume.Path == newVolume.Path {
+				matched = true
+				break
+			}
+		}
+
+		if !matched {
+			if newVolume.VolumeMode != AerospikeVolumeModeConfigMap {
+				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("Cannot add persistent volume: %v", newVolume)
+			}
+			addedVolumes = append(addedVolumes, newVolume)
+		}
+	}
+
+	for _, oldVolume := range v.Volumes {
+		matched := false
+		for _, newVolume := range new.Volumes {
+			if oldVolume.Path == newVolume.Path {
+				matched = true
+			}
+		}
+
+		if !matched {
+			if oldVolume.VolumeMode != AerospikeVolumeModeConfigMap {
+				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("Cannot remove persistent volume: %v", oldVolume)
+			}
+			removedVolumes = append(removedVolumes, oldVolume)
+		}
+	}
+
+	return addedVolumes, removedVolumes, nil
 }
 
 // SetDefaults sets default values for storage spec fields.
@@ -366,7 +437,7 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 		// Use storage spec values as defaults for the volumes.
 		if v.Volumes[i].VolumeMode == AerospikeVolumeModeBlock {
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.BlockVolumePolicy)
-		} else {
+		} else if v.Volumes[i].VolumeMode == AerospikeVolumeModeFilesystem {
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
 		}
 	}
@@ -374,11 +445,22 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 
 // GetStorageList gives blockStorageDeviceList and fileStorageList
 func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string, fileStorageList []string, err error) {
-	storagePaths := map[string]int{}
+	storagePaths := map[string]int{
+		// Reserved mount path for the operator.
+		"/etc/aerospike": 1,
+	}
 
 	for _, volume := range v.Volumes {
-		if volume.StorageClass == "" {
+		if volume.VolumeMode != AerospikeVolumeModeConfigMap && volume.StorageClass == "" {
 			return nil, nil, fmt.Errorf("Mising storage class. Invalid volume: %v", volume)
+		}
+
+		if volume.VolumeMode == AerospikeVolumeModeConfigMap && volume.ConfigMapName == "" {
+			return nil, nil, fmt.Errorf("Mising config map name. Invalid volume: %v", volume)
+		}
+
+		if volume.Path == "" {
+			return nil, nil, fmt.Errorf("Mising volume path. Invalid volume: %v", volume)
 		}
 
 		if !filepath.IsAbs(volume.Path) {
@@ -398,7 +480,7 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 			// TODO: Add validation for invalid initMethod (e.g. any random value)
-		} else {
+		} else if volume.VolumeMode == AerospikeVolumeModeFilesystem {
 			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
 				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
 			}
@@ -407,6 +489,16 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 		}
 	}
 	return blockStorageDeviceList, fileStorageList, nil
+}
+
+// GetConfigMaps returns the config map volumes from the storage spec.
+func (v *AerospikeStorageSpec) GetConfigMaps() (configMaps []AerospikePersistentVolumeSpec, err error) {
+	for _, volume := range v.Volumes {
+		if volume.VolumeMode == AerospikeVolumeModeConfigMap {
+			configMaps = append(configMaps, volume)
+		}
+	}
+	return configMaps, nil
 }
 
 // DeepCopy implements deepcopy func for AerospikeStorageSpec.
@@ -493,7 +585,7 @@ type AerospikeNetworkPolicy struct {
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 }
 
-// DeepCopy implements deepcopy func for RackConfig
+// DeepCopy implements deepcopy func for AerospikeNetworkpolicy
 func (v *AerospikeNetworkPolicy) DeepCopy() *AerospikeNetworkPolicy {
 	src := *v
 	var dst = AerospikeNetworkPolicy{}
