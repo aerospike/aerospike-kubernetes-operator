@@ -28,7 +28,7 @@ const (
 
 var aerospikeConfigWithSecurity = map[string]interface{}{
 	"security": map[string]interface{}{"enable-security": true},
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name": "profileNs",
 		},
@@ -40,7 +40,7 @@ var aerospikeConfigWithSecurity = map[string]interface{}{
 
 var aerospikeConfigWithoutSecurity = map[string]interface{}{
 	"security": map[string]interface{}{"enable-security": false},
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name": "profileNs",
 		},
@@ -1342,7 +1342,7 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 				"security": map[string]interface{}{
 					"enable-security": enableSecurity,
 				},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"memory-size":        1000955200,

@@ -3,12 +3,9 @@ package configschema
 const conf4_5_1 = `
 {
   "$schema": "http://json-schema.org/draft-06/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": [
-    "network",
-    "namespace"
-  ],
+  "type": "object",
+  "required": ["network", "namespaces"],
   "properties": {
     "service": {
       "type": "object",
@@ -59,11 +56,7 @@ const conf4_5_1 = `
           "description": "",
           "dynamic": false,
           "default": "none",
-          "enum": [
-            "none",
-            "cpu",
-            "numa"
-          ]
+          "enum": ["none", "cpu", "numa"]
         },
         "batch-index-threads": {
           "type": "integer",
@@ -468,12 +461,7 @@ const conf4_5_1 = `
           "description": "",
           "dynamic": false,
           "default": "none",
-          "enum": [
-            "none",
-            "transient",
-            "persistent",
-            "all"
-          ]
+          "enum": ["none", "transient", "persistent", "all"]
         },
         "fabric-dump-msgs": {
           "type": "boolean",
@@ -496,1004 +484,355 @@ const conf4_5_1 = `
             "dynamic": false
           },
           "misc": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "alloc": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "arenax": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "hardware": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "msg": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "rbuffer": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "socket": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "tls": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "vmapx": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "xmem": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "aggr": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "appeal": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "as": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "batch": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "bin": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "config": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "clustering": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "drv_ssd": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "exchange": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "fabric": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "geo": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "hb": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "health": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "hlc": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "index": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "info": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "info-port": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "job": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "migrate": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "mon": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "namespace": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "nsup": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "particle": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "partition": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "paxos": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "predexp": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "proto": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "proxy": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "proxy-divert": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "query": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "record": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "roster": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "rw": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "rw-client": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "scan": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "security": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "service": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "service-list": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "sindex": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "skew": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "smd": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "storage": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "truncate": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "tsvc": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "udf": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "xdr": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "xdr-client": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "xdr-http": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "any": {
-            "enum": [
-              "CRITICAL",
-              "critical",
-              "WARNING",
-              "warning",
-              "INFO",
-              "info",
-              "DEBUG",
-              "debug",
-              "DETAIL",
-              "detail"
-            ],
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
@@ -1504,20 +843,14 @@ const conf4_5_1 = `
     "network": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "service",
-        "heartbeat",
-        "fabric"
-      ],
+      "required": ["service", "heartbeat", "fabric"],
       "properties": {
         "service": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "port"
-          ],
+          "required": ["port"],
           "properties": {
-            "address": {
+            "addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1534,7 +867,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "access-address": {
+            "access-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1551,7 +884,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "alternate-access-address": {
+            "alternate-access-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1568,7 +901,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "tls-access-address": {
+            "tls-access-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1585,7 +918,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "tls-address": {
+            "tls-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1594,7 +927,7 @@ const conf4_5_1 = `
               "dynamic": false,
               "default": []
             },
-            "tls-alternate-access-address": {
+            "tls-alternate-access-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1636,22 +969,16 @@ const conf4_5_1 = `
         "heartbeat": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "mode",
-            "port"
-          ],
+          "required": ["mode", "port"],
           "properties": {
             "mode": {
               "type": "string",
               "description": "",
               "dynamic": false,
               "default": "",
-              "enum": [
-                "mesh",
-                "multicast"
-              ]
+              "enum": ["mesh", "multicast"]
             },
-            "address": {
+            "addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1660,7 +987,7 @@ const conf4_5_1 = `
               "dynamic": false,
               "default": []
             },
-            "multicast-group": {
+            "multicast-groups": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1677,7 +1004,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "mesh-seed-address-port": {
+            "mesh-seed-address-ports": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1723,12 +1050,9 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false,
               "default": "v3",
-              "enum": [
-                "none",
-                "v3"
-              ]
+              "enum": ["none", "v3"]
             },
-            "tls-address": {
+            "tls-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1737,7 +1061,7 @@ const conf4_5_1 = `
               "dynamic": false,
               "default": []
             },
-            "tls-mesh-seed-address-port": {
+            "tls-mesh-seed-address-ports": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1765,11 +1089,9 @@ const conf4_5_1 = `
         "fabric": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "port"
-          ],
+          "required": ["port"],
           "properties": {
-            "address": {
+            "addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1904,7 +1226,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "tls-address": {
+            "tls-addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -1933,7 +1255,7 @@ const conf4_5_1 = `
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "address": {
+            "addresses": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -2017,15 +1339,13 @@ const conf4_5_1 = `
         }
       }
     },
-    "namespace": {
+    "namespaces": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "memory-size"
-        ],
+        "required": ["memory-size"],
         "properties": {
           "name": {
             "type": "string",
@@ -2058,246 +1378,220 @@ const conf4_5_1 = `
             "dynamic": true
           },
           "storage-engine": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "",
-                "dynamic": false,
-                "default": "memory",
-                "enum": [
-                  "memory"
-                ]
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "anyOf": [
-                  {
-                    "required": [
-                      "device"
-                    ]
+            "oneOf": [{
+              "type": "string",
+              "description": "",
+              "dynamic": false,
+              "default": "memory",
+              "enum": ["memory"]
+            }, {
+              "type": "object",
+              "additionalProperties": false,
+              "anyOf": [{
+                "required": ["devices"]
+              }, {
+                "required": ["files"]
+              }],
+              "properties": {
+                "devices": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
                   },
-                  {
-                    "required": [
-                      "file"
-                    ]
-                  }
-                ],
-                "properties": {
-                  "device": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "",
-                    "dynamic": false,
-                    "default": []
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
                   },
-                  "file": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "",
-                    "dynamic": false,
-                    "default": []
-                  },
-                  "filesize": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 1048576,
-                    "maximum": 2199023255552,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "scheduler-mode": {
-                    "type": "string",
-                    "default": "",
-                    "enum": [
-                      "anticipatory",
-                      "cfq",
-                      "deadline",
-                      "noop",
-                      "null"
-                    ],
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "write-block-size": {
-                    "type": "integer",
-                    "default": 1048576,
-                    "minimum": 1024,
-                    "maximum": 8388608,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "data-in-memory": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "cold-start-empty": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "commit-to-device": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "commit-min-size": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 0,
-                    "maximum": 8388608,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "compression": {
-                    "type": "string",
-                    "description": "",
-                    "dynamic": true,
-                    "default": "none",
-                    "enum": [
-                      "none",
-                      "lz4",
-                      "snappy",
-                      "zstd"
-                    ]
-                  },
-                  "compression-level": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 0,
-                    "maximum": 9,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "defrag-lwm-pct": {
-                    "type": "integer",
-                    "default": 50,
-                    "minimum": 1,
-                    "maximum": 99,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "defrag-queue-min": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 0,
-                    "maximum": 4294967295,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "defrag-sleep": {
-                    "type": "integer",
-                    "default": 1000,
-                    "minimum": 0,
-                    "maximum": 4294967295,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "defrag-startup-minimum": {
-                    "type": "integer",
-                    "default": 10,
-                    "minimum": 1,
-                    "maximum": 99,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "direct-files": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "disable-odsync": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "enable-benchmarks-storage": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "encryption": {
-                    "type": "string",
-                    "description": "",
-                    "dynamic": false,
-                    "default": "aes-128",
-                    "enum": [
-                      "aes-128",
-                      "aes-256"
-                    ]
-                  },
-                  "encryption-key-file": {
-                    "type": "string",
-                    "default": "",
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "flush-max-ms": {
-                    "type": "integer",
-                    "default": 1000,
-                    "minimum": 0,
-                    "maximum": 1000,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "max-write-cache": {
-                    "type": "integer",
-                    "default": 67108864,
-                    "minimum": 0,
-                    "maximum": 18446744073709552000,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "min-avail-pct": {
-                    "type": "integer",
-                    "default": 5,
-                    "minimum": 0,
-                    "maximum": 100,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "post-write-queue": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 0,
-                    "maximum": 4096,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "read-page-cache": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": true
-                  },
-                  "serialize-tomb-raider": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "",
-                    "dynamic": false
-                  },
-                  "tomb-raider-sleep": {
-                    "type": "integer",
-                    "default": 1000,
-                    "minimum": 0,
-                    "maximum": 4294967295,
-                    "description": "",
-                    "dynamic": true
-                  }
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "filesize": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 1048576,
+                  "maximum": 2199023255552,
+                  "description": "",
+                  "dynamic": false
+                },
+                "scheduler-mode": {
+                  "type": "string",
+                  "default": "",
+                  "enum": ["anticipatory", "cfq", "deadline", "noop", "null"],
+                  "description": "",
+                  "dynamic": false
+                },
+                "write-block-size": {
+                  "type": "integer",
+                  "default": 1048576,
+                  "minimum": 1024,
+                  "maximum": 8388608,
+                  "description": "",
+                  "dynamic": false
+                },
+                "data-in-memory": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "",
+                  "dynamic": false
+                },
+                "cold-start-empty": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": false
+                },
+                "commit-to-device": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": false
+                },
+                "commit-min-size": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 8388608,
+                  "description": "",
+                  "dynamic": false
+                },
+                "compression": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": true,
+                  "default": "none",
+                  "enum": ["none", "lz4", "snappy", "zstd"]
+                },
+                "compression-level": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 9,
+                  "description": "",
+                  "dynamic": true
+                },
+                "defrag-lwm-pct": {
+                  "type": "integer",
+                  "default": 50,
+                  "minimum": 1,
+                  "maximum": 99,
+                  "description": "",
+                  "dynamic": true
+                },
+                "defrag-queue-min": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 4294967295,
+                  "description": "",
+                  "dynamic": true
+                },
+                "defrag-sleep": {
+                  "type": "integer",
+                  "default": 1000,
+                  "minimum": 0,
+                  "maximum": 4294967295,
+                  "description": "",
+                  "dynamic": true
+                },
+                "defrag-startup-minimum": {
+                  "type": "integer",
+                  "default": 10,
+                  "minimum": 1,
+                  "maximum": 99,
+                  "description": "",
+                  "dynamic": false
+                },
+                "direct-files": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": false
+                },
+                "disable-odsync": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": false
+                },
+                "enable-benchmarks-storage": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": true
+                },
+                "encryption": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "aes-128",
+                  "enum": ["aes-128", "aes-256"]
+                },
+                "encryption-key-file": {
+                  "type": "string",
+                  "default": "",
+                  "description": "",
+                  "dynamic": false
+                },
+                "flush-max-ms": {
+                  "type": "integer",
+                  "default": 1000,
+                  "minimum": 0,
+                  "maximum": 1000,
+                  "description": "",
+                  "dynamic": true
+                },
+                "max-write-cache": {
+                  "type": "integer",
+                  "default": 67108864,
+                  "minimum": 0,
+                  "maximum": 18446744073709552000,
+                  "description": "",
+                  "dynamic": true
+                },
+                "min-avail-pct": {
+                  "type": "integer",
+                  "default": 5,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
+                "post-write-queue": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 4096,
+                  "description": "",
+                  "dynamic": true
+                },
+                "read-page-cache": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": true
+                },
+                "serialize-tomb-raider": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": false
+                },
+                "tomb-raider-sleep": {
+                  "type": "integer",
+                  "default": 1000,
+                  "minimum": 0,
+                  "maximum": 4294967295,
+                  "description": "",
+                  "dynamic": true
                 }
               }
-            ]
+            }]
           },
           "enable-xdr": {
             "type": "boolean",
@@ -2311,7 +1605,7 @@ const conf4_5_1 = `
             "description": "",
             "dynamic": true
           },
-          "xdr-remote-datacenter": {
+          "xdr-remote-datacenters": {
             "type": "array",
             "items": {
               "type": "string"
@@ -2343,10 +1637,7 @@ const conf4_5_1 = `
             "description": "",
             "dynamic": false,
             "default": "generation",
-            "enum": [
-              "generation",
-              "last-update-time"
-            ]
+            "enum": ["generation", "last-update-time"]
           },
           "data-in-index": {
             "type": "boolean",
@@ -2453,11 +1744,7 @@ const conf4_5_1 = `
             "description": "",
             "dynamic": false,
             "default": "shmem",
-            "enum": [
-              "shmem",
-              "pmem",
-              "flash"
-            ]
+            "enum": ["shmem", "pmem", "flash"]
           },
           "migrate-order": {
             "type": "integer",
@@ -2534,13 +1821,9 @@ const conf4_5_1 = `
             "description": "",
             "dynamic": false,
             "default": "off",
-            "enum": [
-              "all",
-              "off",
-              "one"
-            ]
+            "enum": ["all", "off", "one"]
           },
-          "set": {
+          "sets": {
             "type": "array",
             "items": {
               "type": "object",
@@ -2696,11 +1979,7 @@ const conf4_5_1 = `
             "description": "",
             "dynamic": false,
             "default": "off",
-            "enum": [
-              "all",
-              "master",
-              "off"
-            ]
+            "enum": ["all", "master", "off"]
           }
         }
       }
@@ -2797,7 +2076,7 @@ const conf4_5_1 = `
               "description": "",
               "dynamic": false
             },
-            "role-query-pattern": {
+            "role-query-patterns": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -2943,9 +2222,7 @@ const conf4_5_1 = `
     "xdr": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "xdr-digestlog-path"
-      ],
+      "required": ["xdr-digestlog-path"],
       "properties": {
         "enable-xdr": {
           "type": "boolean",
@@ -2965,7 +2242,7 @@ const conf4_5_1 = `
           "description": "",
           "dynamic": false
         },
-        "datacenter": {
+        "datacenters": {
           "type": "array",
           "minItems": 1,
           "items": {
@@ -2981,15 +2258,11 @@ const conf4_5_1 = `
               "dc-type": {
                 "type": "string",
                 "default": "aerospike",
-                "enum": [
-                  "aerospike",
-                  "http",
-                  "null"
-                ],
+                "enum": ["aerospike", "http", "null"],
                 "description": "",
                 "dynamic": true
               },
-              "dc-node-address-port": {
+              "dc-node-address-ports": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -3035,7 +2308,7 @@ const conf4_5_1 = `
                 "description": "",
                 "dynamic": true
               },
-              "http-url": {
+              "http-urls": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -3047,11 +2320,7 @@ const conf4_5_1 = `
               "http-version": {
                 "type": "string",
                 "default": "v2",
-                "enum": [
-                  "v1",
-                  "v2",
-                  "null"
-                ],
+                "enum": ["v1", "v2", "null"],
                 "description": "",
                 "dynamic": true
               },
@@ -3061,7 +2330,7 @@ const conf4_5_1 = `
                 "description": "",
                 "dynamic": true
               },
-              "tls-node": {
+              "tls-nodes": {
                 "type": "array",
                 "items": {
                   "type": "string"

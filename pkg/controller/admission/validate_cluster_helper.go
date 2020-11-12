@@ -74,7 +74,7 @@ func validateAerospikeConfig(logger log.Logger, config v1alpha1.Values, storage 
 	}
 
 	// namespace conf
-	nsListInterface, ok := config["namespace"]
+	nsListInterface, ok := config["namespaces"]
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.namespace not a present. aerospikeConfig %v", config)
 	} else if nsListInterface == nil {
@@ -122,7 +122,7 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				continue
 			}
 
-			if devices, ok := storage.(map[string]interface{})["device"]; ok {
+			if devices, ok := storage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf("namespace storage devices cannot be nil %v", storage)
 				}
@@ -155,7 +155,7 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				}
 			}
 
-			if files, ok := storage.(map[string]interface{})["file"]; ok {
+			if files, ok := storage.(map[string]interface{})["files"]; ok {
 				if files == nil {
 					return fmt.Errorf("namespace storage files cannot be nil %v", storage)
 				}
@@ -258,7 +258,7 @@ func validateAerospikeConfigUpdate(logger log.Logger, newConf, oldConf aerospike
 
 func validateNsConfUpdate(logger log.Logger, newConf, oldConf aerospikev1alpha1.Values) error {
 
-	newNsConfList := newConf["namespace"].([]interface{})
+	newNsConfList := newConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
 		// Validate new namespaceonf
@@ -269,7 +269,7 @@ func validateNsConfUpdate(logger log.Logger, newConf, oldConf aerospikev1alpha1.
 
 		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
 		var found bool
-		oldNsConfList := oldConf["namespace"].([]interface{})
+		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
 
@@ -323,10 +323,12 @@ func validateAerospikeConfigSchema(logger log.Logger, version string, config aer
 
 	valid, validationErr, err := asConf.IsValid(version)
 	if !valid {
+		errStrs := []string{}
 		for _, e := range validationErr {
-			logger.Info("Validation failed for aerospikeConfig", log.Ctx{"err": *e})
+			errStrs = append(errStrs, fmt.Sprintf("\t%v\n", *e))
 		}
-		return fmt.Errorf("Generated config not valid for version %s: %v", version, validationErr)
+
+		return fmt.Errorf("Generated config not valid for version %s: %v", version, errStrs)
 	}
 
 	return nil
@@ -390,7 +392,7 @@ func getImageVersion(buildStr string) (string, error) {
 	_, _, version := utils.ParseDockerImageTag(buildStr)
 
 	if version == "" || strings.ToLower(version) == "latest" {
-		return nil, fmt.Errorf("Image version is mandatory for image: %v", buildStr)
+		return "", fmt.Errorf("Image version is mandatory for image: %v", buildStr)
 	}
 
 	return version, nil
@@ -452,7 +454,7 @@ func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
 			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
 		}
 
-		version, err := getImageVersion(sidecar.Image)
+		_, err := getImageVersion(sidecar.Image)
 
 		if err != nil {
 			return err

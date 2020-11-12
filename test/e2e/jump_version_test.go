@@ -35,22 +35,22 @@ var aerospikeConfigPre5 = map[string]interface{}{
 		"enable-xdr":                true,
 		"xdr-digestlog-path":        "/opt/aerospike/xdr/digestlog 5G",
 		"xdr-compression-threshold": 1000,
-		"datacenter": []interface{}{
+		"datacenters": []interface{}{
 			map[string]interface{}{
 				"name": "REMOTE_DC_1",
 			},
 		},
 	},
 	"security": map[string]interface{}{"enable-security": true},
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		map[string]interface{}{
-			"name":                  "test",
-			"enable-xdr":            true,
-			"memory-size":           3000000000,
-			"migrate-sleep":         0,
-			"xdr-remote-datacenter": "REMOTE_DC_1",
+			"name":                   "test",
+			"enable-xdr":             true,
+			"memory-size":            3000000000,
+			"migrate-sleep":          0,
+			"xdr-remote-datacenters": "REMOTE_DC_1",
 			"storage-engine": map[string]interface{}{
-				"file":     []interface{}{"/opt/aerospike/data/test.dat"},
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},
 		},
@@ -67,23 +67,23 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 		"enable-xdr":                true,
 		"xdr-digestlog-path":        "/opt/aerospike/xdr/digestlog 5G",
 		"xdr-compression-threshold": 1000,
-		"datacenter": []interface{}{
+		"datacenters": []interface{}{
 			map[string]interface{}{
-				"name":                 "REMOTE_DC_1",
-				"dc-node-address-port": "IP PORT",
+				"name":                  "REMOTE_DC_1",
+				"dc-node-address-ports": "IP PORT",
 			},
 		},
 	},
 	"security": map[string]interface{}{"enable-security": true},
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		map[string]interface{}{
-			"name":                  "test",
-			"migrate-sleep":         0,
-			"enable-xdr":            true,
-			"xdr-remote-datacenter": "REMOTE_DC_1",
-			"memory-size":           3000000000,
+			"name":                   "test",
+			"migrate-sleep":          0,
+			"enable-xdr":             true,
+			"xdr-remote-datacenters": "REMOTE_DC_1",
+			"memory-size":            3000000000,
 			"storage-engine": map[string]interface{}{
-				"file":     []interface{}{"/opt/aerospike/data/test.dat"},
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},
 		},
@@ -97,11 +97,11 @@ var aerospikeConfigPost5 = map[string]interface{}{
 	},
 
 	"xdr": map[string]interface{}{
-		"dc": []interface{}{
+		"dcs": []interface{}{
 			map[string]interface{}{
 				"name":                         "test_dc",
 				"use-alternate-access-address": true,
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":     "test",
 						"delay-ms": 10,
@@ -111,13 +111,13 @@ var aerospikeConfigPost5 = map[string]interface{}{
 		},
 	},
 	"security": map[string]interface{}{"enable-security": true},
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name":          "test",
 			"memory-size":   3000000000,
 			"migrate-sleep": 0,
 			"storage-engine": map[string]interface{}{
-				"file":     []interface{}{"/opt/aerospike/data/test.dat"},
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},
 		},

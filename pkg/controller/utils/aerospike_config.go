@@ -9,12 +9,12 @@ import (
 
 const (
 	// Namespace keys.
-	confKeyNamespace     = "namespace"
+	confKeyNamespace     = "namespaces"
 	confKeyMemorySize    = "memory-size"
 	confKeyStorageEngine = "storage-engine"
 	confKeyFilesize      = "filesize"
-	confKeyDevice        = "device"
-	confKeyFile          = "file"
+	confKeyDevice        = "devices"
+	confKeyFile          = "files"
 	confKeyNetwork       = "network"
 	confKeyTLS           = "tls"
 	confKeySecurity      = "security"

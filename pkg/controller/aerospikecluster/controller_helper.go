@@ -1011,10 +1011,7 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 
 // Called while creating new cluster and also during rolling restart.
 func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
-
 	configMaps, _ := aeroCluster.Spec.Storage.GetConfigMaps()
-	logger.Info("@@@@@ configmaps", log.Ctx{"configmaps": configMaps})
 
 	// Add to stateful set volumes.
 	// TODO: Remove volumes.

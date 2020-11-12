@@ -166,7 +166,7 @@ func IsImageEqual(image1 string, image2 string) bool {
 func ParseDockerImageTag(tag string) (registry string, name string, version string) {
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
-	return matches[1], matches[2], matches[3]
+	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
 // isImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a container
@@ -226,15 +226,29 @@ func IsPodUpgraded(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.AerospikeClus
 	return IsPodOnDesiredImage(pod, aeroCluster)
 }
 
-// IsPodOnDesiredImage indicates of pod is on desired image for all containers.
+// getPodContainerStatus provides status for container in a pod if present else nil.
+// Abstracted into a function because in come cases pod.Status.ContainerStatuses was empty.
+func getPodContainerStatus(pod *corev1.Pod, containerName string) *corev1.ContainerStatus {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.Name == containerName {
+			return &status
+		}
+	}
+
+	return nil
+}
+
+// IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
 func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
-	for i, ps := range pod.Spec.Containers {
+	for _, ps := range pod.Spec.Containers {
 		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
 		if err != nil {
 			// Maybe a deleted sidecar. Ignore.
 			desiredImage = ps.Image
 		}
-		if !pod.Status.ContainerStatuses[i].Ready || !IsImageEqual(ps.Image, desiredImage) {
+
+		status := getPodContainerStatus(pod, ps.Name)
+		if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
 			return false
 		}
 	}

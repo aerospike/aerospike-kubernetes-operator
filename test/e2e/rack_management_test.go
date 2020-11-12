@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"testing"
 
-	as "github.com/ashishshinde/aerospike-client-go"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
+	as "github.com/ashishshinde/aerospike-client-go"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -47,7 +47,7 @@ func RackManagementTest(t *testing.T, f *framework.Framework, ctx *framework.Tes
 		})
 
 		t.Run("UpdateRackEnabledNamespace", func(t *testing.T) {
-			nsListInterface := aeroCluster.Spec.AerospikeConfig["namespace"]
+			nsListInterface := aeroCluster.Spec.AerospikeConfig["namespaces"]
 			nsList := nsListInterface.([]interface{})
 			nsName := nsList[0].(map[string]interface{})["name"].(string)
 
@@ -239,7 +239,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 			t.Run("InvalidAerospikeConfig", func(t *testing.T) {
 
 				aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-				aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aerospikev1alpha1.Values{"namespace": "invalidConf"}
+				aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aerospikev1alpha1.Values{"namespaces": "invalidConf"}
 				err = deployCluster(t, f, ctx, aeroCluster)
 				validateError(t, err, "should fail for invalid aerospikeConfig")
 
@@ -248,7 +248,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 					t.Run("InvalidReplicationFactor", func(t *testing.T) {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 						aeroConfig := aerospikev1alpha1.Values{
-							"namespace": []interface{}{
+							"namespaces": []interface{}{
 								map[string]interface{}{
 									"name":               "test",
 									"replication-factor": 3,
@@ -264,7 +264,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 					t.Run("InvalidStorage", func(t *testing.T) {
 						t.Run("InvalidStorageEngineDevice", func(t *testing.T) {
 							aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-							if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+							if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 								vd := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 									aerospikev1alpha1.AerospikePersistentVolumeSpec{
 										Path:       "/dev/xvdf1",
@@ -285,11 +285,11 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vd...)
 
 								aeroConfig := aerospikev1alpha1.Values{
-									"namespace": []interface{}{
+									"namespaces": []interface{}{
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
-												"device": []interface{}{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"},
+												"devices": []interface{}{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"},
 											},
 										},
 									},
@@ -302,13 +302,13 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 						t.Run("ExtraStorageEngineDevice", func(t *testing.T) {
 							aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-							if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+							if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 								aeroConfig := aerospikev1alpha1.Values{
-									"namespace": []interface{}{
+									"namespaces": []interface{}{
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
-												"device": []interface{}{"andRandomDevice"},
+												"devices": []interface{}{"andRandomDevice"},
 											},
 										},
 									},
@@ -322,7 +322,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 					t.Run("InvalidxdrConfig", func(t *testing.T) {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 							aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{}
 							aeroConfig := aerospikev1alpha1.Values{
 								"xdr": map[string]interface{}{
@@ -353,7 +353,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 						rackAeroConf := aerospikev1alpha1.Values{}
 						lib.DeepCopy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
 
 						racks := []aerospikev1alpha1.Rack{{ID: 1, AerospikeConfig: rackAeroConf}}
 						aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
@@ -381,7 +381,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 						rackAeroConf := aerospikev1alpha1.Values{}
 						lib.DeepCopy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
 
 						aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = rackAeroConf
 						err = f.Client.Update(goctx.TODO(), aeroCluster)

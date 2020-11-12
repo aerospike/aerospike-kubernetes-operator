@@ -372,16 +372,13 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 		}
 	}
 
-	a, r, err := v.validateAddedOrRemovedVolumes(new)
-	fmt.Printf("@@@@@@ %v %v %v", a, r, err)
-
+	_, _, err := v.validateAddedOrRemovedVolumes(new)
 	return err
 }
 
 // NeedsRollingRestart indicates if a change to needs rolling restart..
 func (v *AerospikeStorageSpec) NeedsRollingRestart(new AerospikeStorageSpec) bool {
 	addedVolumes, removedVolumes, _ := v.validateAddedOrRemovedVolumes(new)
-	fmt.Printf("@@@@@@ %v %v", addedVolumes, removedVolumes)
 	return len(addedVolumes) != 0 || len(removedVolumes) != 0
 }
 

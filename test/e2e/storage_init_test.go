@@ -336,7 +336,7 @@ func getStorageInitAerospikeCluster(storageConfig aerospikev1alpha1.AerospikeSto
 					"migrate-threads":  4,
 				},
 				"security": map[string]interface{}{"enable-security": true},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"replication-factor": networkTestPolicyClusterSize,

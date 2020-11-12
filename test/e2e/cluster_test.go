@@ -451,28 +451,28 @@ func UpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Test
 					t.Run("UpdateNamespaceList", func(t *testing.T) {
 						aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
 
-						nsList := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})
+						nsList := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})
 						nsList = append(nsList, map[string]interface{}{
 							"name":        "bar",
 							"memory-size": 2000955200,
 							"storage-engine": map[string]interface{}{
-								"device": []interface{}{"/test/dev/xvdf"},
+								"devices": []interface{}{"/test/dev/xvdf"},
 							},
 						})
-						aeroCluster.Spec.AerospikeConfig["namespace"] = nsList
+						aeroCluster.Spec.AerospikeConfig["namespaces"] = nsList
 						err := f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating namespace list. Cannot be updated")
 					})
 					t.Run("UpdateStorageEngine", func(t *testing.T) {
 						aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
 
 						err := f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating namespace storage-engine. Cannot be updated")
 					})
 					t.Run("UpdateReplicationFactor", func(t *testing.T) {
 						aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 5
+						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 5
 
 						err := f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating namespace replication-factor. Cannot be updated")
@@ -555,21 +555,21 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 			validateError(t, err, "should fail for empty aerospikeConfig")
 
 			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-			aeroCluster.Spec.AerospikeConfig = aerospikev1alpha1.Values{"namespace": "invalidConf"}
+			aeroCluster.Spec.AerospikeConfig = aerospikev1alpha1.Values{"namespaces": "invalidConf"}
 			err = deployCluster(t, f, ctx, aeroCluster)
 			validateError(t, err, "should fail for invalid aerospikeConfig")
 
 			t.Run("InvalidNamespace", func(t *testing.T) {
 				t.Run("NilAerospikeNamespace", func(t *testing.T) {
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig["namespace"] = nil
+					aeroCluster.Spec.AerospikeConfig["namespaces"] = nil
 					err = deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for nil aerospikeConfig.namespace")
 				})
 
 				t.Run("InvalidReplicationFactor", func(t *testing.T) {
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 3
+					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 3
 					err = deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for replication-factor greater than node sz")
 				})
@@ -578,15 +578,15 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 				t.Run("InvalidStorage", func(t *testing.T) {
 					t.Run("NilStorageEngine", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
+						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
 						err = deployCluster(t, f, ctx, aeroCluster)
 						validateError(t, err, "should fail for nil storage-engine")
 					})
 
 					t.Run("NilStorageEngineDevice", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = nil
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = nil
 							err = deployCluster(t, f, ctx, aeroCluster)
 							validateError(t, err, "should fail for nil storage-engine.device")
 						}
@@ -594,7 +594,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("InvalidStorageEngineDevice", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 							aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 								aerospikev1alpha1.AerospikePersistentVolumeSpec{
 									Path:         "/dev/xvdf1",
@@ -616,7 +616,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 								},
 							}
 
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = []string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
 							err = deployCluster(t, f, ctx, aeroCluster)
 							validateError(t, err, "should fail for invalid storage-engine.device, cannot have 3 devices in single device string")
 						}
@@ -624,8 +624,8 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("NilStorageEngineFile", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["file"]; ok {
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["file"] = nil
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"]; ok {
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"] = nil
 							err = deployCluster(t, f, ctx, aeroCluster)
 							validateError(t, err, "should fail for nil storage-engine.file")
 						}
@@ -633,10 +633,10 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("ExtraStorageEngineDevice", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							devList := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"].([]interface{})
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+							devList := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 							devList = append(devList, "andRandomDevice")
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = devList
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = devList
 							err = deployCluster(t, f, ctx, aeroCluster)
 							validateError(t, err, "should fail for invalid storage-engine.device, cannot a device which doesn't exist in storage")
 						}
@@ -644,7 +644,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("InvalidxdrConfig", func(t *testing.T) {
 						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 							aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{}
 							aeroCluster.Spec.AerospikeConfig["xdr"] = map[string]interface{}{
 								"enable-xdr":         false,
@@ -662,7 +662,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Ns conf
 					// Rack-id
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
 					err := deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for setting rack-id")
 				})
@@ -686,14 +686,14 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Network conf
 					// "port"
 					// "access-port"
-					// "access-address"
+					// "access-addresses"
 					// "alternate-access-port"
-					// "alternate-access-address"
+					// "alternate-access-addresses"
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 					networkConf := map[string]interface{}{
 						"service": map[string]interface{}{
-							"port":           3000,
-							"access-address": []string{"<access_address>"},
+							"port":             3000,
+							"access-addresses": []string{"<access_addresses>"},
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig["network"] = networkConf
@@ -703,15 +703,15 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// if "tls-name" in conf
 					// "tls-port"
 					// "tls-access-port"
-					// "tls-access-address"
+					// "tls-access-addresses"
 					// "tls-alternate-access-port"
-					// "tls-alternate-access-address"
+					// "tls-alternate-access-addresses"
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
 					networkConf = map[string]interface{}{
 						"service": map[string]interface{}{
-							"tls-name":           "bob-cluster-a",
-							"tls-port":           3001,
-							"tls-access-address": []string{"<tls-access-address>"},
+							"tls-name":             "bob-cluster-a",
+							"tls-port":             3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig["network"] = networkConf
@@ -788,21 +788,21 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 			validateError(t, err, "should fail for empty aerospikeConfig")
 
 			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-			aeroCluster.Spec.AerospikeConfig = aerospikev1alpha1.Values{"namespace": "invalidConf"}
+			aeroCluster.Spec.AerospikeConfig = aerospikev1alpha1.Values{"namespaces": "invalidConf"}
 			err = f.Client.Update(goctx.TODO(), aeroCluster)
 			validateError(t, err, "should fail for invalid aerospikeConfig")
 
 			t.Run("InvalidNamespace", func(t *testing.T) {
 				t.Run("NilAerospikeNamespace", func(t *testing.T) {
 					aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-					aeroCluster.Spec.AerospikeConfig["namespace"] = nil
+					aeroCluster.Spec.AerospikeConfig["namespaces"] = nil
 					err := f.Client.Update(goctx.TODO(), aeroCluster)
 					validateError(t, err, "should fail for nil aerospikeConfig.namespace")
 				})
 
 				t.Run("InvalidReplicationFactor", func(t *testing.T) {
 					aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-					aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 30
+					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 30
 					err := f.Client.Update(goctx.TODO(), aeroCluster)
 					validateError(t, err, "should fail for replication-factor greater than node sz")
 				})
@@ -811,15 +811,15 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 				t.Run("InvalidStorage", func(t *testing.T) {
 					t.Run("NilStorageEngine", func(t *testing.T) {
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
+						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
 						err := f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for nil storage-engine")
 					})
 
 					t.Run("NilStorageEngineDevice", func(t *testing.T) {
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = nil
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = nil
 							err := f.Client.Update(goctx.TODO(), aeroCluster)
 							validateError(t, err, "should fail for nil storage-engine.device")
 						}
@@ -827,8 +827,8 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("NilStorageEngineFile", func(t *testing.T) {
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["file"]; ok {
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["file"] = nil
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"]; ok {
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"] = nil
 							err := f.Client.Update(goctx.TODO(), aeroCluster)
 							validateError(t, err, "should fail for nil storage-engine.file")
 						}
@@ -836,10 +836,10 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("ExtraStorageEngineDevice", func(t *testing.T) {
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
-							devList := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"].([]interface{})
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+							devList := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 							devList = append(devList, "andRandomDevice")
-							aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"] = devList
+							aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = devList
 							err := f.Client.Update(goctx.TODO(), aeroCluster)
 							validateError(t, err, "should fail for invalid storage-engine.device, cannot add a device which doesn't exist in BlockStorage")
 						}
@@ -847,7 +847,7 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 
 					t.Run("InvalidxdrConfig", func(t *testing.T) {
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						if _, ok := aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["device"]; ok {
+						if _, ok := aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
 							aeroCluster.Spec.AerospikeConfig["xdr"] = map[string]interface{}{
 								"enable-xdr":         false,
 								"xdr-digestlog-path": "randomPath 100G",
@@ -864,7 +864,7 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Ns conf
 					// Rack-id
 					aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-					aeroCluster.Spec.AerospikeConfig["namespace"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
 					err := f.Client.Update(goctx.TODO(), aeroCluster)
 					validateError(t, err, "should fail for setting rack-id")
 				})
@@ -888,14 +888,14 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Network conf
 					// "port"
 					// "access-port"
-					// "access-address"
+					// "access-addresses"
 					// "alternate-access-port"
-					// "alternate-access-address"
+					// "alternate-access-addresses"
 					aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
 					networkConf := map[string]interface{}{
 						"service": map[string]interface{}{
-							"port":           3000,
-							"access-address": []string{"<access_address>"},
+							"port":             3000,
+							"access-addresses": []string{"<access_addresses>"},
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig["network"] = networkConf
@@ -905,15 +905,15 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// if "tls-name" in conf
 					// "tls-port"
 					// "tls-access-port"
-					// "tls-access-address"
+					// "tls-access-addresses"
 					// "tls-alternate-access-port"
-					// "tls-alternate-access-address"
+					// "tls-alternate-access-addresses"
 					aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 					networkConf = map[string]interface{}{
 						"service": map[string]interface{}{
-							"tls-name":           "bob-cluster-a",
-							"tls-port":           3001,
-							"tls-access-address": []string{"<tls-access-address>"},
+							"tls-name":             "bob-cluster-a",
+							"tls-port":             3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig["network"] = networkConf

@@ -44,14 +44,14 @@ spec:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
       enable-security: true
-    namespace:
+    namespaces:
       - name: test
         memory-size: 2000000000
         single-bin: true
         data-in-index: true
         replication-factor: 1
         storage-engine:
-          file:
+          files:
             - /opt/aerospike/data/test/test.dat
           filesize: 2000000000
           data-in-memory: true
@@ -61,7 +61,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
-          file:
+          files:
             - /opt/aerospike/data/bar/bar.dat
           filesize: 2000000000
           data-in-memory: true

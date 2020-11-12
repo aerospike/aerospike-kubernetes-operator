@@ -351,14 +351,14 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 				"network": networkConf,
 
 				"security": map[string]interface{}{"enable-security": true},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"replication-factor": networkTestPolicyClusterSize,
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
 						"storage-engine": map[string]interface{}{
-							"file":     []interface{}{"/opt/aerospike/data/test.dat"},
+							"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 							"filesize": 2000955200,
 						},
 					},

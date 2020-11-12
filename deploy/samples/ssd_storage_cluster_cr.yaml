@@ -48,10 +48,10 @@ spec:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
       enable-security: true
-    namespace:
+    namespaces:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
-          device:
+          devices:
             - /test/dev/xvdf

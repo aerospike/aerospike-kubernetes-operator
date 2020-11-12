@@ -224,13 +224,13 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 						},
 					},
 				},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"memory-size":        1000955200,
 						"replication-factor": 2,
 						"storage-engine": map[string]interface{}{
-							"device": []interface{}{"/test/dev/xvdf"},
+							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
 				},
@@ -321,13 +321,13 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 				"security": map[string]interface{}{
 					"enable-security": true,
 				},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"memory-size":        1000955200,
 						"replication-factor": 1,
 						"storage-engine": map[string]interface{}{
-							"device": []interface{}{"/test/dev/xvdf"},
+							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
 				},
@@ -443,13 +443,13 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 		},
 	}
 
-	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"device": []interface{}{"/test/dev/xvdf"},
+				"devices": []interface{}{"/test/dev/xvdf"},
 			},
 		},
 	}
@@ -471,13 +471,13 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 		},
 	}
 
-	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"/opt/aerospike/data/test.dat"},
+				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -509,7 +509,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
-	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"memory-size":        2000955200,
@@ -517,7 +517,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 			"data-in-index":      true,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"/opt/aerospike/data/test.dat"},
+				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -529,7 +529,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"memory-size":        2000955200,
@@ -568,13 +568,13 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 		},
 	}
 
-	aeroCluster.Spec.AerospikeConfig["namespace"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"device": []interface{}{"/dev/nvme0n1	/test/dev/xvdf"},
+				"devices": []interface{}{"/dev/nvme0n1	/test/dev/xvdf"},
 			},
 		},
 	}

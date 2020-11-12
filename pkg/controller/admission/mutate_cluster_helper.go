@@ -11,24 +11,24 @@ import (
 
 func setDefaultNsConf(logger log.Logger, config aerospikev1alpha1.Values, rackEnabledNsList []string) error {
 	// namespace conf
-	nsConf, ok := config["namespace"]
+	nsConf, ok := config["namespaces"]
 	if !ok {
-		return fmt.Errorf("aerospikeConfig.namespace not a present. aerospikeConfig %v", config)
+		return fmt.Errorf("aerospikeConfig.namespaces not present. aerospikeConfig %v", config)
 	} else if nsConf == nil {
-		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
+		return fmt.Errorf("aerospikeConfig.namespaces cannot be nil")
 	}
 
 	nsList, ok := nsConf.([]interface{})
 	if !ok {
-		return fmt.Errorf("aerospikeConfig.namespace not valid namespace list %v", nsConf)
+		return fmt.Errorf("aerospikeConfig.namespaces not valid namespace list %v", nsConf)
 	} else if len(nsList) == 0 {
-		return fmt.Errorf("aerospikeConfig.namespace cannot be empty. aerospikeConfig %v", config)
+		return fmt.Errorf("aerospikeConfig.namespaces cannot be empty. aerospikeConfig %v", config)
 	}
 
 	for _, nsInt := range nsList {
 		nsMap, ok := nsInt.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("aerospikeConfig.namespace does not have valid namespace map. nsMap %v", nsInt)
+			return fmt.Errorf("aerospikeConfig.namespaces does not have valid namespace map. nsMap %v", nsInt)
 		}
 
 		// Add dummy rack-id only for rackEnabled namespaces
@@ -38,13 +38,13 @@ func setDefaultNsConf(logger log.Logger, config aerospikev1alpha1.Values, rackEn
 				if isNameExist(rackEnabledNsList, nsName.(string)) {
 					// Add dummy rack-id, should be replaced with actual rack-id by init-container script
 					if err := setDefaultsInConfigMap(logger, nsMap, defaultConfs); err != nil {
-						return fmt.Errorf("Failed to set default aerospikeConfig.namespace rack config: %v", err)
+						return fmt.Errorf("Failed to set default aerospikeConfig.namespaces rack config: %v", err)
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
-					logger.Info("aerospikeConfig.namespace.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
+					logger.Info("aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
 
 					delete(nsMap, "rack-id")
 				}
@@ -104,15 +104,15 @@ func setDefaultNetworkConf(logger log.Logger, config aerospikev1alpha1.Values) e
 	serviceDefaults := map[string]interface{}{}
 	serviceDefaults["port"] = utils.ServicePort
 	serviceDefaults["access-port"] = utils.ServicePort // must be greater that or equal to 1024
-	serviceDefaults["access-address"] = []string{"<access-address>"}
+	serviceDefaults["access-addresses"] = []string{"<access-address>"}
 	serviceDefaults["alternate-access-port"] = utils.ServicePort // must be greater that or equal to 1024,
-	serviceDefaults["alternate-access-address"] = []string{"<alternate-access-address>"}
+	serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
 	if _, ok := serviceConf["tls-name"]; ok {
 		serviceDefaults["tls-port"] = utils.ServiceTLSPort
 		serviceDefaults["tls-access-port"] = utils.ServiceTLSPort
-		serviceDefaults["tls-access-address"] = []string{"<tls-access-address>"}
+		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
 		serviceDefaults["tls-alternate-access-port"] = utils.ServiceTLSPort // must be greater that or equal to 1024,
-		serviceDefaults["tls-alternate-access-address"] = []string{"<tls-alternate-access-address>"}
+		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
 	}
 
 	if err := setDefaultsInConfigMap(logger, serviceConf, serviceDefaults); err != nil {

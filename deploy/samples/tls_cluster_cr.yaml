@@ -62,12 +62,12 @@ spec:
           cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
           key-file: /etc/aerospike/secret/fb_key.pem
           ca-file: /etc/aerospike/secret/cacert.pem
-    namespace:
+    namespaces:
       - name: bar
         memory-size: 3000000000
         replication-factor: 1
         storage-engine:
-          file:
+          files:
             - /opt/aerospike/data/bar.dat
           filesize: 2000000000
           data-in-memory: true
