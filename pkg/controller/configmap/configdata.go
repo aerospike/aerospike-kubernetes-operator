@@ -179,6 +179,11 @@ for volume in volumes:
 
     initialized.append(volume['path'])
 
+def executeCommand(command):
+    print 'Executing command\n\t' + command
+    exit = os.system(command)
+    if exit != 0:
+        raise Exception('Error executing command')
 
 # Create the patch payload for updating pod status.
 pathPayload = [{'op': 'replace', 'path': '/status/podStatus/' +
@@ -203,7 +208,6 @@ cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization
      -H 'Content-Type: application/json-patch+json' \
      "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
 `
-
 const onStartShTemplateStr = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
@@ -231,7 +235,20 @@ const onStartShTemplateStr = `
 
 set -e
 set -x
-CFG=/etc/aerospike/aerospike.template.conf
+
+echo "Update label in pod"
+
+# Get ripemd hash and clean it
+CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
+echo $CONF_HASH
+
+apt-get update && apt-get install -y apt-transport-https gnupg2 curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubectl
+
+kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
 
 function join {
     local IFS="$1"; shift; echo "$*";
@@ -244,6 +261,8 @@ IFS='-' read -ra ADDR <<< "$(hostname)"
 CLUSTER_NAME="${ADDR[0]}"
 
 NODE_ID="a${ADDR[-1]}"
+
+CFG=/etc/aerospike/aerospike.template.conf
 
 # Find rack-id, if given
 len=${#ADDR[@]}
@@ -399,6 +418,7 @@ echo "Generated Aerospike Configuration "
 echo "---------------------------------"
 cat ${CFG}
 echo "---------------------------------"
+
 `
 
 type initializeTemplateInput struct {
@@ -439,3 +459,22 @@ func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aeros
 		"on-start.sh":   onStartSh.String(),
 	}, nil
 }
+
+// echo "Update label in pod"
+
+// cat << EOF > setlabels.py
+// import json
+
+// # Create the patch payload for updating pod label.
+// pathPayload = [{'op': 'add', 'path': '/metadata/labels/hello', 'value': 'world'}]
+
+// with open('/tmp/labels.json', 'w') as outfile:
+//     json.dump(pathPayload, outfile)
+// EOF
+
+// python setlabels.py
+
+// cat /tmp/labels.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
+//      -H 'Accept: application/json' \
+//      -H 'Content-Type: application/json-patch+json' \
+//      "https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/pod/${MY_POD_NAME}"

@@ -11,24 +11,27 @@ import (
 
 var pkglog = log.New(log.Ctx{"module": "lib.asconfig"})
 
+const AerospikeTemplateConfFileName = "aerospike.template.conf"
+
 // CreateConfigMapData create configMap data
 func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (map[string]string, error) {
 	// Add config template
-	temp, err := buildConfigTemplate(aeroCluster, rack)
+	temp, err := BuildConfigTemplate(aeroCluster, rack)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
+
 	confData, err := getBaseConfData(aeroCluster, rack)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build config template: %v", err)
 	}
 
-	confData["aerospike.template.conf"] = temp
+	confData[AerospikeTemplateConfFileName] = temp
 
 	return confData, nil
 }
 
-func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
+func BuildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
 	version := strings.Split(aeroCluster.Spec.Build, ":")
 
 	config := rack.AerospikeConfig
@@ -47,3 +50,20 @@ func buildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 
 	return confFile, nil
 }
+
+// func writeLogContext(buf *bytes.Buffer, conf Conf, indent int) {
+// 	var keys []string
+// 	for k := range conf {
+// 		keys = append(keys, k)
+// 	}
+
+// 	sort.Strings(keys)
+
+// 	for _, context := range keys {
+// 		if context == "name" {
+// 			// ignore generated field
+// 			continue
+// 		}
+// 		writeField(buf, "context "+context, conf[context].(string), indent)
+// 	}
+// }

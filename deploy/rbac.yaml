@@ -155,6 +155,12 @@ rules:
   - '*'
   verbs:
   - '*'
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - '*'
 
 ---
 # RoleBinding

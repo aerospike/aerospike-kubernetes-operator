@@ -74,7 +74,7 @@ type Rack struct {
 	// Racklabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLable {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
-	NodeName  string `json:"nodeName,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
 	// AerospikeConfig overrides the common AerospikeConfig for this Rack. This is merged with global Aerospike config.
 	InputAerospikeConfig *Values `json:"aerospikeConfig,omitempty"`
 	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config

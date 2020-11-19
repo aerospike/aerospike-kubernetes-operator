@@ -716,7 +716,10 @@ func (r *ReconcileAerospikeCluster) isAnyPodInFailedState(aeroCluster *aerospike
 
 	for _, p := range podList {
 		for _, ps := range p.Status.ContainerStatuses {
-			if err := utils.CheckPodFailed(&p); err != nil {
+			// TODO: Should we use checkPodFailed or CheckPodImageFailed?
+			// scaleDown, rollingRestart should work even if node is crashed
+			// If node was crashed due to wrong config then only rollingRestart can bring it back.
+			if err := utils.CheckPodImageFailed(&p); err != nil {
 				logger.Info("AerospikeCluster Pod is in failed state", log.Ctx{"currentImage": ps.Image, "podName": p.Name, "err": err})
 				return true
 			}
@@ -940,6 +943,7 @@ func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, 
 	st.Spec.Template.Spec.Affinity = affinity
 }
 
+// TODO: How to remove if user has removed this field? Should we find and remove volume
 // Called while creating new cluster and also during rolling restart
 func updateStatefulSetSecretInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
@@ -1136,7 +1140,7 @@ func truncateString(str string, num int) string {
 func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
 
-	hashPath, err := getHashForPVCPath(path)
+	hashPath, err := getHash(path)
 	if err != nil {
 		return "", err
 	}
@@ -1211,11 +1215,11 @@ func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospike
 	return rackList
 }
 
-func getHashForPVCPath(path string) (string, error) {
+func getHash(str string) (string, error) {
 	var digest []byte
 	hash := ripemd160.New()
 	hash.Reset()
-	if _, err := hash.Write([]byte(path)); err != nil {
+	if _, err := hash.Write([]byte(str)); err != nil {
 		return "", err
 	}
 	res := hash.Sum(digest)
