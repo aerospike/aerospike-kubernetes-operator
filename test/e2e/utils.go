@@ -268,18 +268,18 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 			//t.Logf("Cluster status not updated. cluster.Status.Spec %v, cluster.Spec %v", newCluster.Status.AerospikeClusterSpec, newCluster.Spec)
 			return false, nil
 		}
-		if len(newCluster.Status.Nodes) != replicas {
-			t.Logf("Cluster status doesn't have node summary for all nodes. Cluster status may not have fully updated")
+		if len(newCluster.Status.Pods) != replicas {
+			t.Logf("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
 			return false, nil
 		} else {
-			for _, node := range newCluster.Status.Nodes {
-				if node.NodeID == "" {
-					t.Logf("Cluster nodes nodeID is empty")
+			for _, pod := range newCluster.Status.Pods {
+				if pod.Aerospike.NodeID == "" {
+					t.Logf("Cluster pod's nodeID is empty")
 					return false, nil
 				}
-				specBuild := strings.Split(aeroCluster.Spec.Build, ":")[1]
-				if node.Build != specBuild {
-					t.Logf("Cluster node build %s not same as spec %s", node.Build, specBuild)
+				specImage := strings.Split(aeroCluster.Spec.Image, ":")[1]
+				if pod.Image != specImage {
+					t.Logf("Cluster pod's image %s not same as spec %s", pod.Image, specImage)
 				}
 			}
 		}

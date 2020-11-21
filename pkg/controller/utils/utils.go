@@ -162,8 +162,22 @@ func IsImageEqual(image1 string, image2 string) bool {
 	return desiredRegistry == actualRegistry && desiredName == actualName && (desiredVersion == actualVersion || (desiredVersion == ":latest" && actualVersion == "") || (actualVersion == ":latest" && desiredVersion == ""))
 }
 
+// GetImageVersion extracts image version from image string/tag.
+func GetImageVersion(tag string) (string, error) {
+	_, _, version := ParseDockerImageTag(tag)
+
+	if version == "" || strings.ToLower(version) == "latest" {
+		return "", fmt.Errorf("Image version is mandatory for image: %v", tag)
+	}
+
+	return version, nil
+}
+
 // ParseDockerImageTag parses input tag into registry, name and version.
 func ParseDockerImageTag(tag string) (registry string, name string, version string) {
+	if tag == "" {
+		return "", "", ""
+	}
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
@@ -203,7 +217,7 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
 func GetDesiredImage(aeroCluster *aerospikev1alpha1.AerospikeCluster, containerName string) (string, error) {
 	if containerName == "aerospike-server" {
-		return aeroCluster.Spec.Build, nil
+		return aeroCluster.Spec.Image, nil
 	}
 
 	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {

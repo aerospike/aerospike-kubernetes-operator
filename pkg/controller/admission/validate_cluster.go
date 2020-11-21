@@ -75,8 +75,12 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 	}
 
 	// Jump version should not be allowed
-	newVersion := strings.Split(s.obj.Spec.Build, ":")[1]
-	oldVersion := strings.Split(old.Spec.Build, ":")[1]
+	newVersion := strings.Split(s.obj.Spec.Image, ":")[1]
+	oldVersion := ""
+
+	if old.Spec.Image != "" {
+		oldVersion = strings.Split(old.Spec.Image, ":")[1]
+	}
 	if err := deployment.IsValidUpgrade(oldVersion, newVersion); err != nil {
 		return fmt.Errorf("Failed to start upgrade: %v", err)
 	}
@@ -134,8 +138,8 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("AerospikeCluster name cannot have spaces")
 	}
 
-	// Validate build type. Only enterprise build allowed for now
-	if !isEnterprise(s.obj.Spec.Build) {
+	// Validate image type. Only enterprise image allowed for now
+	if !isEnterprise(s.obj.Spec.Image) {
 		return fmt.Errorf("CommunityEdition Cluster not supported")
 	}
 
@@ -152,18 +156,18 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `aerospikeConfigSecret` field")
 	}
 
-	// Validate Build version
-	version, err := getImageVersion(s.obj.Spec.Build)
+	// Validate Image version
+	version, err := getImageVersion(s.obj.Spec.Image)
 	if err != nil {
 		return err
 	}
 
 	val, err := asconfig.CompareVersions(version, baseVersion)
 	if err != nil {
-		return fmt.Errorf("Failed to check build version: %v", err)
+		return fmt.Errorf("Failed to check image version: %v", err)
 	}
 	if val < 0 {
-		return fmt.Errorf("Build version %s not supported. Base version %s", version, baseVersion)
+		return fmt.Errorf("Image version %s not supported. Base version %s", version, baseVersion)
 	}
 
 	err = validateClusterSize(version, int(s.obj.Spec.Size))
@@ -308,7 +312,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 		}
 	}
 
-	version, err := getImageVersion(s.obj.Spec.Build)
+	version, err := getImageVersion(s.obj.Spec.Image)
 	if err != nil {
 		return err
 	}

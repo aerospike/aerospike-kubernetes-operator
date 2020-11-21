@@ -426,7 +426,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	}
 
 	if upgradeNeeded {
-		found, err = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Build, rackState)
+		found, err = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState)
 		if err != nil {
 			logger.Error("Failed to update StatefulSet image", log.Ctx{"err": err})
 			return err
@@ -490,9 +490,9 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 	cleanupPods := []string{}
 	cleanupPods = append(cleanupPods, newPodNames...)
 
-	// Find dangling pods in podstatus
-	if aeroCluster.Status.PodStatus != nil {
-		for podName := range aeroCluster.Status.PodStatus {
+	// Find dangling pods in pods
+	if aeroCluster.Status.Pods != nil {
+		for podName := range aeroCluster.Status.Pods {
 			ordinal, err := getStatefulSetPodOrdinal(podName)
 			if err != nil {
 				return found, fmt.Errorf("Invalid pod name: %s", podName)
@@ -542,7 +542,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 
 	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
 	// Update will happen only when a pod is deleted.
-	// So first update build and then delete a pod. Pod will come up with new image.
+	// So first update image and then delete a pod. Pod will come up with new image.
 	// Repeat the above process.
 	needsUpdate := false
 	for i, container := range found.Spec.Template.Spec.Containers {
@@ -921,21 +921,6 @@ func (r *ReconcileAerospikeCluster) updateStatus(aeroCluster *aerospikev1alpha1.
 		return err
 	}
 
-	// Commit important access control information since getting node summary could take time.
-	err = r.patchStatus(aeroCluster, newAeroCluster)
-	if err != nil {
-		return fmt.Errorf("Error updating status: %v", err)
-	}
-
-	summary, err := r.getAerospikeClusterNodeSummary(newAeroCluster)
-	if err != nil {
-		// This should not be error. Before status update, we already try reconcileAccessControl
-		// This error may be because of few nodes, That should not be cosidered as full cluster error
-		logger.Error("Failed to get nodes summary", log.Ctx{"err": err})
-	}
-
-	newAeroCluster.Status.Nodes = summary
-
 	err = r.patchStatus(aeroCluster, newAeroCluster)
 	if err != nil {
 		return fmt.Errorf("Error updating status: %v", err)
@@ -956,12 +941,8 @@ func (r *ReconcileAerospikeCluster) createStatus(aeroCluster *aerospikev1alpha1.
 		return err
 	}
 
-	if newAeroCluster.Status.Nodes == nil {
-		newAeroCluster.Status.Nodes = []aerospikev1alpha1.AerospikeNodeSummary{}
-	}
-
-	if newAeroCluster.Status.PodStatus == nil {
-		newAeroCluster.Status.PodStatus = map[string]aerospikev1alpha1.AerospikePodStatus{}
+	if newAeroCluster.Status.Pods == nil {
+		newAeroCluster.Status.Pods = map[string]aerospikev1alpha1.AerospikePodStatus{}
 	}
 
 	if err = r.client.Status().Update(context.TODO(), newAeroCluster); err != nil {
@@ -1020,11 +1001,11 @@ func (r *ReconcileAerospikeCluster) patchStatus(oldAeroCluster, newAeroCluster *
 	// Pick changes to the status object only.
 	filteredPatch := []jsonpatch.JsonPatchOperation{}
 	for _, operation := range jsonpatchPatch {
-		// podStatus should never be updated here
-		// podStatus is updated only from 2 places
-		// 1: While pod init, it will add pod in podStatus
-		// 2: While pod cleanup, it will remove pod from podStatus
-		if strings.HasPrefix(operation.Path, "/status") && !strings.HasPrefix(operation.Path, "/status/podStatus") {
+		// pods should never be updated here
+		// pods is updated only from 2 places
+		// 1: While pod init, it will add pod in pods
+		// 2: While pod cleanup, it will remove pod from pods
+		if strings.HasPrefix(operation.Path, "/status") && !strings.HasPrefix(operation.Path, "/status/pods") {
 			filteredPatch = append(filteredPatch, operation)
 		}
 	}
@@ -1065,7 +1046,7 @@ func (r *ReconcileAerospikeCluster) removePodStatus(aeroCluster *aerospikev1alph
 	for _, podName := range podNames {
 		patch := jsonpatch.JsonPatchOperation{
 			Operation: "remove",
-			Path:      "/status/podStatus/" + podName,
+			Path:      "/status/pods/" + podName,
 		}
 		patches = append(patches, patch)
 	}
@@ -1137,7 +1118,7 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 
 	needStatusCleanup := []string{}
 	for _, podName := range podNames {
-		_, ok := aeroCluster.Status.PodStatus[podName]
+		_, ok := aeroCluster.Status.Pods[podName]
 		if ok {
 			needStatusCleanup = append(needStatusCleanup, podName)
 		}

@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	latestClusterBuild = "aerospike/aerospike-server-enterprise:4.8.0.6"
-	buildToUpgrade     = "aerospike/aerospike-server-enterprise:4.8.0.1"
+	latestClusterImage = "aerospike/aerospike-server-enterprise:4.8.0.6"
+	imageToUpgrade     = "aerospike/aerospike-server-enterprise:4.8.0.1"
 )
 
 var (
@@ -130,7 +130,7 @@ func CreateBasicCluster(t *testing.T, f *framework.Framework, ctx *framework.Tes
 }
 
 // feature-key file needed
-func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, size int32, build string) *aerospikev1alpha1.AerospikeCluster {
+func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, size int32, image string) *aerospikev1alpha1.AerospikeCluster {
 	// create Aerospike custom resource
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
@@ -141,7 +141,7 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
-			Build: build,
+			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -263,7 +263,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
-			Build: latestClusterBuild,
+			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
@@ -349,7 +349,7 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
-			Build: latestClusterBuild,
+			Image: latestClusterImage,
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
 				Users: []aerospikev1alpha1.AerospikeUserSpec{
 					{

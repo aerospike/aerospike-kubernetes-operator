@@ -435,14 +435,14 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 	kclient := &framework.Global.Client.Client
 
 	var found bool
-	for _, node := range aeroCluster.Status.Nodes {
+	for _, pod := range aeroCluster.Status.Pods {
 
-		if isNodePartOfRack(node.NodeID, strconv.Itoa(rack.ID)) {
+		if isNodePartOfRack(pod.Aerospike.NodeID, strconv.Itoa(rack.ID)) {
 			found = true
 			// TODO:
 			// We may need to check for all keys in aerospikeConfig in rack
 			// but we know that we are changing for service only for now
-			host := &as.Host{Name: node.HostExternalIP, Port: int(node.ServicePort), TLSName: node.TLSName}
+			host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 			confs, err := asinfo.GetAsConfig("service")
 			if err != nil {
@@ -467,7 +467,7 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 		}
 	}
 	if !found {
-		t.Fatalf("No node found in for rack. Nodes %v, Rack %v", aeroCluster.Status.Nodes, rack)
+		t.Fatalf("No pod found in for rack. Pods %v, Rack %v", aeroCluster.Status.Pods, rack)
 	}
 }
 
@@ -476,12 +476,15 @@ func isNamespaceRackEnabled(t *testing.T, f *framework.Framework, ctx *framework
 
 	kclient := &framework.Global.Client.Client
 
-	if len(aeroCluster.Status.Nodes) == 0 {
-		t.Fatal("Cluster has empty node list in status")
+	if len(aeroCluster.Status.Pods) == 0 {
+		t.Fatal("Cluster has empty pod list in status")
 	}
-	node := aeroCluster.Status.Nodes[0]
 
-	host := &as.Host{Name: node.HostExternalIP, Port: int(node.ServicePort), TLSName: node.TLSName}
+	var pod aerospikev1alpha1.AerospikePodStatus
+	for _, p := range aeroCluster.Status.Pods {
+		pod = p
+	}
+	host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 
 	confs, err := asinfo.GetAsConfig("racks")

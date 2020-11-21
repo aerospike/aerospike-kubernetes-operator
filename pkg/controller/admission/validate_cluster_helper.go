@@ -357,7 +357,7 @@ func validateRequiredFileStorage(logger log.Logger, config aerospikev1alpha1.Val
 	if !validationPolicy.SkipXdrDlogFileValidate {
 		val, err := asconfig.CompareVersions(version, "5.0.0")
 		if err != nil {
-			return fmt.Errorf("Failed to check build version: %v", err)
+			return fmt.Errorf("Failed to check image version: %v", err)
 		}
 		if val < 0 {
 			// Validate xdr-digestlog-path for pre-5.0.0 versions.
@@ -388,11 +388,11 @@ func validateConfigMapVolumes(logger log.Logger, config aerospikev1alpha1.Values
 	return err
 }
 
-func getImageVersion(buildStr string) (string, error) {
-	_, _, version := utils.ParseDockerImageTag(buildStr)
+func getImageVersion(imageStr string) (string, error) {
+	_, _, version := utils.ParseDockerImageTag(imageStr)
 
 	if version == "" || strings.ToLower(version) == "latest" {
-		return "", fmt.Errorf("Image version is mandatory for image: %v", buildStr)
+		return "", fmt.Errorf("Image version is mandatory for image: %v", imageStr)
 	}
 
 	return version, nil
@@ -404,9 +404,9 @@ func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return !ok || storage == "memory"
 }
 
-// isEnterprise indicates if aerospike build is enterprise
-func isEnterprise(build string) bool {
-	return strings.Contains(strings.ToLower(build), "enterprise")
+// isEnterprise indicates if aerospike image is enterprise
+func isEnterprise(image string) bool {
+	return strings.Contains(strings.ToLower(image), "enterprise")
 }
 
 // isSecretNeeded indicates if aerospikeConfig needs secret

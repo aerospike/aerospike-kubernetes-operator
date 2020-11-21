@@ -72,8 +72,8 @@ func RackEnabledClusterTest(t *testing.T, f *framework.Framework, ctx *framework
 			validateRackEnabledCluster(t, f, ctx, clusterNamespacedName)
 		})
 		t.Run("Upgrade/Downgrade", func(t *testing.T) {
-			// dont change build, it upgrade, check old version
-			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName, buildToUpgrade); err != nil {
+			// dont change image, it upgrade, check old version
+			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName, imageToUpgrade); err != nil {
 				t.Fatal(err)
 			}
 			validateRackEnabledCluster(t, f, ctx, clusterNamespacedName)

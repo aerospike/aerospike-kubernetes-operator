@@ -14,7 +14,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeCluster":              schema_pkg_apis_aerospike_v1alpha1_AerospikeCluster(ref),
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec":          schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref),
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterStatus":        schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref),
-		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary":          schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref),
+		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeInstanceSummary":      schema_pkg_apis_aerospike_v1alpha1_AerospikeInstanceSummary(ref),
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePersistentVolumeSpec": schema_pkg_apis_aerospike_v1alpha1_AerospikePersistentVolumeSpec(ref),
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus":            schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref),
 		"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeStorageSpec":          schema_pkg_apis_aerospike_v1alpha1_AerospikeStorageSpec(ref),
@@ -79,9 +79,9 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"build": {
+					"image": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Aerospike cluster build",
+							Description: "Aerospike server image",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -157,7 +157,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterSpec(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"size", "build", "aerospikeConfig", "resources"},
+				Required: []string{"size", "image", "aerospikeConfig", "resources"},
 			},
 		},
 		Dependencies: []string{
@@ -178,27 +178,14 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec"),
 						},
 					},
-					"nodes": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Nodes contains Aerospike node specific  state of cluster.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary"),
-									},
-								},
-							},
-						},
-					},
-					"podStatus": {
+					"pods": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
 								"x-kubernetes-patch-strategy": "strategic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "PodStatus has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its status. The map key is the name of the pod.",
+							Description: "Pods has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its own status. The map key is the name of the pod.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -211,63 +198,21 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeClusterStatus(ref common.Refere
 						},
 					},
 				},
-				Required: []string{"AerospikeClusterSpec", "nodes", "podStatus"},
+				Required: []string{"AerospikeClusterSpec", "pods"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeNodeSummary", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus"},
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeClusterSpec", "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikePodStatus"},
 	}
 }
 
-func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_aerospike_v1alpha1_AerospikeInstanceSummary(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "AerospikeNodeSummary defines the observed state of AerospikeClusterNode",
+				Description: "AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"podName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PodName is the K8s pod name.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"podIP": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PodIP in the K8s network.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"hostInternalIP": {
-						SchemaProps: spec.SchemaProps{
-							Description: "HostInternalIP of the K8s host this pod is scheduled on.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"hostExternalIP": {
-						SchemaProps: spec.SchemaProps{
-							Description: "HostExternalIP of the K8s host this pod is scheduled on.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"podPort": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PodPort is the port K8s intenral Aerospike clients can connect to.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"servicePort": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ServicePort is the port Aerospike clients outside K8s can connect to.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
 					"clusterName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ClusterName is the name of the Aerospike cluster this pod belongs to.",
@@ -282,13 +227,6 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"build": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Build is the Aerospike build this pod is running.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"rackID": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RackID of rack to which this node belongs",
@@ -296,7 +234,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"tlsname": {
+					"tlsName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLSName is the TLS name of this pod in the Aerospike cluster.",
 							Type:        []string{"string"},
@@ -360,7 +298,7 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikeNodeSummary(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"podName", "podIP", "podPort", "servicePort", "clusterName", "nodeID", "build", "rackID"},
+				Required: []string{"clusterName", "nodeID"},
 			},
 		},
 	}
@@ -450,6 +388,54 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref common.ReferenceC
 				Description: "AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"image": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Image is the Aerospike image this pod is running.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"podIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodIP in the K8s network.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"hostInternalIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostInternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"hostExternalIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostExternalIP of the K8s host this pod is scheduled on.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"podPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodPort is the port K8s intenral Aerospike clients can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"servicePort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServicePort is the port Aerospike clients outside K8s can connect to.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"aerospike": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Aerospike server instance summary for this pod.",
+							Ref:         ref("github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeInstanceSummary"),
+						},
+					},
 					"initializedVolumePaths": {
 						SchemaProps: spec.SchemaProps{
 							Description: "InitializedVolumePaths is the list of device path that have already been initialized.",
@@ -465,9 +451,11 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"initializedVolumePaths"},
+				Required: []string{"image", "podIP", "podPort", "servicePort", "initializedVolumePaths"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1.AerospikeInstanceSummary"},
 	}
 }
 

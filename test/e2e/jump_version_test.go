@@ -139,11 +139,11 @@ func TestJumpVersion(t *testing.T) {
 	initializeOperator(t, f, ctx)
 
 	var aeroCluster *aerospikev1alpha1.AerospikeCluster = nil
-	var deployVersion = ""
+	var deployImage = ""
 	t.Run("CrashRecovery", func(t *testing.T) {
-		deployVersion = "4.7.0.10"
+		deployImage = "aerospike/aerospike-server-enterprise:4.7.0.10"
 		// Save cluster variable as well for cleanup.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigCrashingPre5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigCrashingPre5, deployImage, ctx)
 		err := aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, 100*time.Millisecond, 10*time.Second, t)
 		if err == nil {
 			// Cluster should have crashed.
@@ -151,42 +151,42 @@ func TestJumpVersion(t *testing.T) {
 		}
 
 		// Cluster should recover once correct config is provided.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployImage, ctx)
 		err = aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err != nil {
 			// Cluster should have recovered.
 			t.Fatalf("Cluster should have recovered - but did not: %v", err)
 		}
 
-		err = waitForVersion(t, aeroCluster, deployVersion, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+		err = waitForVersion(t, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 		if err != nil {
 			// Cluster should have recovered.
-			t.Fatalf("Cluster should have been on %s - but is not: %v", deployVersion, err)
+			t.Fatalf("Cluster should have been on %s - but is not: %v", deployImage, err)
 		}
 
 	})
 
 	t.Run("TestRegularUpgrade", func(t *testing.T) {
-		deployVersion = "4.8.0.11"
+		deployImage = "aerospike/aerospike-server-enterprise:4.8.0.11"
 		// Save cluster variable as well for cleanup.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployImage, ctx)
 		err := aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err != nil {
 			// Cluster should have recovered.
 			t.Fatalf("Cluster should have recovered - but did not: %v", err)
 		}
 
-		err = waitForVersion(t, aeroCluster, deployVersion, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+		err = waitForVersion(t, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 		if err != nil {
 			// Cluster should have recovered.
-			t.Fatalf("Cluster should have been on %s - but is not: %v", deployVersion, err)
+			t.Fatalf("Cluster should have been on %s - but is not: %v", deployImage, err)
 		}
 	})
 
 	t.Run("TestInvalidUpgrade", func(t *testing.T) {
-		deployVersion = "5.0.0.4"
+		deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
 		// Save cluster variable as well for cleanup.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPost5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPost5, deployImage, ctx)
 		err := aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err == nil || !strings.Contains(err.Error(), "jump required to version") {
 			t.Fatalf("Cluster should have not have upgraded - but did not: %v", err)
@@ -194,46 +194,46 @@ func TestJumpVersion(t *testing.T) {
 	})
 
 	t.Run("TestValidUpgrade", func(t *testing.T) {
-		deployVersion = "4.9.0.8"
+		deployImage = "aerospike/aerospike-server-enterprise:4.9.0.8"
 		// Save cluster variable as well for cleanup.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployImage, ctx)
 		err := aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err != nil {
 			t.Fatalf("Cluster should have upgraded - but did not: %v", err)
 		}
-		err = waitForVersion(t, aeroCluster, deployVersion, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+		err = waitForVersion(t, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 		if err != nil {
 			// Cluster should have recovered.
-			t.Fatalf("Cluster should have been on %s - but is not: %v", deployVersion, err)
+			t.Fatalf("Cluster should have been on %s - but is not: %v", deployImage, err)
 		}
 
-		deployVersion = "5.0.0.4"
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPost5, deployVersion, ctx)
+		deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPost5, deployImage, ctx)
 		err = aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err != nil {
 			t.Fatalf("Cluster should have upgraded - but did not: %v", err)
 		}
 
-		err = waitForVersion(t, aeroCluster, deployVersion, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+		err = waitForVersion(t, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 		if err != nil {
 			// Cluster should have recovered.
-			t.Fatalf("Cluster should have been on %s - but is not: %v", deployVersion, err)
+			t.Fatalf("Cluster should have been on %s - but is not: %v", deployImage, err)
 		}
 	})
 
 	t.Run("TestValidDowngrade", func(t *testing.T) {
-		deployVersion = "4.9.0.8"
+		deployImage = "aerospike/aerospike-server-enterprise:4.9.0.8"
 		// Save cluster variable as well for cleanup.
-		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployVersion, ctx)
+		aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfigPre5, deployImage, ctx)
 		err := aerospikeClusterCreateUpdateWithTO(aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO, t)
 		if err != nil {
 			t.Fatalf("Cluster should have upgraded - but did not: %v", err)
 		}
 
-		err = waitForVersion(t, aeroCluster, deployVersion, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+		err = waitForVersion(t, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 		if err != nil {
 			// Cluster should have recovered.
-			t.Fatalf("Cluster should have been on %s - but is not: %v", deployVersion, err)
+			t.Fatalf("Cluster should have been on %s - but is not: %v", deployImage, err)
 		}
 	})
 
@@ -242,7 +242,7 @@ func TestJumpVersion(t *testing.T) {
 	}
 }
 
-func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]interface{}, version string, ctx *framework.TestCtx) *aerospikev1alpha1.AerospikeCluster {
+func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]interface{}, image string, ctx *framework.TestCtx) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
@@ -257,7 +257,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  jumpTestClusterSize,
-			Build: "aerospike/aerospike-server-enterprise:" + version,
+			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
@@ -310,7 +310,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(aerospikeConfig map[string]inter
 }
 
 // waitForVersion waits for the cluster to have all nodes at input Aerospike version.
-func waitForVersion(t *testing.T, aeroCluster *aerospikev1alpha1.AerospikeCluster, version string, retryInterval, timeout time.Duration) error {
+func waitForVersion(t *testing.T, aeroCluster *aerospikev1alpha1.AerospikeCluster, image string, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Refresh cluster object.
 		err = framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, aeroCluster)
@@ -319,9 +319,9 @@ func waitForVersion(t *testing.T, aeroCluster *aerospikev1alpha1.AerospikeCluste
 			return false, nil
 		}
 
-		for _, nodeSummary := range aeroCluster.Status.Nodes {
-			if !strings.HasSuffix(nodeSummary.Build, version) {
-				t.Logf("Node : %s expected build: %s status reported build: %s", nodeSummary.NodeID, version, nodeSummary.Build)
+		for _, pod := range aeroCluster.Status.Pods {
+			if !strings.HasSuffix(pod.Image, image) {
+				t.Logf("Node : %s expected image: %s status reported image: %s", pod.Aerospike.NodeID, image, pod.Image)
 				return false, nil
 			}
 		}

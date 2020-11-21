@@ -1314,7 +1314,7 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  testClusterSize,
-			Build: latestClusterBuild,
+			Image: latestClusterImage,
 			ValidationPolicy: &aerospikev1alpha1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,

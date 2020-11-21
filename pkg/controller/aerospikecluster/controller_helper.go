@@ -83,6 +83,17 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 		newEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newEnvVar("MY_POD_IP", "status.podIP"),
 		newEnvVar("MY_HOST_IP", "status.hostIP"),
+		newEnvVarStatic("MY_POD_TLS_NAME", getServiceTLSName(aeroCluster)),
+		newEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
+		newEnvVarStatic("MY_POD_IMAGE", aeroCluster.Spec.Image),
+	}
+
+	if rackState.Rack.ID != utils.DefaultRackID {
+		envVarList = append(envVarList, newEnvVarStatic("MY_POD_RACK_ID", string(rackState.Rack.ID)))
+	}
+
+	if name := getServiceTLSName(aeroCluster); name != "" {
+		envVarList = append(envVarList, newEnvVarStatic("MY_POD_TLS_ENABLED", "true"))
 	}
 
 	const confDirName = "confdir"
@@ -114,7 +125,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  "aerospike-init",
-						Image: "aerospike/aerospike-kubernetes-init:0.0.11",
+						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
 						// TODO: Change make this ifnotpresent after finalization
 						ImagePullPolicy: corev1.PullAlways,
 						VolumeMounts: []corev1.VolumeMount{
@@ -143,7 +154,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 
 					Containers: []corev1.Container{{
 						Name:            "aerospike-server",
-						Image:           aeroCluster.Spec.Build,
+						Image:           aeroCluster.Spec.Image,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports:           ports,
 						Env:             envVarList,
@@ -581,6 +592,10 @@ func (r *ReconcileAerospikeCluster) getOrderedRackPodList(aeroCluster *aerospike
 		indexStr := strings.Split(p.Name, "-")
 		// Index is last, [1] can be rackID
 		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
+		if indexInt >= len(podList.Items) {
+			// Happens if we do not get full list of pods due to a crash,
+			return nil, fmt.Errorf("Error get pod list for rack:%v", rackID)
+		}
 		sortedList[(len(podList.Items)-1)-indexInt] = p
 	}
 	return sortedList, nil
@@ -608,6 +623,10 @@ func (r *ReconcileAerospikeCluster) getOrderedClusterPodList(aeroCluster *aerosp
 	for _, p := range podList.Items {
 		indexStr := strings.Split(p.Name, "-")
 		indexInt, _ := strconv.Atoi(indexStr[1])
+		if indexInt >= len(podList.Items) {
+			// Happens if we do not get full list of pods due to a crash,
+			return nil, fmt.Errorf("Error get pod list for cluster: %v", aeroCluster.Name)
+		}
 		sortedList[(len(podList.Items)-1)-indexInt] = p
 	}
 	return sortedList, nil
@@ -1165,6 +1184,13 @@ func newEnvVar(name, fieldPath string) corev1.EnvVar {
 				FieldPath: fieldPath,
 			},
 		},
+	}
+}
+
+func newEnvVarStatic(name, value string) corev1.EnvVar {
+	return corev1.EnvVar{
+		Name:  name,
+		Value: value,
 	}
 }
 

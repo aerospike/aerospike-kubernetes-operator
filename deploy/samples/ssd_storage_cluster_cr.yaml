@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  build: aerospike/aerospike-server-enterprise:4.9.0.5
+  image: aerospike/aerospike-server-enterprise:4.9.0.5
 
   resources:
     requests:

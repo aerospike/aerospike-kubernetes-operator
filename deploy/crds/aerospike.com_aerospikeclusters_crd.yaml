@@ -153,8 +153,8 @@ spec:
                   - hostExternal
                   type: string
               type: object
-            build:
-              description: Aerospike cluster build
+            image:
+              description: Aerospike server image
               type: string
             multiPodPerHost:
               description: "If set true then multiple pods can be created per Kubernetes
@@ -1611,37 +1611,63 @@ spec:
               type: object
           required:
           - aerospikeConfig
-          - build
+          - image
           - resources
           - size
           type: object
         status:
           description: AerospikeClusterStatus defines the observed state of AerospikeCluster
           properties:
-            nodes:
-              description: Nodes contains Aerospike node specific  state of cluster.
-              items:
-                description: AerospikeNodeSummary defines the observed state of AerospikeClusterNode
+            pods:
+              additionalProperties:
+                description: AerospikePodStatus contains the Aerospike specific status
+                  of the Aerospike serverpods.
                 properties:
-                  accessEndpoints:
-                    description: AccessEndpoints are the access endpoints for this
-                      pod.
-                    items:
-                      type: string
-                    type: array
-                  alternateAccessEndpoints:
-                    description: AlternateAccessEndpoints are the alternate access
-                      endpoints for this pod.
-                    items:
-                      type: string
-                    type: array
-                  build:
-                    description: Build is the Aerospike build this pod is running.
-                    type: string
-                  clusterName:
-                    description: ClusterName is the name of the Aerospike cluster
-                      this pod belongs to.
-                    type: string
+                  aerospike:
+                    description: Aerospike server instance summary for this pod.
+                    properties:
+                      accessEndpoints:
+                        description: AccessEndpoints are the access endpoints for
+                          this pod.
+                        items:
+                          type: string
+                        type: array
+                      alternateAccessEndpoints:
+                        description: AlternateAccessEndpoints are the alternate access
+                          endpoints for this pod.
+                        items:
+                          type: string
+                        type: array
+                      clusterName:
+                        description: ClusterName is the name of the Aerospike cluster
+                          this pod belongs to.
+                        type: string
+                      nodeID:
+                        description: NodeID is the unique Aerospike ID for this pod.
+                        type: string
+                      rackID:
+                        description: RackID of rack to which this node belongs
+                        type: integer
+                      tlsAccessEndpoints:
+                        description: TLSAccessEndpoints are the TLS access endpoints
+                          for this pod.
+                        items:
+                          type: string
+                        type: array
+                      tlsAlternateAccessEndpoints:
+                        description: TLSAlternateAccessEndpoints are the alternate
+                          TLS access endpoints for this pod.
+                        items:
+                          type: string
+                        type: array
+                      tlsName:
+                        description: TLSName is the TLS name of this pod in the Aerospike
+                          cluster.
+                        type: string
+                    required:
+                    - clusterName
+                    - nodeID
+                    type: object
                   hostExternalIP:
                     description: HostExternalIP of the K8s host this pod is scheduled
                       on.
@@ -1650,76 +1676,41 @@ spec:
                     description: HostInternalIP of the K8s host this pod is scheduled
                       on.
                     type: string
-                  nodeID:
-                    description: NodeID is the unique Aerospike ID for this pod.
+                  image:
+                    description: Image is the Aerospike image this pod is running.
                     type: string
-                  podIP:
-                    description: PodIP in the K8s network.
-                    type: string
-                  podName:
-                    description: PodName is the K8s pod name.
-                    type: string
-                  podPort:
-                    description: PodPort is the port K8s intenral Aerospike clients
-                      can connect to.
-                    type: integer
-                  rackID:
-                    description: RackID of rack to which this node belongs
-                    type: integer
-                  servicePort:
-                    description: ServicePort is the port Aerospike clients outside
-                      K8s can connect to.
-                    format: int32
-                    type: integer
-                  tlsAccessEndpoints:
-                    description: TLSAccessEndpoints are the TLS access endpoints for
-                      this pod.
-                    items:
-                      type: string
-                    type: array
-                  tlsAlternateAccessEndpoints:
-                    description: TLSAlternateAccessEndpoints are the alternate TLS
-                      access endpoints for this pod.
-                    items:
-                      type: string
-                    type: array
-                  tlsname:
-                    description: TLSName is the TLS name of this pod in the Aerospike
-                      cluster.
-                    type: string
-                required:
-                - build
-                - clusterName
-                - nodeID
-                - podIP
-                - podName
-                - podPort
-                - rackID
-                - servicePort
-                type: object
-              type: array
-            podStatus:
-              additionalProperties:
-                description: AerospikePodStatus contains the Aerospike specific status
-                  of the Aerospike serverpods.
-                properties:
                   initializedVolumePaths:
                     description: InitializedVolumePaths is the list of device path
                       that have already been initialized.
                     items:
                       type: string
                     type: array
+                  podIP:
+                    description: PodIP in the K8s network.
+                    type: string
+                  podPort:
+                    description: PodPort is the port K8s intenral Aerospike clients
+                      can connect to.
+                    type: integer
+                  servicePort:
+                    description: ServicePort is the port Aerospike clients outside
+                      K8s can connect to.
+                    format: int32
+                    type: integer
                 required:
+                - image
                 - initializedVolumePaths
+                - podIP
+                - podPort
+                - servicePort
                 type: object
-              description: PodStatus has Aerospike specific status of the pods. This
-                is map instead of the conventional map as list convention to allow
-                each pod to patch update its status. The map key is the name of the
+              description: Pods has Aerospike specific status of the pods. This is
+                map instead of the conventional map as list convention to allow each
+                pod to patch update its own status. The map key is the name of the
                 pod.
               type: object
           required:
-          - nodes
-          - podStatus
+          - pods
           type: object
       type: object
   version: v1alpha1

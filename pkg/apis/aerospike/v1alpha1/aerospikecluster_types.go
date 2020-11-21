@@ -21,8 +21,8 @@ type AerospikeClusterSpec struct {
 
 	// Aerospike cluster size
 	Size int32 `json:"size"`
-	// Aerospike cluster build
-	Build string `json:"build"`
+	// Aerospike server image
+	Image string `json:"image"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -67,7 +67,7 @@ type AerospikePodSpec struct {
 
 // ValidatePodSpecChange indicates if a change to to pod spec is safe to apply.
 func (v *AerospikePodSpec) ValidatePodSpecChange(new AerospikePodSpec) error {
-	//TODO: verify if this is ok.
+	// All changes are valid for now.
 	return nil
 }
 
@@ -527,15 +527,12 @@ type AerospikeClusterStatus struct {
 	// The current state of Aerospike cluster.
 	AerospikeClusterSpec
 
-	// Nodes contains Aerospike node specific  state of cluster.
-	Nodes []AerospikeNodeSummary `json:"nodes"`
-
 	// Details about the current condition of the AerospikeCluster resource.
 	//Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 
-	// PodStatus has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its status. The map key is the name of the pod.
+	// Pods has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its own status. The map key is the name of the pod.
 	// +patchStrategy=strategic
-	PodStatus map[string]AerospikePodStatus `json:"podStatus" patchStrategy:"strategic"`
+	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
 
 	// TODO:
 	// Give asadm info
@@ -609,32 +606,17 @@ func (v *AerospikeNetworkPolicy) SetDefaults() {
 	}
 }
 
-// AerospikeNodeSummary defines the observed state of AerospikeClusterNode
+// AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.
 // +k8s:openapi-gen=true
-type AerospikeNodeSummary struct {
-	// PodName is the K8s pod name.
-	PodName string `json:"podName"`
-	// PodIP in the K8s network.
-	PodIP string `json:"podIP"`
-	// HostInternalIP of the K8s host this pod is scheduled on.
-	HostInternalIP string `json:"hostInternalIP,omitempty"`
-	// HostExternalIP of the K8s host this pod is scheduled on.
-	HostExternalIP string `json:"hostExternalIP,omitempty"`
-	// PodPort is the port K8s intenral Aerospike clients can connect to.
-	PodPort int `json:"podPort"`
-	// ServicePort is the port Aerospike clients outside K8s can connect to.
-	ServicePort int32 `json:"servicePort"`
-
+type AerospikeInstanceSummary struct {
 	// ClusterName is the name of the Aerospike cluster this pod belongs to.
 	ClusterName string `json:"clusterName"`
 	// NodeID is the unique Aerospike ID for this pod.
 	NodeID string `json:"nodeID"`
-	// Build is the Aerospike build this pod is running.
-	Build string `json:"build"`
 	// RackID of rack to which this node belongs
-	RackID int `json:"rackID"`
+	RackID int `json:"rackID,omitempty"`
 	// TLSName is the TLS name of this pod in the Aerospike cluster.
-	TLSName string `json:"tlsname,omitempty"`
+	TLSName string `json:"tlsName,omitempty"`
 
 	// AccessEndpoints are the access endpoints for this pod.
 	AccessEndpoints []string `json:"accessEndpoints,omitempty"`
@@ -646,10 +628,10 @@ type AerospikeNodeSummary struct {
 	TLSAlternateAccessEndpoints []string `json:"tlsAlternateAccessEndpoints,omitempty"`
 }
 
-// DeepCopy implements deepcopy func for AerospikeNodeSummary
-func (v *AerospikeNodeSummary) DeepCopy() *AerospikeNodeSummary {
+// DeepCopy implements deepcopy func for AerospikeInstanceSummary
+func (v *AerospikeInstanceSummary) DeepCopy() *AerospikeInstanceSummary {
 	src := *v
-	var dst = AerospikeNodeSummary{}
+	var dst = AerospikeInstanceSummary{}
 	lib.DeepCopy(dst, src)
 	return &dst
 }
@@ -657,6 +639,22 @@ func (v *AerospikeNodeSummary) DeepCopy() *AerospikeNodeSummary {
 // AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.
 // +k8s:openapi-gen=true
 type AerospikePodStatus struct {
+	// Image is the Aerospike image this pod is running.
+	Image string `json:"image"`
+	// PodIP in the K8s network.
+	PodIP string `json:"podIP"`
+	// HostInternalIP of the K8s host this pod is scheduled on.
+	HostInternalIP string `json:"hostInternalIP,omitempty"`
+	// HostExternalIP of the K8s host this pod is scheduled on.
+	HostExternalIP string `json:"hostExternalIP,omitempty"`
+	// PodPort is the port K8s intenral Aerospike clients can connect to.
+	PodPort int `json:"podPort"`
+	// ServicePort is the port Aerospike clients outside K8s can connect to.
+	ServicePort int32 `json:"servicePort"`
+
+	// Aerospike server instance summary for this pod.
+	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`
+
 	// InitializedVolumePaths is the list of device path that have already been initialized.
 	InitializedVolumePaths []string `json:"initializedVolumePaths"`
 }
