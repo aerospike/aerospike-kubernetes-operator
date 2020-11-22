@@ -442,10 +442,13 @@ func (v *AerospikeStorageSpec) SetDefaults() {
 
 // GetStorageList gives blockStorageDeviceList and fileStorageList
 func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string, fileStorageList []string, err error) {
-	storagePaths := map[string]int{
-		// Reserved mount path for the operator.
+	reservedPaths := map[string]int{
+		// Reserved mount paths for the operator.
 		"/etc/aerospike": 1,
+		"/configs":       1,
 	}
+
+	storagePaths := map[string]int{}
 
 	for _, volume := range v.Volumes {
 		if volume.VolumeMode != AerospikeVolumeModeConfigMap && volume.StorageClass == "" {
@@ -462,6 +465,10 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 
 		if !filepath.IsAbs(volume.Path) {
 			return nil, nil, fmt.Errorf("Volume path should be absolute: %s", volume.Path)
+		}
+
+		if _, ok := reservedPaths[volume.Path]; ok {
+			return nil, nil, fmt.Errorf("Reserved volume path %s", volume.Path)
 		}
 
 		if _, ok := storagePaths[volume.Path]; ok {

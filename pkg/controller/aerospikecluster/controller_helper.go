@@ -50,6 +50,9 @@ const (
 	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
 	// while deleting pvc
 	storagePathAnnotationKey = "storage-path"
+
+	confDirName     = "confdir"
+	initConfDirName = "initconfigs"
 )
 
 //------------------------------------------------------------------------------------
@@ -95,9 +98,6 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 	if name := getServiceTLSName(aeroCluster); name != "" {
 		envVarList = append(envVarList, newEnvVarStatic("MY_POD_TLS_ENABLED", "true"))
 	}
-
-	const confDirName = "confdir"
-	const initConfDirName = "initconfigs"
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1010,10 +1010,13 @@ func updateStatefulSetSecretInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster
 
 // Called while creating new cluster and also during rolling restart.
 func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	// Add new sidecars.
+	for i, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		found := false
 		for _, container := range st.Spec.Template.Spec.Containers {
 			if newSidecar.Name == container.Name {
+				// Update the sidecar in case something has changed.
+				st.Spec.Template.Spec.Containers[i] = newSidecar
 				found = true
 				break
 			}
@@ -1025,7 +1028,24 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 		}
 	}
 
-	// TODO: remove containers.
+	// Remove deleted sidecars.
+	j := 0
+	for i, container := range st.Spec.Template.Spec.Containers {
+		found := i == 0
+		for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+			if newSidecar.Name == container.Name {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			// Retain main aerospike container or a matched sidecar.
+			st.Spec.Template.Spec.Containers[j] = container
+			j++
+		}
+	}
+	st.Spec.Template.Spec.Containers = st.Spec.Template.Spec.Containers[:j]
 }
 
 // Called while creating new cluster and also during rolling restart.
@@ -1033,7 +1053,6 @@ func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeC
 	configMaps, _ := aeroCluster.Spec.Storage.GetConfigMaps()
 
 	// Add to stateful set volumes.
-	// TODO: Remove volumes.
 	for _, configMapVolume := range configMaps {
 		// Ignore error since its not possible.
 		pvcName, _ := getPVCName(configMapVolume.Path)
@@ -1062,6 +1081,32 @@ func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeC
 		addConfigMapVolumeMount(st.Spec.Template.Spec.InitContainers, configMapVolume)
 		addConfigMapVolumeMount(st.Spec.Template.Spec.Containers, configMapVolume)
 	}
+
+	// Remove to stateful set volumes.
+	j := 0
+	for _, volume := range st.Spec.Template.Spec.Volumes {
+		found := volume.ConfigMap == nil || volume.Name == confDirName || volume.Name == initConfDirName
+		for _, configMapVolume := range configMaps {
+			// Ignore error since its not possible.
+			pvcName, _ := getPVCName(configMapVolume.Path)
+			if volume.Name == pvcName {
+				// Do not touch non confimap volumes or reserved config map volumes.
+				found = true
+				break
+			}
+		}
+
+		if found {
+			// Retain internal volumen or a matched volume
+			st.Spec.Template.Spec.Volumes[j] = volume
+			j++
+		} else {
+			// Remove volume mounts from the containers.
+			removeConfigMapVolumeMount(st.Spec.Template.Spec.InitContainers, volume)
+			removeConfigMapVolumeMount(st.Spec.Template.Spec.Containers, volume)
+		}
+	}
+	st.Spec.Template.Spec.Volumes = st.Spec.Template.Spec.Volumes[:j]
 }
 
 func addConfigMapVolumeMount(containers []corev1.Container, configMapVolume aerospikev1alpha1.AerospikePersistentVolumeSpec) {
@@ -1070,21 +1115,38 @@ func addConfigMapVolumeMount(containers []corev1.Container, configMapVolume aero
 		container := &containers[i]
 		// Ignore error since its not possible.
 		pvcName, _ := getPVCName(configMapVolume.Path)
-		volFound := false
-		for _, vol := range container.VolumeMounts {
-			if vol.Name == pvcName {
-				volFound = true
+		mountFound := false
+		for _, mount := range container.VolumeMounts {
+			if mount.Name == pvcName {
+				mountFound = true
 				break
 			}
 		}
 
-		if !volFound {
+		if !mountFound {
 			volumeMount := corev1.VolumeMount{
 				Name:      pvcName,
 				MountPath: configMapVolume.Path,
 			}
 			container.VolumeMounts = append(container.VolumeMounts, volumeMount)
 		}
+	}
+}
+
+func removeConfigMapVolumeMount(containers []corev1.Container, volume corev1.Volume) {
+	// Update volume mounts.
+	for i := range containers {
+		container := &containers[i]
+		j := 0
+		for _, mount := range container.VolumeMounts {
+			if mount.Name != volume.Name {
+				// This mount point must be retained.
+				container.VolumeMounts[j] = mount
+				j++
+			}
+		}
+
+		container.VolumeMounts = container.VolumeMounts[:j]
 	}
 }
 
