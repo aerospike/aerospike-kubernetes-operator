@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.0.0.4
+  image: aerospike/aerospike-server-enterprise:5.2.0.7
   multiPodPerHost: true
 
   storage:
