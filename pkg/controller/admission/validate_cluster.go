@@ -75,8 +75,12 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 	}
 
 	// Jump version should not be allowed
-	newVersion := strings.Split(s.obj.Spec.Build, ":")[1]
-	oldVersion := strings.Split(old.Spec.Build, ":")[1]
+	newVersion := strings.Split(s.obj.Spec.Image, ":")[1]
+	oldVersion := ""
+
+	if old.Spec.Image != "" {
+		oldVersion = strings.Split(old.Spec.Image, ":")[1]
+	}
 	if err := deployment.IsValidUpgrade(oldVersion, newVersion); err != nil {
 		return fmt.Errorf("Failed to start upgrade: %v", err)
 	}
@@ -100,6 +104,12 @@ func (s *ClusterValidatingAdmissionWebhook) ValidateUpdate(old aerospikev1alpha1
 	if err := s.validateRackUpdate(old); err != nil {
 		return err
 	}
+
+	// Validate changes to pod spec
+	if err := old.Spec.PodSpec.ValidatePodSpecChange(s.obj.Spec.PodSpec); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -128,8 +138,8 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("AerospikeCluster name cannot have spaces")
 	}
 
-	// Validate build type. Only enterprise build allowed for now
-	if !isEnterprise(s.obj.Spec.Build) {
+	// Validate image type. Only enterprise image allowed for now
+	if !isEnterprise(s.obj.Spec.Image) {
 		return fmt.Errorf("CommunityEdition Cluster not supported")
 	}
 
@@ -146,18 +156,18 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 		return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `aerospikeConfigSecret` field")
 	}
 
-	// Validate Build version
-	version, err := getBuildVersion(s.obj.Spec.Build)
+	// Validate Image version
+	version, err := getImageVersion(s.obj.Spec.Image)
 	if err != nil {
 		return err
 	}
 
 	val, err := asconfig.CompareVersions(version, baseVersion)
 	if err != nil {
-		return fmt.Errorf("Failed to check build version: %v", err)
+		return fmt.Errorf("Failed to check image version: %v", err)
 	}
 	if val < 0 {
-		return fmt.Errorf("Build version %s not supported. Base version %s", version, baseVersion)
+		return fmt.Errorf("Image version %s not supported. Base version %s", version, baseVersion)
 	}
 
 	err = validateClusterSize(version, int(s.obj.Spec.Size))
@@ -173,10 +183,15 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 
 	// Validate if passed aerospikeConfig
 	if err := validateAerospikeConfigSchema(s.logger, version, s.obj.Spec.AerospikeConfig); err != nil {
-		return fmt.Errorf("AerospikeConfig not valid %v", err)
+		return fmt.Errorf("AerospikeConfig not valid: %v", err)
 	}
 
 	err = validateRequiredFileStorage(s.logger, aeroConfig, &s.obj.Spec.Storage, s.obj.Spec.ValidationPolicy, version)
+	if err != nil {
+		return err
+	}
+
+	err = validateConfigMapVolumes(s.logger, aeroConfig, &s.obj.Spec.Storage, s.obj.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
@@ -195,6 +210,12 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	if err := s.validateRackConfig(); err != nil {
 		return err
 	}
+
+	// Validate Sidecars
+	if err := s.validatePodSpec(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -291,7 +312,7 @@ func (s *ClusterValidatingAdmissionWebhook) validateRackConfig() error {
 		}
 	}
 
-	version, err := getBuildVersion(s.obj.Spec.Build)
+	version, err := getImageVersion(s.obj.Spec.Image)
 	if err != nil {
 		return err
 	}

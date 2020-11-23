@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  build: aerospike/aerospike-server-enterprise:4.7.0.10
+  image: aerospike/aerospike-server-enterprise:5.0.0.4
 
   storage:
     filesystemVolumePolicy:
@@ -44,26 +44,30 @@ spec:
     logging:
       - name: /var/log/aerospike/aerospike.log
         any: info
+
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
+
     security:
       enable-security: true
+
     xdr:
-      enable-xdr: true
-      xdr-digestlog-path: /opt/aerospike/xdr/digestlog 5G
-      xdr-compression-threshold: 1000
-      datacenter:
+      dcs:
         - name: dc1
-          dc-node-address-port: "aeroclusterdst-0-0 3000"
-          dc-security-config-file: /etc/aerospike/secret/security_credentials_DC1.txt
-    namespace:
+          node-address-ports:
+            - aeroclusterdst-0-0 3000
+
+          auth-user: admin
+          auth-password-file: /etc/aerospike/secret/password_DC1.txt
+          namespaces:
+            - name: test
+
+    namespaces:
       - name: test
-        enable-xdr: true
-        xdr-remote-datacenter: dc1
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
-          file:
+          files:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true

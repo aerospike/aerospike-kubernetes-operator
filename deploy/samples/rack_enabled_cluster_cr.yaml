@@ -6,13 +6,14 @@ metadata:
 
 spec:
   size: 2
-  build: aerospike/aerospike-server-enterprise:4.8.0.6
+  image: aerospike/aerospike-server-enterprise:4.8.0.6
   rackConfig:
     namespaces:
       - test
     racks:
       - id: 1
-        zone: us-central1-b
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-a
         # nodeName: kubernetes-minion-group-qp3m
         aerospikeConfig:
           service:
@@ -34,7 +35,8 @@ spec:
               volumeMode: filesystem
               sizeInGB: 3
       - id: 2
-        zone: us-central1-a
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-a
         # nodeName: kubernetes-minion-group-tft3
         aerospikeConfig:
           service:
@@ -73,12 +75,12 @@ spec:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
       enable-security: true
-    namespace:
+    namespaces:
       - name: test
         memory-size: 3000000000
         replication-factor: 1
         storage-engine:
-          file:
+          files:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true

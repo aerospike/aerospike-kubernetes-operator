@@ -50,13 +50,13 @@ var mergedMap1 = map[string]interface{}{
 // file to dev/mem/patch
 var baseMap2 = map[string]interface{}{
 
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for file type to device type change
 		map[string]interface{}{
 			"name":               "filetodev",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -66,7 +66,7 @@ var baseMap2 = map[string]interface{}{
 			"name":               "filetomem",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -76,7 +76,7 @@ var baseMap2 = map[string]interface{}{
 			"name":               "filepatch",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -90,12 +90,12 @@ var baseMap2 = map[string]interface{}{
 	},
 }
 var patchMap2 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for file type to device type change
 		map[string]interface{}{
 			"name": "filetodev",
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
@@ -108,7 +108,7 @@ var patchMap2 = map[string]interface{}{
 		map[string]interface{}{
 			"name": "filepatch",
 			"storage-engine": map[string]interface{}{
-				"file": []interface{}{"newtest.dat"},
+				"files": []interface{}{"newtest.dat"},
 			},
 		},
 		// extra
@@ -120,13 +120,13 @@ var patchMap2 = map[string]interface{}{
 	},
 }
 var mergedMap2 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for file type to device type change
 		map[string]interface{}{
 			"name":               "filetodev",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
@@ -141,7 +141,7 @@ var mergedMap2 = map[string]interface{}{
 			"name":               "filepatch",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"newtest.dat"},
+				"files":          []interface{}{"newtest.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -163,14 +163,14 @@ var mergedMap2 = map[string]interface{}{
 
 // dev to file/mem/patch
 var baseMap3 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for device type to file type change
 		map[string]interface{}{
 			"name":               "devtofile",
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
@@ -180,7 +180,7 @@ var baseMap3 = map[string]interface{}{
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
@@ -190,19 +190,19 @@ var baseMap3 = map[string]interface{}{
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
 	},
 }
 var patchMap3 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for device type to file type change
 		map[string]interface{}{
 			"name": "devtofile",
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -216,20 +216,20 @@ var patchMap3 = map[string]interface{}{
 		map[string]interface{}{
 			"name": "devpatch",
 			"storage-engine": map[string]interface{}{
-				"device": []interface{}{"/newtest/dev/xvdf"},
+				"devices": []interface{}{"/newtest/dev/xvdf"},
 			},
 		},
 	},
 }
 var mergedMap3 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for device type to file type change
 		map[string]interface{}{
 			"name":               "devtofile",
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -247,7 +247,7 @@ var mergedMap3 = map[string]interface{}{
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/newtest/dev/xvdf"},
+				"devices":        []interface{}{"/newtest/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
@@ -256,7 +256,7 @@ var mergedMap3 = map[string]interface{}{
 
 // mem to file/dev
 var baseMap4 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for memory type to file type change
 		map[string]interface{}{
 			"name":               "memtofile",
@@ -274,12 +274,12 @@ var baseMap4 = map[string]interface{}{
 	},
 }
 var patchMap4 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for memory type to file type change
 		map[string]interface{}{
 			"name": "memtofile",
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -288,21 +288,21 @@ var patchMap4 = map[string]interface{}{
 		map[string]interface{}{
 			"name": "memtodev",
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},
 	},
 }
 var mergedMap4 = map[string]interface{}{
-	"namespace": []interface{}{
+	"namespaces": []interface{}{
 		// for memory type to file type change
 		map[string]interface{}{
 			"name":               "memtofile",
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"file":           []interface{}{"test.dat"},
+				"files":          []interface{}{"test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
 			},
@@ -313,7 +313,7 @@ var mergedMap4 = map[string]interface{}{
 			"filesize":           2000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"device":         []interface{}{"/test/dev/xvdf"},
+				"devices":        []interface{}{"/test/dev/xvdf"},
 				"data-in-memory": true,
 			},
 		},

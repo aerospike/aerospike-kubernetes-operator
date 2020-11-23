@@ -33,6 +33,10 @@ github.com/aerospike/aerospike-client-go v1.35.2 h1:TWV2Bn59Ig7SM4Zue84fFsPGlfFJ
 github.com/aerospike/aerospike-client-go v1.35.2/go.mod h1:zj8LBEnWBDOVEIJt8LvaRvDG5ARAoa5dBeHaB472NRc=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67 h1:/hLp4b5/MzTUFPmaLe8AiqaMvDWPlBA+pMGwRoidxlw=
 github.com/aerospike/aerospike-management-lib v0.0.0-20200922172736-0b4a178c0e67/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20201109072024-f348dde90487 h1:NwrhJM9GG62vI7xOX8WX+aL5tSBOtGradE+9hv/69PY=
+github.com/aerospike/aerospike-management-lib v0.0.0-20201109072024-f348dde90487/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20201112142459-9dbbb66be120 h1:TfxLhhbf78tlQNbrQtPpFCPqEkRzD+kDZwu+hGRxBZg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20201112142459-9dbbb66be120/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf h1:qet1QNfXsQxTZqLG4oE62mJzwPIB8+Tee4RNCL9ulrY=

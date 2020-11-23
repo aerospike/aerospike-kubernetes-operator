@@ -74,7 +74,7 @@ func validateAerospikeConfig(logger log.Logger, config v1alpha1.Values, storage 
 	}
 
 	// namespace conf
-	nsListInterface, ok := config["namespace"]
+	nsListInterface, ok := config["namespaces"]
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.namespace not a present. aerospikeConfig %v", config)
 	} else if nsListInterface == nil {
@@ -122,7 +122,7 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				continue
 			}
 
-			if devices, ok := storage.(map[string]interface{})["device"]; ok {
+			if devices, ok := storage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf("namespace storage devices cannot be nil %v", storage)
 				}
@@ -155,7 +155,7 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				}
 			}
 
-			if files, ok := storage.(map[string]interface{})["file"]; ok {
+			if files, ok := storage.(map[string]interface{})["files"]; ok {
 				if files == nil {
 					return fmt.Errorf("namespace storage files cannot be nil %v", storage)
 				}
@@ -258,7 +258,7 @@ func validateAerospikeConfigUpdate(logger log.Logger, newConf, oldConf aerospike
 
 func validateNsConfUpdate(logger log.Logger, newConf, oldConf aerospikev1alpha1.Values) error {
 
-	newNsConfList := newConf["namespace"].([]interface{})
+	newNsConfList := newConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
 		// Validate new namespaceonf
@@ -269,7 +269,7 @@ func validateNsConfUpdate(logger log.Logger, newConf, oldConf aerospikev1alpha1.
 
 		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
 		var found bool
-		oldNsConfList := oldConf["namespace"].([]interface{})
+		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
 
@@ -323,10 +323,12 @@ func validateAerospikeConfigSchema(logger log.Logger, version string, config aer
 
 	valid, validationErr, err := asConf.IsValid(version)
 	if !valid {
+		errStrs := []string{}
 		for _, e := range validationErr {
-			logger.Info("Validation failed for aerospikeConfig", log.Ctx{"err": *e})
+			errStrs = append(errStrs, fmt.Sprintf("\t%v\n", *e))
 		}
-		return fmt.Errorf("Generated config not valid for version %s: %v", version, err)
+
+		return fmt.Errorf("Generated config not valid for version %s: %v", version, errStrs)
 	}
 
 	return nil
@@ -355,7 +357,7 @@ func validateRequiredFileStorage(logger log.Logger, config aerospikev1alpha1.Val
 	if !validationPolicy.SkipXdrDlogFileValidate {
 		val, err := asconfig.CompareVersions(version, "5.0.0")
 		if err != nil {
-			return fmt.Errorf("Failed to check build version: %v", err)
+			return fmt.Errorf("Failed to check image version: %v", err)
 		}
 		if val < 0 {
 			// Validate xdr-digestlog-path for pre-5.0.0 versions.
@@ -381,13 +383,17 @@ func validateRequiredFileStorage(logger log.Logger, config aerospikev1alpha1.Val
 	return nil
 }
 
-func getBuildVersion(buildStr string) (string, error) {
-	build := strings.Split(buildStr, ":")
-	if len(build) != 2 {
-		return "", fmt.Errorf("Build name %s not valid. Should be in the format of repo:version", buildStr)
-	}
+func validateConfigMapVolumes(logger log.Logger, config aerospikev1alpha1.Values, storage *aerospikev1alpha1.AerospikeStorageSpec, validationPolicy *aerospikev1alpha1.ValidationPolicySpec, version string) error {
+	_, err := storage.GetConfigMaps()
+	return err
+}
 
-	version := build[1]
+func getImageVersion(imageStr string) (string, error) {
+	_, _, version := utils.ParseDockerImageTag(imageStr)
+
+	if version == "" || strings.ToLower(version) == "latest" {
+		return "", fmt.Errorf("Image version is mandatory for image: %v", imageStr)
+	}
 
 	return version, nil
 }
@@ -398,9 +404,9 @@ func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return !ok || storage == "memory"
 }
 
-// isEnterprise indicates if aerospike build is enterprise
-func isEnterprise(build string) bool {
-	return strings.Contains(strings.ToLower(build), "enterprise")
+// isEnterprise indicates if aerospike image is enterprise
+func isEnterprise(image string) bool {
+	return strings.Contains(strings.ToLower(image), "enterprise")
 }
 
 // isSecretNeeded indicates if aerospikeConfig needs secret
@@ -439,4 +445,21 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 
 	// Paths are unrelated.
 	return false
+}
+
+func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
+	for _, sidecar := range s.obj.Spec.PodSpec.Sidecars {
+		// Check for reserved sidecar name
+		if sidecar.Name == "aeropsike-server" || sidecar.Name == "aerospike-init" {
+			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
+		}
+
+		_, err := getImageVersion(sidecar.Image)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -132,7 +132,7 @@ func TestStorageInit(t *testing.T) {
 	checkData(aeroCluster, true, true, t)
 
 	// Force a rolling restart, volumes should still have data.
-	aeroCluster.Spec.Build = "aerospike/aerospike-server-enterprise:5.0.0.11"
+	aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:5.0.0.11"
 	err = aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
 	if err != nil {
 		t.Error(err)
@@ -293,7 +293,7 @@ func getStorageInitAerospikeCluster(storageConfig aerospikev1alpha1.AerospikeSto
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Build:   "aerospike/aerospike-server-enterprise:5.0.0.4",
+			Image:   "aerospike/aerospike-server-enterprise:5.0.0.4",
 			Storage: storageConfig,
 			RackConfig: aerospikev1alpha1.RackConfig{
 				Namespaces: []string{"test"},
@@ -336,7 +336,7 @@ func getStorageInitAerospikeCluster(storageConfig aerospikev1alpha1.AerospikeSto
 					"migrate-threads":  4,
 				},
 				"security": map[string]interface{}{"enable-security": true},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"replication-factor": networkTestPolicyClusterSize,

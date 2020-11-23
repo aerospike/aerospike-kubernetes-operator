@@ -38,11 +38,13 @@ done
 echo installing aerospike.conf into "${CONFIG_VOLUME}"
 mkdir -p "${CONFIG_VOLUME}"
 
+# Copy template to config volume for initialization.
+cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
+
 # Initialize the pod.
 bash /configs/initialize.sh
 
 cp /configs/on-start.sh /usr/bin/on-start.sh
-cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
 if [ -f /configs/features.conf ]; then
         cp /configs/features.conf "${CONFIG_VOLUME}"/
 fi
