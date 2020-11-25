@@ -15,7 +15,7 @@ echo "Deploying the operator...."
 $DIR/deploy-test-operator.sh $1
 
 
-TEST_REPORTS_DIR="build/test-reports"
+TEST_REPORTS_DIR="build/test-results"
 mkdir -p $TEST_REPORTS_DIR
 GO_TEST_OUTPUT="$TEST_REPORTS_DIR/go-test.txt"
 JUNIT_TEST_OUTPUT="$TEST_REPORTS_DIR/report.xml"

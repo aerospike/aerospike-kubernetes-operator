@@ -218,6 +218,12 @@ fi
 # Update pod status in the k8s aerospike cluster object
 # ------------------------------------------------------------------------------
 
+# Get pod image
+POD_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$MY_POD_NAME")"
+export POD_IMAGE="$(echo $POD_JSON | python3 -c "import sys, json
+data = json.load(sys.stdin)
+print(data['spec']['containers'][0]['image'])")"
+
 # Parse out cluster name, formatted as: petset_name-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
 AERO_CLUSTER_NAME="${ADDR[0]}"
@@ -380,7 +386,7 @@ if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABL
   servicePort = os.environ['MAPPED_TLSPORT']
 
 value = {
-    'image': os.environ.get('MY_POD_IMAGE',''),
+    'image': os.environ.get('POD_IMAGE',''),
     'podIP': os.environ.get('PODIP',''),
     'hostInternalIP': os.environ.get('INTERNALIP',''),
     'hostExternalIP': os.environ.get('EXTERNALIP',''),
