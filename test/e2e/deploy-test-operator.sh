@@ -4,6 +4,8 @@
 # Should be run from reposiroty root
 ####################################
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # Use the input operator image for testing if provided
 IMAGE=$1
 
@@ -17,4 +19,4 @@ kubectl -n test apply -f deploy/samples/storage-classes/gce-ssd-storage-class.ya
 
 # Create the test namespace
 kubectl create namespace test || true
-kubectl -n test apply -f test/e2e/setup_operator.yaml
+kubectl -n test apply -f $DIR/setup_operator_test.yaml
