@@ -80,10 +80,10 @@ func isStorageEngineTypeChanged(base, patch interface{}) bool {
 	patchMap, ok2 := patch.(map[string]interface{})
 
 	if ok1 && ok2 {
-		_, ok1f := baseMap["file"]
-		_, ok1d := baseMap["device"]
-		_, ok2f := patchMap["file"]
-		_, ok2d := patchMap["device"]
+		_, ok1f := baseMap["files"]
+		_, ok1d := baseMap["devices"]
+		_, ok2f := patchMap["files"]
+		_, ok2d := patchMap["devices"]
 
 		// file replaced with device or device replace with file
 		if (ok1f && ok2d) || (ok1d && ok2f) {

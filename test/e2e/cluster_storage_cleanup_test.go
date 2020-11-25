@@ -180,11 +180,11 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		// AerospikeConfig is only patched
 		devName := "/test/dev/rackstorage"
 		racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
-			"namespace": []interface{}{
+			"namespaces": []interface{}{
 				map[string]interface{}{
 					"name": "test",
 					"storage-engine": map[string]interface{}{
-						"device": []interface{}{devName},
+						"devices": []interface{}{devName},
 					},
 				},
 			},
@@ -278,11 +278,11 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 			racks := getDummyRackConf(1)
 			// AerospikeConfig is only patched
 			racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name": "test",
 						"storage-engine": map[string]interface{}{
-							"device": []interface{}{"random/device/name"},
+							"devices": []interface{}{"random/device/name"},
 						},
 					},
 				},

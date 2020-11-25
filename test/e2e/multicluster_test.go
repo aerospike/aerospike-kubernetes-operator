@@ -78,8 +78,8 @@ func multiClusterInParallel(t *testing.T, f *framework.Framework, ctx *framework
 			}
 		})
 		t.Run("Upgrade/Downgrade", func(t *testing.T) {
-			// dont change build, it upgrade, check old version
-			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName1, buildToUpgrade); err != nil {
+			// dont change image, it upgrade, check old version
+			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName1, imageToUpgrade); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -100,8 +100,8 @@ func multiClusterInParallel(t *testing.T, f *framework.Framework, ctx *framework
 			}
 		})
 		t.Run("Upgrade/Downgrade", func(t *testing.T) {
-			// dont change build, it upgrade, check old version
-			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName2, buildToUpgrade); err != nil {
+			// dont change image, it upgrade, check old version
+			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName2, imageToUpgrade); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -259,8 +259,8 @@ func validateLifecycleOperation(t *testing.T, f *framework.Framework, ctx *frame
 			validateRackEnabledCluster(t, f, ctx, clusterNamespacedName)
 		})
 		t.Run("Upgrade/Downgrade", func(t *testing.T) {
-			// dont change build, it upgrade, check old version
-			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName, buildToUpgrade); err != nil {
+			// dont change image, it upgrade, check old version
+			if err := upgradeClusterTest(t, f, ctx, clusterNamespacedName, imageToUpgrade); err != nil {
 				t.Fatal(err)
 			}
 			validateRackEnabledCluster(t, f, ctx, clusterNamespacedName)

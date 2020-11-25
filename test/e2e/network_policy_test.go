@@ -295,7 +295,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 		},
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  networkTestPolicyClusterSize,
-			Build: "aerospike/aerospike-server-enterprise:5.0.0.4",
+			Image: "aerospike/aerospike-server-enterprise:5.0.0.4",
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
@@ -351,14 +351,14 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 				"network": networkConf,
 
 				"security": map[string]interface{}{"enable-security": true},
-				"namespace": []interface{}{
+				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name":               "test",
 						"replication-factor": networkTestPolicyClusterSize,
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
 						"storage-engine": map[string]interface{}{
-							"file":     []interface{}{"/opt/aerospike/data/test.dat"},
+							"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 							"filesize": 2000955200,
 						},
 					},

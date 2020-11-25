@@ -32,11 +32,11 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 }
 
 func BuildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aerospikev1alpha1.Rack) (string, error) {
-	version := strings.Split(aeroCluster.Spec.Build, ":")
+	version := strings.Split(aeroCluster.Spec.Image, ":")
 
 	config := rack.AerospikeConfig
 
-	pkglog.Debug("AerospikeConfig", log.Ctx{"config": config, "build": aeroCluster.Spec.Build})
+	pkglog.Debug("AerospikeConfig", log.Ctx{"config": config, "image": aeroCluster.Spec.Image})
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], config)
 	if err != nil {

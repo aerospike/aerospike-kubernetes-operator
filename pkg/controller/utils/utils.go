@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -151,9 +152,35 @@ func IsCrashed(pod *v1.Pod) bool {
 
 // IsImageEqual returns true if image name image1 is equal to image name image2.
 func IsImageEqual(image1 string, image2 string) bool {
-	desiredImage := strings.TrimPrefix(image1, DockerHubImagePrefix)
-	actualImage := strings.TrimPrefix(image2, DockerHubImagePrefix)
-	return actualImage == desiredImage
+	desiredImageWithVersion := strings.TrimPrefix(image1, DockerHubImagePrefix)
+	actualImageWithVersion := strings.TrimPrefix(image2, DockerHubImagePrefix)
+
+	desiredRegistry, desiredName, desiredVersion := ParseDockerImageTag(desiredImageWithVersion)
+	actualRegistry, actualName, actualVersion := ParseDockerImageTag(actualImageWithVersion)
+
+	// registry name, image name and version should match.
+	return desiredRegistry == actualRegistry && desiredName == actualName && (desiredVersion == actualVersion || (desiredVersion == ":latest" && actualVersion == "") || (actualVersion == ":latest" && desiredVersion == ""))
+}
+
+// GetImageVersion extracts image version from image string/tag.
+func GetImageVersion(tag string) (string, error) {
+	_, _, version := ParseDockerImageTag(tag)
+
+	if version == "" || strings.ToLower(version) == "latest" {
+		return "", fmt.Errorf("Image version is mandatory for image: %v", tag)
+	}
+
+	return version, nil
+}
+
+// ParseDockerImageTag parses input tag into registry, name and version.
+func ParseDockerImageTag(tag string) (registry string, name string, version string) {
+	if tag == "" {
+		return "", "", ""
+	}
+	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
+	matches := r.FindStringSubmatch(tag)
+	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
 // isImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a container
@@ -187,19 +214,59 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 	return pvc.DeletionTimestamp != nil
 }
 
+// GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
+func GetDesiredImage(aeroCluster *aerospikev1alpha1.AerospikeCluster, containerName string) (string, error) {
+	if containerName == "aerospike-server" {
+		return aeroCluster.Spec.Image, nil
+	}
+
+	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+		if sidecar.Name == containerName {
+			return sidecar.Image, nil
+		}
+	}
+
+	return "", fmt.Errorf("Container %s not found", containerName)
+}
+
 // IsPodUpgraded assume that all container have same image or take containerID
-func IsPodUpgraded(pod *corev1.Pod, image string) bool {
+func IsPodUpgraded(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
 	pkglog.Info("Checking pod image")
 
 	if !IsPodRunningAndReady(pod) {
 		return false
 	}
 
-	for _, ps := range pod.Status.ContainerStatuses {
-		if !ps.Ready || !IsImageEqual(ps.Image, image) {
+	return IsPodOnDesiredImage(pod, aeroCluster)
+}
+
+// getPodContainerStatus provides status for container in a pod if present else nil.
+// Abstracted into a function because in come cases pod.Status.ContainerStatuses was empty.
+func getPodContainerStatus(pod *corev1.Pod, containerName string) *corev1.ContainerStatus {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.Name == containerName {
+			return &status
+		}
+	}
+
+	return nil
+}
+
+// IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
+func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
+	for _, ps := range pod.Spec.Containers {
+		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
+		if err != nil {
+			// Maybe a deleted sidecar. Ignore.
+			desiredImage = ps.Image
+		}
+
+		status := getPodContainerStatus(pod, ps.Name)
+		if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
 			return false
 		}
 	}
+
 	return true
 }
 
