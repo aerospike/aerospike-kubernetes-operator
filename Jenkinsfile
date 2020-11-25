@@ -24,6 +24,7 @@ pipeline {
 
                 dir("${env.GO_REPO}") {
                     sh "operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                    sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                 }
             }
         }
