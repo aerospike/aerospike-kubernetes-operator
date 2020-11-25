@@ -116,7 +116,7 @@ rules:
   resources:
   - pods
   verbs:
-  - get
+  - '*'
 - apiGroups:
   - ""
   resources:
@@ -192,6 +192,12 @@ roleRef:
 #   - aerospike.com
 #   resources:
 #   - '*'
+#   verbs:
+#   - '*'
+# - apiGroups:
+#   - ""
+#   resources:
+#   - pods
 #   verbs:
 #   - '*'
 # ---

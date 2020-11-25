@@ -930,6 +930,11 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 	logger.Info("ScaleDown AerospikeCluster statefulset", log.Ctx{"desiredSz": desiredSize, "currentSz": *found.Spec.Replicas})
 
+	// Continue if scaleDown is not needed
+	if *found.Spec.Replicas <= desiredSize {
+		return found, reconcileContinue()
+	}
+
 	oldPodList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))

@@ -6,11 +6,12 @@ import (
 	"strconv"
 	"testing"
 
-	as "github.com/ashishshinde/aerospike-client-go"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
+	as "github.com/ashishshinde/aerospike-client-go"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -129,12 +130,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 		t.Run("DeployWithAerospikeConfig", func(t *testing.T) {
 
-			racks[0].AerospikeConfig = map[string]interface{}{
+			racks[0].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 10000,
 				},
 			}
-			racks[1].AerospikeConfig = map[string]interface{}{
+			racks[1].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 12000,
 				},
@@ -142,7 +143,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 			// Make a copy to validate later
 			racksCopy := []aerospikev1alpha1.Rack{}
-			if err := lib.DeepCopy(&racksCopy, &racks); err != nil {
+			if err := Copy(&racksCopy, &racks); err != nil {
 				t.Fatal(err)
 			}
 
@@ -161,12 +162,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 		t.Run("UpdateAerospikeConfigInRack", func(t *testing.T) {
 			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
 
-			racks[0].AerospikeConfig = map[string]interface{}{
+			racks[0].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 12000,
 				},
 			}
-			racks[1].AerospikeConfig = map[string]interface{}{
+			racks[1].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 14000,
 				},
@@ -174,7 +175,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 			// Make a copy to validate later
 			racksCopy := []aerospikev1alpha1.Rack{}
-			if err := lib.DeepCopy(&racksCopy, &racks); err != nil {
+			if err := Copy(&racksCopy, &racks); err != nil {
 				t.Fatal(err)
 			}
 
@@ -193,12 +194,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 		t.Run("RemoveAerospikeConfigInRack", func(t *testing.T) {
 			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-			racks[0].AerospikeConfig = nil
-			racks[1].AerospikeConfig = nil
+			racks[0].InputAerospikeConfig = nil
+			racks[1].InputAerospikeConfig = nil
 
 			// Make a copy to validate later
 			racksCopy := []aerospikev1alpha1.Rack{}
-			if err := lib.DeepCopy(&racksCopy, &racks); err != nil {
+			if err := Copy(&racksCopy, &racks); err != nil {
 				t.Fatal(err)
 			}
 
@@ -214,12 +215,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 			// Config for both rack should have been taken from default config
 			// Default proto-fd-max is 15000. So check for default value
-			racks[0].AerospikeConfig = map[string]interface{}{
+			racks[0].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 15000,
 				},
 			}
-			racks[1].AerospikeConfig = map[string]interface{}{
+			racks[1].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
 					"proto-fd-max": 15000,
 				},
@@ -239,7 +240,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 			t.Run("InvalidAerospikeConfig", func(t *testing.T) {
 
 				aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-				aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aerospikev1alpha1.Values{"namespace": "invalidConf"}
+				aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{"namespace": "invalidConf"}
 				err = deployCluster(t, f, ctx, aeroCluster)
 				validateError(t, err, "should fail for invalid aerospikeConfig")
 
@@ -255,7 +256,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 								},
 							},
 						}
-						aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
 						err = deployCluster(t, f, ctx, aeroCluster)
 						validateError(t, err, "should fail for replication-factor greater than node sz")
 					})
@@ -294,7 +295,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										},
 									},
 								}
-								aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+								aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
 								err = deployCluster(t, f, ctx, aeroCluster)
 								validateError(t, err, "should fail for invalid storage-engine.device, cannot have 3 devices in single device string")
 							}
@@ -313,7 +314,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										},
 									},
 								}
-								aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+								aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
 								err = deployCluster(t, f, ctx, aeroCluster)
 								validateError(t, err, "should fail for invalid storage-engine.device, cannot a device which doesn't exist in BlockStorage")
 							}
@@ -330,7 +331,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 									"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
 								},
 							}
-							aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = aeroConfig
+							aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
 							err = deployCluster(t, f, ctx, aeroCluster)
 							validateError(t, err, "should fail for invalid xdr config. mountPath for digestlog not present in fileStorage")
 						}
@@ -352,10 +353,10 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						// Deploy cluster with rackConfig
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 						rackAeroConf := aerospikev1alpha1.Values{}
-						lib.DeepCopy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
+						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
 						rackAeroConf["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
 
-						racks := []aerospikev1alpha1.Rack{{ID: 1, AerospikeConfig: rackAeroConf}}
+						racks := []aerospikev1alpha1.Rack{{ID: 1, InputAerospikeConfig: &rackAeroConf}}
 						aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
 						if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
@@ -364,7 +365,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 
 						// Update rackConfig to nil. should fail as storage can not be updated
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = nil
+						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = nil
 						err = f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating storage")
 
@@ -380,10 +381,10 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						// Update rackConfig to nonEmpty. should fail as storage can not be updated
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 						rackAeroConf := aerospikev1alpha1.Values{}
-						lib.DeepCopy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
+						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
 						rackAeroConf["namespace"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
 
-						aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig = rackAeroConf
+						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &rackAeroConf
 						err = f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating storage")
 
@@ -450,7 +451,7 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 			}
 			svcConfs := confs["service"].(lib.Stats)
 
-			for k, v := range rack.AerospikeConfig["service"].(map[string]interface{}) {
+			for k, v := range (*rack.InputAerospikeConfig)["service"].(map[string]interface{}) {
 				if vint, ok := v.(int); ok {
 					v = int64(vint)
 				}

@@ -179,7 +179,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
 		devName := "/test/dev/rackstorage"
-		racks[0].AerospikeConfig = aerospikev1alpha1.Values{
+		racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
 			"namespace": []interface{}{
 				map[string]interface{}{
 					"name": "test",
@@ -277,7 +277,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 			// AerospikeConfig is only patched
-			racks[0].AerospikeConfig = aerospikev1alpha1.Values{
+			racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
 				"namespace": []interface{}{
 					map[string]interface{}{
 						"name": "test",
