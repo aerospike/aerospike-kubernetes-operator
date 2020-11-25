@@ -3,6 +3,7 @@ pipeline {
     tools {
         go 'go-1.13.5'
     }
+
     environment {
         GOPATH="/var/lib/jenkins/go"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
@@ -23,7 +24,7 @@ pipeline {
                 sh 'ln -sf ${WORKSPACE} ${GO_REPO}'
 
                 dir("${env.GO_REPO}") {
-                    sh "rsync -aK ${env.WORKSPACE}/../../~/aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
+                    sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
                     sh "operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                     sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                 }
@@ -41,4 +42,14 @@ pipeline {
                 }
             }
         }
-    }                                                                                                    }
+    }
+
+    post {
+        always {
+            junit testResults: '**/build/test-results/**/*.xml', keepLongStdio: true
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

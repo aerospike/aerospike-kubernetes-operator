@@ -15,4 +15,19 @@ echo "Deploying the operator...."
 $DIR/deploy-test-operator.sh $1
 
 
-operator-sdk test local ./test/e2e --no-setup --namespace test --go-test-flags "-v -timeout=59m -tags test" --kubeconfig ~/.kube/config
+TEST_REPORTS_DIR="build/test-reports"
+mkdir -p $TEST_REPORTS_DIR
+GO_TEST_OUTPUT="$TEST_REPORTS_DIR/go-test.txt"
+JUNIT_TEST_OUTPUT="$TEST_REPORTS_DIR/report.xml"
+
+# Fecth go to junit report convertor
+go get -u github.com/jstemmer/go-junit-report
+
+# Generate junit report even on test failure.
+function generate_junit_report()
+{
+    cat $GO_TEST_OUTPUT | $GOPATH/bin/go-junit-report   > "$JUNIT_TEST_OUTPUT"
+}
+trap generate_junit_report EXIT
+
+operator-sdk test local ./test/e2e --no-setup --namespace test --go-test-flags "-v -timeout=59m -tags test" --kubeconfig ~/.kube/config  2>&1 | tee "$GO_TEST_OUTPUT"
