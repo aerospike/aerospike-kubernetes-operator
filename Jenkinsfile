@@ -3,6 +3,7 @@ pipeline {
     tools {
         go 'go-1.13.4'
     }
+
     environment {
         GOPATH = "${env.WORKSPACE}/"
         PATH = "${env.PATH}:${env.WORKSPACE}/bin:/usr/local/go/bin"
@@ -17,14 +18,8 @@ pipeline {
     stages {
         stage('Compile') {
             steps {
-                sh 'operator-sdk build aerospike/aerospike-kubernetes-operator:v0.0.11-beta'
+                sh 'operator-sdk build ${env.OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}'
             }
-        }
-        stage('Test') {
-        }
-        stage('Code Analysis') {
-        }
-        stage('Release') {
         }
     }
 
