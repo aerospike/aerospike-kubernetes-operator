@@ -16,6 +16,7 @@ require (
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
 	github.com/travelaudience/aerospike-operator v0.0.0-20191002090530-354c1a4e7e2a
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
+	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible

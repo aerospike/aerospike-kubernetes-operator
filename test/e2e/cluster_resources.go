@@ -101,6 +101,11 @@ func createClusterRole(f *framework.Framework, ctx *framework.TestCtx, name stri
 				Resources: []string{"*"},
 				Verbs:     []string{"*"},
 			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"*"},
+			},
 		},
 	}
 	return f.Client.Create(goctx.TODO(), cr, cleanupOption(ctx))

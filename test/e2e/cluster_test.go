@@ -44,13 +44,10 @@ func TestAerospikeCluster(t *testing.T) {
 	t.Run("UpdateCluster", func(t *testing.T) {
 		UpdateClusterTest(t, f, ctx)
 	})
-
 	// CPU, Mem resource related
 	t.Run("ClusterResources", func(t *testing.T) {
 		ClusterResourceTest(t, f, ctx)
 	})
-
-	// Rack related
 	t.Run("RackEnabledCluster", func(t *testing.T) {
 		RackEnabledClusterTest(t, f, ctx)
 	})
@@ -663,6 +660,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Rack-id
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 					err := deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for setting rack-id")
 				})

@@ -11,9 +11,11 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Delete Aeropsike clusters
 kubectl -n test delete aerospikecluster --all
+kubectl -n test1 delete aerospikecluster --all
+kubectl -n test2 delete aerospikecluster --all
+kubectl -n test3 delete aerospikecluster --all
 
-# Delete Stateful Sets
-kubectl -n test delete statefulset --selector 'app=aerospike-cluster'
+kubectl delete -f test/e2e/setup_operator_test.yaml
 
 # Delete PVCs
 kubectl -n test delete pvc --selector 'app=aerospike-cluster'
