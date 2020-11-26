@@ -111,18 +111,18 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 			return err
 		}
 
-		if storage, ok := nsConf["storage-engine"]; ok {
+		if nsStorage, ok := nsConf["storage-engine"]; ok {
 			if storage == nil {
 				// TODO: Should it be error
 				return fmt.Errorf("storage-engine cannot be nil for namespace %v", storage)
 			}
 
-			if _, ok := storage.(string); ok {
+			if _, ok := nsStorage.(string); ok {
 				// storage-engine memory
 				continue
 			}
 
-			if devices, ok := storage.(map[string]interface{})["devices"]; ok {
+			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf("namespace storage devices cannot be nil %v", storage)
 				}
@@ -155,7 +155,7 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				}
 			}
 
-			if files, ok := storage.(map[string]interface{})["files"]; ok {
+			if files, ok := nsStorage.(map[string]interface{})["files"]; ok {
 				if files == nil {
 					return fmt.Errorf("namespace storage files cannot be nil %v", storage)
 				}

@@ -28,29 +28,26 @@ func TestAerospikeCluster(t *testing.T) {
 
 	initializeOperator(t, f, ctx)
 
-	// Cluster lifecycle related
-	t.Run("DeployClusterPost460", func(t *testing.T) {
-		DeployClusterForAllImagesPost460(t, f, ctx)
-	})
-	t.Run("DeployClusterDiffStorageMultiPodPerHost", func(t *testing.T) {
-		DeployClusterForDiffStorageTest(t, f, ctx, 2, true)
-	})
-	t.Run("DeployClusterDiffStorageSinglePodPerHost", func(t *testing.T) {
-		DeployClusterForDiffStorageTest(t, f, ctx, 2, false)
-	})
-	t.Run("CommonNegativeClusterValidationTest", func(t *testing.T) {
-		NegativeClusterValidationTest(t, f, ctx)
-	})
-	t.Run("UpdateCluster", func(t *testing.T) {
-		UpdateClusterTest(t, f, ctx)
-	})
-
-	// CPU, Mem resource related
-	t.Run("ClusterResources", func(t *testing.T) {
-		ClusterResourceTest(t, f, ctx)
-	})
-
-	// Rack related
+	// // Cluster lifecycle related
+	// t.Run("DeployClusterPost460", func(t *testing.T) {
+	// 	DeployClusterForAllImagesPost460(t, f, ctx)
+	// })
+	// t.Run("DeployClusterDiffStorageMultiPodPerHost", func(t *testing.T) {
+	// 	DeployClusterForDiffStorageTest(t, f, ctx, 2, true)
+	// })
+	// t.Run("DeployClusterDiffStorageSinglePodPerHost", func(t *testing.T) {
+	// 	DeployClusterForDiffStorageTest(t, f, ctx, 2, false)
+	// })
+	// t.Run("CommonNegativeClusterValidationTest", func(t *testing.T) {
+	// 	NegativeClusterValidationTest(t, f, ctx)
+	// })
+	// t.Run("UpdateCluster", func(t *testing.T) {
+	// 	UpdateClusterTest(t, f, ctx)
+	// })
+	// // CPU, Mem resource related
+	// t.Run("ClusterResources", func(t *testing.T) {
+	// 	ClusterResourceTest(t, f, ctx)
+	// })
 	// t.Run("RackEnabledCluster", func(t *testing.T) {
 	// 	RackEnabledClusterTest(t, f, ctx)
 	// })
@@ -663,6 +660,7 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 					// Rack-id
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 					err := deployCluster(t, f, ctx, aeroCluster)
 					validateError(t, err, "should fail for setting rack-id")
 				})

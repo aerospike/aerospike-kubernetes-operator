@@ -51,6 +51,23 @@ NAMESPACE=$MY_POD_NAMESPACE
 CFG=/etc/aerospike/aerospike.template.conf
 
 # ------------------------------------------------------------------------------
+# Update label in pod
+# ------------------------------------------------------------------------------
+echo "Update label in pod"
+
+# Get ripemd hash and clean it
+CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
+echo $CONF_HASH
+
+apt-get update && apt-get install -y apt-transport-https gnupg2 curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubectl
+
+kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
+
+# ------------------------------------------------------------------------------
 # Update node and rack ids configuration file
 # ------------------------------------------------------------------------------
 function join {
@@ -406,7 +423,7 @@ for k,v in addressTypeNameMap.items():
 
 # Add rack id if passed as environment variable.
 if 'MY_POD_RACK_ID' in os.environ:
-  value['aerospike']['rackID'] = int(os.environ['MY_POD_RACK_ID'])
+  value['aerospike']['rackID'] = int(ord(os.environ['MY_POD_RACK_ID']))
 
 
 # Create the patch payload for updating pod status.
@@ -458,20 +475,6 @@ const onStartShTemplateStr = `
 
 set -e
 set -x
-
-echo "Update label in pod"
-
-# Get ripemd hash and clean it
-CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
-echo $CONF_HASH
-
-apt-get update && apt-get install -y apt-transport-https gnupg2 curl
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
-apt-get update
-apt-get install -y kubectl
-
-kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
 
 function join {
     local IFS="$1"; shift; echo "$*";

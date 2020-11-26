@@ -462,7 +462,9 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	if upgradeNeeded {
 		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState)
 		if !res.isContinue {
-			logger.Error("Failed to update StatefulSet image", log.Ctx{"err": res.err})
+			if res.err != nil {
+				logger.Error("Failed to update StatefulSet image", log.Ctx{"err": res.err})
+			}
 			return res
 		}
 	} else {
@@ -720,56 +722,56 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 			needsDeletion = true
 			break
 		}
+	}
+	if needsDeletion {
+		logger.Debug("Delete the Pod", log.Ctx{"podName": p.Name})
 
-		if needsDeletion {
-			logger.Debug("Delete the Pod", log.Ctx{"podName": p.Name})
-
-			// If already dead node, so no need to check node safety, migration
-			if err := utils.CheckPodFailed(&p); err == nil {
-				if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isContinue {
-					return res
-				}
-			}
-
-			// Delete pod
-			if err := r.client.Delete(context.TODO(), &p); err != nil {
-				return reconcileError(err)
-			}
-			logger.Debug("Pod deleted", log.Ctx{"podName": p.Name})
-
-			// Wait for pod to come up
-			for {
-				logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": p.Name})
-
-				pFound := &corev1.Pod{}
-				err = r.client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
-				if err != nil {
-					logger.Error("Failed to get pod", log.Ctx{"podName": p.Name, "err": err})
-
-					if _, err = r.getStatefulSet(aeroCluster, rackState); err != nil {
-						// Stateful set has been deleted.
-						// TODO Ashish to rememeber which scenario this can happen.
-						logger.Error("Statefulset has been deleted for pod", log.Ctx{"podName": p.Name, "err": err})
-						return reconcileError(err)
-					}
-
-					time.Sleep(time.Second * 5)
-					continue
-				}
-				if err := utils.CheckPodFailed(pFound); err != nil {
-					return reconcileError(err)
-				}
-				if !utils.IsPodUpgraded(pFound, aeroCluster) {
-					logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
-					time.Sleep(time.Second * 5)
-					continue
-				}
-
-				logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
-				break
+		// If already dead node, so no need to check node safety, migration
+		if err := utils.CheckPodFailed(&p); err == nil {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isContinue {
+				return res
 			}
 		}
+
+		// Delete pod
+		if err := r.client.Delete(context.TODO(), &p); err != nil {
+			return reconcileError(err)
+		}
+		logger.Debug("Pod deleted", log.Ctx{"podName": p.Name})
+
+		// Wait for pod to come up
+		for {
+			logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": p.Name})
+
+			pFound := &corev1.Pod{}
+			err := r.client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
+			if err != nil {
+				logger.Error("Failed to get pod", log.Ctx{"podName": p.Name, "err": err})
+
+				if _, err = r.getStatefulSet(aeroCluster, rackState); err != nil {
+					// Stateful set has been deleted.
+					// TODO Ashish to rememeber which scenario this can happen.
+					logger.Error("Statefulset has been deleted for pod", log.Ctx{"podName": p.Name, "err": err})
+					return reconcileError(err)
+				}
+
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			if err := utils.CheckPodFailed(pFound); err != nil {
+				return reconcileError(err)
+			}
+			if !utils.IsPodUpgraded(pFound, aeroCluster) {
+				logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
+			break
+		}
 	}
+
 	return reconcileRequeueAfter(1)
 }
 
@@ -840,7 +842,6 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 	if err != nil {
 		return false, err
 	}
-
 	confHash, err := getHash(confStr)
 	if err != nil {
 		return false, err
