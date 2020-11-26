@@ -88,11 +88,10 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 		newEnvVar("MY_HOST_IP", "status.hostIP"),
 		newEnvVarStatic("MY_POD_TLS_NAME", getServiceTLSName(aeroCluster)),
 		newEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
-		newEnvVarStatic("MY_POD_IMAGE", aeroCluster.Spec.Image),
 	}
 
 	if rackState.Rack.ID != utils.DefaultRackID {
-		envVarList = append(envVarList, newEnvVarStatic("MY_POD_RACK_ID", string(rackState.Rack.ID)))
+		envVarList = append(envVarList, newEnvVarStatic("MY_POD_RACK_ID", strconv.Itoa(rackState.Rack.ID)))
 	}
 
 	if name := getServiceTLSName(aeroCluster); name != "" {

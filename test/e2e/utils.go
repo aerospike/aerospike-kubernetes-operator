@@ -14,6 +14,8 @@ import (
 	"time"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
+
 	"github.com/operator-framework/operator-sdk/pkg/test"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 
@@ -272,17 +274,18 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 		if len(newCluster.Status.Pods) != replicas {
 			t.Logf("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
 			return false, nil
-		} else {
-			for _, pod := range newCluster.Status.Pods {
-				if pod.Aerospike.NodeID == "" {
-					t.Logf("Cluster pod's nodeID is empty")
-					return false, nil
-				}
-				specImage := strings.Split(aeroCluster.Spec.Image, ":")[1]
-				if pod.Image != specImage {
-					t.Logf("Cluster pod's image %s not same as spec %s", pod.Image, specImage)
-				}
+		}
+
+		for _, pod := range newCluster.Status.Pods {
+			if pod.Aerospike.NodeID == "" {
+				t.Logf("Cluster pod's nodeID is empty")
+				return false, nil
 			}
+			if operatorutils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
+				break
+			}
+
+			t.Logf("Cluster pod's image %s not same as spec %s", pod.Image, aeroCluster.Spec.Image)
 		}
 
 		return true, nil

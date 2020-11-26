@@ -167,6 +167,9 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 			Size:  size,
 			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/test/dev/xvdf",
@@ -484,7 +487,6 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-
 	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 		{
 			Path:         "/opt/aerospike",
@@ -575,7 +577,6 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-
 	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 		{
 			Path:         "/test/dev/xvdf",
