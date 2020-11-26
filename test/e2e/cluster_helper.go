@@ -143,6 +143,9 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 			Size:  size,
 			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/test/dev/xvdf",
@@ -435,10 +438,11 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				Path:            "/opt/aerospike",
+				SizeInGB:        1,
+				StorageClass:    "ssd",
+				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
 			},
 		},
 	}
@@ -463,10 +467,11 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				Path:            "/opt/aerospike",
+				SizeInGB:        1,
+				StorageClass:    "ssd",
+				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
 			},
 		},
 	}
@@ -560,10 +565,11 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				Path:            "/opt/aerospike",
+				SizeInGB:        1,
+				StorageClass:    "ssd",
+				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
 			},
 		},
 	}
