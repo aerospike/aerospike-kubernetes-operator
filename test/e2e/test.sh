@@ -19,6 +19,8 @@ TEST_REPORTS_DIR="build/test-results"
 mkdir -p $TEST_REPORTS_DIR
 GO_TEST_OUTPUT="$TEST_REPORTS_DIR/go-test.txt"
 JUNIT_TEST_OUTPUT="$TEST_REPORTS_DIR/report.xml"
+rm -f $GO_TEST_OUTPUT || true
+rm -f $JUNIT_TEST_OUTPUT || true
 
 # Fecth go to junit report convertor
 go get -u github.com/jstemmer/go-junit-report
