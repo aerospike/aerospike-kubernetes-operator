@@ -430,6 +430,9 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+		},
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 			{
 				Path:         "/test/dev/xvdf",
@@ -438,11 +441,10 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			{
-				Path:            "/opt/aerospike",
-				SizeInGB:        1,
-				StorageClass:    "ssd",
-				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
@@ -465,13 +467,15 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+		},
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 			{
-				Path:            "/opt/aerospike",
-				SizeInGB:        1,
-				StorageClass:    "ssd",
-				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
@@ -551,6 +555,10 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
 
 	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+		},
+
 		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 			{
 				Path:         "/test/dev/xvdf",
@@ -565,11 +573,10 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
 			},
 			{
-				Path:            "/opt/aerospike",
-				SizeInGB:        1,
-				StorageClass:    "ssd",
-				VolumeMode:      aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-				InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				Path:         "/opt/aerospike",
+				SizeInGB:     1,
+				StorageClass: "ssd",
+				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 			},
 		},
 	}
