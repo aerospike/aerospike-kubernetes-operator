@@ -25,7 +25,8 @@ pipeline {
 
                 dir("${env.GO_REPO}") {
                     sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
-                    sh "operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                    // Changing directory again otherwise operator generates binary with the symlink name.
+                    sh "cd ${GO_REPO} && operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                     sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                 }
             }
@@ -47,9 +48,6 @@ pipeline {
     post {
         always {
             junit testResults: '**/build/test-results/**/*.xml', keepLongStdio: true
-        }
-        cleanup {
-            cleanWs()
         }
     }
 }
