@@ -28,7 +28,7 @@ func TestAerospikeCluster(t *testing.T) {
 
 	initializeOperator(t, f, ctx)
 
-	Cluster lifecycle related
+	// Cluster lifecycle related
 	t.Run("DeployClusterPost460", func(t *testing.T) {
 		DeployClusterForAllImagesPost460(t, f, ctx)
 	})
