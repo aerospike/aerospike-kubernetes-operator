@@ -1,10 +1,10 @@
 
 Aerospike Kubernetes Operator automates deployment and management of
 **Aerospike Database Enterprise Edition** clusters on Kubernetes.
-It is licensed using the [Apache License 2.0](LICENSE).
+It is licensed using [Apache License 2.0](LICENSE).
 
 The Aerospike Kubernetes Operator is now in **beta**. This means that we are
-seeking your feedbback, but that you should not be deploying the Operator in
+seeking your feedback, but that you should not be deploying the Operator in
 production, yet.
 
 If you're an enterprise customer, feel free to reach out to support about
