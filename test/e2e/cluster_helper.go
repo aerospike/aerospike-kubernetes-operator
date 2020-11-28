@@ -8,12 +8,14 @@ import (
 	"time"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -26,6 +28,9 @@ const (
 var (
 	retryInterval = time.Second * 5
 	timeout       = time.Second * 120
+
+	cascadeDeleteFalse = false
+	cascadeDeleteTrue  = true
 )
 
 func getCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName) *aerospikev1alpha1.AerospikeCluster {
@@ -85,29 +90,48 @@ func updateAndWait(t *testing.T, f *framework.Framework, ctx *framework.TestCtx,
 	return waitForAerospikeCluster(t, f, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
+func getClusterPodList(f *framework.Framework, aeroCluster *aerospikev1alpha1.AerospikeCluster) (*corev1.PodList, error) {
+	// List the pods for this aeroCluster's statefulset
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+
+	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
+	if err := f.Client.List(context.TODO(), podList, listOps); err != nil {
+		return nil, err
+	}
+	return podList, nil
+}
+
 func validateResource(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) {
-	found := &appsv1.StatefulSet{}
-	if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, found); err != nil {
+	podList, err := getClusterPodList(f, aeroCluster)
+	if err != nil {
 		t.Fatal(err)
 	}
-	mem := aeroCluster.Spec.Resources.Requests.Memory()
-	stMem := found.Spec.Template.Spec.Containers[0].Resources.Requests.Memory()
-	if !mem.Equal(*stMem) {
-		t.Fatal(fmt.Errorf("resource memory not matching. want %v, got %v", mem.String(), stMem.String()))
-	}
-	limitMem := found.Spec.Template.Spec.Containers[0].Resources.Limits.Memory()
-	if !mem.Equal(*limitMem) {
-		t.Fatal(fmt.Errorf("limit memory not matching. want %v, got %v", mem.String(), limitMem.String()))
-	}
 
+	mem := aeroCluster.Spec.Resources.Requests.Memory()
 	cpu := aeroCluster.Spec.Resources.Requests.Cpu()
-	stCPU := found.Spec.Template.Spec.Containers[0].Resources.Requests.Cpu()
-	if !cpu.Equal(*stCPU) {
-		t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), stCPU.String()))
-	}
-	limitCPU := found.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu()
-	if !cpu.Equal(*limitCPU) {
-		t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), limitCPU.String()))
+
+	for _, p := range podList.Items {
+		for _, cnt := range p.Spec.Containers {
+			stMem := cnt.Resources.Requests.Memory()
+			if !mem.Equal(*stMem) {
+				t.Fatal(fmt.Errorf("resource memory not matching. want %v, got %v", mem.String(), stMem.String()))
+			}
+			limitMem := cnt.Resources.Limits.Memory()
+			if !mem.Equal(*limitMem) {
+				t.Fatal(fmt.Errorf("limit memory not matching. want %v, got %v", mem.String(), limitMem.String()))
+			}
+
+			stCPU := cnt.Resources.Requests.Cpu()
+			if !cpu.Equal(*stCPU) {
+				t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), stCPU.String()))
+			}
+			limitCPU := cnt.Resources.Limits.Cpu()
+			if !cpu.Equal(*limitCPU) {
+				t.Fatal(fmt.Errorf("resource cpu not matching. want %v, got %v", cpu.String(), limitCPU.String()))
+			}
+		}
 	}
 }
 
@@ -143,6 +167,9 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 			Size:  size,
 			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/test/dev/xvdf",
@@ -253,7 +280,6 @@ func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.Namespaced
 func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
-	cascadeDelete := false
 
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
@@ -266,11 +292,11 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDeleteFalse,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDeleteFalse,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -350,6 +376,11 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 		Spec: aerospikev1alpha1.AerospikeClusterSpec{
 			Size:  size,
 			Image: latestClusterImage,
+			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+				},
+			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
 				Users: []aerospikev1alpha1.AerospikeUserSpec{
 					{
@@ -362,7 +393,6 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 					},
 				},
 			},
-
 			AerospikeConfigSecret: aerospikev1alpha1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
@@ -426,20 +456,18 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
-		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
-			{
-				Path:         "/test/dev/xvdf",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
-			},
-			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-			},
+	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+		{
+			Path:         "/test/dev/xvdf",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+		},
+		{
+			Path:         "/opt/aerospike",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 
@@ -459,15 +487,12 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-
-	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
-		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
-			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-			},
+	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+		{
+			Path:         "/opt/aerospike",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 
@@ -529,6 +554,14 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+		{
+			Path:         "/opt/aerospike",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+		},
+	}
 	aeroCluster.Spec.AerospikeConfig["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -544,27 +577,24 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *aerospikev1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
-
-	aeroCluster.Spec.Storage = aerospikev1alpha1.AerospikeStorageSpec{
-		Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
-			{
-				Path:         "/test/dev/xvdf",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
-			},
-			{
-				Path:         "/dev/nvme0n1",
-				SizeInGB:     1,
-				StorageClass: "local-ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
-			},
-			{
-				Path:         "/opt/aerospike",
-				SizeInGB:     1,
-				StorageClass: "ssd",
-				VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
-			},
+	aeroCluster.Spec.Storage.Volumes = []aerospikev1alpha1.AerospikePersistentVolumeSpec{
+		{
+			Path:         "/test/dev/xvdf",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+		},
+		{
+			Path:         "/dev/nvme0n1",
+			SizeInGB:     1,
+			StorageClass: "local-ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeBlock,
+		},
+		{
+			Path:         "/opt/aerospike",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 

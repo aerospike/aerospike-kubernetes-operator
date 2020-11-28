@@ -14,6 +14,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// Local tests var
+// var (
+// 	zone1 = "us-central1-b"
+// 	zone2 = "us-central1-a"
+// 	region = "us-central1"
+// )
+
+// Jenkins tests var
+var (
+	zone1  = "us-west1-a"
+	zone2  = "us-west1-a"
+	region = "us-west1"
+)
+
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
 
 // racks:
@@ -40,8 +54,8 @@ func RackEnabledClusterTest(t *testing.T, f *framework.Framework, ctx *framework
 		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 		// This needs to be changed based on setup. update zone, region, nodeName according to setup
 		racks := []aerospikev1alpha1.Rack{
-			{ID: 1, Zone: "us-central1-b", NodeName: "kubernetes-minion-group-qp3m", Region: "us-central1"},
-			{ID: 2, Zone: "us-central1-a", NodeName: "kubernetes-minion-group-tft3", Region: "us-central1"}}
+			{ID: 1, Zone: zone1, Region: region},
+			{ID: 2, Zone: zone2, Region: region}}
 		rackConf := aerospikev1alpha1.RackConfig{
 			Racks: racks,
 		}

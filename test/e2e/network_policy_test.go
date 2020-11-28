@@ -67,6 +67,15 @@ func TestNetworkPolicy(t *testing.T) {
 func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx *framework.TestCtx, t *testing.T) {
 	var aeroCluster *aerospikev1alpha1.AerospikeCluster = nil
 
+	var cleanup = func() {
+		if aeroCluster != nil {
+			// Cleanup for next run.
+			deleteCluster(t, framework.Global, ctx, aeroCluster)
+		}
+	}
+
+	defer cleanup()
+
 	t.Run("DefaultNetworkPolicy", func(t *testing.T) {
 		// Ensures that default network policy is applied.
 		defaultNetworkPolicy := aerospikev1alpha1.AerospikeNetworkPolicy{}
@@ -88,11 +97,6 @@ func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx *framework.Te
 		}
 		validateNetworkPolicy(aeroCluster, t)
 	})
-
-	if aeroCluster != nil {
-		// Cleanup for next run.
-		deleteCluster(t, framework.Global, ctx, aeroCluster)
-	}
 }
 
 // validateNetworkPolicy validates that the new network policy is applied correctly.

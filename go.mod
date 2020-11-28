@@ -9,12 +9,14 @@ require (
 	github.com/go-openapi/spec v0.19.0
 	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a // indirect
+	github.com/jstemmer/go-junit-report v0.9.1 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/operator-framework/operator-sdk v0.12.1-0.20191113210304-dc4b52186933
 	github.com/stretchr/testify v1.3.0
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
 	github.com/travelaudience/aerospike-operator v0.0.0-20191002090530-354c1a4e7e2a
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
+	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
