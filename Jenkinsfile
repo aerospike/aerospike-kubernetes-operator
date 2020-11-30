@@ -21,7 +21,7 @@ pipeline {
 
             steps {
                 sh 'mkdir -p $GO_REPO_ROOT'
-                sh 'ln -sf ${WORKSPACE} ${GO_REPO}'
+                sh 'ln -sfn ${WORKSPACE} ${GO_REPO}'
 
                 dir("${env.GO_REPO}") {
                     sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
