@@ -170,6 +170,7 @@ func TestStorageInit(t *testing.T) {
 		}
 
 		if len(pvcs) != 0 {
+			panic("Is this timing")
 			t.Errorf("PVCs not deleted: %v", pvcs)
 		}
 	}
