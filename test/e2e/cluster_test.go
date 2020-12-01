@@ -757,6 +757,7 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 	if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Run("Validation", func(t *testing.T) {
 
 		t.Run("InvalidImage", func(t *testing.T) {
@@ -961,6 +962,8 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 			})
 		})
 	})
+
+	deleteCluster(t, f, ctx, aeroCluster)
 }
 
 func scaleUpClusterTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName, increaseBy int32) error {
