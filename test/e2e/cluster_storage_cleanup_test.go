@@ -36,7 +36,7 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 
 	t.Run("Positive", func(t *testing.T) {
 		// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 4, false)
 		racks := getDummyRackConf(1, 2, 3, 4)
 		aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
@@ -192,7 +192,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 	// (nil -> val), (val -> nil), (val1 -> val2)
 
 	t.Run("Positive", func(t *testing.T) {
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
 		devName := "/test/dev/rackstorage"
@@ -292,7 +292,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 	t.Run("Negative", func(t *testing.T) {
 		t.Run("BadAerospikeConfig", func(t *testing.T) {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
 			racks := getDummyRackConf(1)
 			// AerospikeConfig is only patched
 			racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
@@ -331,7 +331,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		t.Run("Update", func(t *testing.T) {
 			t.Run("NilToValue", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 				if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
@@ -361,7 +361,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 			})
 			t.Run("ValueToNil", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -392,7 +392,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 
 			t.Run("ValueToValue", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -435,7 +435,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		// Add test while rack using common aeroConfig but local storage, fail for mismatch
 		t.Run("CommonConfigLocalStorage", func(t *testing.T) {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 			racks := getDummyRackConf(1)
 			// Rack is completely replaced
 			volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{

@@ -278,6 +278,10 @@ func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.Namespaced
 }
 
 func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
+	return createDummyAerospikeClusterWithOption(clusterNamespacedName, size, true)
+}
+
+func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
@@ -292,11 +296,11 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
