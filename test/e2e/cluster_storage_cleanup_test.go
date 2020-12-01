@@ -308,7 +308,8 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 			// Rack is completely replaced
 			racks[0].InputStorage = &aerospikev1alpha1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{

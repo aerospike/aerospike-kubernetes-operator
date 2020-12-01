@@ -167,8 +167,12 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 			Size:  size,
 			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -381,8 +385,12 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 			Size:  size,
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
 				},
 			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{

@@ -304,6 +304,9 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
+				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDelete,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					aerospikev1alpha1.AerospikePersistentVolumeSpec{
 						Path:         "/opt/aerospike",
