@@ -1140,7 +1140,7 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
 	}
 	storage := rackState.Rack.Storage
-	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, pvcItems); err != nil {
+	if err := r.removePVCs(aeroCluster, &storage, pvcItems); err != nil {
 		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
 	}
 
@@ -1194,7 +1194,7 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 			return fmt.Errorf("Could not find pvc for rack: %v", err)
 		}
 		storage := rack.Storage
-		if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &storage, rackPVCItems); err != nil {
+		if err := r.removePVCs(aeroCluster, &storage, rackPVCItems); err != nil {
 			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 		}
 	}
@@ -1221,16 +1221,20 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 		}
 	}
 
-	// Delete pvc for commmon storage
-	if err := r.removePVCs(getNamespacedNameForCluster(aeroCluster), &aeroCluster.Spec.Storage, fileredPVCItems); err != nil {
+	// Delete pvc for commmon storage.
+	if err := r.removePVCs(aeroCluster, &aeroCluster.Spec.Storage, fileredPVCItems); err != nil {
 		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 	}
 
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.NamespacedName, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
+func (r *ReconcileAerospikeCluster) removePVCs(aeroCluster *aerospikev1alpha1.AerospikeCluster, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
+	aeroClusterNamespacedName := getNamespacedNameForCluster(aeroCluster)
+
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": aeroClusterNamespacedName})
+
+	deletedPVCs := []corev1.PersistentVolumeClaim{}
 
 	for _, pvc := range pvcItems {
 		if utils.IsPVCTerminating(&pvc) {
@@ -1261,6 +1265,7 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 		}
 
 		if cascadeDelete {
+			deletedPVCs = append(deletedPVCs, pvc)
 			if err := r.client.Delete(context.TODO(), &pvc); err != nil {
 				return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
 			}
@@ -1268,6 +1273,49 @@ func (r *ReconcileAerospikeCluster) removePVCs(aeroClusterNamespacedName types.N
 		} else {
 			logger.Info("PVC not removed", log.Ctx{"PVC": pvc.Name, "PVCCascadeDelete": cascadeDelete})
 		}
+	}
+
+	return r.waitForPVCTermination(aeroCluster, deletedPVCs)
+}
+
+func (r *ReconcileAerospikeCluster) waitForPVCTermination(aeroCluster *aerospikev1alpha1.AerospikeCluster, deletedPVCs []corev1.PersistentVolumeClaim) error {
+	if len(deletedPVCs) == 0 {
+		return nil
+	}
+
+	// Wait for the PVCs to actually be deleted.
+	pollAttempts := 15
+	sleepInterval := time.Second * 20
+
+	for i := 0; i < pollAttempts; i++ {
+		pending := false
+		existingPVCs, err := r.getClusterPVCList(aeroCluster)
+		if err != nil {
+			return err
+		}
+
+		for _, pvc := range deletedPVCs {
+			found := false
+			for _, existing := range existingPVCs {
+				if existing.Name == pvc.Name {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				pending = true
+				break
+			}
+		}
+
+		if !pending {
+			// All to-delete PVCs are deleted.
+			break
+		}
+
+		// Wait for some more time.
+		time.Sleep(sleepInterval)
 	}
 	return nil
 }

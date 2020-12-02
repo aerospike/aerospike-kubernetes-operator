@@ -152,16 +152,11 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 					continue
 				}
 				if strings.Contains(pvc.Name, stsName) {
-					// t.Fatalf("PVC %s not removed for cluster sts %s", pvc.Name, stsName)
-					fmt.Printf("PVC %s not removed for cluster sts %s Aerospike cluster %v\n", pvc.Name, stsName, aeroCluster)
-					panic("Fail!!! pvc not removed")
+					t.Fatalf("PVC %s not removed for cluster sts %s", pvc.Name, stsName)
 				}
 			}
 			if !found {
 				t.Fatalf("PVC with prefix %s should not be removed for cluster sts %s", pvcNamePrefix, stsName)
-				fmt.Printf("Aerospike cluster %v\n", aeroCluster)
-				panic("PVC removed")
-
 			}
 		})
 
