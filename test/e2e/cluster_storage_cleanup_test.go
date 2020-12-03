@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -151,6 +152,12 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 					found = true
 					continue
 				}
+
+				if utils.IsPVCTerminating(&pvc) {
+					// Ignore PVC that are being terminated.
+					continue
+				}
+
 				if strings.Contains(pvc.Name, stsName) {
 					t.Fatalf("PVC %s not removed for cluster sts %s", pvc.Name, stsName)
 				}
