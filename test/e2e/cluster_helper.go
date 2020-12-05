@@ -351,11 +351,11 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
