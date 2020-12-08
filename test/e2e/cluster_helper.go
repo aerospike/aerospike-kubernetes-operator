@@ -11,6 +11,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,13 +43,63 @@ func getCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, cl
 	return aeroCluster
 }
 
+func getClusterIfExists(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName) *aerospikev1alpha1.AerospikeCluster {
+	aeroCluster := &aerospikev1alpha1.AerospikeCluster{}
+	err := f.Client.Get(goctx.TODO(), clusterNamespacedName, aeroCluster)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+
+		t.Fatalf("Error getting cluster: %v", err)
+	}
+
+	return aeroCluster
+}
+
 func deleteCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	if err := f.Client.Delete(goctx.TODO(), aeroCluster); err != nil {
 		return err
 	}
-	// wait for all pod to get deleted
-	time.Sleep(time.Second * 12)
-	// TODO: do we need to do anything more
+
+	// Wait for all pod to get deleted.
+	// TODO: Maybe add these checks in cluster delete itself.
+	//time.Sleep(time.Second * 12)
+
+	clusterNamespacedName := getClusterNamespacedName(aeroCluster.Name, aeroCluster.Namespace)
+	for {
+		t.Logf("Waiting for cluster %v to be deleted", aeroCluster.Name)
+		existing := getClusterIfExists(t, f, ctx, clusterNamespacedName)
+		if existing == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	// Wait for all rmoved PVCs to be terminated.
+	for {
+		newPVCList, err := getAeroClusterPVCList(aeroCluster, &f.Client.Client)
+
+		if err != nil {
+			t.Fatalf("Error getting PVCs: %v", err)
+		}
+
+		pending := false
+		for _, pvc := range newPVCList {
+			if utils.IsPVCTerminating(&pvc) {
+				t.Logf("Waiting for PVC %v to terminate", pvc.Name)
+				pending = true
+				break
+			}
+		}
+
+		if !pending {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
 	return nil
 }
 
@@ -167,8 +218,12 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 			Size:  size,
 			Image: image,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -278,6 +333,10 @@ func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.Namespaced
 }
 
 func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
+	return createDummyAerospikeClusterWithOption(clusterNamespacedName, size, true)
+}
+
+func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
@@ -292,11 +351,11 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteFalse,
+					InputCascadeDelete: &cascadeDelete,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -377,8 +436,12 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 			Size:  size,
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
+				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &aerospikeVolumeInitMethodDeleteFiles,
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
 				},
 			},
 			AerospikeAccessControl: &aerospikev1alpha1.AerospikeAccessControlSpec{
