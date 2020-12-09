@@ -7,7 +7,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Cleanup
-echo "Removing up operator residual k8s resources...."
+echo "Removing residual k8s resources...."
 $DIR/cleanup-test-namespace.sh
 
 # Setup the deploy-test-operator.sh
@@ -33,3 +33,5 @@ function generate_junit_report()
 trap generate_junit_report EXIT
 
 operator-sdk test local ./test/e2e --no-setup --namespace test --go-test-flags "-v -timeout=5h -tags test" --kubeconfig ~/.kube/config  2>&1 | tee "$GO_TEST_OUTPUT"
+
+exit ${PIPESTATUS[0]}
