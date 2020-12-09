@@ -148,6 +148,7 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 
 	// Check DeletionTimestamp to see if cluster is being deleted
 	if !aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
+		// TODO: LOG FOR CLUSTER DELETION
 		// The cluster is being deleted
 		if err := r.handleClusterDeletion(aeroCluster, finalizerName); err != nil {
 			return reconcile.Result{}, err
@@ -168,7 +169,7 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 	}
 
 	// Reconcile all racks
-	if res := r.reconcileRacks(aeroCluster); !res.isContinue {
+	if res := r.reconcileRacks(aeroCluster); !res.isSuccess {
 		return res.result, res.err
 	}
 
@@ -253,7 +254,7 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 			// Create statefulset with 0 size rack and then scaleUp later in reconcile
 			zeroSizedRack := RackState{Rack: state.Rack, Size: 0}
 			found, res = r.createRack(aeroCluster, zeroSizedRack)
-			if !res.isContinue {
+			if !res.isSuccess {
 				return res
 			}
 		}
@@ -264,7 +265,7 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 			scaledDownRackList = append(scaledDownRackList, state)
 		} else {
 			// Reconcile other statefulset
-			if res := r.reconcileRack(aeroCluster, found, state); !res.isContinue {
+			if res := r.reconcileRack(aeroCluster, found, state); !res.isSuccess {
 				return res
 			}
 		}
@@ -272,20 +273,20 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 
 	// Reconcile scaledDownRacks after all other racks are reconciled
 	for idx, state := range scaledDownRackList {
-		if res := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); !res.isContinue {
+		if res := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); !res.isSuccess {
 			return res
 		}
 	}
 
 	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
 		// Remove removed racks
-		if res := r.deleteRacks(aeroCluster, rackStateList); !res.isContinue {
+		if res := r.deleteRacks(aeroCluster, rackStateList); !res.isSuccess {
 			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": res.err})
 			return res
 		}
 	}
 
-	return reconcileContinue()
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
@@ -314,7 +315,7 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 		r.deleteStatefulSet(aeroCluster, found)
 		return nil, reconcileError(err)
 	}
-	return found, reconcileContinue()
+	return found, reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) reconcileResult {
@@ -345,7 +346,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
 		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack})
-		if !res.isContinue {
+		if !res.isSuccess {
 			return res
 		}
 
@@ -354,7 +355,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 			return reconcileError(err)
 		}
 	}
-	return reconcileContinue()
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) needsRollingRestart(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, logger log.Logger) bool {
@@ -425,7 +426,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
 		found, res = r.scaleDownRack(aeroCluster, found, rackState)
-		if !res.isContinue {
+		if !res.isSuccess {
 			if res.err != nil {
 				logger.Error("Failed to scaleDown StatefulSet pods", log.Ctx{"err": res.err})
 			}
@@ -461,7 +462,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 
 	if upgradeNeeded {
 		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState)
-		if !res.isContinue {
+		if !res.isSuccess {
 			if res.err != nil {
 				logger.Error("Failed to update StatefulSet image", log.Ctx{"err": res.err})
 			}
@@ -474,7 +475,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 		}
 		if needRollingRestartRack {
 			found, res = r.rollingRestartRack(aeroCluster, found, rackState)
-			if !res.isContinue {
+			if !res.isSuccess {
 				if res.err != nil {
 					logger.Error("Failed to do rolling restart", log.Ctx{"err": res.err})
 				}
@@ -486,13 +487,14 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	// Scale up after upgrading, so that new pods comeup with new image
 	if *found.Spec.Replicas < desiredSize {
 		found, res = r.scaleUpRack(aeroCluster, found, rackState)
-		if !res.isContinue {
+		if !res.isSuccess {
 			logger.Error("Failed to scaleUp StatefulSet pods", log.Ctx{"err": res.err})
 			return res
 		}
 	}
 
-	return reconcileContinue()
+	// TODO: check if all the pods are up or not
+	return reconcileSuccess()
 }
 
 func isClusterAerospikeConfigSecretUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
@@ -623,7 +625,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return found, reconcileError(err)
 	}
-	return found, reconcileContinue()
+	return found, reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
@@ -683,9 +685,11 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 		}
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		if res := r.checkPodImageUpdated(aeroCluster, desiredImage, rackState, p); !res.isContinue {
+		res := r.checkPodImageUpdated(aeroCluster, desiredImage, rackState, p)
+		if !res.isSuccess {
 			return found, res
 		}
+		return found, reconcileRequeueAfter(0)
 	}
 
 	// return a fresh copy
@@ -693,7 +697,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 	if err != nil {
 		return found, reconcileError(err)
 	}
-	return found, reconcileContinue()
+	return found, reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod) reconcileResult {
@@ -728,7 +732,7 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 
 		// If already dead node, so no need to check node safety, migration
 		if err := utils.CheckPodFailed(&p); err == nil {
-			if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isContinue {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isSuccess {
 				return res
 			}
 		}
@@ -772,7 +776,7 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 		}
 	}
 
-	return reconcileRequeueAfter(1)
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
@@ -817,9 +821,12 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 			logger.Info("This Pod doesn't need rolling restart, Skip this")
 			continue
 		}
-		if res := r.rollingRestartPod(aeroCluster, rackState, pod); !res.isContinue {
+
+		res := r.rollingRestartPod(aeroCluster, rackState, pod)
+		if !res.isSuccess {
 			return found, res
 		}
+		return found, reconcileRequeueAfter(0)
 	}
 
 	// return a fresh copy
@@ -827,7 +834,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 	if err != nil {
 		return found, reconcileError(err)
 	}
-	return found, reconcileContinue()
+	return found, reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (bool, error) {
@@ -863,6 +870,10 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 	if isPodResourceUpdated(aeroCluster, pod) {
 		return true, nil
 	}
+
+	// PODSPEC
+	// NETWORK
+	// RACKSTORAGE/CONFIGMAP
 
 	return false, nil
 }
@@ -962,7 +973,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
 		// Check for migration
-		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound); !res.isContinue {
+		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound); !res.isSuccess {
 			return res
 		}
 	} else {
@@ -1010,7 +1021,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 		logger.Error("Pos is not running or ready. Pod might also be terminating", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
 	}
 
-	return reconcileRequeueAfter(1)
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
@@ -1022,7 +1033,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 	// Continue if scaleDown is not needed
 	if *found.Spec.Replicas <= desiredSize {
-		return found, reconcileContinue()
+		return found, reconcileSuccess()
 	}
 
 	oldPodList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
@@ -1045,7 +1056,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 		// Ignore safe stop check on pod not in running state.
 		if utils.IsPodRunningAndReady(pod) {
-			if res := r.waitForNodeSafeStopReady(aeroCluster, pod); !res.isContinue {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, pod); !res.isSuccess {
 				// The pod is running and is unsafe to terminate.
 				return found, res
 			}
@@ -1105,8 +1116,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		}
 	}
 
-	// This is alredy new copy, no need to fetch again
-	return found, reconcileRequeueAfter(1)
+	return found, reconcileRequeueAfter(0)
 }
 
 func (r *ReconcileAerospikeCluster) reconcileAccessControl(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {

@@ -61,8 +61,8 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
 
-	const maxRetry = 10
-	const retryInterval = time.Second * 60
+	const maxRetry = 6
+	const retryInterval = time.Second * 10
 
 	var isStable bool
 	// Wait for migration to finish. Wait for 10 min for now
@@ -78,9 +78,9 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 			break
 		}
 	}
-	// TODO: Requeue after how much time. 3 min for now
+	// TODO: Requeue after how much time. 1 min for now
 	if !isStable {
-		return reconcileRequeueAfter(180)
+		return reconcileRequeueAfter(60)
 	}
 
 	// Quiesce node
@@ -91,7 +91,7 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
 		return reconcileError(err)
 	}
-	return reconcileContinue()
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
