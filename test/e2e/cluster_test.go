@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func TestAerospikeCluster(t *testing.T) {
+func NoTestAerospikeCluster(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
 	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
 		t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
@@ -48,10 +48,7 @@ func TestAerospikeCluster(t *testing.T) {
 	t.Run("ClusterResources", func(t *testing.T) {
 		ClusterResourceTest(t, f, ctx)
 	})
-<<<<<<< HEAD
-=======
 
->>>>>>> e401db8dabac02dd06f1da6a9d3dd192b1994a8b
 	t.Run("RackEnabledCluster", func(t *testing.T) {
 		RackEnabledClusterTest(t, f, ctx)
 	})
@@ -1002,7 +999,7 @@ func rollingRestartClusterTest(t *testing.T, f *framework.Framework, ctx *framew
 	if _, ok := aeroCluster.Spec.AerospikeConfig["service"]; !ok {
 		aeroCluster.Spec.AerospikeConfig["service"] = map[string]interface{}{}
 	}
-	aeroCluster.Spec.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"] = 1100
+	aeroCluster.Spec.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"] = 15000
 
 	err := f.Client.Update(goctx.TODO(), aeroCluster)
 	if err != nil {

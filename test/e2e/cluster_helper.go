@@ -339,7 +339,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
-
+	protofdmax := 12000
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -380,6 +380,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
@@ -402,6 +403,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 			AerospikeConfig: aerospikev1alpha1.Values{
 				"service": map[string]interface{}{
 					"feature-key-file": "/etc/aerospike/secret/features.conf",
+					"proto-fd-max":     protofdmax,
 				},
 				"security": map[string]interface{}{
 					"enable-security": true,
