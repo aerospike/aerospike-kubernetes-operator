@@ -450,7 +450,7 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
 	for _, sidecar := range s.obj.Spec.PodSpec.Sidecars {
 		// Check for reserved sidecar name
-		if sidecar.Name == "aeropsike-server" || sidecar.Name == "aerospike-init" {
+		if sidecar.Name == utils.AerospikeServerContainerName || sidecar.Name == utils.AerospikeServerInitContainerName {
 			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
 		}
 

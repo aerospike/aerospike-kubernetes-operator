@@ -41,7 +41,7 @@ func TestLargeReconcile(t *testing.T) {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		// Create a 5 node cluster
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 5)
 		networkPolicy := aerospikev1alpha1.AerospikeNetworkPolicy{
 			AccessType:             aerospikev1alpha1.AerospikeNetworkTypeHostExternal,
 			AlternateAccessType:    aerospikev1alpha1.AerospikeNetworkTypeHostExternal,
@@ -54,7 +54,9 @@ func TestLargeReconcile(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := loadDataInCluster(aeroCluster); err != nil {
+		aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
+
+		if err := loadDataInCluster(t, f, ctx, aeroCluster); err != nil {
 			t.Fatal(err)
 		}
 
@@ -142,14 +144,10 @@ func TestLargeReconcile(t *testing.T) {
 		})
 		t.Run("WaitingForStableCluster", func(t *testing.T) {
 			t.Run("LargeMigration", func(t *testing.T) {
-				// Create a 5 node cluster
-				// Add large data to make migration time taking
-				// Change size to 2
-				// Change size to 4 immediately
-				// Cluster size should never go below 4,
+				// Need to create large migration...is there any way to mimic or olny way is to load data
 			})
 			t.Run("ColdStart", func(t *testing.T) {
-
+				// Not needed for this, isClusterStable call should fail and this will requeue request.
 			})
 		})
 
@@ -161,42 +159,63 @@ func TestLargeReconcile(t *testing.T) {
 	})
 }
 
-func loadDataInCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
-	// Current user pass set in dummycluster
-	clientP, err := getClient(aeroCluster, &framework.Global.Client.Client)
+func loadDataInCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+
+	kclient := &framework.Global.Client.Client
+
+	policy := getClientPolicy(aeroCluster, kclient)
+	policy.Timeout = time.Minute * 2
+	policy.UseServicesAlternate = true
+	policy.ConnectionQueueSize = 100
+	policy.LimitConnectionsToQueueSize = true
+
+	var hostList []*as.Host
+	for _, pod := range aeroCluster.Status.Pods {
+		host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
+		hostList = append(hostList, host)
+	}
+
+	clientP, err := as.NewClientWithPolicyAndHost(policy, hostList...)
 	if err != nil {
-		return fmt.Errorf("Error creating client: %v", err)
+		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
 	}
 
 	client := *clientP
 	defer client.Close()
 
+	client.WarmUp(-1)
+
 	keyPrefix := "testkey"
 
-	size := 1000
+	size := 100
 	bufferSize := 10000
 	token := make([]byte, bufferSize)
 	rand.Read(token)
 
 	fmt.Printf("Loading record, isClusterConnected %v\n", clientP.IsConnected())
+	fmt.Println(client.GetNodes())
+
+	wp := as.NewWritePolicy(0, 0)
+	wp.MaxRetries = 1000
+	wp.TotalTimeout = time.Second * 10
+
 	// loads size * bufferSize data
 	for i := 0; i < size; i++ {
-		key, err := as.NewKey(aeroCluster.Namespace, "", keyPrefix+strconv.Itoa(i))
+		key, err := as.NewKey("test", "testset", keyPrefix+strconv.Itoa(i))
 		if err != nil {
 			return err
 		}
 		binMap := map[string]interface{}{
 			"testbin": token,
 		}
-		wp := as.NewWritePolicy(1, 500)
-		wp.MaxRetries = 10
-		wp.TotalTimeout = time.Second * 1
+
 		err = client.Put(wp, key, binMap)
 		if err != nil {
 			return err
 		}
 		fmt.Print(strconv.Itoa(i) + ", ")
 	}
+	fmt.Println("added records")
 
 	return nil
 }
@@ -255,8 +274,8 @@ func waitForClusterRollingRestart(t *testing.T, f *framework.Framework, aeroClus
 		}
 		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		protofdmax := newCluster.Status.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"].(int)
-		if protofdmax == tempConf {
+		protofdmax := newCluster.Status.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"].(int64)
+		if int(protofdmax) == tempConf {
 			err := fmt.Errorf("Cluster status can not be updated with intermediate conf value %d, it should have only final value", tempConf)
 			t.Logf(err.Error())
 			return false, err

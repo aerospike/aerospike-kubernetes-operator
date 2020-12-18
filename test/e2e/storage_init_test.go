@@ -17,6 +17,7 @@ import (
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
@@ -253,7 +254,7 @@ func writeDataToPodVolumes(storage aerospikev1alpha1.AerospikeStorageSpec, pod *
 }
 
 func writeDataToVolumeBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) {
-	_, _, err := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Path))
+	_, _, err := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Path))
 
 	if err != nil {
 		t.Errorf("Error creating file %v", err)
@@ -261,7 +262,7 @@ func writeDataToVolumeBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikeP
 }
 
 func writeDataToVolumeFileSystem(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) {
-	_, _, err := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Path))
+	_, _, err := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Path))
 
 	if err != nil {
 		t.Errorf("Error creating file %v", err)
@@ -269,12 +270,12 @@ func writeDataToVolumeFileSystem(pod *corev1.Pod, volume aerospikev1alpha1.Aeros
 }
 
 func hasDataBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) bool {
-	stdout, _, _ := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Path))
+	stdout, _, _ := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Path))
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
 func hasDataFilesystem(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) bool {
-	stdout, _, _ := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Path))
+	stdout, _, _ := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Path))
 	return strings.HasPrefix(stdout, magicBytes)
 }
 

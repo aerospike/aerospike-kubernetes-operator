@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	as "github.com/ashishshinde/aerospike-client-go"
-	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -123,7 +121,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					ServiceAccountName: aeroClusterServiceAccountName,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
-						Name:  "aerospike-init",
+						Name:  utils.AerospikeServerInitContainerName,
 						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
@@ -152,7 +150,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					}},
 
 					Containers: []corev1.Container{{
-						Name:            "aerospike-server",
+						Name:            utils.AerospikeServerContainerName,
 						Image:           aeroCluster.Spec.Image,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports:           ports,
@@ -199,7 +197,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 
 	updateStatefulSetSecretInfo(aeroCluster, st)
 
-	updateStatefulSetConfigMapVolumes(aeroCluster, st)
+	updateStatefulSetConfigMapVolumes(aeroCluster, st, rackState)
 
 	updateStatefulSetAffinity(aeroCluster, st, ls, rackState)
 	// Set AerospikeCluster instance as the owner and controller
@@ -1014,9 +1012,9 @@ func updateStatefulSetSecretInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster
 // Called while creating new cluster and also during rolling restart.
 func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
 	// Add new sidecars.
-	for i, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		found := false
-		for _, container := range st.Spec.Template.Spec.Containers {
+		for i, container := range st.Spec.Template.Spec.Containers {
 			if newSidecar.Name == container.Name {
 				// Update the sidecar in case something has changed.
 				st.Spec.Template.Spec.Containers[i] = newSidecar
@@ -1052,8 +1050,8 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 }
 
 // Called while creating new cluster and also during rolling restart.
-func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-	configMaps, _ := aeroCluster.Spec.Storage.GetConfigMaps()
+func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
 
 	// Add to stateful set volumes.
 	for _, configMapVolume := range configMaps {
@@ -1154,6 +1152,7 @@ func removeConfigMapVolumeMount(containers []corev1.Container, volume corev1.Vol
 }
 
 func updateStatefulSetAerospikeServerContainerResources(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
+	// These resource is for main aerospike container. Other sidecar can mention their own resource
 	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
 	// st.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
 	// 	Requests: corev1.ResourceList{
@@ -1313,7 +1312,7 @@ func truncateString(str string, num int) string {
 func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
 
-	hashPath, err := getHash(path)
+	hashPath, err := utils.GetHash(path)
 	if err != nil {
 		return "", err
 	}
@@ -1386,15 +1385,4 @@ func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospike
 		rackList = append(rackList, rack)
 	}
 	return rackList
-}
-
-func getHash(str string) (string, error) {
-	var digest []byte
-	hash := ripemd160.New()
-	hash.Reset()
-	if _, err := hash.Write([]byte(str)); err != nil {
-		return "", err
-	}
-	res := hash.Sum(digest)
-	return hex.EncodeToString(res), nil
 }

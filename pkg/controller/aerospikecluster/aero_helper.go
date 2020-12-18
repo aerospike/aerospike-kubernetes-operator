@@ -56,6 +56,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
+	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConn(aeroCluster)
 	if err != nil {
 		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
@@ -70,6 +71,8 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 		logger.Debug("Waiting for migrations to be zero")
 		time.Sleep(retryInterval)
 
+		// This should fail if coldstart is going on.
+		// Info command in coldstarting node should give error, is it? confirm.
 		isStable, err = deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
 		if err != nil {
 			return reconcileError(err)

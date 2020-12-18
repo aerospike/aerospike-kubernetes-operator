@@ -53,19 +53,19 @@ CFG=/etc/aerospike/aerospike.template.conf
 # ------------------------------------------------------------------------------
 # Update label in pod
 # ------------------------------------------------------------------------------
-echo "Update label in pod"
+# echo "Update label in pod"
 
 # Get ripemd hash and clean it
-CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
-echo $CONF_HASH
+# CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
+# echo $CONF_HASH
 
-apt-get update && apt-get install -y apt-transport-https gnupg2 curl
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
-apt-get update
-apt-get install -y kubectl
+# apt-get update && apt-get install -y apt-transport-https gnupg2 curl
+# curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+# echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
+# apt-get update
+# apt-get install -y kubectl
 
-kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
+# kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
 
 # ------------------------------------------------------------------------------
 # Update node and rack ids configuration file
@@ -395,12 +395,25 @@ def getEndpoints(addressType):
   # Address type not defined.
   return []
 
+def readFile(filePath):
+  file = open(filePath,mode='r') 
+  data = file.read()
+  file.close()
+  return data
+
 podPort = os.environ['POD_PORT']
 servicePort = os.environ['MAPPED_PORT']
 
 if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABLED']:
   podPort = os.environ['POD_TLSPORT']
   servicePort = os.environ['MAPPED_TLSPORT']
+
+# Get AerospikeConfingHash and NetworkPolicyHash
+confHashFile = '/configs/aerospikeConfHash'
+networkPolicyHashFile = '/configs/networkPolicyHash'
+
+confHash = readFile(confHashFile)
+newtworkPolicyHash = readFile(networkPolicyHashFile)
 
 value = {
     'image': os.environ.get('POD_IMAGE',''),
@@ -415,6 +428,8 @@ value = {
        'tlsName': os.environ.get('MY_POD_TLS_NAME','')
      },
     'initializedVolumePaths': initialized,
+    'aerospikeConfigHash': confHash,
+    'networkPolicyHash': newtworkPolicyHash,
 }
 
 # Add access type to pod status variable name.

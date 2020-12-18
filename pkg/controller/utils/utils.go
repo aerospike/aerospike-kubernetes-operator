@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	log "github.com/inconshreveable/log15"
+	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -53,6 +55,11 @@ const (
 	ReasonRegistryUnavailable = "RegistryUnavailable"
 
 	aerospikeConfConfigMapPrefix = "aerospike-conf"
+)
+
+const (
+	AerospikeServerContainerName     string = "aerospike-server"
+	AerospikeServerInitContainerName string = "aerospike-init"
 )
 
 // ClusterNamespacedName return namespaced name
@@ -216,7 +223,7 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
 func GetDesiredImage(aeroCluster *aerospikev1alpha1.AerospikeCluster, containerName string) (string, error) {
-	if containerName == "aerospike-server" {
+	if containerName == AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
 
@@ -337,4 +344,16 @@ func GetPodNames(pods []corev1.Pod) []string {
 func PrettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "    ")
 	return string(s)
+}
+
+// GetHash return ripmd160 hash for given string
+func GetHash(str string) (string, error) {
+	var digest []byte
+	hash := ripemd160.New()
+	hash.Reset()
+	if _, err := hash.Write([]byte(str)); err != nil {
+		return "", err
+	}
+	res := hash.Sum(digest)
+	return hex.EncodeToString(res), nil
 }

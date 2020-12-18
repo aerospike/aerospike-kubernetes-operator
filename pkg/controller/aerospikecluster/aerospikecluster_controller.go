@@ -358,61 +358,61 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) needsRollingRestart(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, logger log.Logger) bool {
-	// Never set to false later on.
-	// True value not optimized so that we check and log all changes that have hapened.
-	needsRollingRestart := false
+// func (r *ReconcileAerospikeCluster) needsRollingRestart(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, logger log.Logger) bool {
+// 	// Never set to false later on.
+// 	// True value not optimized so that we check and log all changes that have hapened.
+// 	needsRollingRestart := false
 
-	// Aerospike config nil in status indicates that AerospikeCluster object is created but status is not successfully updated even once
-	if aeroCluster.Status.AerospikeConfig != nil {
-		// Check if rack specific spec has changed.
-		for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
-			if rackState.Rack.ID == statusRack.ID {
-				if !reflect.DeepEqual(rackState.Rack.AerospikeConfig, statusRack.AerospikeConfig) {
-					needsRollingRestart = true
-					logger.Info("Rack AerospikeConfig changed. Need rolling restart", log.Ctx{"oldRackConfig": statusRack, "newRackConfig": rackState.Rack})
-				}
+// 	// Aerospike config nil in status indicates that AerospikeCluster object is created but status is not successfully updated even once
+// 	if aeroCluster.Status.AerospikeConfig != nil {
+// 		// Check if rack specific spec has changed.
+// 		for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
+// 			if rackState.Rack.ID == statusRack.ID {
+// 				if !reflect.DeepEqual(rackState.Rack.AerospikeConfig, statusRack.AerospikeConfig) {
+// 					needsRollingRestart = true
+// 					logger.Info("Rack AerospikeConfig changed. Need rolling restart", log.Ctx{"oldRackConfig": statusRack, "newRackConfig": rackState.Rack})
+// 				}
 
-				if statusRack.Storage.NeedsRollingRestart(rackState.Rack.Storage) {
-					needsRollingRestart = true
-					logger.Info("Rack storage changed. Need rolling restart")
-				}
-				break
-			}
-		}
+// 				if statusRack.Storage.NeedsRollingRestart(rackState.Rack.Storage) {
+// 					needsRollingRestart = true
+// 					logger.Info("Rack storage changed. Need rolling restart")
+// 				}
+// 				break
+// 			}
+// 		}
 
-		// Check is global spec has changed.
+// 		// Check is global spec has changed.
 
-		// Network policy.
-		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeNetworkPolicy, aeroCluster.Status.AerospikeNetworkPolicy) {
-			needsRollingRestart = true
-			logger.Info("Aerospike network policy changed. Need rolling restart")
-		}
+// 		// Network policy.
+// 		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeNetworkPolicy, aeroCluster.Status.AerospikeNetworkPolicy) {
+// 			needsRollingRestart = true
+// 			logger.Info("Aerospike network policy changed. Need rolling restart")
+// 		}
 
-		// Pod spec.
-		if !reflect.DeepEqual(aeroCluster.Spec.PodSpec, aeroCluster.Status.PodSpec) {
-			needsRollingRestart = true
-			logger.Info("Aerospike pod spec changed. Need rolling restart")
-		}
+// 		// Pod spec.
+// 		if !reflect.DeepEqual(aeroCluster.Spec.PodSpec, aeroCluster.Status.PodSpec) {
+// 			needsRollingRestart = true
+// 			logger.Info("Aerospike pod spec changed. Need rolling restart")
+// 		}
 
-		// Secrets
-		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret) {
-			// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
-			needsRollingRestart = true
-			logger.Info("Aerospike config secret changed. Need rolling restart")
-		}
+// 		// Secrets
+// 		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret) {
+// 			// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
+// 			needsRollingRestart = true
+// 			logger.Info("Aerospike config secret changed. Need rolling restart")
+// 		}
 
-		// Resources.
-		if aeroCluster.Spec.Resources != nil || aeroCluster.Status.Resources != nil {
-			if isClusterResourceUpdated(aeroCluster) {
-				// Resource are updated, need rolling restart
-				needsRollingRestart = true
-				logger.Info("Resources changed. Need rolling restart")
-			}
-		}
-	}
-	return needsRollingRestart
-}
+// 		// Resources.
+// 		if aeroCluster.Spec.Resources != nil || aeroCluster.Status.Resources != nil {
+// 			if isClusterResourceUpdated(aeroCluster) {
+// 				// Resource are updated, need rolling restart
+// 				needsRollingRestart = true
+// 				logger.Info("Resources changed. Need rolling restart")
+// 			}
+// 		}
+// 	}
+// 	return needsRollingRestart
+// }
 
 func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
@@ -802,7 +802,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 
 	updateStatefulSetSecretInfo(aeroCluster, found)
 
-	updateStatefulSetConfigMapVolumes(aeroCluster, found)
+	updateStatefulSetConfigMapVolumes(aeroCluster, found, rackState)
 
 	logger.Info("Updating statefulset spec")
 
@@ -838,47 +838,152 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 }
 
 func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (bool, error) {
-	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
+	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID), "Pod": pod.Name})
+
+	needRollingRestartPod := false
 
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig == nil {
-		return false, nil
+		return needRollingRestartPod, nil
 	}
 
-	confStr, err := configmap.BuildConfigTemplate(aeroCluster, rackState.Rack)
+	// confStr, err := configmap.BuildConfigTemplate(aeroCluster, rackState.Rack)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// confHash, err := utils.GetHash(confStr)
+	// if err != nil {
+	// 	return false, err
+	// }
+
+	// currentConfHash := pod.Annotations["aerospike-config-hash"]
+
+	// if currentConfHash != confHash {
+	// 	logger.Info("Pod config not matching with expected config. Needs rolling restart", log.Ctx{"expectedConfHash": confHash, "currentConfHash": currentConfHash})
+	// 	return true, nil
+	// }
+
+	cmName := getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID)
+	confMap := &corev1.ConfigMap{}
+	err := r.client.Get(context.TODO(), cmName, confMap)
 	if err != nil {
 		return false, err
 	}
-	confHash, err := getHash(confStr)
-	if err != nil {
-		return false, err
+	requiredConfHash := confMap.Data[configmap.AerospikeConfHashFileName]
+	requiredNetworkPolicyHash := confMap.Data[configmap.NetworkPolicyHashKeyFileName]
+
+	podStatus := aeroCluster.Status.Pods[pod.Name]
+
+	// Check if aerospikeConfig is updated
+	if podStatus.AerospikeConfigHash != requiredConfHash {
+		needRollingRestartPod = true
+		logger.Info("AerospikeConfig changed. Need rolling restart", log.Ctx{
+			"requiredHash": requiredConfHash,
+			"currentHash":  podStatus.AerospikeConfigHash})
 	}
 
-	currentConfHash := pod.Annotations["aerospike-config-hash"]
-
-	if currentConfHash != confHash {
-		logger.Info("Pod config not matching with expected config. Needs rolling restart", log.Ctx{"expectedConfHash": confHash, "currentConfHash": currentConfHash})
-		return true, nil
+	// Check if networkPolicy is updated
+	if podStatus.NetworkPolicyHash != requiredNetworkPolicyHash {
+		needRollingRestartPod = true
+		logger.Info("Aerospike network policy changed. Need rolling restart", log.Ctx{
+			"requiredHash": requiredNetworkPolicyHash,
+			"currentHash":  podStatus.NetworkPolicyHash})
 	}
 
 	// Check if secret is updated
-	if isPodAerospikeConfigSecretUpdated(aeroCluster, pod) {
-		return true, nil
+	if isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
+		needRollingRestartPod = true
+		logger.Info("AerospikeConfigSecret changed. Need rolling restart")
 	}
 
 	// Check if resources are updated
-	if isPodResourceUpdated(aeroCluster, pod) {
-		return true, nil
+	if isResourceUpdatedInAeroCluster(aeroCluster, pod) {
+		needRollingRestartPod = true
+		logger.Info("Aerospike resources changed. Need rolling restart")
 	}
 
-	// PODSPEC
-	// NETWORK
-	// RACKSTORAGE/CONFIGMAP
+	// Check if podSpec is updated
+	if isPodSpecUpdatedInAeroCluster(aeroCluster, pod) {
+		needRollingRestartPod = true
+		logger.Info("Aerospike podSpec changed. Need rolling restart")
+	}
 
-	return false, nil
+	// Check if RACKSTORAGE/CONFIGMAP is updated
+	if isRackConfigMapsUpdatedInAeroCluster(aeroCluster, rackState, pod) {
+		needRollingRestartPod = true
+		logger.Info("Aerospike rack storage configMaps changed. Need rolling restart")
+	}
+
+	return needRollingRestartPod, nil
 }
 
-func isPodResourceUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
+func isRackConfigMapsUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
+	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
+
+	var volumesToBeMatched []corev1.Volume
+	for _, volume := range pod.Spec.Volumes {
+		if volume.ConfigMap == nil ||
+			volume.Name == confDirName ||
+			volume.Name == initConfDirName {
+			continue
+		}
+		volumesToBeMatched = append(volumesToBeMatched, volume)
+	}
+
+	if len(configMaps) != len(volumesToBeMatched) {
+		return true
+	}
+
+	for _, configMapVolume := range configMaps {
+		// Ignore error since its not possible.
+		pvcName, _ := getPVCName(configMapVolume.Path)
+		found := false
+		for _, volume := range volumesToBeMatched {
+			if volume.Name == pvcName {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return true
+		}
+
+	}
+	return false
+}
+
+func isPodSpecUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
+	var extraPodContainers []corev1.Container
+	for _, podContainer := range pod.Spec.Containers {
+		if podContainer.Name == utils.AerospikeServerContainerName ||
+			podContainer.Name == utils.AerospikeServerInitContainerName {
+			// Check any other container also if added in default container list of statefulset
+			continue
+		}
+		extraPodContainers = append(extraPodContainers, podContainer)
+	}
+
+	if len(extraPodContainers) != len(aeroCluster.Spec.PodSpec.Sidecars) {
+		return true
+	}
+	for _, sideCar := range aeroCluster.Spec.PodSpec.Sidecars {
+		found := false
+		for _, podContainer := range extraPodContainers {
+			if sideCar.Name == podContainer.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// SideCar not present in podSpec
+			return true
+		}
+	}
+	return false
+}
+
+func isResourceUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
 	res := aeroCluster.Spec.Resources
 	if res == nil {
 		res = &corev1.ResourceRequirements{}
@@ -891,7 +996,7 @@ func isPodResourceUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod c
 	return false
 }
 
-func isPodAerospikeConfigSecretUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
+func isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
 	// TODO: Should we restart when secret is removed completely
 	// Can secret be even empty for enterprise cluster (feature-key is alsways required)?
 	if aeroCluster.Spec.AerospikeConfigSecret.SecretName != "" {
