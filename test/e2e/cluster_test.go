@@ -44,13 +44,11 @@ func TestAerospikeCluster(t *testing.T) {
 	t.Run("UpdateCluster", func(t *testing.T) {
 		UpdateClusterTest(t, f, ctx)
 	})
-
 	// CPU, Mem resource related
 	t.Run("ClusterResources", func(t *testing.T) {
 		ClusterResourceTest(t, f, ctx)
 	})
 
-	// Rack related
 	t.Run("RackEnabledCluster", func(t *testing.T) {
 		RackEnabledClusterTest(t, f, ctx)
 	})
@@ -661,10 +659,11 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 				t.Run("NsConf", func(t *testing.T) {
 					// Ns conf
 					// Rack-id
-					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
-					err := deployCluster(t, f, ctx, aeroCluster)
-					validateError(t, err, "should fail for setting rack-id")
+					// aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+					// aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+					// err := deployCluster(t, f, ctx, aeroCluster)
+					// validateError(t, err, "should fail for setting rack-id")
 				})
 
 				t.Run("ServiceConf", func(t *testing.T) {
@@ -758,6 +757,7 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 	if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Run("Validation", func(t *testing.T) {
 
 		t.Run("InvalidImage", func(t *testing.T) {
@@ -863,10 +863,12 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 				t.Run("NsConf", func(t *testing.T) {
 					// Ns conf
 					// Rack-id
-					aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-					aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
-					err := f.Client.Update(goctx.TODO(), aeroCluster)
-					validateError(t, err, "should fail for setting rack-id")
+					// aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
+					// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+					// // Rack-id is checked only for rack enabled namespaces.
+					// aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+					// err := f.Client.Update(goctx.TODO(), aeroCluster)
+					// validateError(t, err, "should fail for setting rack-id")
 				})
 
 				t.Run("ServiceConf", func(t *testing.T) {
@@ -927,6 +929,9 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 		})
 
 		t.Run("InvalidAerospikeConfigSecret", func(t *testing.T) {
+			if err := deleteCluster(t, f, ctx, aeroCluster); err != nil {
+				t.Fatal(err)
+			}
 			// Will be used in Update
 			aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 2, latestClusterImage)
 			if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
@@ -957,6 +962,8 @@ func negativeUpdateClusterValidationTest(t *testing.T, f *framework.Framework, c
 			})
 		})
 	})
+
+	deleteCluster(t, f, ctx, aeroCluster)
 }
 
 func scaleUpClusterTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, clusterNamespacedName types.NamespacedName, increaseBy int32) error {

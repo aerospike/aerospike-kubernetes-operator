@@ -39,7 +39,7 @@ spec:
       containers:
         - name: aerospike-kubernetes-operator-test
           # Replace this with the built image name
-          image: aerospike/aerospike-kubernetes-operator:v0.0.11-beta
+          image: aerospike/aerospike-kubernetes-operator:v0.0.12-beta
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always
@@ -116,7 +116,7 @@ rules:
   resources:
   - pods
   verbs:
-  - get
+  - '*'
 - apiGroups:
   - ""
   resources:
@@ -192,6 +192,12 @@ roleRef:
 #   - aerospike.com
 #   resources:
 #   - '*'
+#   verbs:
+#   - '*'
+# - apiGroups:
+#   - ""
+#   resources:
+#   - pods
 #   verbs:
 #   - '*'
 # ---

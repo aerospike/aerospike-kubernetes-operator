@@ -154,7 +154,7 @@ func TestStorageInit(t *testing.T) {
 
 	if aeroCluster != nil {
 
-		// Update the volumes to cascade delete so that volumes are cleanup.
+		// Update the volumes to cascade delete so that volumes are cleaned up.
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
 		err := aerospikeClusterCreateUpdate(aeroCluster, ctx, t)

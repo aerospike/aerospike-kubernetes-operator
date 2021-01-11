@@ -93,12 +93,17 @@ func createClusterRole(f *framework.Framework, ctx *framework.TestCtx, name stri
 		Rules: []rbac.PolicyRule{
 			{
 				APIGroups: []string{""},
-				Resources: []string{"nodes", "services"},
+				Resources: []string{"pods", "nodes", "services"},
 				Verbs:     []string{"get", "list"},
 			},
 			{
 				APIGroups: []string{"aerospike.com"},
 				Resources: []string{"*"},
+				Verbs:     []string{"*"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
 				Verbs:     []string{"*"},
 			},
 		},

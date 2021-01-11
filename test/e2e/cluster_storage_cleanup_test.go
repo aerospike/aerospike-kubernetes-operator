@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -36,7 +37,7 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 
 	t.Run("Positive", func(t *testing.T) {
 		// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 4, false)
 		racks := getDummyRackConf(1, 2, 3, 4)
 		aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
@@ -74,6 +75,12 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 			aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &remove
 			aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &remove
 
+			if err := updateAndWait(t, f, ctx, aeroCluster); err != nil {
+				t.Fatal(err)
+			}
+
+			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
+
 			// RackID to be used to check if pvc are removed
 			racks := aeroCluster.Spec.RackConfig.Racks
 			lastRackID := racks[len(racks)-1].ID
@@ -108,6 +115,12 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 			vRemove := false
 			aeroCluster.Spec.Storage.Volumes[0].InputCascadeDelete = &vRemove
 
+			if err := updateAndWait(t, f, ctx, aeroCluster); err != nil {
+				t.Fatal(err)
+			}
+
+			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
+
 			// RackID to be used to check if pvc are removed
 			racks := aeroCluster.Spec.RackConfig.Racks
 			lastRackID := racks[len(racks)-1].ID
@@ -139,6 +152,12 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 					found = true
 					continue
 				}
+
+				if utils.IsPVCTerminating(&pvc) {
+					// Ignore PVC that are being terminated.
+					continue
+				}
+
 				if strings.Contains(pvc.Name, stsName) {
 					t.Fatalf("PVC %s not removed for cluster sts %s", pvc.Name, stsName)
 				}
@@ -175,11 +194,11 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 	// (nil -> val), (val -> nil), (val1 -> val2)
 
 	t.Run("Positive", func(t *testing.T) {
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
 		devName := "/test/dev/rackstorage"
-		racks[0].AerospikeConfig = aerospikev1alpha1.Values{
+		racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
 			"namespaces": []interface{}{
 				map[string]interface{}{
 					"name": "test",
@@ -191,12 +210,13 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		}
 		remove := true
 		// Rack is completely replaced
-		racks[0].Storage = aerospikev1alpha1.AerospikeStorageSpec{
+		racks[0].InputStorage = &aerospikev1alpha1.AerospikeStorageSpec{
 			BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 				InputCascadeDelete: &remove,
 			},
 			FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 				InputCascadeDelete: &remove,
+				InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 			},
 			Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 				{
@@ -274,10 +294,10 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 	t.Run("Negative", func(t *testing.T) {
 		t.Run("BadAerospikeConfig", func(t *testing.T) {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
 			racks := getDummyRackConf(1)
 			// AerospikeConfig is only patched
-			racks[0].AerospikeConfig = aerospikev1alpha1.Values{
+			racks[0].InputAerospikeConfig = &aerospikev1alpha1.Values{
 				"namespaces": []interface{}{
 					map[string]interface{}{
 						"name": "test",
@@ -288,7 +308,11 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 				},
 			}
 			// Rack is completely replaced
-			racks[0].Storage = aerospikev1alpha1.AerospikeStorageSpec{
+			racks[0].InputStorage = &aerospikev1alpha1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/opt/aerospike",
@@ -310,7 +334,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		t.Run("Update", func(t *testing.T) {
 			t.Run("NilToValue", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 				if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
@@ -329,7 +353,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
-				racks[0].Storage = getStorage(volumes)
+				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
@@ -340,7 +364,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 			})
 			t.Run("ValueToNil", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -352,7 +376,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
-				racks[0].Storage = getStorage(volumes)
+				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 				if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
 					t.Fatal(err)
@@ -361,7 +385,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 				// Update storage
 				aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 				// Rack is completely replaced
-				racks[0].Storage = aerospikev1alpha1.AerospikeStorageSpec{}
+				racks[0].InputStorage = &aerospikev1alpha1.AerospikeStorageSpec{}
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 				err := f.Client.Update(goctx.TODO(), aeroCluster)
 				validateError(t, err, "should fail for updating Storage. Cannot be updated")
@@ -371,7 +395,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 
 			t.Run("ValueToValue", func(t *testing.T) {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -383,7 +407,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
-				racks[0].Storage = getStorage(volumes)
+				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
 				if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
@@ -402,7 +426,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
-				racks[0].Storage = getStorage(volumes)
+				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
 				err := f.Client.Update(goctx.TODO(), aeroCluster)
@@ -414,7 +438,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 		// Add test while rack using common aeroConfig but local storage, fail for mismatch
 		t.Run("CommonConfigLocalStorage", func(t *testing.T) {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 			racks := getDummyRackConf(1)
 			// Rack is completely replaced
 			volumes := []aerospikev1alpha1.AerospikePersistentVolumeSpec{
@@ -425,7 +449,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 				},
 			}
-			racks[0].Storage = getStorage(volumes)
+			racks[0].InputStorage = getStorage(volumes)
 			aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
 			err := deployCluster(t, f, ctx, aeroCluster)
@@ -437,7 +461,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 
 }
 
-func getStorage(volumes []aerospikev1alpha1.AerospikePersistentVolumeSpec) aerospikev1alpha1.AerospikeStorageSpec {
+func getStorage(volumes []aerospikev1alpha1.AerospikePersistentVolumeSpec) *aerospikev1alpha1.AerospikeStorageSpec {
 	cascadeDelete := true
 	storage := aerospikev1alpha1.AerospikeStorageSpec{
 		BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
@@ -445,10 +469,11 @@ func getStorage(volumes []aerospikev1alpha1.AerospikePersistentVolumeSpec) aeros
 		},
 		FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 			InputCascadeDelete: &cascadeDelete,
+			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 		},
 		Volumes: volumes,
 	}
-	return storage
+	return &storage
 }
 
 func truncateString(str string, num int) string {
@@ -461,7 +486,7 @@ func truncateString(str string, num int) string {
 func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
 
-	hashPath, err := getHashForPVCPath(path)
+	hashPath, err := getHash(path)
 	if err != nil {
 		return "", err
 	}
@@ -471,15 +496,14 @@ func getPVCName(path string) (string, error) {
 		return "", err
 	}
 	newPath := reg.ReplaceAllString(path, "-")
-
-	return hashPath + "-" + truncateString(newPath, 50), nil
+	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
 }
 
-func getHashForPVCPath(path string) (string, error) {
+func getHash(str string) (string, error) {
 	var digest []byte
 	hash := ripemd160.New()
 	hash.Reset()
-	if _, err := hash.Write([]byte(path)); err != nil {
+	if _, err := hash.Write([]byte(str)); err != nil {
 		return "", err
 	}
 	res := hash.Sum(digest)
