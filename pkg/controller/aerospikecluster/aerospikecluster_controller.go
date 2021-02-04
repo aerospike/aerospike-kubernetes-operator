@@ -759,7 +759,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 		}
 
 		if !started {
-			logger.Error("Pos is not running or ready. Pod might also be terminating", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
+			logger.Error("Pod is not running or ready. Pod might also be terminating", log.Ctx{"podName": pod.Name, "status": pod.Status.Phase, "DeletionTimestamp": pod.DeletionTimestamp})
 		}
 
 	}
