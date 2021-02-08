@@ -1,0 +1,51 @@
+apiVersion: aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: {{ template "aerospike-cluster.commonName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "aerospike-cluster.commonName" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+spec:
+  size: {{ .Values.replicas | default 3 }}
+  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "5.2.0.7" }}
+  multiPodPerHost: {{ .Values.multiPodPerHost | default true }}
+
+  {{- with .Values.aerospikeAccessControl }}
+  aerospikeAccessControl: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- with .Values.aerospikeConfig }}
+  aerospikeConfig: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  # Must have
+  # to pass in feature key file
+  # TODO: Operator must support mounting multiple secrets. aerospikeConfigSecret currently takes only one secret source
+  aerospikeConfigSecret:
+    secretName: {{ .Release.Name }}-secrets
+    mountPath:  /etc/aerospike/secrets/
+
+  {{- with .Values.aerospikeNetworkPolicy }}
+  aerospikeNetworkPolicy: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- with .Values.podSpec }}
+  podSpec: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- with .Values.rackConfig }}
+  rackConfig: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- with .Values.storage }}
+  storage: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- with .Values.validationPolicy }}
+  validationPolicy: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  resources:
+{{ toYaml .Values.resources | indent 4 }}

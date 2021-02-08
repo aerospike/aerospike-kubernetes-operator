@@ -1,0 +1,14 @@
+apiVersion: v2
+type: application
+name: aerospike-kubernetes-operator
+
+version: 0.1.0
+appVersion: 0.0.12
+
+description: A Helm chart for Aerospike Kubernetes Operator
+
+sources:
+  - https://github.com/aerospike/aerospike-kubernetes-operator
+maintainers:
+  - name: Aerospike
+    email: support@aerospike.com

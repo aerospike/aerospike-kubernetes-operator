@@ -1,0 +1,70 @@
+## Number of operator replicas
+replicas: 2
+
+## Operator image
+image:
+  repository: aerospike/aerospike-kubernetes-operator
+  tag: v0.0.12-beta
+  # pullPolicy: IfNotPresent
+
+## Create RBAC resources
+rbac:
+  create: true
+  # serviceAccountName: "default"
+
+
+##  Operator configurations
+# containerPort: 8443
+# watchNamespaces: "default"
+# logLevel: "debug"
+
+## Resources - limits / requests
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 64Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 64Mi
+
+## Affinity rules
+affinity: {}
+  # nodeAffinity:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: kubernetes.io/hostname
+  #         operator: In
+  #         values:
+  #         - <Kubernetes Host>
+
+# Extra environment variables that will be passed into the operator pods
+extraEnv: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Deployment annotations and labels
+# Deployment labels are inherited by the pods automatically
+annotations: {}
+labels: {}
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Service configuration
+service: {}
+  # labels: {}
+  # annotations: {}
+  # port: 443
+  # type: ClusterIP
+
+# Pod security context
+podSecurityContext: {}
+
+# Container security context
+securityContext: {}

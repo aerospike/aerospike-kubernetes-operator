@@ -1,0 +1,83 @@
+## Aerospike cluster size
+replicas: 3
+
+## Aerospike server docker image
+image:
+  repository: aerospike/aerospike-server-enterprise
+  tag: 5.2.0.7
+
+## Multi pod per host
+# multiPodPerHost: true
+
+## Aerospike access control configuration
+aerospikeAccessControl: {}
+  # users:
+  #   - name: admin
+  #     secretName: auth-secret
+  #     roles:
+  #       - sys-admin
+  #       - user-admin
+  # adminPolicy:
+  #   # timeout in milliseconds
+  #   timeout: 1000
+  # roles:
+  #   - name:
+  #     privileges: []
+  #     whitelist: []
+
+## Aerospike Configuration
+aerospikeConfig:
+  service:
+    feature-key-file: /etc/aerospike/secrets/features.conf
+
+  namespaces:
+    - name: test
+      memory-size: 1073741824 # 1GiB
+      replication-factor: 2
+      storage-engine: memory
+
+
+## Secrets
+secrets: {}
+#   # Provide only base64 encoded values
+#   aerospike.spkesan.com.cert.pem: <base64-encoded-value>
+#   aerospike.spkesan.com.encrypted.key.pem: <base64-encoded-value>
+#   aerospike.spkesan.com.key.pem: <base64-encoded-value>
+#   www.spkesan.com.cacert.pem: <base64-encoded-value>
+
+## Dynamic secret (use only with helm install/upgrade command. Not to be specified in values.yaml file)
+# featureKeyFile
+
+## Network policy
+aerospikeNetworkPolicy:
+  access: pod
+  alternateAccess: hostExternal
+  # tlsAccess: pod
+  # tlsAlternateAccess: hostExternal
+
+## Pod spec
+podSpec: {}
+  # sidecars:
+  #   - name: aerospike-prometheus-exporter
+  #     image: "aerospike/aerospike-prometheus-exporter:1.1.6"
+  #     ports:
+  #     - containerPort: 9145
+  #       name: exporter
+
+## Rack configuration
+rackConfig: {}
+
+## Storage configuration
+storage: {}
+  # volumes: []
+
+## Validation policy
+validationPolicy:
+  skipWorkDirValidate: true
+
+## Resource requests and limits
+# TODO: AerospikeCluster custom resource must accept null values for resources and assume defaults.
+resources:
+  requests:
+    memory: 1Gi
+    cpu: 100m
