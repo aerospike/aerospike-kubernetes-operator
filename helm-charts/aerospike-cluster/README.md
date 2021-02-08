@@ -41,14 +41,14 @@ helm install aerospike aerospike/aerospike-cluster \
 | `image.tag` | Aerospike server container image tag | `5.2.0.7` |
 | `multiPodPerHost` | Set this to `true` to allow scheduling multiple pods per kubernetes node | `true` |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
-| `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
+| `aerospikeConfig` | Aerospike configuration | `aerospikeConfig.service.feature-key-file=/etc/aerospike/secrets/features.conf`,<br>`aerospikeConfig.namespaces[0].name=test`,<br>`aerospikeConfig.namespaces[0].memory-size=1073741824`,<br>`aerospikeConfig.namespaces[0].replication-factor=2`,<br>`aerospikeConfig.namespaces[0].storage-engine=memory` |
 | `secrets` | Secrets to be mounted into containers at `/etc/aerospike/secrets/` | `{}` (nil) |
 | `featureKeyFile` | Dynamic secret to pass in feature key file to run Aerospike enterprise edition (use only with `helm install` / `helm upgrade` command. Not to be specified in `values.yaml` file) | `nil` |
-| `aerospikeNetworkPolicy` | Network policy (client access configuration) | `{}` (nil) |
+| `aerospikeNetworkPolicy` | Network policy (client access configuration) | `aerospikeNetworkPolicy.access=pod`,<br>`aerospikeNetworkPolicy.alternateAccess=hostExternal` |
 | `podSpec` | Aerospike pod spec configuration | `{}` (nil) |
 | `rackConfig` | Aerospike rack configuration | `{}` (nil) |
 | `storage` | Aerospike pod storage configuration | `{}` (nil) |
-| `validationPolicy` | Validation policy | `{}` (nil) |
+| `validationPolicy` | Validation policy | `validationPolicy.skipWorkDirValidate=true` |
 | `resources` | Resource requests and limits for Aerospike pod | `requests.memory=1Gi, requests.cpu=100m` |
 
 ### Configurations Explained
