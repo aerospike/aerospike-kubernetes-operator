@@ -19,16 +19,24 @@ helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operato
 
 ### Deploy Aerospike Cluster
 
+Create a secret containing aerospike feature key file - `features.conf`,
+
 ```sh
-helm install aerospike aerospike/aerospike-cluster \
-    --set-file featureKeyFile=<path-to-feature-key-file>
+kubectl create secret generic aerospike-secrets --from-file=<path-to-features.conf-file>
 ```
 
-*Note that this command assumes few defaults and deploys an aerospike cluster with no data persistence. It is recommended to create a separate YAML file with configurations as per your requirements and use it with `helm install`.*
+Install the chart,
 
 ```sh
 helm install aerospike aerospike/aerospike-cluster \
-    --set-file featureKeyFile=<path-to-feature-key-file> \
+    --set devMode=true \
+    --set aerospikeSecretName=aerospike-secrets
+```
+
+*Note that this command assumes few defaults and deploys an aerospike cluster in **"dev"** mode with no data persistence. It is recommended to create a separate YAML file with configurations as per your requirements and use it with `helm install`.*
+
+```sh
+helm install aerospike aerospike/aerospike-cluster \
     -f <customized-values-yaml-file>`
 ```
 
@@ -41,15 +49,42 @@ helm install aerospike aerospike/aerospike-cluster \
 | `image.tag` | Aerospike server container image tag | `5.2.0.7` |
 | `multiPodPerHost` | Set this to `true` to allow scheduling multiple pods per kubernetes node | `true` |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
-| `aerospikeConfig` | Aerospike configuration | `aerospikeConfig.service.feature-key-file=/etc/aerospike/secrets/features.conf`,<br>`aerospikeConfig.namespaces[0].name=test`,<br>`aerospikeConfig.namespaces[0].memory-size=1073741824`,<br>`aerospikeConfig.namespaces[0].replication-factor=2`,<br>`aerospikeConfig.namespaces[0].storage-engine=memory` |
-| `secrets` | Secrets to be mounted into containers at `/etc/aerospike/secrets/` | `{}` (nil) |
-| `featureKeyFile` | Dynamic secret to pass in feature key file to run Aerospike enterprise edition (use only with `helm install` / `helm upgrade` command. Not to be specified in `values.yaml` file) | `nil` |
-| `aerospikeNetworkPolicy` | Network policy (client access configuration) | `aerospikeNetworkPolicy.access=pod`,<br>`aerospikeNetworkPolicy.alternateAccess=hostExternal` |
+| `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
+| `aerospikeSecretName`| Secret containing Aerospike feature key file, TLS certificates etc. | `""` |
+| `aerospikeSecretMountPath` | Mount path inside for the `aerospikeSecretName` secret | `/etc/aerospike/secrets/` |
+| `aerospikeNetworkPolicy` | Network policy (client access configuration) | `{}` (nil) |
 | `podSpec` | Aerospike pod spec configuration | `{}` (nil) |
 | `rackConfig` | Aerospike rack configuration | `{}` (nil) |
 | `storage` | Aerospike pod storage configuration | `{}` (nil) |
-| `validationPolicy` | Validation policy | `validationPolicy.skipWorkDirValidate=true` |
-| `resources` | Resource requests and limits for Aerospike pod | `requests.memory=1Gi, requests.cpu=100m` |
+| `validationPolicy` | Validation policy | `{}` (nil) |
+| `resources` | Resource requests and limits for Aerospike pod | `{}` (nil) |
+| `devMode` | Deploy Aerospike cluster in "dev" mode | `false` |
+
+### Default values in `devMode=true` mode:
+
+The following values are set as defaults when the cluster is deployed in "dev" mode.
+
+```yaml
+aerospikeConfig:
+  service:
+    feature-key-file: /etc/aerospike/secrets/features.conf
+
+  namespaces:
+    - name: test
+      memory-size: 1073741824
+      replication-factor: 2
+      storage-engine: memory
+
+aerospikeSecretMountPath: /etc/aerospike/secrets/
+
+validationPolicy:
+  skipWorkDirValidate: true
+
+resources:
+  requests:
+    memory: 1Gi
+    cpu: 100m
+```
 
 ### Configurations Explained
 
@@ -132,21 +167,6 @@ helm install aerospike aerospike/aerospike-cluster \
           data-in-memory: true
     ```
 
-- `secrets`
-    - Fields
-        - Format,
-
-          `<secretName>:<base64EncodedValue>`
-
-    Example,
-    ```yaml
-    secrets:
-      server1.aerospike.com.cert.pem: <SomeBase64Value>
-      server1.aerospike.com.encrypted.key.pem: <SomeBase64Value>
-      server1.aerospike.com.key.pem: <SomeBase64Value>
-      server1.aerospike.com.cacert.pem: <SomeBase64Value>
-    ```
-
 - `aerospikeNetworkPolicy`
     - Fields
         - `access` - type of network address to use for Aerospike access address
@@ -206,9 +226,9 @@ helm install aerospike aerospike/aerospike-cluster \
                         - Fields are their types are same as `AerospikeCluster.spec.aerospikeConfig`
                     - `id` - Identifier for the rack
                         - type: `integer`
-                    - `nodeName` - K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
+                    - `nodeName` - Kubernetes node name for setting rack affinity. Rack pods will be deployed in given Kubernetes node
                         - type: `string`
-                    - `rackLabel` - Racklabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLabel `{aerospike.com/rack-label:<rack-label>}`
+                    - `rackLabel` - Racklabel for setting rack affinity. Rack pods will be deployed in Kubernetes nodes having rackLabel `{aerospike.com/rack-label:<rack-label>}`
                         - type: `string`
                     - `region` - Region name for setting rack affinity. Rack pods will be deployed to given Region
                         - type: `string`

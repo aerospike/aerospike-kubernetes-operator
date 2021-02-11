@@ -8,44 +8,86 @@ metadata:
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
 spec:
+  # Aerospike cluster size
   size: {{ .Values.replicas | default 3 }}
+
+  # Aerospike server docker image
   image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "5.2.0.7" }}
+
+  # Multi pod per host
   multiPodPerHost: {{ .Values.multiPodPerHost | default true }}
 
+  # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}
   aerospikeAccessControl: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Aerospike configuration
   {{- with .Values.aerospikeConfig }}
   aerospikeConfig: {{- toYaml . | nindent 4 }}
   {{- end }}
 
-  # Must have
-  # to pass in feature key file
-  # TODO: Operator must support mounting multiple secrets. aerospikeConfigSecret currently takes only one secret source
-  aerospikeConfigSecret:
-    secretName: {{ .Release.Name }}-secrets
-    mountPath:  /etc/aerospike/secrets/
+  {{- if and .Values.devMode (not .Values.aerospikeConfig) }}
+  # Dev mode (default aerospike configuration)
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secrets/features.conf
 
+    namespaces:
+      - name: test
+        memory-size: 1073741824
+        replication-factor: 2
+        storage-engine: memory
+  {{- end }}
+
+  # Aerospike secrets
+  {{- if not .Values.aerospikeSecretName }}
+  {{- fail "aerospikeSecretName not configured. A Kubernetes secret containing the feature key file is required to deploy an enterprise edition Aerospike cluster. Use --set aerospikeSecretName=<kubernetes-secret-name>" }}
+  {{- end }}
+  aerospikeConfigSecret:
+    secretName: {{ .Values.aerospikeSecretName }}
+    mountPath: {{ .Values.aerospikeSecretMountPath | default "/etc/aerospike/secrets/" | quote }}
+
+  # Aerospike network policy
   {{- with .Values.aerospikeNetworkPolicy }}
   aerospikeNetworkPolicy: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Aerospike pod spec
   {{- with .Values.podSpec }}
   podSpec: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Rack configuration
   {{- with .Values.rackConfig }}
   rackConfig: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Storage configuration
   {{- with .Values.storage }}
   storage: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Validation policy
   {{- with .Values.validationPolicy }}
   validationPolicy: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  {{- if and .Values.devMode (not .Values.validationPolicy) }}
+  # Dev mode (default validation policy)
+  validationPolicy:
+    skipWorkDirValidate: true
+  {{- end }}
+
+  # Resource requests and limits
+  {{- with .Values.resources }}
+  resources: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- if and .Values.devMode (not .Values.resources) }}
+  # Dev mode (default resource requests and limits)
   resources:
-{{ toYaml .Values.resources | indent 4 }}
+    requests:
+      memory: 1Gi
+      cpu: 100m
+  {{- end }}
