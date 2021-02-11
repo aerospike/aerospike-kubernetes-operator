@@ -60,7 +60,7 @@ helm install aerospike aerospike/aerospike-cluster \
 | `resources` | Resource requests and limits for Aerospike pod | `{}` (nil) |
 | `devMode` | Deploy Aerospike cluster in "dev" mode | `false` |
 
-### Default values in `devMode=true` mode:
+### Default values in "dev" mode (`devMode=true`):
 
 The following values are set as defaults when the cluster is deployed in "dev" mode.
 
@@ -89,34 +89,28 @@ resources:
 ### Configurations Explained
 
 - `aerospikeAccessControl`
-    - Fields
-        - `users`
-            - type: `array`
-            - sub-type: `User`
-                - Fields
-                    - `name` - Name of the user
-                        - type: `string`
-                    - `roles` - Roles for the user
-                        - type: `array`
-                        - sub-type: `string`
-                    - `secretName` - Secret containing the password
-                        - type: `string`
-        - `adminPolicy`
-            - Fields
-                - `timeout` - Timeout for adminPolicy in client (in milliseconds)
-                    - type: `integer`
-        - `roles`
-            - type: `array`
-            - sub-type: `Role`
-                - Fields
-                    - `name` - Name of the role
-                        - type: `string`
-                    - `privileges` - Privileges for the role
-                        - type: `array`
-                        - sub-type: `string`
-                    - `whitelist` - Whitelist of host address allowed for the role
-                        - type: `array`
-                        - sub-type: `string`
+
+    | Field | Type | Sub-type / Sub-field | Description |
+    | ----- | ---- | -------- | ----------- |
+    | `users` | `array` | Type `User` | List of Users |
+    | `adminPolicy` | `object` | Field `timeout` (Timeout for adminPolicy in client (in milliseconds)), Type `integer` | AdminPolicy for access control operations |
+    | `roles` | `array` | Type `Role` | List of roles |
+
+    - Type `User`
+
+      | Field | Type | Sub-type | Description |
+      | ----- | ---- | -------- | ----------- |
+      | `name` | `string` |  | Name of the user |
+      | `roles` | `array` | `string` | Roles for the user |
+      | `secretName` | `string` | | Secret containing the password |
+
+    - Type `Role`
+
+      | Field | Type | Sub-type | Description |
+      | ----- | ---- | -------- | ----------- |
+      | `name` | `string` |  | Name of the role |
+      | `privileges` | `array` | `string` | Privileges for the role |
+      | `whitelist` | `array` | `string` | Whitelist of host address allowed for the role |
 
     Example,
     ```yaml
@@ -144,7 +138,7 @@ resources:
     ```
 
 - `aerospikeConfig`
-    - This is a YAML representation of the `aerospike.conf` file. So the configuration names and their types are same as in `aerospike.conf` file.
+    - This is a YAML representation of the `aerospike.conf` file. See [Aerospike Configuration](https://github.com/aerospike/aerospike-kubernetes-operator/wiki/Aerospike-configuration) for more details.
 
     Example,
     ```yaml
@@ -168,19 +162,12 @@ resources:
     ```
 
 - `aerospikeNetworkPolicy`
-    - Fields
-        - `access` - type of network address to use for Aerospike access address
-            - type: `string`
-            - values: `pod`, `hostInternal`, `hostExternal`
-        - `alternateAccess` - type of network address to use for Aerospike alternate access address
-            - type: `string`
-            - values: `pod`, `hostInternal`, `hostExternal`
-        - `tlsAccess` - type of network address to use for Aerospike TLS access address
-            - type: `string`
-            - values: `pod`, `hostInternal`, `hostExternal`
-        - `tlsAlternateAccess` - type of network address to use for Aerospike TLS alternate access address
-            - type: `string`
-            - values: `pod`, `hostInternal`, `hostExternal`
+    | Field | Type | Values | Description |
+    | ----- | ---- | -------- | ----------- |
+    | `access` | `string` | `pod`, `hostInternal`, `hostExternal` | type of network address to use for Aerospike access address |
+    | `alternateAccess` | `string` | `pod`, `hostInternal`, `hostExternal` | type of network address to use for Aerospike alternate access address |
+    | `tlsAccess` | `string` | `pod`, `hostInternal`, `hostExternal` | type of network address to use for Aerospike TLS access address |
+    | `tlsAlternateAccess` | `string` | `pod`, `hostInternal`, `hostExternal` | type of network address to use for Aerospike TLS alternate access address |
 
     Example,
     ```yaml
@@ -192,12 +179,10 @@ resources:
     ```
 
 - `podSpec`
-    - Fields
-        - `sidecars` - Sidecar containers to add to the Aerospike pod
-            - type: `array`
-            - sub-type: `Container`
-                - Format is same as defining containers in pod spec
-                - Refer https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.20/#container-v1-core
+
+    | Field | Type | Sub-type | Description |
+    | ----- | ---- | -------- | ----------- |
+    | `sidecars` | `array` | `Container` (Format is same as defining containers in pod spec. Refer https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.20/#container-v1-core) | Sidecar containers to add to the Aerospike pod |
 
     Example,
     ```yaml
@@ -214,28 +199,23 @@ resources:
     ```
 
 - `rackConfig`
-    - Fields
-        - `namespaces` - List of namespaces to enable rack awareness
-            - type: `array`
-            - sub-type: `string`
-        - `racks` - List of racks and their configurations
-            - type: `array`
-            - sub-type: `Rack`
-                - Fields
-                    - `aerospikeConfig`
-                        - Fields are their types are same as `AerospikeCluster.spec.aerospikeConfig`
-                    - `id` - Identifier for the rack
-                        - type: `integer`
-                    - `nodeName` - Kubernetes node name for setting rack affinity. Rack pods will be deployed in given Kubernetes node
-                        - type: `string`
-                    - `rackLabel` - Racklabel for setting rack affinity. Rack pods will be deployed in Kubernetes nodes having rackLabel `{aerospike.com/rack-label:<rack-label>}`
-                        - type: `string`
-                    - `region` - Region name for setting rack affinity. Rack pods will be deployed to given Region
-                        - type: `string`
-                    - `storage`
-                        - Fields and their types are same as `AerospikeCluster.spec.storage`
-                    - `zone` - Zone name for setting rack affinity. Rack pods will be deployed to given Zone
-                        - type: `string`
+
+    | Field | Type | Sub-type | Description |
+    | ----- | ---- | -------- | ----------- |
+    | `namespaces` | `array` | `string` | List of namespaces to enable rack awareness |
+    | `racks` | `array` | `Rack` | List of racks and their configurations |
+
+    - Type `Rack`
+
+      | Field | Type | Description |
+      | ----- | ---- | ----------- |
+      | `aerospikeConfig` | Fields and their types are same as `AerospikeCluster.spec.aerospikeConfig` | Aerospike configuration |
+      | `id` | `integer` | Identifier for the rack |
+      | `nodeName` | `string` | Kubernetes node name for setting rack affinity. Rack pods will be deployed in given kubernetes node |
+      | `rackLabel` | `string` | Racklabel for setting rack affinity. Rack pods will be deployed in kubernetes nodes having rackLabel `{aerospike.com/rack-label:<rack-label>}` |
+      | `region` | `string` | Region name for setting rack affinity. Rack pods will be deployed to given region |
+      | `storage` | Fields and their types are same as `AerospikeCluster.spec.storage` | Storage configuration per rack |
+      | `zone` | `string` | Zone name for setting rack affinity. Rack pods will be deployed to given Zone |
 
     Example,
     ```yaml
@@ -271,39 +251,32 @@ resources:
     ```
 
 - `storage`
-    - Fields
-        - `blockVolumePolicy` - BlockVolumePolicy contains default policies for block volumes
-            - Fields
-                - `cascadeDelete` - CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster
-                    - type: `boolean`
-                - `initMethod` - InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none"
-                    - type: `string`
-                    - values: `none`, `dd`, `blkdiscard`, `deleteFiles`
-        - `filesystemVolumePolicy` - FileSystemVolumePolicy contains default policies for filesystem volumes
-            - Fields
-                - `cascadeDelete` - CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster
-                    - type: `boolean`
-                - `initMethod` - InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none"
-                    - type: `string`
-                    - values: `none`, `dd`, `blkdiscard`, `deleteFiles`
-        - `volumes` - List of volumes to be attached to pods
-            - Fields
-                - `cascadeDelete` - CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster
-                    - type: `boolean`
-                - `configMap` - Name of the configmap for 'configmap' mode volumes
-                    - type: `string`
-                - `initMethod` - InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none"
-                    - type: `string`
-                    - values: `none`, `dd`, `blkdiscard`, `deleteFiles`
-                - `path` - Device path or mount path for the volume
-                    - type: `string`
-                - `sizeInGB` - Size of volume in GB
-                    - type: `integer`
-                - `storageClass` - Storage class for volume provisioning
-                    - type: `string`
-                - `volumeMode`
-                    - type: `string`
-                    - values: `filesystem`, `block`, `configMap`
+
+    | Field | Type | Sub-type | Description |
+    | ----- | ---- | -------- | ----------- |
+    | `blockVolumePolicy` | `VolumePolicy` |  | BlockVolumePolicy contains default policies for block volumes |
+    | `filesystemVolumePolicy` | `VolumePolicy` |  | FileSystemVolumePolicy contains default policies for filesystem volumes |
+    | `volumes` | `array` | `Volume`  | List of volumes to be attached to pods |
+
+
+    - Type `VolumePolicy`
+
+      | Field | Type | Values | Description |
+      | ----- | ---- | -------- | ----------- |
+      | `cascadeDelete` | `boolean` |  | CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster |
+      | `initMethod` | `string` | `none`, `dd`, `blkdiscard`, `deleteFiles` | InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none" |
+
+    - Type `Volume`
+
+      | Field | Type | Values | Description |
+      | ----- | ---- | -------- | ----------- |
+      | `cascadeDelete` | `boolean` |  | CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster |
+      | `initMethod` | `string` | `none`, `dd`, `blkdiscard`, `deleteFiles` | InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none" |
+      | `configMap` | `string` |  | Name of the configmap for 'configmap' mode volumes |
+      | `path` | `string` |  | Device path or mount path for the volume |
+      | `sizeInGB` | `integer` |  | Size of volume in GB |
+      | `storageClass` | `string` |  | Storage class for volume provisioning |
+      | `volumeMode` | `string` | `filesystem`, `block`, `configMap` | Volume mode |
 
     Example,
     ```yaml
@@ -323,11 +296,10 @@ resources:
     ```
 
 - `validationPolicy`
-    - Fields
-        - `skipWorkDirValidate` - skipWorkDirValidate skips validation to check if Aerospike work directory is mounted on a persistent file storage. Defaults to false
-            - type: `boolean`
-        - `skipXdrDlogFileValidate` - skipXdrDlogFileValidate skips validation to check if the xdr digestlog file is mounted on a persistent file storage. Defaults to false
-            - type: `boolean`
+    | Field | Type | Description |
+    | ----- | ---- | ----------- |
+    | `skipWorkDirValidate` | `boolean` | skipWorkDirValidate skips validation to check if Aerospike work directory is mounted on a persistent file storage. Defaults to false |
+    | `skipXdrDlogFileValidate` | `boolean` | skipXdrDlogFileValidate skips validation to check if the xdr digestlog file is mounted on a persistent file storage. Defaults to false |
 
     Example,
     ```yaml
@@ -336,9 +308,10 @@ resources:
     ```
 
 - `resources`
-    - Fields
-        - `requests` - Requests describes the minimum amount of compute resources required.
-        - `limits` - Limits describes the maximum amount of compute resources allowed.
+    | Field | Description |
+    | ----- | ----------- |
+    | `requests` | Requests describes the minimum amount of resources required scheduling the pod |
+    | `limits` | Limits describes the maximum amount of resources allowed for the pod |
 
     Example,
     ```yaml
