@@ -52,7 +52,7 @@ spec:
           - name: OPERATOR_NAME
             value: {{ template "aerospike-kubernetes-operator.fullname" . }}
           - name: LOG_LEVEL
-            value: {{ .Values.logLevel | default "debug" | quote }}
+            value: {{ .Values.logLevel | default "info" | quote }}
           {{- if .Values.extraEnv }}
           {{- range $key, $value := .Values.extraEnv }}
           - name: "{{ $key }}"

@@ -35,7 +35,7 @@ helm install operator aerospike/aerospike-kubernetes-operator \
 | `rbac.serviceAccountName` | If `rbac.create=false`, provide a service account name to be used with the operator deployment | `default` |
 | `containerPort` | Operator container port | `8443` |
 | `watchNamespaces` | Namespaces to watch. Operator will watch for `AerospikeCluster` custom resources in these namespaces | `default` |
-| `logLevel` | Logging level for operator | `debug` |
+| `logLevel` | Logging level for operator | `info` |
 | `resources` | Resource requests and limits for the operator pods | `{}` (nil) |
 | `affinity` | Affinity rules for the operator deployment | `{}` (nil) |
 | `extraEnv` | Extra environment variables that will be passed into the operator pods | `{}` (nil) |

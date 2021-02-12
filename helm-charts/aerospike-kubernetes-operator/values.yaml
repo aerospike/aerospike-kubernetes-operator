@@ -16,7 +16,7 @@ rbac:
 ##  Operator configurations
 # containerPort: 8443
 # watchNamespaces: "default"
-# logLevel: "debug"
+# logLevel: "info"
 
 ## Resources - limits / requests
 resources: {}

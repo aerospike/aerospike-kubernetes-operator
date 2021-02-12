@@ -79,6 +79,7 @@ aerospikeSecretMountPath: /etc/aerospike/secrets/
 
 validationPolicy:
   skipWorkDirValidate: true
+  skipXdrDlogFileValidate: true
 
 resources:
   requests:
