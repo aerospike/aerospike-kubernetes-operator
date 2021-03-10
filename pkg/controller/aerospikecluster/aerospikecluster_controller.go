@@ -358,62 +358,6 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 	return reconcileSuccess()
 }
 
-// func (r *ReconcileAerospikeCluster) needsRollingRestart(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, logger log.Logger) bool {
-// 	// Never set to false later on.
-// 	// True value not optimized so that we check and log all changes that have hapened.
-// 	needsRollingRestart := false
-
-// 	// Aerospike config nil in status indicates that AerospikeCluster object is created but status is not successfully updated even once
-// 	if aeroCluster.Status.AerospikeConfig != nil {
-// 		// Check if rack specific spec has changed.
-// 		for _, statusRack := range aeroCluster.Status.RackConfig.Racks {
-// 			if rackState.Rack.ID == statusRack.ID {
-// 				if !reflect.DeepEqual(rackState.Rack.AerospikeConfig, statusRack.AerospikeConfig) {
-// 					needsRollingRestart = true
-// 					logger.Info("Rack AerospikeConfig changed. Need rolling restart", log.Ctx{"oldRackConfig": statusRack, "newRackConfig": rackState.Rack})
-// 				}
-
-// 				if statusRack.Storage.NeedsRollingRestart(rackState.Rack.Storage) {
-// 					needsRollingRestart = true
-// 					logger.Info("Rack storage changed. Need rolling restart")
-// 				}
-// 				break
-// 			}
-// 		}
-
-// 		// Check is global spec has changed.
-
-// 		// Network policy.
-// 		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeNetworkPolicy, aeroCluster.Status.AerospikeNetworkPolicy) {
-// 			needsRollingRestart = true
-// 			logger.Info("Aerospike network policy changed. Need rolling restart")
-// 		}
-
-// 		// Pod spec.
-// 		if !reflect.DeepEqual(aeroCluster.Spec.PodSpec, aeroCluster.Status.PodSpec) {
-// 			needsRollingRestart = true
-// 			logger.Info("Aerospike pod spec changed. Need rolling restart")
-// 		}
-
-// 		// Secrets
-// 		if !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret) {
-// 			// Secret (having config info like tls, feature-key-file) is updated, need rolling restart
-// 			needsRollingRestart = true
-// 			logger.Info("Aerospike config secret changed. Need rolling restart")
-// 		}
-
-// 		// Resources.
-// 		if aeroCluster.Spec.Resources != nil || aeroCluster.Status.Resources != nil {
-// 			if isClusterResourceUpdated(aeroCluster) {
-// 				// Resource are updated, need rolling restart
-// 				needsRollingRestart = true
-// 				logger.Info("Resources changed. Need rolling restart")
-// 			}
-// 		}
-// 	}
-// 	return needsRollingRestart
-// }
-
 func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 	logger.Info("Reconcile existing Aerospike cluster statefulset")
@@ -433,15 +377,6 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 			return res
 		}
 	}
-
-	// isRackAerospikeConfigUpdated := r.isAerospikeConfigUpdatedForRack(aeroCluster, rackState)
-	// // Update config map if config is updated
-	// if isRackAerospikeConfigUpdated {
-	// 	if err := r.updateConfigMap(aeroCluster, getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID), rackState); err != nil {
-	// 		logger.Error("Failed to update configMap from AerospikeConfig", log.Ctx{"err": err})
-	// 		return reconcileError(err)
-	// 	}
-	// }
 
 	// Always update configMap. We won't be able to find if a rack's config and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
@@ -679,16 +614,20 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 				break
 			}
 		}
+
 		if !needPodUpgrade {
 			logger.Info("Pod doesn't need upgrade")
 			continue
 		}
+
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.checkPodImageUpdated(aeroCluster, desiredImage, rackState, p)
+		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p)
 		if !res.isSuccess {
 			return found, res
 		}
+
+		// Handle the next pod in subsequent reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
 
@@ -700,7 +639,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 	return found, reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod) reconcileResult {
+func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	needsDeletion := false
@@ -727,6 +666,7 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 			break
 		}
 	}
+
 	if needsDeletion {
 		logger.Debug("Delete the Pod", log.Ctx{"podName": p.Name})
 
@@ -744,7 +684,10 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 		logger.Debug("Pod deleted", log.Ctx{"podName": p.Name})
 
 		// Wait for pod to come up
-		for {
+		const maxRetries = 6
+		const retryInterval = time.Second * 10
+		var isUpgraded bool
+		for i := 0; i < maxRetries; i++ {
 			logger.Debug("Waiting for pod to be ready after delete", log.Ctx{"podName": p.Name})
 
 			pFound := &corev1.Pod{}
@@ -759,20 +702,26 @@ func (r *ReconcileAerospikeCluster) checkPodImageUpdated(aeroCluster *aerospikev
 					return reconcileError(err)
 				}
 
-				time.Sleep(time.Second * 5)
+				time.Sleep(retryInterval)
 				continue
 			}
 			if err := utils.CheckPodFailed(pFound); err != nil {
 				return reconcileError(err)
 			}
-			if !utils.IsPodUpgraded(pFound, aeroCluster) {
-				logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
-				time.Sleep(time.Second * 5)
-				continue
+
+			if utils.IsPodUpgraded(pFound, aeroCluster) {
+				isUpgraded = true
+				logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
+				break
 			}
 
-			logger.Info("Pod is upgraded/downgraded", log.Ctx{"podName": p.Name})
-			break
+			logger.Debug("Waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
+			time.Sleep(retryInterval)
+		}
+
+		if !isUpgraded {
+			logger.Info("Timed out waiting for pod to come up with new image", log.Ctx{"podName": p.Name})
+			return reconcileRequeueAfter(10)
 		}
 	}
 
@@ -794,8 +743,6 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 	}
 
 	// Can we optimize this? Update stateful set only if there is any update for it.
-	//updateStatefulSetStorage(aeroCluster, found)
-
 	updateStatefulSetPodSpec(aeroCluster, found)
 
 	updateStatefulSetAerospikeServerContainerResources(aeroCluster, found)
@@ -826,6 +773,8 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 		if !res.isSuccess {
 			return found, res
 		}
+
+		// Handle next pod in subsequent reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
 
@@ -972,6 +921,7 @@ func isPodSpecUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeClust
 		for _, podContainer := range extraPodContainers {
 			if sideCar.Name == podContainer.Name {
 				found = true
+				// TODO: check equality of the specs
 				break
 			}
 		}
@@ -980,6 +930,7 @@ func isPodSpecUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeClust
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1161,6 +1112,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 		// Ignore safe stop check on pod not in running state.
 		if utils.IsPodRunningAndReady(pod) {
+			// TODO: is r.waitForNodeSafeStopReady idempotent or is it ok to call multiple times if its taking more time.
 			if res := r.waitForNodeSafeStopReady(aeroCluster, pod); !res.isSuccess {
 				// The pod is running and is unsafe to terminate.
 				return found, res

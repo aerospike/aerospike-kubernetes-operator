@@ -66,7 +66,7 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 	const retryInterval = time.Second * 10
 
 	var isStable bool
-	// Wait for migration to finish. Wait for 10 min for now
+	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
 		logger.Debug("Waiting for migrations to be zero")
 		time.Sleep(retryInterval)
