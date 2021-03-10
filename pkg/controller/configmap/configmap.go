@@ -75,20 +75,3 @@ func BuildConfigTemplate(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 
 	return confFile, nil
 }
-
-// func writeLogContext(buf *bytes.Buffer, conf Conf, indent int) {
-// 	var keys []string
-// 	for k := range conf {
-// 		keys = append(keys, k)
-// 	}
-
-// 	sort.Strings(keys)
-
-// 	for _, context := range keys {
-// 		if context == "name" {
-// 			// ignore generated field
-// 			continue
-// 		}
-// 		writeField(buf, "context "+context, conf[context].(string), indent)
-// 	}
-// }

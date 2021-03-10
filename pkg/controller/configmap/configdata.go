@@ -51,23 +51,6 @@ NAMESPACE=$MY_POD_NAMESPACE
 CFG=/etc/aerospike/aerospike.template.conf
 
 # ------------------------------------------------------------------------------
-# Update label in pod
-# ------------------------------------------------------------------------------
-# echo "Update label in pod"
-
-# Get ripemd hash and clean it
-# CONF_HASH="$(openssl rmd160 /etc/aerospike/aerospike.template.conf | cut -d'=' -f2 | xargs)"
-# echo $CONF_HASH
-
-# apt-get update && apt-get install -y apt-transport-https gnupg2 curl
-# curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-# echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
-# apt-get update
-# apt-get install -y kubectl
-
-# kubectl annotate pods $MY_POD_NAME aerospike-config-hash=$CONF_HASH -n $MY_POD_NAMESPACE
-
-# ------------------------------------------------------------------------------
 # Update node and rack ids configuration file
 # ------------------------------------------------------------------------------
 function join {
@@ -396,7 +379,7 @@ def getEndpoints(addressType):
   return []
 
 def readFile(filePath):
-  file = open(filePath,mode='r') 
+  file = open(filePath,mode='r')
   data = file.read()
   file.close()
   return data
@@ -443,6 +426,7 @@ for k,v in addressTypeNameMap.items():
   value['aerospike'][v] = getEndpoints(k)
 
 # Add rack id if passed as environment variable.
+# TODO: Check if this conversion from environ to int is correct.
 if 'MY_POD_RACK_ID' in os.environ:
   value['aerospike']['rackID'] = int(ord(os.environ['MY_POD_RACK_ID']))
 
@@ -586,22 +570,3 @@ func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aeros
 		"on-start.sh":   onStartSh.String(),
 	}, nil
 }
-
-// echo "Update label in pod"
-
-// cat << EOF > setlabels.py
-// import json
-
-// # Create the patch payload for updating pod label.
-// pathPayload = [{'op': 'add', 'path': '/metadata/labels/hello', 'value': 'world'}]
-
-// with open('/tmp/labels.json', 'w') as outfile:
-//     json.dump(pathPayload, outfile)
-// EOF
-
-// python setlabels.py
-
-// cat /tmp/labels.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
-//      -H 'Accept: application/json' \
-//      -H 'Content-Type: application/json-patch+json' \
-//      "https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/pod/${MY_POD_NAME}"
