@@ -249,6 +249,7 @@ func waitForDeployment(t *testing.T, kubeclient kubernetes.Interface, namespace,
 }
 
 func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *aerospikev1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+	var isValid bool
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
 		newCluster := &aerospikev1alpha1.AerospikeCluster{}
@@ -262,10 +263,15 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 		}
 		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		return isClusterStateValid(t, f, aeroCluster, newCluster, replicas), nil
+		isValid = isClusterStateValid(t, f, aeroCluster, newCluster, replicas)
+		return isValid, nil
+		// return isClusterStateValid(t, f, aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err
+	}
+	if !isValid {
+		return fmt.Errorf("Cluster state not matching with desired state")
 	}
 	t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 

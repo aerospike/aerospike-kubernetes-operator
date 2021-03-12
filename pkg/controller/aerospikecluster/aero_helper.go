@@ -22,8 +22,10 @@ import (
 	"time"
 
 	log "github.com/inconshreveable/log15"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -53,8 +55,37 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 	return version, nil
 }
 
+func (r *ReconcileAerospikeCluster) waitForClusterToBeReady(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	// User aeroCluster.Status to get all existing sts.
+	// Can status be empty here
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+	logger.Info("Waiting for cluster to be ready")
+
+	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+		st := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
+		if err := r.client.Get(context.TODO(), stsName, st); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
+			continue
+		}
+		if err := r.waitForStatefulSetToBeReady(st); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
+	// Remove a node only if cluster is stable
+	err := r.waitForClusterToBeReady(aeroCluster)
+	if err != nil {
+		return reconcileError(fmt.Errorf("Failed to wait for cluster to be ready: %v", err))
+	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConn(aeroCluster)
@@ -211,12 +242,22 @@ func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha
 		if utils.IsTerminating(&pod) {
 			continue
 		}
+		// Checking if all the container in the pod are ready or not
+		if !utils.IsPodReady(&pod) {
+			return nil, fmt.Errorf("Pod: %v is not ready", pod.Name)
+		}
 		hostConn, err := r.newHostConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err
 		}
 		hostConns = append(hostConns, hostConn)
 	}
+
+	// TODO: Do we need this?
+	// // We should be able to connect with all the nodes for making cluster stability checks
+	// if len(hostConns) != int(aeroCluster.Spec.Size) {
+	// 	return nil, fmt.Errorf("Number of hostConns not matching with number of cluster pods")
+	// }
 	return hostConns, nil
 }
 

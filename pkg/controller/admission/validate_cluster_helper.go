@@ -448,11 +448,19 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
+	sidecarNames := map[string]int{}
+
 	for _, sidecar := range s.obj.Spec.PodSpec.Sidecars {
 		// Check for reserved sidecar name
 		if sidecar.Name == utils.AerospikeServerContainerName || sidecar.Name == utils.AerospikeServerInitContainerName {
 			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
 		}
+
+		// Check for duplicate names
+		if _, ok := sidecarNames[sidecar.Name]; ok {
+			return fmt.Errorf("Connot have duplicate names of sidecars: %v", sidecar.Name)
+		}
+		sidecarNames[sidecar.Name] = 1
 
 		_, err := getImageVersion(sidecar.Image)
 

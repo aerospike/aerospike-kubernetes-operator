@@ -80,7 +80,7 @@ func NamespacedName(namespace, name string) string {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning
+	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning && IsPodReady(pod)
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
@@ -155,6 +155,16 @@ func IsCrashed(pod *v1.Pod) bool {
 	// Get aerospike server container status.
 	ps := pod.Status.ContainerStatuses[0]
 	return ps.State.Waiting != nil && isCrashError(ps.State.Waiting.Reason)
+}
+
+// IsPodReady return true if all the container of the pod are in ready state
+func IsPodReady(pod *v1.Pod) bool {
+	for _, status := range pod.Status.ContainerStatuses {
+		if !status.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 // IsImageEqual returns true if image name image1 is equal to image name image2.
@@ -268,8 +278,16 @@ func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.Aerospi
 			desiredImage = ps.Image
 		}
 
-		status := getPodContainerStatus(pod, ps.Name)
-		if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// TODO: Should we check status here?
+		// status may not be ready due to any bad config (e.g. bad podSpec).
+		// Due to this check, flow will be stuck at this place (upgradeImage)
+
+		// status := getPodContainerStatus(pod, ps.Name)
+		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// 	return false
+		// }
+
+		if !IsImageEqual(ps.Image, desiredImage) {
 			return false
 		}
 	}

@@ -8,8 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var multiClusterNs1 = "test1"
-var multiClusterNs2 = "test2"
+const multiClusterNs1 string = "test1"
+const multiClusterNs2 string = "test2"
 
 // DeployMultiClusterMultiNsTest tests multicluster in multi namespaces
 func DeployMultiClusterMultiNsTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {

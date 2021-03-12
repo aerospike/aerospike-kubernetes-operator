@@ -337,7 +337,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 }
 
 func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
+	mem := resource.MustParse("1Gi")
 	cpu := resource.MustParse("200m")
 	protofdmax := 12000
 	// create Aerospike custom resource
@@ -426,7 +426,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 
 // feature-key file needed
 func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
+	mem := resource.MustParse("1Gi")
 	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{

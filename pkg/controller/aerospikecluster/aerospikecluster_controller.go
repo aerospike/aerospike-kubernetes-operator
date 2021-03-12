@@ -765,7 +765,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 			return found, reconcileError(err)
 		}
 		if !needRollingRestart {
-			logger.Info("This Pod doesn't need rolling restart, Skip this")
+			logger.Info("This Pod doesn't need rolling restart, Skip this", log.Ctx{"pod": pod.Name})
 			continue
 		}
 
@@ -795,22 +795,6 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 	if aeroCluster.Status.AerospikeConfig == nil {
 		return needRollingRestartPod, nil
 	}
-
-	// confStr, err := configmap.BuildConfigTemplate(aeroCluster, rackState.Rack)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// confHash, err := utils.GetHash(confStr)
-	// if err != nil {
-	// 	return false, err
-	// }
-
-	// currentConfHash := pod.Annotations["aerospike-config-hash"]
-
-	// if currentConfHash != confHash {
-	// 	logger.Info("Pod config not matching with expected config. Needs rolling restart", log.Ctx{"expectedConfHash": confHash, "currentConfHash": currentConfHash})
-	// 	return true, nil
-	// }
 
 	cmName := getNamespacedNameForConfigMap(aeroCluster, rackState.Rack.ID)
 	confMap := &corev1.ConfigMap{}
@@ -920,8 +904,12 @@ func isPodSpecUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeClust
 		found := false
 		for _, podContainer := range extraPodContainers {
 			if sideCar.Name == podContainer.Name {
+				// TODO: Add check for updated podSpec
+				// check equality of the specs
+				// if !reflect.DeepEqual(sideCar, podContainer) {
+				// 	return true
+				// }
 				found = true
-				// TODO: check equality of the specs
 				break
 			}
 		}
@@ -1010,8 +998,8 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 			time.Sleep(time.Second * 5)
 			continue
 		}
-		ps := pFound.Status.ContainerStatuses[0]
-		if ps.Ready {
+
+		if utils.IsPodReady(pFound) {
 			break
 		}
 
