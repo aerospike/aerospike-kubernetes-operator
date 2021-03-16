@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func NoTestAerospikeCluster(t *testing.T) {
+func TestAerospikeCluster(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
 	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
 		t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
@@ -71,6 +71,10 @@ func NoTestAerospikeCluster(t *testing.T) {
 	})
 	t.Run("DeployMultiClusterSingleNsTest", func(t *testing.T) {
 		DeployMultiClusterSingleNsTest(t, f, ctx)
+	})
+
+	t.Run("PodSpecTest", func(t *testing.T) {
+		PodSpecTest(t, f, ctx)
 	})
 }
 
@@ -137,8 +141,8 @@ func ClusterResourceTest(t *testing.T, f *framework.Framework, ctx *framework.Te
 	t.Run("Positive", func(t *testing.T) {
 		t.Run("DeployClusterWithResource", func(t *testing.T) {
 			// It should be greater than given in cluster namespace
-			mem := resource.MustParse("6Gi")
-			cpu := resource.MustParse("2000m")
+			mem := resource.MustParse("2Gi")
+			cpu := resource.MustParse("200m")
 			aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
@@ -162,8 +166,8 @@ func ClusterResourceTest(t *testing.T, f *framework.Framework, ctx *framework.Te
 				t.Fatal(err)
 			}
 			// It should be greater than given in cluster namespace
-			mem := resource.MustParse("8Gi")
-			cpu := resource.MustParse("2500m")
+			mem := resource.MustParse("1Gi")
+			cpu := resource.MustParse("250m")
 			aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
@@ -190,10 +194,10 @@ func ClusterResourceTest(t *testing.T, f *framework.Framework, ctx *framework.Te
 		})
 		t.Run("DeployClusterWithResource", func(t *testing.T) {
 			// It should be greater than given in cluster namespace
-			resourceMem := resource.MustParse("8Gi")
-			resourceCPU := resource.MustParse("2500m")
-			limitMem := resource.MustParse("6Gi")
-			limitCPU := resource.MustParse("2000m")
+			resourceMem := resource.MustParse("3Gi")
+			resourceCPU := resource.MustParse("250m")
+			limitMem := resource.MustParse("2Gi")
+			limitCPU := resource.MustParse("200m")
 			aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resourceCPU,
@@ -215,10 +219,10 @@ func ClusterResourceTest(t *testing.T, f *framework.Framework, ctx *framework.Te
 				t.Fatal(err)
 			}
 			// It should be greater than given in cluster namespace
-			resourceMem := resource.MustParse("8Gi")
-			resourceCPU := resource.MustParse("2500m")
-			limitMem := resource.MustParse("6Gi")
-			limitCPU := resource.MustParse("2000m")
+			resourceMem := resource.MustParse("3Gi")
+			resourceCPU := resource.MustParse("250m")
+			limitMem := resource.MustParse("2Gi")
+			limitCPU := resource.MustParse("200m")
 			aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resourceCPU,
@@ -245,7 +249,8 @@ func DeployClusterForAllImagesPost460(t *testing.T, f *framework.Framework, ctx 
 		t.Fatal(err)
 	}
 	// post 4.6.0, need feature-key file
-	versions := []string{"4.8.0.6", "4.8.0.1", "4.7.0.11", "4.7.0.2", "4.6.0.13", "4.6.0.2"}
+	versions := []string{"5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11"}
+	// versions := []string{"5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11", "4.8.0.6", "4.8.0.1", "4.7.0.11", "4.7.0.2", "4.6.0.13", "4.6.0.2"}
 
 	for _, v := range versions {
 		clusterName := "aerocluster"

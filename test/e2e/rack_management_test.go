@@ -217,12 +217,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 			// Default proto-fd-max is 15000. So check for default value
 			racks[0].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
-					"proto-fd-max": 15000,
+					"proto-fd-max": defaultProtofdmax,
 				},
 			}
 			racks[1].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
-					"proto-fd-max": 15000,
+					"proto-fd-max": defaultProtofdmax,
 				},
 			}
 			for _, rack := range racks {
