@@ -28,7 +28,7 @@ const (
 	magicBytes                            = "aero"
 )
 
-func TestStorageInit(t *testing.T) {
+func NoTestStorageInit(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
 	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
 		t.Errorf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)

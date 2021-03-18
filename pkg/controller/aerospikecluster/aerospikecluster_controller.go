@@ -18,6 +18,7 @@ import (
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 	log "github.com/inconshreveable/log15"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -171,6 +172,19 @@ func (r *ReconcileAerospikeCluster) Reconcile(request reconcile.Request) (reconc
 	// Reconcile all racks
 	if res := r.reconcileRacks(aeroCluster); !res.isSuccess {
 		return res.result, res.err
+	}
+
+	// Check if there is any node with quiesce status. We need to undo that
+	// It may have been left from previous steps
+	allHostConns, err := r.newAllHostConn(aeroCluster)
+	if err != nil {
+		e := fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err)
+		logger.Error("Failed to get hostConn for aerospike cluster nodes", log.Ctx{"err": err})
+		return reconcile.Result{}, e
+	}
+	if err := deployment.InfoQuiesceUndo(r.getClientPolicy(aeroCluster), allHostConns); err != nil {
+		logger.Error("Failed to check for Quiesced nodes", log.Ctx{"err": err})
+		return reconcile.Result{}, err
 	}
 
 	// Setup access control.
