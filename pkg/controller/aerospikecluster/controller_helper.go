@@ -611,24 +611,6 @@ func (r *ReconcileAerospikeCluster) getClusterPodList(aeroCluster *aerospikev1al
 	return podList, nil
 }
 
-func (r *ReconcileAerospikeCluster) getOrderedClusterPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.Pod, error) {
-	podList, err := r.getClusterPodList(aeroCluster)
-	if err != nil {
-		return nil, err
-	}
-	sortedList := make([]corev1.Pod, len(podList.Items))
-	for _, p := range podList.Items {
-		indexStr := strings.Split(p.Name, "-")
-		indexInt, _ := strconv.Atoi(indexStr[1])
-		if indexInt >= len(podList.Items) {
-			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf("Error get pod list for cluster: %v", aeroCluster.Name)
-		}
-		sortedList[(len(podList.Items)-1)-indexInt] = p
-	}
-	return sortedList, nil
-}
-
 func (r *ReconcileAerospikeCluster) getClusterStatefulSets(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*appsv1.StatefulSetList, error) {
 	// List the pods for this aeroCluster's statefulset
 	statefulSetList := &appsv1.StatefulSetList{}

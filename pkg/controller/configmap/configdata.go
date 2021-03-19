@@ -57,27 +57,17 @@ function join {
     local IFS="$1"; shift; echo "$*";
 }
 
-HOSTNAME=$(hostname)
-
-# Parse out cluster name, formatted as: petset_name-rackid-index
+# Parse out cluster name, formatted as: stsname-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
-CLUSTER_NAME="${ADDR[0]}"
 
-POD_ORDINAL="a${ADDR[-1]}"
-export NODE_ID=$POD_ORDINAL
+POD_ORDINAL="${ADDR[-1]}"
 
-# Find rack-id, if given
-len=${#ADDR[@]}
-if [ ${#ADDR[@]} == 3 ]; then
-    export RACK_ID="${ADDR[1]}"
-    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
-    export NODE_ID="$RACK_ID$NODE_ID"
-fi
+# Find rack-id
+export RACK_ID="${ADDR[-2]}"
+sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
 
-# TODO: get the ordinal, this will be used as nodeid.
-# This looks hacky way but no other way found yet
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
-
 
 # ------------------------------------------------------------------------------
 # Update access addresses in the configuration file
@@ -224,9 +214,12 @@ export POD_IMAGE="$(echo $POD_JSON | python3 -c "import sys, json
 data = json.load(sys.stdin)
 print(data['spec']['containers'][0]['image'])")"
 
-# Parse out cluster name, formatted as: petset_name-rackid-index
-IFS='-' read -ra ADDR <<< "$(hostname)"
-AERO_CLUSTER_NAME="${ADDR[0]}"
+# Parse out cluster name, formatted as: stsname-rackid-index
+# https://www.linuxjournal.com/article/8919
+# Trim index and rackid
+
+AERO_CLUSTER_NAME=${MY_POD_NAME%-*}
+AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
 # Read this pod's Aerospike pod status from the cluster status.
 AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
@@ -279,7 +272,7 @@ def executeCommand(command):
 
 def getRack(data, podname):
     print('Checking for rack in rackConfig')
-    # Assuming podname format petset_name-rackid-index
+    # Assuming podname format stsname-rackid-index
     rackID = podname.split("-")[-2]
     if 'rackConfig' in data and 'racks' in data['rackConfig']:
         racks = data['rackConfig']['racks']
@@ -302,7 +295,8 @@ else:
 
 rack = getRack(spec, podname)
 if rack is None:
-    raise Exception('Rack not found for pod ' + podname + ' spec ' + spec)
+    print("spec: ", spec)
+    raise Exception('Rack not found for pod ' + podname + ' in above spec')
 
 if 'storage' in rack and 'volumes' in rack['storage'] and len(rack['storage']['volumes']) > 0:
     volumes = rack['storage']['volumes']
@@ -489,23 +483,16 @@ HOSTNAME=$(hostname)
 
 # Parse out cluster name, formatted as: petset_name-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
-CLUSTER_NAME="${ADDR[0]}"
 
-POD_ORDINAL="a${ADDR[-1]}"
-NODE_ID=$POD_ORDINAL
+POD_ORDINAL="${ADDR[-1]}"
 
 CFG=/etc/aerospike/aerospike.template.conf
 
-# Find rack-id, if given
-len=${#ADDR[@]}
-if [ ${#ADDR[@]} == 3 ]; then
-    RACK_ID="${ADDR[1]}"
-    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
-    NODE_ID="$RACK_ID$NODE_ID"
-fi
+# Find rack-id
+RACK_ID="${ADDR[-2]}"
+sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+NODE_ID="${RACK_ID}a${POD_ORDINAL}"
 
-# TODO: get the ordinal, this will be used as nodeid.
-# This looks hacky way but no other way found yet
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # Parse lines to insert peer-list

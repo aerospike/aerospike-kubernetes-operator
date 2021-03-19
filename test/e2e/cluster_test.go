@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func NoTestAerospikeCluster(t *testing.T) {
+func TestAerospikeCluster(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
 	if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
 		t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)

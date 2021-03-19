@@ -157,6 +157,8 @@ func getRackIDFromPodName(podName string) (*int, error) {
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
 	}
+	// Podname format stsname-ordinal
+	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-2]
 	rackID, err := strconv.Atoi(rackStr)
 	if err != nil {
