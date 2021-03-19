@@ -91,7 +91,7 @@ func TestLargeReconcile(t *testing.T) {
 			// Change config
 			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
 			// oldService := aeroCluster.Spec.AerospikeConfig["service"]
-			tempConf := 15000
+			tempConf := 18000
 			aeroCluster.Spec.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"] = tempConf
 			err := f.Client.Update(goctx.TODO(), aeroCluster)
 			if err != nil {
@@ -100,7 +100,7 @@ func TestLargeReconcile(t *testing.T) {
 
 			// Change config back to original value
 			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-			aeroCluster.Spec.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"] = 16000
+			aeroCluster.Spec.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
 			err = f.Client.Update(goctx.TODO(), aeroCluster)
 			if err != nil {
 				t.Fatal(err)
@@ -235,7 +235,7 @@ func waitForClusterScaleDown(t *testing.T, f *framework.Framework, aeroCluster *
 		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 		if int(newCluster.Status.Size) < replicas {
-			err := fmt.Errorf("Cluster size can not go below replica size")
+			err := fmt.Errorf("Cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
 			t.Logf(err.Error())
 			return false, err
 		}
@@ -276,7 +276,7 @@ func waitForClusterRollingRestart(t *testing.T, f *framework.Framework, aeroClus
 
 		protofdmax := newCluster.Status.AerospikeConfig["service"].(map[string]interface{})["proto-fd-max"].(int64)
 		if int(protofdmax) == tempConf {
-			err := fmt.Errorf("Cluster status can not be updated with intermediate conf value %d, it should have only final value", tempConf)
+			err := fmt.Errorf("Cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow", tempConf)
 			t.Logf(err.Error())
 			return false, err
 		}
@@ -307,7 +307,7 @@ func waitForClusterUpgrade(t *testing.T, f *framework.Framework, aeroCluster *ae
 		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 		if newCluster.Status.Image == tempImage {
-			err := fmt.Errorf("Cluster status can not be updated with intermediate image value %s, it should have only final value", tempImage)
+			err := fmt.Errorf("Cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow", tempImage)
 			t.Logf(err.Error())
 			return false, err
 		}
