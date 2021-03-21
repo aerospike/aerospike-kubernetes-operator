@@ -1719,8 +1719,6 @@ spec:
                 pod to patch update its own status. The map key is the name of the
                 pod.
               type: object
-          required:
-          - pods
           type: object
       type: object
   version: v1alpha1
