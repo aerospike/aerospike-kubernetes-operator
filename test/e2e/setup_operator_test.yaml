@@ -39,7 +39,7 @@ spec:
       containers:
         - name: aerospike-kubernetes-operator-test
           # Replace this with the built image name
-          image: aerospike/aerospike-kubernetes-operator:v0.0.13-beta-coldstart
+          image: aerospike/aerospike-kubernetes-operator:v0.0.13-beta-crname
           command:
           - aerospike-kubernetes-operator
           imagePullPolicy: Always

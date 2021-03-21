@@ -524,14 +524,6 @@ func negativeDeployClusterValidationTest(t *testing.T, f *framework.Framework, c
 			err := deployCluster(t, f, ctx, aeroCluster)
 			validateError(t, err, "should fail for EmptyNamespaceName")
 		})
-		t.Run("InvalidClusterName", func(t *testing.T) {
-			// Name cannot have `-`
-			cName := getClusterNamespacedName("invalid-cluster-name", clusterNamespacedName.Namespace)
-
-			aeroCluster := createDummyAerospikeCluster(cName, 1)
-			err := deployCluster(t, f, ctx, aeroCluster)
-			validateError(t, err, "invalid-cluster-name")
-		})
 		t.Run("InvalidImage", func(t *testing.T) {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 			aeroCluster.Spec.Image = "InvalidImage"
