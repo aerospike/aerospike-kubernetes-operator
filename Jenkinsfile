@@ -14,6 +14,17 @@ pipeline {
     }
 
     stages {
+        stage("Checkout") {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: scm.branches,
+                    extensions: scm.extensions + [[$class: 'CleanBeforeCheckout']],
+                    userRemoteConfigs: scm.userRemoteConfigs
+                ])
+            }
+        }
+
         stage('Build') {
              options {
                 lock('gopath-k8s-operator')
