@@ -80,6 +80,7 @@ spec:
         memory-size: 3000000000
         replication-factor: 1
         storage-engine:
+          type: device
           files:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
@@ -87,7 +88,9 @@ spec:
       - name: testMem
         memory-size: 3000000000
         replication-factor: 1
-        storage-engine: memory
+        storage-engine:
+          type: memory
+
 
   resources:
     requests:

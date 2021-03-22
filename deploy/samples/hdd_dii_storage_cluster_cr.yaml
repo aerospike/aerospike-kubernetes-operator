@@ -51,6 +51,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
+          type: device
           files:
             - /opt/aerospike/data/test/test.dat
           filesize: 2000000000
@@ -61,6 +62,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
+          type: device
           files:
             - /opt/aerospike/data/bar/bar.dat
           filesize: 2000000000
