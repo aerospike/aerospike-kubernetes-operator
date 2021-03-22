@@ -365,6 +365,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
 						"storage-engine": map[string]interface{}{
+							"type":     "device",
 							"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 							"filesize": 2000955200,
 						},

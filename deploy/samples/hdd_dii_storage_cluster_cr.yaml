@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:4.7.0.10
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
 
   storage:
     filesystemVolumePolicy:
@@ -51,6 +51,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
+          type: device
           files:
             - /opt/aerospike/data/test/test.dat
           filesize: 2000000000
@@ -61,6 +62,7 @@ spec:
         data-in-index: true
         replication-factor: 1
         storage-engine:
+          type: device
           files:
             - /opt/aerospike/data/bar/bar.dat
           filesize: 2000000000

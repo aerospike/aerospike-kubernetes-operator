@@ -459,6 +459,7 @@ func UpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Test
 							"name":        "bar",
 							"memory-size": 2000955200,
 							"storage-engine": map[string]interface{}{
+								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
 							},
 						})
@@ -468,7 +469,7 @@ func UpdateClusterTest(t *testing.T, f *framework.Framework, ctx *framework.Test
 					})
 					t.Run("UpdateStorageEngine", func(t *testing.T) {
 						aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						aeroCluster.Spec.AerospikeConfig["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
 
 						err := f.Client.Update(goctx.TODO(), aeroCluster)
 						validateError(t, err, "should fail for updating namespace storage-engine. Cannot be updated")

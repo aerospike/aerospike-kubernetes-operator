@@ -203,6 +203,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 				map[string]interface{}{
 					"name": "test",
 					"storage-engine": map[string]interface{}{
+						"type":    "device",
 						"devices": []interface{}{devName},
 					},
 				},
@@ -302,6 +303,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					map[string]interface{}{
 						"name": "test",
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"random/device/name"},
 						},
 					},

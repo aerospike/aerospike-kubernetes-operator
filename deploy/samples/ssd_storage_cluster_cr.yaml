@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:4.9.0.5
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
 
   resources:
     requests:
@@ -53,5 +53,6 @@ spec:
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
+          type: device
           devices:
             - /test/dev/xvdf

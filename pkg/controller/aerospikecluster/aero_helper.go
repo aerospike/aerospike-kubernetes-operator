@@ -79,6 +79,9 @@ func (r *ReconcileAerospikeCluster) waitForClusterToBeReady(aeroCluster *aerospi
 }
 
 func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
+	// TODO: Check post quiesce recluster conditions first.
+	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
+
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// Remove a node only if cluster is stable

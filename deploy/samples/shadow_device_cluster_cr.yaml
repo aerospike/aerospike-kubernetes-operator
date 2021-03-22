@@ -7,7 +7,7 @@ metadata:
 spec:
   # Add fields here
   size: 2
-  image: aerospike/aerospike-server-enterprise:4.7.0.10
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
 
   storage:
     filesystemVolumePolicy:
@@ -53,6 +53,7 @@ spec:
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
+          type: device
           devices:
             - /dev/nvme0n1	/dev/sdf
 

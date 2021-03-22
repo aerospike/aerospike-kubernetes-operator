@@ -312,6 +312,7 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 						"memory-size":        1000955200,
 						"replication-factor": 2,
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
@@ -415,6 +416,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 						"memory-size":        1000955200,
 						"replication-factor": 1,
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
@@ -543,6 +545,7 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":    "device",
 				"devices": []interface{}{"/test/dev/xvdf"},
 			},
 		},
@@ -568,6 +571,7 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":           "device",
 				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
@@ -608,6 +612,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 			"data-in-index":      true,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":           "device",
 				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
@@ -633,7 +638,9 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 			"name":               "test",
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
-			"storage-engine":     "memory",
+			"storage-engine": map[string]interface{}{
+				"type": "memory",
+			},
 		},
 	}
 
@@ -670,6 +677,7 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type": "device",
 				"devices": []interface{}{"/dev/nvme0n1	/test/dev/xvdf"},
 			},
 		},
