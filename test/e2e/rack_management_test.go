@@ -290,6 +290,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
+												"type":    "device",
 												"devices": []interface{}{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"},
 											},
 										},
@@ -309,6 +310,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
+												"type":    "device",
 												"devices": []interface{}{"andRandomDevice"},
 											},
 										},
@@ -355,7 +357,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						rackAeroConf := aerospikev1alpha1.Values{}
 
 						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
 
 						racks := []aerospikev1alpha1.Rack{{ID: 1, InputAerospikeConfig: &rackAeroConf}}
 						aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
@@ -383,7 +385,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 						rackAeroConf := aerospikev1alpha1.Values{}
 						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
 
 						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &rackAeroConf
 						err = f.Client.Update(goctx.TODO(), aeroCluster)

@@ -343,7 +343,9 @@ func getStorageInitAerospikeCluster(storageConfig aerospikev1alpha1.AerospikeSto
 						"replication-factor": networkTestPolicyClusterSize,
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
-						"storage-engine":     "memory",
+						"storage-engine": map[string]interface{}{
+							"type": "memory",
+						},
 					},
 				},
 			},

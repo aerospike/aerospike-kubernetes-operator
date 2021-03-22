@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:4.7.0.10
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
 
   storage:
     filesystemVolumePolicy:
