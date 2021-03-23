@@ -388,9 +388,11 @@ if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABL
 # Get AerospikeConfingHash and NetworkPolicyHash
 confHashFile = '/configs/aerospikeConfHash'
 networkPolicyHashFile = '/configs/networkPolicyHash'
+podSpecHashFile = '/configs/podSpecHash'
 
 confHash = readFile(confHashFile)
 newtworkPolicyHash = readFile(networkPolicyHashFile)
+podSpecHash = readFile(podSpecHashFile)
 
 value = {
     'image': os.environ.get('POD_IMAGE',''),
@@ -407,6 +409,7 @@ value = {
     'initializedVolumePaths': initialized,
     'aerospikeConfigHash': confHash,
     'networkPolicyHash': newtworkPolicyHash,
+    'podSpecHash': podSpecHash,
 }
 
 # Add access type to pod status variable name.

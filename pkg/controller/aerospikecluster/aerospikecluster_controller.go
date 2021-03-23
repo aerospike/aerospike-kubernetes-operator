@@ -817,7 +817,8 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 		return false, err
 	}
 	requiredConfHash := confMap.Data[configmap.AerospikeConfHashFileName]
-	requiredNetworkPolicyHash := confMap.Data[configmap.NetworkPolicyHashKeyFileName]
+	requiredNetworkPolicyHash := confMap.Data[configmap.NetworkPolicyHashFileName]
+	requiredPodSpecHash := confMap.Data[configmap.PodSpecHashFileName]
 
 	podStatus := aeroCluster.Status.Pods[pod.Name]
 
@@ -837,6 +838,14 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 			"currentHash":  podStatus.NetworkPolicyHash})
 	}
 
+	// Check if podSpec is updated
+	if podStatus.PodSpecHash != requiredPodSpecHash {
+		needRollingRestartPod = true
+		logger.Info("Aerospike pod spec changed. Need rolling restart", log.Ctx{
+			"requiredHash": requiredPodSpecHash,
+			"currentHash":  podStatus.PodSpecHash})
+	}
+
 	// Check if secret is updated
 	if isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
 		needRollingRestartPod = true
@@ -847,12 +856,6 @@ func (r *ReconcileAerospikeCluster) needRollingRestartPod(aeroCluster *aerospike
 	if isResourceUpdatedInAeroCluster(aeroCluster, pod) {
 		needRollingRestartPod = true
 		logger.Info("Aerospike resources changed. Need rolling restart")
-	}
-
-	// Check if podSpec is updated
-	if isPodSpecUpdatedInAeroCluster(aeroCluster, pod) {
-		needRollingRestartPod = true
-		logger.Info("Aerospike podSpec changed. Need rolling restart")
 	}
 
 	// Check if RACKSTORAGE/CONFIGMAP is updated
@@ -897,42 +900,6 @@ func isRackConfigMapsUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.Aerospi
 		}
 
 	}
-	return false
-}
-
-func isPodSpecUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod corev1.Pod) bool {
-	var extraPodContainers []corev1.Container
-	for _, podContainer := range pod.Spec.Containers {
-		if podContainer.Name == utils.AerospikeServerContainerName ||
-			podContainer.Name == utils.AerospikeServerInitContainerName {
-			// Check any other container also if added in default container list of statefulset
-			continue
-		}
-		extraPodContainers = append(extraPodContainers, podContainer)
-	}
-
-	if len(extraPodContainers) != len(aeroCluster.Spec.PodSpec.Sidecars) {
-		return true
-	}
-	for _, sideCar := range aeroCluster.Spec.PodSpec.Sidecars {
-		found := false
-		for _, podContainer := range extraPodContainers {
-			if sideCar.Name == podContainer.Name {
-				// TODO: Add check for updated podSpec
-				// check equality of the specs
-				// if !reflect.DeepEqual(sideCar, podContainer) {
-				// 	return true
-				// }
-				found = true
-				break
-			}
-		}
-		if !found {
-			// SideCar not present in podSpec
-			return true
-		}
-	}
-
 	return false
 }
 

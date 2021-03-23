@@ -1700,6 +1700,10 @@ spec:
                     description: PodPort is the port K8s intenral Aerospike clients
                       can connect to.
                     type: integer
+                  podSpecHash:
+                    description: PodSpecHash is ripemd160 hash of PodSpec used by
+                      this pod
+                    type: string
                   servicePort:
                     description: ServicePort is the port Aerospike clients outside
                       K8s can connect to.
@@ -1712,6 +1716,7 @@ spec:
                 - networkPolicyHash
                 - podIP
                 - podPort
+                - podSpecHash
                 - servicePort
                 type: object
               description: Pods has Aerospike specific status of the pods. This is

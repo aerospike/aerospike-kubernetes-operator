@@ -17,8 +17,8 @@ fi
 kubectl -n test apply -f deploy/crds/aerospike.com_aerospikeclusters_crd.yaml
 
 # Create storage classes.
-kubectl -n test apply -f deploy/samples/storage-classes/local-storage-class.yaml
-kubectl -n test apply -f deploy/samples/storage-classes/gce-ssd-storage-class.yaml
+kubectl -n test apply -f deploy/samples/storage/local_storage_class.yaml
+kubectl -n test apply -f deploy/samples/storage/gce_ssd_storage_class.yaml
 
 # Create the test namespace
 kubectl create namespace test || true

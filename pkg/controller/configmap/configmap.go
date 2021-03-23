@@ -15,7 +15,8 @@ var pkglog = log.New(log.Ctx{"module": "lib.asconfig"})
 
 const (
 	AerospikeTemplateConfFileName = "aerospike.template.conf"
-	NetworkPolicyHashKeyFileName  = "networkPolicyHash"
+	NetworkPolicyHashFileName     = "networkPolicyHash"
+	PodSpecHashFileName           = "podSpecHash"
 	AerospikeConfHashFileName     = "aerospikeConfHash"
 )
 
@@ -51,7 +52,19 @@ func CreateConfigMapData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack a
 	if err != nil {
 		return nil, err
 	}
-	confData[NetworkPolicyHashKeyFileName] = policyHash
+	confData[NetworkPolicyHashFileName] = policyHash
+
+	// Add podSpec hash
+	podSpec := aeroCluster.Spec.PodSpec
+	podSpecStr, err := json.Marshal(podSpec)
+	if err != nil {
+		return nil, err
+	}
+	podSpecHash, err := utils.GetHash(string(podSpecStr))
+	if err != nil {
+		return nil, err
+	}
+	confData[PodSpecHashFileName] = podSpecHash
 
 	return confData, nil
 }

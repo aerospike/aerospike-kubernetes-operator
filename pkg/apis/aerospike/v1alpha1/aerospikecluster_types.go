@@ -670,6 +670,9 @@ type AerospikePodStatus struct {
 
 	// NetworkPolicyHash is ripemd160 hash of NetworkPolicy used by this pod
 	NetworkPolicyHash string `json:"networkPolicyHash"`
+
+	// PodSpecHash is ripemd160 hash of PodSpec used by this pod
+	PodSpecHash string `json:"podSpecHash"`
 }
 
 // DeepCopy implements deepcopy func for AerospikePodStatus
