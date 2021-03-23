@@ -10,7 +10,6 @@ import (
 	"net"
 	"reflect"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,7 +20,6 @@ import (
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/aerospikecluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
@@ -131,15 +129,7 @@ func validateNetworkPolicy(desired *aerospikev1alpha1.AerospikeCluster, t *testi
 		}
 
 		cp := getClientPolicy(current, &client)
-		var res map[string]string
-		for i := 0; i < 10; i++ {
-			res, err = deployment.RunInfo(cp, asConn, "endpoints")
-			if err == nil {
-				break
-			}
-
-			time.Sleep(time.Second)
-		}
+		res, err := runInfo(cp, asConn, "endpoints")
 
 		if err != nil {
 			t.Errorf("Failed to run Aerospike info command: %v", err)

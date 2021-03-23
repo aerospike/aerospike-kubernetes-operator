@@ -562,6 +562,11 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 			SizeInGB:     1,
 			StorageClass: "ssd",
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+		}, {
+			Path:         "/opt/aerospike/data",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 

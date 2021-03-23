@@ -243,15 +243,14 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 
 		// Wait for 10 sec to pod to get started
 		for i := 0; i < 5; i++ {
-			time.Sleep(time.Second * 2)
 			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: st.Namespace}, pod); err == nil {
 				break
 			}
+			time.Sleep(time.Second * 2)
 		}
+
 		// Wait for pod to get ready
 		for i := 0; i < podStatusMaxRetry; i++ {
-			time.Sleep(podStatusRetryInterval)
-
 			logger.Debug("Check statefulSet pod running and ready", log.Ctx{"pod": podName})
 
 			pod := &corev1.Pod{}
@@ -266,6 +265,8 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 				logger.Info("Pod is running and ready", log.Ctx{"pod": podName})
 				break
 			}
+
+			time.Sleep(podStatusRetryInterval)
 		}
 		if !isReady {
 			statusErr := fmt.Errorf("StatefulSet pod is not ready. Status: %v", pod.Status.Conditions)

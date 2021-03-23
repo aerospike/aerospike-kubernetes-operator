@@ -450,7 +450,7 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 			// but we know that we are changing for service only for now
 			host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
-			confs, err := asinfo.GetAsConfig("service")
+			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -493,7 +493,7 @@ func isNamespaceRackEnabled(t *testing.T, f *framework.Framework, ctx *framework
 	host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 
-	confs, err := asinfo.GetAsConfig("racks")
+	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {
 		t.Fatal(err)
 	}

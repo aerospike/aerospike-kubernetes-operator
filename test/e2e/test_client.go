@@ -21,7 +21,9 @@ import (
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go"
 )
 
@@ -374,4 +376,31 @@ func getPodsPVCList(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *kub
 		}
 	}
 	return newPVCItems, nil
+}
+
+func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
+	var confs lib.Stats
+	var err error
+	for i := 0; i < 10; i++ {
+		confs, err = asinfo.GetAsConfig(cmd)
+		if err == nil {
+			return confs, nil
+		}
+	}
+
+	return nil, err
+}
+
+func runInfo(cp *as.ClientPolicy, asConn *deployment.ASConn, cmd string) (map[string]string, error) {
+	var res map[string]string
+	var err error
+	for i := 0; i < 10; i++ {
+		res, err = deployment.RunInfo(cp, asConn, cmd)
+		if err == nil {
+			return res, nil
+		}
+
+		time.Sleep(time.Second)
+	}
+	return nil, err
 }
