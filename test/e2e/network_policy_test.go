@@ -10,6 +10,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -130,7 +131,16 @@ func validateNetworkPolicy(desired *aerospikev1alpha1.AerospikeCluster, t *testi
 		}
 
 		cp := getClientPolicy(current, &client)
-		res, err := deployment.RunInfo(cp, asConn, "endpoints")
+		var res map[string]string
+		for i := 0; i < 10; i++ {
+			res, err = deployment.RunInfo(cp, asConn, "endpoints")
+			if err == nil {
+				break
+			}
+
+			time.Sleep(time.Second)
+		}
+
 		if err != nil {
 			t.Errorf("Failed to run Aerospike info command: %v", err)
 			return
