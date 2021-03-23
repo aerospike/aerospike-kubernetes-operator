@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	log "github.com/inconshreveable/log15"
 	corev1 "k8s.io/api/core/v1"
@@ -222,7 +223,7 @@ func getClientPolicy(aeroCluster *aerospikev1alpha1.AerospikeCluster, client *ku
 	if err != nil {
 		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
 	}
-
+	policy.Timeout = time.Minute * 3
 	policy.User = user
 	policy.Password = pass
 	return policy

@@ -33,6 +33,13 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 	// Cleanup selected volumes
 	// Update
 
+	// Cleanup storage
+	// kubectl -n test delete pvc --selector 'app=aerospike-cluster'
+	err = cleanupPVC(t, namespace)
+	if err != nil {
+		t.Error(err)
+	}
+
 	client := &framework.Global.Client.Client
 
 	t.Run("Positive", func(t *testing.T) {

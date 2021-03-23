@@ -249,7 +249,7 @@ func DeployClusterForAllImagesPost460(t *testing.T, f *framework.Framework, ctx 
 		t.Fatal(err)
 	}
 	// post 4.6.0, need feature-key file
-	versions := []string{"5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11"}
+	versions := []string{"5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11"}
 	// versions := []string{"5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11", "4.8.0.6", "4.8.0.1", "4.7.0.11", "4.7.0.2", "4.6.0.13", "4.6.0.2"}
 
 	for _, v := range versions {

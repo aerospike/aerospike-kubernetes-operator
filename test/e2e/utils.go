@@ -261,7 +261,7 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 			}
 			return false, err
 		}
-		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
+		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 		isValid = isClusterStateValid(t, f, aeroCluster, newCluster, replicas)
 		return isValid, nil
@@ -273,7 +273,7 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 	if !isValid {
 		return fmt.Errorf("Cluster state not matching with desired state")
 	}
-	t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
+	t.Logf("AerospikeCluster available\n")
 
 	// make info call
 	return nil
@@ -308,7 +308,7 @@ func isClusterStateValid(t *testing.T, f *framework.Framework, aeroCluster *aero
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return (3 * time.Minute * time.Duration(nodes))
+	return (5 * time.Minute * time.Duration(nodes))
 }
 
 func validateError(t *testing.T, err error, msg string) {

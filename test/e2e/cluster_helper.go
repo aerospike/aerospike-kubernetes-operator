@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	latestClusterImage = "aerospike/aerospike-server-enterprise:4.8.0.6"
-	imageToUpgrade     = "aerospike/aerospike-server-enterprise:4.8.0.1"
+	latestClusterImage = "aerospike/aerospike-server-enterprise:5.4.0.5"
+	imageToUpgrade     = "aerospike/aerospike-server-enterprise:5.5.0.3"
 )
 
 var (
@@ -715,8 +715,7 @@ func aerospikeClusterCreateUpdateWithTO(desired *aerospikev1alpha1.AerospikeClus
 		return err
 	}
 
-	waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, timeout)
-	return nil
+	return waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, timeout)
 }
 
 func aerospikeClusterCreateUpdate(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {

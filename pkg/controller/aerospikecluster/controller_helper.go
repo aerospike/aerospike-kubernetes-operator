@@ -794,7 +794,8 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 	if err != nil {
 		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
 	}
-
+	// TODO: What should be the timeout, should make it configurable or just keep it default
+	policy.Timeout = time.Minute * 1
 	policy.User = user
 	policy.Password = pass
 	return policy
