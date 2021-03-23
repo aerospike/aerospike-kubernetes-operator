@@ -6,6 +6,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -14,9 +15,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis"
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
@@ -26,6 +30,33 @@ const (
 	storageInitTestWaitForVersionTO       = 10 * time.Minute
 	magicBytes                            = "aero"
 )
+
+func cleanupPVC(t *testing.T, ns string) error {
+	t.Log("Cleanup old pvc")
+
+	// List the pvc for this aeroCluster's statefulset
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	clLabels := map[string]string{"app": "aerospike-cluster"}
+	labelSelector := labels.SelectorFromSet(clLabels)
+	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
+
+	if err := framework.Global.Client.List(context.TODO(), pvcList, listOps); err != nil {
+		return err
+	}
+
+	for _, pvc := range pvcList.Items {
+		t.Logf("Found pvc %s, deleting it", pvc.Name)
+
+		if utils.IsPVCTerminating(&pvc) {
+			continue
+		}
+
+		if err := framework.Global.Client.Delete(context.TODO(), &pvc); err != nil {
+			return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
+		}
+	}
+	return nil
+}
 
 func TestStorageInit(t *testing.T) {
 	aeroClusterList := &aerospikev1alpha1.AerospikeClusterList{}
@@ -40,6 +71,14 @@ func TestStorageInit(t *testing.T) {
 	f := framework.Global
 
 	initializeOperator(t, f, ctx)
+
+	// Cleanup storage
+	// kubectl -n test delete pvc --selector 'app=aerospike-cluster'
+	kubeNs, _ := ctx.GetNamespace()
+	err := cleanupPVC(t, kubeNs)
+	if err != nil {
+		t.Error(err)
+	}
 
 	falseVar := false
 	trueVar := true
@@ -117,21 +156,21 @@ func TestStorageInit(t *testing.T) {
 	}
 
 	aeroCluster = getStorageInitAerospikeCluster(storageConfig, racks, ctx)
-	err := aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
+	err = aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
 	if err != nil {
 		t.Error(err)
 	}
 
-	// Ensure volumes are empty.
+	t.Log("Ensure volumes are empty")
 	checkData(aeroCluster, false, false, t)
 
-	// Write some data to the all volumes.
+	t.Log("Write some data to the all volumes")
 	writeDataToVolumes(aeroCluster, t)
 
-	// Ensure volumes have data.
+	t.Log("Ensure volumes have data")
 	checkData(aeroCluster, true, true, t)
 
-	// Force a rolling restart, volumes should still have data.
+	t.Log("Force a rolling restart, volumes should still have data")
 	aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:5.0.0.11"
 	err = aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
 	if err != nil {
@@ -139,22 +178,22 @@ func TestStorageInit(t *testing.T) {
 	}
 	checkData(aeroCluster, true, true, t)
 
-	// Delete the cluster but retain the test volumes.
+	t.Log("Delete the cluster but retain the test volumes")
 	deleteCluster(t, f, ctx, aeroCluster)
 
-	// Recreate. Older volumes will still be around and reused.
+	t.Log("Recreate. Older volumes will still be around and reused")
 	aeroCluster = getStorageInitAerospikeCluster(storageConfig, racks, ctx)
 	err = aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
 	if err != nil {
 		t.Error(err)
 	}
 
-	// Volumes that need initialization should not have data.
+	t.Log("Volumes that need initialization should not have data")
 	checkData(aeroCluster, false, true, t)
 
 	if aeroCluster != nil {
 
-		// Update the volumes to cascade delete so that volumes are cleaned up.
+		t.Log("Update the volumes to cascade delete so that volumes are cleaned up")
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
 		err := aerospikeClusterCreateUpdate(aeroCluster, ctx, t)
@@ -185,6 +224,8 @@ func checkData(aeroCluster *aerospikev1alpha1.AerospikeCluster, assertHasData bo
 	}
 
 	for _, pod := range podList.Items {
+		t.Logf("Check data for pod %v", pod.Name)
+
 		rackID, err := getRackID(&pod)
 		if err != nil {
 			t.Errorf("Failed to get rackID pods: %v", err)
@@ -200,6 +241,7 @@ func checkData(aeroCluster *aerospikev1alpha1.AerospikeCluster, assertHasData bo
 			}
 		}
 		for _, volume := range storage.Volumes {
+			t.Logf("Check data for volume %v", volume.Path)
 			var volumeHasData bool
 			if volume.VolumeMode == aerospikev1alpha1.AerospikeVolumeModeBlock {
 				volumeHasData = hasDataBlock(&pod, volume, t)
@@ -253,7 +295,7 @@ func writeDataToPodVolumes(storage aerospikev1alpha1.AerospikeStorageSpec, pod *
 }
 
 func writeDataToVolumeBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) {
-	_, _, err := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Path))
+	_, _, err := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Path))
 
 	if err != nil {
 		t.Errorf("Error creating file %v", err)
@@ -261,7 +303,7 @@ func writeDataToVolumeBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikeP
 }
 
 func writeDataToVolumeFileSystem(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) {
-	_, _, err := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Path))
+	_, _, err := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Path))
 
 	if err != nil {
 		t.Errorf("Error creating file %v", err)
@@ -269,12 +311,12 @@ func writeDataToVolumeFileSystem(pod *corev1.Pod, volume aerospikev1alpha1.Aeros
 }
 
 func hasDataBlock(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) bool {
-	stdout, _, _ := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Path))
+	stdout, _, _ := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Path))
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
 func hasDataFilesystem(pod *corev1.Pod, volume aerospikev1alpha1.AerospikePersistentVolumeSpec, t *testing.T) bool {
-	stdout, _, _ := ExecuteCommandOnPod(pod, "aerospike-server", "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Path))
+	stdout, _, _ := ExecuteCommandOnPod(pod, utils.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Path))
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
@@ -342,7 +384,9 @@ func getStorageInitAerospikeCluster(storageConfig aerospikev1alpha1.AerospikeSto
 						"replication-factor": networkTestPolicyClusterSize,
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
-						"storage-engine":     "memory",
+						"storage-engine": map[string]interface{}{
+							"type": "memory",
+						},
 					},
 				},
 			},

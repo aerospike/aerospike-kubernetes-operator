@@ -664,6 +664,12 @@ type AerospikePodStatus struct {
 
 	// InitializedVolumePaths is the list of device path that have already been initialized.
 	InitializedVolumePaths []string `json:"initializedVolumePaths"`
+
+	// AerospikeConfigHash is ripemd160 hash of aerospikeConfig used by this pod
+	AerospikeConfigHash string `json:"aerospikeConfigHash"`
+
+	// NetworkPolicyHash is ripemd160 hash of NetworkPolicy used by this pod
+	NetworkPolicyHash string `json:"networkPolicyHash"`
 }
 
 // DeepCopy implements deepcopy func for AerospikePodStatus

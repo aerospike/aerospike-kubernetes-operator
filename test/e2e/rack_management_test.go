@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	goctx "context"
 	"reflect"
 	"strconv"
 	"testing"
@@ -217,12 +216,12 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 			// Default proto-fd-max is 15000. So check for default value
 			racks[0].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
-					"proto-fd-max": 15000,
+					"proto-fd-max": defaultProtofdmax,
 				},
 			}
 			racks[1].InputAerospikeConfig = &v1alpha1.Values{
 				"service": map[string]interface{}{
-					"proto-fd-max": 15000,
+					"proto-fd-max": defaultProtofdmax,
 				},
 			}
 			for _, rack := range racks {
@@ -290,6 +289,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
+												"type":    "device",
 												"devices": []interface{}{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"},
 											},
 										},
@@ -309,6 +309,7 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 										map[string]interface{}{
 											"name": "test",
 											"storage-engine": map[string]interface{}{
+												"type":    "device",
 												"devices": []interface{}{"andRandomDevice"},
 											},
 										},
@@ -344,54 +345,57 @@ func RackAerospikeConfigUpdateTest(t *testing.T, f *framework.Framework, ctx *fr
 		t.Run("Update", func(t *testing.T) {
 			t.Run("InvalidAerospikeConfig", func(t *testing.T) {
 
-				// storage-engine can not be updated
-				t.Run("UpdateStorageEngine", func(t *testing.T) {
-					clusterName := "updatestorage"
-					clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+				// TODO: Do we need this test. Rack aerospikeConfig can never be empty.
+				// If not given by user then it will be taken from global
 
-					t.Run("NonEmptyToEmpty", func(t *testing.T) {
-						// Deploy cluster with rackConfig
-						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-						rackAeroConf := aerospikev1alpha1.Values{}
+				// // storage-engine can not be updated
+				// t.Run("UpdateStorageEngine", func(t *testing.T) {
+				// 	clusterName := "updatestorage"
+				// 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
-						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+				// 	t.Run("NonEmptyToEmpty", func(t *testing.T) {
+				// 		// Deploy cluster with rackConfig
+				// 		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				// 		rackAeroConf := aerospikev1alpha1.Values{}
 
-						racks := []aerospikev1alpha1.Rack{{ID: 1, InputAerospikeConfig: &rackAeroConf}}
-						aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
+				// 		Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
+				// 		rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
 
-						if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
-							t.Fatal(err)
-						}
+				// 		racks := []aerospikev1alpha1.Rack{{ID: 1, InputAerospikeConfig: &rackAeroConf}}
+				// 		aeroCluster.Spec.RackConfig = aerospikev1alpha1.RackConfig{Racks: racks}
 
-						// Update rackConfig to nil. should fail as storage can not be updated
-						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = nil
-						err = f.Client.Update(goctx.TODO(), aeroCluster)
-						validateError(t, err, "should fail for updating storage")
+				// 		if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
+				// 			t.Fatal(err)
+				// 		}
 
-						deleteCluster(t, f, ctx, aeroCluster)
-					})
-					t.Run("EmptyToNonEmpty", func(t *testing.T) {
-						// Deploy cluster with empty rackConfig
-						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-						if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
-							t.Fatal(err)
-						}
+				// 		// Update rackConfig to nil. should fail as storage can not be updated
+				// 		aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
+				// 		aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = nil
+				// 		err = f.Client.Update(goctx.TODO(), aeroCluster)
+				// 		validateError(t, err, "should fail for updating storage")
 
-						// Update rackConfig to nonEmpty. should fail as storage can not be updated
-						aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
-						rackAeroConf := aerospikev1alpha1.Values{}
-						Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
-						rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = "memory"
+				// 		deleteCluster(t, f, ctx, aeroCluster)
+				// 	})
+				// 	t.Run("EmptyToNonEmpty", func(t *testing.T) {
+				// 		// Deploy cluster with empty rackConfig
+				// 		aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
+				// 		if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
+				// 			t.Fatal(err)
+				// 		}
 
-						aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &rackAeroConf
-						err = f.Client.Update(goctx.TODO(), aeroCluster)
-						validateError(t, err, "should fail for updating storage")
+				// 		// Update rackConfig to nonEmpty. should fail as storage can not be updated
+				// 		aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
+				// 		rackAeroConf := aerospikev1alpha1.Values{}
+				// 		Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig)
+				// 		rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
 
-						deleteCluster(t, f, ctx, aeroCluster)
-					})
-				})
+				// 		aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &rackAeroConf
+				// 		err = f.Client.Update(goctx.TODO(), aeroCluster)
+				// 		validateError(t, err, "should fail for updating storage")
+
+				// 		deleteCluster(t, f, ctx, aeroCluster)
+				// 	})
+				// })
 			})
 		})
 	})
@@ -446,7 +450,7 @@ func validateAerospikeConfigServiceUpdate(t *testing.T, f *framework.Framework, 
 			// but we know that we are changing for service only for now
 			host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
-			confs, err := asinfo.GetAsConfig("service")
+			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -489,7 +493,7 @@ func isNamespaceRackEnabled(t *testing.T, f *framework.Framework, ctx *framework
 	host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
 	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, kclient))
 
-	confs, err := asinfo.GetAsConfig("racks")
+	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {
 		t.Fatal(err)
 	}

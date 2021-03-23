@@ -33,6 +33,13 @@ func ClusterStorageCleanUpTest(t *testing.T, f *framework.Framework, ctx *framew
 	// Cleanup selected volumes
 	// Update
 
+	// Cleanup storage
+	// kubectl -n test delete pvc --selector 'app=aerospike-cluster'
+	err = cleanupPVC(t, namespace)
+	if err != nil {
+		t.Error(err)
+	}
+
 	client := &framework.Global.Client.Client
 
 	t.Run("Positive", func(t *testing.T) {
@@ -203,6 +210,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 				map[string]interface{}{
 					"name": "test",
 					"storage-engine": map[string]interface{}{
+						"type":    "device",
 						"devices": []interface{}{devName},
 					},
 				},
@@ -302,6 +310,7 @@ func RackUsingLocalStorageTest(t *testing.T, f *framework.Framework, ctx *framew
 					map[string]interface{}{
 						"name": "test",
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"random/device/name"},
 						},
 					},

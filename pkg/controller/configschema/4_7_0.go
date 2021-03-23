@@ -1359,20 +1359,34 @@ const conf4_7_0 = `
           },
           "storage-engine": {
             "oneOf": [{
-              "type": "string",
-              "description": "",
-              "dynamic": false,
-              "default": "memory",
-              "enum": ["memory"]
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "memory",
+                  "enum": ["memory"]
+                }
+              }
             }, {
               "type": "object",
               "additionalProperties": false,
-              "anyOf": [{
-                "required": ["devices"]
+              "oneOf": [{
+                "required": ["type", "devices"]
               }, {
-                "required": ["files"]
+                "required": ["type", "files"]
               }],
               "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "device",
+                  "enum": ["device"]
+                },
                 "devices": {
                   "type": "array",
                   "items": {
@@ -1734,11 +1748,96 @@ const conf4_7_0 = `
             "dynamic": false
           },
           "index-type": {
-            "type": "string",
-            "description": "",
-            "dynamic": false,
-            "default": "shmem",
-            "enum": ["shmem", "pmem", "flash"]
+            "oneOf": [{
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "shmem",
+                  "enum": ["shmem"]
+                }
+              }
+            }, {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "mounts", "mounts-size-limit"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "pmem",
+                  "enum": ["pmem"]
+                },
+                "mounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "mounts-high-water-pct": {
+                  "type": "integer",
+                  "default": 80,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
+                "mounts-size-limit": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 1073741824,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
+                }
+              }
+            }, {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "mounts", "mounts-size-limit"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "flash",
+                  "enum": ["flash"]
+                },
+                "mounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "mounts-high-water-pct": {
+                  "type": "integer",
+                  "default": 80,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
+                "mounts-size-limit": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 4294967296,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
+                }
+              }
+            }]
           },
           "migrate-order": {
             "type": "integer",

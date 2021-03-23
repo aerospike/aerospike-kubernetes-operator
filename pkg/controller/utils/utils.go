@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	log "github.com/inconshreveable/log15"
+	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -55,6 +57,11 @@ const (
 	aerospikeConfConfigMapPrefix = "aerospike-conf"
 )
 
+const (
+	AerospikeServerContainerName     string = "aerospike-server"
+	AerospikeServerInitContainerName string = "aerospike-init"
+)
+
 // ClusterNamespacedName return namespaced name
 func ClusterNamespacedName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
@@ -73,7 +80,7 @@ func NamespacedName(namespace, name string) string {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning
+	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning && IsPodReady(pod)
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
@@ -150,6 +157,16 @@ func IsCrashed(pod *v1.Pod) bool {
 	return ps.State.Waiting != nil && isCrashError(ps.State.Waiting.Reason)
 }
 
+// IsPodReady return true if all the container of the pod are in ready state
+func IsPodReady(pod *v1.Pod) bool {
+	for _, status := range pod.Status.ContainerStatuses {
+		if !status.Ready {
+			return false
+		}
+	}
+	return true
+}
+
 // IsImageEqual returns true if image name image1 is equal to image name image2.
 func IsImageEqual(image1 string, image2 string) bool {
 	desiredImageWithVersion := strings.TrimPrefix(image1, DockerHubImagePrefix)
@@ -216,7 +233,7 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
 func GetDesiredImage(aeroCluster *aerospikev1alpha1.AerospikeCluster, containerName string) (string, error) {
-	if containerName == "aerospike-server" {
+	if containerName == AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
 
@@ -261,8 +278,16 @@ func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *aerospikev1alpha1.Aerospi
 			desiredImage = ps.Image
 		}
 
-		status := getPodContainerStatus(pod, ps.Name)
-		if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// TODO: Should we check status here?
+		// status may not be ready due to any bad config (e.g. bad podSpec).
+		// Due to this check, flow will be stuck at this place (upgradeImage)
+
+		// status := getPodContainerStatus(pod, ps.Name)
+		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// 	return false
+		// }
+
+		if !IsImageEqual(ps.Image, desiredImage) {
 			return false
 		}
 	}
@@ -337,4 +362,16 @@ func GetPodNames(pods []corev1.Pod) []string {
 func PrettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "    ")
 	return string(s)
+}
+
+// GetHash return ripmd160 hash for given string
+func GetHash(str string) (string, error) {
+	var digest []byte
+	hash := ripemd160.New()
+	hash.Reset()
+	if _, err := hash.Write([]byte(str)); err != nil {
+		return "", err
+	}
+	res := hash.Sum(digest)
+	return hex.EncodeToString(res), nil
 }

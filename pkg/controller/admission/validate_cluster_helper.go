@@ -111,28 +111,33 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 			return err
 		}
 
-		if storage, ok := nsConf["storage-engine"]; ok {
-			if storage == nil {
-				// TODO: Should it be error
-				return fmt.Errorf("storage-engine cannot be nil for namespace %v", storage)
+		if nsStorage, ok := nsConf["storage-engine"]; ok {
+			if nsStorage == nil {
+				return fmt.Errorf("storage-engine cannot be nil for namespace %v", nsConf)
 			}
 
-			if _, ok := storage.(string); ok {
+			if isInMemoryNamespace(nsConf) {
 				// storage-engine memory
 				continue
 			}
 
-			if devices, ok := storage.(map[string]interface{})["devices"]; ok {
+			if !isDeviceNamespace(nsConf) {
+				// storage-engine pmem
+				return fmt.Errorf("storage-engine not supported for namespace %v", nsConf)
+			}
+
+			// TODO: worry about pmem.
+			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
-					return fmt.Errorf("namespace storage devices cannot be nil %v", storage)
+					return fmt.Errorf("namespace storage devices cannot be nil %v", nsStorage)
 				}
 
 				if _, ok := devices.([]interface{}); !ok {
-					return fmt.Errorf("namespace storage device format not valid %v", storage)
+					return fmt.Errorf("namespace storage device format not valid %v", nsStorage)
 				}
 
 				if len(devices.([]interface{})) == 0 {
-					return fmt.Errorf("No devices for namespace storage %v", storage)
+					return fmt.Errorf("No devices for namespace storage %v", nsStorage)
 				}
 
 				for _, device := range devices.([]interface{}) {
@@ -155,17 +160,17 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 				}
 			}
 
-			if files, ok := storage.(map[string]interface{})["files"]; ok {
+			if files, ok := nsStorage.(map[string]interface{})["files"]; ok {
 				if files == nil {
-					return fmt.Errorf("namespace storage files cannot be nil %v", storage)
+					return fmt.Errorf("namespace storage files cannot be nil %v", nsStorage)
 				}
 
 				if _, ok := files.([]interface{}); !ok {
-					return fmt.Errorf("namespace storage files format not valid %v", storage)
+					return fmt.Errorf("namespace storage files format not valid %v", nsStorage)
 				}
 
 				if len(files.([]interface{})) == 0 {
-					return fmt.Errorf("No files for namespace storage %v", storage)
+					return fmt.Errorf("No files for namespace storage %v", nsStorage)
 				}
 
 				for _, file := range files.([]interface{}) {
@@ -181,6 +186,45 @@ func validateNamespaceConfig(logger log.Logger, nsConfInterfaceList []interface{
 			}
 		} else {
 			return fmt.Errorf("storage-engine config is required for namespace")
+		}
+	}
+
+	// Vaidate index-type
+	for _, nsConfInterface := range nsConfInterfaceList {
+		nsConf, ok := nsConfInterface.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("namespace conf not in valid format %v", nsConfInterface)
+		}
+
+		if isShmemIndexTypeNamespace(nsConf) {
+			continue
+		}
+
+		if nsIndexStorage, ok := nsConf["index-type"]; ok {
+			if mounts, ok := nsIndexStorage.(map[string]interface{})["mounts"]; ok {
+				if mounts == nil {
+					return fmt.Errorf("namespace index-type mounts cannot be nil %v", nsIndexStorage)
+				}
+
+				if _, ok := mounts.([]interface{}); !ok {
+					return fmt.Errorf("namespace index-type mounts format not valid %v", nsIndexStorage)
+				}
+
+				if len(mounts.([]interface{})) == 0 {
+					return fmt.Errorf("No mounts for namespace index-type %v", nsIndexStorage)
+				}
+
+				for _, mount := range mounts.([]interface{}) {
+					if _, ok := mount.(string); !ok {
+						return fmt.Errorf("namespace index-type mount not valid string %v", mount)
+					}
+
+					// Namespace index-type mount should be present in filesystem config section
+					if !utils.ContainsString(fileStorageList, mount.(string)) {
+						return fmt.Errorf("Namespace index-type mount %v not found in Storage config %v", mount, storage)
+					}
+				}
+			}
 		}
 	}
 
@@ -304,7 +348,7 @@ func validateNsConfUpdate(logger log.Logger, newConf, oldConf aerospikev1alpha1.
 			}
 		}
 
-		// New namespace not allowed to add
+		// Cannot add new persistent namespaces.
 		if !found && !isInMemoryNamespace(singleConf) {
 			return fmt.Errorf("New persistent storage namespace %s cannot be added. Old namespace list %v, new namespace list %v", singleConf["name"], oldNsConfList, newNsConfList)
 		}
@@ -398,10 +442,44 @@ func getImageVersion(imageStr string) (string, error) {
 	return version, nil
 }
 
-// isInMemoryNamespace returns true if this nameapce config uses memory for storage.
+// isInMemoryNamespace returns true if this namespace config uses memory for storage.
 func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf["storage-engine"]
-	return !ok || storage == "memory"
+	if !ok {
+		return false
+	}
+
+	storageConf := storage.(map[string]interface{})
+	typeStr, ok := storageConf["type"]
+
+	return ok && typeStr == "memory"
+}
+
+// isDeviceNamespace returns true if this namespace config uses device for storage.
+func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
+	storage, ok := namespaceConf["storage-engine"]
+	if !ok {
+		return false
+	}
+
+	storageConf := storage.(map[string]interface{})
+	typeStr, ok := storageConf["type"]
+
+	return ok && typeStr == "device"
+}
+
+// isShmemIndexTypeNamespace returns true if this namespace index type is shmem.
+func isShmemIndexTypeNamespace(namespaceConf map[string]interface{}) bool {
+	storage, ok := namespaceConf["index-type"]
+	if !ok {
+		// missing index-type assumed to be shmem.
+		return true
+	}
+
+	storageConf := storage.(map[string]interface{})
+	typeStr, ok := storageConf["type"]
+
+	return ok && typeStr == "shmem"
 }
 
 // isEnterprise indicates if aerospike image is enterprise
@@ -448,11 +526,19 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 }
 
 func (s *ClusterValidatingAdmissionWebhook) validatePodSpec() error {
+	sidecarNames := map[string]int{}
+
 	for _, sidecar := range s.obj.Spec.PodSpec.Sidecars {
 		// Check for reserved sidecar name
-		if sidecar.Name == "aeropsike-server" || sidecar.Name == "aerospike-init" {
+		if sidecar.Name == utils.AerospikeServerContainerName || sidecar.Name == utils.AerospikeServerInitContainerName {
 			return fmt.Errorf("Cannot use reserved sidecar name: %v", sidecar.Name)
 		}
+
+		// Check for duplicate names
+		if _, ok := sidecarNames[sidecar.Name]; ok {
+			return fmt.Errorf("Connot have duplicate names of sidecars: %v", sidecar.Name)
+		}
+		sidecarNames[sidecar.Name] = 1
 
 		_, err := getImageVersion(sidecar.Image)
 
