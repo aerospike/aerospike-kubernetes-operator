@@ -102,7 +102,7 @@ func PodSpecTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
 			// adding sidecar1 with changed name and port.
 			badsidecar := corev1.Container{
 				Name:  "nginxbad",
-				Image: "nginx:1.14.2",
+				Image: "nginx-bad:1.14.2",
 				Ports: []corev1.ContainerPort{
 					{
 						ContainerPort: 81,
