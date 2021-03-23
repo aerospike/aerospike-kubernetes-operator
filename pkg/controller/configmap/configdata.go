@@ -422,11 +422,7 @@ addressTypeNameMap = {
 for k,v in addressTypeNameMap.items():
   value['aerospike'][v] = getEndpoints(k)
 
-# Add rack id if passed as environment variable.
-# TODO: Check if this conversion from environ to int is correct.
-if 'MY_POD_RACK_ID' in os.environ:
-  value['aerospike']['rackID'] = int(ord(os.environ['MY_POD_RACK_ID']))
-
+value['aerospike']['rackID'] = rack['id']
 
 # Create the patch payload for updating pod status.
 pathPayload = [{'op': 'replace', 'path': '/status/pods/' +

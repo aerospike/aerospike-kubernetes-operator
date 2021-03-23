@@ -307,7 +307,7 @@ func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 }
 
 func getFQDNForPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
-	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
+	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
 // getEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.

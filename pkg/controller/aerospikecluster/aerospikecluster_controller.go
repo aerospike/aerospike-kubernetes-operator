@@ -1115,13 +1115,13 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		logger.Info("Pod Removed", log.Ctx{"podName": podName})
 	}
 
-	newPodList, err := r.getRackPodList(aeroCluster, rackState.Rack.ID)
+	clusterPodList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
 	}
 
 	// Do post-remove-node info calls
-	for _, np := range newPodList.Items {
+	for _, np := range clusterPodList.Items {
 		// TODO: We remove node from the end. Nodes will not have seed of successive nodes
 		// So this will be no op.
 		// We should tip in all nodes the same seed list,
