@@ -35,8 +35,8 @@ func PodSpecTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
 		Command: []string{"sh", "-c", "echo The app is running! && sleep 3600"},
 	}
 
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 	t.Run("Positive", func(t *testing.T) {
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 		if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +62,7 @@ func PodSpecTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
 		t.Run("UpdateContainer2", func(t *testing.T) {
 			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 
-			aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{"sh", "-c", "updating command, should do rolling restart! && sleep 3600"}
+			aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{"sh", "-c", "sleep 3600"}
 
 			if err := updateAndWait(t, f, ctx, aeroCluster); err != nil {
 				t.Fatal(err)
@@ -80,41 +80,15 @@ func PodSpecTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) {
 	})
 
 	t.Run("Negative", func(t *testing.T) {
-		// aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-		// if err := deployCluster(t, f, ctx, aeroCluster); err != nil {
-		// 	t.Fatal(err)
-		// }
-
 		t.Run("AddSameContainer", func(t *testing.T) {
-			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
+			aeroCluster = getCluster(t, f, ctx, clusterNamespacedName)
 			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, sidecar1)
 			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, sidecar1)
 
 			err := f.Client.Update(goctx.TODO(), aeroCluster)
 			validateError(t, err, "should fail for adding container with same name")
 		})
-
-		// Add test for bad container config, cluster status should not get updated, if pod is not running and ready
-		t.Run("AddBadContainer", func(t *testing.T) {
-			aeroCluster := getCluster(t, f, ctx, clusterNamespacedName)
-			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, sidecar1)
-
-			// adding sidecar1 with changed name and port.
-			badsidecar := corev1.Container{
-				Name:  "nginxbad",
-				Image: "nginx-bad:1.14.2",
-				Ports: []corev1.ContainerPort{
-					{
-						ContainerPort: 81,
-					},
-				},
-			}
-			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, badsidecar)
-
-			err := updateAndWait(t, f, ctx, aeroCluster)
-			validateError(t, err, "should fail for adding the bad container")
-
-		})
 	})
 
+	deleteCluster(t, f, ctx, aeroCluster)
 }
