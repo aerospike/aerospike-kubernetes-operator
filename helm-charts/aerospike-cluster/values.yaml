@@ -4,7 +4,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 5.2.0.7
+  tag: 5.5.0.7
 
 ## Multi pod per host
 # multiPodPerHost: true
@@ -34,7 +34,8 @@ aerospikeConfig: {}
   #   - name: test
   #     memory-size: 1073741824 # 1GiB
   #     replication-factor: 2
-  #     storage-engine: memory
+  #     storage-engine:
+  #       type: memory
 
 
 ## Aerospike secrets

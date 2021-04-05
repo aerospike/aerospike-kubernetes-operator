@@ -46,7 +46,7 @@ helm install aerospike aerospike/aerospike-cluster \
 | ---------- | ----------- | --------- |
 | `replicas` | Aerospike cluster size | `3` |
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
-| `image.tag` | Aerospike server container image tag | `5.2.0.7` |
+| `image.tag` | Aerospike server container image tag | `5.5.0.7` |
 | `multiPodPerHost` | Set this to `true` to allow scheduling multiple pods per kubernetes node | `true` |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
@@ -73,7 +73,8 @@ aerospikeConfig:
     - name: test
       memory-size: 1073741824
       replication-factor: 2
-      storage-engine: memory
+      storage-engine:
+        type: memory
 
 aerospikeSecretMountPath: /etc/aerospike/secrets/
 
@@ -151,11 +152,13 @@ resources:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
-        storage-engine: memory
+        storage-engine:
+          type: memory
       - name: bar
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
+          type: device
           files:
           - /opt/aerospike/data/bar.dat
           filesize: 2000000000

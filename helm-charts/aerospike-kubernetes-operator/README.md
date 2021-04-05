@@ -29,7 +29,7 @@ helm install operator aerospike/aerospike-kubernetes-operator \
 | ---------- | ----------- | --------- |
 | `replicas` | Number of operator replicas | `2` |
 | `image.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator` |
-| `image.tag` | Operator image tag | `v0.0.12-beta` |
+| `image.tag` | Operator image tag | `1.0.0` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `rbac.create` | Set this to `true` to let helm chart automatically create RBAC resources necessary for operator | `true` |
 | `rbac.serviceAccountName` | If `rbac.create=false`, provide a service account name to be used with the operator deployment | `default` |

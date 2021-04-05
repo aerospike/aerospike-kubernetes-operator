@@ -1668,6 +1668,10 @@ spec:
                     - clusterName
                     - nodeID
                     type: object
+                  aerospikeConfigHash:
+                    description: AerospikeConfigHash is ripemd160 hash of aerospikeConfig
+                      used by this pod
+                    type: string
                   hostExternalIP:
                     description: HostExternalIP of the K8s host this pod is scheduled
                       on.
@@ -1685,6 +1689,10 @@ spec:
                     items:
                       type: string
                     type: array
+                  networkPolicyHash:
+                    description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
+                      used by this pod
+                    type: string
                   podIP:
                     description: PodIP in the K8s network.
                     type: string
@@ -1692,16 +1700,23 @@ spec:
                     description: PodPort is the port K8s intenral Aerospike clients
                       can connect to.
                     type: integer
+                  podSpecHash:
+                    description: PodSpecHash is ripemd160 hash of PodSpec used by
+                      this pod
+                    type: string
                   servicePort:
                     description: ServicePort is the port Aerospike clients outside
                       K8s can connect to.
                     format: int32
                     type: integer
                 required:
+                - aerospikeConfigHash
                 - image
                 - initializedVolumePaths
+                - networkPolicyHash
                 - podIP
                 - podPort
+                - podSpecHash
                 - servicePort
                 type: object
               description: Pods has Aerospike specific status of the pods. This is
