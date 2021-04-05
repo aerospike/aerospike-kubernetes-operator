@@ -1390,20 +1390,34 @@ const conf4_2_0 = `
           },
           "storage-engine": {
             "oneOf": [{
-              "type": "string",
-              "description": "",
-              "dynamic": false,
-              "default": "memory",
-              "enum": ["memory"]
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "memory",
+                  "enum": ["memory"]
+                }
+              }
             }, {
               "type": "object",
               "additionalProperties": false,
-              "anyOf": [{
-                "required": ["devices"]
+              "oneOf": [{
+                "required": ["type", "devices"]
               }, {
-                "required": ["files"]
+                "required": ["type", "files"]
               }],
               "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "device",
+                  "enum": ["device"]
+                },
                 "devices": {
                   "type": "array",
                   "items": {

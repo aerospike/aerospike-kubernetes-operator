@@ -1347,7 +1347,9 @@ func getAerospikeClusterSpecWithAccessControl(accessControl *aerospikev1alpha1.A
 						"name":               "test",
 						"memory-size":        1000955200,
 						"replication-factor": 1,
-						"storage-engine":     "memory",
+						"storage-engine": map[string]interface{}{
+							"type": "memory",
+						},
 					},
 				},
 			},

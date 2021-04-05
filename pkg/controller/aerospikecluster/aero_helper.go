@@ -22,8 +22,10 @@ import (
 	"time"
 
 	log "github.com/inconshreveable/log15"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
@@ -53,38 +55,80 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 	return version, nil
 }
 
-func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) error {
+func (r *ReconcileAerospikeCluster) waitForClusterToBeReady(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+	// User aeroCluster.Status to get all existing sts.
+	// Can status be empty here
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+	logger.Info("Waiting for cluster to be ready")
+
+	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+		st := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
+		if err := r.client.Get(context.TODO(), stsName, st); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
+			continue
+		}
+		if err := r.waitForStatefulSetToBeReady(st); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
+	// TODO: Check post quiesce recluster conditions first.
+	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
+
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
-	allHostConns, err := r.newAllHostConn(aeroCluster)
+	// Remove a node only if cluster is stable
+	err := r.waitForClusterToBeReady(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err)
+		return reconcileError(fmt.Errorf("Failed to wait for cluster to be ready: %v", err))
 	}
 
-	// Wait for migration to finish
-	for {
-		logger.Info("Waiting for migrations to be zero")
-		time.Sleep(time.Second * 2)
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConn(aeroCluster)
+	if err != nil {
+		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
+	}
 
-		isStable, err := deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
+	const maxRetry = 6
+	const retryInterval = time.Second * 10
+
+	var isStable bool
+	// Wait for migration to finish. Wait for some time...
+	for idx := 1; idx <= maxRetry; idx++ {
+		logger.Debug("Waiting for migrations to be zero")
+		time.Sleep(retryInterval)
+
+		// This should fail if coldstart is going on.
+		// Info command in coldstarting node should give error, is it? confirm.
+		isStable, err = deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
 		if err != nil {
-			return err
+			return reconcileError(err)
 		}
 		if isStable {
 			break
 		}
 	}
-	time.Sleep(time.Second * 10)
+	// TODO: Requeue after how much time. 1 min for now
+	if !isStable {
+		return reconcileRequeueAfter(60)
+	}
 
 	// Quiesce node
 	selectedHostConn, err := r.newHostConn(aeroCluster, pod)
 	if err != nil {
-		return fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err)
+		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err))
 	}
 	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
-		return err
+		return reconcileError(err)
 	}
-	return nil
+	return reconcileSuccess()
 }
 
 func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
@@ -116,6 +160,8 @@ func getRackIDFromPodName(podName string) (*int, error) {
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
 	}
+	// Podname format stsname-ordinal
+	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-2]
 	rackID, err := strconv.Atoi(rackStr)
 	if err != nil {
@@ -201,12 +247,22 @@ func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha
 		if utils.IsTerminating(&pod) {
 			continue
 		}
+		// Checking if all the container in the pod are ready or not
+		if !utils.IsPodReady(&pod) {
+			return nil, fmt.Errorf("Pod: %v is not ready", pod.Name)
+		}
 		hostConn, err := r.newHostConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err
 		}
 		hostConns = append(hostConns, hostConn)
 	}
+
+	// TODO: Do we need this?
+	// // We should be able to connect with all the nodes for making cluster stability checks
+	// if len(hostConns) != int(aeroCluster.Spec.Size) {
+	// 	return nil, fmt.Errorf("Number of hostConns not matching with number of cluster pods")
+	// }
 	return hostConns, nil
 }
 
@@ -251,7 +307,7 @@ func getServiceTLSName(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
 }
 
 func getFQDNForPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, host string) string {
-	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
+	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
 // getEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.

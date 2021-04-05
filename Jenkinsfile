@@ -14,32 +14,43 @@ pipeline {
     }
 
     stages {
-        stage('Build') {
-             options {
-                lock('gopath-k8s-operator')
+        stage("Pipeline" ) {
+            options {
+              lock("gke-k8s-cluster")
             }
 
-            steps {
-                sh 'mkdir -p $GO_REPO_ROOT'
-                sh 'ln -sfn ${WORKSPACE} ${GO_REPO}'
-
-                dir("${env.GO_REPO}") {
-                    sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
-                    // Changing directory again otherwise operator generates binary with the symlink name.
-                    sh "cd ${GO_REPO} && operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
-                    sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+            stages {
+                stage("Checkout") {
+                    steps {
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: scm.branches,
+                            extensions: scm.extensions + [[$class: 'CleanBeforeCheckout']],
+                            userRemoteConfigs: scm.userRemoteConfigs
+                        ])
+                    }
                 }
-            }
-        }
 
-       stage('Test') {
-             options {
-                lock('gke-k8s-cluster')
-            }
+                stage('Build') {
+                    steps {
+                        sh 'mkdir -p $GO_REPO_ROOT'
+                        sh 'ln -sfn ${WORKSPACE} ${GO_REPO}'
 
-            steps {
-                dir("${env.GO_REPO}") {
-                    sh "./test/e2e/test.sh ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
+                            // Changing directory again otherwise operator generates binary with the symlink name.
+                            sh "cd ${GO_REPO} && operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                            sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                        }
+                    }
+                }
+
+               stage('Test') {
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "./test/e2e/test.sh ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                        }
+                    }
                 }
             }
         }

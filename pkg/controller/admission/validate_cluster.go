@@ -120,10 +120,6 @@ func (s *ClusterValidatingAdmissionWebhook) validate() error {
 	if s.obj.Name == "" {
 		return fmt.Errorf("AerospikeCluster name cannot be empty")
 	}
-	if strings.Contains(s.obj.Name, "-") {
-		// Few parsing logic depend on this
-		return fmt.Errorf("AerospikeCluster name cannot have char '-'")
-	}
 	if strings.Contains(s.obj.Name, " ") {
 		// Few parsing logic depend on this
 		return fmt.Errorf("AerospikeCluster name cannot have spaces")

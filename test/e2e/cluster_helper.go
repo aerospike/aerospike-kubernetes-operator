@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	latestClusterImage = "aerospike/aerospike-server-enterprise:4.8.0.6"
-	imageToUpgrade     = "aerospike/aerospike-server-enterprise:4.8.0.1"
+	latestClusterImage = "aerospike/aerospike-server-enterprise:5.4.0.5"
+	imageToUpgrade     = "aerospike/aerospike-server-enterprise:5.5.0.3"
 )
 
 var (
@@ -312,6 +312,7 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 						"memory-size":        1000955200,
 						"replication-factor": 2,
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
@@ -336,10 +337,11 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 	return createDummyAerospikeClusterWithOption(clusterNamespacedName, size, true)
 }
 
-func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
+var defaultProtofdmax int64 = 15000
 
+func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *aerospikev1alpha1.AerospikeCluster {
+	mem := resource.MustParse("1Gi")
+	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -351,11 +353,11 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 			Image: latestClusterImage,
 			Storage: aerospikev1alpha1.AerospikeStorageSpec{
 				BlockVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDeleteFalse,
 				},
 				FileSystemVolumePolicy: aerospikev1alpha1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDelete,
+					InputCascadeDelete: &cascadeDeleteFalse,
 				},
 				Volumes: []aerospikev1alpha1.AerospikePersistentVolumeSpec{
 					{
@@ -380,6 +382,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
@@ -402,6 +405,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 			AerospikeConfig: aerospikev1alpha1.Values{
 				"service": map[string]interface{}{
 					"feature-key-file": "/etc/aerospike/secret/features.conf",
+					"proto-fd-max":     defaultProtofdmax,
 				},
 				"security": map[string]interface{}{
 					"enable-security": true,
@@ -412,6 +416,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 						"memory-size":        1000955200,
 						"replication-factor": 1,
 						"storage-engine": map[string]interface{}{
+							"type":    "device",
 							"devices": []interface{}{"/test/dev/xvdf"},
 						},
 					},
@@ -424,7 +429,7 @@ func createDummyAerospikeClusterWithOption(clusterNamespacedName types.Namespace
 
 // feature-key file needed
 func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int32) *aerospikev1alpha1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
+	mem := resource.MustParse("1Gi")
 	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
 	aeroCluster := &aerospikev1alpha1.AerospikeCluster{
@@ -540,6 +545,7 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":    "device",
 				"devices": []interface{}{"/test/dev/xvdf"},
 			},
 		},
@@ -556,6 +562,11 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 			SizeInGB:     1,
 			StorageClass: "ssd",
 			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
+		}, {
+			Path:         "/opt/aerospike/data",
+			SizeInGB:     1,
+			StorageClass: "ssd",
+			VolumeMode:   aerospikev1alpha1.AerospikeVolumeModeFilesystem,
 		},
 	}
 
@@ -565,6 +576,7 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":           "device",
 				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
@@ -605,6 +617,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 			"data-in-index":      true,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type":           "device",
 				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize":       2000955200,
 				"data-in-memory": true,
@@ -630,7 +643,9 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 			"name":               "test",
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
-			"storage-engine":     "memory",
+			"storage-engine": map[string]interface{}{
+				"type": "memory",
+			},
 		},
 	}
 
@@ -667,6 +682,7 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
+				"type": "device",
 				"devices": []interface{}{"/dev/nvme0n1	/test/dev/xvdf"},
 			},
 		},
@@ -704,8 +720,7 @@ func aerospikeClusterCreateUpdateWithTO(desired *aerospikev1alpha1.AerospikeClus
 		return err
 	}
 
-	waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, timeout)
-	return nil
+	return waitForAerospikeCluster(t, framework.Global, desired, int(desired.Spec.Size), retryInterval, timeout)
 }
 
 func aerospikeClusterCreateUpdate(desired *aerospikev1alpha1.AerospikeCluster, ctx *framework.TestCtx, t *testing.T) error {

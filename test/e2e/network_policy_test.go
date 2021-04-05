@@ -20,7 +20,6 @@ import (
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/aerospikecluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 )
 
@@ -130,7 +129,8 @@ func validateNetworkPolicy(desired *aerospikev1alpha1.AerospikeCluster, t *testi
 		}
 
 		cp := getClientPolicy(current, &client)
-		res, err := deployment.RunInfo(cp, asConn, "endpoints")
+		res, err := runInfo(cp, asConn, "endpoints")
+
 		if err != nil {
 			t.Errorf("Failed to run Aerospike info command: %v", err)
 			return
@@ -365,6 +365,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy aerospikev1alpha1.Ae
 						"memory-size":        3000000000,
 						"migrate-sleep":      0,
 						"storage-engine": map[string]interface{}{
+							"type":     "device",
 							"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 							"filesize": 2000955200,
 						},

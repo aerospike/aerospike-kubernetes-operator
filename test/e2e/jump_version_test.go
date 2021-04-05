@@ -50,6 +50,7 @@ var aerospikeConfigPre5 = map[string]interface{}{
 			"migrate-sleep":          0,
 			"xdr-remote-datacenters": "REMOTE_DC_1",
 			"storage-engine": map[string]interface{}{
+				"type":     "device",
 				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},
@@ -83,6 +84,7 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 			"xdr-remote-datacenters": "REMOTE_DC_1",
 			"memory-size":            3000000000,
 			"storage-engine": map[string]interface{}{
+				"type":     "device",
 				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},
@@ -117,6 +119,7 @@ var aerospikeConfigPost5 = map[string]interface{}{
 			"memory-size":   3000000000,
 			"migrate-sleep": 0,
 			"storage-engine": map[string]interface{}{
+				"type":     "device",
 				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
 			},

@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.2.0.7
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
   multiPodPerHost: true
 
   storage:
@@ -47,7 +47,8 @@ spec:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
-        storage-engine: memory
+        storage-engine:
+          type: memory
 
   resources:
     requests:

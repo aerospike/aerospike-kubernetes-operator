@@ -57,27 +57,17 @@ function join {
     local IFS="$1"; shift; echo "$*";
 }
 
-HOSTNAME=$(hostname)
-
-# Parse out cluster name, formatted as: petset_name-rackid-index
+# Parse out cluster name, formatted as: stsname-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
-CLUSTER_NAME="${ADDR[0]}"
 
-POD_ORDINAL="a${ADDR[-1]}"
-export NODE_ID=$POD_ORDINAL
+POD_ORDINAL="${ADDR[-1]}"
 
-# Find rack-id, if given
-len=${#ADDR[@]}
-if [ ${#ADDR[@]} == 3 ]; then
-    export RACK_ID="${ADDR[1]}"
-    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
-    export NODE_ID="$RACK_ID$NODE_ID"
-fi
+# Find rack-id
+export RACK_ID="${ADDR[-2]}"
+sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
 
-# TODO: get the ordinal, this will be used as nodeid.
-# This looks hacky way but no other way found yet
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
-
 
 # ------------------------------------------------------------------------------
 # Update access addresses in the configuration file
@@ -224,9 +214,12 @@ export POD_IMAGE="$(echo $POD_JSON | python3 -c "import sys, json
 data = json.load(sys.stdin)
 print(data['spec']['containers'][0]['image'])")"
 
-# Parse out cluster name, formatted as: petset_name-rackid-index
-IFS='-' read -ra ADDR <<< "$(hostname)"
-AERO_CLUSTER_NAME="${ADDR[0]}"
+# Parse out cluster name, formatted as: stsname-rackid-index
+# https://www.linuxjournal.com/article/8919
+# Trim index and rackid
+
+AERO_CLUSTER_NAME=${MY_POD_NAME%-*}
+AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
 # Read this pod's Aerospike pod status from the cluster status.
 AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
@@ -279,7 +272,7 @@ def executeCommand(command):
 
 def getRack(data, podname):
     print('Checking for rack in rackConfig')
-    # Assuming podname format petset_name-rackid-index
+    # Assuming podname format stsname-rackid-index
     rackID = podname.split("-")[-2]
     if 'rackConfig' in data and 'racks' in data['rackConfig']:
         racks = data['rackConfig']['racks']
@@ -302,7 +295,8 @@ else:
 
 rack = getRack(spec, podname)
 if rack is None:
-    raise Exception('Rack not found for pod ' + podname + ' spec ' + spec)
+    print("spec: ", spec)
+    raise Exception('Rack not found for pod ' + podname + ' in above spec')
 
 if 'storage' in rack and 'volumes' in rack['storage'] and len(rack['storage']['volumes']) > 0:
     volumes = rack['storage']['volumes']
@@ -378,12 +372,27 @@ def getEndpoints(addressType):
   # Address type not defined.
   return []
 
+def readFile(filePath):
+  file = open(filePath,mode='r')
+  data = file.read()
+  file.close()
+  return data
+
 podPort = os.environ['POD_PORT']
 servicePort = os.environ['MAPPED_PORT']
 
 if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABLED']:
   podPort = os.environ['POD_TLSPORT']
   servicePort = os.environ['MAPPED_TLSPORT']
+
+# Get AerospikeConfingHash and NetworkPolicyHash
+confHashFile = '/configs/aerospikeConfHash'
+networkPolicyHashFile = '/configs/networkPolicyHash'
+podSpecHashFile = '/configs/podSpecHash'
+
+confHash = readFile(confHashFile)
+newtworkPolicyHash = readFile(networkPolicyHashFile)
+podSpecHash = readFile(podSpecHashFile)
 
 value = {
     'image': os.environ.get('POD_IMAGE',''),
@@ -398,6 +407,9 @@ value = {
        'tlsName': os.environ.get('MY_POD_TLS_NAME','')
      },
     'initializedVolumePaths': initialized,
+    'aerospikeConfigHash': confHash,
+    'networkPolicyHash': newtworkPolicyHash,
+    'podSpecHash': podSpecHash,
 }
 
 # Add access type to pod status variable name.
@@ -410,10 +422,7 @@ addressTypeNameMap = {
 for k,v in addressTypeNameMap.items():
   value['aerospike'][v] = getEndpoints(k)
 
-# Add rack id if passed as environment variable.
-if 'MY_POD_RACK_ID' in os.environ:
-  value['aerospike']['rackID'] = int(os.environ['MY_POD_RACK_ID'])
-
+value['aerospike']['rackID'] = rack['id']
 
 # Create the patch payload for updating pod status.
 pathPayload = [{'op': 'replace', 'path': '/status/pods/' +
@@ -437,7 +446,6 @@ cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization
      -H 'Content-Type: application/json-patch+json' \
      "$KUBE_API_SERVER/apis/aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
 `
-
 const onStartShTemplateStr = `
 #! /bin/bash
 # ------------------------------------------------------------------------------
@@ -465,7 +473,6 @@ const onStartShTemplateStr = `
 
 set -e
 set -x
-CFG=/etc/aerospike/aerospike.template.conf
 
 function join {
     local IFS="$1"; shift; echo "$*";
@@ -475,21 +482,16 @@ HOSTNAME=$(hostname)
 
 # Parse out cluster name, formatted as: petset_name-rackid-index
 IFS='-' read -ra ADDR <<< "$(hostname)"
-CLUSTER_NAME="${ADDR[0]}"
 
-POD_ORDINAL="a${ADDR[-1]}"
-NODE_ID=$POD_ORDINAL
+POD_ORDINAL="${ADDR[-1]}"
 
-# Find rack-id, if given
-len=${#ADDR[@]}
-if [ ${#ADDR[@]} == 3 ]; then
-    RACK_ID="${ADDR[1]}"
-    sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
-    NODE_ID="$RACK_ID$NODE_ID"
-fi
+CFG=/etc/aerospike/aerospike.template.conf
 
-# TODO: get the ordinal, this will be used as nodeid.
-# This looks hacky way but no other way found yet
+# Find rack-id
+RACK_ID="${ADDR[-2]}"
+sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+NODE_ID="${RACK_ID}a${POD_ORDINAL}"
+
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # Parse lines to insert peer-list
@@ -530,7 +532,13 @@ func getBaseConfData(aeroCluster *aerospikev1alpha1.AerospikeCluster, rack aeros
 	config := rack.AerospikeConfig
 	workDir := utils.GetWorkDirectory(config)
 
-	initializeTemplateInput := initializeTemplateInput{WorkDir: workDir, MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost, NetworkPolicy: aeroCluster.Spec.AerospikeNetworkPolicy, PodPort: utils.ServicePort, PodTLSPort: utils.ServiceTLSPort}
+	initializeTemplateInput := initializeTemplateInput{
+		WorkDir:         workDir,
+		MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost,
+		NetworkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
+		PodPort:         utils.ServicePort,
+		PodTLSPort:      utils.ServiceTLSPort,
+	}
 	var initializeSh bytes.Buffer
 	err := initializeShTemplate.Execute(&initializeSh, initializeTemplateInput)
 	if err != nil {

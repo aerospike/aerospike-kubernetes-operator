@@ -11,7 +11,8 @@ import (
 // - If a old key/value in base map is not updated in patch map then it will be added in result map
 // - If a old key/value in base map is updated in patch map then
 //    - if value type is changed then key/value from the patch map will be added in result map
-// 	  - if key is `storage-engine` then storage-engine can be of 3 type device, file and memory.
+// 	  - if key is `storage-engine` then storage-engine can be of 3 types device, pmem and memory.
+// 	  - if key is `index-type` then it can be of 3 types shmem, pmem and flash.
 // 		if its type has been changed then key/value from patch map will be added in result map
 
 // 	  - if value type is same then
@@ -44,12 +45,14 @@ func merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 			res[key] = patchValue
 			continue
 		}
-		// Special check for key "storage-engine"
+		// Special check for typed sections "storage-engine" or "index-type"
 		// Check value type and replace if it's type has changed
-		if key == "storage-engine" && isStorageEngineTypeChanged(baseValue, patchValue) {
+		if (key == "storage-engine" && isStorageEngineTypeChanged(baseValue, patchValue)) ||
+			(key == "index-type" && isTypeChanged(baseValue, patchValue)) {
 			res[key] = patchValue
 			continue
 		}
+
 		// Types are the same, compare values
 		val, err := handleValues(baseValue, patchValue)
 		if err != nil {
@@ -64,22 +67,42 @@ func merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 		}
 	}
 	return res, nil
+}
 
+func isTypeChanged(base, patch interface{}) bool {
+	baseMap, ok1 := base.(map[string]interface{})
+	patchMap, ok2 := patch.(map[string]interface{})
+
+	if ok1 != ok2 {
+		// Should never happen but assume types have changed
+		return true
+	}
+
+	baseType, ok1 := baseMap["type"]
+	patchType, ok2 := patchMap["type"]
+
+	if ok1 && ok2 {
+		return baseType != patchType
+	}
+	return true
 }
 
 func isStorageEngineTypeChanged(base, patch interface{}) bool {
-	// storage-engine = "memory"
-	_, ok1 := base.(string)
-	_, ok2 := patch.(string)
-
-	if ok1 && ok2 {
-		return false
+	if isTypeChanged(base, patch) {
+		return true
 	}
 
 	baseMap, ok1 := base.(map[string]interface{})
 	patchMap, ok2 := patch.(map[string]interface{})
 
 	if ok1 && ok2 {
+		baseType := baseMap["type"]
+
+		if baseType != "device" {
+			return false
+		}
+
+		// Special check for device type since it is really two types, file or device.
 		_, ok1f := baseMap["files"]
 		_, ok1d := baseMap["devices"]
 		_, ok2f := patchMap["files"]

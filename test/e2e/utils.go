@@ -127,7 +127,7 @@ func setupByUser(f *framework.Framework, ctx *framework.TestCtx) error {
 	}
 
 	// Create authSecret
-	pass := "admin123"
+	pass := "admin"
 	if err := createAuthSecret(f, ctx, namespace, labels, authSecretName, pass); err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func createClusterPreReq(f *framework.Framework, ctx *framework.TestCtx, namespa
 	}
 
 	// Create authSecret
-	pass := "admin123"
+	pass := "admin"
 	if err := createAuthSecret(f, ctx, namespace, labels, authSecretName, pass); err != nil {
 		return err
 	}
@@ -249,6 +249,7 @@ func waitForDeployment(t *testing.T, kubeclient kubernetes.Interface, namespace,
 }
 
 func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *aerospikev1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+	var isValid bool
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
 		newCluster := &aerospikev1alpha1.AerospikeCluster{}
@@ -260,47 +261,54 @@ func waitForAerospikeCluster(t *testing.T, f *framework.Framework, aeroCluster *
 			}
 			return false, err
 		}
-		t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
+		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		if int(newCluster.Status.Size) != replicas {
-			t.Logf("Cluster size is not correct")
-			return false, nil
-		}
-		if !reflect.DeepEqual(newCluster.Status.AerospikeClusterSpec, newCluster.Spec) {
-			t.Logf("Cluster status not updated")
-			//t.Logf("Cluster status not updated. cluster.Status.Spec %v, cluster.Spec %v", newCluster.Status.AerospikeClusterSpec, newCluster.Spec)
-			return false, nil
-		}
-		if len(newCluster.Status.Pods) != replicas {
-			t.Logf("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
-			return false, nil
-		}
-
-		for _, pod := range newCluster.Status.Pods {
-			if pod.Aerospike.NodeID == "" {
-				t.Logf("Cluster pod's nodeID is empty")
-				return false, nil
-			}
-			if operatorutils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
-				break
-			}
-
-			t.Logf("Cluster pod's image %s not same as spec %s", pod.Image, aeroCluster.Spec.Image)
-		}
-
-		return true, nil
+		isValid = isClusterStateValid(t, f, aeroCluster, newCluster, replicas)
+		return isValid, nil
+		// return isClusterStateValid(t, f, aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err
 	}
-	t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
+	if !isValid {
+		return fmt.Errorf("Cluster state not matching with desired state")
+	}
+	t.Logf("AerospikeCluster available\n")
 
 	// make info call
 	return nil
 }
 
+func isClusterStateValid(t *testing.T, f *framework.Framework, aeroCluster *aerospikev1alpha1.AerospikeCluster, newCluster *aerospikev1alpha1.AerospikeCluster, replicas int) bool {
+	if int(newCluster.Status.Size) != replicas {
+		t.Logf("Cluster size is not correct")
+		return false
+	}
+	if !reflect.DeepEqual(newCluster.Status.AerospikeClusterSpec, newCluster.Spec) {
+		t.Logf("Cluster status not updated")
+		return false
+	}
+	if len(newCluster.Status.Pods) != replicas {
+		t.Logf("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
+		return false
+	}
+
+	for _, pod := range newCluster.Status.Pods {
+		if pod.Aerospike.NodeID == "" {
+			t.Logf("Cluster pod's nodeID is empty")
+			return false
+		}
+		if operatorutils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
+			break
+		}
+
+		t.Logf("Cluster pod's image %s not same as spec %s", pod.Image, aeroCluster.Spec.Image)
+	}
+	return true
+}
+
 func getTimeout(nodes int32) time.Duration {
-	return (3 * time.Minute * time.Duration(nodes))
+	return (5 * time.Minute * time.Duration(nodes))
 }
 
 func validateError(t *testing.T, err error, msg string) {

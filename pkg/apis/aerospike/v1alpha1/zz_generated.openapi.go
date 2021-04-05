@@ -450,8 +450,29 @@ func schema_pkg_apis_aerospike_v1alpha1_AerospikePodStatus(ref common.ReferenceC
 							},
 						},
 					},
+					"aerospikeConfigHash": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AerospikeConfigHash is ripemd160 hash of aerospikeConfig used by this pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"networkPolicyHash": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NetworkPolicyHash is ripemd160 hash of NetworkPolicy used by this pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"podSpecHash": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodSpecHash is ripemd160 hash of PodSpec used by this pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"image", "podIP", "podPort", "servicePort", "initializedVolumePaths"},
+				Required: []string{"image", "podIP", "podPort", "servicePort", "initializedVolumePaths", "aerospikeConfigHash", "networkPolicyHash", "podSpecHash"},
 			},
 		},
 		Dependencies: []string{

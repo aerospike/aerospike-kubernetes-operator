@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	as "github.com/ashishshinde/aerospike-client-go"
-	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
 	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
@@ -90,10 +88,6 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 		newEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
 	}
 
-	if rackState.Rack.ID != utils.DefaultRackID {
-		envVarList = append(envVarList, newEnvVarStatic("MY_POD_RACK_ID", strconv.Itoa(rackState.Rack.ID)))
-	}
-
 	if name := getServiceTLSName(aeroCluster); name != "" {
 		envVarList = append(envVarList, newEnvVarStatic("MY_POD_TLS_ENABLED", "true"))
 	}
@@ -123,7 +117,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					ServiceAccountName: aeroClusterServiceAccountName,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
-						Name:  "aerospike-init",
+						Name:  utils.AerospikeServerInitContainerName,
 						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
@@ -152,7 +146,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					}},
 
 					Containers: []corev1.Container{{
-						Name:            "aerospike-server",
+						Name:            utils.AerospikeServerContainerName,
 						Image:           aeroCluster.Spec.Image,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports:           ports,
@@ -199,7 +193,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 
 	updateStatefulSetSecretInfo(aeroCluster, st)
 
-	updateStatefulSetConfigMapVolumes(aeroCluster, st)
+	updateStatefulSetConfigMapVolumes(aeroCluster, st, rackState)
 
 	updateStatefulSetAffinity(aeroCluster, st, ls, rackState)
 	// Set AerospikeCluster instance as the owner and controller
@@ -245,15 +239,14 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 
 		// Wait for 10 sec to pod to get started
 		for i := 0; i < 5; i++ {
-			time.Sleep(time.Second * 2)
 			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: st.Namespace}, pod); err == nil {
 				break
 			}
+			time.Sleep(time.Second * 2)
 		}
+
 		// Wait for pod to get ready
 		for i := 0; i < podStatusMaxRetry; i++ {
-			time.Sleep(podStatusRetryInterval)
-
 			logger.Debug("Check statefulSet pod running and ready", log.Ctx{"pod": podName})
 
 			pod := &corev1.Pod{}
@@ -268,6 +261,8 @@ func (r *ReconcileAerospikeCluster) waitForStatefulSetToBeReady(st *appsv1.State
 				logger.Info("Pod is running and ready", log.Ctx{"pod": podName})
 				break
 			}
+
+			time.Sleep(podStatusRetryInterval)
 		}
 		if !isReady {
 			statusErr := fmt.Errorf("StatefulSet pod is not ready. Status: %v", pod.Status.Conditions)
@@ -613,24 +608,6 @@ func (r *ReconcileAerospikeCluster) getClusterPodList(aeroCluster *aerospikev1al
 	return podList, nil
 }
 
-func (r *ReconcileAerospikeCluster) getOrderedClusterPodList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]corev1.Pod, error) {
-	podList, err := r.getClusterPodList(aeroCluster)
-	if err != nil {
-		return nil, err
-	}
-	sortedList := make([]corev1.Pod, len(podList.Items))
-	for _, p := range podList.Items {
-		indexStr := strings.Split(p.Name, "-")
-		indexInt, _ := strconv.Atoi(indexStr[1])
-		if indexInt >= len(podList.Items) {
-			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf("Error get pod list for cluster: %v", aeroCluster.Name)
-		}
-		sortedList[(len(podList.Items)-1)-indexInt] = p
-	}
-	return sortedList, nil
-}
-
 func (r *ReconcileAerospikeCluster) getClusterStatefulSets(aeroCluster *aerospikev1alpha1.AerospikeCluster) (*appsv1.StatefulSetList, error) {
 	// List the pods for this aeroCluster's statefulset
 	statefulSetList := &appsv1.StatefulSetList{}
@@ -736,7 +713,10 @@ func (r *ReconcileAerospikeCluster) isAnyPodInFailedState(aeroCluster *aerospike
 
 	for _, p := range podList {
 		for _, ps := range p.Status.ContainerStatuses {
-			if err := utils.CheckPodFailed(&p); err != nil {
+			// TODO: Should we use checkPodFailed or CheckPodImageFailed?
+			// scaleDown, rollingRestart should work even if node is crashed
+			// If node was crashed due to wrong config then only rollingRestart can bring it back.
+			if err := utils.CheckPodImageFailed(&p); err != nil {
 				logger.Info("AerospikeCluster Pod is in failed state", log.Ctx{"currentImage": ps.Image, "podName": p.Name, "err": err})
 				return true
 			}
@@ -811,7 +791,8 @@ func (r *ReconcileAerospikeCluster) getClientPolicy(aeroCluster *aerospikev1alph
 	if err != nil {
 		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
 	}
-
+	// TODO: What should be the timeout, should make it configurable or just keep it default
+	policy.Timeout = time.Minute * 1
 	policy.User = user
 	policy.Password = pass
 	return policy
@@ -964,6 +945,7 @@ func updateStatefulSetAffinity(aeroCluster *aerospikev1alpha1.AerospikeCluster, 
 	st.Spec.Template.Spec.Affinity = affinity
 }
 
+// TODO: How to remove if user has removed this field? Should we find and remove volume
 // Called while creating new cluster and also during rolling restart
 func updateStatefulSetSecretInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
@@ -1010,9 +992,9 @@ func updateStatefulSetSecretInfo(aeroCluster *aerospikev1alpha1.AerospikeCluster
 // Called while creating new cluster and also during rolling restart.
 func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
 	// Add new sidecars.
-	for i, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		found := false
-		for _, container := range st.Spec.Template.Spec.Containers {
+		for i, container := range st.Spec.Template.Spec.Containers {
 			if newSidecar.Name == container.Name {
 				// Update the sidecar in case something has changed.
 				st.Spec.Template.Spec.Containers[i] = newSidecar
@@ -1048,8 +1030,8 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 }
 
 // Called while creating new cluster and also during rolling restart.
-func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-	configMaps, _ := aeroCluster.Spec.Storage.GetConfigMaps()
+func updateStatefulSetConfigMapVolumes(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
 
 	// Add to stateful set volumes.
 	for _, configMapVolume := range configMaps {
@@ -1150,6 +1132,7 @@ func removeConfigMapVolumeMount(containers []corev1.Container, volume corev1.Vol
 }
 
 func updateStatefulSetAerospikeServerContainerResources(aeroCluster *aerospikev1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
+	// These resource is for main aerospike container. Other sidecar can mention their own resource
 	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
 	// st.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
 	// 	Requests: corev1.ResourceList{
@@ -1256,7 +1239,9 @@ func newEnvVarStatic(name, value string) corev1.EnvVar {
 }
 
 func isClusterResourceUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
-
+	if aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources == nil {
+		return false
+	}
 	// TODO: What should be the convention, should we allow removing these things once added in spec?
 	// Should removing be the no op or change the cluster also for these changes? Check for the other also, like auth, secret
 	if (aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources != nil) ||
@@ -1307,7 +1292,7 @@ func truncateString(str string, num int) string {
 func getPVCName(path string) (string, error) {
 	path = strings.Trim(path, "/")
 
-	hashPath, err := getHashForPVCPath(path)
+	hashPath, err := utils.GetHash(path)
 	if err != nil {
 		return "", err
 	}
@@ -1380,15 +1365,4 @@ func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospike
 		rackList = append(rackList, rack)
 	}
 	return rackList
-}
-
-func getHashForPVCPath(path string) (string, error) {
-	var digest []byte
-	hash := ripemd160.New()
-	hash.Reset()
-	if _, err := hash.Write([]byte(path)); err != nil {
-		return "", err
-	}
-	res := hash.Sum(digest)
-	return hex.EncodeToString(res), nil
 }
