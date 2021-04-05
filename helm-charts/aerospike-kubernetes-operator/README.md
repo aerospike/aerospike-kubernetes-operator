@@ -10,8 +10,6 @@ A Helm chart for Aerospike Kubernetes Operator
 
 ### Add Aerospike Helm Repository
 
-<!-- TODO: Change/update the URL on publishing the chart -->
-
 ```sh
 helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operator
 ```
@@ -51,3 +49,5 @@ helm install operator aerospike/aerospike-kubernetes-operator \
 | `service.type` | Operator service type | `ClusterIP` |
 | `podSecurityContext` | Security context for the operator pods | `{}` (nil) |
 | `securityContext` | Security context for the operator container | `{}` (nil) |
+| `livenessProbe` | Liveness probe for operator container | `{}` (nil) |
+| `readinessProbe` | Readiness probe for the operator container | `{}` (nil) |

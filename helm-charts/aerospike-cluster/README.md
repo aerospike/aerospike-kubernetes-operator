@@ -11,8 +11,6 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ### Add Aerospike Helm Repository
 
-<!-- TODO: Change/update the URL on publishing the chart -->
-
 ```sh
 helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operator
 ```
