@@ -1,0 +1,85 @@
+## Aerospike cluster size
+replicas: 3
+
+## Aerospike server docker image
+image:
+  repository: aerospike/aerospike-server-enterprise
+  tag: 5.5.0.7
+
+## Multi pod per host
+# multiPodPerHost: true
+
+## Aerospike access control configuration
+aerospikeAccessControl: {}
+  # users:
+  #   - name: admin
+  #     secretName: auth-secret
+  #     roles:
+  #       - sys-admin
+  #       - user-admin
+  # adminPolicy:
+  #   # timeout in milliseconds
+  #   timeout: 1000
+  # roles:
+  #   - name:
+  #     privileges: []
+  #     whitelist: []
+
+## Aerospike Configuration
+aerospikeConfig: {}
+  # service:
+  #   feature-key-file: /etc/aerospike/secrets/features.conf
+
+  # namespaces:
+  #   - name: test
+  #     memory-size: 1073741824 # 1GiB
+  #     replication-factor: 2
+  #     storage-engine:
+  #       type: memory
+
+
+## Aerospike secrets
+## To add feature key file, tls certificates etc.
+## We may be able to add feature key file, certificates and other secrets dynamically during helm install
+## when,
+## 1. operator supports adding multiple secret sources, or
+## 2. https://github.com/helm/helm/pull/8841 feature is added.
+
+# aerospikeSecretName: aerospike-secrets
+# aerospikeSecretMountPath: /etc/aerospike/secrets/
+
+## Network policy
+aerospikeNetworkPolicy: {}
+  # access: pod
+  # alternateAccess: hostExternal
+  # tlsAccess: pod
+  # tlsAlternateAccess: hostExternal
+
+## Pod spec
+podSpec: {}
+  # sidecars:
+  #   - name: aerospike-prometheus-exporter
+  #     image: "aerospike/aerospike-prometheus-exporter:1.1.6"
+  #     ports:
+  #     - containerPort: 9145
+  #       name: exporter
+
+## Rack configuration
+rackConfig: {}
+
+## Storage configuration
+storage: {}
+  # volumes: []
+
+## Validation policy
+validationPolicy: {}
+  # skipWorkDirValidate: true
+
+## Resource requests and limits
+resources: {}
+  # requests:
+  #   memory: 1Gi
+  #   cpu: 100m
+
+# Deploy Aerospike cluster in dev mode
+devMode: false
