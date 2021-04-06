@@ -6,6 +6,7 @@ version: 1.0.0
 appVersion: 1.0.0
 
 description: A Helm chart for Aerospike Kubernetes Operator
+icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
 
 sources:
   - https://github.com/aerospike/aerospike-kubernetes-operator
