@@ -40,7 +40,7 @@ pipeline {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
                             // Changing directory again otherwise operator generates binary with the symlink name.
-                            sh "cd ${GO_REPO} && operator-sdk build --image-build-args "--build-arg OPERATOR_VERSION=${OPERATOR_VERSION}" ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                            sh "cd ${GO_REPO} && operator-sdk build --image-build-args \"--build-arg OPERATOR_VERSION=${OPERATOR_VERSION}\" ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                             sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                         }
                     }
