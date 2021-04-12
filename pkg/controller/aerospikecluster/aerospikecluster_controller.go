@@ -464,7 +464,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState)
+		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
 				logger.Error("Failed to update StatefulSet image", log.Ctx{"err": res.err})
@@ -477,7 +477,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 			return reconcileError(err)
 		}
 		if needRollingRestartRack {
-			found, res = r.rollingRestartRack(aeroCluster, found, rackState)
+			found, res = r.rollingRestartRack(aeroCluster, found, rackState, ignorablePods)
 			if !res.isSuccess {
 				if res.err != nil {
 					logger.Error("Failed to do rolling restart", log.Ctx{"err": res.err})
@@ -631,7 +631,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 	return found, reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
+func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	// List the pods for this aeroCluster's statefulset
@@ -690,7 +690,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p)
+		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -707,7 +707,7 @@ func (r *ReconcileAerospikeCluster) upgradeRack(aeroCluster *aerospikev1alpha1.A
 	return found, reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod) reconcileResult {
+func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	needsDeletion := false
@@ -740,7 +740,7 @@ func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospike
 
 		// If already dead node, so no need to check node safety, migration
 		if err := utils.CheckPodFailed(&p); err == nil {
-			if res := r.waitForNodeSafeStopReady(aeroCluster, &p, nil); !res.isSuccess {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, &p, ignorablePods); !res.isSuccess {
 				return res
 			}
 		}
@@ -796,7 +796,7 @@ func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospike
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
+func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	logger.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -837,7 +837,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartRack(aeroCluster *aerospikev1a
 			continue
 		}
 
-		res := r.rollingRestartPod(aeroCluster, rackState, pod)
+		res := r.rollingRestartPod(aeroCluster, rackState, pod, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -1011,7 +1011,7 @@ func isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster *aerospikev1alpha1.
 	return false
 }
 
-func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) reconcileResult {
+func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	// Also check if statefulSet is in stable condition
@@ -1052,7 +1052,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
 		// Check for migration
-		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound, nil); !res.isSuccess {
+		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound, ignorablePods); !res.isSuccess {
 			return res
 		}
 	} else {
@@ -1529,7 +1529,6 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 			return fmt.Errorf("Could not find pvc for rack: %v", err)
 		}
 		storage := rack.Storage
-		logger.Info("##### in delete external resource delete", log.Ctx{"storage": storage, "rack": rack})
 
 		if _, err := r.removePVCsAsync(aeroCluster, &storage, rackPVCItems); err != nil {
 			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
@@ -1595,8 +1594,6 @@ func (r *ReconcileAerospikeCluster) removePVCsAsync(aeroCluster *aerospikev1alph
 			logger.Error("PVC can not be removed, it does not have storage-path annotation", log.Ctx{"PVC": pvc.Name, "annotations": pvc.Annotations})
 			continue
 		}
-
-		logger.Info("##### Storage in remove PVC", log.Ctx{"PVC": pvc.Name, "storage": storage})
 
 		var cascadeDelete bool
 		v := getVolumeConfigForPVC(storage, path)

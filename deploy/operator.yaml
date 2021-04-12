@@ -20,6 +20,7 @@ kind: Deployment
 metadata:
   name: aerospike-kubernetes-operator
   namespace: aerospike
+
 spec:
   replicas: 1
   selector:
