@@ -257,6 +257,23 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 	var res reconcileResult
 
 	rackStateList := getNewRackStateList(aeroCluster)
+	racksToDelete, err := r.getRacksToDelete(aeroCluster, rackStateList)
+	if err != nil {
+		return reconcileError(err)
+	}
+
+	ignorablePods, err := r.getIgnorablePods(aeroCluster, racksToDelete)
+	if err != nil {
+		return reconcileError(err)
+	}
+
+	ignorablePodNames := []string{}
+	for _, pod := range ignorablePods {
+		ignorablePodNames = append(ignorablePodNames, pod.Name)
+	}
+
+	logger.Info("Rack changes", log.Ctx{"racksToDelete": racksToDelete, "ignorablePods": ignorablePodNames})
+
 	for _, state := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForStatefulSet(aeroCluster, state.Rack.ID)
@@ -279,7 +296,7 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 			scaledDownRackList = append(scaledDownRackList, state)
 		} else {
 			// Reconcile other statefulset
-			if res := r.reconcileRack(aeroCluster, found, state); !res.isSuccess {
+			if res := r.reconcileRack(aeroCluster, found, state, ignorablePods); !res.isSuccess {
 				return res
 			}
 		}
@@ -287,15 +304,17 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 
 	// Reconcile scaledDownRacks after all other racks are reconciled
 	for idx, state := range scaledDownRackList {
-		if res := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state); !res.isSuccess {
+		if res := r.reconcileRack(aeroCluster, &scaledDownRackSTSList[idx], state, ignorablePods); !res.isSuccess {
 			return res
 		}
 	}
 
 	if len(aeroCluster.Status.RackConfig.Racks) != 0 {
 		// Remove removed racks
-		if res := r.deleteRacks(aeroCluster, rackStateList); !res.isSuccess {
-			logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": res.err})
+		if res := r.deleteRacks(aeroCluster, racksToDelete, ignorablePods); !res.isSuccess {
+			if res.err != nil {
+				logger.Error("Failed to remove statefulset for removed racks", log.Ctx{"err": res.err})
+			}
 			return res
 		}
 	}
@@ -332,24 +351,54 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 	return found, reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) reconcileResult {
-	oldRackList := getOldRackList(aeroCluster)
+func (r *ReconcileAerospikeCluster) getRacksToDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) ([]int, error) {
+	oldRackIDs, err := r.getOldRackList(aeroCluster)
 
-	for _, rack := range oldRackList {
+	if err != nil {
+		return nil, err
+	}
+
+	toDelete := []int{}
+	for _, rackID := range oldRackIDs {
 		var rackFound bool
 		for _, newRack := range rackStateList {
-			if rack.ID == newRack.Rack.ID {
+			if rackID == newRack.Rack.ID {
 				rackFound = true
 				break
 			}
 		}
 
-		if rackFound {
-			continue
+		if !rackFound {
+			toDelete = append(toDelete, rackID)
+		}
+	}
+
+	return toDelete, nil
+}
+
+// getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability checks.
+func (r *ReconcileAerospikeCluster) getIgnorablePods(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []int) ([]corev1.Pod, error) {
+	ignorablePods := []corev1.Pod{}
+	for _, rackID := range racksToDelete {
+		rackPods, err := r.getRackPodList(aeroCluster, rackID)
+
+		if err != nil {
+			return nil, err
 		}
 
+		for _, pod := range rackPods.Items {
+			if !utils.IsPodRunningAndReady(&pod) {
+				ignorablePods = append(ignorablePods, pod)
+			}
+		}
+	}
+	return ignorablePods, nil
+}
+
+func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []int, ignorablePods []corev1.Pod) reconcileResult {
+	for _, rackID := range racksToDelete {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackID)
 		err := r.client.Get(context.TODO(), stsName, found)
 		if err != nil {
 			// If not found then go to next
@@ -359,7 +408,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 			return reconcileError(err)
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack})
+		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: aerospikev1alpha1.Rack{ID: rackID}}, ignorablePods)
 		if !res.isSuccess {
 			return res
 		}
@@ -372,7 +421,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) reconcileResult {
+func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 	logger.Info("Reconcile existing Aerospike cluster statefulset")
 
@@ -383,7 +432,7 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
-		found, res = r.scaleDownRack(aeroCluster, found, rackState)
+		found, res = r.scaleDownRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
 				logger.Error("Failed to scaleDown StatefulSet pods", log.Ctx{"err": res.err})
@@ -686,7 +735,7 @@ func (r *ReconcileAerospikeCluster) ensurePodImageUpdated(aeroCluster *aerospike
 
 		// If already dead node, so no need to check node safety, migration
 		if err := utils.CheckPodFailed(&p); err == nil {
-			if res := r.waitForNodeSafeStopReady(aeroCluster, &p); !res.isSuccess {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, &p, nil); !res.isSuccess {
 				return res
 			}
 		}
@@ -980,7 +1029,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 			continue
 		}
 
-		if utils.IsPodReady(pFound) {
+		if utils.IsPodRunningAndReady(pFound) {
 			break
 		}
 
@@ -998,7 +1047,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
 		// Check for migration
-		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound); !res.isSuccess {
+		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound, nil); !res.isSuccess {
 			return res
 		}
 	} else {
@@ -1049,7 +1098,7 @@ func (r *ReconcileAerospikeCluster) rollingRestartPod(aeroCluster *aerospikev1al
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
+func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 	logger := pkglog.New(log.Ctx{"AerospikeClusterSTS": getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)})
 
 	desiredSize := int32(rackState.Size)
@@ -1081,8 +1130,7 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 
 		// Ignore safe stop check on pod not in running state.
 		if utils.IsPodRunningAndReady(pod) {
-			// TODO: is r.waitForNodeSafeStopReady idempotent or is it ok to call multiple times if its taking more time.
-			if res := r.waitForNodeSafeStopReady(aeroCluster, pod); !res.isSuccess {
+			if res := r.waitForNodeSafeStopReady(aeroCluster, pod, ignorablePods); !res.isSuccess {
 				// The pod is running and is unsafe to terminate.
 				return found, res
 			}

@@ -10,7 +10,8 @@ pipeline {
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY=""
         OPERATOR_NAME = "aerospike-kubernetes-operator"
-        OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}aerospike/${env.OPERATOR_NAME}:candidate-${env.BRANCH_NAME}"
+        OPERATOR_VERSION = "candidate-${env.BRANCH_NAME}"
+        OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}aerospike/${env.OPERATOR_NAME}:${env.OPERATOR_VERSION}"
     }
 
     stages {
@@ -39,7 +40,7 @@ pipeline {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ deploy/secrets"
                             // Changing directory again otherwise operator generates binary with the symlink name.
-                            sh "cd ${GO_REPO} && operator-sdk build ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+                            sh "cd ${GO_REPO} && operator-sdk build --image-build-args "--build-arg OPERATOR_VERSION=${OPERATOR_VERSION}" ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                             sh "docker push ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                         }
                     }
