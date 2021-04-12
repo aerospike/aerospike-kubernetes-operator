@@ -26,7 +26,7 @@ metadata:
   name: aerospike-kubernetes-operator-test
   namespace: test
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       name: aerospike-kubernetes-operator-test
@@ -41,21 +41,31 @@ spec:
           # Replace this with the built image name
           image: aerospike/aerospike-kubernetes-operator:1.0.0
           command:
-          - aerospike-kubernetes-operator
+            - aerospike-kubernetes-operator
           imagePullPolicy: Always
           ports:
-          - containerPort: 8443
+            - containerPort: 8443
           env:
-          - name: WATCH_NAMESPACE
-            value: test,test1,test2
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: OPERATOR_NAME
-            value: "aerospike-kubernetes-operator-test"
-          - name: LOG_LEVEL
-            value: debug
+            - name: WATCH_NAMESPACE
+              value: test,test1,test2
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "aerospike-kubernetes-operator-test"
+            - name: LOG_LEVEL
+              value: debug
+          readinessProbe:
+            exec:
+              command:
+              - stat
+              - "/tmp/cert"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 1
+
 
 ---
 

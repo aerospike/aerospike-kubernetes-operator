@@ -29,26 +29,39 @@ spec:
     metadata:
       labels:
         name: aerospike-kubernetes-operator
+
     spec:
       serviceAccountName: aerospike-kubernetes-operator
       containers:
         - name: aerospike-kubernetes-operator
           image: aerospike/aerospike-kubernetes-operator:v0.0.14-beta
           command:
-          - aerospike-kubernetes-operator
+            - aerospike-kubernetes-operator
           imagePullPolicy: Always
+
           ports:
-          - containerPort: 8443
+            - containerPort: 8443
+
           env:
-          - name: WATCH_NAMESPACE
-            value: aerospike
-            # Use below value for watching multiple namespaces by operator
-            # value: aerospike,aerospike1,aerospike2
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: OPERATOR_NAME
-            value: "aerospike-kubernetes-operator"
-          - name: LOG_LEVEL
-            value: debug
+            - name: WATCH_NAMESPACE
+              value: aerospike
+              # Use below value for watching multiple namespaces by operator
+              # value: aerospike,aerospike1,aerospike2
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "aerospike-kubernetes-operator"
+            - name: LOG_LEVEL
+              value: debug
+
+          readinessProbe:
+            exec:
+              command:
+              - stat
+              - "/tmp/cert"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 1
