@@ -621,8 +621,12 @@ func (r *ReconcileAerospikeCluster) getClusterStatefulSets(aeroCluster *aerospik
 	return statefulSetList, nil
 }
 
-func (r *ReconcileAerospikeCluster) getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]int, error) {
-	rackIDs := []int{}
+func (r *ReconcileAerospikeCluster) getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]aerospikev1alpha1.Rack, error) {
+	var rackList []aerospikev1alpha1.Rack = []aerospikev1alpha1.Rack{}
+	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+		rackList = append(rackList, rack)
+	}
+
 	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack before status was updated.
 	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
 	if err != nil {
@@ -635,10 +639,24 @@ func (r *ReconcileAerospikeCluster) getOldRackList(aeroCluster *aerospikev1alpha
 			return nil, err
 		}
 
-		rackIDs = append(rackIDs, *rackID)
+		found := false
+		for _, rack := range aeroCluster.Status.RackConfig.Racks {
+			if rack.ID == *rackID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Create a dummy rack config using globals.
+			// TODO: Refactor and reuse code in mutate setting.
+			dummyRack := aerospikev1alpha1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: aeroCluster.Spec.AerospikeConfig}
+
+			rackList = append(rackList, dummyRack)
+		}
 	}
 
-	return rackIDs, nil
+	return rackList, nil
 }
 
 func (r *ReconcileAerospikeCluster) getClusterServerPool(aeroCluster *aerospikev1alpha1.AerospikeCluster) *x509.CertPool {

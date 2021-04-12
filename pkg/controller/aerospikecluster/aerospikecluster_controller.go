@@ -262,6 +262,11 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 		return reconcileError(err)
 	}
 
+	rackIDsToDelete := []int{}
+	for _, rack := range racksToDelete {
+		rackIDsToDelete = append(rackIDsToDelete, rack.ID)
+	}
+
 	ignorablePods, err := r.getIgnorablePods(aeroCluster, racksToDelete)
 	if err != nil {
 		return reconcileError(err)
@@ -272,7 +277,7 @@ func (r *ReconcileAerospikeCluster) reconcileRacks(aeroCluster *aerospikev1alpha
 		ignorablePodNames = append(ignorablePodNames, pod.Name)
 	}
 
-	logger.Info("Rack changes", log.Ctx{"racksToDelete": racksToDelete, "ignorablePods": ignorablePodNames})
+	logger.Info("Rack changes", log.Ctx{"racksToDelete": rackIDsToDelete, "ignorablePods": ignorablePodNames})
 
 	for _, state := range rackStateList {
 		found := &appsv1.StatefulSet{}
@@ -351,25 +356,25 @@ func (r *ReconcileAerospikeCluster) createRack(aeroCluster *aerospikev1alpha1.Ae
 	return found, reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) getRacksToDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) ([]int, error) {
-	oldRackIDs, err := r.getOldRackList(aeroCluster)
+func (r *ReconcileAerospikeCluster) getRacksToDelete(aeroCluster *aerospikev1alpha1.AerospikeCluster, rackStateList []RackState) ([]aerospikev1alpha1.Rack, error) {
+	oldRacks, err := r.getOldRackList(aeroCluster)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toDelete := []int{}
-	for _, rackID := range oldRackIDs {
+	toDelete := []aerospikev1alpha1.Rack{}
+	for _, oldRack := range oldRacks {
 		var rackFound bool
 		for _, newRack := range rackStateList {
-			if rackID == newRack.Rack.ID {
+			if oldRack.ID == newRack.Rack.ID {
 				rackFound = true
 				break
 			}
 		}
 
 		if !rackFound {
-			toDelete = append(toDelete, rackID)
+			toDelete = append(toDelete, oldRack)
 		}
 	}
 
@@ -377,10 +382,10 @@ func (r *ReconcileAerospikeCluster) getRacksToDelete(aeroCluster *aerospikev1alp
 }
 
 // getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability checks.
-func (r *ReconcileAerospikeCluster) getIgnorablePods(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []int) ([]corev1.Pod, error) {
+func (r *ReconcileAerospikeCluster) getIgnorablePods(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []aerospikev1alpha1.Rack) ([]corev1.Pod, error) {
 	ignorablePods := []corev1.Pod{}
-	for _, rackID := range racksToDelete {
-		rackPods, err := r.getRackPodList(aeroCluster, rackID)
+	for _, rack := range racksToDelete {
+		rackPods, err := r.getRackPodList(aeroCluster, rack.ID)
 
 		if err != nil {
 			return nil, err
@@ -395,10 +400,10 @@ func (r *ReconcileAerospikeCluster) getIgnorablePods(aeroCluster *aerospikev1alp
 	return ignorablePods, nil
 }
 
-func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []int, ignorablePods []corev1.Pod) reconcileResult {
-	for _, rackID := range racksToDelete {
+func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.AerospikeCluster, racksToDelete []aerospikev1alpha1.Rack, ignorablePods []corev1.Pod) reconcileResult {
+	for _, rack := range racksToDelete {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackID)
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
 		err := r.client.Get(context.TODO(), stsName, found)
 		if err != nil {
 			// If not found then go to next
@@ -408,7 +413,7 @@ func (r *ReconcileAerospikeCluster) deleteRacks(aeroCluster *aerospikev1alpha1.A
 			return reconcileError(err)
 		}
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: aerospikev1alpha1.Rack{ID: rackID}}, ignorablePods)
+		found, res := r.scaleDownRack(aeroCluster, found, RackState{Size: 0, Rack: rack}, ignorablePods)
 		if !res.isSuccess {
 			return res
 		}
@@ -1524,6 +1529,8 @@ func (r *ReconcileAerospikeCluster) deleteExternalResources(aeroCluster *aerospi
 			return fmt.Errorf("Could not find pvc for rack: %v", err)
 		}
 		storage := rack.Storage
+		logger.Info("##### in delete external resource delete", log.Ctx{"storage": storage, "rack": rack})
+
 		if _, err := r.removePVCsAsync(aeroCluster, &storage, rackPVCItems); err != nil {
 			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
 		}
@@ -1589,8 +1596,10 @@ func (r *ReconcileAerospikeCluster) removePVCsAsync(aeroCluster *aerospikev1alph
 			continue
 		}
 
+		logger.Info("##### Storage in remove PVC", log.Ctx{"PVC": pvc.Name, "storage": storage})
+
 		var cascadeDelete bool
-		v := getVolumeConfigForPVC(aeroClusterNamespacedName.Name, storage, path)
+		v := getVolumeConfigForPVC(storage, path)
 		if v == nil {
 			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
 				cascadeDelete = storage.BlockVolumePolicy.CascadeDelete
@@ -1670,7 +1679,7 @@ func (r *ReconcileAerospikeCluster) waitForPVCTermination(aeroCluster *aerospike
 	return nil
 }
 
-func getVolumeConfigForPVC(aeroClusterName string, storage *aerospikev1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *aerospikev1alpha1.AerospikePersistentVolumeSpec {
+func getVolumeConfigForPVC(storage *aerospikev1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *aerospikev1alpha1.AerospikePersistentVolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
 		if pvcPathAnnotation == v.Path {

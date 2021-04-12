@@ -136,9 +136,7 @@ func (s *ClusterMutatingAdmissionWebhook) setDefaults() error {
 // setDefaultRackConf create the default rack if the spec has no racks configured.
 func (s *ClusterMutatingAdmissionWebhook) setDefaultRackConf() error {
 	if len(s.obj.Spec.RackConfig.Racks) == 0 {
-		s.obj.Spec.RackConfig = aerospikev1alpha1.RackConfig{
-			Racks: []aerospikev1alpha1.Rack{{ID: utils.DefaultRackID}},
-		}
+		s.obj.Spec.RackConfig.Racks = append(s.obj.Spec.RackConfig.Racks, aerospikev1alpha1.Rack{ID: utils.DefaultRackID})
 		s.logger.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": s.obj.Spec.RackConfig, "DefaultRackID": utils.DefaultRackID})
 	} else {
 		for _, rack := range s.obj.Spec.RackConfig.Racks {
