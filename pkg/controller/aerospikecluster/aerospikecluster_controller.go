@@ -496,8 +496,41 @@ func (r *ReconcileAerospikeCluster) reconcileRack(aeroCluster *aerospikev1alpha1
 		}
 	}
 
+	// All regular operation are complete. Take time and cleanup dangling nodes that have not been cleaned up previously due to errors.
+	if err = r.cleanupDanglingPodsRack(aeroCluster, found, rackState); err != nil {
+		return reconcileError(err)
+	}
+
 	// TODO: check if all the pods are up or not
 	return reconcileSuccess()
+}
+
+func (r *ReconcileAerospikeCluster) cleanupDanglingPodsRack(aeroCluster *aerospikev1alpha1.AerospikeCluster, sts *appsv1.StatefulSet, rackState RackState) error {
+	// Clean up any dangling resources associated with the new pods.
+	// This implements a safety net to protect scale up against failed cleanup operations when cluster
+	// is scaled down.
+	danglingPods := []string{}
+
+	// Find dangling pods in pods
+	if aeroCluster.Status.Pods != nil {
+		for podName := range aeroCluster.Status.Pods {
+			ordinal, err := getStatefulSetPodOrdinal(podName)
+			if err != nil {
+				fmt.Errorf("Invalid pod name: %s", podName)
+			}
+
+			if *ordinal >= *sts.Spec.Replicas {
+				danglingPods = append(danglingPods, podName)
+			}
+		}
+	}
+
+	err := r.cleanupPods(aeroCluster, danglingPods, rackState)
+	if err != nil {
+		return fmt.Errorf("Failed dangling pod cleanup: %v", err)
+	}
+
+	return nil
 }
 
 func isClusterAerospikeConfigSecretUpdated(aeroCluster *aerospikev1alpha1.AerospikeCluster) bool {
@@ -580,28 +613,7 @@ func (r *ReconcileAerospikeCluster) scaleUpRack(aeroCluster *aerospikev1alpha1.A
 		}
 	}
 
-	// Clean up any dangling resources associated with the new pods.
-	// This implements a safety net to protect scale up against failed cleanup operations when cluster
-	// is scaled down.
-	cleanupPods := []string{}
-	cleanupPods = append(cleanupPods, newPodNames...)
-
-	// Find dangling pods in pods
-	if aeroCluster.Status.Pods != nil {
-		for podName := range aeroCluster.Status.Pods {
-			ordinal, err := getStatefulSetPodOrdinal(podName)
-			if err != nil {
-				return found, reconcileError(fmt.Errorf("Invalid pod name: %s", podName))
-			}
-
-			if *ordinal >= desiredSize {
-				cleanupPods = append(cleanupPods, podName)
-			}
-		}
-	}
-
-	err = r.cleanupPods(aeroCluster, cleanupPods, rackState)
-	if err != nil {
+	if err := r.cleanupDanglingPodsRack(aeroCluster, found, rackState); err != nil {
 		return found, reconcileError(fmt.Errorf("Failed scale up pre-check: %v", err))
 	}
 
@@ -1168,33 +1180,6 @@ func (r *ReconcileAerospikeCluster) scaleDownRack(aeroCluster *aerospikev1alpha1
 		logger.Info("Pod Removed", log.Ctx{"podName": podName})
 	}
 
-	clusterPodList, err := r.getClusterPodList(aeroCluster)
-	if err != nil {
-		return found, reconcileError(fmt.Errorf("Failed to list pods: %v", err))
-	}
-
-	// Do post-remove-node info calls
-	for _, np := range clusterPodList.Items {
-		// TODO: We remove node from the end. Nodes will not have seed of successive nodes
-		// So this will be no op.
-		// We should tip in all nodes the same seed list,
-		// then only this will have any impact. Is it really necessary?
-
-		// TODO: tip after scaleup and create
-		// All nodes from other rack
-		r.tipClearHostname(aeroCluster, &np, pod)
-
-		r.alumniReset(aeroCluster, &np)
-	}
-
-	if aeroCluster.Spec.MultiPodPerHost {
-		// Remove service for pod
-		// TODO: make it more roboust, what if it fails
-		if err := r.deleteServiceForPod(pod.Name, aeroCluster.Namespace); err != nil {
-			return found, reconcileError(err)
-		}
-	}
-
 	return found, reconcileRequeueAfter(0)
 }
 
@@ -1451,8 +1436,48 @@ func (r *ReconcileAerospikeCluster) recoverFailedCreate(aeroCluster *aerospikev1
 func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.AerospikeCluster, podNames []string, rackState RackState) error {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
+	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
+
+	// Delete PVCs if cascadeDelete
+	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
+	if err != nil {
+		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
+	}
+	storage := rackState.Rack.Storage
+	if err := r.removePVCs(aeroCluster, &storage, pvcItems); err != nil {
+		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
+	}
+
 	needStatusCleanup := []string{}
+
+	clusterPodList, err := r.getClusterPodList(aeroCluster)
+	if err != nil {
+		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
+	}
+
 	for _, podName := range podNames {
+		// Clear references to this pod in the running cluster.
+		for _, np := range clusterPodList.Items {
+			// TODO: We remove node from the end. Nodes will not have seed of successive nodes
+			// So this will be no op.
+			// We should tip in all nodes the same seed list,
+			// then only this will have any impact. Is it really necessary?
+
+			// TODO: tip after scaleup and create
+			// All nodes from other rack
+			r.tipClearHostname(aeroCluster, &np, podName)
+
+			r.alumniReset(aeroCluster, &np)
+		}
+
+		if aeroCluster.Spec.MultiPodPerHost {
+			// Remove service for pod
+			// TODO: make it more roboust, what if it fails
+			if err := r.deleteServiceForPod(podName, aeroCluster.Namespace); err != nil {
+				return err
+			}
+		}
+
 		_, ok := aeroCluster.Status.Pods[podName]
 		if ok {
 			needStatusCleanup = append(needStatusCleanup, podName)
@@ -1465,18 +1490,6 @@ func (r *ReconcileAerospikeCluster) cleanupPods(aeroCluster *aerospikev1alpha1.A
 		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
 			return fmt.Errorf("Could not cleanup pod status: %v", err)
 		}
-	}
-
-	logger.Info("Removing pvc for removed pods", log.Ctx{"pods": podNames})
-
-	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
-	if err != nil {
-		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
-	}
-	storage := rackState.Rack.Storage
-	if err := r.removePVCs(aeroCluster, &storage, pvcItems); err != nil {
-		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
 	}
 
 	return nil

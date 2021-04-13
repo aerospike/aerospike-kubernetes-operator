@@ -132,12 +132,12 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
+func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPodName string) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
