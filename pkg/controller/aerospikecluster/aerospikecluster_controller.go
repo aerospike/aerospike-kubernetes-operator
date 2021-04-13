@@ -514,9 +514,18 @@ func (r *ReconcileAerospikeCluster) cleanupDanglingPodsRack(aeroCluster *aerospi
 	// Find dangling pods in pods
 	if aeroCluster.Status.Pods != nil {
 		for podName := range aeroCluster.Status.Pods {
+			rackID, err := utils.GetRackIDFromPodName(podName)
+			if err != nil {
+				return fmt.Errorf("Failed to get rackID for the pod %s", podName)
+			}
+			if *rackID != rackState.Rack.ID {
+				// This pod is from other rack, so skip it
+				continue
+			}
+
 			ordinal, err := getStatefulSetPodOrdinal(podName)
 			if err != nil {
-				fmt.Errorf("Invalid pod name: %s", podName)
+				return fmt.Errorf("Invalid pod name: %s", podName)
 			}
 
 			if *ordinal >= *sts.Spec.Replicas {
