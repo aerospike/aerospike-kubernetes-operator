@@ -55,7 +55,7 @@ func (r *ReconcileAerospikeCluster) getAerospikeServerVersionFromPod(aeroCluster
 	return version, nil
 }
 
-func (r *ReconcileAerospikeCluster) waitForClusterToBeReady(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
+func (r *ReconcileAerospikeCluster) waitForClusterStaefulSetsToBeReady(aeroCluster *aerospikev1alpha1.AerospikeCluster) error {
 	// User aeroCluster.Status to get all existing sts.
 	// Can status be empty here
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
@@ -78,20 +78,21 @@ func (r *ReconcileAerospikeCluster) waitForClusterToBeReady(aeroCluster *aerospi
 	return nil
 }
 
-func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod) reconcileResult {
+// waitForNodeSafeStopReady waits util the input pod is safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
+func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, ignorablePods []v1.Pod) reconcileResult {
 	// TODO: Check post quiesce recluster conditions first.
 	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
 
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// Remove a node only if cluster is stable
-	err := r.waitForClusterToBeReady(aeroCluster)
+	err := r.waitForClusterStaefulSetsToBeReady(aeroCluster)
 	if err != nil {
 		return reconcileError(fmt.Errorf("Failed to wait for cluster to be ready: %v", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConn(aeroCluster)
+	allHostConns, err := r.newAllHostConnWithOption(aeroCluster, ignorablePods)
 	if err != nil {
 		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -131,12 +132,12 @@ func (r *ReconcileAerospikeCluster) waitForNodeSafeStopReady(aeroCluster *aerosp
 	return reconcileSuccess()
 }
 
-func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
+func (r *ReconcileAerospikeCluster) tipClearHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPodName string) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), utils.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), utils.HeartbeatPort)
 }
 
 func (r *ReconcileAerospikeCluster) tipHostname(aeroCluster *aerospikev1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
@@ -153,21 +154,6 @@ func (r *ReconcileAerospikeCluster) alumniReset(aeroCluster *aerospikev1alpha1.A
 		return err
 	}
 	return deployment.AlumniReset(r.getClientPolicy(aeroCluster), asConn)
-}
-
-func getRackIDFromPodName(podName string) (*int, error) {
-	parts := strings.Split(podName, "-")
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
-	}
-	// Podname format stsname-ordinal
-	// stsname ==> clustername-rackid
-	rackStr := parts[len(parts)-2]
-	rackID, err := strconv.Atoi(rackStr)
-	if err != nil {
-		return nil, err
-	}
-	return &rackID, nil
 }
 
 // getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
@@ -234,10 +220,18 @@ func (r *ReconcileAerospikeCluster) getServicePortForPod(aeroCluster *aerospikev
 }
 
 func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]*deployment.HostConn, error) {
+	return r.newAllHostConnWithOption(aeroCluster, nil)
+}
+
+// newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and present in ignorablePods.
+func (r *ReconcileAerospikeCluster) newAllHostConnWithOption(aeroCluster *aerospikev1alpha1.AerospikeCluster, ignorablePods []v1.Pod) ([]*deployment.HostConn, error) {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+
 	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(podList.Items) == 0 {
 		return nil, fmt.Errorf("Pod list empty")
 	}
@@ -247,10 +241,18 @@ func (r *ReconcileAerospikeCluster) newAllHostConn(aeroCluster *aerospikev1alpha
 		if utils.IsTerminating(&pod) {
 			continue
 		}
+
 		// Checking if all the container in the pod are ready or not
-		if !utils.IsPodReady(&pod) {
+		if !utils.IsPodRunningAndReady(&pod) {
+			ignorablePod := utils.GetPod(pod.Name, ignorablePods)
+			if ignorablePod != nil {
+				// This pod is not running and ignorable.
+				logger.Info("Ignoring info call on non-running pod ", log.Ctx{"pod": pod.Name})
+				continue
+			}
 			return nil, fmt.Errorf("Pod: %v is not ready", pod.Name)
 		}
+
 		hostConn, err := r.newHostConn(aeroCluster, &pod)
 		if err != nil {
 			return nil, err

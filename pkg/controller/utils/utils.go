@@ -80,7 +80,7 @@ func NamespacedName(namespace, name string) string {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning && IsPodReady(pod)
+	return !IsTerminating(pod) && pod.Status.Phase == v1.PodRunning && isPodReady(pod)
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
@@ -157,8 +157,8 @@ func IsCrashed(pod *v1.Pod) bool {
 	return ps.State.Waiting != nil && isCrashError(ps.State.Waiting.Reason)
 }
 
-// IsPodReady return true if all the container of the pod are in ready state
-func IsPodReady(pod *v1.Pod) bool {
+// isPodReady return true if all the container of the pod are in ready state
+func isPodReady(pod *v1.Pod) bool {
 	for _, status := range pod.Status.ContainerStatuses {
 		if !status.Ready {
 			return false
@@ -374,4 +374,33 @@ func GetHash(str string) (string, error) {
 	}
 	res := hash.Sum(digest)
 	return hex.EncodeToString(res), nil
+}
+
+func GetRackIDFromPodName(podName string) (*int, error) {
+	parts := strings.Split(podName, "-")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
+	}
+	// Podname format stsname-ordinal
+	// stsname ==> clustername-rackid
+	rackStr := parts[len(parts)-2]
+	rackID, err := strconv.Atoi(rackStr)
+	if err != nil {
+		return nil, err
+	}
+	return &rackID, nil
+}
+
+func GetRackIDFromStatefulSetName(statefulSetName string) (*int, error) {
+	parts := strings.Split(statefulSetName, "-")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("Failed to get rackID from statefulSetName %s", statefulSetName)
+	}
+	// stsname ==> clustername-rackid
+	rackStr := parts[len(parts)-1]
+	rackID, err := strconv.Atoi(rackStr)
+	if err != nil {
+		return nil, err
+	}
+	return &rackID, nil
 }

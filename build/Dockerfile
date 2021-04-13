@@ -4,6 +4,10 @@ ENV OPERATOR=/usr/local/bin/aerospike-kubernetes-operator \
     USER_UID=1001 \
     USER_NAME=aerospike-kubernetes-operator
 
+ARG OPERATOR_VERSION
+RUN if [ -z "$OPERATOR_VERSION" ]; then echo "OPERATOR_VERSION NOT SET - ERROR"; exit 1; else : ; fi
+ENV OPERATOR_VERSION=$OPERATOR_VERSION
+
 # install operator binary
 COPY build/_output/bin/aerospike-kubernetes-operator ${OPERATOR}
 

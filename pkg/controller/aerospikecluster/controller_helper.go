@@ -12,12 +12,6 @@ import (
 	"strings"
 	"time"
 
-	as "github.com/ashishshinde/aerospike-client-go"
-
-	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
-	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/configmap"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
 	log "github.com/inconshreveable/log15"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +23,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	aerospikev1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	accessControl "github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/asconfig"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/configmap"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/controller/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
+	as "github.com/ashishshinde/aerospike-client-go"
 )
 
 const (
@@ -620,6 +621,44 @@ func (r *ReconcileAerospikeCluster) getClusterStatefulSets(aeroCluster *aerospik
 	return statefulSetList, nil
 }
 
+func (r *ReconcileAerospikeCluster) getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) ([]aerospikev1alpha1.Rack, error) {
+	var rackList []aerospikev1alpha1.Rack = []aerospikev1alpha1.Rack{}
+	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+		rackList = append(rackList, rack)
+	}
+
+	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack before status was updated.
+	statefulSetList, err := r.getClusterStatefulSets(aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sts := range statefulSetList.Items {
+		rackID, err := utils.GetRackIDFromStatefulSetName(sts.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		found := false
+		for _, rack := range aeroCluster.Status.RackConfig.Racks {
+			if rack.ID == *rackID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Create a dummy rack config using globals.
+			// TODO: Refactor and reuse code in mutate setting.
+			dummyRack := aerospikev1alpha1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: aeroCluster.Spec.AerospikeConfig}
+
+			rackList = append(rackList, dummyRack)
+		}
+	}
+
+	return rackList, nil
+}
+
 func (r *ReconcileAerospikeCluster) getClusterServerPool(aeroCluster *aerospikev1alpha1.AerospikeCluster) *x509.CertPool {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
@@ -994,10 +1033,15 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 	// Add new sidecars.
 	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		found := false
+
+		// Create a copy because updating stateful sets sets defaults
+		// on the sidecar container object which mutates original aeroCluster object.
+		sideCarCopy := corev1.Container{}
+		lib.DeepCopy(&sideCarCopy, &newSidecar)
 		for i, container := range st.Spec.Template.Spec.Containers {
 			if newSidecar.Name == container.Name {
 				// Update the sidecar in case something has changed.
-				st.Spec.Template.Spec.Containers[i] = newSidecar
+				st.Spec.Template.Spec.Containers[i] = sideCarCopy
 				found = true
 				break
 			}
@@ -1005,7 +1049,7 @@ func updateStatefulSetPodSpec(aeroCluster *aerospikev1alpha1.AerospikeCluster, s
 
 		if !found {
 			// Add to stateful set containers.
-			st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, newSidecar)
+			st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, sideCarCopy)
 		}
 	}
 
@@ -1357,12 +1401,4 @@ func getNewRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []Rack
 		})
 	}
 	return rackStateList
-}
-
-func getOldRackList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []aerospikev1alpha1.Rack {
-	var rackList []aerospikev1alpha1.Rack
-	for _, rack := range aeroCluster.Status.RackConfig.Racks {
-		rackList = append(rackList, rack)
-	}
-	return rackList
 }
