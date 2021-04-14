@@ -55,6 +55,8 @@ github.com/aerospike/aerospike-management-lib v0.0.0-20210322115330-9d485d9c5418
 github.com/aerospike/aerospike-management-lib v0.0.0-20210322115330-9d485d9c5418/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210323221025-602456f7790f h1:F3WG136l1Luy5FD27xQ13F80EhoMoZGw8ycvNIlp89A=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210323221025-602456f7790f/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20210414075543-ccbdd7508d23 h1:7AXK5VxEJOeATSzd8SsJBrHuyM4FbImaSmiJh4ZXEIg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20210414075543-ccbdd7508d23/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf h1:qet1QNfXsQxTZqLG4oE62mJzwPIB8+Tee4RNCL9ulrY=
@@ -336,6 +338,8 @@ github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a h1:zPPuIq2jAWWPTrGt7
 github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a/go.mod h1:yL958EeXv8Ylng6IfnvG4oflryUi3vgA3xPs9hmII1s=
 github.com/jinzhu/copier v0.2.8 h1:N8MbL5niMwE3P4dOwurJixz5rMkKfujmMRFmAanSzWE=
 github.com/jinzhu/copier v0.2.8/go.mod h1:24xnZezI2Yqac9J61UC6/dG/k76ttpq0DdJI3QmUvro=
+github.com/jinzhu/copier v0.2.9 h1:v0Wnz+GKEI63FX7cU2LI20mFFlhTNl+36cjDIuhq3QY=
+github.com/jinzhu/copier v0.2.9/go.mod h1:24xnZezI2Yqac9J61UC6/dG/k76ttpq0DdJI3QmUvro=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmoiron/sqlx v1.2.0/go.mod h1:1FEQNm3xlJgrMD+FBdI9+xvCksHtbpVBBw5dYhBSsks=
 github.com/joefitzgerald/rainbow-reporter v0.1.0/go.mod h1:481CNgqmVHQZzdIbN52CupLJyoVwB10FQ/IQlF1pdL8=
