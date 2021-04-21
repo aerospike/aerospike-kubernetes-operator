@@ -2,8 +2,10 @@ apiVersion: v2
 type: application
 name: aerospike-cluster
 
-version: 1.0.0
-appVersion: 1.0.0
+# version tracks chart changes
+version: 1.0.1
+# appVersion tracks operator version
+appVersion: 1.0.1
 
 description: A Helm chart for Aerospike Cluster Custom Resource
 icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4

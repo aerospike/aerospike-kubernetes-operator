@@ -4,7 +4,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 5.5.0.7
+  tag: 5.5.0.9
 
 ## Multi pod per host
 # multiPodPerHost: true

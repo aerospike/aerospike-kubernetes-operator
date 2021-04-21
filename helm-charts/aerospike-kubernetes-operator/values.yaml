@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 image:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 1.0.0
+  tag: 1.0.1
   # pullPolicy: IfNotPresent
 
 ## Create RBAC resources
