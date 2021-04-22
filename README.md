@@ -34,7 +34,8 @@ A layered approach is taken to orchestration which allows the Operator to manage
  * [System Requirements](https://www.aerospike.com/docs/cloud/System-Requirements.html)
  * [Install the Operator on Kubernetes](https://www.aerospike.com/docs/cloud/Install-the-Operator-on-Kubernetes.html)
  * [Create an Aerospike cluster](https://www.aerospike.com/docs/cloud/Create-Aerospike-cluster.html)
+ * [Limitations](https://www.aerospike.com/docs/cloud/Limitations.html)
 
 ## See also
  * [Kubernetes](https://kubernetes.io)
- * [Limitations](/docs/cloud/Limitations.html)
+
