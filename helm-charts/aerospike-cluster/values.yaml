@@ -81,5 +81,5 @@ resources: {}
   #   memory: 1Gi
   #   cpu: 100m
 
-# Deploy Aerospike cluster in dev mode
+## Deploy Aerospike cluster in dev mode
 devMode: false
