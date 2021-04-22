@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 image:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 1.0.0
+  tag: 1.0.1
   # pullPolicy: IfNotPresent
 
 ## Create RBAC resources
@@ -38,38 +38,38 @@ affinity: {}
   #         values:
   #         - <Kubernetes Host>
 
-# Extra environment variables that will be passed into the operator pods
+## Extra environment variables that will be passed into the operator pods
 extraEnv: {}
 
-# Node selector
+## Node selector
 nodeSelector: {}
 
-# Tolerations
+## Tolerations
 tolerations: []
 
-# Deployment annotations and labels
-# Deployment labels are inherited by the pods automatically
+## Deployment annotations and labels
+## Deployment labels are inherited by the pods automatically
 annotations: {}
 labels: {}
 
-# Pod annotations and labels
+## Pod annotations and labels
 podAnnotations: {}
 podLabels: {}
 
-# Service configuration
+## Service configuration
 service: {}
   # labels: {}
   # annotations: {}
   # port: 443
   # type: ClusterIP
 
-# Pod security context
+## Pod security context
 podSecurityContext: {}
 
-# Container security context
+## Container security context
 securityContext: {}
 
-# Readiness and Liveness probes
+## Readiness and Liveness probes
 # livenessProbe: {}
 # readinessProbe: {}
 #   tcpSocket:
