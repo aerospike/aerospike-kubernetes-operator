@@ -13,9 +13,10 @@ metadata:
 ---
 # Role
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: aerospike-cluster
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "aerospike-cluster.commonName" . }}
     chart: {{ .Chart.Name }}
@@ -39,10 +40,11 @@ rules:
 
 ---
 # RoleBinding
-kind: ClusterRoleBinding
+kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: aerospike-cluster
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "aerospike-cluster.commonName" . }}
     chart: {{ .Chart.Name }}
@@ -55,3 +57,4 @@ subjects:
 - kind: ServiceAccount
   name: aerospike-cluster
   namespace: {{ .Release.Namespace }}
+
