@@ -29,25 +29,24 @@ spec:
         - /manager
         args:
         - --leader-elect
-        # image: controller:latest
-        image: sud82/test-operator:v0.0.12
+        image: controller:latest
         name: manager
         # TODO: only in dev
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
-        # livenessProbe:
-        #   httpGet:
-        #     path: /healthz
-        #     port: 8081
-        #   initialDelaySeconds: 15
-        #   periodSeconds: 20
-        # readinessProbe:
-        #   httpGet:
-        #     path: /readyz
-        #     port: 8081
-        #   initialDelaySeconds: 5
-        #   periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           limits:
             cpu: 100m

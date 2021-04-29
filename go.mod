@@ -78,8 +78,5 @@ replace github.com/openshift/api => github.com/openshift/api v0.0.0-201909241025
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
-	// github.com/operator-framework/operator-sdk => github.com/operator-framework/operator-sdk v1.3.2
-	// k8s.io/apimachinery => k8s.io/apimachinery v0.18.2
-	// k8s.io/client-go => k8s.io/client-go v0.17.0 // Required by prometheus-operator
 	k8s.io/client-go => k8s.io/client-go v0.19.2 // Required by prometheus-operator
 )

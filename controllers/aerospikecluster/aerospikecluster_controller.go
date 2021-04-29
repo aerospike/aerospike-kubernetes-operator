@@ -52,78 +52,7 @@ var (
 	}
 )
 
-// // Add creates a new AerospikeCluster Controller and adds it to the Manager. The Manager will set fields on the Controller
-// // and Start it when the Manager is Started.
-// func Add(mgr manager.Manager) error {
-// 	return add(mgr, newReconciler(mgr))
-// }
-
-// // newReconciler returns a new reconcile.Reconciler
-// func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-// 	return &AerospikeClusterReconciler{client: mgr.GetClient(), scheme: mgr.GetScheme()}
-// }
-
-// // add adds a new Controller to mgr with r as the reconcile.Reconciler
-// func add(mgr manager.Manager, r reconcile.Reconciler) error {
-// 	// Create a new controller
-// 	c, err := controller.New("aerospikecluster-controller", mgr, controller.Options{Reconciler: r, MaxConcurrentReconciles: maxConcurrentReconciles})
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	// Watch for changes to primary resource AerospikeCluster
-// 	err = c.Watch(
-// 		&source.Kind{Type: &asdbv1alpha1.AerospikeCluster{}},
-// 		&handler.EnqueueRequestForObject{},
-// 		// Skip where cluster object generation is not changed
-// 		predicate.GenerationChangedPredicate{})
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	// TODO: Do we need to monitor this? Statefulset is updated many times in reconcile and this add new entry in
-// 	// update queue. If user will change only cr then we may not need to monitor statefulset.
-// 	// Think all possible situation
-
-// 	// Watch for changes to secondary resource StatefulSet and requeue the owner AerospikeCluster
-// 	err = c.Watch(
-// 		&source.Kind{Type: &appsv1.StatefulSet{}},
-// 		&handler.EnqueueRequestForOwner{
-// 			IsController: true,
-// 			OwnerType:    &asdbv1alpha1.AerospikeCluster{},
-// 		}, predicate.Funcs{
-// 			CreateFunc: func(e event.CreateEvent) bool {
-// 				return false
-// 			},
-// 			UpdateFunc: func(e event.UpdateEvent) bool {
-// 				return false
-// 			},
-// 		})
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
-
 func ignoreSecondaryResource() predicate.Predicate {
-	// Watch for changes to secondary resource StatefulSet and requeue the owner AerospikeCluster
-	// err = c.Watch(
-	// 	&source.Kind{Type: &appsv1.StatefulSet{}},
-	// 	&handler.EnqueueRequestForOwner{
-	// 		IsController: true,
-	// 		OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
-	// 	}, predicate.Funcs{
-	// 		CreateFunc: func(e event.CreateEvent) bool {
-	// 			return false
-	// 		},
-	// 		UpdateFunc: func(e event.UpdateEvent) bool {
-	// 			return false
-	// 		},
-	// 	)
-	// if err != nil {
-	// 	return err
-	// }
 	p := predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// Ignore updates to CR status in which case metadata.Generation does not change
@@ -141,24 +70,6 @@ func ignoreSecondaryResource() predicate.Predicate {
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&asdbv1alpha1.AerospikeCluster{}).
-		// Watches(
-		// 	&source.Kind{Type: &appsv1.StatefulSet{}},
-		// 	&handler.EnqueueRequestForOwner{
-		// 		IsController: true,
-		// 		OwnerType:    &aerospikev1alpha1.AerospikeCluster{},
-		// 	},
-
-		// 	builder.WithPredicates(
-		// 		predicate.Funcs{
-		// 			CreateFunc: func(e event.CreateEvent) bool {
-		// 				return false
-		// 			},
-		// 			UpdateFunc: func(e event.UpdateEvent) bool {
-		// 				return false
-		// 			},
-		// 		},
-		// 	),
-		// ).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(
 			predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
@@ -173,34 +84,8 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// 	MaxConcurrentReconciles: maxConcurrentReconciles,
 		// }).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		// WithEventFilter(predicate.Funcs{
-		// 	UpdateFunc: func(e event.UpdateEvent) bool {
-		// 		// Generation is only updated on spec changes (also on deletion),
-		// 		// not metadata or status
-		// 		// Filter out events where the generation hasn't changed to
-		// 		// avoid being triggered by status updates
-		// 		return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
-		// 	},
-		// 	DeleteFunc: func(e event.DeleteEvent) bool {
-		// 		// The reconciler adds a finalizer so we perform clean-up
-		// 		// when the delete timestamp is added
-		// 		// Suppress Delete events to avoid filtering them out in the Reconcile function
-		// 		return false
-		// 	},
-		// }).
 		Complete(r)
 }
-
-// // blank assignment to verify that AerospikeClusterReconciler implements reconcile.Reconciler
-// var _ reconcile.Reconciler = &AerospikeClusterReconciler{}
-
-// // AerospikeClusterReconciler reconciles a AerospikeCluster object
-// type AerospikeClusterReconciler struct {
-// 	// This client, initialized using mgr.Client() above, is a split client
-// 	// that reads objects from the cache and writes to the apiserver
-// 	client client.Client
-// 	scheme *k8sRuntime.Scheme
-// }
 
 // AerospikeClusterReconciler reconciles a AerospikeCluster object
 type AerospikeClusterReconciler struct {
