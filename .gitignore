@@ -22,4 +22,12 @@ testbin/*
 .idea
 *.swp
 *.swo
+
+# aerospike feature conf file
+features.conf
 *~
+\#*\#
+.\#*
+GPATH
+GRTAGS
+GTAGS
