@@ -1,0 +1,72 @@
+apiVersion: asdb.aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  size: 2
+  #image: aerospike/aerospike-server-enterprise:5.5.0.3
+  image: aerospike/aerospike-server-enterprise:5.2.0.7
+  multiPodPerHost: true
+  # rackConfig:
+  #   namespaces:
+  #     - test
+  #   racks:
+  #     - id: 1
+  #       aerospikeConfig:
+  #         service:
+  #           proto-fd-max: 18000
+  #     - id: 2
+  #       aerospikeConfig:
+  #         service:
+  #           proto-fd-max: 18000
+  #     - id: 3
+  #       aerospikeConfig:
+  #         service:
+  #           proto-fd-max: 18000
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - path: /opt/aerospike
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+
+  aerospikeConfig:
+    logging:
+      - name: /var/log/aerospike/aerospike.log
+        any: info
+        clustering: debug
+
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+
+    security:
+      enable-security: true
+
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine:
+          type: memory
+
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 200m

@@ -1,0 +1,98 @@
+apiVersion: asdb.aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  size: 2
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
+  rackConfig:
+    namespaces:
+      - test
+    racks:
+      - id: 1
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-a
+        # nodeName: kubernetes-minion-group-qp3m
+        aerospikeConfig:
+          service:
+            proto-fd-max: 18000
+        # rack level storage, used by pods of this rack
+        storage:
+          filesystemVolumePolicy:
+            initMethod: deleteFiles
+            cascadeDelete: true
+          blockVolumePolicy:
+            cascadeDelete: true
+          volumes:
+            - storageClass: ssd
+              path: /opt/aerospike
+              volumeMode: filesystem
+              sizeInGB: 1
+            - path: /opt/aerospike/data
+              storageClass: ssd
+              volumeMode: filesystem
+              sizeInGB: 3
+      - id: 2
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-a
+        # nodeName: kubernetes-minion-group-tft3
+        aerospikeConfig:
+          service:
+            proto-fd-max: 16000
+
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+
+  multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 1
+        storage-engine:
+          type: device
+          files:
+            - /opt/aerospike/data/test.dat
+          filesize: 2000000000
+          data-in-memory: true
+      - name: testMem
+        memory-size: 3000000000
+        replication-factor: 1
+        storage-engine:
+          type: memory
+
+
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 200m

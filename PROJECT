@@ -1,0 +1,14 @@
+domain: aerospike.com
+layout: go.kubebuilder.io/v3
+projectName: aerospike-kubernetes-operator
+repo: github.com/aerospike/aerospike-kubernetes-operator
+resources:
+- crdVersion: v1
+  group: asdb
+  kind: AerospikeCluster
+  version: v1alpha1
+  webhookVersion: v1
+version: 3-alpha
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
