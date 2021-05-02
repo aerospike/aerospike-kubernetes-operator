@@ -74,10 +74,7 @@ func BuildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1
 
 	version := strings.Split(aeroCluster.Spec.Image, ":")
 
-	configMap, err := asdbv1alpha1.ToAeroConfMap(rack.AerospikeConfig)
-	if err != nil {
-		return "", err
-	}
+	configMap := rack.AerospikeConfig.Value
 	log.V(1).Info("AerospikeConfig", "config", configMap, "image", aeroCluster.Spec.Image)
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], configMap)
