@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	// "github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
-	//"github.com/aerospike/aerospike-kubernetes-operator/pkg/apis/aerospike/v1alpha1"
+	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	"k8s.io/apimachinery/pkg/runtime"
