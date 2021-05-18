@@ -1363,8 +1363,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -1399,8 +1397,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             volumes:
                               description: Volumes list to attach to created pods.
@@ -1465,7 +1461,6 @@ spec:
                                     - configMap
                                     type: string
                                 required:
-                                - effectiveCascadeDelete
                                 - path
                                 - sizeInGB
                                 - storageClass
@@ -1530,8 +1525,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -1566,8 +1559,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             volumes:
                               description: Volumes list to attach to created pods.
@@ -1632,7 +1623,6 @@ spec:
                                     - configMap
                                     type: string
                                 required:
-                                - effectiveCascadeDelete
                                 - path
                                 - sizeInGB
                                 - storageClass
@@ -1722,8 +1712,6 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
-                    required:
-                    - effectiveCascadeDelete
                     type: object
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
@@ -1757,8 +1745,6 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
-                    required:
-                    - effectiveCascadeDelete
                     type: object
                   volumes:
                     description: Volumes list to attach to created pods.
@@ -1819,7 +1805,6 @@ spec:
                           - configMap
                           type: string
                       required:
-                      - effectiveCascadeDelete
                       - path
                       - sizeInGB
                       - storageClass
@@ -3294,8 +3279,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -3330,8 +3313,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             volumes:
                               description: Volumes list to attach to created pods.
@@ -3396,7 +3377,6 @@ spec:
                                     - configMap
                                     type: string
                                 required:
-                                - effectiveCascadeDelete
                                 - path
                                 - sizeInGB
                                 - storageClass
@@ -3461,8 +3441,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -3497,8 +3475,6 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
-                              required:
-                              - effectiveCascadeDelete
                               type: object
                             volumes:
                               description: Volumes list to attach to created pods.
@@ -3563,7 +3539,6 @@ spec:
                                     - configMap
                                     type: string
                                 required:
-                                - effectiveCascadeDelete
                                 - path
                                 - sizeInGB
                                 - storageClass
@@ -3652,8 +3627,6 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
-                    required:
-                    - effectiveCascadeDelete
                     type: object
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
@@ -3687,8 +3660,6 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
-                    required:
-                    - effectiveCascadeDelete
                     type: object
                   volumes:
                     description: Volumes list to attach to created pods.
@@ -3749,7 +3720,6 @@ spec:
                           - configMap
                           type: string
                       required:
-                      - effectiveCascadeDelete
                       - path
                       - sizeInGB
                       - storageClass

@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/merge"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/merge"
 )
 
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1alpha1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1alpha1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
@@ -68,24 +69,10 @@ func (r *AerospikeCluster) setDefaults() error {
 	}
 
 	// Set common aerospikeConfig defaults
-	config := r.Spec.AerospikeConfig
-	if config.Raw == nil {
-		return fmt.Errorf("aerospikeConfig cannot be empty")
-	}
-	configMap, err := ToAeroConfMap(config)
-	if err != nil {
-		return err
-	}
 	// Update configMap
-	if err := r.setDefaultAerospikeConfigs(configMap); err != nil {
+	if err := r.setDefaultAerospikeConfigs(*r.Spec.AerospikeConfig); err != nil {
 		return err
 	}
-	rawConf, err := ToAeroConfRaw(configMap)
-	if err != nil {
-		return err
-	}
-
-	r.Spec.AerospikeConfig.Raw = rawConf
 
 	// Update racks configuration using global values where required.
 	if err := r.updateRacks(); err != nil {
@@ -158,71 +145,58 @@ func (r *AerospikeCluster) updateRacksStorageFromGlobal() error {
 }
 
 func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal() error {
-	baseConfigMap, err := ToAeroConfMap(r.Spec.AerospikeConfig)
-	if err != nil {
-		return err
-	}
-
 	for i, rack := range r.Spec.RackConfig.Racks {
 		var m map[string]interface{}
+		var err error
 		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
-			rackConfigMap, err := ToAeroConfMap(*rack.InputAerospikeConfig)
-			if err != nil {
-				return err
-			}
-
-			m, err = merge.Merge(baseConfigMap, rackConfigMap)
-
-			// // r.// logger.Debug("Merged rack config from global aerospikeConfig", log.Ctx{"rack id": rack.ID, "rackAerospikeConfig": m, "globalAerospikeConfig": r.Spec.AerospikeConfig})
+			m, err = merge.Merge(r.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value)
+			// s.logger.Debug("Merged rack config from global aerospikeConfig", log.Ctx{"rack id": rack.ID, "rackAerospikeConfig": m, "globalAerospikeConfig": r.Spec.AerospikeConfig})
 			if err != nil {
 				return err
 			}
 		} else {
 			// Use the global config.
-			m = baseConfigMap
+			m = r.Spec.AerospikeConfig.Value
 		}
 
-		// // r.// logger.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		// s.logger.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := r.setDefaultAerospikeConfigs(m); err != nil {
+		if err := r.setDefaultAerospikeConfigs(AerospikeConfigSpec{Value: m}); err != nil {
 			return err
 		}
-		rawConf, err := ToAeroConfRaw(m)
-		if err != nil {
-			return err
-		}
-		r.Spec.RackConfig.Racks[i].AerospikeConfig.Raw = rawConf
+		r.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
 	}
 	return nil
 }
 
-func (r *AerospikeCluster) setDefaultAerospikeConfigs(config AeroConfMap) error {
+func (r *AerospikeCluster) setDefaultAerospikeConfigs(configSpec AerospikeConfigSpec) error {
+	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(config, r.Spec.RackConfig.Namespaces); err != nil {
+	if err := setDefaultNsConf(configSpec, r.Spec.RackConfig.Namespaces); err != nil {
 		return err
 	}
 
 	// service conf
-	if err := setDefaultServiceConf(config, r.Name); err != nil {
+	if err := setDefaultServiceConf(configSpec, r.Name); err != nil {
 		return err
 	}
 
 	// network conf
-	if err := setDefaultNetworkConf(config); err != nil {
+	if err := setDefaultNetworkConf(configSpec); err != nil {
 		return err
 	}
 
 	// logging conf
-	if err := setDefaultLoggingConf(config); err != nil {
+	if err := setDefaultLoggingConf(configSpec); err != nil {
 		return err
 	}
 
 	// xdr conf
 	if _, ok := config["xdr"]; ok {
-		if err := setDefaultXDRConf(config); err != nil {
+		if err := setDefaultXDRConf(configSpec); err != nil {
 			return err
 		}
 	}
@@ -234,7 +208,8 @@ func (r *AerospikeCluster) setDefaultAerospikeConfigs(config AeroConfMap) error 
 // Helper
 //*****************************************************************************
 
-func setDefaultNsConf(config AeroConfMap, rackEnabledNsList []string) error {
+func setDefaultNsConf(configSpec AerospikeConfigSpec, rackEnabledNsList []string) error {
+	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
 	if !ok {
@@ -282,7 +257,9 @@ func setDefaultNsConf(config AeroConfMap, rackEnabledNsList []string) error {
 	return nil
 }
 
-func setDefaultServiceConf(config AeroConfMap, crObjName string) error {
+func setDefaultServiceConf(configSpec AerospikeConfigSpec, crObjName string) error {
+	config := configSpec.Value
+
 	if _, ok := config["service"]; !ok {
 		config["service"] = map[string]interface{}{}
 	}
@@ -305,7 +282,9 @@ func setDefaultServiceConf(config AeroConfMap, crObjName string) error {
 	return nil
 }
 
-func setDefaultNetworkConf(config AeroConfMap) error {
+func setDefaultNetworkConf(configSpec AerospikeConfigSpec) error {
+	config := configSpec.Value
+
 	// Network section
 	if _, ok := config["network"]; !ok {
 		config["network"] = map[string]interface{}{}
@@ -392,7 +371,9 @@ func setDefaultNetworkConf(config AeroConfMap) error {
 	return nil
 }
 
-func setDefaultLoggingConf(config AeroConfMap) error {
+func setDefaultLoggingConf(configSpec AerospikeConfigSpec) error {
+	config := configSpec.Value
+
 	if _, ok := config["logging"]; !ok {
 		config["logging"] = []interface{}{}
 	}
@@ -426,7 +407,7 @@ func setDefaultLoggingConf(config AeroConfMap) error {
 	return nil
 }
 
-func setDefaultXDRConf(config AeroConfMap) error {
+func setDefaultXDRConf(configSpec AerospikeConfigSpec) error {
 	// Nothing to update for now
 
 	return nil

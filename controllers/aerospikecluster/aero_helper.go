@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	// log "github.com/inconshreveable/log15"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -295,10 +294,8 @@ func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1alpha1.Aerospi
 
 func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
 	// TODO: Should we return err, should have failed in validation
-	aeroConf, err := asdbv1alpha1.ToAeroConfMap(aeroCluster.Spec.AerospikeConfig)
-	if err != nil {
-		return ""
-	}
+	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
+
 	if networkConfTmp, ok := aeroConf["network"]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
 		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {

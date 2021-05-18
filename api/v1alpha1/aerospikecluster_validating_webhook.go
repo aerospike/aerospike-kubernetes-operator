@@ -93,16 +93,8 @@ func (r *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("Cannot update MultiPodPerHost setting")
 	}
 
-	newConfigMap, err := ToAeroConfMap(r.Spec.AerospikeConfig)
-	if err != nil {
-		return err
-	}
-	oldConfigMap, err := ToAeroConfMap(old.Spec.AerospikeConfig)
-	if err != nil {
-		return err
-	}
 	// Validate AerospikeConfig update
-	if err := validateAerospikeConfigUpdate(newConfigMap, oldConfigMap); err != nil {
+	if err := validateAerospikeConfigUpdate(r.Spec.AerospikeConfig, old.Spec.AerospikeConfig); err != nil {
 		return err
 	}
 
@@ -154,11 +146,8 @@ func (r *AerospikeCluster) validate() error {
 
 	// Validate for AerospikeConfigSecret.
 	// TODO: Should we validate mount path also. Config has tls info at different paths, fetching and validating that may be little complex
-	configMap, err := ToAeroConfMap(r.Spec.AerospikeConfig)
-	if err != nil {
-		return err
-	}
-	if isSecretNeeded(configMap) && r.Spec.AerospikeConfigSecret.SecretName == "" {
+	configMap := r.Spec.AerospikeConfig
+	if isSecretNeeded(*configMap) && r.Spec.AerospikeConfigSecret.SecretName == "" {
 		return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `aerospikeConfigSecret` field")
 	}
 
@@ -187,16 +176,16 @@ func (r *AerospikeCluster) validate() error {
 	}
 
 	// Validate if passed aerospikeConfig
-	if err := validateAerospikeConfigSchema(version, configMap); err != nil {
+	if err := validateAerospikeConfigSchema(version, *configMap); err != nil {
 		return fmt.Errorf("AerospikeConfig not valid: %v", err)
 	}
 
-	err = validateRequiredFileStorage(configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
+	err = validateRequiredFileStorage(*configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
 
-	err = validateConfigMapVolumes(configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
+	err = validateConfigMapVolumes(*configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
@@ -252,18 +241,9 @@ func (r *AerospikeCluster) validateRackUpdate(old *AerospikeCluster) error {
 					return fmt.Errorf("Old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v", oldRack, newRack)
 				}
 
-				if len(oldRack.AerospikeConfig.Raw) != 0 || len(newRack.AerospikeConfig.Raw) != 0 {
-					// Config might have changed
-					newConf, err := ToAeroConfMap(newRack.AerospikeConfig)
-					if err != nil {
-						return err
-					}
-					oldConf, err := ToAeroConfMap(oldRack.AerospikeConfig)
-					if err != nil {
-						return err
-					}
+				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
 					// Validate aerospikeConfig update
-					if err := validateAerospikeConfigUpdate(newConf, oldConf); err != nil {
+					if err := validateAerospikeConfigUpdate(&newRack.AerospikeConfig, &oldRack.AerospikeConfig); err != nil {
 						return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
 					}
 				}
@@ -345,22 +325,19 @@ func (r *AerospikeCluster) validateRackConfig() error {
 			return fmt.Errorf("Invalid rackID. RackID range (%d, %d)", MinRackID, MaxRackID)
 		}
 
-		config, err := ToAeroConfMap(rack.AerospikeConfig)
-		if err != nil {
-			return err
-		}
+		config := rack.AerospikeConfig
 
-		if len(rack.AerospikeConfig.Raw) != 0 || len(rack.Storage.Volumes) != 0 {
+		if len(rack.AerospikeConfig.Value) != 0 || len(rack.Storage.Volumes) != 0 {
 			// TODO:
 			// Replication-factor in rack and commonConfig can not be different
 			storage := rack.Storage
-			if err := validateAerospikeConfig(config, &storage, int(r.Spec.Size)); err != nil {
+			if err := validateAerospikeConfig(&config, &storage, int(r.Spec.Size)); err != nil {
 				return err
 			}
 		}
 
 		// Validate rack aerospike config
-		if len(rack.AerospikeConfig.Raw) != 0 {
+		if len(rack.AerospikeConfig.Value) != 0 {
 			if err := validateAerospikeConfigSchema(version, config); err != nil {
 				return fmt.Errorf("AerospikeConfig not valid for rack %v", rack)
 			}
@@ -400,7 +377,9 @@ func validateClusterSize(version string, sz int) error {
 	return nil
 }
 
-func validateAerospikeConfig(config AeroConfMap, storage *AerospikeStorageSpec, clSize int) error {
+func validateAerospikeConfig(configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int) error {
+	config := configSpec.Value
+
 	if config == nil {
 		return fmt.Errorf("aerospikeConfig cannot be empty")
 	}
@@ -619,7 +598,9 @@ func validateNamespaceReplicationFactor(nsConf map[string]interface{}, clSize in
 	return nil
 }
 
-func validateAerospikeConfigUpdate(newConf, oldConf AeroConfMap) error {
+func validateAerospikeConfigUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
+	newConf := newConfSpec.Value
+	oldConf := oldConfSpec.Value
 	// logger.Info("Validate AerospikeConfig update")
 
 	// Security can not be updated dynamically
@@ -659,14 +640,16 @@ func validateAerospikeConfigUpdate(newConf, oldConf AeroConfMap) error {
 		return fmt.Errorf("Cannot update tls-name for network.fabric")
 	}
 
-	if err := validateNsConfUpdate(newConf, oldConf); err != nil {
+	if err := validateNsConfUpdate(newConfSpec, oldConfSpec); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func validateNsConfUpdate(newConf, oldConf AeroConfMap) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
+	newConf := newConfSpec.Value
+	oldConf := oldConfSpec.Value
 
 	newNsConfList := newConf["namespaces"].([]interface{})
 
@@ -723,8 +706,9 @@ func validateNsConfUpdate(newConf, oldConf AeroConfMap) error {
 	return nil
 }
 
-func validateAerospikeConfigSchema(version string, config AeroConfMap) error {
+func validateAerospikeConfigSchema(version string, configSpec AerospikeConfigSpec) error {
 	// logger = logger.New(log.Ctx{"version": version})
+	config := configSpec.Value
 
 	asConf, err := asconfig.NewMapAsConfig(version, config)
 	if err != nil {
@@ -744,7 +728,7 @@ func validateAerospikeConfigSchema(version string, config AeroConfMap) error {
 	return nil
 }
 
-func validateRequiredFileStorage(config AeroConfMap, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
+func validateRequiredFileStorage(configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
 
 	_, fileStorageList, err := storage.GetStorageList()
 	if err != nil {
@@ -753,7 +737,7 @@ func validateRequiredFileStorage(config AeroConfMap, storage *AerospikeStorageSp
 
 	// Validate work directory.
 	if !validationPolicy.SkipWorkDirValidate {
-		workDirPath := GetWorkDirectory(config)
+		workDirPath := GetWorkDirectory(configSpec)
 
 		if !filepath.IsAbs(workDirPath) {
 			return fmt.Errorf("Aerospike work directory path %s must be absolute in storage config %v", workDirPath, storage)
@@ -771,8 +755,8 @@ func validateRequiredFileStorage(config AeroConfMap, storage *AerospikeStorageSp
 		}
 		if val < 0 {
 			// Validate xdr-digestlog-path for pre-5.0.0 versions.
-			if IsXdrEnabled(config) {
-				dglogFilePath, err := GetDigestLogFile(config)
+			if IsXdrEnabled(configSpec) {
+				dglogFilePath, err := GetDigestLogFile(configSpec)
 				if err != nil {
 					return err
 				}
@@ -793,7 +777,7 @@ func validateRequiredFileStorage(config AeroConfMap, storage *AerospikeStorageSp
 	return nil
 }
 
-func validateConfigMapVolumes(config AeroConfMap, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
+func validateConfigMapVolumes(configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
 	_, err := storage.GetConfigMaps()
 	return err
 }
@@ -854,16 +838,18 @@ func isEnterprise(image string) bool {
 }
 
 // isSecretNeeded indicates if aerospikeConfig needs secret
-func isSecretNeeded(aerospikeConfig AeroConfMap) bool {
+func isSecretNeeded(configSpec AerospikeConfigSpec) bool {
+	config := configSpec.Value
+
 	// feature-key-file needs secret
-	if svc, ok := aerospikeConfig["service"]; ok {
+	if svc, ok := config["service"]; ok {
 		if _, ok := svc.(map[string]interface{})["feature-key-file"]; ok {
 			return true
 		}
 	}
 
 	// tls needs secret
-	if IsTLS(aerospikeConfig) {
+	if IsTLS(configSpec) {
 		return true
 	}
 	return false

@@ -17,20 +17,19 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 
 	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
+// +k8s:openapi-gen=true
 type AerospikeClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
@@ -60,7 +59,7 @@ type AerospikeClusterSpec struct {
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
-	AerospikeConfig runtime.RawExtension `json:"aerospikeConfig"`
+	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
@@ -112,10 +111,10 @@ type Rack struct {
 	NodeName string `json:"nodeName,omitempty"`
 	// AerospikeConfig overrides the common AerospikeConfig for this Rack. This is merged with global Aerospike config.
 	// +kubebuilder:pruning:PreserveUnknownFields
-	InputAerospikeConfig *runtime.RawExtension `json:"aerospikeConfig,omitempty"`
+	InputAerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
 	// Effective/operative Aerospike config. The resultant is merge of rack Aerospike config and the global Aerospike config
 	// +kubebuilder:pruning:PreserveUnknownFields
-	AerospikeConfig runtime.RawExtension `json:"effectiveAerospikeConfig,omitempty"`
+	AerospikeConfig AerospikeConfigSpec `json:"effectiveAerospikeConfig,omitempty"`
 	// Storage specify persistent storage to use for the pods in this rack. This value overwrites the global storage config
 	InputStorage *AerospikeStorageSpec `json:"storage,omitempty"`
 	// Effective/operative storage. The resultant is user input if specified else global storage
@@ -301,7 +300,7 @@ type AerospikePersistentVolumePolicySpec struct {
 	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
-	CascadeDelete bool `json:"effectiveCascadeDelete"`
+	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -534,31 +533,31 @@ func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
 	return &dst
 }
 
-type AeroConfMap map[string]interface{}
+// type AeroConfMap map[string]interface{}
 
-func ToAeroConfMap(conf runtime.RawExtension) (AeroConfMap, error) {
-	var confMap AeroConfMap
-	if err := json.Unmarshal(conf.Raw, &confMap); err != nil {
-		return nil, err
-	}
+// func ToAeroConfMap(conf AerospikeConfigSpec) (AeroConfMap, error) {
+// 	var confMap AeroConfMap
+// 	if err := json.Unmarshal(conf.Value, &confMap); err != nil {
+// 		return nil, err
+// 	}
 
-	return confMap, nil
-}
+// 	return confMap, nil
+// }
 
-func ToAeroConfRaw(conf map[string]interface{}) ([]byte, error) {
-	raw, err := json.Marshal(conf)
-	return raw, err
-}
+// func ToAeroConfRaw(conf map[string]interface{}) ([]byte, error) {
+// 	raw, err := json.Marshal(conf)
+// 	return raw, err
+// }
 
-// type Values lib.Stats
+// // type Values lib.Stats
 
-// DeepCopy implements deepcopy func for AeroConfMap
-func (v *AeroConfMap) DeepCopy() *AeroConfMap {
-	src := *v
-	var dst = make(AeroConfMap)
-	lib.DeepCopy(dst, src)
-	return &dst
-}
+// // DeepCopy implements deepcopy func for AeroConfMap
+// func (v *AeroConfMap) DeepCopy() *AeroConfMap {
+// 	src := *v
+// 	var dst = make(AeroConfMap)
+// 	lib.DeepCopy(dst, src)
+// 	return &dst
+// }
 
 type AerospikeClusterStatusSpec struct {
 	// Aerospike cluster size
@@ -586,7 +585,7 @@ type AerospikeClusterStatusSpec struct {
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +nullable
-	AerospikeConfig runtime.RawExtension `json:"aerospikeConfig,omitempty"`
+	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -635,8 +634,8 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 	}
 
 	// AerospikeConfig
-	statusAerospikeConfig := runtime.RawExtension{}
-	if err := lib.DeepCopy(&statusAerospikeConfig, &spec.AerospikeConfig); err != nil {
+	statusAerospikeConfig := &AerospikeConfigSpec{}
+	if err := lib.DeepCopy(statusAerospikeConfig, spec.AerospikeConfig); err != nil {
 		return nil, err
 	}
 	status.AerospikeConfig = statusAerospikeConfig
@@ -716,8 +715,8 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec,
 	}
 
 	// AerospikeConfig
-	specAerospikeConfig := runtime.RawExtension{}
-	if err := lib.DeepCopy(&specAerospikeConfig, &status.AerospikeConfig); err != nil {
+	specAerospikeConfig := &AerospikeConfigSpec{}
+	if err := lib.DeepCopy(specAerospikeConfig, status.AerospikeConfig); err != nil {
 		return nil, err
 	}
 	spec.AerospikeConfig = specAerospikeConfig
