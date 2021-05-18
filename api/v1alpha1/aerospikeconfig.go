@@ -6,9 +6,8 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-// AerospikeConfig container for unstructured Aerospike server config.
+// AerospikeConfigSpec container for unstructured Aerospike server config.
 type AerospikeConfigSpec struct {
-	// +kubebuilder:pruning:PreserveUnknownFields
 	Value map[string]interface{} `json:"-"`
 }
 
@@ -29,17 +28,7 @@ func (v *AerospikeConfigSpec) DeepCopy() *AerospikeConfigSpec {
 	dst := AerospikeConfigSpec{
 		Value: map[string]interface{}{},
 	}
-	lib.DeepCopy(dst, src)
+	lib.DeepCopy(dst.Value, src.Value)
+
 	return &dst
 }
-
-// func (in *AerospikeConfigSpec) DeepCopy() *AerospikeConfigSpec {
-// 	if in == nil {
-// 		return nil
-// 	}
-// 	out := new(AerospikeConfigSpec)
-
-// 	// TODO: Use deepcopy form management lib
-// 	*out = *in
-// 	return out
-// }

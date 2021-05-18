@@ -147,7 +147,7 @@ func (r *AerospikeCluster) validate() error {
 	// Validate for AerospikeConfigSecret.
 	// TODO: Should we validate mount path also. Config has tls info at different paths, fetching and validating that may be little complex
 	configMap := r.Spec.AerospikeConfig
-	if isSecretNeeded(configMap) && r.Spec.AerospikeConfigSecret.SecretName == "" {
+	if isSecretNeeded(*configMap) && r.Spec.AerospikeConfigSecret.SecretName == "" {
 		return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `aerospikeConfigSecret` field")
 	}
 
@@ -176,16 +176,16 @@ func (r *AerospikeCluster) validate() error {
 	}
 
 	// Validate if passed aerospikeConfig
-	if err := validateAerospikeConfigSchema(version, configMap); err != nil {
+	if err := validateAerospikeConfigSchema(version, *configMap); err != nil {
 		return fmt.Errorf("AerospikeConfig not valid: %v", err)
 	}
 
-	err = validateRequiredFileStorage(configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
+	err = validateRequiredFileStorage(*configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
 
-	err = validateConfigMapVolumes(configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
+	err = validateConfigMapVolumes(*configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (r *AerospikeCluster) validateRackUpdate(old *AerospikeCluster) error {
 
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
 					// Validate aerospikeConfig update
-					if err := validateAerospikeConfigUpdate(newRack.AerospikeConfig, oldRack.AerospikeConfig); err != nil {
+					if err := validateAerospikeConfigUpdate(&newRack.AerospikeConfig, &oldRack.AerospikeConfig); err != nil {
 						return fmt.Errorf("Invalid update in Rack(ID: %d) aerospikeConfig: %v", oldRack.ID, err)
 					}
 				}
@@ -331,7 +331,7 @@ func (r *AerospikeCluster) validateRackConfig() error {
 			// TODO:
 			// Replication-factor in rack and commonConfig can not be different
 			storage := rack.Storage
-			if err := validateAerospikeConfig(config, &storage, int(r.Spec.Size)); err != nil {
+			if err := validateAerospikeConfig(&config, &storage, int(r.Spec.Size)); err != nil {
 				return err
 			}
 		}
@@ -377,7 +377,7 @@ func validateClusterSize(version string, sz int) error {
 	return nil
 }
 
-func validateAerospikeConfig(configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int) error {
+func validateAerospikeConfig(configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int) error {
 	config := configSpec.Value
 
 	if config == nil {
@@ -598,7 +598,7 @@ func validateNamespaceReplicationFactor(nsConf map[string]interface{}, clSize in
 	return nil
 }
 
-func validateAerospikeConfigUpdate(newConfSpec, oldConfSpec AerospikeConfigSpec) error {
+func validateAerospikeConfigUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 	// logger.Info("Validate AerospikeConfig update")
@@ -647,7 +647,7 @@ func validateAerospikeConfigUpdate(newConfSpec, oldConfSpec AerospikeConfigSpec)
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 

@@ -641,7 +641,7 @@ func (r *AerospikeClusterReconciler) getOldRackList(aeroCluster *asdbv1alpha1.Ae
 		if !found {
 			// Create a dummy rack config using globals.
 			// TODO: Refactor and reuse code in mutate setting.
-			dummyRack := asdbv1alpha1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: aeroCluster.Spec.AerospikeConfig}
+			dummyRack := asdbv1alpha1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: *aeroCluster.Spec.AerospikeConfig}
 
 			rackList = append(rackList, dummyRack)
 		}

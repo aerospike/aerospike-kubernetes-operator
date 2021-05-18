@@ -29,6 +29,7 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
+// +k8s:openapi-gen=true
 type AerospikeClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
@@ -58,7 +59,7 @@ type AerospikeClusterSpec struct {
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
-	AerospikeConfig AerospikeConfigSpec `json:"aerospikeConfig"`
+	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
@@ -299,7 +300,7 @@ type AerospikePersistentVolumePolicySpec struct {
 	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
-	CascadeDelete bool `json:"effectiveCascadeDelete"`
+	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -584,7 +585,7 @@ type AerospikeClusterStatusSpec struct {
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +nullable
-	AerospikeConfig AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
+	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -633,8 +634,8 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 	}
 
 	// AerospikeConfig
-	statusAerospikeConfig := AerospikeConfigSpec{}
-	if err := lib.DeepCopy(&statusAerospikeConfig, &spec.AerospikeConfig); err != nil {
+	statusAerospikeConfig := &AerospikeConfigSpec{}
+	if err := lib.DeepCopy(statusAerospikeConfig, spec.AerospikeConfig); err != nil {
 		return nil, err
 	}
 	status.AerospikeConfig = statusAerospikeConfig
@@ -714,8 +715,8 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec,
 	}
 
 	// AerospikeConfig
-	specAerospikeConfig := AerospikeConfigSpec{}
-	if err := lib.DeepCopy(&specAerospikeConfig, &status.AerospikeConfig); err != nil {
+	specAerospikeConfig := &AerospikeConfigSpec{}
+	if err := lib.DeepCopy(specAerospikeConfig, status.AerospikeConfig); err != nil {
 		return nil, err
 	}
 	spec.AerospikeConfig = specAerospikeConfig

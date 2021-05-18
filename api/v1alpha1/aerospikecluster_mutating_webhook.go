@@ -70,7 +70,7 @@ func (r *AerospikeCluster) setDefaults() error {
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
-	if err := r.setDefaultAerospikeConfigs(r.Spec.AerospikeConfig); err != nil {
+	if err := r.setDefaultAerospikeConfigs(*r.Spec.AerospikeConfig); err != nil {
 		return err
 	}
 
@@ -148,7 +148,7 @@ func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal() error {
 	for i, rack := range r.Spec.RackConfig.Racks {
 		var m map[string]interface{}
 		var err error
-		if rack.InputAerospikeConfig.Value != nil {
+		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
 			m, err = merge.Merge(r.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value)
 			// s.logger.Debug("Merged rack config from global aerospikeConfig", log.Ctx{"rack id": rack.ID, "rackAerospikeConfig": m, "globalAerospikeConfig": r.Spec.AerospikeConfig})

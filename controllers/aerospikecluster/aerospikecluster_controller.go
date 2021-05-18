@@ -560,7 +560,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1a
 func (r *AerospikeClusterReconciler) isAerospikeConfigUpdatedForRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState) bool {
 
 	// AerospikeConfig nil means status not updated yet
-	if aeroCluster.Status.AerospikeConfig.Value == nil {
+	if aeroCluster.Status.AerospikeConfig == nil {
 		return false
 	}
 	// TODO: Should we use some other check? Reconcile may requeue request multiple times before updating status and
@@ -868,7 +868,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 	needRollingRestartPod := false
 
 	// AerospikeConfig nil means status not updated yet
-	if aeroCluster.Status.AerospikeConfig.Value == nil {
+	if aeroCluster.Status.AerospikeConfig == nil {
 		return needRollingRestartPod, nil
 	}
 
@@ -1289,7 +1289,7 @@ func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1alpha1.Aero
 }
 
 func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) (bool, error) {
-	if aeroCluster.Status.AerospikeConfig.Value != nil {
+	if aeroCluster.Status.AerospikeConfig != nil {
 		// We have valid status, cluster cannot be new.
 		return false, nil
 	}
@@ -1313,7 +1313,7 @@ func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1alpha1.
 		return false, err
 	}
 
-	return !isNew && aeroCluster.Status.AerospikeConfig.Value == nil, nil
+	return !isNew && aeroCluster.Status.AerospikeConfig == nil, nil
 }
 
 func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster *asdbv1alpha1.AerospikeCluster) error {

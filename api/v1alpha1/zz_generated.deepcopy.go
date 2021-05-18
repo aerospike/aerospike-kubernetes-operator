@@ -105,7 +105,10 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 		in, out := &in.AerospikeAccessControl, &out.AerospikeAccessControl
 		*out = (*in).DeepCopy()
 	}
-	in.AerospikeConfig.DeepCopyInto(&out.AerospikeConfig)
+	if in.AerospikeConfig != nil {
+		in, out := &in.AerospikeConfig, &out.AerospikeConfig
+		*out = (*in).DeepCopy()
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = new(v1.ResourceRequirements)
@@ -162,7 +165,10 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		in, out := &in.AerospikeAccessControl, &out.AerospikeAccessControl
 		*out = (*in).DeepCopy()
 	}
-	in.AerospikeConfig.DeepCopyInto(&out.AerospikeConfig)
+	if in.AerospikeConfig != nil {
+		in, out := &in.AerospikeConfig, &out.AerospikeConfig
+		*out = (*in).DeepCopy()
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = new(v1.ResourceRequirements)

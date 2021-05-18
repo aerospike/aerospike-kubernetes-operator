@@ -154,7 +154,7 @@ func IsTLS(aerospikeConfigSpec AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can a invalid map come here
-func IsSecurityEnabled(aerospikeConfigSpec AerospikeConfigSpec) (bool, error) {
+func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
 	aerospikeConfig := aerospikeConfigSpec.Value
 
 	// security conf

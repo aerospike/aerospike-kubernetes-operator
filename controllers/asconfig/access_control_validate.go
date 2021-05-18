@@ -110,7 +110,7 @@ func IsAerospikeAccessControlValid(aerospikeCluster *asdbv1alpha1.AerospikeClust
 	}
 
 	// Validate roles.
-	_, err = isRoleSpecValid(aerospikeCluster.AerospikeAccessControl.Roles, aerospikeCluster.AerospikeConfig)
+	_, err = isRoleSpecValid(aerospikeCluster.AerospikeAccessControl.Roles, *aerospikeCluster.AerospikeConfig)
 	if err != nil {
 		return false, err
 	}
