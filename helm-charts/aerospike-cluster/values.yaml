@@ -48,6 +48,10 @@ aerospikeConfig: {}
 # aerospikeSecretName: aerospike-secrets
 # aerospikeSecretMountPath: /etc/aerospike/secrets/
 
+## Cluster commonName
+## If not specified, the release name (with hyphens removed) is used
+# commonName: aerocluster
+
 ## Network policy
 aerospikeNetworkPolicy: {}
   # access: pod
