@@ -7,11 +7,16 @@ image:
   tag: 1.0.1
   # pullPolicy: IfNotPresent
 
+## In case the above image is pulled from a registry that requires
+## authentication, a secret containining credentials can be added
+## imagePullSecrets:
+##   - secret_with_credentials_to_custom_registry
+imagePullSecrets: {}
+
 ## Create RBAC resources
 rbac:
   create: true
   # serviceAccountName: "default"
-
 
 ##  Operator configurations
 # containerPort: 8443
