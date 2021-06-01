@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -119,7 +120,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  utils.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
+						Image: GetAerospikeServerInitContainerImage(aeroCluster),
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts: []corev1.VolumeMount{
@@ -1401,4 +1402,17 @@ func getNewRackStateList(aeroCluster *aerospikev1alpha1.AerospikeCluster) []Rack
 		})
 	}
 	return rackStateList
+}
+
+func GetAerospikeServerInitContainerImage(aeroCluster *aerospikev1alpha1.AerospikeCluster) string {
+	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
+	image, found := os.LookupEnv(utils.AerospikeServerInitContainerImageEnvVar)
+	if !found {
+		logger.Info(fmt.Sprintf("%s not set, using %s for init container image",
+			utils.AerospikeServerInitContainerImageEnvVar, utils.AerospikeServerInitContainerDefaultImage))
+		return utils.AerospikeServerInitContainerDefaultImage
+	}
+	logger.Info(fmt.Sprintf("%s set, using %s for init container image",
+		utils.AerospikeServerInitContainerImageEnvVar, image))
+	return image
 }
