@@ -7,7 +7,10 @@
 # Use the input operator image for testing if provided
 IMAGE=$1
 
+# Install cert manager
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
+
 # Create storage classes.
-kubectl -n test apply -f deploy/samples/storage/gce_ssd_storage_class.yaml
+kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
 
 make deploy  IMG=${IMAGE}

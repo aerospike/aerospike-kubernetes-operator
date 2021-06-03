@@ -5,8 +5,8 @@ pipeline {
     }
 
     environment {
-        PATH="/usr/local/operator-sdk-1.3:${env.PATH}"
         GOPATH="/var/lib/jenkins/go"
+        PATH="/usr/local/operator-sdk-1.3:${GOPATH}/bin:${env.PATH}"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY=""
