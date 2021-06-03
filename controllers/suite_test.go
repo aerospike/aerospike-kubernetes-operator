@@ -17,13 +17,15 @@ limitations under the License.
 package controllers
 
 import (
-	"fmt"
+	goctx "context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/aerospikecluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/configschema"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -107,14 +109,14 @@ var _ = BeforeSuite(func(done Done) {
 		ClientBuilder: &newClientBuilder{},
 		Scheme:        scheme.Scheme,
 		Port:          9443,
-		// Namespace:     "test",
+		Namespace:     "test",
 	}
 
 	k8sManager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	Expect(err).ToNot(HaveOccurred())
 
-	// setupLog.Info("Init aerospike-server config schemas")
-	// asconfig.InitFromMap(configschema.SchemaMap)
+	setupLog.Info("Init aerospike-server config schemas")
+	asconfig.InitFromMap(configschema.SchemaMap)
 
 	err = (&aerospikecluster.AerospikeClusterReconciler{
 		Client: k8sManager.GetClient(),
@@ -139,8 +141,6 @@ var _ = BeforeSuite(func(done Done) {
 }, 60)
 
 var _ = AfterSuite(func() {
-	fmt.Println("waiting....")
-	time.Sleep(time.Minute * 2)
 	By("tearing down the test environment")
 	gexec.KillAndWait(5 * time.Second)
 	err := testEnv.Stop()
@@ -158,3 +158,20 @@ func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options
 	// Create the Client for Write operations.
 	return crclient.New(config, options)
 }
+
+var ctx goctx.Context
+
+// var _ = Describe("Cluster controller", func() {
+
+// 	Context("When deployed a new cluster", func() {
+// 		It("should deploy a new cluster", func() {
+// 			clusterName := "aerocluster"
+// 			namespace := "test"
+// 			clusterNamespacedName := e2e.GetClusterNamespacedName(clusterName, namespace)
+// 			aeroCluster := e2e.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+// 			err := e2e.DeployCluster(k8sClient, ctx, aeroCluster)
+// 			Expect(err).ToNot(HaveOccurred())
+
+// 		})
+// 	})
+// })

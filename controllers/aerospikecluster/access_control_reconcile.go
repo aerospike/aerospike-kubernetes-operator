@@ -1,4 +1,4 @@
-package asconfig
+package aerospikecluster
 
 // Aerospike access control reconciliation of access control.
 
@@ -11,6 +11,19 @@ import (
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	as "github.com/ashishshinde/aerospike-client-go"
+	"github.com/go-logr/logr"
+)
+
+// Logger type alias.
+type Logger = logr.Logger
+
+const (
+
+	// Error marker for user not found errors.
+	userNotFoundErr = "Invalid user"
+
+	// Error marker for role not found errors.
+	roleNotFoundErr = "Invalid role"
 )
 
 // AerospikeAdminCredentials to use for aerospike clients.
@@ -18,10 +31,10 @@ import (
 // Returns a tuple of admin username and password to use. If the cluster is not security
 // enabled both username and password will be zero strings.
 func AerospikeAdminCredentials(desiredState *asdbv1alpha1.AerospikeClusterSpec, currentState *asdbv1alpha1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
-	enabled, err := isSecurityEnabled(currentState)
+	enabled, err := asdbv1alpha1.IsSecurityEnabled(currentState.AerospikeConfig)
 	if err != nil {
 		// Its possible this is a new cluster and current state is empty.
-		enabled, err = isSecurityEnabled(desiredState)
+		enabled, err = asdbv1alpha1.IsSecurityEnabled(desiredState.AerospikeConfig)
 
 		if err != nil {
 			return "", "", err
@@ -35,67 +48,67 @@ func AerospikeAdminCredentials(desiredState *asdbv1alpha1.AerospikeClusterSpec, 
 
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
-		return adminUsername, defaultAdminPAssword, nil
+		return asdbv1alpha1.AdminUsername, asdbv1alpha1.DefaultAdminPAssword, nil
 	}
 
-	adminUserSpec, ok := getUsersFromSpec(currentState)[adminUsername]
+	adminUserSpec, ok := asdbv1alpha1.GetUsersFromSpec(currentState)[asdbv1alpha1.AdminUsername]
 
 	if !ok {
 		// Should not happen on a validated spec.
-		return "", "", fmt.Errorf("%s user missing in access control", adminUsername)
+		return "", "", fmt.Errorf("%s user missing in access control", asdbv1alpha1.AdminUsername)
 	}
 
-	password, err := passwordProvider.Get(adminUsername, &adminUserSpec)
+	password, err := passwordProvider.Get(asdbv1alpha1.AdminUsername, &adminUserSpec)
 
 	if err != nil {
 		return "", "", err
 	}
 
-	return adminUsername, password, nil
+	return asdbv1alpha1.AdminUsername, password, nil
 }
 
 // ReconcileAccessControl reconciles access control to ensure current state moves to the desired state.
 func ReconcileAccessControl(desired *asdbv1alpha1.AerospikeClusterSpec, current *asdbv1alpha1.AerospikeClusterSpec, client *as.Client, passwordProvider AerospikeUserPasswordProvider, logger Logger) error {
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
-	adminPolicy := getAdminPolicy(desired)
+	adminPolicy := GetAdminPolicy(desired)
 
-	desiredRoles := getRolesFromSpec(desired)
-	currentRoles := getRolesFromSpec(current)
+	desiredRoles := asdbv1alpha1.GetRolesFromSpec(desired)
+	currentRoles := asdbv1alpha1.GetRolesFromSpec(current)
 	err := reconcileRoles(desiredRoles, currentRoles, client, adminPolicy, logger)
 	if err != nil {
 		return err
 	}
 
-	desiredUsers := getUsersFromSpec(desired)
-	currentUsers := getUsersFromSpec(current)
+	desiredUsers := asdbv1alpha1.GetUsersFromSpec(desired)
+	currentUsers := asdbv1alpha1.GetUsersFromSpec(current)
 	err = reconcileUsers(desiredUsers, currentUsers, passwordProvider, client, adminPolicy, logger)
 	return err
 }
 
-// getRolesFromSpec returns roles or an empty map from the spec.
-func getRolesFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeRoleSpec {
-	var roles map[string]asdbv1alpha1.AerospikeRoleSpec = map[string]asdbv1alpha1.AerospikeRoleSpec{}
-	if spec.AerospikeAccessControl != nil {
-		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
-			roles[roleSpec.Name] = roleSpec
-		}
-	}
-	return roles
-}
+// // asdbv1alpha1.GetRolesFromSpec returns roles or an empty map from the spec.
+// func asdbv1alpha1.GetRolesFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeRoleSpec {
+// 	var roles map[string]asdbv1alpha1.AerospikeRoleSpec = map[string]asdbv1alpha1.AerospikeRoleSpec{}
+// 	if spec.AerospikeAccessControl != nil {
+// 		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
+// 			roles[roleSpec.Name] = roleSpec
+// 		}
+// 	}
+// 	return roles
+// }
 
-// getUsersFromSpec returns users or an empty map from the spec.
-func getUsersFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeUserSpec {
-	var users map[string]asdbv1alpha1.AerospikeUserSpec = map[string]asdbv1alpha1.AerospikeUserSpec{}
-	if spec.AerospikeAccessControl != nil {
-		for _, userSpec := range spec.AerospikeAccessControl.Users {
-			users[userSpec.Name] = userSpec
-		}
-	}
-	return users
-}
+// // asdbv1alpha1.GetUsersFromSpec returns users or an empty map from the spec.
+// func asdbv1alpha1.GetUsersFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeUserSpec {
+// 	var users map[string]asdbv1alpha1.AerospikeUserSpec = map[string]asdbv1alpha1.AerospikeUserSpec{}
+// 	if spec.AerospikeAccessControl != nil {
+// 		for _, userSpec := range spec.AerospikeAccessControl.Users {
+// 			users[userSpec.Name] = userSpec
+// 		}
+// 	}
+// 	return users
+// }
 
-// getAdminPolicy returns the AdminPolicy to use for performing access control operations.
-func getAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPolicy {
+// GetAdminPolicy returns the AdminPolicy to use for performing access control operations.
+func GetAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPolicy {
 	if clusterSpec.AerospikeAccessControl == nil || clusterSpec.AerospikeAccessControl.AdminPolicy == nil {
 		return *as.NewAdminPolicy()
 	}
@@ -129,10 +142,10 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 	roleReconcileCmds := []AerospikeAccessControlReconcileCmd{}
 
 	// Create a list of role commands to drop.
-	rolesToDrop := sliceSubtract(currentRoleNames, requiredRoleNames)
+	rolesToDrop := SliceSubtract(currentRoleNames, requiredRoleNames)
 
 	for _, roleToDrop := range rolesToDrop {
-		_, ok := predefinedRoles[roleToDrop]
+		_, ok := asdbv1alpha1.PredefinedRoles[roleToDrop]
 
 		if !ok {
 			// Not a predefined role and can be dropped.
@@ -181,7 +194,7 @@ func reconcileUsers(desired map[string]asdbv1alpha1.AerospikeUserSpec, current m
 	userReconcileCmds := []AerospikeAccessControlReconcileCmd{}
 
 	// Create a list of user commands to drop.
-	usersToDrop := sliceSubtract(currentUserNames, requiredUserNames)
+	usersToDrop := SliceSubtract(currentUserNames, requiredUserNames)
 
 	for _, userToDrop := range usersToDrop {
 		userReconcileCmds = append(userReconcileCmds, AerospikeUserDrop{name: userToDrop})
@@ -197,7 +210,7 @@ func reconcileUsers(desired map[string]asdbv1alpha1.AerospikeUserSpec, current m
 		}
 
 		cmd := AerospikeUserCreateUpdate{name: userName, password: &password, roles: userSpec.Roles}
-		if userName == adminUsername {
+		if userName == asdbv1alpha1.AdminUsername {
 			adminUpdateCmd = &cmd
 		} else {
 			userReconcileCmds = append(userReconcileCmds, cmd)
@@ -227,7 +240,7 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 	for _, privilege := range privilegeStrings {
 		parts := strings.Split(privilege, ".")
 
-		_, ok := privileges[parts[0]]
+		_, ok := asdbv1alpha1.Privileges[parts[0]]
 		if !ok {
 			// First part of the privilege is not part of defined privileges.
 			return nil, fmt.Errorf("Invalid privilege %s", privilege)
@@ -291,8 +304,8 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 	return aerospikePrivileges, nil
 }
 
-// aerospikePrivilegeToPrivilegeString converts aerospikePrivilege to controller spec privilege string.
-func aerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]string, error) {
+// AerospikePrivilegeToPrivilegeString converts aerospikePrivilege to controller spec privilege string.
+func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]string, error) {
 	privileges := []string{}
 	for _, aerospikePrivilege := range aerospikePrivileges {
 		var buffer bytes.Buffer
@@ -415,14 +428,14 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 	logger.Info("Updating role", "rolename", roleCreate.name)
 
 	// Find the privileges to drop.
-	currentPrivileges, err := aerospikePrivilegeToPrivilegeString(role.Privileges)
+	currentPrivileges, err := AerospikePrivilegeToPrivilegeString(role.Privileges)
 	if err != nil {
 		return fmt.Errorf("Could not update role %s: %v", roleCreate.name, err)
 	}
 
 	desiredPrivileges := roleCreate.privileges
-	privilegesToRevoke := sliceSubtract(currentPrivileges, desiredPrivileges)
-	privilegesToGrant := sliceSubtract(desiredPrivileges, currentPrivileges)
+	privilegesToRevoke := SliceSubtract(currentPrivileges, desiredPrivileges)
+	privilegesToGrant := SliceSubtract(desiredPrivileges, currentPrivileges)
 
 	if len(privilegesToRevoke) > 0 {
 		aerospikePrivileges, err := privilegeStringtoAerospikePrivilege(privilegesToRevoke)
@@ -533,8 +546,8 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 	// Find the roles to grant and revoke.
 	currentRoles := user.Roles
 	desiredRoles := userCreate.roles
-	rolesToRevoke := sliceSubtract(currentRoles, desiredRoles)
-	rolesToGrant := sliceSubtract(desiredRoles, currentRoles)
+	rolesToRevoke := SliceSubtract(currentRoles, desiredRoles)
+	rolesToGrant := SliceSubtract(desiredRoles, currentRoles)
 
 	if len(rolesToRevoke) > 0 {
 		err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke)
@@ -604,8 +617,8 @@ func (roledrop AerospikeRoleDrop) Execute(client *as.Client, adminPolicy *as.Adm
 	return nil
 }
 
-// sliceSubtract removes elements of slice2 from slice1 and returns the result.
-func sliceSubtract(slice1 []string, slice2 []string) []string {
+// SliceSubtract removes elements of slice2 from slice1 and returns the result.
+func SliceSubtract(slice1 []string, slice2 []string) []string {
 	result := []string{}
 	for _, s1 := range slice1 {
 		found := false

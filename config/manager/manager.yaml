@@ -56,9 +56,9 @@ spec:
             memory: 20Mi
         env:
         - name: WATCH_NAMESPACE
-          value: aerospike
+          # value: aerospike
           # Use below value for watching multiple namespaces by operator
-          # value: aerospike,aerospike1,aerospike2
+          value: aerospike,test,test1,test2
         - name: POD_NAME
           valueFrom:
             fieldRef:

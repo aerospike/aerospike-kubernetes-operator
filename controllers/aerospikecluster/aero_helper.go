@@ -30,7 +30,6 @@ import (
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	"github.com/travelaudience/aerospike-operator/pkg/meta"
 )
 
 //------------------------------------------------------------------------------------
@@ -49,7 +48,7 @@ func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluste
 	}
 	version, ok := res["build"]
 	if !ok {
-		return "", fmt.Errorf("Failed to get aerospike version from pod %v", meta.Key(pod))
+		return "", fmt.Errorf("Failed to get aerospike version from pod %v", pod.Name)
 	}
 	return version, nil
 }
@@ -309,10 +308,10 @@ func getFQDNForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, host string) stri
 	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
-// getEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
+// GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
 //
 // E.g. addressName are access, alternate-access
-func getEndpointsFromInfo(addressName string, endpointsMap map[string]interface{}) []string {
+func GetEndpointsFromInfo(addressName string, endpointsMap map[string]interface{}) []string {
 	endpoints := []string{}
 
 	portStr, ok := endpointsMap["service."+addressName+"-port"]
@@ -339,9 +338,9 @@ func getEndpointsFromInfo(addressName string, endpointsMap map[string]interface{
 	return endpoints
 }
 
-// parseInfoIntoMap parses info string into a map.
+// ParseInfoIntoMap parses info string into a map.
 // TODO adapted from management lib. Should be made public there.
-func parseInfoIntoMap(str string, del string, sep string) (map[string]interface{}, error) {
+func ParseInfoIntoMap(str string, del string, sep string) (map[string]interface{}, error) {
 	m := make(map[string]interface{})
 	if str == "" {
 		return m, nil

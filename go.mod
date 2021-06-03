@@ -24,7 +24,6 @@ require (
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
-	github.com/travelaudience/aerospike-operator v0.0.0-20191002090530-354c1a4e7e2a
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect

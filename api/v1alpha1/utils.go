@@ -156,7 +156,9 @@ func IsTLS(aerospikeConfigSpec AerospikeConfigSpec) bool {
 // TODO: can a invalid map come here
 func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
 	aerospikeConfig := aerospikeConfigSpec.Value
-
+	if len(aerospikeConfig) == 0 {
+		return false, fmt.Errorf("Missing aerospike configuration in cluster state")
+	}
 	// security conf
 	if confInterface, ok := aerospikeConfig[confKeySecurity]; ok {
 		if secConf, ok := confInterface.(map[string]interface{}); ok {

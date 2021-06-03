@@ -1,4 +1,4 @@
-package asconfig
+package v1alpha1
 
 // Aerospike access control functions provides validation and reconciliation of access control.
 
@@ -6,14 +6,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
-
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	// log "github.com/inconshreveable/log15"
-	"github.com/go-logr/logr"
 )
-
-// Logger type alias.
-type Logger = logr.Logger
 
 // PrivilegeScope enumerates valid scopes for privileges.
 type PrivilegeScope int
@@ -36,17 +30,11 @@ const (
 	// Maximum allowed length for a user password.
 	userPasswordLengthMax int = 60
 
-	// Error marker for user not found errors.
-	userNotFoundErr = "Invalid user"
-
-	// Error marker for role not found errors.
-	roleNotFoundErr = "Invalid role"
-
 	// The admin username.
-	adminUsername = "admin"
+	AdminUsername = "admin"
 
 	// The default admin user password.
-	defaultAdminPAssword = "admin"
+	DefaultAdminPAssword = "admin"
 )
 
 // Chacacters forbidden in role name.
@@ -56,7 +44,7 @@ var roleNameForbiddenChars []string = []string{";", ":"}
 var userNameForbiddenChars []string = []string{";", ":"}
 
 // Predefined roles names.
-var predefinedRoles = map[string]struct{}{
+var PredefinedRoles = map[string]struct{}{
 	"user-admin":     struct{}{},
 	"sys-admin":      struct{}{},
 	"data-admin":     struct{}{},
@@ -73,7 +61,7 @@ var requiredRoles = []string{
 }
 
 // Privilege string allowed in the spec and associated scopes.
-var privileges = map[string][]PrivilegeScope{
+var Privileges = map[string][]PrivilegeScope{
 	"read":           []PrivilegeScope{Global, NamespaceSet},
 	"write":          []PrivilegeScope{Global, NamespaceSet},
 	"read-write":     []PrivilegeScope{Global, NamespaceSet},
@@ -90,8 +78,8 @@ var privileges = map[string][]PrivilegeScope{
 //    follows rules defined https://www.aerospike.com/docs/guide/limitations.html
 //    follows rules found through server code inspection for e.g. predefined roles
 //    meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
-func IsAerospikeAccessControlValid(aerospikeCluster *asdbv1alpha1.AerospikeClusterSpec) (bool, error) {
-	enabled, err := isSecurityEnabled(aerospikeCluster)
+func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (bool, error) {
+	enabled, err := IsSecurityEnabled(aerospikeCluster.AerospikeConfig)
 	if err != nil {
 		return false, err
 	}
@@ -115,7 +103,7 @@ func IsAerospikeAccessControlValid(aerospikeCluster *asdbv1alpha1.AerospikeClust
 		return false, err
 	}
 
-	roleMap := getRolesFromSpec(aerospikeCluster)
+	roleMap := GetRolesFromSpec(aerospikeCluster)
 
 	// Validate users.
 	_, err = isUserSpecValid(aerospikeCluster.AerospikeAccessControl.Users, roleMap)
@@ -127,23 +115,30 @@ func IsAerospikeAccessControlValid(aerospikeCluster *asdbv1alpha1.AerospikeClust
 	return true, nil
 }
 
-// isSecurityEnabled indicates if clusterSpec has security enabled.
-func isSecurityEnabled(aerospikeCluster *asdbv1alpha1.AerospikeClusterSpec) (bool, error) {
-	if len(aerospikeCluster.AerospikeConfig.Value) == 0 {
-		return false, fmt.Errorf("Missing aerospike configuration in cluster state")
+// GetRolesFromSpec returns roles or an empty map from the spec.
+func GetRolesFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeRoleSpec {
+	var roles map[string]AerospikeRoleSpec = map[string]AerospikeRoleSpec{}
+	if spec.AerospikeAccessControl != nil {
+		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
+			roles[roleSpec.Name] = roleSpec
+		}
 	}
+	return roles
+}
 
-	enabled, err := asdbv1alpha1.IsSecurityEnabled(aerospikeCluster.AerospikeConfig)
-
-	if err != nil {
-		return false, fmt.Errorf("Failed to get cluster security status: %v", err)
+// GetUsersFromSpec returns users or an empty map from the spec.
+func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
+	var users map[string]AerospikeUserSpec = map[string]AerospikeUserSpec{}
+	if spec.AerospikeAccessControl != nil {
+		for _, userSpec := range spec.AerospikeAccessControl.Users {
+			users[userSpec.Name] = userSpec
+		}
 	}
-
-	return enabled, err
+	return users
 }
 
 // isRoleSpecValid indicates if input role spec is valid.
-func isRoleSpecValid(roles []asdbv1alpha1.AerospikeRoleSpec, aerospikeConfigSpec asdbv1alpha1.AerospikeConfigSpec) (bool, error) {
+func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
 		_, isSeen := seenRoles[roleSpec.Name]
@@ -153,7 +148,7 @@ func isRoleSpecValid(roles []asdbv1alpha1.AerospikeRoleSpec, aerospikeConfigSpec
 		}
 		seenRoles[roleSpec.Name] = true
 
-		_, ok := predefinedRoles[roleSpec.Name]
+		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
 			// Cannot modify or add predefined roles.
 			return false, fmt.Errorf("Cannot create or modify predefined role: %s", roleSpec.Name)
@@ -225,10 +220,10 @@ func isRoleNameValid(roleName string) (bool, error) {
 }
 
 // Indicates if privilege is a valid privilege.
-func isPrivilegeValid(privilege string, aerospikeConfigSpec asdbv1alpha1.AerospikeConfigSpec) (bool, error) {
+func isPrivilegeValid(privilege string, aerospikeConfigSpec AerospikeConfigSpec) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
-	_, ok := privileges[parts[0]]
+	_, ok := Privileges[parts[0]]
 	if !ok {
 		// First part of the privilege is not part of defined privileges.
 		return false, fmt.Errorf("Invalid privilege %s", privilege)
@@ -242,14 +237,14 @@ func isPrivilegeValid(privilege string, aerospikeConfigSpec asdbv1alpha1.Aerospi
 
 	if nParts > 1 {
 		// This privilege should necessarily have NamespaceSet scope.
-		scopes := privileges[parts[0]]
+		scopes := Privileges[parts[0]]
 		if !scopeContains(scopes, NamespaceSet) {
 			return false, fmt.Errorf("Privilege %s cannot have namespace or set scope", privilege)
 		}
 
 		namespaceName := parts[1]
 
-		if !asdbv1alpha1.IsAerospikeNamespacePresent(aerospikeConfigSpec, namespaceName) {
+		if !IsAerospikeNamespacePresent(aerospikeConfigSpec, namespaceName) {
 			return false, fmt.Errorf("For privilege %s, namespace %s not configured", privilege, namespaceName)
 		}
 
@@ -324,7 +319,7 @@ func subset(first, second []string) bool {
 }
 
 // isUserSpecValid indicates if input user specification is valid.
-func isUserSpecValid(users []asdbv1alpha1.AerospikeUserSpec, roles map[string]asdbv1alpha1.AerospikeRoleSpec) (bool, error) {
+func isUserSpecValid(users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec) (bool, error) {
 	requiredRolesUserFound := false
 	seenUsers := map[string]bool{}
 	for _, userSpec := range users {
@@ -354,7 +349,7 @@ func isUserSpecValid(users []asdbv1alpha1.AerospikeUserSpec, roles map[string]as
 			_, ok := roles[roleName]
 			if !ok {
 				// Check is this is a predefined role.
-				_, ok = predefinedRoles[roleName]
+				_, ok = PredefinedRoles[roleName]
 				if !ok {
 					// Neither a specified role nor a predefined role.
 					return false, fmt.Errorf("User '%s' has non-existent role %s", userSpec.Name, roleName)
@@ -368,7 +363,7 @@ func isUserSpecValid(users []asdbv1alpha1.AerospikeUserSpec, roles map[string]as
 			return false, fmt.Errorf("User %s has empty secret name", userSpec.Name)
 		}
 
-		if subset(requiredRoles, userSpec.Roles) && userSpec.Name == adminUsername {
+		if subset(requiredRoles, userSpec.Roles) && userSpec.Name == AdminUsername {
 			// We found admin user that has the required roles.
 			requiredRolesUserFound = true
 		}

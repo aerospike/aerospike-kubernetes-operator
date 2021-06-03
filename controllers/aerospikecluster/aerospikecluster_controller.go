@@ -13,7 +13,6 @@ import (
 	"github.com/go-logr/logr"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	accessControl "github.com/aerospike/aerospike-kubernetes-operator/controllers/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/jsonpatch"
 
@@ -30,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -80,9 +80,9 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				},
 			},
 		)).
-		// WithOptions(controller.Options{
-		// 	MaxConcurrentReconciles: maxConcurrentReconciles,
-		// }).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: maxConcurrentReconciles,
+		}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
@@ -1229,7 +1229,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 	// // TODO: FIXME: REMOVE LOGGER
 	// logger := pkglog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
 
-	err = accessControl.ReconcileAccessControl(&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log)
+	err = ReconcileAccessControl(&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log)
 	return err
 }
 

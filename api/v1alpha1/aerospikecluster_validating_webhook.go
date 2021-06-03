@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"strings"
 
-	// "github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -267,9 +266,8 @@ func (r *AerospikeCluster) validateRackUpdate(old *AerospikeCluster) error {
 
 // TODO: FIX
 func (r *AerospikeCluster) validateAccessControl() error {
-	// _, err := accessControl.IsAerospikeAccessControlValid(&aeroCluster.Spec)
-	// return err
-	return nil
+	_, err := IsAerospikeAccessControlValid(&r.Spec)
+	return err
 }
 
 func (r *AerospikeCluster) validateResourceAndLimits() error {

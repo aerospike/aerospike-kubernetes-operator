@@ -336,5 +336,5 @@ func mergeAndCheck(t *testing.T, baseM, patchM, mergedM map[string]interface{}) 
 	if !reflect.DeepEqual(m, mergedM) {
 		t.Fatalf("Merge failed, \nexpected %v, \ngot %v", mergedM, m)
 	}
-	t.Logf("AerospikeConfig merged successfully %v", m)
+	// t.Logf("AerospikeConfig merged successfully %v", m)
 }

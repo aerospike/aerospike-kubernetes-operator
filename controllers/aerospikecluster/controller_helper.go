@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	accessControl "github.com/aerospike/aerospike-kubernetes-operator/controllers/asconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -830,7 +829,7 @@ func (r *AerospikeClusterReconciler) getClientPolicy(aeroCluster *asdbv1alpha1.A
 		r.Log.Error(err, "Failed to copy spec in status", "err", err)
 	}
 
-	user, pass, err := accessControl.AerospikeAdminCredentials(&aeroCluster.Spec, statusToSpec, r.getPasswordProvider(aeroCluster))
+	user, pass, err := AerospikeAdminCredentials(&aeroCluster.Spec, statusToSpec, r.getPasswordProvider(aeroCluster))
 	if err != nil {
 		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
 	}

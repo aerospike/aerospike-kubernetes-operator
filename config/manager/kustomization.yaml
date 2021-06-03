@@ -1,7 +1,6 @@
 # TODO: Adding service account manually
 resources:
 - manager.yaml
-- service_account.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

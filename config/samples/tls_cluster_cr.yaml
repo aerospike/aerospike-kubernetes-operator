@@ -43,25 +43,25 @@ spec:
       enable-security: true
     network:
       service:
-        tls-name: bob-cluster-a
+        tls-name: aerospike-a-0.test-runner
         tls-authenticate-client: any
       heartbeat:
-        tls-name: bob-cluster-b
+        tls-name: aerospike-a-0.test-runner
       fabric:
-        tls-name: bob-cluster-c
+        tls-name: aerospike-a-0.test-runner
       tls:
-        - name: bob-cluster-a
+        - name: aerospike-a-0.test-runner
           cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
           key-file: /etc/aerospike/secret/svc_key.pem
           ca-file: /etc/aerospike/secret/cacert.pem
-        - name: bob-cluster-b
-          cert-file: /etc/aerospike/secret/hb_cluster_chain.pem
-          key-file: /etc/aerospike/secret/hb_key.pem
-          ca-file: /etc/aerospike/secret/cacert.pem
-        - name: bob-cluster-c
-          cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
-          key-file: /etc/aerospike/secret/fb_key.pem
-          ca-file: /etc/aerospike/secret/cacert.pem
+        # - name: aerospike-a-0.test-runner
+        #   cert-file: /etc/aerospike/secret/hb_cluster_chain.pem
+        #   key-file: /etc/aerospike/secret/hb_key.pem
+        #   ca-file: /etc/aerospike/secret/cacert.pem
+        # - name: aerospike-a-0.test-runner
+        #   cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
+        #   key-file: /etc/aerospike/secret/fb_key.pem
+        #   ca-file: /etc/aerospike/secret/cacert.pem
     namespaces:
       - name: bar
         memory-size: 3000000000

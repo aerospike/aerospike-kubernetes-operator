@@ -80,7 +80,14 @@ func main() {
 	// Add support for multiple namespaces given in WATCH_NAMESPACE (e.g. ns1,ns2)
 	// For more Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
 	if strings.Contains(watchNs, ",") {
-		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(watchNs, ","))
+		nsList := strings.Split(watchNs, ",")
+
+		var newNsList []string
+		for _, ns := range nsList {
+			newNsList = append(newNsList, strings.TrimSpace(ns))
+		}
+
+		options.NewCache = cache.MultiNamespacedCacheBuilder(newNsList)
 	} else {
 		options.Namespace = watchNs
 	}
@@ -148,13 +155,6 @@ func (n *newClientBuilder) WithUncached(objs ...crclient.Object) manager.ClientB
 }
 
 func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options crclient.Options) (crclient.Client, error) {
-	// Create the Client for Write operations.
-	return crclient.New(config, options)
-}
-
-// newClient creates the default caching client
-// this will read/write directly from api-server
-func newClient(cache cache.Cache, config *rest.Config, options crclient.Options) (crclient.Client, error) {
 	// Create the Client for Write operations.
 	return crclient.New(config, options)
 }
