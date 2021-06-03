@@ -63,6 +63,16 @@ deploy: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
+test-deploy: manifests kustomize
+	cp -r config test
+	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
+	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
+
+# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
+test-undeploy:
+	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
+
 # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
 undeploy:
 	$(KUSTOMIZE) build config/default | kubectl delete -f -

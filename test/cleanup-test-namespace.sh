@@ -31,7 +31,7 @@ kubectl -n test1 delete serviceaccount aerospike-cluster || true
 kubectl -n test2 delete serviceaccount aerospike-cluster || true
 
 # # Delete the operator deployment
-# kubectl -n test delete -f $DIR/setup_operator_test.yaml || true
+make test-undeploy
 
 # Delete namespaces
 kubectl delete namespace test1 || true

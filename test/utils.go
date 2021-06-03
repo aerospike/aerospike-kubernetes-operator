@@ -45,7 +45,7 @@ var schemas map[string]string
 var secrets map[string][]byte
 
 const schemaDir = "deploy/config-schemas"
-const secretDir = "../../config/secrets"
+const secretDir = "../config/secrets"
 
 const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"

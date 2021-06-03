@@ -9,8 +9,9 @@ IMAGE=$1
 
 # Install cert manager
 kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.1/cert-manager.yaml
+sleep(10)
 
 # Create storage classes.
 kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
 
-make deploy  IMG=${IMAGE}
+make test-deploy  IMG="${IMAGE}" NS="test"
