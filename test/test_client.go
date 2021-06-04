@@ -56,12 +56,12 @@ func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1alpha1
 	// Assuming secret is in same namespace
 	err := pp.k8sClient.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret)
 	if err != nil {
-		return "", fmt.Errorf("Failed to get secret %s: %v", secretName, err)
+		return "", fmt.Errorf("failed to get secret %s: %v", secretName, err)
 	}
 
 	passbyte, ok := secret.Data["password"]
 	if !ok {
-		return "", fmt.Errorf("Failed to get password from secret. Please check your secret %s", secretName)
+		return "", fmt.Errorf("failed to get password from secret. Please check your secret %s", secretName)
 	}
 	return string(passbyte), nil
 }
@@ -90,7 +90,7 @@ func getClient(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Clie
 func getClientForUser(username string, password string, aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
 	conns, err := newAllHostConn(aeroCluster, k8sClient)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get host info: %v", err)
+		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
 	var hosts []*as.Host
 	for _, conn := range conns {
@@ -103,7 +103,7 @@ func getClientForUser(username string, password string, aeroCluster *asdbv1alpha
 	// Create policy using status, status has current connection info
 	aeroClient, err := as.NewClientWithPolicyAndHost(getClientPolicy(aeroCluster, k8sClient), hosts...)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create aerospike cluster client: %v", err)
+		return nil, fmt.Errorf("failed to create aerospike cluster client: %v", err)
 	}
 
 	return aeroClient, nil
@@ -130,13 +130,13 @@ func getClientCertificate(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 	found := &corev1.Secret{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Spec.AerospikeConfigSecret.SecretName, Namespace: aeroCluster.Namespace}, found)
 	if err != nil {
-		logger.Warn("Failed to get secret certificates to the pool", log.Ctx{"err": err})
+		logger.Warn("failed to get secret certificates to the pool", log.Ctx{"err": err})
 		return nil, err
 	}
 
 	tlsName := getServiceTLSName(aeroCluster)
 	if tlsName == "" {
-		logger.Warn("Failed to get tlsName from aerospikeConfig", log.Ctx{"err": err})
+		logger.Warn("failed to get tlsName from aerospikeConfig", log.Ctx{"err": err})
 		return nil, err
 	}
 	// get ca-file and use as cacert
@@ -154,7 +154,7 @@ func getClientCertificate(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 			return &cert, nil
 		}
 	}
-	return nil, fmt.Errorf("Failed to get tls config for creating client certificate")
+	return nil, fmt.Errorf("failed to get tls config for creating client certificate")
 }
 
 func getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) *x509.CertPool {
@@ -163,7 +163,7 @@ func getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 	// Try to load system CA certs, otherwise just make an empty pool
 	serverPool, err := x509.SystemCertPool()
 	if err != nil {
-		logger.Warn("Failed to add system certificates to the pool", log.Ctx{"err": err})
+		logger.Warn("failed to add system certificates to the pool", log.Ctx{"err": err})
 		serverPool = x509.NewCertPool()
 	}
 
@@ -171,12 +171,12 @@ func getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 	found := &corev1.Secret{}
 	err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Spec.AerospikeConfigSecret.SecretName, Namespace: aeroCluster.Namespace}, found)
 	if err != nil {
-		logger.Warn("Failed to get secret certificates to the pool, returning empty certPool", log.Ctx{"err": err})
+		logger.Warn("failed to get secret certificates to the pool, returning empty certPool", log.Ctx{"err": err})
 		return serverPool
 	}
 	tlsName := getServiceTLSName(aeroCluster)
 	if tlsName == "" {
-		logger.Warn("Failed to get tlsName from aerospikeConfig, returning empty certPool", log.Ctx{"err": err})
+		logger.Warn("failed to get tlsName from aerospikeConfig, returning empty certPool", log.Ctx{"err": err})
 		return serverPool
 	}
 	// get ca-file and use as cacert
@@ -227,7 +227,7 @@ func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient clien
 
 		cert, err := getClientCertificate(aeroCluster, k8sClient)
 		if err != nil {
-			logger.Error("Failed to get client certificate. Using basic clientPolicy", log.Ctx{"err": err})
+			logger.Error("failed to get client certificate. Using basic clientPolicy", log.Ctx{"err": err})
 			return policy
 		}
 		tlsConf.Certificates = append(tlsConf.Certificates, *cert)
@@ -238,12 +238,12 @@ func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient clien
 
 	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		logger.Error("Failed to get spec from status", log.Ctx{"err": err})
+		logger.Error("failed to get spec from status", log.Ctx{"err": err})
 		return policy
 	}
 	user, pass, err := aerospikecluster.AerospikeAdminCredentials(&aeroCluster.Spec, statusToSpec, getPasswordProvider(aeroCluster, k8sClient))
 	if err != nil {
-		logger.Error("Failed to get cluster auth info", log.Ctx{"err": err})
+		logger.Error("failed to get cluster auth info", log.Ctx{"err": err})
 	}
 	policy.Timeout = time.Minute * 3
 	policy.User = user
@@ -255,7 +255,7 @@ func getServiceForPod(pod *corev1.Pod, k8sClient client.Client) (*corev1.Service
 	service := &corev1.Service{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get service for pod %s: %v", pod.Name, err)
+		return nil, fmt.Errorf("failed to get service for pod %s: %v", pod.Name, err)
 	}
 	return service, nil
 }
@@ -310,7 +310,7 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 	k8sNode := &corev1.Node{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return nil, fmt.Errorf("failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
 	}
 
 	// TODO: when refactoring this to use this as main code, this might need to be the
@@ -352,7 +352,7 @@ func newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client
 		return nil, err
 	}
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("Pod list empty")
+		return nil, fmt.Errorf("pod list empty")
 	}
 
 	var hostConns []*deployment.HostConn

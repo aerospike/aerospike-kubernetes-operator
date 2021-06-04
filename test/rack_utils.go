@@ -58,6 +58,7 @@ func removeLastRack(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
 	// This will also indirectl check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
+
 	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
@@ -93,17 +94,17 @@ func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Con
 				// t.Logf("Matching rack key %s, value %v", k, v)
 				cv, ok := svcConfs[k]
 				if !ok {
-					return fmt.Errorf("Config %s missing in aerospikeConfig %v", k, svcConfs)
+					return fmt.Errorf("config %s missing in aerospikeConfig %v", k, svcConfs)
 				}
 				if !reflect.DeepEqual(cv, v) {
-					return fmt.Errorf("Config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+					return fmt.Errorf("config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
 				}
 
 			}
 		}
 	}
 	if !found {
-		return fmt.Errorf("No pod found in for rack. Pods %v, Rack %v", aeroCluster.Status.Pods, rack)
+		return fmt.Errorf("no pod found in for rack. Pods %v, Rack %v", aeroCluster.Status.Pods, rack)
 	}
 	return nil
 }
@@ -115,7 +116,7 @@ func isNamespaceRackEnabled(k8sClient client.Client, ctx goctx.Context, clusterN
 	}
 
 	if len(aeroCluster.Status.Pods) == 0 {
-		return false, fmt.Errorf("Cluster has empty pod list in status")
+		return false, fmt.Errorf("cluster has empty pod list in status")
 	}
 
 	var pod asdbv1alpha1.AerospikePodStatus
@@ -277,10 +278,10 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 		for k, v1 := range rackSelectorMap {
 			if v2, ok := node.Labels[k]; !ok {
 				// error
-				return fmt.Errorf("Rack key %s, not present in node labels %v", k, node.Labels)
+				return fmt.Errorf("rack key %s, not present in node labels %v", k, node.Labels)
 			} else if v1 != v2 {
 				// error
-				return fmt.Errorf("Rack key:val %s:%s doesn't match in node labels %v", k, v1, node.Labels)
+				return fmt.Errorf("rack key:val %s:%s doesn't match in node labels %v", k, v1, node.Labels)
 			}
 		}
 	}

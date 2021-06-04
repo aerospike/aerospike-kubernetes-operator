@@ -19,27 +19,12 @@ import (
 )
 
 var _ = Describe("TestLargeReconcile", func() {
-	// aeroClusterList := &asdbv1alpha1.AerospikeClusterList{}
-	// if err := framework.AddToFrameworkScheme(apis.AddToScheme, aeroClusterList); err != nil {
-	// 	t.Fatalf("Failed to add AerospikeCluster custom resource scheme to framework: %v", err)
-	// }
-
-	// ctx := framework.NewTestCtx(t)
-	// defer ctx.Cleanup()
 
 	ctx := goctx.Background()
-	// // get global framework variables
-	// f := framework.Global
-
-	// initializeOperator(k8sClient, ctx)
 
 	Context("Positive", func() {
-		// get namespace
-		// namespace, err := ctx.GetNamespace()
-		// if err != nil {
-		// 	t.Fatal(err)
-		// }
-		clusterName := "aerocluster"
+
+		clusterName := "large-reconcile"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		// Create a 5 node cluster
@@ -52,7 +37,10 @@ var _ = Describe("TestLargeReconcile", func() {
 		}
 		aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
 
-		It("Deploy and load data", func() {
+		It("Should try large reconcile operations", func() {
+
+			By("Deploy and load data")
+
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -62,9 +50,8 @@ var _ = Describe("TestLargeReconcile", func() {
 			err = loadDataInCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-		})
+			By("ScaleDown")
 
-		It("ScaleDown", func() {
 			// Create a 5 node cluster
 			// Add some data to make migration time taking
 			// Change size to 2
@@ -85,15 +72,15 @@ var _ = Describe("TestLargeReconcile", func() {
 
 			// Cluster size should never go below 4,
 			// as only one node is removed at a time and before reducing 2nd node, we changed the size to 4
-			err = waitForClusterScaleDown(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(4))
+			err = waitForClusterScaleDown(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(4))
 			Expect(err).ToNot(HaveOccurred())
 
-		})
-		It("RollingRestart", func() {
+			By("RollingRestart")
+
 			// Create a 5 node cluster
 			// Add some data to make migration time taking
 			// Change config
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			// oldService := aeroCluster.Spec.AerospikeConfig.Value["service"]
@@ -114,13 +101,13 @@ var _ = Describe("TestLargeReconcile", func() {
 			err = waitForClusterRollingRestart(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), tempConf, retryInterval, getTimeout(4))
 			Expect(err).ToNot(HaveOccurred())
 
-		})
-		It("Upgrade", func() {
+			By("Upgrade")
+
 			// Test1
 			// Create a 5 node cluster
 			// Add some data to make migration time taking
 			// Change build
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			tempImage := imageToUpgrade
@@ -146,7 +133,10 @@ var _ = Describe("TestLargeReconcile", func() {
 			// Change build to build1
 			// Change build to build2
 			// Only a single pod may have build1 at max in whole upgrade..ultimately all should reach build2
+
+			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
+
 		Context("WaitingForStableCluster", func() {
 			It("LargeMigration", func() {
 				// Need to create large migration...is there any way to mimic or olny way is to load data
@@ -155,15 +145,8 @@ var _ = Describe("TestLargeReconcile", func() {
 				// Not needed for this, isClusterStable call should fail and this will requeue request.
 			})
 		})
-
-		It("cleanup", func() {
-			deleteCluster(k8sClient, ctx, aeroCluster)
-		})
-
 	})
-	It("Negative", func() {
 
-	})
 })
 
 func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) error {
@@ -225,7 +208,7 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 	return nil
 }
 
-func waitForClusterScaleDown(k8sClient client.Client, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+func waitForClusterScaleDown(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
 		newCluster := &asdbv1alpha1.AerospikeCluster{}
@@ -245,7 +228,7 @@ func waitForClusterScaleDown(k8sClient client.Client, aeroCluster *asdbv1alpha1.
 			return false, err
 		}
 
-		podList, err := getClusterPodList(k8sClient, aeroCluster)
+		podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 		if err != nil {
 			return false, err
 		}
@@ -255,7 +238,7 @@ func waitForClusterScaleDown(k8sClient client.Client, aeroCluster *asdbv1alpha1.
 			return false, err
 		}
 
-		return isClusterStateValid(k8sClient, aeroCluster, newCluster, replicas), nil
+		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err
@@ -287,7 +270,7 @@ func waitForClusterRollingRestart(k8sClient client.Client, aeroCluster *asdbv1al
 		}
 		// t.Logf("conf value to check proto-fd-max %d", protofdmax)
 
-		return isClusterStateValid(k8sClient, aeroCluster, newCluster, replicas), nil
+		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err
@@ -317,7 +300,7 @@ func waitForClusterUpgrade(k8sClient client.Client, aeroCluster *asdbv1alpha1.Ae
 			return false, err
 		}
 
-		return isClusterStateValid(k8sClient, aeroCluster, newCluster, replicas), nil
+		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err

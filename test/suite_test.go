@@ -271,6 +271,11 @@ var _ = BeforeSuite(func(done Done) {
 // Need to create storageclass if not created already
 
 var _ = AfterSuite(func() {
+	By("Cleaning up all pvcs")
+	cleanupPVC(k8sClient, namespace)
+	cleanupPVC(k8sClient, multiClusterNs1)
+	cleanupPVC(k8sClient, multiClusterNs2)
+
 	By("tearing down the test environment")
 	gexec.KillAndWait(5 * time.Second)
 	err := testEnv.Stop()

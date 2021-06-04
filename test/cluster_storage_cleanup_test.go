@@ -22,38 +22,38 @@ import (
 var _ = Describe("ClusterStorageCleanUpTest", func() {
 	ctx := goctx.TODO()
 
-	clusterName := "aerocluster"
-
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
 	// Check defaults
 	// Cleanup all volumes
 	// Cleanup selected volumes
 	// Update
-
-	// Cleanup storage
-	// kubectl -n test delete pvc --selector 'app=aerospike-cluster'
-
-	Context("cleanupPVC", func() {
-		It("should deploy a new cluster", func() {
-			err := cleanupPVC(k8sClient, namespace)
-			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-
 	Context("Positive", func() {
-		// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 4, false)
-		racks := getDummyRackConf(1, 2, 3, 4)
-		aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+		clusterName := "storage-cleanup"
+		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
-		It("Deploy", func() {
+		BeforeEach(func() {
+			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+			racks := getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
+		// // Deploy cluster with 6 racks to remove rack one by one and check for pvc
+		// aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 4, false)
+		// racks := getDummyRackConf(1, 2, 3, 4)
+		// aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
+		// It("Deploy", func() {
+		// 	err := deployCluster(k8sClient, ctx, aeroCluster)
+		// 	Expect(err).ToNot(HaveOccurred())
+		// })
 
 		// Check defaults
 		It("Defaults", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
 			oldPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -172,7 +172,8 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 			}
 		})
 
-		It("It should remove cluster", func() {
+		AfterEach(func() {
+			// cleanup cluster
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 			deleteCluster(k8sClient, ctx, aeroCluster)
@@ -184,24 +185,17 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 var _ = Describe("RackUsingLocalStorageTest", func() {
 	ctx := goctx.TODO()
 
-	clusterName := "aerocluster"
-
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
 	// Positive
 	// Global storage given, no local (already checked in normal cluster tests)
 	// Global storage given, local also given
 	// Local storage should be used for cascadeDelete, aerospikeConfig
-
-	// Negative
-	// Update rack storage should fail
-	// (nil -> val), (val -> nil), (val1 -> val2)
-
 	Context("Positive", func() {
-		aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+		clusterName := "rack-storage"
+		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+
+		devName := "/test/dev/rackstorage"
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
-		devName := "/test/dev/rackstorage"
 		racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
 			Value: map[string]interface{}{
 				"namespaces": []interface{}{
@@ -241,14 +235,18 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 			},
 		}
 
-		aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+		BeforeEach(func() {
+			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
-		It("Deploy", func() {
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("UseForAerospikeConfig", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
 			newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -275,10 +273,13 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 		})
 
 		It("UseForCascadeDelete", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
 			// There is only single rack
 			podName := aeroCluster.Name + "-" + strconv.Itoa(racks[0].ID) + "-" + strconv.Itoa(int(aeroCluster.Spec.Size-1))
 
-			err := scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)
+			err = scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)
 			Expect(err).ToNot(HaveOccurred())
 
 			newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
@@ -293,63 +294,93 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 			}
 		})
 
-		It("It should remove cluster", func() {
+		AfterEach(func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 	})
 
+	// Negative
+	// Update rack storage should fail
+	// (nil -> val), (val -> nil), (val1 -> val2)
 	Context("Negative", func() {
-		It("should fail for not having aerospikeConfig namespace Storage device in rack storage", func() {
-			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
-			racks := getDummyRackConf(1)
-			// AerospikeConfig is only patched
-			racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name": "test",
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"random/device/name"},
+		clusterName := "rack-storage-invalid"
+		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+
+		Context("Deploy", func() {
+			It("should fail for not having aerospikeConfig namespace Storage device in rack storage", func() {
+				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+				racks := getDummyRackConf(1)
+				// AerospikeConfig is only patched
+				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"namespaces": []interface{}{
+							map[string]interface{}{
+								"name": "test",
+								"storage-engine": map[string]interface{}{
+									"type":    "device",
+									"devices": []interface{}{"random/device/name"},
+								},
 							},
 						},
 					},
-				},
-			}
+				}
 
-			// Rack is completely replaced
-			racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				// Rack is completely replaced
+				racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{
+					FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+						InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+						InputCascadeDelete: &cascadeDeleteTrue,
+					},
+					Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+						{
+							Path:         "/opt/aerospike",
+							SizeInGB:     1,
+							StorageClass: storageClass,
+							VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						},
+					},
+				}
+
+				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).Should(HaveOccurred())
+			})
+
+			// Add test while rack using common aeroConfig but local storage, fail for mismatch
+			It("CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn't have namespace related volumes", func() {
+				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
+				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
+				racks := getDummyRackConf(1)
+				// Rack is completely replaced
+				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
 					{
-						Path:         "/opt/aerospike",
+						Path:         "/opt/aerospike/new",
 						SizeInGB:     1,
 						StorageClass: storageClass,
 						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
 					},
-				},
-			}
+				}
+				racks[0].InputStorage = getStorage(volumes)
+				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).Should(HaveOccurred())
+			})
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).Should(HaveOccurred())
-
-			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 
 		Context("Update", func() {
+
 			It("NilToValue: should fail for updating Storage. Cannot be updated", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
 				racks := getDummyRackConf(1)
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -376,6 +407,7 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 
 				deleteCluster(k8sClient, ctx, aeroCluster)
 			})
+
 			It("ValueToNil: should fail for updating Storage. Cannot be updated", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
@@ -392,6 +424,7 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
 				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -402,6 +435,7 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 				// Rack is completely replaced
 				racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{}
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+
 				err = k8sClient.Update(goctx.TODO(), aeroCluster)
 				Expect(err).Should(HaveOccurred())
 
@@ -425,6 +459,7 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
+				// Deploy cluster
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -450,28 +485,6 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 
 				deleteCluster(k8sClient, ctx, aeroCluster)
 			})
-		})
-		// Add test while rack using common aeroConfig but local storage, fail for mismatch
-		It("CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn't have namespace related volumes", func() {
-			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
-			racks := getDummyRackConf(1)
-			// Rack is completely replaced
-			volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
-				{
-					Path:         "/opt/aerospike/new",
-					SizeInGB:     1,
-					StorageClass: storageClass,
-					VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
-				},
-			}
-			racks[0].InputStorage = getStorage(volumes)
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
-
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).Should(HaveOccurred())
-
-			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 	})
 

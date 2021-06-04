@@ -35,9 +35,6 @@ const (
 var _ = Describe("Testing StorageInit", func() {
 	ctx := goctx.TODO()
 
-	// Cleanup storage
-	// kubectl -n test delete pvc --selector 'app=aerospike-cluster'
-
 	Context("When using various storage-init policies", func() {
 
 		falseVar := false
@@ -175,10 +172,6 @@ var _ = Describe("Testing StorageInit", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(len(pvcs)).Should(Equal(0), "PVCs not deleted")
-
-				// if len(pvcs) != 0 {
-				// 	t.Errorf("PVCs not deleted: %v", pvcs)
-				// }
 			}
 		})
 	})

@@ -11,15 +11,15 @@ import (
 
 // Local tests var
 // var (
-// 	zone1 = "us-central1-b"
-// 	zone2 = "us-central1-a"
-// 	region = "us-central1"
+// zone1  = "us-west1-b"
+// zone2  = "us-west1-b"
+// region = "us-west1"
 // )
 
 // Jenkins tests var
 var (
-	zone1  = "us-west1-b"
-	zone2  = "us-west1-b"
+	zone1  = "us-west1-a"
+	zone2  = "us-west1-a"
 	region = "us-west1"
 )
 
@@ -30,6 +30,7 @@ var _ = Describe("RackEnabledClusterTest", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid lifecyle operation on rack enbaled cluster", func() {
+
 		clusterName := "rack-enabled"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 

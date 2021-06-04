@@ -3,6 +3,7 @@ package test
 import (
 	goctx "context"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -32,17 +33,22 @@ var _ = Describe("Using podspec feature", func() {
 		Command: []string{"sh", "-c", "echo The app is running! && sleep 3600"},
 	}
 
-	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+	var aeroCluster *v1alpha1.AerospikeCluster
 
 	Context("When doing valid operation", func() {
 
-		// TODO: This gives "Context deadline exceeded"
-		// BeforeEach(func() {
-		// 	By("deploying a cluster")
+		BeforeEach(func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-		// 	err := deployCluster(k8sClient, ctx, aeroCluster)
-		// 	Expect(err).ToNot(HaveOccurred())
-		// }, 180)
+		AfterEach(func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			deleteCluster(k8sClient, ctx, aeroCluster)
+		})
 
 		It("Should validate the workflow", func() {
 
@@ -89,11 +95,6 @@ var _ = Describe("Using podspec feature", func() {
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
 
 			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

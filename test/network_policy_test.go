@@ -5,7 +5,6 @@
 package test
 
 import (
-	"context"
 	goctx "context"
 	"fmt"
 	"net"
@@ -53,40 +52,43 @@ var _ = Describe("TestNetworkPolicy", func() {
 })
 
 func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx goctx.Context) {
-	var aeroCluster *asdbv1alpha1.AerospikeCluster
-
 	It("DefaultNetworkPolicy", func() {
+		clusterNamespacedName := getClusterNamespacedName("np-default", multiClusterNs1)
+
 		// Ensures that default network policy is applied.
 		defaultNetworkPolicy := asdbv1alpha1.AerospikeNetworkPolicy{}
-		aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(defaultNetworkPolicy, multiPodPerHost, enableTLS, ctx)
+		aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName, defaultNetworkPolicy, multiPodPerHost, enableTLS, ctx)
+
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = validateNetworkPolicy(aeroCluster)
+		err = validateNetworkPolicy(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
+		deleteCluster(k8sClient, ctx, aeroCluster)
 	})
 
 	It("PodAndExternal", func() {
+		clusterNamespacedName := getClusterNamespacedName("np-pod-external", multiClusterNs1)
+
 		// Ensures that default network policy is applied.
 		networkPolicy := asdbv1alpha1.AerospikeNetworkPolicy{AccessType: asdbv1alpha1.AerospikeNetworkTypePod, AlternateAccessType: asdbv1alpha1.AerospikeNetworkTypeHostExternal, TLSAccessType: asdbv1alpha1.AerospikeNetworkTypePod, TLSAlternateAccessType: asdbv1alpha1.AerospikeNetworkTypeHostExternal}
-		aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(networkPolicy, multiPodPerHost, enableTLS, ctx)
+		aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName, networkPolicy, multiPodPerHost, enableTLS, ctx)
+
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = validateNetworkPolicy(aeroCluster)
+		err = validateNetworkPolicy(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
-	})
-	It("cleanup", func() {
-		// Cleanup for next run.
+
 		deleteCluster(k8sClient, ctx, aeroCluster)
 	})
 }
 
 // validateNetworkPolicy validates that the new network policy is applied correctly.
-func validateNetworkPolicy(desired *asdbv1alpha1.AerospikeCluster) error {
+func validateNetworkPolicy(ctx goctx.Context, desired *asdbv1alpha1.AerospikeCluster) error {
 	current := &asdbv1alpha1.AerospikeCluster{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
 		return fmt.Errorf("Error reading cluster spec:%v", err)
 	}
@@ -127,12 +129,12 @@ func validateNetworkPolicy(desired *asdbv1alpha1.AerospikeCluster) error {
 		networkPolicy := current.Spec.AerospikeNetworkPolicy
 
 		// Validate the returned endpoints.
-		err = validatePodEndpoint(&pod, current, networkPolicy.AccessType, false, aerospikecluster.GetEndpointsFromInfo("access", endpointsMap))
+		err = validatePodEndpoint(ctx, &pod, current, networkPolicy.AccessType, false, aerospikecluster.GetEndpointsFromInfo("access", endpointsMap))
 		if err != nil {
 			return err
 		}
 
-		err = validatePodEndpoint(&pod, current, networkPolicy.AlternateAccessType, false, aerospikecluster.GetEndpointsFromInfo("alternate-access", endpointsMap))
+		err = validatePodEndpoint(ctx, &pod, current, networkPolicy.AlternateAccessType, false, aerospikecluster.GetEndpointsFromInfo("alternate-access", endpointsMap))
 		if err != nil {
 			return err
 		}
@@ -140,12 +142,12 @@ func validateNetworkPolicy(desired *asdbv1alpha1.AerospikeCluster) error {
 		tlsName := getServiceTLSName(current)
 
 		if tlsName != "" {
-			err = validatePodEndpoint(&pod, current, networkPolicy.TLSAccessType, true, aerospikecluster.GetEndpointsFromInfo("tls-access", endpointsMap))
+			err = validatePodEndpoint(ctx, &pod, current, networkPolicy.TLSAccessType, true, aerospikecluster.GetEndpointsFromInfo("tls-access", endpointsMap))
 			if err != nil {
 				return err
 			}
 
-			err = validatePodEndpoint(&pod, current, networkPolicy.TLSAlternateAccessType, true, aerospikecluster.GetEndpointsFromInfo("tls-alternate-access", endpointsMap))
+			err = validatePodEndpoint(ctx, &pod, current, networkPolicy.TLSAlternateAccessType, true, aerospikecluster.GetEndpointsFromInfo("tls-alternate-access", endpointsMap))
 			if err != nil {
 				return err
 			}
@@ -154,8 +156,8 @@ func validateNetworkPolicy(desired *asdbv1alpha1.AerospikeCluster) error {
 	return nil
 }
 
-func validatePodEndpoint(pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster, networkType asdbv1alpha1.AerospikeNetworkType, isTLS bool, actual []string) error {
-	podIP, hostInternalIP, hostExternalIP, _ := getIPs(pod)
+func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster, networkType asdbv1alpha1.AerospikeNetworkType, isTLS bool, actual []string) error {
+	podIP, hostInternalIP, hostExternalIP, _ := getIPs(ctx, pod)
 	endpoint := actual[0]
 	host, portStr, err := net.SplitHostPort(endpoint)
 	// t.Logf("For pod:%v for accessType:%v Actual endpoint:%v", pod.Name, networkType, endpoint)
@@ -231,13 +233,13 @@ func getExpectedServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, po
 
 // getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
 // Note: the IPs returned from here should match the IPs generated in the pod intialization script for the init container.
-func getIPs(pod *corev1.Pod) (string, string, string, error) {
+func getIPs(ctx goctx.Context, pod *corev1.Pod) (string, string, string, error) {
 	podIP := pod.Status.PodIP
 	hostInternalIP := pod.Status.HostIP
 	hostExternalIP := hostInternalIP
 
 	k8sNode := &corev1.Node{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 	if err != nil {
 		return "", "", "", fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
 	}
@@ -254,11 +256,10 @@ func getIPs(pod *corev1.Pod) (string, string, string, error) {
 }
 
 // getAerospikeClusterSpecWithNetworkPolicy create a spec with input network policy.
-func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy asdbv1alpha1.AerospikeNetworkPolicy, multiPodPerHost bool, enableTLS bool, ctx goctx.Context) *asdbv1alpha1.AerospikeCluster {
+func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.NamespacedName, networkPolicy asdbv1alpha1.AerospikeNetworkPolicy, multiPodPerHost bool, enableTLS bool, ctx goctx.Context) *asdbv1alpha1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
-	kubeNs := namespace
 	cascadeDelete := true
 
 	var networkConf map[string]interface{} = map[string]interface{}{}
@@ -281,8 +282,8 @@ func getAerospikeClusterSpecWithNetworkPolicy(networkPolicy asdbv1alpha1.Aerospi
 
 	return &asdbv1alpha1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "aeroclustertest",
-			Namespace: kubeNs,
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: asdbv1alpha1.AerospikeClusterSpec{
 			Size:  networkTestPolicyClusterSize,

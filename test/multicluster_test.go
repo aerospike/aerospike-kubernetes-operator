@@ -2,7 +2,6 @@ package test
 
 import (
 	goctx "context"
-	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -15,25 +14,25 @@ var _ = Describe("DeployMultiClusterMultiNsTest", func() {
 	ctx := goctx.TODO()
 
 	// 1st cluster
-	clusterName1 := "aerocluster"
+	clusterName1 := "multicluster"
 	clusterNamespacedName1 := getClusterNamespacedName(clusterName1, multiClusterNs1)
 
 	// 2nd cluster
-	clusterName2 := "aerocluster"
+	clusterName2 := "multicluster"
 	clusterNamespacedName2 := getClusterNamespacedName(clusterName2, multiClusterNs2)
 
-	Context("multiClusterLifeCycleTest", func() {
-		multiClusterLifeCycleTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
-	})
+	// Context("multiClusterLifeCycleTest", func() {
+	// 	multiClusterLifeCycleTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
+	// })
 	Context("multiClusterGenChangeTest", func() {
 		multiClusterGenChangeTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
 	})
 	Context("multiClusterPVCTest", func() {
 		multiClusterPVCTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
 	})
-	Context("multiClusterInParallel", func() {
-		multiClusterInParallel(ctx, clusterNamespacedName1, clusterNamespacedName2)
-	})
+	// Context("multiClusterInParallel", func() {
+	// 	multiClusterInParallel(ctx, clusterNamespacedName1, clusterNamespacedName2)
+	// })
 })
 
 // DeployMultiClusterSingleNsTest tests multicluster in single namespace
@@ -41,82 +40,62 @@ var _ = Describe("DeployMultiClusterSingleNsTest", func() {
 	ctx := goctx.TODO()
 
 	// 1st cluster
-	clusterName1 := "aerocluster1"
+	clusterName1 := "multicluster1"
 	clusterNamespacedName1 := getClusterNamespacedName(clusterName1, multiClusterNs1)
 
 	// 2nd cluster
-	clusterName2 := "aerocluster2"
+	clusterName2 := "multicluster2"
 	clusterNamespacedName2 := getClusterNamespacedName(clusterName2, multiClusterNs1)
 
-	Context("multiClusterLifeCycleTest", func() {
-		multiClusterLifeCycleTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
-	})
+	// Context("multiClusterLifeCycleTest", func() {
+	// 	multiClusterLifeCycleTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
+	// })
 	Context("multiClusterGenChangeTest", func() {
 		multiClusterGenChangeTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
 	})
 	Context("multiClusterPVCTest", func() {
 		multiClusterPVCTest(ctx, clusterNamespacedName1, clusterNamespacedName2)
 	})
-	Context("multiClusterInParallel", func() {
-		multiClusterInParallel(ctx, clusterNamespacedName1, clusterNamespacedName2)
-	})
+	// Context("multiClusterInParallel", func() {
+	// 	multiClusterInParallel(ctx, clusterNamespacedName1, clusterNamespacedName2)
+	// })
 })
 
-func multiClusterInParallel(ctx goctx.Context, clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName) {
-	var wg sync.WaitGroup
-	wg.Add(2)
+// func multiClusterInParallel(ctx goctx.Context, clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName) {
 
-	// Deploy 1st cluster
-	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
-	go func() {
-		defer wg.Done()
-		It("DeployCluster", func() {
-			err := deployCluster(k8sClient, ctx, aeroCluster1)
-			Expect(err).ToNot(HaveOccurred())
+// 	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
 
-		})
-		It("RollingRestart", func() {
-			err := rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName1)
-			Expect(err).ToNot(HaveOccurred())
+// 	aeroCluster2 := createDummyAerospikeCluster(clusterNamespacedName2, 2)
 
-		})
-		It("Upgrade/Downgrade", func() {
-			// dont change image, it upgrade, check old version
-			err := upgradeClusterTest(k8sClient, ctx, clusterNamespacedName1, imageToUpgrade)
-			Expect(err).ToNot(HaveOccurred())
+// 	It("Should be able to do lifecycle operation in multicluster setup", func() {
 
-		})
-	}()
+// 		By("DeployCluster-1")
 
-	aeroCluster2 := createDummyAerospikeCluster(clusterNamespacedName2, 2)
-	go func() {
-		defer wg.Done()
-		// Deploy 2nd cluster
-		It("DeployCluster", func() {
-			err := deployCluster(k8sClient, ctx, aeroCluster2)
-			Expect(err).ToNot(HaveOccurred())
+// 		err := deployCluster(k8sClient, ctx, aeroCluster1)
+// 		Expect(err).ToNot(HaveOccurred())
 
-		})
-		It("RollingRestart", func() {
-			err := rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName2)
-			Expect(err).ToNot(HaveOccurred())
+// 		By("Trying lifecycle operations on 2nd cluster")
 
-		})
-		It("Upgrade/Downgrade", func() {
-			// dont change image, it upgrade, check old version
-			err := upgradeClusterTest(k8sClient, ctx, clusterNamespacedName2, imageToUpgrade)
-			Expect(err).ToNot(HaveOccurred())
+// 		By("DeployCluster-2")
 
-		})
-	}()
+// 		err = deployCluster(k8sClient, ctx, aeroCluster2)
+// 		Expect(err).ToNot(HaveOccurred())
 
-	wg.Wait()
+// 		By("RollingRestart")
 
-	It("cleanup", func() {
-		deleteCluster(k8sClient, ctx, aeroCluster1)
-		deleteCluster(k8sClient, ctx, aeroCluster2)
-	})
-}
+// 		err = rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName2)
+// 		Expect(err).ToNot(HaveOccurred())
+
+// 		By("Upgrade/Downgrade")
+
+// 		// dont change image, it upgrade, check old version
+// 		err = upgradeClusterTest(k8sClient, ctx, clusterNamespacedName2, imageToUpgrade)
+// 		Expect(err).ToNot(HaveOccurred())
+
+// 		deleteCluster(k8sClient, ctx, aeroCluster1)
+// 		deleteCluster(k8sClient, ctx, aeroCluster2)
+// 	})
+// }
 
 // multiClusterGenChangeTest tests if state of one cluster gets impacted by another
 func multiClusterGenChangeTest(ctx goctx.Context, clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName) {
@@ -147,20 +126,22 @@ func multiClusterGenChangeTest(ctx goctx.Context, clusterNamespacedName1, cluste
 		// 	t.Fatalf("Generation for cluster1 is changed affter deleting cluster2")
 		// }
 		Expect(aeroCluster1.Generation).To(Equal(newaeroCluster1.Generation), "Generation for cluster1 is changed affter deleting cluster2")
-	})
-
-	// Just try rolling restart to see if 1st cluster is fine
-	It("RollingRestart", func() {
-		err := rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName1)
-		Expect(err).ToNot(HaveOccurred())
-
-		validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName1)
-	})
-
-	It("cleanup", func() {
 
 		deleteCluster(k8sClient, ctx, aeroCluster1)
 	})
+
+	// // Just try rolling restart to see if 1st cluster is fine
+	// It("RollingRestart", func() {
+	// 	err := rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName1)
+	// 	Expect(err).ToNot(HaveOccurred())
+
+	// 	validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName1)
+	// })
+
+	// It("cleanup", func() {
+
+	// 	deleteCluster(k8sClient, ctx, aeroCluster1)
+	// })
 }
 
 // multiClusterPVCTest tests if pvc of one cluster gets impacted by another
@@ -210,51 +191,42 @@ func multiClusterPVCTest(ctx goctx.Context, clusterNamespacedName1, clusterNames
 
 		err = matchPVCList(aeroClusterPVCList1, newaeroClusterPVCList1)
 		Expect(err).ToNot(HaveOccurred())
-	})
-	// Just try rolling restart to see if 1st cluster is fine
-	It("RollingRestart", func() {
-		err := rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName1)
-		Expect(err).ToNot(HaveOccurred())
 
-		validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName1)
-	})
-
-	It("cleanup", func() {
 		// Delete 1st cluster
 		deleteCluster(k8sClient, ctx, aeroCluster1)
 	})
 }
 
-// multiClusterLifeCycleTest tests multicluster
-func multiClusterLifeCycleTest(ctx goctx.Context, clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName) {
-	// Deploy 1st cluster
-	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
-	It("Deploy 1st cluster", func() {
-		err := deployCluster(k8sClient, ctx, aeroCluster1)
-		Expect(err).ToNot(HaveOccurred())
-	})
+// // multiClusterLifeCycleTest tests multicluster
+// func multiClusterLifeCycleTest(ctx goctx.Context, clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName) {
+// 	// Deploy 1st cluster
+// 	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
+// 	It("Deploy 1st cluster", func() {
+// 		err := deployCluster(k8sClient, ctx, aeroCluster1)
+// 		Expect(err).ToNot(HaveOccurred())
+// 	})
 
-	// Deploy 2nd cluster
-	aeroCluster2 := createDummyAerospikeCluster(clusterNamespacedName2, 2)
-	It("Deploy 2nd cluster", func() {
-		err := deployCluster(k8sClient, ctx, aeroCluster2)
-		Expect(err).ToNot(HaveOccurred())
-	})
-	// Validate lifecycle for 1st cluster
-	It("Validate_"+clusterNamespacedName1.String(), func() {
-		validateLifecycleOperation(ctx, clusterNamespacedName1)
-	})
+// 	// Deploy 2nd cluster
+// 	aeroCluster2 := createDummyAerospikeCluster(clusterNamespacedName2, 2)
+// 	It("Deploy 2nd cluster", func() {
+// 		err := deployCluster(k8sClient, ctx, aeroCluster2)
+// 		Expect(err).ToNot(HaveOccurred())
+// 	})
+// 	// Validate lifecycle for 1st cluster
+// 	It("Validate_"+clusterNamespacedName1.String(), func() {
+// 		validateLifecycleOperation(ctx, clusterNamespacedName1)
+// 	})
 
-	// Validate lifecycle for 2nd cluster
-	It("Validate_"+clusterNamespacedName2.String(), func() {
-		validateLifecycleOperation(ctx, clusterNamespacedName2)
-	})
+// 	// Validate lifecycle for 2nd cluster
+// 	It("Validate_"+clusterNamespacedName2.String(), func() {
+// 		validateLifecycleOperation(ctx, clusterNamespacedName2)
+// 	})
 
-	It("cleanup", func() {
-		deleteCluster(k8sClient, ctx, aeroCluster1)
-		deleteCluster(k8sClient, ctx, aeroCluster2)
-	})
-}
+// 	It("cleanup", func() {
+// 		deleteCluster(k8sClient, ctx, aeroCluster1)
+// 		deleteCluster(k8sClient, ctx, aeroCluster2)
+// 	})
+// }
 
 func validateLifecycleOperation(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
 	By("Scaleup")

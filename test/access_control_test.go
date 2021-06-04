@@ -3,7 +3,6 @@
 package test
 
 import (
-	"context"
 	goctx "context"
 	"fmt"
 	"math/rand"
@@ -41,19 +40,19 @@ var aerospikeConfigWithSecurity = &asdbv1alpha1.AerospikeConfigSpec{
 	},
 }
 
-var aerospikeConfigWithoutSecurity = &asdbv1alpha1.AerospikeConfigSpec{
-	Value: map[string]interface{}{
-		"security": map[string]interface{}{"enable-security": false},
-		"namespaces": []interface{}{
-			map[string]interface{}{
-				"name": "profileNs",
-			},
-			map[string]interface{}{
-				"name": "userNs",
-			},
-		},
-	},
-}
+// var aerospikeConfigWithoutSecurity = &asdbv1alpha1.AerospikeConfigSpec{
+// 	Value: map[string]interface{}{
+// 		"security": map[string]interface{}{"enable-security": false},
+// 		"namespaces": []interface{}{
+// 			map[string]interface{}{
+// 				"name": "profileNs",
+// 			},
+// 			map[string]interface{}{
+// 				"name": "userNs",
+// 			},
+// 		},
+// 	},
+// }
 
 var _ = Describe("AccessControl", func() {
 
@@ -1313,7 +1312,7 @@ func testAccessControlReconcile(desired *asdbv1alpha1.AerospikeCluster, ctx goct
 	}
 
 	current := &asdbv1alpha1.AerospikeCluster{}
-	err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
 		return err
 	}

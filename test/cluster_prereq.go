@@ -68,7 +68,7 @@ func createNamespace(k8sClient client.Client, ctx goctx.Context, name string) er
 			Name: name,
 		},
 	}
-	return k8sClient.Create(goctx.TODO(), ns)
+	return k8sClient.Create(ctx, ns)
 }
 
 func createServiceAccount(k8sClient client.Client, ctx goctx.Context, name string, namespace string) error {
@@ -78,7 +78,7 @@ func createServiceAccount(k8sClient client.Client, ctx goctx.Context, name strin
 			Namespace: namespace,
 		},
 	}
-	return k8sClient.Create(goctx.TODO(), svcAct)
+	return k8sClient.Create(ctx, svcAct)
 }
 
 func createClusterRole(k8sClient client.Client, ctx goctx.Context, name string) error {
@@ -104,7 +104,7 @@ func createClusterRole(k8sClient client.Client, ctx goctx.Context, name string) 
 			},
 		},
 	}
-	return k8sClient.Create(goctx.TODO(), cr)
+	return k8sClient.Create(ctx, cr)
 }
 
 func createRoleBinding(k8sClient client.Client, ctx goctx.Context, name string, subjects []rbac.Subject, roleRefName string) error {
@@ -119,5 +119,5 @@ func createRoleBinding(k8sClient client.Client, ctx goctx.Context, name string, 
 			Kind:     "ClusterRole",
 		},
 	}
-	return k8sClient.Create(goctx.TODO(), crb)
+	return k8sClient.Create(ctx, crb)
 }

@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	goctx "context"
 	"fmt"
 	"time"
@@ -24,9 +23,7 @@ const (
 )
 
 var (
-	retryInterval = time.Second * 5
-	timeout       = time.Second * 120
-
+	retryInterval      = time.Second * 5
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 )
@@ -38,13 +35,13 @@ func scaleUpClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNames
 	}
 
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + increaseBy
-	err = k8sClient.Update(goctx.TODO(), aeroCluster)
+	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
 	// Wait for aerocluster to reach 2 replicas
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(increaseBy))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(increaseBy))
 }
 
 func scaleDownClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, decreaseBy int32) error {
@@ -54,13 +51,13 @@ func scaleDownClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNam
 	}
 
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size - decreaseBy
-	err = k8sClient.Update(goctx.TODO(), aeroCluster)
+	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
 	// How much time to wait in scaleDown
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(decreaseBy))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(decreaseBy))
 }
 
 func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
@@ -75,12 +72,12 @@ func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clust
 	}
 	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
 
-	err = k8sClient.Update(goctx.TODO(), aeroCluster)
+	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
 func upgradeClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, image string) error {
@@ -91,17 +88,17 @@ func upgradeClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNames
 
 	// Change config
 	aeroCluster.Spec.Image = image
-	err = k8sClient.Update(goctx.TODO(), aeroCluster)
+	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
 func getCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) (*asdbv1alpha1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1alpha1.AerospikeCluster{}
-	err := k8sClient.Get(goctx.TODO(), clusterNamespacedName, aeroCluster)
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -110,20 +107,20 @@ func getCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedNam
 
 func getClusterIfExists(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) (*asdbv1alpha1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1alpha1.AerospikeCluster{}
-	err := k8sClient.Get(goctx.TODO(), clusterNamespacedName, aeroCluster)
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("Error getting cluster: %v", err)
+		return nil, fmt.Errorf("error getting cluster: %v", err)
 	}
 
 	return aeroCluster, nil
 }
 
 func deleteCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) error {
-	if err := k8sClient.Delete(goctx.TODO(), aeroCluster); err != nil {
+	if err := k8sClient.Delete(ctx, aeroCluster); err != nil {
 		return err
 	}
 
@@ -149,7 +146,7 @@ func deleteCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdb
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 
 		if err != nil {
-			return fmt.Errorf("Error getting PVCs: %v", err)
+			return fmt.Errorf("error getting PVCs: %v", err)
 		}
 
 		pending := false
@@ -182,21 +179,21 @@ func deployClusterWithTO(k8sClient client.Client, ctx goctx.Context, aeroCluster
 		return err
 	}
 	// Wait for aerocluster to reach desired cluster size.
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, timeout)
 }
 
 func updateCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) error {
-	err := k8sClient.Update(goctx.TODO(), aeroCluster)
+	err := k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
 // TODO: remove it
 func updateAndWait(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) error {
-	err := k8sClient.Update(goctx.TODO(), aeroCluster)
+	err := k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -206,24 +203,24 @@ func updateAndWait(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdb
 	// TODO: find another way or validate config also
 	time.Sleep(5 * time.Second)
 
-	return waitForAerospikeCluster(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
 }
 
-func getClusterPodList(k8sClient client.Client, aeroCluster *asdbv1alpha1.AerospikeCluster) (*corev1.PodList, error) {
+func getClusterPodList(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
 	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := k8sClient.List(context.TODO(), podList, listOps); err != nil {
+	if err := k8sClient.List(ctx, podList, listOps); err != nil {
 		return nil, err
 	}
 	return podList, nil
 }
 
 func validateResource(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) error {
-	podList, err := getClusterPodList(k8sClient, aeroCluster)
+	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -777,7 +774,7 @@ func createPMEMStorageCluster(clusterNamespacedName types.NamespacedName, size i
 
 func aerospikeClusterCreateUpdateWithTO(k8sClient client.Client, desired *asdbv1alpha1.AerospikeCluster, ctx goctx.Context, retryInterval, timeout time.Duration) error {
 	current := &asdbv1alpha1.AerospikeCluster{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
 		// Deploy the cluster.
 		// t.Logf("Deploying cluster at %v", time.Now().Format(time.RFC850))
@@ -796,12 +793,12 @@ func aerospikeClusterCreateUpdateWithTO(k8sClient client.Client, desired *asdbv1
 	}
 	lib.DeepCopy(&current.Spec.AerospikeConfig.Value, &desired.Spec.AerospikeConfig.Value)
 
-	err = k8sClient.Update(context.TODO(), current)
+	err = k8sClient.Update(ctx, current)
 	if err != nil {
 		return err
 	}
 
-	return waitForAerospikeCluster(k8sClient, desired, int(desired.Spec.Size), retryInterval, timeout)
+	return waitForAerospikeCluster(k8sClient, ctx, desired, int(desired.Spec.Size), retryInterval, timeout)
 }
 
 func aerospikeClusterCreateUpdate(k8sClient client.Client, desired *asdbv1alpha1.AerospikeCluster, ctx goctx.Context) error {

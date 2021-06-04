@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -36,15 +35,8 @@ var (
 	pkgLog       = ctrl.Log.WithName("test")
 )
 
-var (
-	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Second * 200
-)
-
-var schemas map[string]string
 var secrets map[string][]byte
 
-const schemaDir = "deploy/config-schemas"
 const secretDir = "../config/secrets"
 
 const tlsSecretName = "aerospike-secret"
@@ -55,39 +47,6 @@ const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1alpha1.AerospikeVolumeInitMethodDeleteFiles
-
-// func cleanupOption(ctx goctx.Context) *framework.CleanupOptions {
-// 	return &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
-// }
-
-func initConf(schemaDir string) error {
-	schemas = make(map[string]string)
-
-	fileInfo, err := ioutil.ReadDir(schemaDir)
-	if err != nil {
-		return err
-	}
-
-	if len(fileInfo) == 0 {
-		return fmt.Errorf("no config schema file available in %s", schemaDir)
-	}
-
-	for _, file := range fileInfo {
-		if file.IsDir() {
-			// no need to check recursively
-			continue
-		}
-
-		schema, err := ioutil.ReadFile(filepath.Join(schemaDir, file.Name()))
-		if err != nil {
-			return fmt.Errorf("wrong config schema file %s: %v", file.Name(), err)
-		}
-
-		schemas[file.Name()] = string(schema)
-	}
-
-	return nil
-}
 
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
@@ -119,17 +78,12 @@ func initConfigSecret(secretDir string) error {
 }
 
 func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
-	// kubectl create configmap config-schemas --from-file=deploy/config-schemas
-	// namespace, err := ctx.GetNamespace()
-	// if err != nil {
-	// 	return fmt.Errorf("Could not get namespace: %v", err)
-	// }
 
 	labels := getLabels()
 
 	// Create configSecret
 	if err := initConfigSecret(secretDir); err != nil {
-		return fmt.Errorf("Failed to init secrets: %v", err)
+		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
 	if err := createConfigSecret(k8sClient, ctx, namespace, labels); err != nil {
@@ -178,7 +132,7 @@ func createClusterPreReq(k8sClient client.Client, ctx goctx.Context, namespace s
 	return nil
 }
 
-func createStorageClass(k8sClient client.Client) error {
+func createStorageClass(k8sClient client.Client, ctx goctx.Context) error {
 	bindingMode := storagev1.VolumeBindingWaitForFirstConsumer
 	storageClass := &storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
@@ -191,7 +145,7 @@ func createStorageClass(k8sClient client.Client) error {
 		},
 		VolumeBindingMode: &bindingMode,
 	}
-	err := k8sClient.Create(goctx.TODO(), storageClass)
+	err := k8sClient.Create(ctx, storageClass)
 	if err != nil {
 		return err
 	}
@@ -210,7 +164,7 @@ func createConfigSecret(k8sClient client.Client, ctx goctx.Context, namespace st
 		Data: secrets,
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err := k8sClient.Create(goctx.TODO(), s)
+	err := k8sClient.Create(ctx, s)
 	if err != nil {
 		return err
 	}
@@ -232,7 +186,7 @@ func createAuthSecret(k8sClient client.Client, ctx goctx.Context, namespace stri
 		},
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
-	err := k8sClient.Create(goctx.TODO(), as)
+	err := k8sClient.Create(ctx, as)
 	if err != nil {
 		return err
 	}
@@ -244,47 +198,12 @@ func getLabels() map[string]string {
 	return map[string]string{"app": "aerospike-cluster"}
 }
 
-// WaitForOperatorDeployment has the same functionality as WaitForDeployment but will no wait for the deployment if the
-// test was run with a locally run operator (--up-local flag)
-func waitForOperatorDeployment(kubeclient kubernetes.Interface, namespace, name string, replicas int, retryInterval, timeout time.Duration) error {
-	return waitForDeployment(kubeclient, namespace, name, replicas, retryInterval, timeout, true)
-}
-
-func waitForDeployment(kubeclient kubernetes.Interface, namespace, name string, replicas int, retryInterval, timeout time.Duration, isOperator bool) error {
-	ctx := goctx.Background()
-	// if isOperator && test.Global.LocalOperator {
-	// 	// t.Log("Operator is running locally; skip waitForDeployment")
-	// 	return nil
-	// }
-	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		deployment, err := kubeclient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				pkgLog.Info("Waiting for availability of %s deployment\n", name)
-				return false, nil
-			}
-			return false, err
-		}
-
-		if int(deployment.Status.AvailableReplicas) == replicas {
-			return true, nil
-		}
-		pkgLog.Info("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, replicas)
-		return false, nil
-	})
-	if err != nil {
-		return err
-	}
-	pkgLog.Info("Deployment available (%d/%d)\n", replicas, replicas)
-	return nil
-}
-
-func waitForAerospikeCluster(k8sClient client.Client, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
 	var isValid bool
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
 		newCluster := &asdbv1alpha1.AerospikeCluster{}
-		err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
+		err = k8sClient.Get(ctx, types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				pkgLog.Info("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
@@ -292,25 +211,15 @@ func waitForAerospikeCluster(k8sClient client.Client, aeroCluster *asdbv1alpha1.
 			}
 			return false, err
 		}
-		// pkgLog.Info("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		// nodeList := &corev1.StatefulSetList{}
-		// err = k8sClient.List(goctx.Background(), nodeList)
-		// pkgLog.Info(" @@@@@@@Node ", "node", nodeList)
-
-		// for _, p := range nodeList.Items {
-		// 	pkgLog.Info(" @@@@@@@Node ", "node", p)
-		// }
-
-		isValid = isClusterStateValid(k8sClient, aeroCluster, newCluster, replicas)
+		isValid = isClusterStateValid(aeroCluster, newCluster, replicas)
 		return isValid, nil
-		// return isClusterStateValid(k8sClient, aeroCluster, newCluster, replicas), nil
 	})
 	if err != nil {
 		return err
 	}
 	if !isValid {
-		return fmt.Errorf("Cluster state not matching with desired state")
+		return fmt.Errorf("cluster state not matching with desired state")
 	}
 	pkgLog.Info("AerospikeCluster available\n")
 
@@ -318,7 +227,7 @@ func waitForAerospikeCluster(k8sClient client.Client, aeroCluster *asdbv1alpha1.
 	return nil
 }
 
-func isClusterStateValid(k8sClient client.Client, aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster *asdbv1alpha1.AerospikeCluster, replicas int) bool {
+func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster *asdbv1alpha1.AerospikeCluster, replicas int) bool {
 	if int(newCluster.Status.Size) != replicas {
 		pkgLog.Info("Cluster size is not correct")
 		return false
@@ -355,14 +264,6 @@ func isClusterStateValid(k8sClient client.Client, aeroCluster *asdbv1alpha1.Aero
 
 func getTimeout(nodes int32) time.Duration {
 	return (5 * time.Minute * time.Duration(nodes))
-}
-
-func validateError(t *testing.T, err error, msg string) {
-	if err == nil {
-		t.Fatal(msg)
-	} else {
-		t.Log(err)
-	}
 }
 
 // ExecuteCommandOnPod executes a command in the specified container,
@@ -422,11 +323,11 @@ func Copy(dst interface{}, src interface{}) error {
 	}
 	bytes, err := json.Marshal(src)
 	if err != nil {
-		return fmt.Errorf("Unable to marshal src: %s", err)
+		return fmt.Errorf("unable to marshal src: %s", err)
 	}
 	err = json.Unmarshal(bytes, dst)
 	if err != nil {
-		return fmt.Errorf("Unable to unmarshal into dst: %s", err)
+		return fmt.Errorf("unable to unmarshal into dst: %s", err)
 	}
 	return nil
 }
