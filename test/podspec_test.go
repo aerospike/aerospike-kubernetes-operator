@@ -102,6 +102,8 @@ var _ = Describe("Using podspec feature", func() {
 	Context("When doing invalid operation", func() {
 
 		It("Should fail for adding container with same name", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
 			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, sidecar1)
 			aeroCluster.Spec.PodSpec.Sidecars = append(aeroCluster.Spec.PodSpec.Sidecars, sidecar1)
 
