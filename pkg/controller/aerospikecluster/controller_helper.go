@@ -85,6 +85,7 @@ func (r *ReconcileAerospikeCluster) createStatefulSet(aeroCluster *aerospikev1al
 		newEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newEnvVar("MY_POD_IP", "status.podIP"),
 		newEnvVar("MY_HOST_IP", "status.hostIP"),
+		newEnvVar("MY_NODE_NAME", "spec.nodeName"),
 		newEnvVarStatic("MY_POD_TLS_NAME", getServiceTLSName(aeroCluster)),
 		newEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
 	}
