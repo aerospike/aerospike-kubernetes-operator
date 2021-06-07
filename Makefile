@@ -39,7 +39,7 @@ test: generate fmt vet
 	# source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out
 	# TODO: replace this line with old line
 	# source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); cd $(shell pwd)/test; go test -p 4 -ginkgo.v -ginkgo.parallel.total=3 -ginkgo.progress -timeout=59m -coverprofile cover.out
-	 source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); ginkgo test $(shell pwd)/test -nodes=4 -stream -v -progress -cover cover.out
+	 source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); ginkgo test $(shell pwd)/test -v -progress -cover cover.out
 
 # Build manager binary
 manager: generate fmt vet
