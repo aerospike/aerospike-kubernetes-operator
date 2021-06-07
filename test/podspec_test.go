@@ -3,7 +3,6 @@ package test
 import (
 	goctx "context"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -33,8 +32,6 @@ var _ = Describe("Using podspec feature", func() {
 		Command: []string{"sh", "-c", "echo The app is running! && sleep 3600"},
 	}
 
-	var aeroCluster *v1alpha1.AerospikeCluster
-
 	Context("When doing valid operation", func() {
 
 		BeforeEach(func() {
@@ -51,11 +48,6 @@ var _ = Describe("Using podspec feature", func() {
 		})
 
 		It("Should validate the workflow", func() {
-
-			By("Deploying the cluster")
-
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 
 			By("Adding the container1")
 
