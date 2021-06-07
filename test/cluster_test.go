@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ = Describe("TestAerospikeCluster", func() {
+var _ = Describe("AerospikeCluster", func() {
 
 	ctx := goctx.TODO()
 
@@ -148,7 +148,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 		deleteCluster(k8sClient, ctx, aeroCluster)
 	})
 
-	Context("When doing valid updates", func() {
+	Context("When doing valid operations", func() {
 		It("Try update operations", func() {
 			By("ScaleUp")
 
@@ -178,7 +178,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 		})
 	})
 
-	Context("When doing invalid updates", func() {
+	Context("When doing invalid operations", func() {
 
 		Context("ValidateUpdate", func() {
 			// TODO: No jump version yet but will be used

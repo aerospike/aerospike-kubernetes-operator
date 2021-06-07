@@ -11,24 +11,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package aerospikecluster
+package controllers
 
 import (
-	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -53,35 +47,13 @@ func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluste
 	return version, nil
 }
 
-func (r *AerospikeClusterReconciler) waitForClusterStaefulSetsToBeReady(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
-	// User aeroCluster.Status to get all existing sts.
-	// Can status be empty here
-	r.Log.Info("Waiting for cluster to be ready")
-
-	for _, rack := range aeroCluster.Status.RackConfig.Racks {
-		st := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rack.ID)
-		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
-				return err
-			}
-			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
-			continue
-		}
-		if err := r.waitForStatefulSetToBeReady(st); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // waitForNodeSafeStopReady waits util the input pod is safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
 func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod, ignorablePods []v1.Pod) reconcileResult {
 	// TODO: Check post quiesce recluster conditions first.
 	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
 
 	// Remove a node only if cluster is stable
-	err := r.waitForClusterStaefulSetsToBeReady(aeroCluster)
+	err := r.waitForAllSTSToBeReady(aeroCluster)
 	if err != nil {
 		return reconcileError(fmt.Errorf("Failed to wait for cluster to be ready: %v", err))
 	}
@@ -151,69 +123,6 @@ func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1alpha1.Aeros
 	return deployment.AlumniReset(r.getClientPolicy(aeroCluster), asConn)
 }
 
-// getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
-// Note: the IPs returned from here should match the IPs generated in the pod intialization script for the init container.
-func (r *AerospikeClusterReconciler) getIPs(pod *corev1.Pod) (string, string, string, error) {
-	podIP := pod.Status.PodIP
-	hostInternalIP := pod.Status.HostIP
-	hostExternalIP := hostInternalIP
-
-	k8sNode := &corev1.Node{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
-	if err != nil {
-		return "", "", "", fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
-	}
-	// If externalIP is present than give external ip
-	for _, add := range k8sNode.Status.Addresses {
-		if add.Type == corev1.NodeExternalIP && add.Address != "" {
-			hostExternalIP = add.Address
-		} else if add.Type == corev1.NodeInternalIP && add.Address != "" {
-			hostInternalIP = add.Address
-		}
-	}
-
-	return podIP, hostInternalIP, hostExternalIP, nil
-}
-
-func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (*corev1.Service, error) {
-	service := &corev1.Service{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get service for pod %s: %v", pod.Name, err)
-	}
-	return service, nil
-}
-
-func (r *AerospikeClusterReconciler) getServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (int32, error) {
-	var port int32
-	tlsName := getServiceTLSName(aeroCluster)
-
-	if aeroCluster.Spec.MultiPodPerHost {
-		svc, err := r.getServiceForPod(pod)
-		if err != nil {
-			return 0, fmt.Errorf("Error getting service port: %v", err)
-		}
-		if tlsName == "" {
-			port = svc.Spec.Ports[0].NodePort
-		} else {
-			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
-					port = portInfo.NodePort
-					break
-				}
-			}
-		}
-	} else {
-		if tlsName == "" {
-			port = asdbv1alpha1.ServicePort
-		} else {
-			port = asdbv1alpha1.ServiceTLSPort
-		}
-	}
-
-	return port, nil
-}
-
 func (r *AerospikeClusterReconciler) newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]*deployment.HostConn, error) {
 	return r.newAllHostConnWithOption(aeroCluster, nil)
 }
@@ -231,7 +140,7 @@ func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv
 
 	var hostConns []*deployment.HostConn
 	for _, pod := range podList.Items {
-		if utils.IsTerminating(&pod) {
+		if utils.IsPodTerminating(&pod) {
 			continue
 		}
 
@@ -289,53 +198,6 @@ func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1alpha1.Aerospi
 	}
 
 	return asConn, nil
-}
-
-func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
-	// TODO: Should we return err, should have failed in validation
-	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
-
-	if networkConfTmp, ok := aeroConf["network"]; ok {
-		networkConf := networkConfTmp.(map[string]interface{})
-		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-			return tlsName.(string)
-		}
-	}
-	return ""
-}
-
-func getFQDNForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, host string) string {
-	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
-}
-
-// GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
-//
-// E.g. addressName are access, alternate-access
-func GetEndpointsFromInfo(addressName string, endpointsMap map[string]interface{}) []string {
-	endpoints := []string{}
-
-	portStr, ok := endpointsMap["service."+addressName+"-port"]
-	if !ok {
-		return endpoints
-	}
-
-	port, err := strconv.ParseInt(fmt.Sprintf("%v", portStr), 10, 32)
-
-	if err != nil || port == 0 {
-		return endpoints
-	}
-
-	hostsStr, ok := endpointsMap["service."+addressName+"-addresses"]
-	if !ok {
-		return endpoints
-	}
-
-	hosts := strings.Split(fmt.Sprintf("%v", hostsStr), ",")
-
-	for _, host := range hosts {
-		endpoints = append(endpoints, net.JoinHostPort(host, strconv.Itoa(int(port))))
-	}
-	return endpoints
 }
 
 // ParseInfoIntoMap parses info string into a map.

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	ctrl "sigs.k8s.io/controller-runtime"
 )

@@ -1,4 +1,4 @@
-package aerospikecluster
+package controllers
 
 // Aerospike access control reconciliation of access control.
 
@@ -84,28 +84,6 @@ func ReconcileAccessControl(desired *asdbv1alpha1.AerospikeClusterSpec, current 
 	err = reconcileUsers(desiredUsers, currentUsers, passwordProvider, client, adminPolicy, logger)
 	return err
 }
-
-// // asdbv1alpha1.GetRolesFromSpec returns roles or an empty map from the spec.
-// func asdbv1alpha1.GetRolesFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeRoleSpec {
-// 	var roles map[string]asdbv1alpha1.AerospikeRoleSpec = map[string]asdbv1alpha1.AerospikeRoleSpec{}
-// 	if spec.AerospikeAccessControl != nil {
-// 		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
-// 			roles[roleSpec.Name] = roleSpec
-// 		}
-// 	}
-// 	return roles
-// }
-
-// // asdbv1alpha1.GetUsersFromSpec returns users or an empty map from the spec.
-// func asdbv1alpha1.GetUsersFromSpec(spec *asdbv1alpha1.AerospikeClusterSpec) map[string]asdbv1alpha1.AerospikeUserSpec {
-// 	var users map[string]asdbv1alpha1.AerospikeUserSpec = map[string]asdbv1alpha1.AerospikeUserSpec{}
-// 	if spec.AerospikeAccessControl != nil {
-// 		for _, userSpec := range spec.AerospikeAccessControl.Users {
-// 			users[userSpec.Name] = userSpec
-// 		}
-// 	}
-// 	return users
-// }
 
 // GetAdminPolicy returns the AdminPolicy to use for performing access control operations.
 func GetAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPolicy {

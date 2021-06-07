@@ -26,10 +26,10 @@ var (
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
 
 // Test cluster cr updation
-var _ = Describe("RackEnabledClusterTest", func() {
+var _ = Describe("RackLifeCycleOp", func() {
 	ctx := goctx.TODO()
 
-	Context("When doing valid lifecyle operation on rack enbaled cluster", func() {
+	Context("When doing valid operations", func() {
 
 		clusterName := "rack-enabled"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)

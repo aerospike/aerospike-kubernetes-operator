@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -19,14 +19,14 @@ import (
 )
 
 // Test cluster cr updation
-var _ = Describe("ClusterStorageCleanUpTest", func() {
+var _ = Describe("ClusterStorageCleanUp", func() {
 	ctx := goctx.TODO()
 
 	// Check defaults
 	// Cleanup all volumes
 	// Cleanup selected volumes
 	// Update
-	Context("Positive", func() {
+	Context("When doing valid operations", func() {
 		clusterName := "storage-cleanup"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
@@ -50,7 +50,7 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 		// })
 
 		// Check defaults
-		It("Defaults", func() {
+		It("Try Defaults", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -69,7 +69,7 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 
 		})
 
-		It("CleanupAllVolumes", func() {
+		It("Try CleanupAllVolumes", func() {
 
 			// Set common FileSystemVolumePolicy, BlockVolumePolicy to true
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -109,7 +109,7 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 			}
 		})
 
-		It("CleanupSelectedVolumes", func() {
+		It("Try CleanupSelectedVolumes", func() {
 			// Set common FileSystemVolumePolicy, BlockVolumePolicy to false and true for selected volumes
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
@@ -182,14 +182,14 @@ var _ = Describe("ClusterStorageCleanUpTest", func() {
 })
 
 // Test cluster cr updation
-var _ = Describe("RackUsingLocalStorageTest", func() {
+var _ = Describe("RackUsingLocalStorage", func() {
 	ctx := goctx.TODO()
 
 	// Positive
 	// Global storage given, no local (already checked in normal cluster tests)
 	// Global storage given, local also given
 	// Local storage should be used for cascadeDelete, aerospikeConfig
-	Context("Positive", func() {
+	Context("When doing valid operations", func() {
 		clusterName := "rack-storage"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
@@ -304,7 +304,7 @@ var _ = Describe("RackUsingLocalStorageTest", func() {
 	// Negative
 	// Update rack storage should fail
 	// (nil -> val), (val -> nil), (val1 -> val2)
-	Context("Negative", func() {
+	Context("When doing invalid operations", func() {
 		clusterName := "rack-storage-invalid"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 

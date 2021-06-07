@@ -29,8 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/aerospikecluster"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/aerospike/aerospike-management-lib/info"

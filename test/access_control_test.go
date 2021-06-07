@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/aerospikecluster"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go"
 )
 
@@ -57,7 +57,7 @@ var aerospikeConfigWithSecurity = &asdbv1alpha1.AerospikeConfigSpec{
 var _ = Describe("AccessControl", func() {
 
 	Context("AccessControl", func() {
-		It("TestValidAccessControl", func() {
+		It("Try ValidAccessControl", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -105,7 +105,7 @@ var _ = Describe("AccessControl", func() {
 			// }
 		})
 
-		It("TestMissingRequiredUserRoles", func() {
+		It("Try MissingRequiredUserRoles", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -154,7 +154,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidUserRole", func() {
+		It("Try InvalidUserRole", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -204,7 +204,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestDuplicateUser", func() {
+		It("Try DuplicateUser", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -253,7 +253,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestDuplicateUserRole", func() {
+		It("Try DuplicateUserRole", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -295,7 +295,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidUserSecretName", func() {
+		It("Try InvalidUserSecretName", func() {
 			invalidSecretNames := []string{
 				"", "   ",
 			}
@@ -350,7 +350,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidUserName", func() {
+		It("Try InvalidUserName", func() {
 			name64Chars := randString(64)
 			invalidUserNames := []string{
 				"",
@@ -410,7 +410,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidRoleName", func() {
+		It("Try InvalidRoleName", func() {
 			name64Chars := randString(64)
 			invalidRoleNames := []string{
 				"",
@@ -470,7 +470,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestDuplicateRole", func() {
+		It("Try DuplicateRole", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -527,7 +527,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestDuplicateRolePrivilege", func() {
+		It("Try DuplicateRolePrivilege", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -577,7 +577,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestDuplicateRoleWhitelist", func() {
+		It("Try DuplicateRoleWhitelist", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -630,7 +630,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidWhitelist", func() {
+		It("Try InvalidWhitelist", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -682,7 +682,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestPredefinedRoleUpdate", func() {
+		It("Try PredefinedRoleUpdate", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -744,7 +744,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidRoleWhitelist", func() {
+		It("Try InvalidRoleWhitelist", func() {
 			rand64Chars := randString(64)
 			invalidWhitelists := []string{
 				"",
@@ -803,7 +803,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestMissingNamespacePrivilege", func() {
+		It("Try MissingNamespacePrivilege", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -851,7 +851,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestMissingSetPrivilege", func() {
+		It("Try MissingSetPrivilege", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -899,7 +899,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidPrivilege", func() {
+		It("Try InvalidPrivilege", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{
@@ -948,7 +948,7 @@ var _ = Describe("AccessControl", func() {
 			}
 		})
 
-		It("TestInvalidGlobalScopeOnlyPrivilege", func() {
+		It("Try InvalidGlobalScopeOnlyPrivilege", func() {
 			accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 				Roles: []asdbv1alpha1.AerospikeRoleSpec{
 					{

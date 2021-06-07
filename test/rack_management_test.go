@@ -9,13 +9,14 @@ import (
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 )
 
-var _ = Describe("Using rack feature", func() {
+var _ = Describe("RackManagement", func() {
 	ctx := goctx.TODO()
 
-	Context("When doing valid rack management operations", func() {
+	Context("When doing valid operations", func() {
 
 		clusterName := "rack-management"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+
 		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
 		It("Should validate rack management flow", func() {
@@ -96,132 +97,132 @@ var _ = Describe("Using rack feature", func() {
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
-	})
 
-	Context("When using valid rack aerospike config", func() {
-		// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
+		Context("When using valid rack aerospike config", func() {
+			// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
 
-		clusterName := "rack-config-update"
-		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-		racks := getDummyRackConf(1, 2)
+			clusterName := "rack-config-update"
+			clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			racks := getDummyRackConf(1, 2)
 
-		It("Should validate whole flow of rack.AerospikeConfig use", func() {
+			It("Should validate whole flow of rack.AerospikeConfig use", func() {
 
-			// Op1: Add rack.AerospikeConfig
-			By("Deploying cluster having rack.AerospikeConfig")
+				// Op1: Add rack.AerospikeConfig
+				By("Deploying cluster having rack.AerospikeConfig")
 
-			racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": 10000,
-					},
-				}}
-			racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": 12000,
-					},
-				}}
+				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": 10000,
+						},
+					}}
+				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": 12000,
+						},
+					}}
 
-			// Make a copy to validate later
-			racksCopy := []asdbv1alpha1.Rack{}
-			err := Copy(&racksCopy, &racks)
-			Expect(err).ToNot(HaveOccurred())
+				// Make a copy to validate later
+				racksCopy := []asdbv1alpha1.Rack{}
+				err := Copy(&racksCopy, &racks)
+				Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
-			err = deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				err = deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
 
-			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
-			for _, rack := range racks {
-				validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
-			}
+				validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+				for _, rack := range racks {
+					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+				}
 
-			// Op2: Update rack.AerospikeConfig
-			By("Update rack.AerospikeConfig")
+				// Op2: Update rack.AerospikeConfig
+				By("Update rack.AerospikeConfig")
 
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
 
-			racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": 12000,
-					},
-				}}
-			racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": 14000,
-					},
-				}}
+				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": 12000,
+						},
+					}}
+				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": 14000,
+						},
+					}}
 
-			// Make a copy to validate later
-			racksCopy = []asdbv1alpha1.Rack{}
-			err = Copy(&racksCopy, &racks)
-			Expect(err).ToNot(HaveOccurred())
+				// Make a copy to validate later
+				racksCopy = []asdbv1alpha1.Rack{}
+				err = Copy(&racksCopy, &racks)
+				Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
 
-			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
-			for _, rack := range racks {
-				validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
-			}
+				validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+				for _, rack := range racks {
+					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+				}
 
-			// Op3: Remove rack.AerospikeConfig
-			By("Remove rack.AerospikeConfig")
+				// Op3: Remove rack.AerospikeConfig
+				By("Remove rack.AerospikeConfig")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
 
-			racks[0].InputAerospikeConfig = nil
-			racks[1].InputAerospikeConfig = nil
+				racks[0].InputAerospikeConfig = nil
+				racks[1].InputAerospikeConfig = nil
 
-			// Make a copy to validate later
-			racksCopy = []asdbv1alpha1.Rack{}
-			err = Copy(&racksCopy, &racks)
-			Expect(err).ToNot(HaveOccurred())
+				// Make a copy to validate later
+				racksCopy = []asdbv1alpha1.Rack{}
+				err = Copy(&racksCopy, &racks)
+				Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
-			// Increase size also so that below wait func wait for new cluster
-			aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
+				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				// Increase size also so that below wait func wait for new cluster
+				aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
 
-			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+				validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
-			// Config for both rack should have been taken from default config
-			// Default proto-fd-max is 15000. So check for default value
-			racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": defaultProtofdmax,
-					},
-				}}
-			racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"proto-fd-max": defaultProtofdmax,
-					},
-				}}
-			for _, rack := range racks {
-				validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
-			}
+				// Config for both rack should have been taken from default config
+				// Default proto-fd-max is 15000. So check for default value
+				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": defaultProtofdmax,
+						},
+					}}
+				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					Value: map[string]interface{}{
+						"service": map[string]interface{}{
+							"proto-fd-max": defaultProtofdmax,
+						},
+					}}
+				for _, rack := range racks {
+					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+				}
 
-			// cleanup: Remove the cluster
-			By("Cleaning up the cluster")
+				// cleanup: Remove the cluster
+				By("Cleaning up the cluster")
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+				err = deleteCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 	})
 
-	Context("When doing invalid lifecyle operation on rack enbaled cluster", func() {
+	Context("When doing invalid operations", func() {
 		clusterName := "invalid-rack-config"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 

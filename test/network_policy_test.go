@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/aerospikecluster"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 )
 
 const (
@@ -27,25 +27,25 @@ const (
 	networkTestPolicyClusterSize = 1
 )
 
-var _ = Describe("TestNetworkPolicy", func() {
+var _ = Describe("NetworkPolicy", func() {
 	ctx := goctx.TODO()
 
-	Context("TLS", func() {
-		Context("MultiPodperhost", func() {
+	Context("When using TLS", func() {
+		Context("When using MultiPodperhost", func() {
 			doTestNetworkPolicy(true, true, ctx)
 		})
 
-		Context("SinglePodperhost", func() {
+		Context("When using SinglePodperhost", func() {
 			doTestNetworkPolicy(false, true, ctx)
 		})
 	})
 
-	Context("NonTLS", func() {
-		Context("MultiPodperhost", func() {
+	Context("When using NonTLS", func() {
+		Context("When using MultiPodperhost", func() {
 			doTestNetworkPolicy(true, false, ctx)
 		})
 
-		Context("SinglePodperhost", func() {
+		Context("When using SinglePodperhost", func() {
 			doTestNetworkPolicy(false, false, ctx)
 		})
 	})

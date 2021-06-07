@@ -1,4 +1,4 @@
-package aerospikecluster
+package controllers
 
 import (
 	"time"

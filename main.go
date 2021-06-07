@@ -8,8 +8,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/aerospikecluster"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/configschema"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

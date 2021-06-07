@@ -1,6 +1,6 @@
 // +build test
 
-package aerospikecluster
+package controllers
 
 // Export symbols to be used in testing.
 

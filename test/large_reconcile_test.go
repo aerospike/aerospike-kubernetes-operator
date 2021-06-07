@@ -18,11 +18,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("TestLargeReconcile", func() {
+var _ = Describe("LargeReconcile", func() {
 
 	ctx := goctx.Background()
 
-	Context("Positive", func() {
+	Context("When doing valid operations", func() {
 
 		clusterName := "large-reconcile"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)

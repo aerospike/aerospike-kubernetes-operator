@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 const (
@@ -32,10 +32,10 @@ const (
 	magicBytes                            = "aero"
 )
 
-var _ = Describe("Testing StorageInit", func() {
+var _ = Describe("StorageInit", func() {
 	ctx := goctx.TODO()
 
-	Context("When using various storage-init policies", func() {
+	Context("When doing valid operations", func() {
 
 		falseVar := false
 		trueVar := true

@@ -10,7 +10,7 @@ import (
 )
 
 // DeployMultiClusterMultiNsTest tests multicluster in multi namespaces
-var _ = Describe("DeployMultiClusterMultiNsTest", func() {
+var _ = Describe("DeployMultiClusterMultiNs", func() {
 	ctx := goctx.TODO()
 
 	// 1st cluster

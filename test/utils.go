@@ -13,7 +13,7 @@ import (
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
+	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1 "k8s.io/api/core/v1"
