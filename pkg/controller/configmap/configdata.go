@@ -64,16 +64,14 @@ IFS='-' read -ra ADDR <<< "$(hostname)"
 POD_ORDINAL="${ADDR[-1]}"
 
 # Find rack-id
+export RACK_ID="${ADDR[-2]}"
 ALTERNATE_RACK_ID="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes/$NODE" | awk '/aerospike.com\/alternate-rack-id/ {gsub(/"|,/,"",$2); print ($2) + 0}')"
 if [ "$ALTERNATE_RACK_ID" == "0" ] || [ "$ALTERNATE_RACK_ID" == "" ]; then
-  RACK_ID="${ADDR[-2]}"
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
 else
-  RACK_ID="$ALTERNATE_RACK_ID"
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${ALTERNATE_RACK_ID}/" ${CFG}
 fi
-export RACK_ID
-sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
 export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # ------------------------------------------------------------------------------
@@ -501,15 +499,14 @@ POD_ORDINAL="${ADDR[-1]}"
 CFG=/etc/aerospike/aerospike.template.conf
 
 # Find rack-id
+RACK_ID="${ADDR[-2]}"
 ALTERNATE_RACK_ID="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes/$NODE" | awk '/aerospike.com\/alternate-rack-id/ {gsub(/"|,/,"",$2); print ($2) + 0}')"
 if [ "$ALTERNATE_RACK_ID" == "0" ] || [ "$ALTERNATE_RACK_ID" == "" ]; then
-  RACK_ID="${ADDR[-2]}"
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
 else
-  RACK_ID="$ALTERNATE_RACK_ID"
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${ALTERNATE_RACK_ID}/" ${CFG}
 fi
-sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
 NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # Parse lines to insert peer-list
