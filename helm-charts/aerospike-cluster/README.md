@@ -45,6 +45,7 @@ helm install aerospike aerospike/aerospike-cluster \
 | `replicas` | Aerospike cluster size | `3` |
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
 | `image.tag` | Aerospike server container image tag | `5.5.0.9` |
+| `imagePullSecrets` | Secrets containining credentials to pull Aerospike container image from a private registry | `{}` (nil) |
 | `multiPodPerHost` | Set this to `true` to allow scheduling multiple pods per kubernetes node | `true` |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |

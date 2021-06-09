@@ -10,6 +10,12 @@ image:
   repository: aerospike/aerospike-server-enterprise
   tag: 5.5.0.9
 
+## In case the above image is pulled from a registry that requires
+## authentication, a secret containining credentials can be added
+## imagePullSecrets:
+##   - secret_with_credentials_to_custom_registry
+imagePullSecrets: {}
+
 ## Multi pod per host
 # multiPodPerHost: true
 

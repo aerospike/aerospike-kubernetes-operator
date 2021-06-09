@@ -9,6 +9,12 @@ metadata:
     app: {{ template "aerospike-cluster.commonName" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- range . }}
+  - name: {{ . }}
+  {{- end }}
+{{- end }}
 
 ---
 # Role
