@@ -1,0 +1,78 @@
+# Operator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "aerospike-kubernetes-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: &Labels
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+    {{- with .Values.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+  {{- with .Values.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      <<: *Labels
+      {{- with .Values.podLabels }}{{ toYaml . | nindent 6 }}{{ end }}
+  template:
+    metadata:
+      labels:
+        <<: *Labels
+        {{- with .Values.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+      annotations:
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      serviceAccountName: {{ if .Values.rbac.create }}{{ template "aerospike-kubernetes-operator.fullname" . }}{{ else }}{{ .Values.rbac.serviceAccountName }}{{ end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: aerospike-kubernetes-operator
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+          - name: operator
+            containerPort: {{ .Values.containerPort | default 8443 }}
+          env:
+          - name: WATCH_NAMESPACE
+            value: {{ .Values.watchNamespaces | default "default" | quote }}
+          - name: OPERATOR_NAME
+            value: {{ template "aerospike-kubernetes-operator.fullname" . }}
+          - name: LOG_LEVEL
+            value: {{ .Values.logLevel | default "info" | quote }}
+          {{- if .Values.extraEnv }}
+          {{- range $key, $value := .Values.extraEnv }}
+          - name: "{{ $key }}"
+            value: "{{ $value }}"
+          {{- end }}
+          {{- end }}
+          # Downward API
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          {{- with .Values.resources }}
+          resources: {{- toYaml . | indent 12 }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
