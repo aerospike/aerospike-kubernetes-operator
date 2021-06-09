@@ -29,7 +29,7 @@ helm install operator aerospike/aerospike-kubernetes-operator \
 | `image.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator` |
 | `image.tag` | Operator image tag | `1.0.1` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
-| `imagePullSecrets` | Secrets containining credentials to pull the above image from a registry requiring authentication | `{}` (nil) |
+| `imagePullSecrets` | Secrets containining credentials to pull Operator image from a private registry | `{}` (nil) |
 | `rbac.create` | Set this to `true` to let helm chart automatically create RBAC resources necessary for operator | `true` |
 | `rbac.serviceAccountName` | If `rbac.create=false`, provide a service account name to be used with the operator deployment | `default` |
 | `containerPort` | Operator container port | `8443` |
