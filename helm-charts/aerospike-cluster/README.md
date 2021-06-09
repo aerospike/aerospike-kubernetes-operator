@@ -51,6 +51,7 @@ helm install aerospike aerospike/aerospike-cluster \
 | `aerospikeSecretName`| Secret containing Aerospike feature key file, TLS certificates etc. | `""` |
 | `aerospikeSecretMountPath` | Mount path inside for the `aerospikeSecretName` secret | `/etc/aerospike/secrets/` |
 | `aerospikeNetworkPolicy` | Network policy (client access configuration) | `{}` (nil) |
+| `commonName` | Base string for naming pods, services, stateful sets, etc.  | Release name truncated to 63 characters (without hypens) |
 | `podSpec` | Aerospike pod spec configuration | `{}` (nil) |
 | `rackConfig` | Aerospike rack configuration | `{}` (nil) |
 | `storage` | Aerospike pod storage configuration | `{}` (nil) |

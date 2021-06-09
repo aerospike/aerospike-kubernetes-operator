@@ -25,7 +25,11 @@ If release name contains chart name it will be used as a full name.
 {{- end -}}
 
 {{- define "aerospike-cluster.commonName" -}}
+{{- if .Values.commonName -}}
+{{- .Values.commonName -}}
+{{- else -}}
 {{- .Release.Name | trunc 63 | replace "-" "" -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
