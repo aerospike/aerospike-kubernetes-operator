@@ -45,12 +45,14 @@ helm install aerospike aerospike/aerospike-cluster \
 | `replicas` | Aerospike cluster size | `3` |
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
 | `image.tag` | Aerospike server container image tag | `5.5.0.9` |
+| `imagePullSecrets` | Secrets containining credentials to pull Aerospike container image from a private registry | `{}` (nil) |
 | `multiPodPerHost` | Set this to `true` to allow scheduling multiple pods per kubernetes node | `true` |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
 | `aerospikeSecretName`| Secret containing Aerospike feature key file, TLS certificates etc. | `""` |
 | `aerospikeSecretMountPath` | Mount path inside for the `aerospikeSecretName` secret | `/etc/aerospike/secrets/` |
 | `aerospikeNetworkPolicy` | Network policy (client access configuration) | `{}` (nil) |
+| `commonName` | Base string for naming pods, services, stateful sets, etc.  | Release name truncated to 63 characters (without hypens) |
 | `podSpec` | Aerospike pod spec configuration | `{}` (nil) |
 | `rackConfig` | Aerospike rack configuration | `{}` (nil) |
 | `storage` | Aerospike pod storage configuration | `{}` (nil) |

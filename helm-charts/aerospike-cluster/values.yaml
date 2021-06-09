@@ -1,3 +1,7 @@
+## Cluster common name
+## Defaults to release name truncated to 63 characters (with hyphens removed)
+# commonName: aerocluster
+
 ## Aerospike cluster size
 replicas: 3
 
@@ -5,6 +9,12 @@ replicas: 3
 image:
   repository: aerospike/aerospike-server-enterprise
   tag: 5.5.0.9
+
+## In case the above image is pulled from a registry that requires
+## authentication, a secret containining credentials can be added
+## imagePullSecrets:
+##   - secret_with_credentials_to_custom_registry
+imagePullSecrets: {}
 
 ## Multi pod per host
 # multiPodPerHost: true
