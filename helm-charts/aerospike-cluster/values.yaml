@@ -1,3 +1,7 @@
+## Cluster common name
+## Defaults to release name truncated to 63 characters (with hyphens removed)
+# commonName: aerocluster
+
 ## Aerospike cluster size
 replicas: 3
 
@@ -47,10 +51,6 @@ aerospikeConfig: {}
 
 # aerospikeSecretName: aerospike-secrets
 # aerospikeSecretMountPath: /etc/aerospike/secrets/
-
-## Cluster commonName
-## If not specified, the release name (with hyphens removed) is used
-# commonName: aerocluster
 
 ## Network policy
 aerospikeNetworkPolicy: {}
