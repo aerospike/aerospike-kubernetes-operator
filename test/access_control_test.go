@@ -234,8 +234,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "aerospike") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and 'aerospike'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "aerospike") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and 'aerospike'", err))
 			}
 		})
 
@@ -276,8 +276,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "sys-admin") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and 'sys-admin'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "sys-admin") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and 'sys-admin'", err))
 			}
 		})
 
@@ -390,8 +390,8 @@ var _ = Describe("AccessControl", func() {
 				}
 				Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-				if !strings.Contains(err.Error(), "Username") && !strings.Contains(err.Error(), "empty") {
-					Fail(fmt.Sprintf("Error: %v should contain 'Username' or 'empty'", err))
+				if !strings.Contains(strings.ToLower(err.Error()), "username") && !strings.Contains(strings.ToLower(err.Error()), "empty") {
+					Fail(fmt.Sprintf("Error: %v should contain 'username' or 'empty'", err))
 				}
 			}
 		})
@@ -450,8 +450,8 @@ var _ = Describe("AccessControl", func() {
 				}
 				Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-				if !strings.Contains(err.Error(), "Role name") && !strings.Contains(err.Error(), "empty") {
-					Fail(fmt.Sprintf("Error: %v should contain 'Role name' or 'empty'", err))
+				if !strings.Contains(strings.ToLower(err.Error()), "role name") && !strings.Contains(strings.ToLower(err.Error()), "empty") {
+					Fail(fmt.Sprintf("Error: %v should contain 'role name' or 'empty'", err))
 				}
 			}
 		})
@@ -508,8 +508,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "profiler") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and 'profiler'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "profiler") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and 'profiler'", err))
 			}
 		})
 
@@ -558,8 +558,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "read-write.profileNs") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and 'read-write.profileNs'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "read-write.profileNs") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and 'read-write.profileNs'", err))
 			}
 		})
 
@@ -611,8 +611,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Duplicate") || !strings.Contains(err.Error(), "8.8.0.0/16") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and '8.8.0.0/16'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "8.8.0.0/16") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and '8.8.0.0/16'", err))
 			}
 		})
 
@@ -663,8 +663,8 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Invalid CIDR") || !strings.Contains(err.Error(), "8.8.8.8/16") {
-				Fail(fmt.Sprintf("Error: %v should contain 'Duplicate' and '8.8.8.8/16'", err))
+			if !strings.Contains(strings.ToLower(err.Error()), "invalid cidr") || !strings.Contains(strings.ToLower(err.Error()), "8.8.8.8/16") {
+				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and '8.8.8.8/16'", err))
 			}
 		})
 
@@ -929,7 +929,7 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(err.Error(), "Invalid privilege") {
+			if !strings.Contains(strings.ToLower(err.Error()), "invalid privilege") {
 				Fail(fmt.Sprintf("Error: %v should contain 'invalid privilege'", err))
 			}
 		})

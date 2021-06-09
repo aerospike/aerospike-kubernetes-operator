@@ -38,8 +38,6 @@ const (
 	InfoPortName = "info"
 )
 
-// var pkglog = log.New(log.Ctx{"module": "admissionWebhook"})
-
 const baseVersion = "4.6.0.2"
 
 // ContainsString check whether list contains given string
@@ -97,6 +95,15 @@ const (
 	AerospikeServerContainerName     string = "aerospike-server"
 	AerospikeServerInitContainerName string = "aerospike-init"
 )
+
+func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
+	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
+}
+
+// NamespacedName return namespaced name
+func NamespacedName(namespace, name string) string {
+	return fmt.Sprintf("%s/%s", namespace, name)
+}
 
 // ParseDockerImageTag parses input tag into registry, name and version.
 func ParseDockerImageTag(tag string) (registry string, name string, version string) {

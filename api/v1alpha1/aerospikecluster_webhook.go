@@ -28,7 +28,7 @@ var aerospikeclusterlog = logf.Log.WithName("aerospikecluster-resource")
 func (r *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 
-	// entryLog.Info("registering webhooks to the webhook server")
+	aerospikeclusterlog.Info("registering mutating webhook to the webhook server")
 	hookServer.Register("/mutate-asdb-aerospike-com-v1alpha1-aerospikecluster", &webhook.Admission{Handler: &mutatingHandler{}})
 
 	return ctrl.NewWebhookManagedBy(mgr).

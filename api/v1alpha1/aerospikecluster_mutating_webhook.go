@@ -24,27 +24,33 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
+	"github.com/go-logr/logr"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1alpha1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1alpha1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeCluster) Default() admission.Response {
-	aerospikeclusterlog.Info("Setting defaults for aerospikeCluster", "name", r.Name, "aerospikecluster.Spec", r.Spec)
+	aslog := logf.Log.WithName(ClusterNamespacedName(r))
 
-	if err := r.setDefaults(); err != nil {
-		aerospikeclusterlog.Error(err, "Mutate AerospikeCluster create failed")
+	aslog.Info("Setting defaults for aerospikeCluster", "aerospikecluster.Spec", r.Spec)
+
+	if err := r.setDefaults(aslog); err != nil {
+		aslog.Error(err, "Mutate AerospikeCluster create failed")
 		return webhook.Denied(err.Error())
 	}
-	aerospikeclusterlog.Info("Setting defaults for aerospikeCluster completed", "name", r.Name)
 
-	aerospikeclusterlog.Info("Added defaults for aerospikeCluster", "name", r.Name, "aerospikecluster.Spec", r.Spec)
+	aslog.Info("Setting defaults for aerospikeCluster completed")
+
+	aslog.Info("Added defaults for aerospikeCluster", "aerospikecluster.Spec", r.Spec)
 
 	return webhook.Patched("Patched aerospike spec with defaults", webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: r.Spec})
 }
 
-func (r *AerospikeCluster) setDefaults() error {
-	// r.// logger.Info("Set defaults for AerospikeCluster", log.Ctx{"obj.Spec": r.Spec})
+func (r *AerospikeCluster) setDefaults(aslog logr.Logger) error {
+
+	aslog.Info("Set defaults for AerospikeCluster", "obj.Spec", r.Spec)
 
 	// Set network defaults
 	r.Spec.AerospikeNetworkPolicy.SetDefaults()
@@ -55,18 +61,18 @@ func (r *AerospikeCluster) setDefaults() error {
 	// Add default rackConfig if not already given. Disallow use of defautRackID by user.
 	// Need to set before setting defaults in aerospikeConfig
 	// aerospikeConfig.namespace checks for racks
-	if err := r.setDefaultRackConf(); err != nil {
+	if err := r.setDefaultRackConf(aslog); err != nil {
 		return err
 	}
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
-	if err := r.setDefaultAerospikeConfigs(*r.Spec.AerospikeConfig); err != nil {
+	if err := r.setDefaultAerospikeConfigs(aslog, *r.Spec.AerospikeConfig); err != nil {
 		return err
 	}
 
 	// Update racks configuration using global values where required.
-	if err := r.updateRacks(); err != nil {
+	if err := r.updateRacks(aslog); err != nil {
 		return err
 	}
 
@@ -74,7 +80,7 @@ func (r *AerospikeCluster) setDefaults() error {
 	if r.Spec.ValidationPolicy == nil {
 		validationPolicy := ValidationPolicySpec{}
 
-		// r.// logger.Info("Set default validation policy", log.Ctx{"validationPolicy": validationPolicy})
+		aslog.Info("Set default validation policy", "validationPolicy", validationPolicy)
 		r.Spec.ValidationPolicy = &validationPolicy
 	}
 
@@ -82,10 +88,10 @@ func (r *AerospikeCluster) setDefaults() error {
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.
-func (r *AerospikeCluster) setDefaultRackConf() error {
+func (r *AerospikeCluster) setDefaultRackConf(aslog logr.Logger) error {
 	if len(r.Spec.RackConfig.Racks) == 0 {
 		r.Spec.RackConfig.Racks = append(r.Spec.RackConfig.Racks, Rack{ID: DefaultRackID})
-		// r.// logger.Info("No rack given. Added default rack-id for all nodes", log.Ctx{"racks": r.Spec.RackConfig, "DefaultRackID": DefaultRackID})
+		aslog.Info("No rack given. Added default rack-id for all nodes", "racks", r.Spec.RackConfig, "DefaultRackID", DefaultRackID)
 	} else {
 		for _, rack := range r.Spec.RackConfig.Racks {
 			if rack.ID == DefaultRackID {
@@ -101,14 +107,14 @@ func (r *AerospikeCluster) setDefaultRackConf() error {
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacks() error {
-	err := r.updateRacksStorageFromGlobal()
+func (r *AerospikeCluster) updateRacks(aslog logr.Logger) error {
+	err := r.updateRacksStorageFromGlobal(aslog)
 
 	if err != nil {
 		return fmt.Errorf("error updating rack storage: %v", err)
 	}
 
-	err = r.updateRacksAerospikeConfigFromGlobal()
+	err = r.updateRacksAerospikeConfigFromGlobal(aslog)
 
 	if err != nil {
 		return fmt.Errorf("error updating rack aerospike config: %v", err)
@@ -117,11 +123,11 @@ func (r *AerospikeCluster) updateRacks() error {
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacksStorageFromGlobal() error {
+func (r *AerospikeCluster) updateRacksStorageFromGlobal(aslog logr.Logger) error {
 	for i, rack := range r.Spec.RackConfig.Racks {
 		if rack.InputStorage == nil {
 			rack.Storage = r.Spec.Storage
-			// r.// logger.Debug("Updated rack storage with global storage", log.Ctx{"rack id": rack.ID, "storage": rack.Storage})
+			aslog.V(1).Info("Updated rack storage with global storage", "rack id", rack.ID, "storage", rack.Storage)
 		} else {
 			rack.Storage = *rack.InputStorage
 		}
@@ -135,14 +141,14 @@ func (r *AerospikeCluster) updateRacksStorageFromGlobal() error {
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal() error {
+func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(aslog logr.Logger) error {
 	for i, rack := range r.Spec.RackConfig.Racks {
 		var m map[string]interface{}
 		var err error
 		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
 			m, err = merge.Merge(r.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value)
-			// s.logger.Debug("Merged rack config from global aerospikeConfig", log.Ctx{"rack id": rack.ID, "rackAerospikeConfig": m, "globalAerospikeConfig": r.Spec.AerospikeConfig})
+			aslog.V(1).Info("Merged rack config from global aerospikeConfig", "rack id", rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig", r.Spec.AerospikeConfig)
 			if err != nil {
 				return err
 			}
@@ -151,10 +157,10 @@ func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal() error {
 			m = r.Spec.AerospikeConfig.Value
 		}
 
-		// s.logger.Debug("Update rack aerospikeConfig from default aerospikeConfig", log.Ctx{"rackAerospikeConfig": m})
+		aslog.V(1).Info("Update rack aerospikeConfig from default aerospikeConfig", "rackAerospikeConfig", m)
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := r.setDefaultAerospikeConfigs(AerospikeConfigSpec{Value: m}); err != nil {
+		if err := r.setDefaultAerospikeConfigs(aslog, AerospikeConfigSpec{Value: m}); err != nil {
 			return err
 		}
 		r.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
@@ -162,32 +168,32 @@ func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal() error {
 	return nil
 }
 
-func (r *AerospikeCluster) setDefaultAerospikeConfigs(configSpec AerospikeConfigSpec) error {
+func (r *AerospikeCluster) setDefaultAerospikeConfigs(aslog logr.Logger, configSpec AerospikeConfigSpec) error {
 	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(configSpec, r.Spec.RackConfig.Namespaces); err != nil {
+	if err := setDefaultNsConf(aslog, configSpec, r.Spec.RackConfig.Namespaces); err != nil {
 		return err
 	}
 
 	// service conf
-	if err := setDefaultServiceConf(configSpec, r.Name); err != nil {
+	if err := setDefaultServiceConf(aslog, configSpec, r.Name); err != nil {
 		return err
 	}
 
 	// network conf
-	if err := setDefaultNetworkConf(configSpec); err != nil {
+	if err := setDefaultNetworkConf(aslog, configSpec); err != nil {
 		return err
 	}
 
 	// logging conf
-	if err := setDefaultLoggingConf(configSpec); err != nil {
+	if err := setDefaultLoggingConf(aslog, configSpec); err != nil {
 		return err
 	}
 
 	// xdr conf
 	if _, ok := config["xdr"]; ok {
-		if err := setDefaultXDRConf(configSpec); err != nil {
+		if err := setDefaultXDRConf(aslog, configSpec); err != nil {
 			return err
 		}
 	}
@@ -199,7 +205,7 @@ func (r *AerospikeCluster) setDefaultAerospikeConfigs(configSpec AerospikeConfig
 // Helper
 //*****************************************************************************
 
-func setDefaultNsConf(configSpec AerospikeConfigSpec, rackEnabledNsList []string) error {
+func setDefaultNsConf(aslog logr.Logger, configSpec AerospikeConfigSpec, rackEnabledNsList []string) error {
 	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
@@ -228,14 +234,14 @@ func setDefaultNsConf(configSpec AerospikeConfigSpec, rackEnabledNsList []string
 			if _, ok := nsName.(string); ok {
 				if isNameExist(rackEnabledNsList, nsName.(string)) {
 					// Add dummy rack-id, should be replaced with actual rack-id by init-container script
-					if err := setDefaultsInConfigMap(nsMap, defaultConfs); err != nil {
+					if err := setDefaultsInConfigMap(aslog, nsMap, defaultConfs); err != nil {
 						return fmt.Errorf("failed to set default aerospikeConfig.namespaces rack config: %v", err)
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
-					// logger.Info("aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", log.Ctx{"nsName": nsName, "rackEnabledNamespaces": rackEnabledNsList})
+					aslog.Info("aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID", "nsName", nsName, "rackEnabledNamespaces", rackEnabledNsList)
 
 					delete(nsMap, "rack-id")
 				}
@@ -243,12 +249,12 @@ func setDefaultNsConf(configSpec AerospikeConfigSpec, rackEnabledNsList []string
 		}
 		// If namespace map doesn't have valid name, it will fail in validation layer
 	}
-	// logger.Info("Set default template values in aerospikeConfig.namespace")
+	aslog.Info("Set default template values in aerospikeConfig.namespace")
 
 	return nil
 }
 
-func setDefaultServiceConf(configSpec AerospikeConfigSpec, crObjName string) error {
+func setDefaultServiceConf(aslog logr.Logger, configSpec AerospikeConfigSpec, crObjName string) error {
 	config := configSpec.Value
 
 	if _, ok := config["service"]; !ok {
@@ -264,16 +270,16 @@ func setDefaultServiceConf(configSpec AerospikeConfigSpec, crObjName string) err
 		"cluster-name": crObjName,
 	}
 
-	if err := setDefaultsInConfigMap(serviceConf, defaultConfs); err != nil {
+	if err := setDefaultsInConfigMap(aslog, serviceConf, defaultConfs); err != nil {
 		return fmt.Errorf("failed to set default aerospikeConfig.service config: %v", err)
 	}
 
-	// logger.Info("Set default template values in aerospikeConfig.service", log.Ctx{"aerospikeConfig.service": serviceConf})
+	aslog.Info("Set default template values in aerospikeConfig.service", "aerospikeConfig.service", serviceConf)
 
 	return nil
 }
 
-func setDefaultNetworkConf(configSpec AerospikeConfigSpec) error {
+func setDefaultNetworkConf(aslog logr.Logger, configSpec AerospikeConfigSpec) error {
 	config := configSpec.Value
 
 	// Network section
@@ -310,11 +316,11 @@ func setDefaultNetworkConf(configSpec AerospikeConfigSpec) error {
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
 	}
 
-	if err := setDefaultsInConfigMap(serviceConf, serviceDefaults); err != nil {
+	if err := setDefaultsInConfigMap(aslog, serviceConf, serviceDefaults); err != nil {
 		return fmt.Errorf("failed to set default aerospikeConfig.network.service config: %v", err)
 	}
 
-	// logger.Info("Set default template values in aerospikeConfig.network.service", log.Ctx{"aerospikeConfig.network.service": serviceConf})
+	aslog.Info("Set default template values in aerospikeConfig.network.service", "aerospikeConfig.network.service", serviceConf)
 
 	// Heartbeat section
 	if _, ok := networkConf["heartbeat"]; !ok {
@@ -332,11 +338,11 @@ func setDefaultNetworkConf(configSpec AerospikeConfigSpec) error {
 		hbDefaults["tls-port"] = HeartbeatTLSPort
 	}
 
-	if err := setDefaultsInConfigMap(heartbeatConf, hbDefaults); err != nil {
+	if err := setDefaultsInConfigMap(aslog, heartbeatConf, hbDefaults); err != nil {
 		return fmt.Errorf("failed to set default aerospikeConfig.network.heartbeat config: %v", err)
 	}
 
-	// logger.Info("Set default template values in aerospikeConfig.network.heartbeat", log.Ctx{"aerospikeConfig.network.heartbeat": heartbeatConf})
+	aslog.Info("Set default template values in aerospikeConfig.network.heartbeat", "aerospikeConfig.network.heartbeat", heartbeatConf)
 
 	// Fabric section
 	if _, ok := networkConf["fabric"]; !ok {
@@ -353,16 +359,16 @@ func setDefaultNetworkConf(configSpec AerospikeConfigSpec) error {
 		fabricDefaults["tls-port"] = FabricTLSPort
 	}
 
-	if err := setDefaultsInConfigMap(fabricConf, fabricDefaults); err != nil {
+	if err := setDefaultsInConfigMap(aslog, fabricConf, fabricDefaults); err != nil {
 		return fmt.Errorf("failed to set default aerospikeConfig.network.fabric config: %v", err)
 	}
 
-	// logger.Info("Set default template values in aerospikeConfig.network.fabric", log.Ctx{"aerospikeConfig.network.fabric": fabricConf})
+	aslog.Info("Set default template values in aerospikeConfig.network.fabric", "aerospikeConfig.network.fabric", fabricConf)
 
 	return nil
 }
 
-func setDefaultLoggingConf(configSpec AerospikeConfigSpec) error {
+func setDefaultLoggingConf(aslog logr.Logger, configSpec AerospikeConfigSpec) error {
 	config := configSpec.Value
 
 	if _, ok := config["logging"]; !ok {
@@ -391,20 +397,20 @@ func setDefaultLoggingConf(configSpec AerospikeConfigSpec) error {
 		})
 	}
 
-	// logger.Info("Set default template values in aerospikeConfig.logging", log.Ctx{"aerospikeConfig.logging": loggingConfList})
+	aslog.Info("Set default template values in aerospikeConfig.logging", "aerospikeConfig.logging", loggingConfList)
 
 	config["logging"] = loggingConfList
 
 	return nil
 }
 
-func setDefaultXDRConf(configSpec AerospikeConfigSpec) error {
+func setDefaultXDRConf(aslog logr.Logger, configSpec AerospikeConfigSpec) error {
 	// Nothing to update for now
 
 	return nil
 }
 
-func setDefaultsInConfigMap(baseConfigs, defaultConfigs map[string]interface{}) error {
+func setDefaultsInConfigMap(aslog logr.Logger, baseConfigs, defaultConfigs map[string]interface{}) error {
 	for k, v := range defaultConfigs {
 		// Special handling.
 		// Older baseValues are parsed to int64 but defaults are in int
