@@ -112,7 +112,7 @@ func GetHash(str string) (string, error) {
 func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 	parts := strings.Split(statefulSetName, "-")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("Failed to get rackID from statefulSetName %s", statefulSetName)
+		return nil, fmt.Errorf("failed to get rackID from statefulSetName %s", statefulSetName)
 	}
 	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-1]

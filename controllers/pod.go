@@ -91,7 +91,7 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
 	if pod.Status.ContainerStatuses == nil {
-		return reconcileError(fmt.Errorf("Pod %s containerStatus is nil, pod may be in unscheduled state", pod.Name))
+		return reconcileError(fmt.Errorf("pod %s containerStatus is nil, pod may be in unscheduled state", pod.Name))
 	}
 
 	r.Log.Info("Rolling restart pod", "podName", pod.Name)
@@ -273,18 +273,18 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 	// Delete PVCs if cascadeDelete
 	pvcItems, err := r.getPodsPVCList(aeroCluster, podNames, rackState.Rack.ID)
 	if err != nil {
-		return fmt.Errorf("Could not find pvc for pods %v: %v", podNames, err)
+		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
 	}
 	storage := rackState.Rack.Storage
 	if err := r.removePVCs(aeroCluster, &storage, pvcItems); err != nil {
-		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
+		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
 	}
 
 	needStatusCleanup := []string{}
 
 	clusterPodList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Could not cleanup pod PVCs: %v", err)
+		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
 	}
 
 	for _, podName := range podNames {
@@ -320,7 +320,7 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 		r.Log.Info("Removing pod status for dangling pods", "pods", podNames)
 
 		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
-			return fmt.Errorf("Could not cleanup pod status: %v", err)
+			return fmt.Errorf("could not cleanup pod status: %v", err)
 		}
 	}
 
@@ -349,7 +349,7 @@ func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1alpha1.A
 
 	// Since the pod status is updated from pod init container, set the fieldowner to "pod" for pod status updates.
 	if err = r.Client.Status().Patch(context.TODO(), aeroCluster, constantPatch, client.FieldOwner("pod")); err != nil {
-		return fmt.Errorf("Error updating status: %v", err)
+		return fmt.Errorf("error updating status: %v", err)
 	}
 
 	return nil
@@ -366,7 +366,7 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 		for podName := range aeroCluster.Status.Pods {
 			rackID, err := utils.GetRackIDFromPodName(podName)
 			if err != nil {
-				return fmt.Errorf("Failed to get rackID for the pod %s", podName)
+				return fmt.Errorf("failed to get rackID for the pod %s", podName)
 			}
 			if *rackID != rackState.Rack.ID {
 				// This pod is from other rack, so skip it
@@ -375,7 +375,7 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 
 			ordinal, err := getSTSPodOrdinal(podName)
 			if err != nil {
-				return fmt.Errorf("Invalid pod name: %s", podName)
+				return fmt.Errorf("invalid pod name: %s", podName)
 			}
 
 			if *ordinal >= *sts.Spec.Replicas {
@@ -386,7 +386,7 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 
 	err := r.cleanupPods(aeroCluster, danglingPods, rackState)
 	if err != nil {
-		return fmt.Errorf("Failed dangling pod cleanup: %v", err)
+		return fmt.Errorf("failed dangling pod cleanup: %v", err)
 	}
 
 	return nil
@@ -421,7 +421,7 @@ func (r *AerospikeClusterReconciler) getPodIPs(pod *corev1.Pod) (string, string,
 	k8sNode := &corev1.Node{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 	if err != nil {
-		return "", "", "", fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return "", "", "", fmt.Errorf("failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
 	}
 	// If externalIP is present than give external ip
 	for _, add := range k8sNode.Status.Addresses {
@@ -439,7 +439,7 @@ func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (*corev1.
 	service := &corev1.Service{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get service for pod %s: %v", pod.Name, err)
+		return nil, fmt.Errorf("failed to get service for pod %s: %v", pod.Name, err)
 	}
 	return service, nil
 }
@@ -451,7 +451,7 @@ func (r *AerospikeClusterReconciler) getServicePortForPod(aeroCluster *asdbv1alp
 	if aeroCluster.Spec.MultiPodPerHost {
 		svc, err := r.getServiceForPod(pod)
 		if err != nil {
-			return 0, fmt.Errorf("Error getting service port: %v", err)
+			return 0, fmt.Errorf("error getting service port: %v", err)
 		}
 		if tlsName == "" {
 			port = svc.Spec.Ports[0].NodePort

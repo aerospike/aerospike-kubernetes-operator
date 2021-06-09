@@ -40,20 +40,6 @@ var aerospikeConfigWithSecurity = &asdbv1alpha1.AerospikeConfigSpec{
 	},
 }
 
-// var aerospikeConfigWithoutSecurity = &asdbv1alpha1.AerospikeConfigSpec{
-// 	Value: map[string]interface{}{
-// 		"security": map[string]interface{}{"enable-security": false},
-// 		"namespaces": []interface{}{
-// 			map[string]interface{}{
-// 				"name": "profileNs",
-// 			},
-// 			map[string]interface{}{
-// 				"name": "userNs",
-// 			},
-// 		},
-// 	},
-// }
-
 var _ = Describe("AccessControl", func() {
 
 	Context("AccessControl", func() {
@@ -1319,7 +1305,7 @@ func testAccessControlReconcile(desired *asdbv1alpha1.AerospikeCluster, ctx goct
 
 	// Ensure desired cluster spec is applied.
 	if !reflect.DeepEqual(desired.Spec.AerospikeAccessControl, current.Spec.AerospikeAccessControl) {
-		return fmt.Errorf("Cluster state not applied. Desired: %v Current: %v", desired.Spec.AerospikeAccessControl, current.Spec.AerospikeAccessControl)
+		return fmt.Errorf("cluster state not applied. Desired: %v Current: %v", desired.Spec.AerospikeAccessControl, current.Spec.AerospikeAccessControl)
 	}
 
 	// Ensure the desired spec access control is correctly applied.
@@ -1387,7 +1373,7 @@ func getAerospikeClusterSpecWithAccessControl(clusterNamespacedName types.Namesp
 func validateAccessControl(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
 	clientP, err := getClient(aeroCluster, k8sClient)
 	if err != nil {
-		return fmt.Errorf("Error creating client: %v", err)
+		return fmt.Errorf("error creating client: %v", err)
 	}
 
 	client := *clientP
@@ -1395,7 +1381,7 @@ func validateAccessControl(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
 
 	err = validateRoles(clientP, &aeroCluster.Spec)
 	if err != nil {
-		return fmt.Errorf("Error creating client: %v", err)
+		return fmt.Errorf("error creating client: %v", err)
 	}
 
 	pp := getPasswordProvider(aeroCluster, k8sClient)
@@ -1429,7 +1415,7 @@ func validateRoles(clientP *as.Client, clusterSpec *asdbv1alpha1.AerospikeCluste
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
 	asRoles, err := client.QueryRoles(&adminPolicy)
 	if err != nil {
-		return fmt.Errorf("Error querying roles: %v", err)
+		return fmt.Errorf("error querying roles: %v", err)
 	}
 
 	currentRoleNames := []string{}
@@ -1500,7 +1486,7 @@ func validateUsers(clientP *as.Client, aeroCluster *asdbv1alpha1.AerospikeCluste
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
 	asUsers, err := client.QueryUsers(&adminPolicy)
 	if err != nil {
-		return fmt.Errorf("Error querying users: %v", err)
+		return fmt.Errorf("error querying users: %v", err)
 	}
 
 	currentUserNames := []string{}

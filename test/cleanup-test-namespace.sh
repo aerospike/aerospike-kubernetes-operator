@@ -15,8 +15,6 @@ kubectl -n test1 delete aerospikecluster --all
 kubectl -n test2 delete aerospikecluster --all
 kubectl -n test3 delete aerospikecluster --all
 
-# kubectl delete -f test/test/setup_operator_test.yaml
-
 # Delete PVCs
 kubectl -n test delete pvc --selector 'app=aerospike-cluster'
 

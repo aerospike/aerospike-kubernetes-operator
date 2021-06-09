@@ -32,22 +32,13 @@ var _ = Describe("ClusterStorageCleanUp", func() {
 
 		BeforeEach(func() {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
-		// // Deploy cluster with 6 racks to remove rack one by one and check for pvc
-		// aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 4, false)
-		// racks := getDummyRackConf(1, 2, 3, 4)
-		// aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
-
-		// It("Deploy", func() {
-		// 	err := deployCluster(k8sClient, ctx, aeroCluster)
-		// 	Expect(err).ToNot(HaveOccurred())
-		// })
 
 		// Check defaults
 		It("Try Defaults", func() {
@@ -236,7 +227,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 		}
 
 		BeforeEach(func() {
-			aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -311,7 +302,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 		Context("Deploy", func() {
 			It("should fail for not having aerospikeConfig namespace Storage device in rack storage", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 3, false)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 				racks := getDummyRackConf(1)
 				// AerospikeConfig is only patched
 				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
@@ -353,7 +344,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 			// Add test while rack using common aeroConfig but local storage, fail for mismatch
 			It("CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn't have namespace related volumes", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
@@ -377,7 +368,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 
 			It("NilToValue: should fail for updating Storage. Cannot be updated", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
@@ -410,7 +401,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 
 			It("ValueToNil: should fail for updating Storage. Cannot be updated", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
@@ -444,7 +435,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 
 			It("ValueToValue: should fail for updating Storage. Cannot be updated", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-				aeroCluster := createDummyAerospikeClusterWithOption(clusterNamespacedName, 1, false)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{

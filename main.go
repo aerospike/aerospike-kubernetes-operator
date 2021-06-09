@@ -36,13 +36,6 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-// func printVersion() {
-// 	// setupLog.Info (fmt.Sprintf("Operator Version: %s", version.Version))
-// 	setupLog.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-// 	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
-// 	// setupLog.Info (fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
-// }
-
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -150,7 +143,6 @@ func getWatchNamespace() (string, error) {
 type newClientBuilder struct{}
 
 func (n *newClientBuilder) WithUncached(objs ...crclient.Object) manager.ClientBuilder {
-	// n.uncached = append(n.uncached, objs...)
 	return n
 }
 

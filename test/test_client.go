@@ -1,15 +1,5 @@
 package test
 
-// import (
-// 	"context"
-
-// 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-// 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/utils"
-// 	corev1 "k8s.io/api/core/v1"
-// 	"k8s.io/apimachinery/pkg/labels"
-// 	"sigs.k8s.io/controller-runtime/pkg/client"
-// )
-
 // Aerospike client and info testing utilities.
 //
 // TODO refactor the code in aero_helper.go anc controller_helper.go so that it can be used here.

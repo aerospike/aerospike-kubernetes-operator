@@ -9,6 +9,8 @@ import (
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 )
 
+// This file needs to be changed based on setup. update zone, region, nodeName according to setup
+
 // Local tests var
 // var (
 // zone1  = "us-west1-b"
@@ -22,8 +24,6 @@ var (
 	zone2  = "us-west1-a"
 	region = "us-west1"
 )
-
-// This file needs to be changed based on setup. update zone, region, nodeName according to setup
 
 // Test cluster cr updation
 var _ = Describe("RackLifeCycleOp", func() {

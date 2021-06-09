@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,13 +31,6 @@ const (
 
 // The default cpu request for the aerospike-server container
 const (
-	aerospikeServerContainerDefaultCPURequest = 1
-	// The default memory request for the aerospike-server container
-	// matches the default value of namespace.memory-size
-	// https://www.aerospike.com/docs/reference/configuration#memory-size
-	aerospikeServerContainerDefaultMemoryRequestGi         = 4
-	aerospikeServerNamespaceDefaultFilesizeMemoryRequestGi = 1
-
 	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
 	// while deleting pvc
 	storagePathAnnotationKey = "storage-path"
@@ -188,12 +180,12 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 	controllerutil.SetControllerReference(aeroCluster, st, r.Scheme)
 
 	if err := r.Client.Create(context.TODO(), st, createOption); err != nil {
-		return nil, fmt.Errorf("Failed to create new StatefulSet: %v", err)
+		return nil, fmt.Errorf("failed to create new StatefulSet: %v", err)
 	}
 	r.Log.Info("Created new StatefulSet", "StatefulSet.Namespace", st.Namespace, "StatefulSet.Name", st.Name)
 
 	if err := r.waitForSTSToBeReady(st); err != nil {
-		return st, fmt.Errorf("Failed to wait for statefulset to be ready: %v", err)
+		return st, fmt.Errorf("failed to wait for statefulset to be ready: %v", err)
 	}
 
 	return r.getSTS(aeroCluster, rackState)
@@ -235,7 +227,7 @@ func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet)
 
 			pod := &corev1.Pod{}
 			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: st.Namespace}, pod); err != nil {
-				return fmt.Errorf("Failed to get statefulSet pod %s: %v", podName, err)
+				return fmt.Errorf("failed to get statefulSet pod %s: %v", podName, err)
 			}
 			if err := utils.CheckPodFailed(pod); err != nil {
 				return fmt.Errorf("StatefulSet pod %s failed: %v", podName, err)
@@ -277,7 +269,7 @@ func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet)
 		r.Log.V(1).Info("Statefulset spec.replica not matching status.replica", "staus", st.Status.Replicas, "spec", *st.Spec.Replicas)
 	}
 	if !updated {
-		return fmt.Errorf("Statefulset status is not updated")
+		return fmt.Errorf("statefulset status is not updated")
 	}
 
 	r.Log.Info("Statefulset is ready")
@@ -305,7 +297,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 			// build the aerospike config file based on the current spec
 			configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
 			if err != nil {
-				return fmt.Errorf("Failed to build dotConfig from map: %v", err)
+				return fmt.Errorf("failed to build dotConfig from map: %v", err)
 			}
 			ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
 
@@ -322,7 +314,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 			controllerutil.SetControllerReference(aeroCluster, confMap, r.Scheme)
 
 			if err := r.Client.Create(context.TODO(), confMap, createOption); err != nil {
-				return fmt.Errorf("Failed to create new confMap for StatefulSet: %v", err)
+				return fmt.Errorf("failed to create new confMap for StatefulSet: %v", err)
 			}
 			r.Log.Info("Created new ConfigMap", "ConfigMap.Namespace", confMap.Namespace, "ConfigMap.Name", confMap.Name)
 
@@ -336,14 +328,14 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 	// Update existing configmap as it might not be current.
 	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
-		return fmt.Errorf("Failed to build config map data: %v", err)
+		return fmt.Errorf("failed to build config map data: %v", err)
 	}
 
 	// Replace config map data since we are supposed to create a new config map.
 	confMap.Data = configMapData
 
 	if err := r.Client.Update(context.TODO(), confMap, updateOption); err != nil {
-		return fmt.Errorf("Failed to update ConfigMap for StatefulSet: %v", err)
+		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
 	}
 	return nil
 }
@@ -361,7 +353,7 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(aeroCluster *asdbv1alpha
 	// build the aerospike config file based on the current spec
 	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
-		return fmt.Errorf("Failed to build dotConfig from map: %v", err)
+		return fmt.Errorf("failed to build dotConfig from map: %v", err)
 	}
 
 	// Overwrite only spec based keys. Do not touch other keys like pod metadata.
@@ -370,27 +362,7 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(aeroCluster *asdbv1alpha
 	}
 
 	if err := r.Client.Update(context.TODO(), confMap, updateOption); err != nil {
-		return fmt.Errorf("Failed to update confMap for StatefulSet: %v", err)
-	}
-	return nil
-}
-
-func (r *AerospikeClusterReconciler) updateSTSConfigMapPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, podNames []string) error {
-	name := utils.ConfigMapName(aeroCluster)
-
-	r.Log.Info("Updating ConfigMap pod names", "ConfigMap.Namespace", aeroCluster.Namespace, "ConfigMap.Name", name)
-
-	confMap := &corev1.ConfigMap{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: aeroCluster.Namespace}, confMap)
-	if err != nil {
-		return err
-	}
-
-	podNamesJSON, _ := json.Marshal(podNames)
-	confMap.Data[configMaPodListKey] = string(podNamesJSON)
-
-	if err := r.Client.Update(context.TODO(), confMap, updateOption); err != nil {
-		return fmt.Errorf("Failed to update confMap for pod names: %v", err)
+		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
 	}
 	return nil
 }
@@ -433,7 +405,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1alp
 			controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
 
 			if err := r.Client.Create(context.TODO(), service, createOption); err != nil {
-				return fmt.Errorf("Failed to create headless service for statefulset: %v", err)
+				return fmt.Errorf("failed to create headless service for statefulset: %v", err)
 			}
 			r.Log.Info("Created new headless service")
 
@@ -482,7 +454,7 @@ func (r *AerospikeClusterReconciler) createPodService(aeroCluster *asdbv1alpha1.
 	controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
 
 	if err := r.Client.Create(context.TODO(), service, createOption); err != nil {
-		return fmt.Errorf("Failed to create new service for pod %s: %v", pName, err)
+		return fmt.Errorf("failed to create new service for pod %s: %v", pName, err)
 	}
 	return nil
 }
@@ -491,10 +463,10 @@ func (r *AerospikeClusterReconciler) deletePodService(pName, pNamespace string) 
 	service := &corev1.Service{}
 
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pName, Namespace: pNamespace}, service); err != nil {
-		return fmt.Errorf("Failed to get service for pod %s: %v", pName, err)
+		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
 	}
 	if err := r.Client.Delete(context.TODO(), service); err != nil {
-		return fmt.Errorf("Failed to delete service for pod %s: %v", pName, err)
+		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
 	}
 	return nil
 }
@@ -511,7 +483,7 @@ func (r *AerospikeClusterReconciler) updateSTSStorage(aeroCluster *asdbv1alpha1.
 
 		pvcName, err := getPVCName(volume.Path)
 		if err != nil {
-			return fmt.Errorf("Failed to create ripemd hash for pvc name from volume.path %s", volume.Path)
+			return fmt.Errorf("failed to create ripemd hash for pvc name from volume.path %s", volume.Path)
 		}
 
 		if volume.VolumeMode == asdbv1alpha1.AerospikeVolumeModeBlock {
@@ -872,13 +844,6 @@ func removeConfigMapVolumeMountFromSTS(containers []corev1.Container, volume cor
 func (r *AerospikeClusterReconciler) updateSTSContainerResources(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
 	// These resource is for main aerospike container. Other sidecar can mention their own resource
 	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
-	// st.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
-	// 	Requests: corev1.ResourceList{
-	// 		corev1.ResourceCPU:    computeCPURequest(aeroCluster),
-	// 		corev1.ResourceMemory: computeMemoryRequest(aeroCluster),
-	// 	},
-	// 	Limits: computeResourceLimits(aeroCluster),
-	// }
 }
 
 func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {

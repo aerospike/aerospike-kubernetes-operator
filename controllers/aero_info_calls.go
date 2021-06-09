@@ -19,7 +19,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -30,7 +29,7 @@ import (
 // Aerospike helper
 //------------------------------------------------------------------------------------
 
-func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod) (string, error) {
+func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (string, error) {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return "", err
@@ -42,26 +41,26 @@ func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluste
 	}
 	version, ok := res["build"]
 	if !ok {
-		return "", fmt.Errorf("Failed to get aerospike version from pod %v", pod.Name)
+		return "", fmt.Errorf("failed to get aerospike version from pod %v", pod.Name)
 	}
 	return version, nil
 }
 
 // waitForNodeSafeStopReady waits util the input pod is safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
-func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod, ignorablePods []v1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
 	// TODO: Check post quiesce recluster conditions first.
 	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
 
 	// Remove a node only if cluster is stable
 	err := r.waitForAllSTSToBeReady(aeroCluster)
 	if err != nil {
-		return reconcileError(fmt.Errorf("Failed to wait for cluster to be ready: %v", err))
+		return reconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(aeroCluster, ignorablePods)
 	if err != nil {
-		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err))
+		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
 
 	const maxRetry = 6
@@ -91,7 +90,7 @@ func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv
 	// Quiesce node
 	selectedHostConn, err := r.newHostConn(aeroCluster, pod)
 	if err != nil {
-		return reconcileError(fmt.Errorf("Failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err))
+		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err))
 	}
 	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
 		return reconcileError(err)
@@ -99,7 +98,7 @@ func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod, clearPodName string) error {
+func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, clearPodName string) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
@@ -107,7 +106,7 @@ func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1alpha1.
 	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), asdbv1alpha1.HeartbeatPort)
 }
 
-func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod, clearPod *v1.Pod) error {
+func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, clearPod *corev1.Pod) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
@@ -115,7 +114,7 @@ func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1alpha1.Aeros
 	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), asdbv1alpha1.HeartbeatPort)
 }
 
-func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *v1.Pod) error {
+func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
@@ -128,14 +127,14 @@ func (r *AerospikeClusterReconciler) newAllHostConn(aeroCluster *asdbv1alpha1.Ae
 }
 
 // newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and present in ignorablePods.
-func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv1alpha1.AerospikeCluster, ignorablePods []v1.Pod) ([]*deployment.HostConn, error) {
+func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv1alpha1.AerospikeCluster, ignorablePods []corev1.Pod) ([]*deployment.HostConn, error) {
 	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("Pod list empty")
+		return nil, fmt.Errorf("pod list empty")
 	}
 
 	var hostConns []*deployment.HostConn
@@ -152,7 +151,7 @@ func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv
 				r.Log.Info("Ignoring info call on non-running pod ", "pod", pod.Name)
 				continue
 			}
-			return nil, fmt.Errorf("Pod: %v is not ready", pod.Name)
+			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
 		}
 
 		hostConn, err := r.newHostConn(aeroCluster, &pod)
@@ -214,7 +213,7 @@ func ParseInfoIntoMap(str string, del string, sep string) (map[string]interface{
 		}
 		kv := strings.Split(item, sep)
 		if len(kv) < 2 {
-			return nil, fmt.Errorf("Error parsing info item %s", item)
+			return nil, fmt.Errorf("error parsing info item %s", item)
 		}
 
 		m[kv[0]] = strings.Join(kv[1:len(kv)], sep)

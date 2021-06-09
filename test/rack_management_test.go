@@ -14,12 +14,12 @@ var _ = Describe("RackManagement", func() {
 
 	Context("When doing valid operations", func() {
 
-		clusterName := "rack-management"
-		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-
 		It("Should validate rack management flow", func() {
+			clusterName := "rack-management"
+			clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
 			// Setup: Deploy cluster without rack
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -40,7 +40,7 @@ var _ = Describe("RackManagement", func() {
 
 			By("Adding rack enabled namespace")
 
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.RackConfig.Namespaces = []string{nsName}
@@ -269,9 +269,9 @@ var _ = Describe("RackManagement", func() {
 
 			Context("When using invalid rack aerospikeConfig to deploy cluster", func() {
 
-				aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-
 				It("should fail for invalid aerospikeConfig", func() {
+					aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
+
 					aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
 						Value: map[string]interface{}{
 							"namespaces": "invalidConf",
@@ -385,15 +385,23 @@ var _ = Describe("RackManagement", func() {
 			})
 		})
 		Context("when update cluster with invalid rack", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			rackConf := asdbv1alpha1.RackConfig{
-				Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: 2}},
-			}
-			aeroCluster.Spec.RackConfig = rackConf
 
-			It("should deploy a cluster", func() {
+			BeforeEach(func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				rackConf := asdbv1alpha1.RackConfig{
+					Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: 2}},
+				}
+				aeroCluster.Spec.RackConfig = rackConf
+
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				deleteCluster(k8sClient, ctx, aeroCluster)
 			})
 
 			It("should fail for updating existing rack", func() {
@@ -418,7 +426,7 @@ var _ = Describe("RackManagement", func() {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, rackConf.Racks...)
+					aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, aeroCluster.Spec.RackConfig.Racks...)
 					err = updateAndWait(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				})
@@ -434,62 +442,6 @@ var _ = Describe("RackManagement", func() {
 
 			Context("When using invalid rack aerospikeConfig to update cluster", func() {
 
-				// TODO: Do we need this test. Rack aerospikeConfig can never be empty.
-				// If not given by user then it will be taken from global
-
-				// // storage-engine can not be updated
-				// It("UpdateStorageEngine", func() {
-				// 	clusterName := "updatestorage"
-				// 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
-				// 	It("NonEmptyToEmpty", func() {
-				// 		// Deploy cluster with rackConfig
-				// 		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				// 		rackAeroConf := asdbv1alpha1.AerospikeConfigSpec{}
-
-				// 		Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig.Value)
-				// 		rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
-
-				// 		racks := []asdbv1alpha1.Rack{{ID: 1, InputAerospikeConfig: &rackAeroConf}}
-				// 		aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
-
-				// 		if err := deployCluster(k8sClient, ctx, aeroCluster); err != nil {
-				// 			return err
-				// 		}
-
-				// 		// Update rackConfig to nil. should fail as storage can not be updated
-				// 		aeroCluster = getCluster(k8sClient, ctx, clusterNamespacedName)
-				// 		aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = nil
-				// 		err = k8sClient.Update(goctx.TODO(), aeroCluster)
-				// 		validateError(err, "should fail for updating storage")
-
-				// 		deleteCluster(k8sClient, ctx, aeroCluster)
-				// 	})
-				// 	It("EmptyToNonEmpty", func() {
-				// 		// Deploy cluster with empty rackConfig
-				// 		aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-				// 		if err := deployCluster(k8sClient, ctx, aeroCluster); err != nil {
-				// 			return err
-				// 		}
-
-				// 		// Update rackConfig to nonEmpty. should fail as storage can not be updated
-				// 		aeroCluster = getCluster(k8sClient, ctx, clusterNamespacedName)
-				// 		rackAeroConf := asdbv1alpha1.AerospikeConfigSpec{}
-				// 		Copy(&rackAeroConf, &aeroCluster.Spec.AerospikeConfig.Value)
-				// 		rackAeroConf["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
-
-				// 		aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &rackAeroConf
-				// 		err = k8sClient.Update(goctx.TODO(), aeroCluster)
-				// 		validateError(err, "should fail for updating storage")
-
-				// 		deleteCluster(k8sClient, ctx, aeroCluster)
-				// 	})
-				// })
-			})
-
-			It("cleanup", func() {
-				err := deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})

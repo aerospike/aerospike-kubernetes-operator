@@ -33,8 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const defaultUser = "admin"
-const defaultPass = "admin"
 const patchFieldOwner = "aerospike-kuberneter-operator"
 const finalizerName = "asdb.aerospike.com/storage-finalizer"
 
@@ -166,7 +164,7 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 	// It may have been left from previous steps
 	allHostConns, err := r.newAllHostConn(aeroCluster)
 	if err != nil {
-		e := fmt.Errorf("Failed to get hostConn for aerospike cluster nodes: %v", err)
+		e := fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err)
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
 		return reconcile.Result{}, e
 	}
@@ -208,7 +206,7 @@ func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *
 
 	isNew, err := r.isNewCluster(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error determining if cluster is new: %v", err)
+		return fmt.Errorf("error determining if cluster is new: %v", err)
 	}
 
 	if isNew {
@@ -220,7 +218,7 @@ func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *
 		r.Log.V(1).Info("It's not a new cluster, check if it is failed and needs recovery")
 		hasFailed, err := r.hasClusterFailed(aeroCluster)
 		if err != nil {
-			return fmt.Errorf("Error determining if cluster has failed: %v", err)
+			return fmt.Errorf("error determining if cluster has failed: %v", err)
 		}
 
 		if hasFailed {
@@ -234,7 +232,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 
 	enabled, err := asdbv1alpha1.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
 	if err != nil {
-		return fmt.Errorf("Failed to get cluster security status: %v", err)
+		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}
 	if !enabled {
 		r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
@@ -244,7 +242,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 	// Create client
 	conns, err := r.newAllHostConn(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Failed to get host info: %v", err)
+		return fmt.Errorf("failed to get host info: %v", err)
 	}
 	var hosts []*as.Host
 	for _, conn := range conns {
@@ -259,7 +257,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 
 	if err != nil {
-		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
+		return fmt.Errorf("failed to create aerospike cluster client: %v", err)
 	}
 
 	defer aeroClient.Close()
@@ -313,7 +311,7 @@ func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1alpha1.Aero
 
 	err = r.patchStatus(aeroCluster, newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error updating status: %v", err)
+		return fmt.Errorf("error updating status: %v", err)
 	}
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
 	return nil
@@ -335,7 +333,7 @@ func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1alpha1.Aero
 	}
 
 	if err = r.Client.Status().Update(context.TODO(), newAeroCluster); err != nil {
-		return fmt.Errorf("Error creating status: %v", err)
+		return fmt.Errorf("error creating status: %v", err)
 	}
 
 	return nil
@@ -373,17 +371,17 @@ func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster 
 
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error marshalling old status: %v", err)
+		return fmt.Errorf("error marshalling old status: %v", err)
 	}
 
 	newJSON, err := json.Marshal(newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error marshalling new status: %v", err)
+		return fmt.Errorf("error marshalling new status: %v", err)
 	}
 
 	jsonpatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
 	if err != nil {
-		return fmt.Errorf("Error creating json patch: %v", err)
+		return fmt.Errorf("error creating json patch: %v", err)
 	}
 
 	// Pick changes to the status object only.
@@ -407,13 +405,13 @@ func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster 
 	jsonpatchJSON, err := json.Marshal(filteredPatch)
 
 	if err != nil {
-		return fmt.Errorf("Error marshalling json patch: %v", err)
+		return fmt.Errorf("error marshalling json patch: %v", err)
 	}
 
 	patch := client.RawPatch(types.JSONPatchType, jsonpatchJSON)
 
 	if err = r.Client.Status().Patch(context.TODO(), oldAeroCluster, patch, client.FieldOwner(patchFieldOwner)); err != nil {
-		return fmt.Errorf("Error patching status: %v", err)
+		return fmt.Errorf("error patching status: %v", err)
 	}
 
 	// FIXME: Json unmarshal used by above client.Status(),Patch()  does not convert empty lists in the new JSON to empty lists in the target. Seems like a bug in encoding/json/Unmarshall.
@@ -438,13 +436,13 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
 	statefulSetList, err := r.getClusterSTSList(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Error getting statefulsets while forcing recreate of the cluster as status is nil: %v", err)
+		return fmt.Errorf("error getting statefulsets while forcing recreate of the cluster as status is nil: %v", err)
 	}
 
 	r.Log.V(1).Info("Found statefulset for cluster. Need to delete them", "nSTS", len(statefulSetList.Items))
 	for _, statefulset := range statefulSetList.Items {
 		if err := r.deleteSTS(aeroCluster, &statefulset); err != nil {
-			return fmt.Errorf("Error deleting statefulset while forcing recreate of the cluster as status is nil: %v", err)
+			return fmt.Errorf("error deleting statefulset while forcing recreate of the cluster as status is nil: %v", err)
 		}
 	}
 
@@ -455,7 +453,7 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 	for _, state := range rackStateList {
 		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
 		if err != nil {
-			return fmt.Errorf("Failed recover failed cluster: %v", err)
+			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 
 		newPodNames := []string{}
@@ -465,11 +463,11 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 
 		err = r.cleanupPods(aeroCluster, newPodNames, state)
 		if err != nil {
-			return fmt.Errorf("Failed recover failed cluster: %v", err)
+			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 	}
 
-	return fmt.Errorf("Forcing recreate of the cluster as status is nil")
+	return fmt.Errorf("forcing recreate of the cluster as status is nil")
 }
 
 func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1alpha1.AerospikeCluster, finalizerName string) error {
@@ -515,19 +513,19 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 	for _, rack := range aeroCluster.Spec.RackConfig.Racks {
 		rackPVCItems, err := r.getRackPVCList(aeroCluster, rack.ID)
 		if err != nil {
-			return fmt.Errorf("Could not find pvc for rack: %v", err)
+			return fmt.Errorf("could not find pvc for rack: %v", err)
 		}
 		storage := rack.Storage
 
 		if _, err := r.removePVCsAsync(aeroCluster, &storage, rackPVCItems); err != nil {
-			return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
+			return fmt.Errorf("failed to remove cluster PVCs: %v", err)
 		}
 	}
 
 	// Delete PVCs for any remaining old removed racks
 	pvcItems, err := r.getClusterPVCList(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("Could not find pvc for cluster: %v", err)
+		return fmt.Errorf("could not find pvc for cluster: %v", err)
 	}
 
 	// removePVCs should be passed only filtered pvc otherwise rack pvc may be removed using global storage cascadeDelete
@@ -548,14 +546,10 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 
 	// Delete pvc for commmon storage.
 	if _, err := r.removePVCsAsync(aeroCluster, &aeroCluster.Spec.Storage, fileredPVCItems); err != nil {
-		return fmt.Errorf("Failed to remove cluster PVCs: %v", err)
+		return fmt.Errorf("failed to remove cluster PVCs: %v", err)
 	}
 
 	return nil
-}
-
-func (r *AerospikeClusterReconciler) isClusterAerospikeConfigSecretUpdated(aeroCluster *asdbv1alpha1.AerospikeCluster) bool {
-	return !reflect.DeepEqual(aeroCluster.Spec.AerospikeConfigSecret, aeroCluster.Status.AerospikeConfigSecret)
 }
 
 func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, pod corev1.Pod) bool {
@@ -612,23 +606,6 @@ func (r *AerospikeClusterReconciler) isAerospikeConfigSecretUpdatedInAeroCluster
 	return false
 }
 
-func isClusterResourceUpdated(aeroCluster *asdbv1alpha1.AerospikeCluster) bool {
-	if aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources == nil {
-		return false
-	}
-	// TODO: What should be the convention, should we allow removing these things once added in spec?
-	// Should removing be the no op or change the cluster also for these changes? Check for the other also, like auth, secret
-	if (aeroCluster.Spec.Resources == nil && aeroCluster.Status.Resources != nil) ||
-		(aeroCluster.Spec.Resources != nil && aeroCluster.Status.Resources == nil) ||
-		!isClusterResourceListEqual(aeroCluster.Spec.Resources.Requests, aeroCluster.Status.Resources.Requests) ||
-		!isClusterResourceListEqual(aeroCluster.Spec.Resources.Limits, aeroCluster.Status.Resources.Limits) {
-
-		return true
-	}
-
-	return false
-}
-
 func isClusterResourceListEqual(res1, res2 corev1.ResourceList) bool {
 	if len(res1) != len(res2) {
 		return false
@@ -639,11 +616,4 @@ func isClusterResourceListEqual(res1, res2 corev1.ResourceList) bool {
 		}
 	}
 	return true
-}
-
-func getNamespacedNameForCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name,
-		Namespace: aeroCluster.Namespace,
-	}
 }

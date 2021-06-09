@@ -90,40 +90,40 @@ func validateNetworkPolicy(ctx goctx.Context, desired *asdbv1alpha1.AerospikeClu
 	current := &asdbv1alpha1.AerospikeCluster{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
-		return fmt.Errorf("Error reading cluster spec:%v", err)
+		return fmt.Errorf("error reading cluster spec:%v", err)
 	}
 
 	// Ensure desired cluster spec is applied.
 	if !reflect.DeepEqual(desired.Spec.AerospikeNetworkPolicy, current.Spec.AerospikeNetworkPolicy) {
-		return fmt.Errorf("Cluster state not applied. Desired: %v Current: %v", desired.Spec.AerospikeNetworkPolicy, current.Spec.AerospikeNetworkPolicy)
+		return fmt.Errorf("cluster state not applied. Desired: %v Current: %v", desired.Spec.AerospikeNetworkPolicy, current.Spec.AerospikeNetworkPolicy)
 	}
 
 	podList, err := getPodList(current, k8sClient)
 	if err != nil {
-		return fmt.Errorf("Failed to list pods: %v", err)
+		return fmt.Errorf("failed to list pods: %v", err)
 	}
 
 	for _, pod := range podList.Items {
 		asConn, err := newAsConn(current, &pod, k8sClient)
 		if err != nil {
-			return fmt.Errorf("Failed to get aerospike connection: %v", err)
+			return fmt.Errorf("failed to get aerospike connection: %v", err)
 		}
 
 		cp := getClientPolicy(current, k8sClient)
 		res, err := runInfo(cp, asConn, "endpoints")
 
 		if err != nil {
-			return fmt.Errorf("Failed to run Aerospike info command: %v", err)
+			return fmt.Errorf("failed to run Aerospike info command: %v", err)
 		}
 
 		endpointsStr, ok := res["endpoints"]
 		if !ok {
-			return fmt.Errorf("Failed to get aerospike endpoints from pod %v", pod.Name)
+			return fmt.Errorf("failed to get aerospike endpoints from pod %v", pod.Name)
 		}
 
 		endpointsMap, err := aerospikecluster.ParseInfoIntoMap(endpointsStr, ";", "=")
 		if err != nil {
-			return fmt.Errorf("Failed to parse aerospike endpoints from pod %v: %v", pod.Name, err)
+			return fmt.Errorf("failed to parse aerospike endpoints from pod %v: %v", pod.Name, err)
 		}
 
 		networkPolicy := current.Spec.AerospikeNetworkPolicy
@@ -163,7 +163,7 @@ func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1
 	// t.Logf("For pod:%v for accessType:%v Actual endpoint:%v", pod.Name, networkType, endpoint)
 
 	if err != nil {
-		return fmt.Errorf("Invalid endpoint %v", endpoint)
+		return fmt.Errorf("invalid endpoint %v", endpoint)
 	}
 
 	// Validate the IP address.
@@ -208,7 +208,7 @@ func getExpectedServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, po
 	} else if aeroCluster.Spec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
-			return 0, fmt.Errorf("Error getting service port: %v", err)
+			return 0, fmt.Errorf("error getting service port: %v", err)
 		}
 		if !isTLS {
 			port = svc.Spec.Ports[0].NodePort
@@ -241,7 +241,7 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (string, string, string, error) 
 	k8sNode := &corev1.Node{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 	if err != nil {
-		return "", "", "", fmt.Errorf("Failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return "", "", "", fmt.Errorf("failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
 	}
 	// If externalIP is present than give external ip
 	for _, add := range k8sNode.Status.Addresses {

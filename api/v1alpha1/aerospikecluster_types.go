@@ -385,7 +385,7 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 			if oldVolume.Path == newVolume.Path {
 				if !oldVolume.IsSafeChange(newVolume) {
 					// Validate same volumes
-					return fmt.Errorf("Cannot change volumes old: %v new %v", oldVolume, newVolume)
+					return fmt.Errorf("cannot change volumes old: %v new %v", oldVolume, newVolume)
 				}
 				break
 			}
@@ -415,7 +415,7 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 
 		if !matched {
 			if newVolume.VolumeMode != AerospikeVolumeModeConfigMap {
-				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("Cannot add persistent volume: %v", newVolume)
+				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("cannot add persistent volume: %v", newVolume)
 			}
 			addedVolumes = append(addedVolumes, newVolume)
 		}
@@ -431,7 +431,7 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 
 		if !matched {
 			if oldVolume.VolumeMode != AerospikeVolumeModeConfigMap {
-				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("Cannot remove persistent volume: %v", oldVolume)
+				return []AerospikePersistentVolumeSpec{}, []AerospikePersistentVolumeSpec{}, fmt.Errorf("cannot remove persistent volume: %v", oldVolume)
 			}
 			removedVolumes = append(removedVolumes, oldVolume)
 		}
@@ -492,21 +492,21 @@ func (v *AerospikeStorageSpec) GetStorageList() (blockStorageDeviceList []string
 		}
 
 		if _, ok := storagePaths[volume.Path]; ok {
-			return nil, nil, fmt.Errorf("Duplicate volume path %s", volume.Path)
+			return nil, nil, fmt.Errorf("duplicate volume path %s", volume.Path)
 		}
 
 		storagePaths[volume.Path] = 1
 
 		if volume.VolumeMode == AerospikeVolumeModeBlock {
 			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for block volume: %v", volume.InitMethod, volume)
+				return nil, nil, fmt.Errorf("invalid init method %v for block volume: %v", volume.InitMethod, volume)
 			}
 
 			blockStorageDeviceList = append(blockStorageDeviceList, volume.Path)
 			// TODO: Add validation for invalid initMethod (e.g. any random value)
 		} else if volume.VolumeMode == AerospikeVolumeModeFilesystem {
 			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
-				return nil, nil, fmt.Errorf("Invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
+				return nil, nil, fmt.Errorf("invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
 			}
 
 			fileStorageList = append(fileStorageList, volume.Path)
@@ -532,32 +532,6 @@ func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
 	lib.DeepCopy(dst, src)
 	return &dst
 }
-
-// type AeroConfMap map[string]interface{}
-
-// func ToAeroConfMap(conf AerospikeConfigSpec) (AeroConfMap, error) {
-// 	var confMap AeroConfMap
-// 	if err := json.Unmarshal(conf.Value, &confMap); err != nil {
-// 		return nil, err
-// 	}
-
-// 	return confMap, nil
-// }
-
-// func ToAeroConfRaw(conf map[string]interface{}) ([]byte, error) {
-// 	raw, err := json.Marshal(conf)
-// 	return raw, err
-// }
-
-// // type Values lib.Stats
-
-// // DeepCopy implements deepcopy func for AeroConfMap
-// func (v *AeroConfMap) DeepCopy() *AeroConfMap {
-// 	src := *v
-// 	var dst = make(AeroConfMap)
-// 	lib.DeepCopy(dst, src)
-// 	return &dst
-// }
 
 type AerospikeClusterStatusSpec struct {
 	// Aerospike cluster size
@@ -778,12 +752,6 @@ type AerospikeClusterStatus struct {
 	// Pods has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its own status. The map key is the name of the pod.
 	// +patchStrategy=strategic
 	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
-
-	// TODO:
-	// Give asadm info
-	// Give pod specific summary
-	// Give service list, to be used by client
-	// Error status
 }
 
 // AerospikeNetworkType specifies the type of network address to use.

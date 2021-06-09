@@ -140,6 +140,7 @@ var _ = Describe("LargeReconcile", func() {
 		Context("WaitingForStableCluster", func() {
 			It("LargeMigration", func() {
 				// Need to create large migration...is there any way to mimic or olny way is to load data
+				// Tested manually
 			})
 			It("ColdStart", func() {
 				// Not needed for this, isClusterStable call should fail and this will requeue request.
@@ -165,7 +166,7 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 
 	clientP, err := as.NewClientWithPolicyAndHost(policy, hostList...)
 	if err != nil {
-		return fmt.Errorf("Failed to create aerospike cluster client: %v", err)
+		return fmt.Errorf("failed to create aerospike cluster client: %v", err)
 	}
 
 	client := *clientP
@@ -223,7 +224,7 @@ func waitForClusterScaleDown(k8sClient client.Client, ctx goctx.Context, aeroClu
 		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 		if int(newCluster.Status.Size) < replicas {
-			err := fmt.Errorf("Cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
+			err := fmt.Errorf("cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
 			// t.Logf(err.Error())
 			return false, err
 		}
@@ -233,7 +234,7 @@ func waitForClusterScaleDown(k8sClient client.Client, ctx goctx.Context, aeroClu
 			return false, err
 		}
 		if len(podList.Items) < replicas {
-			err := fmt.Errorf("Cluster pods number can not go below replica size")
+			err := fmt.Errorf("cluster pods number can not go below replica size")
 			// t.Logf(err.Error())
 			return false, err
 		}
@@ -264,7 +265,7 @@ func waitForClusterRollingRestart(k8sClient client.Client, aeroCluster *asdbv1al
 
 		protofdmax := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"].(float64)
 		if int(protofdmax) == tempConf {
-			err := fmt.Errorf("Cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow", tempConf)
+			err := fmt.Errorf("cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow", tempConf)
 			// t.Logf(err.Error())
 			return false, err
 		}
@@ -295,7 +296,7 @@ func waitForClusterUpgrade(k8sClient client.Client, aeroCluster *asdbv1alpha1.Ae
 		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 		if newCluster.Status.Image == tempImage {
-			err := fmt.Errorf("Cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow", tempImage)
+			err := fmt.Errorf("cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow", tempImage)
 			// t.Logf(err.Error())
 			return false, err
 		}

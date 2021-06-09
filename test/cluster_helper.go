@@ -252,24 +252,6 @@ func validateResource(k8sClient client.Client, ctx goctx.Context, aeroCluster *a
 	return nil
 }
 
-// // CreateBasicCluster deploy a basic dummy cluster with 2 nodes
-// func CreateBasicCluster(k8sClient client.Client, ctx goctx.Context) {
-// 	// get namespace
-// 	// namespace, err := ctx.GetNamespace()
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	clusterName := "aerocluster"
-// 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-
-// 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-// 	t.Run("Positive", func(t *testing.T) {
-// 		if err := deployCluster(k8sClient, ctx, aeroCluster); err != nil {
-// 			return err
-// 		}
-// 	})
-// }
-
 // feature-key file needed
 func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, size int32, image string) *asdbv1alpha1.AerospikeCluster {
 	// create Aerospike custom resource
@@ -360,18 +342,6 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 								"key-file":  "/etc/aerospike/secret/svc_key.pem",
 								"ca-file":   "/etc/aerospike/secret/cacert.pem",
 							},
-							// {
-							// 	"name":      "aerospike-a-0.test-runner",
-							// 	"cert-file": "/etc/aerospike/secret/hb_cluster_chain.pem",
-							// 	"key-file":  "/etc/aerospike/secret/hb_key.pem",
-							// 	"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							// },
-							// {
-							// 	"name":      "aerospike-a-0.test-runner",
-							// 	"cert-file": "/etc/aerospike/secret/fb_cluster_chain.pem",
-							// 	"key-file":  "/etc/aerospike/secret/fb_key.pem",
-							// 	"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							// },
 						},
 					},
 					"namespaces": []interface{}{
@@ -394,7 +364,7 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 
 func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *asdbv1alpha1.AerospikeCluster {
 	// Will be used in Update also
-	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 	// This needs to be changed based on setup. update zone, region, nodeName according to setup
 	racks := []asdbv1alpha1.Rack{{ID: 1}}
 	rackConf := asdbv1alpha1.RackConfig{Racks: racks}
@@ -402,13 +372,9 @@ func createDummyRackAwareAerospikeCluster(clusterNamespacedName types.Namespaced
 	return aeroCluster
 }
 
-func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *asdbv1alpha1.AerospikeCluster {
-	return createDummyAerospikeClusterWithOption(clusterNamespacedName, size, true)
-}
-
 var defaultProtofdmax int64 = 15000
 
-func createDummyAerospikeClusterWithOption(clusterNamespacedName types.NamespacedName, size int32, cascadeDelete bool) *asdbv1alpha1.AerospikeCluster {
+func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, size int32) *asdbv1alpha1.AerospikeCluster {
 	mem := resource.MustParse("1Gi")
 	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
@@ -578,18 +544,6 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 								"key-file":  "/etc/aerospike/secret/svc_key.pem",
 								"ca-file":   "/etc/aerospike/secret/cacert.pem",
 							},
-							// {
-							// 	"name":      "aerospike-a-0.test-runner",
-							// 	"cert-file": "/etc/aerospike/secret/hb_cluster_chain.pem",
-							// 	"key-file":  "/etc/aerospike/secret/hb_key.pem",
-							// 	"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							// },
-							// {
-							// 	"name":      "aerospike-a-0.test-runner",
-							// 	"cert-file": "/etc/aerospike/secret/fb_cluster_chain.pem",
-							// 	"key-file":  "/etc/aerospike/secret/fb_key.pem",
-							// 	"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							// },
 						},
 					},
 				},

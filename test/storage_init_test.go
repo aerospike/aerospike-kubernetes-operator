@@ -182,7 +182,7 @@ func checkData(aeroCluster *asdbv1alpha1.AerospikeCluster, assertHasData bool, w
 
 	podList, err := getPodList(aeroCluster, client)
 	if err != nil {
-		return fmt.Errorf("Failed to list pods: %v", err)
+		return fmt.Errorf("failed to list pods: %v", err)
 	}
 
 	for _, pod := range podList.Items {
@@ -190,7 +190,7 @@ func checkData(aeroCluster *asdbv1alpha1.AerospikeCluster, assertHasData bool, w
 
 		rackID, err := getRackID(&pod)
 		if err != nil {
-			return fmt.Errorf("Failed to get rackID pods: %v", err)
+			return fmt.Errorf("failed to get rackID pods: %v", err)
 		}
 
 		storage := aeroCluster.Spec.Storage
@@ -235,7 +235,7 @@ func writeDataToVolumes(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
 
 	podList, err := getPodList(aeroCluster, client)
 	if err != nil {
-		return fmt.Errorf("Failed to list pods: %v", err)
+		return fmt.Errorf("failed to list pods: %v", err)
 	}
 
 	for _, pod := range podList.Items {
@@ -270,7 +270,7 @@ func writeDataToVolumeBlock(pod *corev1.Pod, volume asdbv1alpha1.AerospikePersis
 	_, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Path))
 
 	if err != nil {
-		return fmt.Errorf("Error creating file %v", err)
+		return fmt.Errorf("error creating file %v", err)
 	}
 	return nil
 }
@@ -279,7 +279,7 @@ func writeDataToVolumeFileSystem(pod *corev1.Pod, volume asdbv1alpha1.AerospikeP
 	_, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Path))
 
 	if err != nil {
-		return fmt.Errorf("Error creating file %v", err)
+		return fmt.Errorf("error creating file %v", err)
 	}
 	return nil
 }
@@ -389,7 +389,7 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		}
 
 		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
-			return fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
+			return fmt.Errorf("could not delete pvc %s: %v", pvc.Name, err)
 		}
 	}
 	return nil

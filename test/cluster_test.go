@@ -266,7 +266,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 		})
 
 	})
-
 }
 
 // Test cluster validation Common for deployment and update both
@@ -687,16 +686,6 @@ func negativeUpdateClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 			})
 
 			Context("ChangeDefaultConfig", func() {
-				It("NsConf", func() {
-					// Ns conf
-					// Rack-id
-					// aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-					// // Rack-id is checked only for rack enabled namespaces.
-					// aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
-					// err = k8sClient.Update(ctx, aeroCluster)
-					// validateError(err, "should fail for setting rack-id")
-				})
 
 				It("ServiceConf: should fail for setting node-id, should fail for setting cluster-name", func() {
 					// Service conf

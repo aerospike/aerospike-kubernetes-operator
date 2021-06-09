@@ -25,13 +25,13 @@ func CreateConfigMapData(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1
 	// Add config template
 	confTemp, err := BuildConfigTemplate(aeroCluster, rack)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to build config template: %v", err)
+		return nil, fmt.Errorf("failed to build config template: %v", err)
 	}
 
 	// Add conf file
 	confData, err := getBaseConfData(aeroCluster, rack)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to build config template: %v", err)
+		return nil, fmt.Errorf("failed to build config template: %v", err)
 	}
 	confData[AerospikeTemplateConfFileName] = confTemp
 
@@ -79,7 +79,7 @@ func BuildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], configMap)
 	if err != nil {
-		return "", fmt.Errorf("Failed to load config map by lib: %v", err)
+		return "", fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
 	// No need for asConf version validation, it's already validated in admission webhook

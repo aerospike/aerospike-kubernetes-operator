@@ -60,7 +60,7 @@ func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1alpha1.A
 		if cascadeDelete {
 			deletedPVCs = append(deletedPVCs, pvc)
 			if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
-				return nil, fmt.Errorf("Could not delete pvc %s: %v", pvc.Name, err)
+				return nil, fmt.Errorf("could not delete pvc %s: %v", pvc.Name, err)
 			}
 			r.Log.Info("PVC removed", "PVC", pvc.Name, "PVCCascadeDelete", cascadeDelete)
 		} else {

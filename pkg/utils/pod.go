@@ -7,24 +7,23 @@ import (
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 )
 
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
-func IsPodRunningAndReady(pod *v1.Pod) bool {
-	return !IsPodTerminating(pod) && pod.Status.Phase == v1.PodRunning && isPodReady(pod)
+func IsPodRunningAndReady(pod *corev1.Pod) bool {
+	return !IsPodTerminating(pod) && pod.Status.Phase == corev1.PodRunning && isPodReady(pod)
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
-func CheckPodFailed(pod *v1.Pod) error {
+func CheckPodFailed(pod *corev1.Pod) error {
 	if IsPodTerminating(pod) {
 		return nil
 	}
 
 	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
-	if pod.Status.Phase == v1.PodFailed {
-		return fmt.Errorf("Pod has failed status")
+	if pod.Status.Phase == corev1.PodFailed {
+		return fmt.Errorf("pod has failed status")
 	}
 
 	// grab the status of every container in the pod (including its init containers)
@@ -35,11 +34,11 @@ func CheckPodFailed(pod *v1.Pod) error {
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return fmt.Errorf("Pod has terminated status")
+		// 	return fmt.Errorf("pod has terminated status")
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
 		if waiting := container.State.Waiting; waiting != nil && (isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason)) {
-			return fmt.Errorf("Pod failed message: %s reason: %s", waiting.Message, waiting.Reason)
+			return fmt.Errorf("pod failed message: %s reason: %s", waiting.Message, waiting.Reason)
 		}
 	}
 
@@ -48,14 +47,14 @@ func CheckPodFailed(pod *v1.Pod) error {
 }
 
 // CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an image related error.
-func CheckPodImageFailed(pod *v1.Pod) error {
+func CheckPodImageFailed(pod *corev1.Pod) error {
 	if IsPodTerminating(pod) {
 		return nil
 	}
 
 	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
-	if pod.Status.Phase == v1.PodFailed {
-		return fmt.Errorf("Pod has failed status")
+	if pod.Status.Phase == corev1.PodFailed {
+		return fmt.Errorf("pod has failed status")
 	}
 
 	// grab the status of every container in the pod (including its init containers)
@@ -66,11 +65,11 @@ func CheckPodImageFailed(pod *v1.Pod) error {
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return fmt.Errorf("Pod has terminated status")
+		// 	return fmt.Errorf("pod has terminated status")
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors
 		if waiting := container.State.Waiting; waiting != nil && isPodImageError(waiting.Reason) {
-			return fmt.Errorf("Pod image pull failed with given container message: %s", waiting.Message)
+			return fmt.Errorf("pod image pull failed with given container message: %s", waiting.Message)
 		}
 	}
 
@@ -79,8 +78,8 @@ func CheckPodImageFailed(pod *v1.Pod) error {
 }
 
 // IsPodCrashed returns true if pod is running and the aerospike container has crashed.
-func IsPodCrashed(pod *v1.Pod) bool {
-	if pod.Status.Phase != v1.PodRunning {
+func IsPodCrashed(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
 		// Assume a pod that is not running has not crashed.
 		return false
 	}
@@ -91,7 +90,7 @@ func IsPodCrashed(pod *v1.Pod) bool {
 }
 
 // isPodReady return true if all the container of the pod are in ready state
-func isPodReady(pod *v1.Pod) bool {
+func isPodReady(pod *corev1.Pod) bool {
 	for _, status := range pod.Status.ContainerStatuses {
 		if !status.Ready {
 			return false
@@ -101,17 +100,17 @@ func isPodReady(pod *v1.Pod) bool {
 }
 
 // isPodCreated returns true if pod has been created and is maintained by the API server
-func isPodCreated(pod *v1.Pod) bool {
+func isPodCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
 // isPodFailed returns true if pod has a Phase of PodFailed
-func isPodFailed(pod *v1.Pod) bool {
-	return pod.Status.Phase == v1.PodFailed
+func isPodFailed(pod *corev1.Pod) bool {
+	return pod.Status.Phase == corev1.PodFailed
 }
 
 // IsPodTerminating returns true if pod's DeletionTimestamp has been set
-func IsPodTerminating(pod *v1.Pod) bool {
+func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
@@ -183,7 +182,7 @@ func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
 func GetRackIDFromPodName(podName string) (*int, error) {
 	parts := strings.Split(podName, "-")
 	if len(parts) < 3 {
-		return nil, fmt.Errorf("Failed to get rackID from podName %s", podName)
+		return nil, fmt.Errorf("failed to get rackID from podName %s", podName)
 	}
 	// Podname format stsname-ordinal
 	// stsname ==> clustername-rackid
