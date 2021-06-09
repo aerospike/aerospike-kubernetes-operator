@@ -76,7 +76,7 @@ var _ = Describe("ClusterResource", func() {
 
 	Context("When doing invalid operations", func() {
 
-		FContext("Deploy", func() {
+		Context("Deploy", func() {
 			clusterName := "cluster-resource-invalid"
 			clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
