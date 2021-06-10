@@ -558,7 +558,7 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "read-write.profileNs") {
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(err.Error(), "read-write.profileNs") {
 				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and 'read-write.profileNs'", err))
 			}
 		})
@@ -611,7 +611,7 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(strings.ToLower(err.Error()), "8.8.0.0/16") {
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(err.Error(), "8.8.0.0/16") {
 				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and '8.8.0.0/16'", err))
 			}
 		})
@@ -663,7 +663,7 @@ var _ = Describe("AccessControl", func() {
 			}
 			Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
 
-			if !strings.Contains(strings.ToLower(err.Error()), "invalid cidr") || !strings.Contains(strings.ToLower(err.Error()), "8.8.8.8/16") {
+			if !strings.Contains(strings.ToLower(err.Error()), "invalid cidr") || !strings.Contains(err.Error(), "8.8.8.8/16") {
 				Fail(fmt.Sprintf("Error: %v should contain 'duplicate' and '8.8.8.8/16'", err))
 			}
 		})
