@@ -46,6 +46,7 @@ done
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 KUBE_API_SERVER=https://kubernetes.default.svc
+NODE=$MY_NODE_NAME
 NAMESPACE=$MY_POD_NAMESPACE
 
 CFG=/etc/aerospike/aerospike.template.conf
@@ -64,9 +65,13 @@ POD_ORDINAL="${ADDR[-1]}"
 
 # Find rack-id
 export RACK_ID="${ADDR[-2]}"
-sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+ALTERNATE_RACK_ID="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes/$NODE" | awk '/aerospike.com\/alternate-rack-id/ {gsub(/"|,/,"",$2); print ($2) + 0}')"
+if [ "$ALTERNATE_RACK_ID" == "0" ] || [ "$ALTERNATE_RACK_ID" == "" ]; then
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
+else
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${ALTERNATE_RACK_ID}/" ${CFG}
+fi
 export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # ------------------------------------------------------------------------------
@@ -478,6 +483,12 @@ function join {
     local IFS="$1"; shift; echo "$*";
 }
 
+# Kubernetes API details.
+CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+KUBE_API_SERVER=https://kubernetes.default.svc
+NODE=$MY_NODE_NAME
+
 HOSTNAME=$(hostname)
 
 # Parse out cluster name, formatted as: petset_name-rackid-index
@@ -489,9 +500,13 @@ CFG=/etc/aerospike/aerospike.template.conf
 
 # Find rack-id
 RACK_ID="${ADDR[-2]}"
-sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+ALTERNATE_RACK_ID="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes/$NODE" | awk '/aerospike.com\/alternate-rack-id/ {gsub(/"|,/,"",$2); print ($2) + 0}')"
+if [ "$ALTERNATE_RACK_ID" == "0" ] || [ "$ALTERNATE_RACK_ID" == "" ]; then
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${RACK_ID}/" ${CFG}
+else
+  sed -i "s/rack-id.\+[0-9]$/rack-id    ${ALTERNATE_RACK_ID}/" ${CFG}
+fi
 NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
 
 # Parse lines to insert peer-list
