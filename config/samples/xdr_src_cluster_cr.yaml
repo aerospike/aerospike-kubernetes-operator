@@ -1,0 +1,79 @@
+apiVersion: asdb.aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aeroclustersrc
+  namespace: aerospike
+spec:
+  size: 2
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
+
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - path: /opt/aerospike
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+      - path: /opt/aerospike/xdr
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+
+  multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+          - read-write
+
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+
+  aerospikeConfig:
+    logging:
+      - name: /var/log/aerospike/aerospike.log
+        any: info
+
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+
+    security:
+      enable-security: true
+
+    xdr:
+      dcs:
+        - name: dc1
+          node-address-ports:
+            - aeroclusterdst-0-0 3000
+
+          auth-user: admin
+          auth-password-file: /etc/aerospike/secret/password_DC1.txt
+          namespaces:
+            - name: test
+
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine:
+          type: device
+          files:
+            - /opt/aerospike/data/test.dat
+          filesize: 2000000000
+          data-in-memory: true
+
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 200m

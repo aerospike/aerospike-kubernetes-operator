@@ -1,0 +1,79 @@
+apiVersion: asdb.aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  size: 2
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
+
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - storageClass: ssd
+        path: /opt/aerospike
+        volumeMode: filesystem
+        sizeInGB: 1
+      - path: /opt/aerospike/data
+        storageClass: ssd
+        volumeMode: filesystem
+        sizeInGB: 3
+
+  multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  aerospikeConfigSecret:
+    secretName: aerospike-secret
+    mountPath:  /etc/aerospike/secret
+
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      enable-security: true
+    network:
+      service:
+        tls-name: aerospike-a-0.test-runner
+        tls-authenticate-client: any
+      heartbeat:
+        tls-name: aerospike-a-0.test-runner
+      fabric:
+        tls-name: aerospike-a-0.test-runner
+      tls:
+        - name: aerospike-a-0.test-runner
+          cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
+          key-file: /etc/aerospike/secret/svc_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+        # - name: aerospike-a-0.test-runner
+        #   cert-file: /etc/aerospike/secret/hb_cluster_chain.pem
+        #   key-file: /etc/aerospike/secret/hb_key.pem
+        #   ca-file: /etc/aerospike/secret/cacert.pem
+        # - name: aerospike-a-0.test-runner
+        #   cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
+        #   key-file: /etc/aerospike/secret/fb_key.pem
+        #   ca-file: /etc/aerospike/secret/cacert.pem
+    namespaces:
+      - name: bar
+        memory-size: 3000000000
+        replication-factor: 1
+        storage-engine:
+          type: device
+          files:
+            - /opt/aerospike/data/bar.dat
+          filesize: 2000000000
+          data-in-memory: true
+
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 200m

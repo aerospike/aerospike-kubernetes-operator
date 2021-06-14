@@ -21,6 +21,47 @@ The Operator supports the following capabilities:
  * Standardize and validate configurations
  * Cluster security management
 
+## Building
+
+### Generate CRD manifests
+
+```sh
+make generate
+make manifests
+```
+
+### Build and push operator's image
+
+Run the following command with the appropriate name and version for the operator's image.
+
+```sh
+IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator
+VERSION=2.0.0-dev
+make docker-build docker-push IMG=$(IMAGE_TAG_BASE):$(VERSION)
+```
+
+### Deploy
+Make sure cert-manager is deployed on your Kubernetes cluster using instructions [here](https://cert-manager.io/docs/installation/kubernetes/).
+
+To deploy the operator build in the previous step run
+
+```sh
+make deploy IMG=$(IMAGE_TAG_BASE):$(VERSION)
+```
+
+Setup RBAC
+
+```sh
+kubectl apply -f cluster_rbac.yaml
+```
+
+## Undeploy
+
+Run
+
+```sh
+make undeploy IMG=$(IMAGE_TAG_BASE):$(VERSION)
+```
 
 ## Architecture
 
@@ -38,4 +79,3 @@ A layered approach is taken to orchestration which allows the Operator to manage
 
 ## See also
  * [Kubernetes](https://kubernetes.io)
-

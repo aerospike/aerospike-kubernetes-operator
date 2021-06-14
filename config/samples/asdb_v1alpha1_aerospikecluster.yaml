@@ -1,0 +1,7 @@
+apiVersion: asdb.aerospike.com/v1alpha1
+kind: AerospikeCluster
+metadata:
+  name: aerospikecluster-sample
+spec:
+  # Add fields here
+  foo: bar

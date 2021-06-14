@@ -1,49 +1,48 @@
 module github.com/aerospike/aerospike-kubernetes-operator
 
-go 1.13
+go 1.15
 
 require (
+	cloud.google.com/go v0.76.0 // indirect
+	github.com/Azure/go-autorest/autorest v0.11.17 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.9.11 // indirect
 	github.com/aerospike/aerospike-management-lib v0.0.0-20210414182131-82c9c425ad34
 	github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible
-	github.com/evanphx/json-patch v4.5.0+incompatible
-	github.com/go-openapi/spec v0.19.0
-	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
+	github.com/evanphx/json-patch v4.9.0+incompatible
+	github.com/go-logr/logr v0.4.0
+	github.com/go-logr/zapr v0.4.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/imdario/mergo v0.3.11 // indirect
+	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/operator-framework/operator-sdk v0.12.1-0.20191113210304-dc4b52186933
+	github.com/kr/pretty v0.2.1 // indirect
+	github.com/mattn/go-colorable v0.1.8 // indirect
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.2
+	github.com/prometheus/client_golang v1.9.0 // indirect
+	github.com/prometheus/procfs v0.3.0 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
-	github.com/travelaudience/aerospike-operator v0.0.0-20191002090530-354c1a4e7e2a
+	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
-	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
-	sigs.k8s.io/controller-runtime v0.3.0
+	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.16.0 // indirect
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
+	golang.org/x/oauth2 v0.0.0-20210201163806-010130855d6c // indirect
+	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
+	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
+	k8s.io/client-go v0.19.2
+	k8s.io/klog/v2 v2.5.0 // indirect
+	sigs.k8s.io/controller-runtime v0.7.2
+
 )
 
-// Pinned to kubernetes-1.15.4
-replace (
-	bitbucket.org/ww/goautoneg => github.com/adjust/goautoneg v0.0.0-20150426214442-d788f35a0315
-	k8s.io/api => k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190918201827-3de75813f604
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
-	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20190918200908-1e17798da8c1
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.0.0-20190918202139-0b14c719ca62
-	k8s.io/client-go => k8s.io/client-go v0.0.0-20190918200256-06eb1244587a
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20190918203125-ae665f80358a
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.0.0-20190918202959-c340507a5d48
-	k8s.io/code-generator => k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b
-	k8s.io/component-base => k8s.io/component-base v0.0.0-20190918200425-ed2f0867c778
-	k8s.io/cri-api => k8s.io/cri-api v0.0.0-20190817025403-3ae76f584e79
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.0.0-20190918203248-97c07dcbb623
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.0.0-20190918201136-c3a845f1fbb2
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.0.0-20190918202837-c54ce30c680e
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.0.0-20190918202429-08c8357f8e2d
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.0.0-20190918202713-c34a54b3ec8e
-	k8s.io/kubelet => k8s.io/kubelet v0.0.0-20190918202550-958285cf3eef
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20190918203421-225f0541b3ea
-	k8s.io/metrics => k8s.io/metrics v0.0.0-20190918202012-3c1ca76f5bda
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20190918201353-5cc279503896
-)
+replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
+
+replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
