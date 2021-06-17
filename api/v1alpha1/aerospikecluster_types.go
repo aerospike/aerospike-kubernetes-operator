@@ -141,6 +141,8 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 type AerospikePodSpec struct {
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
+	// Init sidecars to add to pods.
+	InitSidecars []corev1.Container `json:"initSidecars,omitempty"`
 
 	// TODO: Add affinity and tolerations.
 }

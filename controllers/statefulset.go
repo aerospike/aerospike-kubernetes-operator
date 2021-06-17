@@ -97,7 +97,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.13",
+						Image: asdbv1alpha1.AerospikeServerInitContainerImage,
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts: []corev1.VolumeMount{
@@ -662,18 +662,25 @@ func (r *AerospikeClusterReconciler) updateSTSSecretInfo(aeroCluster *asdbv1alph
 
 // Called while creating new cluster and also during rolling restart.
 func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
+	st.Spec.Template.Spec.Containers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.Containers, aeroCluster.Spec.PodSpec.Sidecars)
+	st.Spec.Template.Spec.InitContainers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.InitContainers, aeroCluster.Spec.PodSpec.InitSidecars)
+}
+
+func updateStatefulSetContainers(statefulSetContainers []corev1.Container, specSidecars []corev1.Container) []corev1.Container {
 	// Add new sidecars.
-	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	for _, newSidecar := range specSidecars {
 		found := false
 
 		// Create a copy because updating stateful sets sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
 		sideCarCopy := corev1.Container{}
 		lib.DeepCopy(&sideCarCopy, &newSidecar)
-		for i, container := range st.Spec.Template.Spec.Containers {
+		for i, container := range statefulSetContainers {
 			if newSidecar.Name == container.Name {
 				// Update the sidecar in case something has changed.
-				st.Spec.Template.Spec.Containers[i] = sideCarCopy
+				statefulSetContainers[i] = sideCarCopy
 				found = true
 				break
 			}
@@ -681,15 +688,15 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.
 
 		if !found {
 			// Add to stateful set containers.
-			st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, sideCarCopy)
+			statefulSetContainers = append(statefulSetContainers, sideCarCopy)
 		}
 	}
 
 	// Remove deleted sidecars.
 	j := 0
-	for i, container := range st.Spec.Template.Spec.Containers {
+	for i, container := range statefulSetContainers {
 		found := i == 0
-		for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+		for _, newSidecar := range specSidecars {
 			if newSidecar.Name == container.Name {
 				found = true
 				break
@@ -698,11 +705,11 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.
 
 		if found {
 			// Retain main aerospike container or a matched sidecar.
-			st.Spec.Template.Spec.Containers[j] = container
+			statefulSetContainers[j] = container
 			j++
 		}
 	}
-	st.Spec.Template.Spec.Containers = st.Spec.Template.Spec.Containers[:j]
+	return statefulSetContainers[:j]
 }
 
 // Called while creating new cluster and also during rolling restart.
