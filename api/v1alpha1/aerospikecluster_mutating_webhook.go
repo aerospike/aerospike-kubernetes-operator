@@ -444,9 +444,12 @@ func toInterfaceList(list []string) []interface{} {
 }
 
 func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
-	val1 := m1[key]
-	val2 := m2[key]
-	return val1 != val2
+	val1, ok1 := m1[key]
+	val2, ok2 := m2[key]
+	if ok1 != ok2 {
+		return true
+	}
+	return !reflect.DeepEqual(val1, val2)
 }
 
 func isNameExist(names []string, name string) bool {
