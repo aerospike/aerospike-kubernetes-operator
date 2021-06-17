@@ -186,6 +186,42 @@ spec:
                   of the Kubernetes Node where the container is running and the hostPort
                   is the port requested by the user."
                 type: boolean
+              operatorClientCertSpec:
+                description: Certificates to connect to Aerospike. If omitted then
+                  certs are taken from the secret 'aerospike-secret'.
+                properties:
+                  certPathInOperator:
+                    description: AerospikeCertPathInOperatorSource contain configuration
+                      for certificates used by operator to connect to aerospike cluster.
+                      All paths are on operator's filesystem.
+                    properties:
+                      caCertsPath:
+                        type: string
+                      clientCertPath:
+                        type: string
+                      clientKeyPath:
+                        type: string
+                    type: object
+                  secretCertSource:
+                    properties:
+                      caCertsFilename:
+                        type: string
+                      clientCertFilename:
+                        type: string
+                      clientKeyFilename:
+                        type: string
+                      secretName:
+                        type: string
+                      secretNamespace:
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  tlsClientName:
+                    description: If specified, this name will be added to tls-authenticate-client
+                      list by the operator
+                    type: string
+                type: object
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
@@ -1994,6 +2030,42 @@ spec:
                   of the Kubernetes Node where the container is running and the hostPort
                   is the port requested by the user."
                 type: boolean
+              operatorClientCertSpec:
+                description: Certificates to connect to Aerospike. If omitted then
+                  certs are taken from the secret 'aerospike-secret'.
+                properties:
+                  certPathInOperator:
+                    description: AerospikeCertPathInOperatorSource contain configuration
+                      for certificates used by operator to connect to aerospike cluster.
+                      All paths are on operator's filesystem.
+                    properties:
+                      caCertsPath:
+                        type: string
+                      clientCertPath:
+                        type: string
+                      clientKeyPath:
+                        type: string
+                    type: object
+                  secretCertSource:
+                    properties:
+                      caCertsFilename:
+                        type: string
+                      clientCertFilename:
+                        type: string
+                      clientKeyFilename:
+                        type: string
+                      secretName:
+                        type: string
+                      secretNamespace:
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  tlsClientName:
+                    description: If specified, this name will be added to tls-authenticate-client
+                      list by the operator
+                    type: string
+                type: object
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
