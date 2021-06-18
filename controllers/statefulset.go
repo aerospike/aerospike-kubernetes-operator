@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sort"
 	"strconv"
 	"strings"
@@ -390,14 +391,15 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 
 	ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
 
+	serviceName := getSTSHeadLessSvcName(aeroCluster)
 	service := &corev1.Service{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, service)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: serviceName, Namespace: aeroCluster.Namespace}, service)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					// Headless service has the same name as AerospikeCluster
-					Name:      getSTSHeadLessSvcName(aeroCluster),
+					Name:      serviceName,
 					Namespace: aeroCluster.Namespace,
 					// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
 					Annotations: map[string]string{
@@ -434,6 +436,80 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 		return err
 	}
 	r.Log.Info("Service already exist for statefulSet. Using existing service", "name", utils.NamespacedName(service.Namespace, service.Name))
+	return nil
+}
+
+func (r *AerospikeClusterReconciler) createSTSLoadBalancerSvc(aeroCluster *asdbv1beta1.AerospikeCluster) error {
+	loadBalancer := aeroCluster.Spec.SeedsFinderServices.LoadBalancer
+	if loadBalancer == nil {
+		r.Log.Info("LoadBalancer is not configured. Skipping...")
+		return nil
+	}
+
+	serviceName := aeroCluster.Name + "-lb"
+	service := &corev1.Service{}
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: serviceName, Namespace: aeroCluster.Namespace}, service)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("Creating LoadBalancer service for cluster")
+			ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
+			var targetPort int32
+			if loadBalancer.TargetPort >= 1024 {
+				// if target port is specified in CR.
+				targetPort = loadBalancer.TargetPort
+			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig); tlsName != "" {
+				targetPort = int32(tlsPort)
+			} else {
+				targetPort = int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig))
+			}
+			var port int32
+			if loadBalancer.Port >= 1024 {
+				// if port is specified in CR.
+				port = loadBalancer.Port
+			} else {
+				port = targetPort
+			}
+
+			service = &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        serviceName,
+					Namespace:   aeroCluster.Namespace,
+					Annotations: loadBalancer.Annotations,
+					Labels:      ls,
+				},
+				Spec: corev1.ServiceSpec{
+					Type:     corev1.ServiceTypeLoadBalancer,
+					Selector: ls,
+					Ports: []corev1.ServicePort{
+						{
+							Port:       port,
+							TargetPort: intstr.FromInt(int(targetPort)),
+						},
+					},
+				},
+			}
+			if len(loadBalancer.LoadBalancerSourceRanges) > 0 {
+				service.Spec.LoadBalancerSourceRanges = loadBalancer.LoadBalancerSourceRanges
+			}
+			if len(loadBalancer.ExternalTrafficPolicy) > 0 {
+				service.Spec.ExternalTrafficPolicy = loadBalancer.ExternalTrafficPolicy
+			}
+
+			// Set AerospikeCluster instance as the owner and controller
+			if err := controllerutil.SetControllerReference(aeroCluster, service, r.Scheme); err != nil {
+				return err
+			}
+
+			if err := r.Client.Create(context.TODO(), service, createOption); err != nil {
+				return err
+			}
+			r.Log.Info("Created new LoadBalancer service.", "serviceName", service.GetName())
+
+			return nil
+		}
+		return err
+	}
+	r.Log.Info("LoadBalancer Service already exist for cluster. Using existing service", "name", utils.NamespacedName(service.Namespace, service.Name))
 	return nil
 }
 

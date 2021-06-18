@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.6.1
   creationTimestamp: null
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -4446,6 +4446,43 @@ spec:
                       x-kubernetes-int-or-string: true
                     description: Requests describes the minimum amount of compute
                       resources required.
+                    type: object
+                type: object
+              seedsFinderServices:
+                description: SeedsFinderServices describes services which are used
+                  for seeding Aerospike nodes.
+                properties:
+                  loadBalancer:
+                    description: LoadBalancer configuration.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: Service External Traffic Policy Type string
+                        enum:
+                        - Local
+                        - Cluster
+                        type: string
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      port:
+                        description: Port Exposed port on load balancer. If not specified
+                          TargetPort is used.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
+                      targetPort:
+                        description: TargetPort Target port. If not specified the
+                          tls-port of network.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
                     type: object
                 type: object
               size:
@@ -9396,6 +9433,43 @@ spec:
                       x-kubernetes-int-or-string: true
                     description: Requests describes the minimum amount of compute
                       resources required.
+                    type: object
+                type: object
+              seedsFinderServices:
+                description: SeedsFinderServices describes services which are used
+                  for seeding Aerospike nodes.
+                properties:
+                  loadBalancer:
+                    description: LoadBalancer configuration.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: Service External Traffic Policy Type string
+                        enum:
+                        - Local
+                        - Cluster
+                        type: string
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      port:
+                        description: Port Exposed port on load balancer. If not specified
+                          TargetPort is used.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
+                      targetPort:
+                        description: TargetPort Target port. If not specified the
+                          tls-port of network.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
                     type: object
                 type: object
               size:
