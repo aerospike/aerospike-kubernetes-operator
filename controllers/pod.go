@@ -10,7 +10,6 @@ import (
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,9 +34,9 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 	if err != nil {
 		return false, err
 	}
-	requiredConfHash := confMap.Data[configmap.AerospikeConfHashFileName]
-	requiredNetworkPolicyHash := confMap.Data[configmap.NetworkPolicyHashFileName]
-	requiredPodSpecHash := confMap.Data[configmap.PodSpecHashFileName]
+	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
+	requiredNetworkPolicyHash := confMap.Data[NetworkPolicyHashFileName]
+	requiredPodSpecHash := confMap.Data[PodSpecHashFileName]
 
 	podStatus := aeroCluster.Status.Pods[pod.Name]
 
@@ -290,6 +289,10 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 	for _, podName := range podNames {
 		// Clear references to this pod in the running cluster.
 		for _, np := range clusterPodList.Items {
+			if !utils.IsPodRunningAndReady(&np) {
+				continue
+			}
+
 			// TODO: We remove node from the end. Nodes will not have seed of successive nodes
 			// So this will be no op.
 			// We should tip in all nodes the same seed list,

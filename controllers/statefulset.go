@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -98,7 +97,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
+						Image: "aerospike/aerospike-kubernetes-init:0.0.13",
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts: []corev1.VolumeMount{
@@ -295,7 +294,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
-			configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+			configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 			if err != nil {
 				return fmt.Errorf("failed to build dotConfig from map: %v", err)
 			}
@@ -326,7 +325,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 	r.Log.Info("Configmap already exists for statefulSet - using existing configmap", "name", utils.NamespacedName(confMap.Namespace, confMap.Name))
 
 	// Update existing configmap as it might not be current.
-	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
@@ -351,7 +350,7 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(aeroCluster *asdbv1alpha
 	}
 
 	// build the aerospike config file based on the current spec
-	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
 		return fmt.Errorf("failed to build dotConfig from map: %v", err)
 	}
