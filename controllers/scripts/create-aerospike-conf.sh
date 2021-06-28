@@ -30,21 +30,10 @@ PEERS=/etc/aerospike/peers
 # ------------------------------------------------------------------------------
 # Update node and rack ids configuration file
 # ------------------------------------------------------------------------------
-function join {
-    local IFS="$1"; shift; echo "$*";
-}
-
-# Parse out cluster name, formatted as: stsname-rackid-index
-IFS='-' read -ra ADDR <<< "$(hostname)"
-
-POD_ORDINAL="${ADDR[-1]}"
-
-# Find rack-id
-export RACK_ID="${ADDR[-2]}"
-sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
-export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-
 sed -i "s/ENV_NODE_ID/${NODE_ID}/" ${CFG}
+sed -i "s/rack-id.*0/rack-id    ${RACK_ID}/" ${CFG}
+
+echo "" > $GENERATED_ENV
 
 # ------------------------------------------------------------------------------
 # Update access addresses in the configuration file
@@ -84,8 +73,8 @@ substituteEndpoint() {
 
     # Pass on computed address to python script to update the status.
     varName=$(echo $addressType | sed -e 's/-/_/g')
-	declare -gx global_${varName}_address="$accessAddress"
-	declare -gx global_${varName}_port="$accessPort"
+	echo export global_${varName}_address="$accessAddress" >> $GENERATED_ENV
+	echo export global_${varName}_port="$accessPort" >> $GENERATED_ENV
 
     # Substitute in the configuration file.
     sed -i "s/^\(\s*\)${addressType}-address.*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}

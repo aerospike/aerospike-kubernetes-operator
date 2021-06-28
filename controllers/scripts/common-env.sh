@@ -102,3 +102,17 @@ export MAPPED_TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
 export MAPPED_PORT="$POD_PORT"
 export MAPPED_TLSPORT="$POD_TLSPORT"
 {{- end}}
+
+# Parse out cluster name, formatted as: stsname-rackid-index
+IFS='-' read -ra ADDR <<< "$(hostname)"
+
+POD_ORDINAL="${ADDR[-1]}"
+
+# Find rack-id
+export RACK_ID="${ADDR[-2]}"
+export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
+
+GENERATED_ENV="/tmp/generate-env.sh"
+if [ -f $GENERATED_ENV ]; then
+	source $GENERATED_ENV
+fi
