@@ -981,10 +981,14 @@ const conf4_3_1 = `
               "dynamic": false
             },
             "tls-authenticate-client": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
+		      "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "default": "",
+                "description": "",
+                "dynamic": false
+              }
             },
             "tls-name": {
               "type": "string",

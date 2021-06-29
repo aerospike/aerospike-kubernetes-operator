@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -30,6 +31,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
+
+var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1alpha1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1alpha1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
@@ -162,14 +165,14 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	// Validate common aerospike config
-	if err := validateAerospikeConfig(aslog, configMap, &r.Spec.Storage, int(r.Spec.Size)); err != nil {
-		return err
-	}
-
 	// Validate if passed aerospikeConfig
 	if err := validateAerospikeConfigSchema(aslog, version, *configMap); err != nil {
 		return fmt.Errorf("aerospikeConfig not valid: %v", err)
+	}
+
+	// Validate common aerospike config
+	if err := validateAerospikeConfig(aslog, configMap, &r.Spec.Storage, int(r.Spec.Size)); err != nil {
+		return err
 	}
 
 	err = validateRequiredFileStorage(aslog, *configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
@@ -381,19 +384,8 @@ func validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec,
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.network not a valid map %v", config["network"])
 	}
-	if _, ok := networkConf["service"]; !ok {
-		return fmt.Errorf("network.service section not found in config. Looks like object is not mutated by webhook")
-	}
-
-	// network.tls conf
-	if _, ok := networkConf["tls"]; ok {
-		tlsConfList := networkConf["tls"].([]interface{})
-		for _, tlsConfInt := range tlsConfList {
-			tlsConf := tlsConfInt.(map[string]interface{})
-			if _, ok := tlsConf["ca-path"]; ok {
-				return fmt.Errorf("ca-path not allowed, please use ca-file. tlsConf %v", tlsConf)
-			}
-		}
+	if err := validateNetworkConfig(networkConf); err != nil {
+		return err
 	}
 
 	// namespace conf
@@ -409,6 +401,98 @@ func validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec,
 		return err
 	}
 
+	return nil
+}
+
+func validateNetworkConfig(networkConf map[string]interface{}) error {
+	if _, ok := networkConf["service"]; !ok {
+		return fmt.Errorf("network.service section not found in config. Looks like object is not mutated by webhook")
+	}
+
+	tlsNames := make(map[string]struct{})
+	// network.tls conf
+	if _, ok := networkConf["tls"]; ok {
+		tlsConfList := networkConf["tls"].([]interface{})
+		for _, tlsConfInt := range tlsConfList {
+			tlsConf := tlsConfInt.(map[string]interface{})
+			if tlsName, ok := tlsConf["name"]; ok {
+				tlsNames[tlsName.(string)] = struct{}{}
+			}
+			if _, ok := tlsConf["ca-path"]; ok {
+				return fmt.Errorf("ca-path not allowed, please use ca-file. tlsConf %v", tlsConf)
+			}
+		}
+	}
+	if err := validateTlsClientNames(networkConf); err != nil {
+		return err
+	}
+	for _, connectionType := range networkConnectionTypes {
+		if err := validateNetworkConnection(networkConf, tlsNames, connectionType); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateTlsClientNames(networkConf map[string]interface{}) error {
+	clientNames, err := readClientNamesFromConfig(networkConf)
+	if err != nil {
+		return err
+	}
+	if len(clientNames) > 1 {
+		for _, clientName := range clientNames {
+			if strings.EqualFold(clientName, "any") || strings.EqualFold(clientName, "false") {
+				return fmt.Errorf("tls-authenticate-client may not mix \"any\" or \"false\" with other values: %v", clientNames)
+			}
+		}
+	}
+	return nil
+}
+
+func readClientNamesFromConfig(networkConf map[string]interface{}) ([]string, error) {
+	serviceConf := networkConf["service"].(map[string]interface{})
+	var result []string
+	clientNames, exists := serviceConf["tls-authenticate-client"]
+	if !exists {
+		return result, nil
+	}
+	switch clientNames.(type) {
+	case string:
+		result = append(result, clientNames.(string))
+	case bool:
+		result = append(result, strconv.FormatBool(clientNames.(bool)))
+	case []interface{}:
+		for _, name := range clientNames.([]interface{}) {
+			if nameStr, ok := name.(string); ok {
+				result = append(result, nameStr)
+			} else if nameBool, ok := name.(bool); ok {
+				result = append(result, strconv.FormatBool(nameBool))
+			} else {
+				return result, fmt.Errorf("tls-authenticate-client value \"%v\" has a wrong type (%t)", name, name)
+			}
+		}
+	default:
+		return result, fmt.Errorf("wrong type (%T) for tls-authenticate-client (%v)", clientNames, clientNames)
+	}
+	return result, nil
+}
+
+func validateNetworkConnection(networkConf map[string]interface{}, tlsNames map[string]struct{}, connectionType string) error {
+	if connectionConfig, exists := networkConf[connectionType]; exists {
+		connectionConfigMap := connectionConfig.(map[string]interface{})
+		if tlsName, ok := connectionConfigMap["tls-name"]; ok {
+			if _, exists := tlsNames[tlsName.(string)]; !exists {
+				return fmt.Errorf("tls-name %s is not configured", tlsName)
+			}
+		} else {
+			for param := range connectionConfigMap {
+				if strings.HasPrefix(param, "tls-") {
+					return fmt.Errorf("you cann't specify %s for network.%s without specifying tls-name", param, connectionType)
+				}
+			}
+		}
+	}
 	return nil
 }
 
