@@ -232,21 +232,21 @@ resources:
           aerospikeConfig:
             service:
               proto-fd-max: 18000
-            storage:
-              filesystemVolumePolicy:
-                initMethod: deleteFiles
-                cascadeDelete: true
-              blockVolumePolicy:
-                cascadeDelete: true
-              volumes:
-                - storageClass: ssd
-                  path: /opt/aerospike
-                  volumeMode: filesystem
-                  sizeInGB: 1
-                - path: /opt/aerospike/data
-                  storageClass: ssd
-                  volumeMode: filesystem
-                  sizeInGB: 3
+          storage:
+            filesystemVolumePolicy:
+              initMethod: deleteFiles
+              cascadeDelete: true
+            blockVolumePolicy:
+              cascadeDelete: true
+            volumes:
+              - storageClass: ssd
+                path: /opt/aerospike
+                volumeMode: filesystem
+                sizeInGB: 1
+              - path: /opt/aerospike/data
+                storageClass: ssd
+                volumeMode: filesystem
+                sizeInGB: 3
         - id: 2
           zone: us-west1-b
           aerospikeConfig:
