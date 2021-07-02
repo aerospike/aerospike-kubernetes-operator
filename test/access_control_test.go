@@ -1047,7 +1047,7 @@ var _ = Describe("AccessControl", func() {
 
 				aeroCluster := getAerospikeClusterSpecWithAccessControl(clusterNamespacedName, &accessControl, false, ctx)
 				err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-				if err == nil || !strings.Contains(err.Error(), "Security is disabled but access control is specified") {
+				if err == nil || !strings.Contains(err.Error(), "security is disabled but access control is specified") {
 					Fail("AccessControlValidation should have failed")
 				}
 			})
@@ -1166,7 +1166,7 @@ var _ = Describe("AccessControl", func() {
 
 				aeroCluster = getAerospikeClusterSpecWithAccessControl(clusterNamespacedName, accessControl, true, ctx)
 				err = testAccessControlReconcile(aeroCluster, ctx)
-				if err == nil || !strings.Contains(err.Error(), "Cannot update cluster security config") {
+				if err == nil || !strings.Contains(err.Error(), "cannot update cluster security config") {
 					Fail("SecurityUpdate should have failed")
 				}
 
