@@ -83,6 +83,8 @@ github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMx
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210414182131-82c9c425ad34 h1:o6dZ/hlGaq0LFJcBR+vR+0JBagiKHezRhEIXJ3+7vqg=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210414182131-82c9c425ad34/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20210624173435-e6a2307b9445 h1:hncjgSgP/qlXXmMTR5cGTpsot5SwN7CSs5j0nGf22Yo=
+github.com/aerospike/aerospike-management-lib v0.0.0-20210624173435-e6a2307b9445/go.mod h1:dD3418ie4w+paWRSoLbFrBh9wWHwcRujeCS36jh1QHg=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
 github.com/agnivade/levenshtein v1.0.1/go.mod h1:CURSv5d9Uaml+FovSIICkLbAUZ9S4RqaHDIsdSBg7lM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
