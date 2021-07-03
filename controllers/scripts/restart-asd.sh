@@ -17,21 +17,20 @@
 # ------------------------------------------------------------------------------
 set -e
 set -x
-
-script_dir="$(dirname $(dirname $(realpath $0)) )"
-cd $script_dir
-
 set -o pipefail
 
+script_dir="$(dirname $(realpath $0))"
+cd $script_dir
 
 # Check if we are running under tini to be able to warm restart.
-if cat /proc/1/cmdline | tr '\000' ' ' | grep tini | grep -- "-r" > /dev/null; then
+if ! cat /proc/1/cmdline | tr '\000' ' ' | grep tini | grep -- "-r" > /dev/null; then
 	echo "warm restart not supported - aborting"
 	exit 1
 fi
 
 # Create new Aerospike configuration
-bash ./create-aerospike.conf
+bash ./copy-templates.sh . /etc/aerospike
+bash ./create-aerospike-conf.sh
 
 # Get current asd pid
 asd_pid=$(ps -A -o pid,cmd|grep "/usr/bin/asd" | grep -v grep |head -n 1 | awk '{print $1}')

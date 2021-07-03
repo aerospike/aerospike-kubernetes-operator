@@ -8,6 +8,9 @@
 bin
 testbin/*
 
+# Test deployment config
+test/config
+
 # Test binary, build with `go test -c`
 *.test
 

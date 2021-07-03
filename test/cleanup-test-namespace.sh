@@ -18,6 +18,7 @@ kubectl -n test3 delete aerospikecluster --all
 
 # Delete PVCs
 echo "Removing PVCs"
+
 kubectl -n test delete pvc --selector 'app=aerospike-cluster'
 
 # Delete the secrets
@@ -35,6 +36,11 @@ kubectl -n test2 delete serviceaccount aerospike-cluster || true
 # # Delete the operator deployment
 echo "Removing test operator deployment"
 make test-undeploy
+
+# Ensure all unlisted resources are also deleted
+kubectl -n test1 delete all --all
+kubectl -n test2 delete all --all
+kubectl -n test delete all --all
 
 # Delete namespaces
 echo "Removing test namespaces"

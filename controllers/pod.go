@@ -16,24 +16,55 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	//restclient "k8s.io/client-go/rest"
+	//"k8s.io/client-go/tools/remotecommand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (bool, error) {
+// RestartType is the type of pod restart to use.
+type RestartType int
 
-	needRollingRestartPod := false
+const (
+	// NoRestart needed.
+	NoRestart RestartType = iota
+
+	// PodRestart indicates that restart requires a restart of the pod.
+	PodRestart
+
+	// QuickRestart indicates that only Aerospike service can be restarted.
+	QuickRestart
+)
+
+// mergeRestartType generates the updated restart type based on precendence.
+// PodRestart > QuickRestart > NoRestart
+func mergeRestartType(current, incoming RestartType) RestartType {
+	if current == PodRestart || incoming == PodRestart {
+		return PodRestart
+	}
+
+	if current == QuickRestart || incoming == QuickRestart {
+		return QuickRestart
+	}
+
+	return NoRestart
+}
+
+func (r *AerospikeClusterReconciler) checkRollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
+
+	restartType := NoRestart
 
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig == nil {
-		return needRollingRestartPod, nil
+		return restartType, nil
 	}
 
 	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
 	confMap := &corev1.ConfigMap{}
 	err := r.Client.Get(context.TODO(), cmName, confMap)
 	if err != nil {
-		return false, err
+		return restartType, err
 	}
+
 	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[NetworkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[PodSpecHashFileName]
@@ -42,7 +73,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info("AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
 			"currentHash", podStatus.AerospikeConfigHash)
@@ -50,7 +81,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if networkPolicy is updated
 	if podStatus.NetworkPolicyHash != requiredNetworkPolicyHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info("Aerospike network policy changed. Need rolling restart",
 			"requiredHash", requiredNetworkPolicyHash,
 			"currentHash", podStatus.NetworkPolicyHash)
@@ -58,7 +89,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if podSpec is updated
 	if podStatus.PodSpecHash != requiredPodSpecHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike pod spec changed. Need rolling restart",
 			"requiredHash", requiredPodSpecHash,
 			"currentHash", podStatus.PodSpecHash)
@@ -66,26 +97,33 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if secret is updated
 	if r.isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
-		needRollingRestartPod = true
+		// TODO: If we can force the secret to mount or refresh on the pod,
+		// we can get away with QuickRestart in this case too.
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("AerospikeConfigSecret changed. Need rolling restart")
 	}
 
 	// Check if resources are updated
 	if r.isResourceUpdatedInAeroCluster(aeroCluster, pod) {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike resources changed. Need rolling restart")
 	}
 
 	// Check if RACKSTORAGE/CONFIGMAP is updated
 	if r.isRackConfigMapsUpdatedInAeroCluster(aeroCluster, rackState, pod) {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike rack storage configMaps changed. Need rolling restart")
 	}
 
-	return needRollingRestartPod, nil
+	return restartType, nil
 }
 
-func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod) reconcileResult {
+
+	if restartType == NoRestart {
+		r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
+		return reconcileSuccess()
+	}
 
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
@@ -104,6 +142,7 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod, try retry after 5 sec")
 			time.Sleep(time.Second * 5)
+			pFound = nil
 			continue
 		}
 
@@ -120,7 +159,9 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		time.Sleep(time.Second * 5)
 	}
 
-	// TODO: What if pod is still not found
+	if pFound == nil {
+		return reconcileError(fmt.Errorf("pod %s not ready", pod.Name))
+	}
 
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
@@ -130,23 +171,71 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		}
 	} else {
 		// TODO: Check a user flag to restart failed pods.
-		r.Log.Info("Restarting failed pod", "podName", pFound.Name, "error", err)
+		r.Log.Info("Restarting failed pod", "podName", pod.Name, "error", err)
+
+		// The pod has failed. Quick start is not possible.
+		restartType = PodRestart
 	}
 
+	if restartType == QuickRestart {
+		return r.quickRestart(aeroCluster, pFound)
+	}
+
+	return r.podRestart(aeroCluster, pFound)
+}
+
+func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) reconcileResult {
+	/*	cmd := []string{
+			"sh",
+			"-c",
+			command,
+		}
+		req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod.Name).
+			Namespace(pod.Namespace).SubResource("exec")
+		option := &v1.PodExecOptions{
+			Command: cmd,
+			Stdin:   false,
+			Stdout:  true,
+			Stderr:  true,
+			TTY:     false,
+		}
+		req.VersionedParams(
+			option,
+			scheme.ParameterCodec,
+		)
+		exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+		if err != nil {
+			return err
+		}
+		var stdout, stderr bytes.Buffer
+		err = exec.Stream(remotecommand.StreamOptions{
+			Stdin:  nil,
+			Stdout: stdout,
+			Stderr: stderr,
+		})
+		if err != nil {
+			return err
+		}*/
+	return r.podRestart(aeroCluster, pod)
+}
+
+func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) reconcileResult {
+	var err error = nil
+
 	// Delete pod
-	if err := r.Client.Delete(context.TODO(), pFound); err != nil {
+	if err := r.Client.Delete(context.TODO(), pod); err != nil {
 		r.Log.Error(err, "Failed to delete pod")
 		return reconcileError(err)
 	}
-	r.Log.V(1).Info("Pod deleted", "podName", pFound.Name)
+	r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 
 	// Wait for pod to come up
 	var started bool
 	for i := 0; i < 20; i++ {
-		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pFound.Name, "status", pFound.Status.Phase, "DeletionTimestamp", pFound.DeletionTimestamp)
+		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
 
 		pod := &corev1.Pod{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: pFound.Name, Namespace: pFound.Namespace}, pod)
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, pod)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod")
 			time.Sleep(time.Second * 5)

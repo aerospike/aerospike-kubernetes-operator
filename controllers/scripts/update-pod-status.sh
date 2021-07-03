@@ -18,7 +18,7 @@
 set -e
 set -x
 
-script_dir="$(dirname $(dirname $(realpath $0)))"
+script_dir="$(dirname $(realpath $0))"
 cd $script_dir
 
 # Set up common environment variables.

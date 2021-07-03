@@ -20,7 +20,7 @@ set -x
 
 # This script initializes storage devices on first pod run.
 
-script_dir="$(dirname $(dirname $(realpath $0)))"
+script_dir="$(dirname $(realpath $0))"
 cd $script_dir
 
 CONFIG_VOLUME="/etc/aerospike"
@@ -49,11 +49,14 @@ for d in ${REQUIRED_DIRS[*]}; do
 done
 {{- end }}
 
-# Copy template to config volume for initialization.
+# Copy required files to config volume for initialization.
 mkdir -p "${CONFIG_VOLUME}"
-echo installing aerospike.conf into "${CONFIG_VOLUME}"
-cp /configs/aerospike.template.conf "${CONFIG_VOLUME}"/
-cp /configs/peers "${CONFIG_VOLUME}"/
+
+bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
+
+# Copy scripts and binaries needed for warm restart.
+cp /usr/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
+cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
 
 if [ -f /configs/features.conf ]; then
     cp /configs/features.conf "${CONFIG_VOLUME}"/

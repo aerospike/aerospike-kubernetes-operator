@@ -263,11 +263,11 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1a
 	}
 	for _, pod := range podList {
 		// Check if this pod need restart
-		needRollingRestart, err := r.needRollingRestartPod(aeroCluster, rackState, pod)
+		restartType, err := r.checkRollingRestartPod(aeroCluster, rackState, pod)
 		if err != nil {
 			return false, err
 		}
-		if needRollingRestart {
+		if restartType != NoRestart {
 			return true, nil
 		}
 	}
@@ -509,16 +509,17 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1alpha
 
 	for _, pod := range podList {
 		// Check if this pod need restart
-		needRollingRestart, err := r.needRollingRestartPod(aeroCluster, rackState, pod)
+		restartType, err := r.checkRollingRestartPod(aeroCluster, rackState, pod)
 		if err != nil {
 			return found, reconcileError(err)
 		}
-		if !needRollingRestart {
+
+		if restartType == NoRestart {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
 
-		res := r.rollingRestartPod(aeroCluster, rackState, pod, ignorablePods)
+		res := r.rollingRestartPod(aeroCluster, rackState, pod, restartType, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}

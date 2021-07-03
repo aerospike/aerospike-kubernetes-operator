@@ -99,7 +99,8 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
 						Image: "aerospike/aerospike-kubernetes-init:0.0.13",
 						// Change to PullAlways for image testing.
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						// TODO: XXXX switch back to PullIfNotpresent before release.
+						ImagePullPolicy: corev1.PullAlways,
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      confDirName,

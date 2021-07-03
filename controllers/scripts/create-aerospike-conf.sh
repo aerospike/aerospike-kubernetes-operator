@@ -18,7 +18,7 @@
 set -e
 set -x
 
-script_dir="$(dirname $(dirname $(realpath $0)))"
+script_dir="$(dirname $(realpath $0))"
 cd $script_dir
 
 # Set up common environment variables.
@@ -93,9 +93,9 @@ fi
 # Update mesh seeds in the configuration file
 # ------------------------------------------------------------------------------
 HOSTNAME=$(hostname)
-while IFS= read -r PEER
-do
-    if [[ $PEER == $HOSTNAME* ]] ;
+
+cat $PEERS | while read PEER || [ -n "$PEER" ]; do
+    if [[ "$PEER" == "$HOSTNAME."* ]] ;
 	then
 		# Skip adding self to mesh addresses
 		continue
@@ -104,7 +104,7 @@ do
 	# 8 spaces, fixed in configwriter file config manager lib
 	# TODO: The search pattern is not robust. Add a better marker in management lib.
 	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} 3002" ${CFG}
-done < "$PEERS"
+done
 
 echo "---------------------------------"
 cat ${CFG}
