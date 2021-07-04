@@ -26,7 +26,7 @@ func (r *AerospikeClusterReconciler) reconcileRacks(aeroCluster *asdbv1alpha1.Ae
 	var scaledDownRackList []RackState
 	var res reconcileResult
 
-	rackStateList := getNewRackStateList(aeroCluster)
+	rackStateList := getRackStateList(aeroCluster)
 	racksToDelete, err := r.getRacksToDelete(aeroCluster, rackStateList)
 	if err != nil {
 		return reconcileError(err)
@@ -673,7 +673,7 @@ func splitRacks(nodes, racks int) []int {
 	return topology
 }
 
-func getNewRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
+func getRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {

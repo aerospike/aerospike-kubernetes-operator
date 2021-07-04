@@ -169,22 +169,48 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1alpha1.A
 	}
 
 	// Include peer list.
-	peers := getFQDNsForCluster(aeroCluster)
+	peers, err := r.getFQDNsForCluster(aeroCluster)
+	if err != nil {
+		return nil, err
+	}
 
 	baseConfData["peers"] = strings.Join(peers, "\n")
 	return baseConfData, nil
 }
 
-func getFQDNsForCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) []string {
+func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]string, error) {
+
+	podNameMap := make(map[string]bool)
+
+	// The default rack is not listed in config during switchover to rack aware state.
+	// Use current pod names as well.
+	pods, err := r.getClusterPodList(aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pod := range pods.Items {
+		fqdn := getFQDNForPod(aeroCluster, pod.Name)
+		podNameMap[fqdn] = true
+	}
+
 	podNames := []string{}
-	rackStateList := getNewRackStateList(aeroCluster)
+	rackStateList := getRackStateList(aeroCluster)
+
+	// Use all pods running or to be launched for each rack.
 	for _, rackState := range rackStateList {
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(aeroCluster, rackState.Rack.ID)
 		for i := 0; i < size; i++ {
-			podNames = append(podNames, getFQDNForPod(aeroCluster,
-				getSTSPodName(stsName.Name, int32(i))))
+			fqdn := getFQDNForPod(aeroCluster,
+				getSTSPodName(stsName.Name, int32(i)))
+			podNameMap[fqdn] = true
 		}
 	}
-	return podNames
+
+	for fqdn := range podNameMap {
+		podNames = append(podNames, fqdn)
+	}
+
+	return podNames, nil
 }

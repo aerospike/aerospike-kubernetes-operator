@@ -453,7 +453,7 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
 	// This is not necessary since scale-up would cleanup danglin pod status. However done here for general
 	// cleanliness.
-	rackStateList := getNewRackStateList(aeroCluster)
+	rackStateList := getRackStateList(aeroCluster)
 	for _, state := range rackStateList {
 		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
 		if err != nil {
