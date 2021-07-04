@@ -38,6 +38,8 @@ then
 	exit 1
 fi
 
+# Include local files.
+export PATH=$PATH:$script_dir
 
 mkdir -p configmap
 chmod +x ./kubernetes-configmap-exporter

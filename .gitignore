@@ -10,6 +10,7 @@ testbin/*
 
 # Test deployment config
 test/config
+test/junit.xml
 
 # Test binary, build with `go test -c`
 *.test

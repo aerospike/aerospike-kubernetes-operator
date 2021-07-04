@@ -16,8 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	//restclient "k8s.io/client-go/rest"
-	//"k8s.io/client-go/tools/remotecommand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -178,48 +176,36 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 	}
 
 	if restartType == QuickRestart {
-		return r.quickRestart(aeroCluster, pFound)
+		return r.quickRestart(aeroCluster, rackState, pFound)
 	}
 
-	return r.podRestart(aeroCluster, pFound)
+	return r.podRestart(aeroCluster, rackState, pFound)
 }
 
-func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) reconcileResult {
-	/*	cmd := []string{
-			"sh",
-			"-c",
-			command,
-		}
-		req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod.Name).
-			Namespace(pod.Namespace).SubResource("exec")
-		option := &v1.PodExecOptions{
-			Command: cmd,
-			Stdin:   false,
-			Stdout:  true,
-			Stderr:  true,
-			TTY:     false,
-		}
-		req.VersionedParams(
-			option,
-			scheme.ParameterCodec,
-		)
-		exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
-		if err != nil {
-			return err
-		}
-		var stdout, stderr bytes.Buffer
-		err = exec.Stream(remotecommand.StreamOptions{
-			Stdin:  nil,
-			Stdout: stdout,
-			Stderr: stderr,
-		})
-		if err != nil {
-			return err
-		}*/
-	return r.podRestart(aeroCluster, pod)
+func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
+	cmd := []string{
+		"bash",
+		"/etc/aerospike/refresh-cmap-restart-asd.sh",
+		cmName.Namespace,
+		cmName.Name,
+	}
+
+	// Quick restart attempt should not take significant time.
+	// Therefore its ok to block the operator on the quick restart attempt.
+	stdout, stderr, err := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+	if err != nil {
+		r.Log.V(1).Info("Failed warm restart", "err", err, "podName", pod.Name, "stdout", stdout, "stderr", stderr)
+
+		// Fallback to pod restart.
+		return r.podRestart(aeroCluster, rackState, pod)
+	}
+
+	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
+	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
 	var err error = nil
 
 	// Delete pod
@@ -234,32 +220,32 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.Aerosp
 	for i := 0; i < 20; i++ {
 		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
 
-		pod := &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, pod)
+		updatedPod := &corev1.Pod{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod")
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		if err := utils.CheckPodFailed(pod); err != nil {
+		if err := utils.CheckPodFailed(updatedPod); err != nil {
 			return reconcileError(err)
 		}
 
-		if !utils.IsPodRunningAndReady(pod) {
-			r.Log.V(1).Info("Waiting for pod to be ready", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		if !utils.IsPodRunningAndReady(updatedPod) {
+			r.Log.V(1).Info("Waiting for pod to be ready", "podName", updatedPod.Name, "status", updatedPod.Status.Phase, "DeletionTimestamp", updatedPod.DeletionTimestamp)
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		r.Log.Info("Pod is restarted", "podName", pod.Name)
+		r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
 		started = true
 		break
 	}
 
 	// TODO: In what situation this can happen?
 	if !started {
-		r.Log.Error(err, "Pos is not running or ready. Pod might also be terminating", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		r.Log.Error(err, "Pod is not running or ready. Pod might also be terminating", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
 	}
 
 	return reconcileSuccess()

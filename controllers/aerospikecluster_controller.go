@@ -24,6 +24,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,8 +88,10 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // AerospikeClusterReconciler reconciles a AerospikeCluster object
 type AerospikeClusterReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *k8sRuntime.Scheme
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Log        logr.Logger
+	Scheme     *k8sRuntime.Scheme
 }
 
 // RackState contains the rack configuration and rack size.

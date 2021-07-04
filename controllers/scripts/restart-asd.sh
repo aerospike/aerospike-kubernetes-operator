@@ -33,7 +33,7 @@ bash ./copy-templates.sh . /etc/aerospike
 bash ./create-aerospike-conf.sh
 
 # Get current asd pid
-asd_pid=$(ps -A -o pid,cmd|grep "/usr/bin/asd" | grep -v grep |head -n 1 | awk '{print $1}')
+asd_pid=$(ps -A -o pid,cmd|grep "asd" | grep -v grep | grep -v tini |head -n 1 | awk '{print $1}')
 retVal=$?
 if [ $retVal -ne 0 ]; then
     echo "error getting Aerospike server PID"
@@ -41,7 +41,7 @@ if [ $retVal -ne 0 ]; then
 fi
 
 # Restart ASD by signalling the init process
-kill -9 SIGUSR1 1
+kill -SIGUSR1 1
 
 # Wait for asd process to restart.
 for i in $(seq 1 60); do

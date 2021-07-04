@@ -68,11 +68,11 @@ for volume in volumes:
     else:
         continue
 
-    if not os.path.exists(localVolumePath):
-        raise Exception(
-            'Volume ' + volume['path'] + ' not attached to path ' + localVolumePath)
-
     if volume['path'] not in alreadyInitialized:
+        if not os.path.exists(localVolumePath):
+            raise Exception(
+                'Volume ' + volume['path'] + ' not attached to path ' + localVolumePath)
+
         if volume['volumeMode'] == 'block':
             localVolumePath = blockMountPoint + volume['path']
             if volume['effectiveInitMethod'] == 'dd':
@@ -136,10 +136,10 @@ if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABL
     podPort = os.environ['POD_TLSPORT']
     servicePort = os.environ['MAPPED_TLSPORT']
 
-# Get AerospikeConfingHash and NetworkPolicyHash
-confHashFile = '/configs/aerospikeConfHash'
-networkPolicyHashFile = '/configs/networkPolicyHash'
-podSpecHashFile = '/configs/podSpecHash'
+# Get AerospikeConfingHash and NetworkPolicyHash, all assumed to be in current working directory
+confHashFile = 'aerospikeConfHash'
+networkPolicyHashFile = 'networkPolicyHash'
+podSpecHashFile = 'podSpecHash'
 
 confHash = readFile(confHashFile)
 newtworkPolicyHash = readFile(networkPolicyHashFile)
