@@ -47,7 +47,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
-func (r *AerospikeClusterReconciler) checkRollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
+func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
 
 	restartType := NoRestart
 

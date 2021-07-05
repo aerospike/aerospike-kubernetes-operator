@@ -149,7 +149,7 @@ func validateRackEnabledCluster(k8sClient client.Client, ctx goctx.Context, clus
 		return err
 	}
 	// Validate cluster
-	rackStateList := getRackStateList(aeroCluster)
+	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for _, rackState := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
@@ -288,7 +288,7 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 	return nil
 }
 
-func getRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {

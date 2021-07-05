@@ -195,7 +195,7 @@ func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1alpha
 	}
 
 	podNames := []string{}
-	rackStateList := getRackStateList(aeroCluster)
+	rackStateList := getConfiguredRackStateList(aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
 	for _, rackState := range rackStateList {
