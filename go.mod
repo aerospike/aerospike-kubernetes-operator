@@ -18,7 +18,7 @@ require (
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.13.0
+	github.com/onsi/gomega v1.14.0
 	github.com/prometheus/client_golang v1.9.0 // indirect
 	github.com/prometheus/procfs v0.3.0 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
