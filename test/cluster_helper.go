@@ -3,7 +3,6 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"reflect"
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -87,10 +86,10 @@ func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clust
 	}
 
 	// Verify that the change has been applied on the cluster.
-	return validateAerospikeConfigServiceClusterUpdate(k8sClient, ctx, clusterNamespacedName, aeroCluster)
+	return validateAerospikeConfigServiceClusterUpdate(k8sClient, ctx, clusterNamespacedName, aeroCluster, []string{"proto-fd-max"})
 }
 
-func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, expectedAerospikeConfig *asdbv1alpha1.AerospikeCluster) error {
+func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, expectedAerospikeConfig *asdbv1alpha1.AerospikeCluster, updatedKeys []string) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -108,19 +107,22 @@ func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx go
 		}
 		svcConfs := confs["service"].(lib.Stats)
 
-		for k, v := range aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{}) {
-			if vint, ok := v.(int); ok {
-				v = int64(vint)
-			}
-			// t.Logf("Matching rack key %s, value %v", k, v)
-			cv, ok := svcConfs[k]
+		inputSvcConf := aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})
+		for _, k := range updatedKeys {
+			v, ok := inputSvcConf[k]
 			if !ok {
 				return fmt.Errorf("config %s missing in aerospikeConfig %v", k, svcConfs)
 			}
-			if !reflect.DeepEqual(cv, v) {
-				return fmt.Errorf("config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+			cv, ok := svcConfs[k]
+			if !ok {
+				return fmt.Errorf("config %s missing in aerospike config asinfo %v", k, svcConfs)
 			}
 
+			strV := fmt.Sprintf("%v", v)
+			strCv := fmt.Sprintf("%v", cv)
+			if strV != strCv {
+				return fmt.Errorf("config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+			}
 		}
 	}
 
