@@ -1,12 +1,18 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/kubectl/pkg/scheme"
 )
 
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
@@ -179,6 +185,8 @@ func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
 	}
 	return nil
 }
+
+// GetRackIDFromPodName returns the rack id given a pod name.
 func GetRackIDFromPodName(podName string) (*int, error) {
 	parts := strings.Split(podName, "-")
 	if len(parts) < 3 {
@@ -192,6 +200,34 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 		return nil, err
 	}
 	return &rackID, nil
+}
+
+// Exec executes a non interactive command on a pod.
+func Exec(pod *corev1.Pod, container string, cmd []string, kubeClient *kubernetes.Clientset, kubeConfig *rest.Config) (string, string, error) {
+	request := kubeClient.
+		CoreV1().
+		RESTClient().
+		Post().
+		Resource("pods").
+		Namespace(pod.Namespace).
+		Name(pod.Name).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: container,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       true,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(kubeConfig, http.MethodPost, request.URL())
+	if err != nil {
+		return "", "", err
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = exec.Stream(remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr})
+	return stdout.String(), stderr.String(), err
 }
 
 // isPodImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a container

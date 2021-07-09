@@ -10,7 +10,6 @@ import (
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -20,30 +19,59 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (bool, error) {
+// RestartType is the type of pod restart to use.
+type RestartType int
 
-	needRollingRestartPod := false
+const (
+	// NoRestart needed.
+	NoRestart RestartType = iota
+
+	// PodRestart indicates that restart requires a restart of the pod.
+	PodRestart
+
+	// QuickRestart indicates that only Aerospike service can be restarted.
+	QuickRestart
+)
+
+// mergeRestartType generates the updated restart type based on precendence.
+// PodRestart > QuickRestart > NoRestart
+func mergeRestartType(current, incoming RestartType) RestartType {
+	if current == PodRestart || incoming == PodRestart {
+		return PodRestart
+	}
+
+	if current == QuickRestart || incoming == QuickRestart {
+		return QuickRestart
+	}
+
+	return NoRestart
+}
+
+func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
+
+	restartType := NoRestart
 
 	// AerospikeConfig nil means status not updated yet
 	if aeroCluster.Status.AerospikeConfig == nil {
-		return needRollingRestartPod, nil
+		return restartType, nil
 	}
 
 	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
 	confMap := &corev1.ConfigMap{}
 	err := r.Client.Get(context.TODO(), cmName, confMap)
 	if err != nil {
-		return false, err
+		return restartType, err
 	}
-	requiredConfHash := confMap.Data[configmap.AerospikeConfHashFileName]
-	requiredNetworkPolicyHash := confMap.Data[configmap.NetworkPolicyHashFileName]
-	requiredPodSpecHash := confMap.Data[configmap.PodSpecHashFileName]
+
+	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
+	requiredNetworkPolicyHash := confMap.Data[NetworkPolicyHashFileName]
+	requiredPodSpecHash := confMap.Data[PodSpecHashFileName]
 
 	podStatus := aeroCluster.Status.Pods[pod.Name]
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info("AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
 			"currentHash", podStatus.AerospikeConfigHash)
@@ -51,7 +79,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if networkPolicy is updated
 	if podStatus.NetworkPolicyHash != requiredNetworkPolicyHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info("Aerospike network policy changed. Need rolling restart",
 			"requiredHash", requiredNetworkPolicyHash,
 			"currentHash", podStatus.NetworkPolicyHash)
@@ -59,7 +87,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if podSpec is updated
 	if podStatus.PodSpecHash != requiredPodSpecHash {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike pod spec changed. Need rolling restart",
 			"requiredHash", requiredPodSpecHash,
 			"currentHash", podStatus.PodSpecHash)
@@ -67,26 +95,33 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 
 	// Check if secret is updated
 	if r.isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
-		needRollingRestartPod = true
+		// TODO: If we can force the secret to mount or refresh on the pod,
+		// we can get away with QuickRestart in this case too.
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("AerospikeConfigSecret changed. Need rolling restart")
 	}
 
 	// Check if resources are updated
 	if r.isResourceUpdatedInAeroCluster(aeroCluster, pod) {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike resources changed. Need rolling restart")
 	}
 
 	// Check if RACKSTORAGE/CONFIGMAP is updated
 	if r.isRackConfigMapsUpdatedInAeroCluster(aeroCluster, rackState, pod) {
-		needRollingRestartPod = true
+		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike rack storage configMaps changed. Need rolling restart")
 	}
 
-	return needRollingRestartPod, nil
+	return restartType, nil
 }
 
-func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod) reconcileResult {
+
+	if restartType == NoRestart {
+		r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
+		return reconcileSuccess()
+	}
 
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
@@ -105,6 +140,7 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod, try retry after 5 sec")
 			time.Sleep(time.Second * 5)
+			pFound = nil
 			continue
 		}
 
@@ -121,7 +157,9 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		time.Sleep(time.Second * 5)
 	}
 
-	// TODO: What if pod is still not found
+	if pFound == nil {
+		return reconcileError(fmt.Errorf("pod %s not ready", pod.Name))
+	}
 
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
@@ -131,47 +169,83 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 		}
 	} else {
 		// TODO: Check a user flag to restart failed pods.
-		r.Log.Info("Restarting failed pod", "podName", pFound.Name, "error", err)
+		r.Log.Info("Restarting failed pod", "podName", pod.Name, "error", err)
+
+		// The pod has failed. Quick start is not possible.
+		restartType = PodRestart
 	}
 
+	if restartType == QuickRestart {
+		return r.quickRestart(aeroCluster, rackState, pFound)
+	}
+
+	return r.podRestart(aeroCluster, rackState, pFound)
+}
+
+func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
+	cmd := []string{
+		"bash",
+		"/etc/aerospike/refresh-cmap-restart-asd.sh",
+		cmName.Namespace,
+		cmName.Name,
+	}
+
+	// Quick restart attempt should not take significant time.
+	// Therefore its ok to block the operator on the quick restart attempt.
+	stdout, stderr, err := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+	if err != nil {
+		r.Log.V(1).Info("Failed warm restart", "err", err, "podName", pod.Name, "stdout", stdout, "stderr", stderr)
+
+		// Fallback to pod restart.
+		return r.podRestart(aeroCluster, rackState, pod)
+	}
+
+	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
+	return reconcileSuccess()
+}
+
+func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+	var err error = nil
+
 	// Delete pod
-	if err := r.Client.Delete(context.TODO(), pFound); err != nil {
+	if err := r.Client.Delete(context.TODO(), pod); err != nil {
 		r.Log.Error(err, "Failed to delete pod")
 		return reconcileError(err)
 	}
-	r.Log.V(1).Info("Pod deleted", "podName", pFound.Name)
+	r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 
 	// Wait for pod to come up
 	var started bool
 	for i := 0; i < 20; i++ {
-		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pFound.Name, "status", pFound.Status.Phase, "DeletionTimestamp", pFound.DeletionTimestamp)
+		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
 
-		pod := &corev1.Pod{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: pFound.Name, Namespace: pFound.Namespace}, pod)
+		updatedPod := &corev1.Pod{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod")
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		if err := utils.CheckPodFailed(pod); err != nil {
+		if err := utils.CheckPodFailed(updatedPod); err != nil {
 			return reconcileError(err)
 		}
 
-		if !utils.IsPodRunningAndReady(pod) {
-			r.Log.V(1).Info("Waiting for pod to be ready", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		if !utils.IsPodRunningAndReady(updatedPod) {
+			r.Log.V(1).Info("Waiting for pod to be ready", "podName", updatedPod.Name, "status", updatedPod.Status.Phase, "DeletionTimestamp", updatedPod.DeletionTimestamp)
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		r.Log.Info("Pod is restarted", "podName", pod.Name)
+		r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
 		started = true
 		break
 	}
 
 	// TODO: In what situation this can happen?
 	if !started {
-		r.Log.Error(err, "Pos is not running or ready. Pod might also be terminating", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		r.Log.Error(err, "Pod is not running or ready. Pod might also be terminating", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
 	}
 
 	return reconcileSuccess()
@@ -290,6 +364,10 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 	for _, podName := range podNames {
 		// Clear references to this pod in the running cluster.
 		for _, np := range clusterPodList.Items {
+			if !utils.IsPodRunningAndReady(&np) {
+				continue
+			}
+
 			// TODO: We remove node from the end. Nodes will not have seed of successive nodes
 			// So this will be no op.
 			// We should tip in all nodes the same seed list,

@@ -8,6 +8,8 @@ import (
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/info"
+	as "github.com/ashishshinde/aerospike-client-go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -77,7 +79,54 @@ func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clust
 		return err
 	}
 
-	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+	err = waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(aeroCluster.Spec.Size))
+
+	if err != nil {
+		return err
+	}
+
+	// Verify that the change has been applied on the cluster.
+	return validateAerospikeConfigServiceClusterUpdate(k8sClient, ctx, clusterNamespacedName, aeroCluster, []string{"proto-fd-max"})
+}
+
+func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, expectedAerospikeConfig *asdbv1alpha1.AerospikeCluster, updatedKeys []string) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range aeroCluster.Status.Pods {
+		// TODO:
+		// We may need to check for all keys in aerospikeConfig in rack
+		// but we know that we are changing for service only for now
+		host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
+		asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+		confs, err := getAsConfig(asinfo, "service")
+		if err != nil {
+			return err
+		}
+		svcConfs := confs["service"].(lib.Stats)
+
+		inputSvcConf := aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})
+		for _, k := range updatedKeys {
+			v, ok := inputSvcConf[k]
+			if !ok {
+				return fmt.Errorf("config %s missing in aerospikeConfig %v", k, svcConfs)
+			}
+			cv, ok := svcConfs[k]
+			if !ok {
+				return fmt.Errorf("config %s missing in aerospike config asinfo %v", k, svcConfs)
+			}
+
+			strV := fmt.Sprintf("%v", v)
+			strCv := fmt.Sprintf("%v", cv)
+			if strV != strCv {
+				return fmt.Errorf("config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+			}
+		}
+	}
+
+	return nil
 }
 
 func upgradeClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, image string) error {

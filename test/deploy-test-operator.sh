@@ -15,3 +15,4 @@ sleep 10
 kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
 
 make test-deploy  IMG="${IMAGE}" NS="test"
+sleep 10

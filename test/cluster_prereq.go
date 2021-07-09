@@ -89,7 +89,7 @@ func createClusterRole(k8sClient client.Client, ctx goctx.Context, name string) 
 		Rules: []rbac.PolicyRule{
 			{
 				APIGroups: []string{""},
-				Resources: []string{"pods", "nodes", "services"},
+				Resources: []string{"pods", "nodes", "services", "configmaps"},
 				Verbs:     []string{"get", "list"},
 			},
 			{

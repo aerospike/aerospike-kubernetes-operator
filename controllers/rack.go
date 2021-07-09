@@ -26,7 +26,7 @@ func (r *AerospikeClusterReconciler) reconcileRacks(aeroCluster *asdbv1alpha1.Ae
 	var scaledDownRackList []RackState
 	var res reconcileResult
 
-	rackStateList := getNewRackStateList(aeroCluster)
+	rackStateList := getConfiguredRackStateList(aeroCluster)
 	racksToDelete, err := r.getRacksToDelete(aeroCluster, rackStateList)
 	if err != nil {
 		return reconcileError(err)
@@ -127,7 +127,7 @@ func (r *AerospikeClusterReconciler) createRack(aeroCluster *asdbv1alpha1.Aerosp
 }
 
 func (r *AerospikeClusterReconciler) getRacksToDelete(aeroCluster *asdbv1alpha1.AerospikeCluster, rackStateList []RackState) ([]asdbv1alpha1.Rack, error) {
-	oldRacks, err := r.getOldRackList(aeroCluster)
+	oldRacks, err := r.getCurrentRackList(aeroCluster)
 
 	if err != nil {
 		return nil, err
@@ -263,11 +263,11 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1a
 	}
 	for _, pod := range podList {
 		// Check if this pod need restart
-		needRollingRestart, err := r.needRollingRestartPod(aeroCluster, rackState, pod)
+		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return false, err
 		}
-		if needRollingRestart {
+		if restartType != NoRestart {
 			return true, nil
 		}
 	}
@@ -509,16 +509,17 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1alpha
 
 	for _, pod := range podList {
 		// Check if this pod need restart
-		needRollingRestart, err := r.needRollingRestartPod(aeroCluster, rackState, pod)
+		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return found, reconcileError(err)
 		}
-		if !needRollingRestart {
+
+		if restartType == NoRestart {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
 
-		res := r.rollingRestartPod(aeroCluster, rackState, pod, ignorablePods)
+		res := r.rollingRestartPod(aeroCluster, rackState, pod, restartType, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -619,7 +620,7 @@ func (r *AerospikeClusterReconciler) getOrderedRackPodList(aeroCluster *asdbv1al
 	return sortedList, nil
 }
 
-func (r *AerospikeClusterReconciler) getOldRackList(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]asdbv1alpha1.Rack, error) {
+func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]asdbv1alpha1.Rack, error) {
 	var rackList []asdbv1alpha1.Rack = []asdbv1alpha1.Rack{}
 	rackList = append(rackList, aeroCluster.Status.RackConfig.Racks...)
 
@@ -672,7 +673,7 @@ func splitRacks(nodes, racks int) []int {
 	return topology
 }
 
-func getNewRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {

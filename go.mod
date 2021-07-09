@@ -1,6 +1,6 @@
 module github.com/aerospike/aerospike-kubernetes-operator
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go v0.76.0 // indirect
@@ -17,8 +17,8 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
-	github.com/onsi/ginkgo v1.14.1
-	github.com/onsi/gomega v1.10.2
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.14.0
 	github.com/prometheus/client_golang v1.9.0 // indirect
 	github.com/prometheus/procfs v0.3.0 // indirect
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
@@ -29,16 +29,14 @@ require (
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
-	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/oauth2 v0.0.0-20210201163806-010130855d6c // indirect
-	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
-	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	golang.org/x/tools v0.1.4 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/api v0.19.2
 	k8s.io/apimachinery v0.19.2
 	k8s.io/client-go v0.19.2
-	k8s.io/klog/v2 v2.5.0 // indirect
+	k8s.io/kubectl v0.19.2
 	sigs.k8s.io/controller-runtime v0.7.2
 
 )

@@ -1279,7 +1279,7 @@ var _ = Describe("AccessControl", func() {
 				By("SecurityUpdateReject")
 				aeroCluster = getAerospikeClusterSpecWithAccessControl(clusterNamespacedName, nil, false, ctx)
 				err = testAccessControlReconcile(aeroCluster, ctx)
-				if err == nil || !strings.Contains(err.Error(), "Cannot update cluster security config") {
+				if err == nil || !strings.Contains(err.Error(), "cannot update cluster security config") {
 					Fail("SecurityUpdate should have failed")
 				}
 

@@ -31,13 +31,13 @@ all: manager
 # Run tests
 ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 # test: generate fmt vet manifests
-test: generate fmt vet 
+test: generate fmt vet
 	# export TEST_USE_EXISTING_CLUSTER="true"
-#  TODO: Uncomment tests
+	#  TODO: Uncomment tests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
 	# TODO: to run tests in all dir, replace go test with (go test ./... -coverprofile cover.out). Currently all the tests are in test dir, so no need to replace
-	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); cd $(shell pwd)/test; go test -ginkgo.v -ginkgo.progress -timeout=300m -coverprofile cover.out
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); cd $(shell pwd)/test; go test ${TEST_ARGS}  -ginkgo.v -ginkgo.progress -timeout=300m -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
