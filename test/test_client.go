@@ -25,7 +25,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/aerospike/aerospike-management-lib/info"
-	as "github.com/ashishshinde/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
