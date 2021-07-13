@@ -675,9 +675,15 @@ func validateAerospikeConfigUpdate(aslog logr.Logger, newConfSpec, oldConfSpec *
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, ok1 := oldConf["security"]
 	newSec, ok2 := newConf["security"]
-	if ok1 != ok2 ||
-		ok1 && ok2 && (!reflect.DeepEqual(oldSec, newSec)) {
+	if ok1 != ok2 {
 		return fmt.Errorf("cannot update cluster security config")
+	}
+	if ok1 && ok2 {
+		oldSecEnblAttr, ok1 := oldSec.(map[string]interface{})["enable-security"]
+		newSecEnblAttr, ok2 := newSec.(map[string]interface{})["enable-security"]
+		if ok1 != ok2 || !reflect.DeepEqual(oldSecEnblAttr, newSecEnblAttr) {
+			return fmt.Errorf("cannot update cluster security config enable-security was changed")
+		}
 	}
 
 	// TLS can not be updated dynamically
