@@ -134,7 +134,7 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 	}
 
 	for roleName, roleSpec := range desired {
-		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist})
+		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist, readQuota: roleSpec.ReadQuota, writeQuota: roleSpec.WriteQuota})
 	}
 
 	// Execute all commands.
@@ -347,6 +347,11 @@ type AerospikeRoleCreateUpdate struct {
 
 	// The whitelist to set for the role. These whitelist addresses and only these whitelist addresses will be granted to the role after this operation.
 	whitelist []string
+
+	readQuota uint32
+
+	writeQuota uint32
+
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
@@ -379,8 +384,8 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	// TODO: Add and use quotas for this role from configuration.
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, 0, 0)
+	// TODO: David Add and use quotas for this role from configuration.
+	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.writeQuota, roleCreate.writeQuota)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}

@@ -166,6 +166,9 @@ type AerospikeRoleSpec struct {
 	// Whitelist of host address allowed for this role.
 	// +listType=set
 	Whitelist []string `json:"whitelist,omitempty"`
+
+	ReadQuota uint32 `json:"readQuota,omitempty"`
+	WriteQuota uint32 `json:"writeQuota,omitempty"`
 }
 
 // DeepCopy implements deepcopy func for AerospikeRoleSpec
