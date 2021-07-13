@@ -384,7 +384,6 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	// TODO: David Add and use quotas for this role from configuration.
 	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.writeQuota, roleCreate.writeQuota)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
