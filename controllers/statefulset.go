@@ -910,7 +910,7 @@ func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 			},
 			{
 				Name:          asdbv1alpha1.FabricTLSPortName,
-				ContainerPort: asdbv1alpha1.FabricPort,
+				ContainerPort: asdbv1alpha1.FabricTLSPort,
 			},
 			{
 				Name:          asdbv1alpha1.InfoPortName,
