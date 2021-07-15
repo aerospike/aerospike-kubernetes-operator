@@ -947,6 +947,10 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 }
 
 func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
+	if r.Spec.PodSpec.HostNetwork && r.Spec.MultiPodPerHost {
+		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
+	}
+
 	sidecarNames := map[string]int{}
 
 	for _, sidecar := range r.Spec.PodSpec.Sidecars {

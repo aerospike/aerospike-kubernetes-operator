@@ -189,6 +189,18 @@ spec:
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
+                  dnsPolicy:
+                    description: DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
+                      If hostNetwork is true and policy is not specified, it defaults
+                      to ClusterFirstWithHostNet
+                    type: string
+                  effectiveDNSPolicy:
+                    description: Effective value of the DNSPolicy
+                    type: string
+                  hostNetwork:
+                    description: HostNetwork enables host networking for the pod.
+                      To enable hostNetwork multiPodPerHost must be true.
+                    type: boolean
                   sidecars:
                     description: Sidecars to add to pods.
                     items:
@@ -1997,6 +2009,18 @@ spec:
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
+                  dnsPolicy:
+                    description: DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
+                      If hostNetwork is true and policy is not specified, it defaults
+                      to ClusterFirstWithHostNet
+                    type: string
+                  effectiveDNSPolicy:
+                    description: Effective value of the DNSPolicy
+                    type: string
+                  hostNetwork:
+                    description: HostNetwork enables host networking for the pod.
+                      To enable hostNetwork multiPodPerHost must be true.
+                    type: boolean
                   sidecars:
                     description: Sidecars to add to pods.
                     items:

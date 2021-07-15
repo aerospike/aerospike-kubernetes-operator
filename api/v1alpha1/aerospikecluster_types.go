@@ -79,12 +79,37 @@ type AerospikePodSpec struct {
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
+	// HostNetwork enables host networking for the pod.
+	// To enable hostNetwork multiPodPerHost must be true.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+
+	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy. If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
+
+	// Effective value of the DNSPolicy
+	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
+
 	// TODO: Add affinity and tolerations.
 }
 
 // ValidatePodSpecChange indicates if a change to to pod spec is safe to apply.
 func (v *AerospikePodSpec) ValidatePodSpecChange(new AerospikePodSpec) error {
 	// All changes are valid for now.
+	return nil
+}
+
+// SetDefaults applies defaults to the pod spec.
+func (v *AerospikePodSpec) SetDefaults() error {
+	if v.InputDNSPolicy == nil {
+		if v.HostNetwork {
+			v.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		} else {
+			v.DNSPolicy = corev1.DNSClusterFirst
+		}
+	} else {
+		v.DNSPolicy = *v.InputDNSPolicy
+	}
+
 	return nil
 }
 
@@ -533,6 +558,7 @@ func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
 	return &dst
 }
 
+// AerospikeClusterStatusSpec captures the current status of the cluster.
 type AerospikeClusterStatusSpec struct {
 	// Aerospike cluster size
 	Size int32 `json:"size,omitempty"`

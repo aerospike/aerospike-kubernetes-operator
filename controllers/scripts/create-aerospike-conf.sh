@@ -92,10 +92,8 @@ fi
 # ------------------------------------------------------------------------------
 # Update mesh seeds in the configuration file
 # ------------------------------------------------------------------------------
-HOSTNAME=$(hostname)
-
 cat $PEERS | while read PEER || [ -n "$PEER" ]; do
-    if [[ "$PEER" == "$HOSTNAME."* ]] ;
+    if [[ "$PEER" == "$MY_POD_NAME."* ]] ;
 	then
 		# Skip adding self to mesh addresses
 		continue
