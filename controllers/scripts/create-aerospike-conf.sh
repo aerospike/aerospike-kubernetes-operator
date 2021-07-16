@@ -104,6 +104,18 @@ cat $PEERS | while read PEER || [ -n "$PEER" ]; do
 	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} 3002" ${CFG}
 done
 
+
+# ------------------------------------------------------------------------------
+# If host networking is used force heartbeat and fabric to advertise network
+# interface bound to K8s node's host network.
+# ------------------------------------------------------------------------------
+{{- if .HostNetwork}}
+# 8 spaces, fixed in configwriter file config manager lib
+# TODO: The search pattern is not robust. Add a better marker in management lib.
+sed -i -e "/heartbeat {/a \\        address ${MY_POD_IP}" ${CFG}
+sed -i -e "/fabric {/a \\        address ${MY_POD_IP}" ${CFG}
+{{- end}}
+
 echo "---------------------------------"
 cat ${CFG}
 echo "---------------------------------"
