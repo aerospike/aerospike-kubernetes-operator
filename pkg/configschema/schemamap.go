@@ -9,4 +9,5 @@ var SchemaMap = map[string]string{
 	"5.3.0": conf5_3_0,
 	"5.4.0": conf5_4_0,
 	"5.5.0": conf5_5_0,
+	"5.6.0": conf5_6_0,
 }

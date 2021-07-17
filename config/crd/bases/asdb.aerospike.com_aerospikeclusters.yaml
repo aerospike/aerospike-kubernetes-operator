@@ -66,6 +66,9 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        readQuota:
+                          format: int32
+                          type: integer
                         whitelist:
                           description: Whitelist of host address allowed for this
                             role.
@@ -73,6 +76,9 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        writeQuota:
+                          format: int32
+                          type: integer
                       required:
                       - name
                       - privileges
@@ -1873,6 +1879,9 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        readQuota:
+                          format: int32
+                          type: integer
                         whitelist:
                           description: Whitelist of host address allowed for this
                             role.
@@ -1880,6 +1889,9 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        writeQuota:
+                          format: int32
+                          type: integer
                       required:
                       - name
                       - privileges
