@@ -6,8 +6,8 @@ require (
 	cloud.google.com/go v0.76.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.17 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.11 // indirect
-	github.com/aerospike/aerospike-management-lib v0.0.0-20210624173435-e6a2307b9445
-	github.com/ashishshinde/aerospike-client-go v3.0.4-0.20200924015406-d85b25081637+incompatible
+	github.com/aerospike/aerospike-management-lib v0.0.0-20210711071602-62b56ba49fbd
+	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210711030305-604f00410716 // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect
@@ -44,3 +44,5 @@ require (
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
 
 replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
+
+//replace github.com/ashishshinde/aerospike-client-go => /home/ashish/go/src/github.com/ashishshinde/aerospike-client-go

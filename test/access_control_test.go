@@ -19,7 +19,7 @@ import (
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
 const (
