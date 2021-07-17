@@ -5,6 +5,7 @@ import (
 	goctx "context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -304,6 +305,25 @@ func ExecuteCommandOnPod(cfg *rest.Config, pod *v1.Pod, containerName string, cm
 	return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), err
 }
 
+func getPodLogs(k8sClientset *kubernetes.Clientset, ctx goctx.Context, pod *v1.Pod) string {
+	podLogOpts := v1.PodLogOptions{}
+	req := k8sClientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &podLogOpts)
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		return "error in opening stream"
+	}
+	defer podLogs.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return "error in copy information from podLogs to buf"
+	}
+	str := buf.String()
+
+	return str
+}
+
 func getRackID(pod *v1.Pod) (int, error) {
 	rack, ok := pod.ObjectMeta.Labels["aerospike.com/rack-id"]
 	if !ok {
@@ -313,7 +333,7 @@ func getRackID(pod *v1.Pod) (int, error) {
 	return strconv.Atoi(rack)
 }
 
-// Make a deep copy from src into dst.
+// Copy makes a deep copy from src into dst.
 func Copy(dst interface{}, src interface{}) error {
 	if dst == nil {
 		return fmt.Errorf("dst cannot be nil")
