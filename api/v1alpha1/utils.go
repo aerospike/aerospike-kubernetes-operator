@@ -38,7 +38,7 @@ const (
 	InfoPortName = "info"
 )
 
-const baseVersion = "4.6.0.2"
+const baseVersion = "4.9.0.3"
 
 // ContainsString check whether list contains given string
 func ContainsString(list []string, ele string) bool {

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	as "github.com/ashishshinde/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"

@@ -16,8 +16,8 @@ var _ = Describe("AerospikeCluster", func() {
 	ctx := goctx.TODO()
 
 	// Cluster lifecycle related
-	Context("DeployClusterPost460", func() {
-		DeployClusterForAllImagesPost460(ctx)
+	Context("DeployClusterPost490", func() {
+		DeployClusterForAllImagesPost490(ctx)
 	})
 	Context("DeployClusterDiffStorageMultiPodPerHost", func() {
 		DeployClusterForDiffStorageTest(ctx, 2, true)
@@ -33,12 +33,11 @@ var _ = Describe("AerospikeCluster", func() {
 	})
 })
 
-// Test cluster deployment with all image post 4.6.0
-func DeployClusterForAllImagesPost460(ctx goctx.Context) {
+// Test cluster deployment with all image post 4.9.0
+func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 
-	// post 4.6.0, need feature-key file
-	// versions := []string{"5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11"}
-	versions := []string{"5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11", "4.8.0.6", "4.8.0.1", "4.7.0.11", "4.7.0.2", "4.6.0.13", "4.6.0.2"}
+	// post 4.9.0, need feature-key file
+	versions := []string{"5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21", "4.9.0.11"}
 
 	for _, v := range versions {
 
