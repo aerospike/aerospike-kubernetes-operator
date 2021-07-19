@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -116,7 +117,7 @@ func ParseDockerImageTag(tag string) (registry string, name string, version stri
 }
 
 // IsTLS tells if cluster is tls enabled
-func IsTLS(aerospikeConfigSpec AerospikeConfigSpec) bool {
+func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
 	if confInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
 		if networkConf, ok := confInterface.(map[string]interface{}); ok {
@@ -203,6 +204,43 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 
 	xdrConf := aerospikeConfig[confKeyXdr]
 	return xdrConf != nil
+}
+
+func readClientNamesFromConfig(serviceConf map[string]interface{}) ([]string, error) {
+	var result []string
+	clientNames, exists := serviceConf["tls-authenticate-client"]
+	if !exists {
+		return result, nil
+	}
+	switch clientNames.(type) {
+	case string:
+		result = append(result, clientNames.(string))
+	case bool:
+		result = append(result, strconv.FormatBool(clientNames.(bool)))
+	case []interface{}:
+		for _, name := range clientNames.([]interface{}) {
+			if nameStr, ok := name.(string); ok {
+				result = append(result, nameStr)
+			} else if nameBool, ok := name.(bool); ok {
+				result = append(result, strconv.FormatBool(nameBool))
+			} else {
+				return result, fmt.Errorf("tls-authenticate-client value \"%v\" has a wrong type (%t)", name, name)
+			}
+		}
+	default:
+		return result, fmt.Errorf("wrong type (%T) for tls-authenticate-client (%v)", clientNames, clientNames)
+	}
+	return result, nil
+}
+
+func isClientCertNameValidationEnabled(clientNames []string) bool {
+	for _, clientName := range clientNames {
+		if strings.EqualFold(clientName, "false") || strings.EqualFold(clientName, "any") {
+			return false
+		}
+	}
+	// if empty the "any" is used by default what mean client name validation disabled.
+	return len(clientNames) > 0
 }
 
 // GetDigestLogFile returns the xdr digest file path if configured.
