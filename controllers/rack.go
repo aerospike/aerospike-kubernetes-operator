@@ -179,19 +179,18 @@ func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1alpha1.Aeros
 
 func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
 
-	r.Log.Info("Reconcile existing Aerospike cluster statefulset")
+	r.Log.Info("Reconcile existing Aerospike cluster statefulset", "statefulSetName", found.Name)
 
-	var err error
 	var res reconcileResult
 
-	r.Log.Info("Ensure rack StatefulSet size is the same as the spec")
+	r.Log.Info("Ensure rack StatefulSet size is the same as the spec", "statefulSetName", found.Name)
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
 		found, res = r.scaleDownRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to scaleDown StatefulSet pods", "err", res.err)
+				r.Log.Error(res.err, "Failed to scaleDown StatefulSet pods for", "statefulSetName", found.Name)
 			}
 			return res
 		}
@@ -215,10 +214,10 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState, ignorablePods)
+		found, res = r.upgradeRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to update StatefulSet image", "err", res.err)
+				r.Log.Error(res.err, "Failed to update StatefulSet image", "statefulSetName", found.Name)
 			}
 			return res
 		}
@@ -231,7 +230,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 			found, res = r.rollingRestartRack(aeroCluster, found, rackState, ignorablePods)
 			if !res.isSuccess {
 				if res.err != nil {
-					r.Log.Error(err, "Failed to do rolling restart", "err", res.err)
+					r.Log.Error(res.err, "Failed to do rolling restart", "statefulSetName", found.Name)
 				}
 				return res
 			}
@@ -242,7 +241,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	if *found.Spec.Replicas < desiredSize {
 		found, res = r.scaleUpRack(aeroCluster, found, rackState)
 		if !res.isSuccess {
-			r.Log.Error(err, "Failed to scaleUp StatefulSet pods", "err", res.err)
+			r.Log.Error(res.err, "Failed to scaleUp StatefulSet pods", "statefulSetName", found.Name)
 			return res
 		}
 	}
@@ -254,6 +253,40 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 
 	// TODO: check if all the pods are up or not
 	return reconcileSuccess()
+}
+
+func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1alpha1.AerospikeCluster, podName string) bool {
+	for _, ps := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
+		if err != nil {
+			continue
+		}
+
+		if !utils.IsImageEqual(ps.Image, desiredImage) {
+			r.Log.Info("Found at least one image for upgrading/downgrading in pod.", "podName", podName, "currentImage", ps.Image, "desiredImage", desiredImage)
+			return true
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1alpha1.AerospikeCluster, containers []corev1.Container) bool {
+	updated := false
+	for i, container := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
+
+		if err != nil {
+			// Maybe a deleted sidecar.
+			continue
+		}
+
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			r.Log.Info("Updating image in statefulset spec", "container", container.Name, "desiredImage", desiredImage, "currentImage", container.Image)
+			containers[i].Image = desiredImage
+			updated = true
+		}
+	}
+	return updated
 }
 
 func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState) (bool, error) {
@@ -336,7 +369,7 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1alpha1.Aeros
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
@@ -348,53 +381,31 @@ func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.Aeros
 	// Update will happen only when a pod is deleted.
 	// So first update image and then delete a pod. Pod will come up with new image.
 	// Repeat the above process.
-	needsUpdate := false
-	for i, container := range found.Spec.Template.Spec.Containers {
-		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
+	containersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.Containers)
+	initContainersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.InitContainers)
 
-		if err != nil {
-			// Maybe a deleted sidecar.
-			continue
-		}
-
-		if !utils.IsImageEqual(container.Image, desiredImage) {
-			r.Log.Info("Updating image in statefulset spec", "container", container.Name, "desiredImage", desiredImage, "currentImage", container.Image)
-			found.Spec.Template.Spec.Containers[i].Image = desiredImage
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
+	if containersUpdated || initContainersUpdated {
 		err = r.Client.Update(context.TODO(), found, updateOption)
 		if err != nil {
 			return found, reconcileError(fmt.Errorf("failed to update image for StatefulSet %s: %v", found.Name, err))
+		} else {
+			r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
 		}
 	}
 
 	for _, p := range podList {
-		r.Log.Info("Check if pod needs upgrade or not")
-		var needPodUpgrade bool
-		for _, ps := range p.Spec.Containers {
-			desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
-			if err != nil {
-				continue
-			}
-
-			if !utils.IsImageEqual(ps.Image, desiredImage) {
-				r.Log.Info("Upgrading/downgrading pod", "podName", p.Name, "currentImage", ps.Image, "desiredImage", desiredImage)
-				needPodUpgrade = true
-				break
-			}
-		}
+		r.Log.Info("Check if pod needs upgrade or not", "podName", p.Name)
+		needPodUpgrade := r.needsToUpdateContainers(p.Spec.Containers, aeroCluster, p.Name) ||
+			r.needsToUpdateContainers(p.Spec.InitContainers, aeroCluster, p.Name)
 
 		if !needPodUpgrade {
-			r.Log.Info("Pod doesn't need upgrade")
+			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
 		}
 
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p, ignorablePods)
+		res := r.deletePodAndEnsureImageUpdated(aeroCluster, rackState, p, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -544,7 +555,7 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1alph
 	}
 	for _, p := range podList.Items {
 		if !utils.IsPodOnDesiredImage(&p, aeroCluster) {
-			r.Log.Info("Pod need upgrade/downgrade")
+			r.Log.Info("Pod need upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}
 

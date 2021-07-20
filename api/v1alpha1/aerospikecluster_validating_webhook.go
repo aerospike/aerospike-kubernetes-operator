@@ -21,6 +21,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -1006,8 +1007,17 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 
 func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 	sidecarNames := map[string]int{}
+	if err := validateContainers(r.Spec.PodSpec.Sidecars, sidecarNames); err != nil {
+		return err
+	}
+	if err := validateContainers(r.Spec.PodSpec.InitSidecars, sidecarNames); err != nil {
+		return err
+	}
+	return nil
+}
 
-	for _, sidecar := range r.Spec.PodSpec.Sidecars {
+func validateContainers(sidecars []corev1.Container, sidecarNames map[string]int) error {
+	for _, sidecar := range sidecars {
 		// Check for reserved sidecar name
 		if sidecar.Name == AerospikeServerContainerName || sidecar.Name == AerospikeServerInitContainerName {
 			return fmt.Errorf("cannot use reserved sidecar name: %v", sidecar.Name)
@@ -1025,6 +1035,5 @@ func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 			return err
 		}
 	}
-
 	return nil
 }
