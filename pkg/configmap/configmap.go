@@ -55,7 +55,7 @@ func CreateConfigMapData(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1
 	confData[NetworkPolicyHashFileName] = policyHash
 
 	// Add podSpec hash
-	podSpec := aeroCluster.Spec.PodSpec
+	podSpec := creatPodSpecForRack(aeroCluster, rack)
 	podSpecStr, err := json.Marshal(podSpec)
 	if err != nil {
 		return nil, err
@@ -67,6 +67,27 @@ func CreateConfigMapData(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1
 	confData[PodSpecHashFileName] = podSpecHash
 
 	return confData, nil
+}
+
+func creatPodSpecForRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) asdbv1alpha1.AerospikePodSpec {
+	podSpec := asdbv1alpha1.AerospikePodSpec{
+		InitContainers: aeroCluster.Spec.PodSpec.InitContainers,
+		Sidecars:       aeroCluster.Spec.PodSpec.Sidecars,
+	}
+	podSpec.Affinity = aeroCluster.Spec.PodSpec.Affinity
+	podSpec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
+	podSpec.NodeSelector = aeroCluster.Spec.PodSpec.NodeSelector
+
+	if rack.Affinity != nil {
+		podSpec.Affinity = rack.Affinity
+	}
+	if rack.Tolerations != nil {
+		podSpec.Tolerations = rack.Tolerations
+	}
+	if rack.NodeSelector != nil {
+		podSpec.NodeSelector = rack.NodeSelector
+	}
+	return podSpec
 }
 
 func BuildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (string, error) {

@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -235,18 +236,32 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 				FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				Volumes: []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike",
+						},
 					},
 					{
-						Path:         "/opt/aerospike/data",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "ns",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/data",
+						},
 					},
 				},
 			},

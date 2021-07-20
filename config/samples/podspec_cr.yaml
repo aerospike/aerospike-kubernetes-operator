@@ -22,8 +22,43 @@ spec:
             size: 3Gi
         aerospike:
           path: /opt/aerospike     
- 
+      - name: sidecar-volume1
+        source:
+          persistentVolume:      
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+        aerospike:
+          path: /para/sidecar1
+        sidecars:
+          - containerName: tomcat
+            path: /para/tomcat1
+      - name: sidecar-volume2
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+        aerospike:
+          path: /para/sidecar2
+        sidecars:
+          - containerName: tomcat
+            path: /para/tomcat2
+          - containerName: database
+            path: /para/database  
         
+  podSpec:
+    sidecars:
+    - name: tomcat
+      image: tomcat:8.0
+      ports:
+        - containerPort: 7500
+      imagePullPolicy: Always
+    - name: database
+      image: mongo:4.4.6
+      ports:
+        - containerPort: 7501
+      imagePullPolicy: Always 
 
   aerospikeAccessControl:
     users:

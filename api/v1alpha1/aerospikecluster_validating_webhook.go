@@ -162,6 +162,11 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	// Storage should be validated before validating aerospikeConfig and fileStorage
+	if err := validateStorage(&r.Spec.Storage, &r.Spec.PodSpec); err != nil {
+		return err
+	}
+
 	// Validate common aerospike config
 	if err := validateAerospikeConfig(aslog, configMap, &r.Spec.Storage, int(r.Spec.Size)); err != nil {
 		return err
@@ -173,11 +178,6 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	err = validateRequiredFileStorage(aslog, *configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
-	if err != nil {
-		return err
-	}
-
-	err = validateConfigMapVolumes(*configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
 	if err != nil {
 		return err
 	}
@@ -418,7 +418,7 @@ func validateNamespaceConfig(aslog logr.Logger, nsConfInterfaceList []interface{
 	}
 
 	// Get list of all devices used in namespace. match it with namespace device list
-	blockStorageDeviceList, fileStorageList, err := storage.GetStorageList()
+	blockStorageDeviceList, fileStorageList, err := storage.GetAerospikeStorageList()
 	if err != nil {
 		return err
 	}
@@ -715,7 +715,7 @@ func validateAerospikeConfigSchema(aslog logr.Logger, version string, configSpec
 
 func validateRequiredFileStorage(aslog logr.Logger, configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
 
-	_, fileStorageList, err := storage.GetStorageList()
+	_, fileStorageList, err := storage.GetAerospikeStorageList()
 	if err != nil {
 		return err
 	}
@@ -760,11 +760,6 @@ func validateRequiredFileStorage(aslog logr.Logger, configSpec AerospikeConfigSp
 	}
 
 	return nil
-}
-
-func validateConfigMapVolumes(configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
-	_, err := storage.GetConfigMaps()
-	return err
 }
 
 func getImageVersion(imageStr string) (string, error) {

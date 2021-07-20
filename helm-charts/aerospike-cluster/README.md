@@ -241,12 +241,12 @@ resources:
               volumes:
                 - storageClass: ssd
                   path: /opt/aerospike
-                  volumeMode: filesystem
-                  sizeInGB: 1
+                  volumeMode: Filesystem
+                  size: 1Gi
                 - path: /opt/aerospike/data
                   storageClass: ssd
-                  volumeMode: filesystem
-                  sizeInGB: 3
+                  volumeMode: Filesystem
+                  size: 3Gi
         - id: 2
           zone: us-west1-b
           aerospikeConfig:
@@ -278,7 +278,7 @@ resources:
       | `initMethod` | `string` | `none`, `dd`, `blkdiscard`, `deleteFiles` | InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none" |
       | `configMap` | `string` |  | Name of the configmap for 'configmap' mode volumes |
       | `path` | `string` |  | Device path or mount path for the volume |
-      | `sizeInGB` | `integer` |  | Size of volume in GB |
+      | `size` | `integer` |  | Size of volume |
       | `storageClass` | `string` |  | Storage class for volume provisioning |
       | `volumeMode` | `string` | `filesystem`, `block`, `configMap` | Volume mode |
 
@@ -291,12 +291,12 @@ resources:
       volumes:
       - path: /opt/aerospike/data/test/
         storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
+        volumeMode: Filesystem
+        size: 3Gi
       - path: /opt/aerospike/data/bar/
         storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
+        volumeMode: Filesystem
+        size: 3Gi
     ```
 
 - `validationPolicy`

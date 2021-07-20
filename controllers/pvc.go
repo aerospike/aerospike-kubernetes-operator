@@ -146,10 +146,10 @@ func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1alpha1.Ae
 	return pvcList.Items, nil
 }
 
-func getPVCVolumeConfig(storage *asdbv1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *asdbv1alpha1.AerospikePersistentVolumeSpec {
+func getPVCVolumeConfig(storage *asdbv1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *asdbv1alpha1.VolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
-		if pvcPathAnnotation == v.Path {
+		if pvcPathAnnotation == v.Name {
 			return &v
 		}
 	}

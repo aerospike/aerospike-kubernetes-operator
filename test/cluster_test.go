@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -203,18 +205,32 @@ func UpdateClusterTest(ctx goctx.Context) {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				new := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				new := []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/dev/xvdf2",
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
-						SizeInGB:     1,
+						Name: "ns",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeBlock,
+								Size:         resource.MustParse("1Gi"),
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/dev/xvdf2",
+						},
 					},
 					{
-						Path:         "/opt/aeropsike/ns1",
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
-						SizeInGB:     1,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+								Size:         resource.MustParse("1Gi"),
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aeropsike/ns1",
+						},
 					},
 				}
 				aeroCluster.Spec.Storage.Volumes = new
@@ -377,24 +393,45 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 					It("InvalidStorageEngineDevice: should fail for invalid storage-engine.device, cannot have 3 devices in single device string", func() {
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 						if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-							aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.AerospikePersistentVolumeSpec{
+							aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 								{
-									Path:         "/dev/xvdf1",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
+									Name: "nsvol1",
+									Source: asdbv1alpha1.VolumeSource{
+										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf1",
+									},
 								},
 								{
-									Path:         "/dev/xvdf2",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
+									Name: "nsvol2",
+									Source: asdbv1alpha1.VolumeSource{
+										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf2",
+									},
 								},
 								{
-									Path:         "/dev/xvdf3",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
+									Name: "nsvol3",
+									Source: asdbv1alpha1.VolumeSource{
+										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf3",
+									},
 								},
 							}
 

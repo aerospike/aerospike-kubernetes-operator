@@ -3,16 +3,20 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -491,14 +495,18 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1alpha
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
+	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
+
 	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(aeroCluster, found)
+	r.updateSTSPodSpec(aeroCluster, found, ls, rackState)
+
+	// This should be called before updating storage
+	initializeSTSStorage(aeroCluster, found, rackState)
+
+	// TODO: Add validation. device, file, both should not exist in same storage class
+	r.updateSTSStorage(aeroCluster, found, rackState)
 
 	r.updateSTSContainerResources(aeroCluster, found)
-
-	r.updateSTSSecretInfo(aeroCluster, found)
-
-	r.updateSTSConfigMapVolumes(aeroCluster, found, rackState)
 
 	r.Log.Info("Updating statefulset spec")
 
@@ -552,7 +560,7 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1alph
 }
 
 func (r *AerospikeClusterReconciler) isRackConfigMapsUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
-	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
+	configMaps := rackState.Rack.Storage.GetConfigMaps()
 
 	var volumesToBeMatched []corev1.Volume
 	for _, volume := range pod.Spec.Volumes {
@@ -569,8 +577,7 @@ func (r *AerospikeClusterReconciler) isRackConfigMapsUpdatedInAeroCluster(aeroCl
 	}
 
 	for _, configMapVolume := range configMaps {
-		// Ignore error since its not possible.
-		pvcName, _ := getPVCName(configMapVolume.Path)
+		pvcName := configMapVolume.Name
 		found := false
 		for _, volume := range volumesToBeMatched {
 			if volume.Name == pvcName {
@@ -585,6 +592,358 @@ func (r *AerospikeClusterReconciler) isRackConfigMapsUpdatedInAeroCluster(aeroCl
 
 	}
 	return false
+}
+
+func (r *AerospikeClusterReconciler) isRackPVStorageUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
+
+	PVs := rackState.Rack.Storage.GetPVs()
+
+	// Check for Added/Updated volumeMounts
+	for _, volume := range PVs {
+
+		// aerospike cont
+		// sidecars
+		// additionalInitCont
+		var newMounts []v1alpha1.VolumeAttachment
+		newMounts = append(newMounts, volume.Sidecars...)
+		if volume.Aerospike.Path != "" {
+			newMounts = append(newMounts, v1alpha1.VolumeAttachment{
+				ContainerName: v1alpha1.AerospikeServerContainerName,
+				// TODO fix path name
+				Path: volume.Aerospike.Path,
+			})
+		}
+
+		if r.isPVAttachmentAddedOrUpdated(volume.Name, volume.Source.PersistentVolume.VolumeMode, newMounts, pod.Spec.Containers, false) ||
+			r.isPVAttachmentAddedOrUpdated(volume.Name, volume.Source.PersistentVolume.VolumeMode, volume.InitContainers, pod.Spec.InitContainers, true) {
+			r.Log.Info("New volumeMount added/updated in rack storage. Pod Need rolling restart")
+			return true
+		}
+
+	}
+
+	// Check for removed volumeMounts
+	if r.isPVAttachmentRemoved(PVs, pod.Spec.Containers, false) ||
+		r.isPVAttachmentRemoved(PVs, pod.Spec.InitContainers, true) {
+		r.Log.Info("volumeMount removed rack storage. Pod Need rolling restart")
+		return true
+	}
+
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isPVAttachmentAddedOrUpdated(volumeName string, volumeMode v1.PersistentVolumeMode, volumeAttachments []v1alpha1.VolumeAttachment, podContainers []v1.Container, isInitContainers bool) bool {
+
+	for _, attachment := range volumeAttachments {
+		for _, container := range podContainers {
+			var pathPrefix string
+			// Find container in the pod and then look for volumeAttachments
+			if attachment.ContainerName == container.Name {
+				if volumeMode == v1.PersistentVolumeBlock {
+					if isInitContainers {
+						pathPrefix = "/block-volumes"
+					}
+
+					for _, volumeDevice := range container.VolumeDevices {
+
+						var found bool
+						if volumeDevice.Name == volumeName {
+							found = true
+							if volumeDevice.DevicePath != pathPrefix+attachment.Path {
+								r.Log.Info("volumeMount path updated in rack storage", "oldpath", volumeDevice.DevicePath, "newpath", pathPrefix+attachment.Path)
+								// Updated volume
+								return true
+							}
+							break
+						}
+						if !found {
+							// Added volume
+							r.Log.Info("volumeMount added in rack storage", "volume", volumeName, "containerName", container.Name)
+							return true
+						}
+					}
+
+				} else if volumeMode == v1.PersistentVolumeFilesystem {
+					if isInitContainers {
+						pathPrefix = "/filesystem-volumes"
+					}
+
+					var found bool
+					for _, volumeMount := range container.VolumeMounts {
+						if volumeMount.Name == volumeName {
+							found = true
+							if volumeMount.MountPath != pathPrefix+attachment.Path {
+								// Updated volume
+								r.Log.Info("volumeMount path updated in rack storage", "oldpath", volumeMount.MountPath, "newpath", pathPrefix+attachment.Path)
+								return true
+							}
+							break
+						}
+					}
+					if !found {
+						// Added volume
+						r.Log.Info("volumeMount added in rack storage", "volume", volumeName, "containerName", container.Name)
+						return true
+					}
+				} else {
+					// Nothing should come here
+					continue
+				}
+				break
+			}
+		}
+	}
+
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isPVAttachmentRemoved(volumes []v1alpha1.VolumeSpec, podContainers []v1.Container, isInitContainers bool) bool {
+	var storageVDevices []v1alpha1.VolumeSpec
+	var storageVMounts []v1alpha1.VolumeSpec
+
+	for _, volume := range volumes {
+		if volume.Source.PersistentVolume == nil {
+			continue
+		}
+
+		if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+			storageVDevices = append(storageVDevices, volume)
+		} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+			storageVMounts = append(storageVMounts, volume)
+		} else {
+			continue
+		}
+	}
+
+	for _, container := range podContainers {
+		if isInitContainers && container.Name == v1alpha1.AerospikeServerInitContainerName {
+			// Initcontainer has all the volumes mounted, there is no specific entry in storage for initcontainer
+			continue
+		}
+		for _, volumeDevice := range container.VolumeDevices {
+			if volumeDevice.Name == confDirName ||
+				volumeDevice.Name == initConfDirName {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(storageVDevices, volumeDevice.Name, container.Name, isInitContainers) {
+				r.Log.Info("volumeMount removed from rack storage", "volumeDevice", volumeDevice.Name, "containerName", container.Name)
+				return true
+			}
+		}
+
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name == confDirName ||
+				volumeMount.Name == initConfDirName {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(storageVMounts, volumeMount.Name, container.Name, isInitContainers) {
+				r.Log.Info("volumeMount removed from rack storage", "volumeDevice", volumeMount.Name, "containerName", container.Name)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isContainerVolumeMountInStorage(volumes []v1alpha1.VolumeSpec, volumeMount v1.VolumeMount, containerName string, isInitContainers bool) bool {
+
+	for _, volume := range volumes {
+		if volumeMount.Name == volume.Name {
+			if isInitContainers {
+				if !isContainerNameInStorageVolumeAttachments(containerName, volume.InitContainers) {
+					return false
+				}
+			} else {
+				if containerName == v1alpha1.AerospikeServerContainerName {
+					if volume.Aerospike == nil {
+						return false
+					}
+				} else {
+					if !isContainerNameInStorageVolumeAttachments(containerName, volume.Sidecars) {
+						return false
+					}
+				}
+			}
+			return true
+		}
+	}
+	// volumeMount should be in storage volumes, if it is not there then it was not created by storage volumes.
+	// because storage volumes can not be removed, only mounts can be added or removed inside them
+	return true
+}
+
+func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
+
+	volumes := rackState.Rack.Storage.Volumes
+
+	for _, volume := range volumes {
+
+		// Check for Updated volumeSource
+		if r.isStorageVolumeSourceUpdated(volume, pod) {
+			r.Log.Info("Volume added or volume source updated in rack storage. Pod Need rolling restart")
+			return true
+		}
+
+		// Check for Added/Updated volumeAttachments
+		var containerAttachments []v1alpha1.VolumeAttachment
+		containerAttachments = append(containerAttachments, volume.Sidecars...)
+		if volume.Aerospike != nil {
+			containerAttachments = append(containerAttachments, v1alpha1.VolumeAttachment{
+				ContainerName: v1alpha1.AerospikeServerContainerName,
+				Path:          volume.Aerospike.Path,
+			})
+		}
+
+		if r.isVolumeAttachmentAddedOrUpdated(volume.Name, containerAttachments, pod.Spec.Containers) ||
+			r.isVolumeAttachmentAddedOrUpdated(volume.Name, volume.InitContainers, pod.Spec.InitContainers) {
+			r.Log.Info("New volume or VolumeAttachment added/updated in rack storage. Pod Need rolling restart")
+			return true
+		}
+
+	}
+
+	// Check for removed volumeAttachments
+	if r.isVolumeAttachmentRemoved(volumes, pod.Spec.Containers, false) ||
+		r.isVolumeAttachmentRemoved(volumes, pod.Spec.InitContainers, true) {
+		r.Log.Info("volume or VolumeAttachment removed from rack storage. Pod Need rolling restart")
+		return true
+	}
+
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume v1alpha1.VolumeSpec, pod corev1.Pod) bool {
+	podVolume := getPodVolume(pod, volume.Name)
+	if podVolume == nil {
+		// Volume not found in pod.volumes. This is newly aaded volume
+		r.Log.Info("New volume added in rack storage. Pod Need rolling restart")
+		return true
+	}
+
+	var volumeCopy v1alpha1.VolumeSpec
+	lib.DeepCopy(&volumeCopy, &volume)
+
+	if volumeCopy.Source.Secret != nil {
+		setDefaults_SecretVolumeSource(volumeCopy.Source.Secret)
+	}
+	if volumeCopy.Source.ConfigMap != nil {
+		setDefaults_ConfigMapVolumeSource(volumeCopy.Source.ConfigMap)
+	}
+
+	if !reflect.DeepEqual(podVolume.Secret, volumeCopy.Source.Secret) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	if !reflect.DeepEqual(podVolume.ConfigMap, volumeCopy.Source.ConfigMap) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	if !reflect.DeepEqual(podVolume.EmptyDir, volumeCopy.Source.EmptyDir) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isVolumeAttachmentAddedOrUpdated(volumeName string, volumeAttachments []v1alpha1.VolumeAttachment, podContainers []corev1.Container) bool {
+
+	for _, attachment := range volumeAttachments {
+		container := getContainer(podContainers, attachment.ContainerName)
+		// Not possible, only valid containerName should be there in attachment
+		if container == nil {
+			continue
+		}
+
+		volumeDevice := getContainerVolumeDevice(container.VolumeDevices, volumeName)
+		if volumeDevice != nil {
+			// Found, check for updated
+			if getOriginalPath(volumeDevice.DevicePath) != attachment.Path {
+				r.Log.Info("volume updated in rack storage", "old", volumeDevice, "new", attachment)
+				return true
+			}
+			continue
+		}
+
+		volumeMount := getContainerVolumeMounts(container.VolumeMounts, volumeName)
+		if volumeMount != nil {
+			// Found, check for updated
+			if getOriginalPath(volumeMount.MountPath) != attachment.Path ||
+				volumeMount.ReadOnly != attachment.ReadOnly ||
+				volumeMount.SubPath != attachment.SubPath ||
+				volumeMount.SubPathExpr != attachment.SubPathExpr ||
+				!reflect.DeepEqual(volumeMount.MountPropagation, attachment.MountPropagation) {
+
+				r.Log.Info("volume updated in rack storage", "old", volumeMount, "new", attachment)
+				return true
+			}
+			continue
+		}
+
+		// Added volume
+		r.Log.Info("volume added in rack storage", "volume", volumeName, "containerName", container.Name)
+		return true
+	}
+
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []v1alpha1.VolumeSpec, podContainers []corev1.Container, isInitContainers bool) bool {
+	for _, container := range podContainers {
+		if isInitContainers && container.Name == v1alpha1.AerospikeServerInitContainerName {
+			// Initcontainer has all the volumes mounted, there is no specific entry in storage for initcontainer
+			continue
+		}
+		for _, volumeDevice := range container.VolumeDevices {
+			if volumeDevice.Name == confDirName ||
+				volumeDevice.Name == initConfDirName {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(volumes, volumeDevice.Name, container.Name, isInitContainers) {
+				r.Log.Info("volume for container.volumeDevice removed from rack storage", "container.volumeDevice", volumeDevice.Name, "containerName", container.Name)
+				return true
+			}
+		}
+
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name == confDirName ||
+				volumeMount.Name == initConfDirName ||
+				volumeMount.Name == secretVolumeName ||
+				volumeMount.MountPath == podServiceAccountMountPath {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(volumes, volumeMount.Name, container.Name, isInitContainers) {
+				r.Log.Info("volume for container.volumeMount removed from rack storage", "container.volumeMount", volumeMount.Name, "containerName", container.Name)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []v1alpha1.VolumeSpec, containerVolumeName string, containerName string, isInitContainers bool) bool {
+	volume := getStorageVolume(volumes, containerVolumeName)
+	if volume == nil {
+		// Volume may have been removed, we allow removal of all volumes (except pv type)
+		r.Log.Info("volume removed from rack storage", "volumeName", containerVolumeName)
+		return false
+	}
+
+	if isInitContainers {
+		if !isContainerNameInStorageVolumeAttachments(containerName, volume.InitContainers) {
+			return false
+		}
+	} else {
+		if containerName == v1alpha1.AerospikeServerContainerName {
+			if volume.Aerospike == nil {
+				return false
+			}
+		} else {
+			if !isContainerNameInStorageVolumeAttachments(containerName, volume.Sidecars) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (r *AerospikeClusterReconciler) getRackPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
@@ -655,6 +1014,15 @@ func (r *AerospikeClusterReconciler) getOldRackList(aeroCluster *asdbv1alpha1.Ae
 	return rackList, nil
 }
 
+func isContainerNameInStorageVolumeAttachments(containerName string, mounts []v1alpha1.VolumeAttachment) bool {
+	for _, mount := range mounts {
+		if mount.ContainerName == containerName {
+			return true
+		}
+	}
+	return false
+}
+
 func splitRacks(nodes, racks int) []int {
 	nodesPerRack, extraNodes := nodes/racks, nodes%racks
 
@@ -682,4 +1050,70 @@ func getNewRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState
 		})
 	}
 	return rackStateList
+}
+
+// TODO: These func are available in client-go@v1.5.2, for now creating our own
+func setDefaults_SecretVolumeSource(obj *corev1.SecretVolumeSource) {
+	if obj.DefaultMode == nil {
+		perm := int32(corev1.SecretVolumeSourceDefaultMode)
+		obj.DefaultMode = &perm
+	}
+}
+
+func setDefaults_ConfigMapVolumeSource(obj *corev1.ConfigMapVolumeSource) {
+	if obj.DefaultMode == nil {
+		perm := int32(corev1.ConfigMapVolumeSourceDefaultMode)
+		obj.DefaultMode = &perm
+	}
+}
+
+func getContainerVolumeDevice(devices []corev1.VolumeDevice, name string) *corev1.VolumeDevice {
+	for _, device := range devices {
+		if device.Name == name {
+			return &device
+		}
+	}
+	return nil
+}
+
+func getContainerVolumeMounts(mounts []corev1.VolumeMount, name string) *corev1.VolumeMount {
+	for _, mount := range mounts {
+		if mount.Name == name {
+			return &mount
+		}
+	}
+	return nil
+}
+
+func getPodVolume(pod corev1.Pod, name string) *corev1.Volume {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == name {
+			return &volume
+		}
+	}
+	return nil
+}
+
+func getStorageVolume(volumes []v1alpha1.VolumeSpec, name string) *v1alpha1.VolumeSpec {
+	for _, volume := range volumes {
+		if name == volume.Name {
+			return &volume
+		}
+	}
+	return nil
+}
+
+func getContainer(podContainers []corev1.Container, name string) *corev1.Container {
+	for _, container := range podContainers {
+		if name == container.Name {
+			return &container
+		}
+	}
+	return nil
+}
+
+func getOriginalPath(path string) string {
+	path = strings.TrimPrefix(path, "/filesystem-volumes")
+	path = strings.TrimPrefix(path, "/block-volumes")
+	return path
 }

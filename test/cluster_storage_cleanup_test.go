@@ -16,6 +16,8 @@ import (
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Test cluster cr updation
@@ -123,7 +125,7 @@ var _ = Describe("ClusterStorageCleanUp", func() {
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(lastRackID)
 			// This should not be removed
 
-			pvcName, err := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Path)
+			pvcName, err := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Name)
 			Expect(err).ToNot(HaveOccurred())
 
 			pvcNamePrefix := pvcName + "-" + stsName
@@ -210,18 +212,32 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				InputCascadeDelete: &remove,
 				InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 			},
-			Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+			Volumes: []asdbv1alpha1.VolumeSpec{
 				{
-					Path:         devName,
-					SizeInGB:     1,
-					StorageClass: storageClass,
-					VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
+					Name: "ns",
+					Source: asdbv1alpha1.VolumeSource{
+						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeBlock,
+						},
+					},
+					Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Path: devName,
+					},
 				},
 				{
-					Path:         "/opt/aerospike",
-					SizeInGB:     1,
-					StorageClass: storageClass,
-					VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+					Name: "workdir",
+					Source: asdbv1alpha1.VolumeSource{
+						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeFilesystem,
+						},
+					},
+					Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Path: "/opt/aerospike",
+					},
 				},
 			},
 		}
@@ -325,12 +341,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 						InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 						InputCascadeDelete: &cascadeDeleteTrue,
 					},
-					Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+					Volumes: []asdbv1alpha1.VolumeSpec{
 						{
-							Path:         "/opt/aerospike",
-							SizeInGB:     1,
-							StorageClass: storageClass,
-							VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+							Name: "workdir",
+							Source: asdbv1alpha1.VolumeSource{
+								PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+									Size:         resource.MustParse("1Gi"),
+									StorageClass: storageClass,
+									VolumeMode:   v1.PersistentVolumeFilesystem,
+								},
+							},
+							Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+								Path: "/opt/aerospike",
+							},
 						},
 					},
 				}
@@ -347,12 +370,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				racks[0].InputStorage = getStorage(volumes)
@@ -380,12 +410,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
@@ -404,12 +441,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
@@ -438,12 +482,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
@@ -459,12 +510,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Rack is completely replaced
-				volumes = []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes = []asdbv1alpha1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new2",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new2",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
@@ -481,7 +539,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 
 })
 
-func getStorage(volumes []asdbv1alpha1.AerospikePersistentVolumeSpec) *asdbv1alpha1.AerospikeStorageSpec {
+func getStorage(volumes []asdbv1alpha1.VolumeSpec) *asdbv1alpha1.AerospikeStorageSpec {
 	cascadeDelete := true
 	storage := asdbv1alpha1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{

@@ -14,47 +14,31 @@ spec:
       - id: 1
         # Change to the zone for your k8s cluster.
         zone: us-west1-a
-        # nodeName: kubernetes-minion-group-qp3m
-        aerospikeConfig:
-          service:
-            proto-fd-max: 18000
-        # rack level storage, used by pods of this rack
-        storage:
-          filesystemVolumePolicy:
-            initMethod: deleteFiles
-            cascadeDelete: true
-          blockVolumePolicy:
-            cascadeDelete: true
-          volumes:
-            - storageClass: ssd
-              path: /opt/aerospike
-              volumeMode: filesystem
-              sizeInGB: 1
-            - path: /opt/aerospike/data
-              storageClass: ssd
-              volumeMode: filesystem
-              sizeInGB: 3
       - id: 2
         # Change to the zone for your k8s cluster.
         zone: us-west1-a
-        # nodeName: kubernetes-minion-group-tft3
-        aerospikeConfig:
-          service:
-            proto-fd-max: 16000
 
   storage:
     filesystemVolumePolicy:
       cascadeDelete: true
       initMethod: deleteFiles
     volumes:
-      - storageClass: ssd
-        path: /opt/aerospike
-        volumeMode: filesystem
-        sizeInGB: 1
-      - path: /opt/aerospike/data
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: ns
+        aerospike:
+          path: /opt/aerospike/data
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 3Gi
 
   multiPodPerHost: true
 
@@ -90,7 +74,6 @@ spec:
         replication-factor: 1
         storage-engine:
           type: memory
-
 
   resources:
     requests:

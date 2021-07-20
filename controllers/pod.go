@@ -77,12 +77,10 @@ func (r *AerospikeClusterReconciler) needRollingRestartPod(aeroCluster *asdbv1al
 		r.Log.Info("Aerospike resources changed. Need rolling restart")
 	}
 
-	// Check if RACKSTORAGE/CONFIGMAP is updated
-	if r.isRackConfigMapsUpdatedInAeroCluster(aeroCluster, rackState, pod) {
+	if r.isRackStorageUpdatedInAeroCluster(aeroCluster, rackState, pod) {
 		needRollingRestartPod = true
-		r.Log.Info("Aerospike rack storage configMaps changed. Need rolling restart")
+		r.Log.Info("Aerospike rack storage volumes changed. Need rolling restart")
 	}
-
 	return needRollingRestartPod, nil
 }
 
