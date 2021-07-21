@@ -1,4 +1,3 @@
-
 package configschema
 
 const conf5_6_0 = `
