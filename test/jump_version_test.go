@@ -145,7 +145,7 @@ var _ = Describe("JumpVersion", func() {
 		})
 
 		It("Try CrashRecovery", func() {
-			deployImage := "aerospike/aerospike-server-enterprise:4.7.0.10"
+			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.8"
 			// Save cluster variable as well for cleanup.
 			aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigCrashingPre5, deployImage, ctx)
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, 100*time.Millisecond, 10*time.Second)
@@ -164,7 +164,7 @@ var _ = Describe("JumpVersion", func() {
 
 			By("Doing regular upgrade")
 
-			deployImage := "aerospike/aerospike-server-enterprise:4.8.0.11"
+			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.33"
 			// Save cluster variable as well for cleanup.
 			aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigPre5, deployImage, ctx)
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
@@ -172,21 +172,10 @@ var _ = Describe("JumpVersion", func() {
 
 			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
-
-			By("Doing jump version upgrade")
-
-			deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
-			// Save cluster variable as well for cleanup.
-			aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigPost5, deployImage, ctx)
-			err = aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
-
-			if err == nil || !strings.Contains(err.Error(), "jump required to version") {
-				Expect(err).To(HaveOccurred(), "Cluster should have not have upgraded - but did not: %v", err)
-			}
 		})
 
 		It("Try ValidUpgrade", func() {
-			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.8"
+			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.33"
 			// Save cluster variable as well for cleanup.
 			aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigPre5, deployImage, ctx)
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
@@ -205,7 +194,7 @@ var _ = Describe("JumpVersion", func() {
 		})
 
 		It("Try ValidDowngrade", func() {
-			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.8"
+			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.33"
 			// Save cluster variable as well for cleanup.
 			aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigPre5, deployImage, ctx)
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)

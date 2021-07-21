@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/ashishshinde/aerospike-client-go/pkg/ripemd160"
+	"github.com/ashishshinde/aerospike-client-go/v5/pkg/ripemd160"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"

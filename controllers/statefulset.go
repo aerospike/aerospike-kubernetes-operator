@@ -19,7 +19,6 @@ import (
 
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configmap"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -97,10 +96,12 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: aeroClusterServiceAccountName,
+					HostNetwork:        aeroCluster.Spec.PodSpec.HostNetwork,
+					DNSPolicy:          aeroCluster.Spec.PodSpec.DNSPolicy,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.12",
+						Image: "aerospike/aerospike-kubernetes-init:0.0.14",
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
@@ -260,7 +261,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
-			configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+			configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 			if err != nil {
 				return fmt.Errorf("failed to build dotConfig from map: %v", err)
 			}
@@ -291,7 +292,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1alpha1
 	r.Log.Info("Configmap already exists for statefulSet - using existing configmap", "name", utils.NamespacedName(confMap.Namespace, confMap.Name))
 
 	// Update existing configmap as it might not be current.
-	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
@@ -316,7 +317,7 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(aeroCluster *asdbv1alpha
 	}
 
 	// build the aerospike config file based on the current spec
-	configMapData, err := configmap.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
 	if err != nil {
 		return fmt.Errorf("failed to build dotConfig from map: %v", err)
 	}
@@ -647,6 +648,10 @@ func (r *AerospikeClusterReconciler) updateSTSAerospikeSecretInfo(aeroCluster *a
 // Called while creating new cluster and also during rolling restart.
 func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
 	r.updateSTSSchedulingPolicy(aeroCluster, st, labels, rackState)
+
+	st.Spec.Template.Spec.HostNetwork = aeroCluster.Spec.PodSpec.HostNetwork
+
+	st.Spec.Template.Spec.DNSPolicy = aeroCluster.Spec.PodSpec.DNSPolicy
 
 	// Add new sidecars.
 	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
@@ -991,7 +996,7 @@ func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 			},
 			{
 				Name:          asdbv1alpha1.FabricTLSPortName,
-				ContainerPort: asdbv1alpha1.FabricPort,
+				ContainerPort: asdbv1alpha1.FabricTLSPort,
 			},
 			{
 				Name:          asdbv1alpha1.InfoPortName,
@@ -1029,7 +1034,7 @@ func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 			},
 			{
 				Name:          asdbv1alpha1.FabricTLSPortName,
-				ContainerPort: asdbv1alpha1.FabricPort,
+				ContainerPort: asdbv1alpha1.FabricTLSPort,
 			},
 			{
 				Name:          asdbv1alpha1.InfoPortName,

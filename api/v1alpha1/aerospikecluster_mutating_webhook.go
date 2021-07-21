@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"fmt"
 	"reflect"
-
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -73,6 +72,11 @@ func (r *AerospikeCluster) setDefaults(aslog logr.Logger) error {
 
 	// Update racks configuration using global values where required.
 	if err := r.updateRacks(aslog); err != nil {
+		return err
+	}
+
+	// Set defaults for pod spec
+	if err := r.Spec.PodSpec.SetDefaults(); err != nil {
 		return err
 	}
 
@@ -182,7 +186,7 @@ func (r *AerospikeCluster) setDefaultAerospikeConfigs(aslog logr.Logger, configS
 	}
 
 	// network conf
-	if err := setDefaultNetworkConf(aslog, configSpec); err != nil {
+	if err := setDefaultNetworkConf(aslog, &configSpec, r.Spec.OperatorClientCertSpec); err != nil {
 		return err
 	}
 
@@ -279,7 +283,7 @@ func setDefaultServiceConf(aslog logr.Logger, configSpec AerospikeConfigSpec, cr
 	return nil
 }
 
-func setDefaultNetworkConf(aslog logr.Logger, configSpec AerospikeConfigSpec) error {
+func setDefaultNetworkConf(aslog logr.Logger, configSpec *AerospikeConfigSpec, clientCertSpec *AerospikeOperatorClientCertSpec) error {
 	config := configSpec.Value
 
 	// Network section
@@ -298,6 +302,9 @@ func setDefaultNetworkConf(aslog logr.Logger, configSpec AerospikeConfigSpec) er
 	serviceConf, ok := networkConf["service"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.network.service not a valid map %v", networkConf["service"])
+	}
+	if err := addOperatorClientNameIfNeeded(aslog, serviceConf, clientCertSpec); err != nil {
+		return err
 	}
 	// Override these sections
 	// TODO: These values lines will be replaces with runtime info by script in init-container
@@ -365,6 +372,36 @@ func setDefaultNetworkConf(aslog logr.Logger, configSpec AerospikeConfigSpec) er
 
 	aslog.Info("Set default template values in aerospikeConfig.network.fabric", "aerospikeConfig.network.fabric", fabricConf)
 
+	return nil
+}
+
+func addOperatorClientNameIfNeeded(aslog logr.Logger, serviceConf map[string]interface{}, clientCertSpec *AerospikeOperatorClientCertSpec) error {
+	if clientCertSpec == nil || clientCertSpec.TLSClientName == "" {
+		aslog.Info("OperatorClientCertSpec or its TLSClientName is not configured. Skipping setting tls-authenticate-client.")
+		return nil
+	}
+	clientNames, err := readClientNamesFromConfig(serviceConf)
+	if err != nil {
+		return err
+	}
+	if !isClientCertNameValidationEnabled(clientNames) {
+		aslog.Info("mTLS is not configured. Skip adding operator's client name.")
+		return nil
+	}
+	var newClientNames []interface{}
+	for _, clientName := range clientNames {
+		if clientName == clientCertSpec.TLSClientName {
+			aslog.Info("Operator's client name already in tls-authenticate-client. Skip adding...",
+				"tls-authenticate-client", clientNames, "OperatorClientCertSpec.TLSClientName", clientCertSpec.TLSClientName)
+			return nil
+		}
+		newClientNames = append(newClientNames, clientName)
+	}
+	newClientNames = append(newClientNames, clientCertSpec.TLSClientName)
+	aslog.Info("Adding operator's tls client name to tls-authenticate-client.",
+		"tls-authenticate-client", clientNames, "newClientNames", newClientNames)
+
+	serviceConf["tls-authenticate-client"] = newClientNames
 	return nil
 }
 
@@ -444,9 +481,12 @@ func toInterfaceList(list []string) []interface{} {
 }
 
 func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
-	val1 := m1[key]
-	val2 := m2[key]
-	return val1 != val2
+	val1, ok1 := m1[key]
+	val2, ok2 := m2[key]
+	if ok1 != ok2 {
+		return true
+	}
+	return !reflect.DeepEqual(val1, val2)
 }
 
 func isNameExist(names []string, name string) bool {

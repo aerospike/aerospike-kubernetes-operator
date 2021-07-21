@@ -30,6 +30,7 @@ import (
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -45,11 +46,11 @@ import (
 
 var cfg *rest.Config
 
-// var k8sClient client.Client
 var testEnv *envtest.Environment
 
-// var ctx goctx.Context
 var k8sClient client.Client
+
+var k8sClientset *kubernetes.Clientset
 
 var (
 	scheme = k8Runtime.NewScheme()
@@ -95,6 +96,9 @@ var _ = BeforeSuite(func(done Done) {
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
+
+	k8sClientset = kubernetes.NewForConfigOrDie(cfg)
 	Expect(k8sClient).NotTo(BeNil())
 
 	ctx := goctx.TODO()

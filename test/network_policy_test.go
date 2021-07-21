@@ -265,6 +265,8 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 
 	var networkConf map[string]interface{} = map[string]interface{}{}
 
+	var operatorClientCertSpec *asdbv1alpha1.AerospikeOperatorClientCertSpec = nil
+
 	if enableTLS {
 		networkConf = map[string]interface{}{
 			"service": map[string]interface{}{
@@ -276,6 +278,17 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 					"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
 					"key-file":  "/etc/aerospike/secret/svc_key.pem",
 					"ca-file":   "/etc/aerospike/secret/cacert.pem",
+				},
+			},
+		}
+
+		operatorClientCertSpec = &asdbv1alpha1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+					SecretName:         tlsSecretName,
+					CaCertsFilename:    "cacert.pem",
+					ClientCertFilename: "svc_cluster_chain.pem",
+					ClientKeyFilename:  "svc_key.pem",
 				},
 			},
 		}
@@ -352,6 +365,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 					corev1.ResourceMemory: mem,
 				},
 			},
+			OperatorClientCertSpec: operatorClientCertSpec,
 			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{

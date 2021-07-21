@@ -10,7 +10,7 @@ import (
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	as "github.com/ashishshinde/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 )
 
@@ -97,6 +97,8 @@ func GetAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPoli
 
 // reconcileRoles reconciles roles to take them from current to desired.
 func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current map[string]asdbv1alpha1.AerospikeRoleSpec, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+	var err error
+
 	// Get list of existing roles from the cluster.
 	asRoles, err := client.QueryRoles(&adminPolicy)
 	if err != nil {
@@ -149,6 +151,8 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 
 // reconcileUsers reconciles users to take them from current to desired.
 func reconcileUsers(desired map[string]asdbv1alpha1.AerospikeUserSpec, current map[string]asdbv1alpha1.AerospikeUserSpec, passwordProvider AerospikeUserPasswordProvider, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+	var err error
+
 	// Get list of existing users from the cluster.
 	asUsers, err := client.QueryUsers(&adminPolicy)
 	if err != nil {
@@ -375,7 +379,8 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist)
+	// TODO: Add and use quotas for this role from configuration.
+	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, 0, 0)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}

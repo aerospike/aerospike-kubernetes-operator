@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	as "github.com/ashishshinde/aerospike-client-go"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -24,6 +24,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,8 +88,10 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // AerospikeClusterReconciler reconciles a AerospikeCluster object
 type AerospikeClusterReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *k8sRuntime.Scheme
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Log        logr.Logger
+	Scheme     *k8sRuntime.Scheme
 }
 
 // RackState contains the rack configuration and rack size.
@@ -97,6 +101,7 @@ type RackState struct {
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/finalizers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch;create;update;patch;delete
@@ -449,7 +454,7 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
 	// This is not necessary since scale-up would cleanup danglin pod status. However done here for general
 	// cleanliness.
-	rackStateList := getNewRackStateList(aeroCluster)
+	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for _, state := range rackStateList {
 		pods, err := r.getRackPodList(aeroCluster, state.Rack.ID)
 		if err != nil {

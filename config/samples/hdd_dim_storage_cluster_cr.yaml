@@ -39,6 +39,8 @@ spec:
         roles:
           - sys-admin
           - user-admin
+          - write
+          - read
 
   aerospikeConfigSecret:
     secretName: aerospike-secret

@@ -23,8 +23,6 @@ spec:
         aerospike:
           path: /opt/aerospike     
  
-        
-
   aerospikeAccessControl:
     users:
       - name: admin

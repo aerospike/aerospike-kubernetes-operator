@@ -13,6 +13,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -90,14 +91,18 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	kubeConfig := ctrl.GetConfigOrDie()
+	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
 	setupLog.Info("Init aerospike-server config schemas")
 	asconfig.InitFromMap(configschema.SchemaMap)
 
 	if err := (&aerospikecluster.AerospikeClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
-		Scheme: mgr.GetScheme(),
+		Client:     mgr.GetClient(),
+		KubeClient: kubeClient,
+		KubeConfig: kubeConfig,
+		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
+		Scheme:     mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeCluster")
 		os.Exit(1)

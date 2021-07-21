@@ -239,14 +239,24 @@ resources:
               blockVolumePolicy:
                 cascadeDelete: true
               volumes:
-                - storageClass: ssd
-                  path: /opt/aerospike
-                  volumeMode: Filesystem
-                  size: 1Gi
-                - path: /opt/aerospike/data
-                  storageClass: ssd
-                  volumeMode: Filesystem
-                  size: 3Gi
+                - name: workdir
+                  source:
+                    persistentVolume:
+                      storageClass: ssd
+                      volumeMode: Filesystem
+                      size: 1Gi
+                  aerospike:
+                    path: /opt/aerospike
+
+                - name: ns
+                  source:
+                    persistentVolume:                  
+                      storageClass: ssd
+                      volumeMode: Filesystem
+                      size: 3Gi
+                  aerospike:
+                    path: /opt/aerospike/data
+
         - id: 2
           zone: us-west1-b
           aerospikeConfig:
