@@ -75,6 +75,11 @@ func (r *AerospikeCluster) setDefaults(aslog logr.Logger) error {
 		return err
 	}
 
+	// Set defaults for pod spec
+	if err := r.Spec.PodSpec.SetDefaults(); err != nil {
+		return err
+	}
+
 	// Validation policy
 	if r.Spec.ValidationPolicy == nil {
 		validationPolicy := ValidationPolicySpec{}

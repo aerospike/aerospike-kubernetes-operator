@@ -16,10 +16,14 @@ kubectl -n test1 delete aerospikecluster --all
 kubectl -n test2 delete aerospikecluster --all
 kubectl -n test3 delete aerospikecluster --all
 
+# Force delete pods
+kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test || true
+kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test1 || true
+kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test2 || true
+
 # Delete PVCs
 echo "Removing PVCs"
-
-kubectl -n test delete pvc --selector 'app=aerospike-cluster'
+kubectl -n test delete pvc --selector 'app=aerospike-cluster' || true
 
 # Delete the secrets
 echo "Removing secrets"
