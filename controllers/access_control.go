@@ -351,7 +351,6 @@ type AerospikeRoleCreateUpdate struct {
 	readQuota uint32
 
 	writeQuota uint32
-
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
