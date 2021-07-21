@@ -40,6 +40,23 @@ var aerospikeConfigWithSecurity = &asdbv1alpha1.AerospikeConfigSpec{
 	},
 }
 
+var aerospikeConfigWithSecurityWithQuota = &asdbv1alpha1.AerospikeConfigSpec{
+	Value: map[string]interface{}{
+		"security": map[string]interface{}{
+			"enable-security": true,
+			"enable-quotas":   true,
+		},
+		"namespaces": []interface{}{
+			map[string]interface{}{
+				"name": "profileNs",
+			},
+			map[string]interface{}{
+				"name": "userNs",
+			},
+		},
+	},
+}
+
 var _ = Describe("AccessControl", func() {
 
 	Context("AccessControl", func() {
@@ -1114,7 +1131,6 @@ var _ = Describe("AccessControl", func() {
 				}
 			})
 		})
-
 		Context("When cluster is deployed", func() {
 			ctx := goctx.Background()
 
@@ -1287,6 +1303,107 @@ var _ = Describe("AccessControl", func() {
 					deleteCluster(k8sClient, ctx, aeroCluster)
 				}
 			})
+
+			It("Try ValidAccessControlQuota", func() {
+					Roles: []asdbv1alpha1.AerospikeRoleSpec{
+						{
+							Name: "profiler",
+							Privileges: []string{
+								"read-write.profileNs",
+								"read.userNs",
+							},
+							Whitelist: []string{
+								"8.8.0.0/16",
+							},
+							ReadQuota:  1,
+							WriteQuota: 1,
+						},
+					},
+					Users: []asdbv1alpha1.AerospikeUserSpec{
+						{
+							Name:       "admin",
+							SecretName: "someSecret",
+							Roles: []string{
+								"sys-admin",
+								"user-admin",
+							},
+						},
+
+						{
+							Name:       "profileUser",
+							SecretName: "someOtherSecret",
+							Roles: []string{
+								"profiler",
+							},
+						},
+					},
+				}
+
+				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
+					AerospikeAccessControl: &accessControl,
+
+					AerospikeConfig: aerospikeConfigWithSecurityWithQuota,
+				}
+
+				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(valid).To(BeTrue(), "Valid aerospike spec marked invalid")
+				// if !valid {
+				// 	Fail(fmt.Sprintf("Valid aerospike spec marked invalid: %v", err))
+				// }
+			})
+			It("Try Invalid AccessControlEnableQuotaMissing", func() {
+				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
+					Roles: []asdbv1alpha1.AerospikeRoleSpec{
+						{
+							Name: "profiler",
+							Privileges: []string{
+								"read-write.profileNs",
+								"read.userNs",
+							},
+							Whitelist: []string{
+								"8.8.0.0/16",
+							},
+							ReadQuota:  1,
+							WriteQuota: 1,
+						},
+					},
+					Users: []asdbv1alpha1.AerospikeUserSpec{
+						{
+							Name:       "admin",
+							SecretName: "someSecret",
+							Roles: []string{
+								"sys-admin",
+								"user-admin",
+							},
+						},
+
+						{
+							Name:       "profileUser",
+							SecretName: "someOtherSecret",
+							Roles: []string{
+								"profiler",
+							},
+						},
+					},
+				}
+				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
+					AerospikeAccessControl: &accessControl,
+
+					AerospikeConfig: aerospikeConfigWithSecurity,
+				}
+
+				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
+
+				if valid || err == nil {
+					Fail("InValid aerospike spec validated")
+				}
+				Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
+
+				if !strings.Contains(strings.ToLower(err.Error()), "invalid aerospike.security conf. enable-quotas: not present") {
+					Fail(fmt.Sprintf("Error: %v enable-quotas: not present'", err))
+				}
+			})
 		})
 	})
 })
@@ -1324,7 +1441,7 @@ func getAerospikeClusterSpecWithAccessControl(clusterNamespacedName types.Namesp
 		},
 		Spec: asdbv1alpha1.AerospikeClusterSpec{
 			Size:  testClusterSize,
-			Image: latestClusterImage,
+			Image: "aerospike/aerospike-server-enterprise:5.6.0.7",
 			ValidationPolicy: &asdbv1alpha1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,

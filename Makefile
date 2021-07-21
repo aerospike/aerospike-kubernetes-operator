@@ -1,5 +1,8 @@
 # /bin/sh does not support source command needed in make test
 SHELL := /bin/bash
+ifneq ($(shell uname -s), 'Darwin')
+SHELL := /bin/zsh
+endif
 
 # Current Operator version
 VERSION ?= 0.0.1
