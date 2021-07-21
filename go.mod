@@ -7,7 +7,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.17 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.11 // indirect
 	github.com/aerospike/aerospike-management-lib v0.0.0-20210711071602-62b56ba49fbd
-	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210711030305-604f00410716 // indirect
+	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210711030305-604f00410716
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect
@@ -26,7 +26,6 @@ require (
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
