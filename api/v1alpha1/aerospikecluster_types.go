@@ -167,7 +167,10 @@ type AerospikeRoleSpec struct {
 	// +listType=set
 	Whitelist []string `json:"whitelist,omitempty"`
 
+	// ReadQuota specifies permitted rate of read records for current role (the value is in RPS)
 	ReadQuota uint32 `json:"readQuota,omitempty"`
+
+	// WriteQuota specifies permitted rate of write records for current role (the value is in RPS)
 	WriteQuota uint32 `json:"writeQuota,omitempty"`
 }
 
