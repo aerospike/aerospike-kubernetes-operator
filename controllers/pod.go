@@ -522,36 +522,6 @@ func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (*corev1.
 	return service, nil
 }
 
-func (r *AerospikeClusterReconciler) getServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (int32, error) {
-	var port int32
-	tlsName := getServiceTLSName(aeroCluster)
-
-	if aeroCluster.Spec.MultiPodPerHost {
-		svc, err := r.getServiceForPod(pod)
-		if err != nil {
-			return 0, fmt.Errorf("error getting service port: %v", err)
-		}
-		if tlsName == "" {
-			port = svc.Spec.Ports[0].NodePort
-		} else {
-			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
-					port = portInfo.NodePort
-					break
-				}
-			}
-		}
-	} else {
-		if tlsName == "" {
-			port = asdbv1alpha1.ServicePort
-		} else {
-			port = asdbv1alpha1.ServiceTLSPort
-		}
-	}
-
-	return port, nil
-}
-
 func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, podNames []string, rackID int) ([]corev1.PersistentVolumeClaim, error) {
 	pvcListItems, err := r.getRackPVCList(aeroCluster, rackID)
 	if err != nil {
@@ -599,19 +569,6 @@ func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1al
 		}
 	}
 	return false
-}
-
-func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
-	// TODO: Should we return err, should have failed in validation
-	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
-
-	if networkConfTmp, ok := aeroConf["network"]; ok {
-		networkConf := networkConfTmp.(map[string]interface{})
-		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-			return tlsName.(string)
-		}
-	}
-	return ""
 }
 
 func getFQDNForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, host string) string {
