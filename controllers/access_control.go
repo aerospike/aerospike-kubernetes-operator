@@ -383,7 +383,7 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.writeQuota, roleCreate.writeQuota)
+	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.readQuota, roleCreate.writeQuota)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
