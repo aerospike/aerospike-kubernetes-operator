@@ -1305,6 +1305,7 @@ var _ = Describe("AccessControl", func() {
 			})
 
 			It("Try ValidAccessControlQuota", func() {
+				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
 					Roles: []asdbv1alpha1.AerospikeRoleSpec{
 						{
 							Name: "profiler",
@@ -1348,9 +1349,6 @@ var _ = Describe("AccessControl", func() {
 				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue(), "Valid aerospike spec marked invalid")
-				// if !valid {
-				// 	Fail(fmt.Sprintf("Valid aerospike spec marked invalid: %v", err))
-				// }
 			})
 			It("Try Invalid AccessControlEnableQuotaMissing", func() {
 				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
@@ -1441,7 +1439,7 @@ func getAerospikeClusterSpecWithAccessControl(clusterNamespacedName types.Namesp
 		},
 		Spec: asdbv1alpha1.AerospikeClusterSpec{
 			Size:  testClusterSize,
-			Image: "aerospike/aerospike-server-enterprise:5.6.0.7",
+			Image: latestClusterImage,
 			ValidationPolicy: &asdbv1alpha1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,
