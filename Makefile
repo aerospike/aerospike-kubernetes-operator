@@ -1,9 +1,7 @@
 # /bin/sh does not support source command needed in make test
 SHELL := /bin/bash
-ifneq ($(shell uname -s), 'Darwin')
-SHELL := /bin/zsh
-endif
 
+OS := $(shell uname -s)
 # Current Operator version
 VERSION ?= 0.0.1
 # Default bundle image tag
@@ -67,7 +65,11 @@ deploy: manifests kustomize
 test-deploy: manifests kustomize
 	cp -r config test
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	cd test/config/manager && sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" manager.yaml
+	if [[ $(OS) = Darwin ]]; then \
+  		sed -I '' "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+  	else \
+		sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+  	fi
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
