@@ -70,8 +70,71 @@ type AerospikeClusterSpec struct {
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
+	// Certificates to connect to Aerospike. If omitted then certs are taken from the secret 'aerospike-secret'.
+	// +optional
+	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCertSpec,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
+}
+
+type AerospikeOperatorClientCertSpec struct {
+	// If specified, this name will be added to tls-authenticate-client list by the operator
+	// +optional
+	TLSClientName               string `json:"tlsClientName,omitempty"`
+	AerospikeOperatorCertSource `json:",inline"`
+}
+
+// AerospikeOperatorCertSource Represents the source of Aerospike ClientCert for Operator.
+// Only one of its members may be specified.
+type AerospikeOperatorCertSource struct {
+	// +optional
+	SecretCertSource *AerospikeSecretCertSource `json:"secretCertSource,omitempty"`
+	// +optional
+	CertPathInOperator *AerospikeCertPathInOperatorSource `json:"certPathInOperator,omitempty"`
+}
+
+type AerospikeSecretCertSource struct {
+	SecretName string `json:"secretName"`
+	// +optional
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+	// +optional
+	CaCertsFilename string `json:"caCertsFilename,omitempty"`
+	// +optional
+	ClientCertFilename string `json:"clientCertFilename,omitempty"`
+	// +optional
+	ClientKeyFilename string `json:"clientKeyFilename,omitempty"`
+}
+
+// AerospikeCertPathInOperatorSource contain configuration for certificates used by operator to connect to aerospike cluster.
+// All paths are on operator's filesystem.
+type AerospikeCertPathInOperatorSource struct {
+	// +optional
+	CaCertsPath string `json:"caCertsPath,omitempty"`
+	// +optional
+	ClientCertPath string `json:"clientCertPath,omitempty"`
+	// +optional
+	ClientKeyPath string `json:"clientKeyPath,omitempty"`
+}
+
+func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
+	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
+		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
+}
+
+func (c *AerospikeOperatorClientCertSpec) validate() error {
+	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
+		return fmt.Errorf("either \"secretCertSource\" or \"certPathInOperator\" must be set in \"operatorClientCertSpec\" but not both: %+v", c)
+	}
+	if c.SecretCertSource != nil && (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+		return fmt.Errorf("both \"clientCertFilename\" and \"clientKeyFilename\" should be either set or not set in \"secretCertSource\": %+v", c.SecretCertSource)
+	}
+	if c.CertPathInOperator != nil && (c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
+		return fmt.Errorf("both \"clientCertPath\" and \"clientKeyPath\" should be either set or not set in \"certPathInOperator\": %+v", c.CertPathInOperator)
+	}
+	if c.TLSClientName != "" && !c.IsClientCertConfigured() {
+		return fmt.Errorf("tlsClientName is provided but client certificate is not: secretCertSource=%+v, certPathInOperator=%v+v", c.SecretCertSource, c.CertPathInOperator)
+	}
+	return nil
 }
 
 // AerospikePodSpec contain configuration for created Aeropsike cluster pods.
@@ -79,12 +142,37 @@ type AerospikePodSpec struct {
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
+	// HostNetwork enables host networking for the pod.
+	// To enable hostNetwork multiPodPerHost must be true.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+
+	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy. If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
+
+	// Effective value of the DNSPolicy
+	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
+
 	// TODO: Add affinity and tolerations.
 }
 
 // ValidatePodSpecChange indicates if a change to to pod spec is safe to apply.
 func (v *AerospikePodSpec) ValidatePodSpecChange(new AerospikePodSpec) error {
 	// All changes are valid for now.
+	return nil
+}
+
+// SetDefaults applies defaults to the pod spec.
+func (v *AerospikePodSpec) SetDefaults() error {
+	if v.InputDNSPolicy == nil {
+		if v.HostNetwork {
+			v.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		} else {
+			v.DNSPolicy = corev1.DNSClusterFirst
+		}
+	} else {
+		v.DNSPolicy = *v.InputDNSPolicy
+	}
+
 	return nil
 }
 
@@ -539,6 +627,7 @@ func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
 	return &dst
 }
 
+// AerospikeClusterStatusSpec captures the current status of the cluster.
 type AerospikeClusterStatusSpec struct {
 	// Aerospike cluster size
 	Size int32 `json:"size,omitempty"`
@@ -577,6 +666,9 @@ type AerospikeClusterStatusSpec struct {
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
+	// Certificates to connect to Aerospike. If omitted then certs are taken from the secret 'aerospike-secret'.
+	// +optional
+	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCertSpec,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 }
@@ -651,6 +743,14 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 		return nil, err
 	}
 	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
+
+	if spec.OperatorClientCertSpec != nil {
+		clientCertSpec := &AerospikeOperatorClientCertSpec{}
+		if err := lib.DeepCopy(clientCertSpec, spec.OperatorClientCertSpec); err != nil {
+			return nil, err
+		}
+		status.OperatorClientCertSpec = clientCertSpec
+	}
 
 	// Storage
 	statusPodSpec := AerospikePodSpec{}
@@ -732,6 +832,14 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec,
 		return nil, err
 	}
 	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
+
+	if status.OperatorClientCertSpec != nil {
+		clientCertSpec := &AerospikeOperatorClientCertSpec{}
+		if err := lib.DeepCopy(clientCertSpec, status.OperatorClientCertSpec); err != nil {
+			return nil, err
+		}
+		spec.OperatorClientCertSpec = clientCertSpec
+	}
 
 	// Storage
 	specPodSpec := AerospikePodSpec{}

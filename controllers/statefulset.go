@@ -94,10 +94,12 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: aeroClusterServiceAccountName,
+					HostNetwork:        aeroCluster.Spec.PodSpec.HostNetwork,
+					DNSPolicy:          aeroCluster.Spec.PodSpec.DNSPolicy,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.13",
+						Image: "aerospike/aerospike-kubernetes-init:0.0.14",
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts: []corev1.VolumeMount{
@@ -662,6 +664,11 @@ func (r *AerospikeClusterReconciler) updateSTSSecretInfo(aeroCluster *asdbv1alph
 
 // Called while creating new cluster and also during rolling restart.
 func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
+	// Update pod spec.
+	st.Spec.Template.Spec.HostNetwork = aeroCluster.Spec.PodSpec.HostNetwork
+
+	st.Spec.Template.Spec.DNSPolicy = aeroCluster.Spec.PodSpec.DNSPolicy
+
 	// Add new sidecars.
 	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		found := false
@@ -872,7 +879,7 @@ func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 			},
 			{
 				Name:          asdbv1alpha1.FabricTLSPortName,
-				ContainerPort: asdbv1alpha1.FabricPort,
+				ContainerPort: asdbv1alpha1.FabricTLSPort,
 			},
 			{
 				Name:          asdbv1alpha1.InfoPortName,
@@ -910,7 +917,7 @@ func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
 			},
 			{
 				Name:          asdbv1alpha1.FabricTLSPortName,
-				ContainerPort: asdbv1alpha1.FabricPort,
+				ContainerPort: asdbv1alpha1.FabricTLSPort,
 			},
 			{
 				Name:          asdbv1alpha1.InfoPortName,

@@ -17,10 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -171,7 +173,11 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	// Validate common aerospike config
-	if err := validateAerospikeConfig(aslog, configMap, &r.Spec.Storage, int(r.Spec.Size)); err != nil {
+	if err := r.validateAerospikeConfig(aslog, configMap, &r.Spec.Storage, int(r.Spec.Size)); err != nil {
+		return err
+	}
+
+	if err := validateClientCertSpec(r.Spec.OperatorClientCertSpec, configMap); err != nil {
 		return err
 	}
 
@@ -206,6 +212,48 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	return nil
+}
+
+func validateClientCertSpec(clientCertSpec *AerospikeOperatorClientCertSpec, configSpec *AerospikeConfigSpec) error {
+	networkConf, networkConfExist := configSpec.Value[confKeyNetwork]
+	if !networkConfExist {
+		return nil
+	}
+	serviceConf, serviceConfExists := networkConf.(map[string]interface{})["service"]
+	if !serviceConfExists {
+		return nil
+	}
+	clientNames, err := readClientNamesFromConfig(serviceConf.(map[string]interface{}))
+	if err != nil {
+		return err
+	}
+	if isClientCertNeeded(clientNames, configSpec) && (clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured()) {
+		return fmt.Errorf("mTLS is configured for AerospikeCluster (%v) but operator's client cert is not: %+v", clientNames, clientCertSpec)
+	}
+	if isClientCertNameValidationEnabled(clientNames) && (clientCertSpec == nil || clientCertSpec.TLSClientName == "") {
+		return fmt.Errorf("client name validation is enabled in mTLS (%+v) but TLSClientName is not provided in operatorClientCertSpec", clientNames)
+	}
+	if clientCertSpec == nil {
+		return nil
+	}
+	if err := clientCertSpec.validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func isClientCertNeeded(clientNames []string, configSpec *AerospikeConfigSpec) bool {
+	if len(clientNames) == 0 {
+		// if tls-authenticate-client is not configured but tls is enabled, this means that "any" is used
+		// and you need to provide client cert for mTLS.
+		return IsTLS(configSpec)
+	}
+	for _, clientName := range clientNames {
+		if strings.EqualFold(clientName, "false") {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *AerospikeCluster) validateRackUpdate(aslog logr.Logger, old *AerospikeCluster) error {
@@ -320,7 +368,7 @@ func (r *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 			// TODO:
 			// Replication-factor in rack and commonConfig can not be different
 			storage := rack.Storage
-			if err := validateAerospikeConfig(aslog, &config, &storage, int(r.Spec.Size)); err != nil {
+			if err := r.validateAerospikeConfig(aslog, &config, &storage, int(r.Spec.Size)); err != nil {
 				return err
 			}
 		}
@@ -363,7 +411,7 @@ func validateClusterSize(aslog logr.Logger, version string, sz int) error {
 	return nil
 }
 
-func validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int) error {
+func (r *AerospikeCluster) validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int) error {
 	config := configSpec.Value
 
 	if config == nil {
@@ -384,7 +432,7 @@ func validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec,
 	if !ok {
 		return fmt.Errorf("aerospikeConfig.network not a valid map %v", config["network"])
 	}
-	if err := validateNetworkConfig(networkConf); err != nil {
+	if err := r.validateNetworkConfig(networkConf); err != nil {
 		return err
 	}
 
@@ -404,8 +452,9 @@ func validateAerospikeConfig(aslog logr.Logger, configSpec *AerospikeConfigSpec,
 	return nil
 }
 
-func validateNetworkConfig(networkConf map[string]interface{}) error {
-	if _, ok := networkConf["service"]; !ok {
+func (r *AerospikeCluster) validateNetworkConfig(networkConf map[string]interface{}) error {
+	serviceConf, serviceExist := networkConf["service"]
+	if !serviceExist {
 		return fmt.Errorf("network.service section not found in config. Looks like object is not mutated by webhook")
 	}
 
@@ -423,7 +472,7 @@ func validateNetworkConfig(networkConf map[string]interface{}) error {
 			}
 		}
 	}
-	if err := validateTlsClientNames(networkConf); err != nil {
+	if err := validateTlsClientNames(serviceConf.(map[string]interface{}), r.Spec.OperatorClientCertSpec); err != nil {
 		return err
 	}
 	for _, connectionType := range networkConnectionTypes {
@@ -435,45 +484,58 @@ func validateNetworkConfig(networkConf map[string]interface{}) error {
 	return nil
 }
 
-func validateTlsClientNames(networkConf map[string]interface{}) error {
-	clientNames, err := readClientNamesFromConfig(networkConf)
+func validateTlsClientNames(serviceConf map[string]interface{}, clientCertSpec *AerospikeOperatorClientCertSpec) error {
+	clientNames, err := readClientNamesFromConfig(serviceConf)
 	if err != nil {
 		return err
 	}
-	if len(clientNames) > 1 {
-		for _, clientName := range clientNames {
-			if strings.EqualFold(clientName, "any") || strings.EqualFold(clientName, "false") {
-				return fmt.Errorf("tls-authenticate-client may not mix \"any\" or \"false\" with other values: %v", clientNames)
-			}
+	clientNameValidationEnabled := isClientCertNameValidationEnabled(clientNames)
+	if !clientNameValidationEnabled && len(clientNames) > 1 {
+		return fmt.Errorf("tls-authenticate-client may not mix \"any\" or \"false\" with other values: %+v", clientNames)
+	}
+	namesFromCert, err := readNamesFromLocalCertificate(clientCertSpec)
+	if err != nil {
+		return err
+	}
+	if clientNameValidationEnabled && len(namesFromCert) > 0 && !containsAnyName(clientNames, namesFromCert) {
+		certNames := make([]string, 0, len(namesFromCert))
+		for name := range namesFromCert {
+			certNames = append(certNames, name)
 		}
+		return fmt.Errorf("tls-authenticate-client (%+v) doesn't contain name from Operator's certificate (%+v) configured in %s, configure OperatorClientCertSpec.TLSClientName properly",
+			clientNames, certNames, clientCertSpec.CertPathInOperator.ClientCertPath)
 	}
 	return nil
 }
 
-func readClientNamesFromConfig(networkConf map[string]interface{}) ([]string, error) {
-	serviceConf := networkConf["service"].(map[string]interface{})
-	var result []string
-	clientNames, exists := serviceConf["tls-authenticate-client"]
-	if !exists {
+func containsAnyName(clientNames []string, namesToFind map[string]struct{}) bool {
+	for _, clientName := range clientNames {
+		if _, exists := namesToFind[clientName]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSpec) (map[string]struct{}, error) {
+	result := make(map[string]struct{})
+	if clientCertSpec == nil || clientCertSpec.CertPathInOperator == nil || clientCertSpec.CertPathInOperator.ClientCertPath == "" {
 		return result, nil
 	}
-	switch clientNames.(type) {
-	case string:
-		result = append(result, clientNames.(string))
-	case bool:
-		result = append(result, strconv.FormatBool(clientNames.(bool)))
-	case []interface{}:
-		for _, name := range clientNames.([]interface{}) {
-			if nameStr, ok := name.(string); ok {
-				result = append(result, nameStr)
-			} else if nameBool, ok := name.(bool); ok {
-				result = append(result, strconv.FormatBool(nameBool))
-			} else {
-				return result, fmt.Errorf("tls-authenticate-client value \"%v\" has a wrong type (%t)", name, name)
-			}
-		}
-	default:
-		return result, fmt.Errorf("wrong type (%T) for tls-authenticate-client (%v)", clientNames, clientNames)
+	r, err := ioutil.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
+	if err != nil {
+		return result, err
+	}
+	block, _ := pem.Decode(r)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return result, err
+	}
+	if len(cert.Subject.CommonName) > 0 {
+		result[cert.Subject.CommonName] = struct{}{}
+	}
+	for _, dns := range cert.DNSNames {
+		result[dns] = struct{}{}
 	}
 	return result, nil
 }
@@ -923,10 +985,6 @@ func isSecretNeeded(configSpec AerospikeConfigSpec) bool {
 		}
 	}
 
-	// tls needs secret
-	if IsTLS(configSpec) {
-		return true
-	}
 	return false
 }
 
@@ -953,6 +1011,10 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 }
 
 func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
+	if r.Spec.PodSpec.HostNetwork && r.Spec.MultiPodPerHost {
+		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
+	}
+
 	sidecarNames := map[string]int{}
 
 	for _, sidecar := range r.Spec.PodSpec.Sidecars {

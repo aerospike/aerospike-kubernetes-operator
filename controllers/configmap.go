@@ -38,6 +38,7 @@ type initializeTemplateInput struct {
 	NetworkPolicy   asdbv1alpha1.AerospikeNetworkPolicy
 	PodPort         int32
 	PodTLSPort      int32
+	HostNetwork     bool
 }
 
 //go:embed scripts
@@ -155,6 +156,7 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1alpha1.A
 		NetworkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
 		PodPort:         asdbv1alpha1.ServicePort,
 		PodTLSPort:      asdbv1alpha1.ServiceTLSPort,
+		HostNetwork:     aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
 	baseConfData := map[string]string{}

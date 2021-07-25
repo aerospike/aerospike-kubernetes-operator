@@ -190,6 +190,8 @@ func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient clien
 
 	policy := as.NewClientPolicy()
 
+	policy.SeedOnlyCluster = true
+
 	// cluster name
 	policy.ClusterName = aeroCluster.Name
 

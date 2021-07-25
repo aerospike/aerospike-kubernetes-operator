@@ -366,6 +366,16 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 					corev1.ResourceMemory: mem,
 				},
 			},
+			OperatorClientCertSpec: &asdbv1alpha1.AerospikeOperatorClientCertSpec{
+				AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
+					SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+						SecretName:         tlsSecretName,
+						CaCertsFilename:    "cacert.pem",
+						ClientCertFilename: "svc_cluster_chain.pem",
+						ClientKeyFilename:  "svc_key.pem",
+					},
+				},
+			},
 			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 
@@ -566,6 +576,16 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
 					corev1.ResourceMemory: mem,
+				},
+			},
+			OperatorClientCertSpec: &asdbv1alpha1.AerospikeOperatorClientCertSpec{
+				AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
+					SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+						SecretName:         tlsSecretName,
+						CaCertsFilename:    "cacert.pem",
+						ClientCertFilename: "svc_cluster_chain.pem",
+						ClientKeyFilename:  "svc_key.pem",
+					},
 				},
 			},
 			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{

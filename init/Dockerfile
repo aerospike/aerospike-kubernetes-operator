@@ -13,6 +13,9 @@ RUN curl -L https://github.com/ashishshinde/kubernetes-configmap-exporter/releas
 ADD entrypoint.sh /usr/bin/entrypoint.sh
 RUN chmod +x /usr/bin/entrypoint.sh
 
+ADD https://github.com/moparisthebest/static-curl/releases/download/v7.77.0/curl-amd64 /usr/local/bin
+RUN chmod +x /usr/local/bin/curl-amd64
+
 RUN rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true
 RUN apt-get clean
 

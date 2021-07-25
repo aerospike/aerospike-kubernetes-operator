@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"path/filepath"
+	"io/ioutil"
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -57,21 +57,23 @@ func (r *AerospikeClusterReconciler) getClientPolicy(aeroCluster *asdbv1alpha1.A
 
 	// tls config
 	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
-		r.Log.V(1).Info("Set tls config in aeospike client policy")
+		r.Log.V(1).Info("Set tls config in aerospike client policy")
+		clientCertSpec := aeroCluster.Spec.OperatorClientCertSpec
 		tlsConf := tls.Config{
-			RootCAs:                  r.getClusterServerPool(aeroCluster),
+			RootCAs:                  r.getClusterServerCAPool(clientCertSpec, aeroCluster.Namespace),
 			Certificates:             []tls.Certificate{},
 			PreferServerCipherSuites: true,
 			// used only in testing
 			// InsecureSkipVerify: true,
 		}
-
-		cert, err := r.getClientCertificate(aeroCluster)
-		if err != nil {
-			r.Log.Error(err, "Failed to get client certificate. Using basic clientPolicy", "err", err)
-			return policy
+		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
+			//This is possible when tls-authenticate-client = false
+			r.Log.Info("Operator's client cert is not configured. Skip using client certs.", "clientCertSpec", clientCertSpec)
+		} else if cert, err := r.getClientCertificate(clientCertSpec, aeroCluster.Namespace); err == nil {
+			tlsConf.Certificates = append(tlsConf.Certificates, *cert)
+		} else {
+			r.Log.Error(err, "Failed to get client certificate. Using basic clientPolicy")
 		}
-		tlsConf.Certificates = append(tlsConf.Certificates, *cert)
 
 		tlsConf.BuildNameToCertificate()
 		policy.TlsConfig = &tlsConf
@@ -102,75 +104,114 @@ func (r *AerospikeClusterReconciler) getClientPolicy(aeroCluster *asdbv1alpha1.A
 	return policy
 }
 
-func (r *AerospikeClusterReconciler) getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster) *x509.CertPool {
-
+func (r *AerospikeClusterReconciler) getClusterServerCAPool(clientCertSpec *asdbv1alpha1.AerospikeOperatorClientCertSpec, clusterNamespace string) *x509.CertPool {
 	// Try to load system CA certs, otherwise just make an empty pool
 	serverPool, err := x509.SystemCertPool()
 	if err != nil {
 		r.Log.Info("Warn: Failed to add system certificates to the pool", "err", err)
 		serverPool = x509.NewCertPool()
 	}
-
-	// get the tls info from secret
-	found := &v1.Secret{}
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Spec.AerospikeConfigSecret.SecretName, Namespace: aeroCluster.Namespace}, found)
-	if err != nil {
-		r.Log.Info("Warn: Failed to get secret certificates to the pool, returning empty certPool", "err", err)
+	if clientCertSpec == nil {
+		r.Log.Info("OperatorClientCertSpec is not configured. Using default system CA certs...")
 		return serverPool
 	}
-	tlsName := getServiceTLSName(aeroCluster)
-	if tlsName == "" {
-		r.Log.Info("Warn: Failed to get tlsName from aerospikeConfig, returning empty certPool", "err", err)
+
+	if clientCertSpec.CertPathInOperator != nil {
+		return r.appendCACertFromFile(clientCertSpec.CertPathInOperator.CaCertsPath, serverPool)
+	} else if clientCertSpec.SecretCertSource != nil {
+		return r.appendCACertFromSecret(clientCertSpec.SecretCertSource, clusterNamespace, serverPool)
+	} else {
+		r.Log.Error(fmt.Errorf("both SecrtenName and CertPathInOperator are not set"), "Returning empty certPool.")
 		return serverPool
 	}
-	// get ca-file and use as cacert
-	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
+}
 
-	tlsConfList := aeroConf["network"].(map[string]interface{})["tls"].([]interface{})
-	for _, tlsConfInt := range tlsConfList {
-		tlsConf := tlsConfInt.(map[string]interface{})
-		if tlsConf["name"].(string) == tlsName {
-			if cafile, ok := tlsConf["ca-file"]; ok {
-				r.Log.V(1).Info("Adding cert in tls serverpool", "tlsConf", tlsConf)
-				caFileName := filepath.Base(cafile.(string))
-				serverPool.AppendCertsFromPEM(found.Data[caFileName])
-			}
-		}
+func (r *AerospikeClusterReconciler) appendCACertFromFile(caPath string, serverPool *x509.CertPool) *x509.CertPool {
+	if caPath == "" {
+		r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
+	} else if caData, err := ioutil.ReadFile(caPath); err != nil {
+		r.Log.Error(err, "Failed to load CA certs from file.", "ca-path", caPath)
+	} else {
+		serverPool.AppendCertsFromPEM(caData)
+		r.Log.Info("Loaded CA root certs from file.", "ca-path", caPath)
 	}
 	return serverPool
 }
 
-func (r *AerospikeClusterReconciler) getClientCertificate(aeroCluster *asdbv1alpha1.AerospikeCluster) (*tls.Certificate, error) {
+func (r *AerospikeClusterReconciler) appendCACertFromSecret(secretSource *asdbv1alpha1.AerospikeSecretCertSource, defaultNamespace string, serverPool *x509.CertPool) *x509.CertPool {
+	if secretSource.CaCertsFilename == "" {
+		r.Log.Info("CaCertsFilename is not specified. Using default CA certs...", "secret", secretSource)
+		return serverPool
+	}
+	// get the tls info from secret
+	r.Log.Info("Trying to find an appropriate CA cert from the secret...", "secret", secretSource)
+	found := &v1.Secret{}
+	secretName := namespacedSecret(secretSource, defaultNamespace)
+	if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+		r.Log.Error(err, "Failed to get secret certificates to the pool, returning empty certPool", "secret", secretName)
+		return serverPool
+	}
+	if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
+		r.Log.V(1).Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
+		serverPool.AppendCertsFromPEM(caData)
+	} else {
+		r.Log.V(1).Info("WARN: Can't find ca-file in the secret. using default certPool.",
+			"secret", secretName, "ca-file", secretSource.CaCertsFilename)
+	}
+	return serverPool
+}
 
+func (r *AerospikeClusterReconciler) getClientCertificate(clientCertSpec *asdbv1alpha1.AerospikeOperatorClientCertSpec, clusterNamespace string) (*tls.Certificate, error) {
+	if clientCertSpec.CertPathInOperator != nil {
+		return r.loadCertAndKeyFromFiles(clientCertSpec.CertPathInOperator.ClientCertPath, clientCertSpec.CertPathInOperator.ClientKeyPath)
+	} else if clientCertSpec.SecretCertSource != nil {
+		return r.loadCertAndKeyFromSecret(clientCertSpec.SecretCertSource, clusterNamespace)
+	} else {
+		return nil, fmt.Errorf("both SecrtenName and CertPathInOperator are not set")
+	}
+}
+
+func (r *AerospikeClusterReconciler) loadCertAndKeyFromSecret(secretSource *asdbv1alpha1.AerospikeSecretCertSource, defaultNamespace string) (*tls.Certificate, error) {
 	// get the tls info from secret
 	found := &v1.Secret{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Spec.AerospikeConfigSecret.SecretName, Namespace: aeroCluster.Namespace}, found)
-	if err != nil {
+	secretName := namespacedSecret(secretSource, defaultNamespace)
+	if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
 		r.Log.Info("Warn: Failed to get secret certificates to the pool", "err", err)
 		return nil, err
 	}
-
-	tlsName := getServiceTLSName(aeroCluster)
-	if tlsName == "" {
-		r.Log.Info("Warn: Failed to get tlsName from aerospikeConfig", "err", err)
-		return nil, err
+	if crtData, crtExists := found.Data[secretSource.ClientCertFilename]; !crtExists {
+		return nil, fmt.Errorf("can't find certificate \"%s\" in secret %+v", secretSource.ClientCertFilename, secretName)
+	} else if keyData, keyExists := found.Data[secretSource.ClientKeyFilename]; !keyExists {
+		return nil, fmt.Errorf("can't find certificate \"%s\" in secret %+v", secretSource.ClientKeyFilename, secretName)
+	} else if cert, err := tls.X509KeyPair(crtData, keyData); err != nil {
+		return nil, fmt.Errorf("failed to load X509 key pair for cluster from secret %+v: %w", secretName, err)
+	} else {
+		r.Log.Info("Loading Aerospike Cluster client cert from secret", "secret", secretName)
+		return &cert, nil
 	}
-	// get ca-file and use as cacert
-	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
+}
 
-	tlsConfList := aeroConf["network"].(map[string]interface{})["tls"].([]interface{})
-	for _, tlsConfInt := range tlsConfList {
-		tlsConf := tlsConfInt.(map[string]interface{})
-		if tlsConf["name"].(string) == tlsName {
-			certFileName := filepath.Base(tlsConf["cert-file"].(string))
-			keyFileName := filepath.Base(tlsConf["key-file"].(string))
-
-			cert, err := tls.X509KeyPair(found.Data[certFileName], found.Data[keyFileName])
-			if err != nil {
-				return nil, fmt.Errorf("failed to load X509 key pair for cluster: %v", err)
-			}
-			return &cert, nil
-		}
+func namespacedSecret(secretSource *asdbv1alpha1.AerospikeSecretCertSource, defaultNamespace string) types.NamespacedName {
+	if secretSource.SecretNamespace == "" {
+		return types.NamespacedName{Name: secretSource.SecretName, Namespace: defaultNamespace}
+	} else {
+		return types.NamespacedName{Name: secretSource.SecretName, Namespace: secretSource.SecretNamespace}
 	}
-	return nil, fmt.Errorf("failed to get tls config for creating client certificate")
+}
+
+func (r *AerospikeClusterReconciler) loadCertAndKeyFromFiles(certPath string, keyPath string) (*tls.Certificate, error) {
+	certData, certErr := ioutil.ReadFile(certPath)
+	if certErr != nil {
+		return nil, certErr
+	}
+	keyData, keyErr := ioutil.ReadFile(keyPath)
+	if keyErr != nil {
+		return nil, keyErr
+	}
+	cert, err := tls.X509KeyPair(certData, keyData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load X509 key pair for cluster (cert=%s,key=%s): %w", certPath, keyPath, err)
+	}
+	r.Log.Info("Loading Aerospike Cluster client cert from files.", "cert-path", certPath, "key-path", keyPath)
+	return &cert, nil
 }
