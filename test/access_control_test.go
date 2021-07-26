@@ -1157,6 +1157,103 @@ var _ = Describe("AccessControl", func() {
 					Fail("AccessControlValidation should have failed")
 				}
 			})
+			It("Try ValidAccessControlQuota", func() {
+				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
+					Roles: []asdbv1alpha1.AerospikeRoleSpec{
+						{
+							Name: "profiler",
+							Privileges: []string{
+								"read-write.profileNs",
+								"read.userNs",
+							},
+							Whitelist: []string{
+								"8.8.0.0/16",
+							},
+							ReadQuota:  1,
+							WriteQuota: 1,
+						},
+					},
+					Users: []asdbv1alpha1.AerospikeUserSpec{
+						{
+							Name:       "admin",
+							SecretName: "someSecret",
+							Roles: []string{
+								"sys-admin",
+								"user-admin",
+							},
+						},
+
+						{
+							Name:       "profileUser",
+							SecretName: "someOtherSecret",
+							Roles: []string{
+								"profiler",
+							},
+						},
+					},
+				}
+
+				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
+					AerospikeAccessControl: &accessControl,
+
+					AerospikeConfig: aerospikeConfigWithSecurityWithQuota,
+				}
+
+				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(valid).To(BeTrue(), "Valid aerospike spec marked invalid")
+			})
+			It("Try Invalid AccessControlEnableQuotaMissing", func() {
+				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
+					Roles: []asdbv1alpha1.AerospikeRoleSpec{
+						{
+							Name: "profiler",
+							Privileges: []string{
+								"read-write.profileNs",
+								"read.userNs",
+							},
+							Whitelist: []string{
+								"8.8.0.0/16",
+							},
+							ReadQuota:  1,
+							WriteQuota: 1,
+						},
+					},
+					Users: []asdbv1alpha1.AerospikeUserSpec{
+						{
+							Name:       "admin",
+							SecretName: "someSecret",
+							Roles: []string{
+								"sys-admin",
+								"user-admin",
+							},
+						},
+
+						{
+							Name:       "profileUser",
+							SecretName: "someOtherSecret",
+							Roles: []string{
+								"profiler",
+							},
+						},
+					},
+				}
+				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
+					AerospikeAccessControl: &accessControl,
+
+					AerospikeConfig: aerospikeConfigWithSecurity,
+				}
+
+				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
+
+				if valid || err == nil {
+					Fail("InValid aerospike spec validated")
+				}
+				Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
+				if !strings.Contains(strings.ToLower(err.Error()), "invalid aerospike.security conf. enable-quotas: not present") {
+					Fail(fmt.Sprintf("Error: %v enable-quotas: not present'", err))
+				}
+			})
 		})
 		Context("When cluster is deployed", func() {
 			ctx := goctx.Background()
@@ -1491,103 +1588,6 @@ var _ = Describe("AccessControl", func() {
 				if err == nil || !strings.Contains(err.Error(),
 					"denied the request: security.enable-quotas is set to false but quota params are") {
 					Fail("QuotaParamsSpecifiedButFlagIsOff should have failed")
-				}
-			})
-			It("Try ValidAccessControlQuota", func() {
-				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
-					Roles: []asdbv1alpha1.AerospikeRoleSpec{
-						{
-							Name: "profiler",
-							Privileges: []string{
-								"read-write.profileNs",
-								"read.userNs",
-							},
-							Whitelist: []string{
-								"8.8.0.0/16",
-							},
-							ReadQuota:  1,
-							WriteQuota: 1,
-						},
-					},
-					Users: []asdbv1alpha1.AerospikeUserSpec{
-						{
-							Name:       "admin",
-							SecretName: "someSecret",
-							Roles: []string{
-								"sys-admin",
-								"user-admin",
-							},
-						},
-
-						{
-							Name:       "profileUser",
-							SecretName: "someOtherSecret",
-							Roles: []string{
-								"profiler",
-							},
-						},
-					},
-				}
-
-				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
-					AerospikeAccessControl: &accessControl,
-
-					AerospikeConfig: aerospikeConfigWithSecurityWithQuota,
-				}
-
-				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(valid).To(BeTrue(), "Valid aerospike spec marked invalid")
-			})
-			It("Try Invalid AccessControlEnableQuotaMissing", func() {
-				accessControl := asdbv1alpha1.AerospikeAccessControlSpec{
-					Roles: []asdbv1alpha1.AerospikeRoleSpec{
-						{
-							Name: "profiler",
-							Privileges: []string{
-								"read-write.profileNs",
-								"read.userNs",
-							},
-							Whitelist: []string{
-								"8.8.0.0/16",
-							},
-							ReadQuota:  1,
-							WriteQuota: 1,
-						},
-					},
-					Users: []asdbv1alpha1.AerospikeUserSpec{
-						{
-							Name:       "admin",
-							SecretName: "someSecret",
-							Roles: []string{
-								"sys-admin",
-								"user-admin",
-							},
-						},
-
-						{
-							Name:       "profileUser",
-							SecretName: "someOtherSecret",
-							Roles: []string{
-								"profiler",
-							},
-						},
-					},
-				}
-				clusterSpec := asdbv1alpha1.AerospikeClusterSpec{
-					AerospikeAccessControl: &accessControl,
-
-					AerospikeConfig: aerospikeConfigWithSecurity,
-				}
-
-				valid, err := asdbv1alpha1.IsAerospikeAccessControlValid(&clusterSpec)
-
-				if valid || err == nil {
-					Fail("InValid aerospike spec validated")
-				}
-				Expect(valid).To(BeFalse(), "InValid aerospike spec validated")
-				if !strings.Contains(strings.ToLower(err.Error()), "invalid aerospike.security conf. enable-quotas: not present") {
-					Fail(fmt.Sprintf("Error: %v enable-quotas: not present'", err))
 				}
 			})
 		})
