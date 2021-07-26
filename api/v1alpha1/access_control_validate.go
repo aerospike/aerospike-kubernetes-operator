@@ -134,7 +134,7 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	return users
 }
 
-func isRoleQuotaParamValid(roleSpec AerospikeRoleSpec, aerospikeConfigSpec *AerospikeConfigSpec) error {
+func validateRoleQuotaParam(roleSpec AerospikeRoleSpec, aerospikeConfigSpec *AerospikeConfigSpec) error {
 	if roleSpec.ReadQuota > 0 || roleSpec.WriteQuota > 0 {
 		enabled, err := IsAttributeEnabled(aerospikeConfigSpec, "security", "enable-quotas")
 		if err != nil {
@@ -171,7 +171,7 @@ func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeCon
 		if err != nil {
 			return false, err
 		}
-		if err := isRoleQuotaParamValid(roleSpec, &aerospikeConfigSpec); err != nil {
+		if err := validateRoleQuotaParam(roleSpec, &aerospikeConfigSpec); err != nil {
 			return false, err
 		}
 		// Validate privileges.
