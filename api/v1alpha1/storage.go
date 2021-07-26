@@ -296,6 +296,22 @@ func validateStorageVolumeSource(source VolumeSource) error {
 		}
 	}
 	if source.PersistentVolume != nil {
+		// Validate VolumeMode
+		vm := source.PersistentVolume.VolumeMode
+		if vm != v1.PersistentVolumeBlock &&
+			vm != v1.PersistentVolumeFilesystem {
+			return fmt.Errorf("invalid VolumeMode `%s`. Valid VolumeModes: %s, %s", vm, v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem)
+		}
+
+		// Validate accessModes
+		for _, am := range source.PersistentVolume.AccessModes {
+			if am != v1.ReadOnlyMany &&
+				am != v1.ReadWriteMany &&
+				am != v1.ReadWriteOnce {
+				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s", am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
+			}
+		}
+
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		} else {

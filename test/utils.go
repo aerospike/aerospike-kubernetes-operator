@@ -240,7 +240,7 @@ func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster 
 		return false
 	}
 	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-		pkgLog.Info("Cluster status is not the matching spec")
+		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
 

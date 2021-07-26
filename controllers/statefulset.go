@@ -501,18 +501,23 @@ func (r *AerospikeClusterReconciler) updateSTSNonPVStorage(aeroCluster *asdbv1al
 
 func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
 
-	var affinity *corev1.Affinity
+	affinity := &corev1.Affinity{}
 
 	// Use rack affinity, if given
 	if rackState.Rack.Affinity != nil {
 		lib.DeepCopy(affinity, rackState.Rack.Affinity)
-	} else {
+	} else if aeroCluster.Spec.PodSpec.Affinity != nil {
 		lib.DeepCopy(affinity, aeroCluster.Spec.PodSpec.Affinity)
 	}
 
 	// Set our rules in PodAntiAffinity
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
 	if !aeroCluster.Spec.MultiPodPerHost {
+
+		if affinity.PodAntiAffinity == nil {
+			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+		}
+
 		r.Log.Info("Adding pod affinity rules for statefulset pod")
 		antiAffinity := &corev1.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -524,6 +529,7 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 				},
 			},
 		}
+
 		affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = append(
 			affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
 			antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution...)
@@ -562,6 +568,10 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 	}
 
 	if len(matchExpressions) != 0 {
+
+		if affinity.NodeAffinity == nil {
+			affinity.NodeAffinity = &corev1.NodeAffinity{}
+		}
 
 		selector := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
 

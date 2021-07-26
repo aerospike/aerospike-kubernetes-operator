@@ -29,6 +29,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -1004,25 +1005,38 @@ func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
 	}
 
-	sidecarNames := map[string]int{}
+	if err := validatePodSpecContainer(r.Spec.PodSpec.Sidecars); err != nil {
+		return nil
+	}
 
-	for _, sidecar := range r.Spec.PodSpec.Sidecars {
-		// Check for reserved sidecar name
-		if sidecar.Name == AerospikeServerContainerName || sidecar.Name == AerospikeServerInitContainerName {
-			return fmt.Errorf("cannot use reserved sidecar name: %v", sidecar.Name)
+	if err := validatePodSpecContainer(r.Spec.PodSpec.InitContainers); err != nil {
+		return nil
+	}
+
+	return nil
+}
+
+func validatePodSpecContainer(containers []v1.Container) error {
+
+	containerNames := map[string]int{}
+
+	for _, container := range containers {
+		// Check for reserved container name
+		if container.Name == AerospikeServerContainerName || container.Name == AerospikeServerInitContainerName {
+			return fmt.Errorf("cannot use reserved container name: %v", container.Name)
 		}
 
 		// Check for duplicate names
-		if _, ok := sidecarNames[sidecar.Name]; ok {
-			return fmt.Errorf("connot have duplicate names of sidecars: %v", sidecar.Name)
+		if _, ok := containerNames[container.Name]; ok {
+			return fmt.Errorf("connot have duplicate names of containers: %v", container.Name)
 		}
-		sidecarNames[sidecar.Name] = 1
+		containerNames[container.Name] = 1
 
-		_, err := getImageVersion(sidecar.Image)
-
-		if err != nil {
-			return err
-		}
+		// TODO: do we need this image check for other containers
+		//_, err := getImageVersion(container.Image)
+		// if err != nil {
+		// 	return err
+		// }
 	}
 
 	return nil
