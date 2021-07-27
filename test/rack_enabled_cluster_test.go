@@ -104,7 +104,7 @@ var _ = Describe("RackLifeCycleOp", func() {
 
 		})
 
-		FIt("Should validate affinity", func() {
+		It("Should validate affinity", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
