@@ -262,14 +262,17 @@ var _ = Describe("Using storage volumes", func() {
 				}
 
 				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, volume)
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Delete
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
 				newAeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 				aeroCluster.Spec = newAeroCluster.Spec
 
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -303,7 +306,7 @@ var _ = Describe("Using storage volumes", func() {
 				}
 
 				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, volume)
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Update
@@ -317,7 +320,7 @@ var _ = Describe("Using storage volumes", func() {
 					},
 				}
 
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -342,7 +345,7 @@ var _ = Describe("Using storage volumes", func() {
 					},
 				}
 
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -353,17 +356,17 @@ var _ = Describe("Using storage volumes", func() {
 					Path:          "/newpath",
 				}
 				aeroCluster.Spec.Storage.Volumes[0].Sidecars = append(aeroCluster.Spec.Storage.Volumes[0].Sidecars, va)
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Update
 				aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Delete
 				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{}
-				err = k8sClient.Update(ctx, aeroCluster)
+				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

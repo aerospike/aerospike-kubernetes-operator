@@ -12,6 +12,7 @@ import (
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -109,7 +110,10 @@ func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1alph
 	confData[NetworkPolicyHashFileName] = policyHash
 
 	// Add podSpec hash
-	podSpec := creatPodSpecForRack(aeroCluster, rack)
+	podSpec, err := creatPodSpecForRack(aeroCluster, rack)
+	if err != nil {
+		return nil, err
+	}
 	podSpecStr, err := json.Marshal(podSpec)
 	if err != nil {
 		return nil, err
@@ -123,25 +127,22 @@ func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1alph
 	return confData, nil
 }
 
-func creatPodSpecForRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) asdbv1alpha1.AerospikePodSpec {
-	podSpec := asdbv1alpha1.AerospikePodSpec{
-		InitContainers: aeroCluster.Spec.PodSpec.InitContainers,
-		Sidecars:       aeroCluster.Spec.PodSpec.Sidecars,
+func creatPodSpecForRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (*asdbv1alpha1.AerospikePodSpec, error) {
+	rackPodSpec := asdbv1alpha1.AerospikePodSpec{}
+	if err := lib.DeepCopy(&rackPodSpec, &aeroCluster.Spec.PodSpec); err != nil {
+		return nil, err
 	}
-	podSpec.Affinity = aeroCluster.Spec.PodSpec.Affinity
-	podSpec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
-	podSpec.NodeSelector = aeroCluster.Spec.PodSpec.NodeSelector
 
 	if rack.Affinity != nil {
-		podSpec.Affinity = rack.Affinity
+		rackPodSpec.Affinity = rack.Affinity
 	}
 	if rack.Tolerations != nil {
-		podSpec.Tolerations = rack.Tolerations
+		rackPodSpec.Tolerations = rack.Tolerations
 	}
 	if rack.NodeSelector != nil {
-		podSpec.NodeSelector = rack.NodeSelector
+		rackPodSpec.NodeSelector = rack.NodeSelector
 	}
-	return podSpec
+	return &rackPodSpec, nil
 }
 
 func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (string, error) {
