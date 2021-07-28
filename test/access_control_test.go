@@ -35,7 +35,7 @@ var (
 
 func init() {
 	var err error
-	ver, err = version.NewVersion(serverVersion)
+	ver, err = version.NewVersion(latestServerVersion)
 	if err != nil {
 		log.Fatalln(err)
 	}

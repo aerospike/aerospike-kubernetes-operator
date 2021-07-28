@@ -348,8 +348,10 @@ type AerospikeRoleCreateUpdate struct {
 	// The whitelist to set for the role. These whitelist addresses and only these whitelist addresses will be granted to the role after this operation.
 	whitelist []string
 
+	// The readQuota specifies the read query rate that is permitted for the current role.
 	readQuota uint32
 
+	// The writeQuota specifies the write query rate that is permitted for the current role.
 	writeQuota uint32
 }
 

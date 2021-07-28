@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	latestClusterImage = "aerospike/aerospike-server-enterprise:5.4.0.5"
-	imageToUpgrade     = "aerospike/aerospike-server-enterprise:5.5.0.3"
-	baseImage          = "aerospike/aerospike-server-enterprise"
-	serverVersion      = "5.6.0.7"
+	latestClusterImage  = "aerospike/aerospike-server-enterprise:5.4.0.5"
+	imageToUpgrade      = "aerospike/aerospike-server-enterprise:5.5.0.3"
+	baseImage           = "aerospike/aerospike-server-enterprise"
+	latestServerVersion = "5.6.0.7"
 )
 
 var (

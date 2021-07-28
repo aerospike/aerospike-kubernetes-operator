@@ -144,7 +144,6 @@ func validateRoleQuotaParam(roleSpec AerospikeRoleSpec, aerospikeConfigSpec *Aer
 			return fmt.Errorf("security.enable-quotas is set to false but quota params are: "+
 				"ReadQuota: %d  WriteQuota: %d", roleSpec.ReadQuota, roleSpec.WriteQuota)
 		}
-		return nil
 	}
 	return nil
 }
