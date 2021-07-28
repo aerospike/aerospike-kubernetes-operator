@@ -15,7 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("HostNetwork", func() {
+var _ = FDescribe("HostNetwork", func() {
 	ctx := goctx.TODO()
 	Context("HostNetwork", func() {
 		clusterName := "host-network-cluster"
@@ -30,29 +30,27 @@ var _ = Describe("HostNetwork", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("Should not advertise node address when off", func() {
+		It("Should verify hostNetwork flag updates", func() {
+			By("Deploying cluster, Should not advertise node address when off")
 			aeroCluster.Spec.MultiPodPerHost = false
 			aeroCluster.Spec.PodSpec.HostNetwork = false
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, false)
-		})
 
-		It("Should advertise node address when dynamically enabled", func() {
+			By("Updating cluster, Should advertise node address when dynamically enabled")
 			aeroCluster.Spec.PodSpec.HostNetwork = true
-			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, true)
-		})
 
-		It("Should not advertise node address when dynamically disabled", func() {
+			By("Updating cluster, Should not advertise node address when dynamically disabled")
 			aeroCluster.Spec.PodSpec.HostNetwork = false
-			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, false)
-		})
 
-		It("Should destroy cluster", func() {
+			By("Deleting cluster")
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 	})

@@ -1006,11 +1006,11 @@ func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 	}
 
 	if err := validatePodSpecContainer(r.Spec.PodSpec.Sidecars); err != nil {
-		return nil
+		return err
 	}
 
 	if err := validatePodSpecContainer(r.Spec.PodSpec.InitContainers); err != nil {
-		return nil
+		return err
 	}
 
 	return nil

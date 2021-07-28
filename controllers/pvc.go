@@ -3,8 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
@@ -154,19 +152,4 @@ func getPVCVolumeConfig(storage *asdbv1alpha1.AerospikeStorageSpec, pvcPathAnnot
 		}
 	}
 	return nil
-}
-func getPVCName(path string) (string, error) {
-	path = strings.Trim(path, "/")
-
-	hashPath, err := utils.GetHash(path)
-	if err != nil {
-		return "", err
-	}
-
-	reg, err := regexp.Compile("[^-a-z0-9]+")
-	if err != nil {
-		return "", err
-	}
-	newPath := reg.ReplaceAllString(path, "-")
-	return utils.TruncateString(hashPath, 30) + "-" + utils.TruncateString(newPath, 20), nil
 }

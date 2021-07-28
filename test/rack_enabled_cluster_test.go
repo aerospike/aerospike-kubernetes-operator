@@ -36,18 +36,18 @@ var _ = Describe("RackLifeCycleOp", func() {
 		clusterName := "rack-enabled"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
-		// Will be used in Update also
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-		// This needs to be changed based on setup. update zone, region, nodeName according to setup
-		racks := []asdbv1alpha1.Rack{
-			{ID: 1, Zone: zone1, Region: region},
-			{ID: 2, Zone: zone2, Region: region}}
-		rackConf := asdbv1alpha1.RackConfig{
-			Racks: racks,
-		}
-		aeroCluster.Spec.RackConfig = rackConf
-
 		BeforeEach(func() {
+			// Will be used in Update also
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			// This needs to be changed based on setup. update zone, region, nodeName according to setup
+			racks := []asdbv1alpha1.Rack{
+				{ID: 1, Zone: zone1, Region: region},
+				{ID: 2, Zone: zone2, Region: region}}
+			rackConf := asdbv1alpha1.RackConfig{
+				Racks: racks,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
+
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 

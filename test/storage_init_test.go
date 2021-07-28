@@ -303,7 +303,10 @@ func writeDataToPodVolumes(storage asdbv1alpha1.AerospikeStorageSpec, pod *corev
 }
 
 func writeDataToVolumeBlock(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec) error {
-	_, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Name))
+	// _, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Name))
+
+	cmd := []string{"bash", "-c", fmt.Sprintf("echo %s > /tmp/magic.txt && dd if=/tmp/magic.txt of=%s", magicBytes, volume.Name)}
+	_, _, err := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
 
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
@@ -312,7 +315,10 @@ func writeDataToVolumeBlock(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec) err
 }
 
 func writeDataToVolumeFileSystem(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec) error {
-	_, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Name))
+	// _, _, err := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Name))
+
+	cmd := []string{"bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, volume.Name)}
+	_, _, err := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
 
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
@@ -321,12 +327,20 @@ func writeDataToVolumeFileSystem(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec
 }
 
 func hasDataBlock(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec) bool {
-	stdout, _, _ := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Name))
+	// stdout, _, _ := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Name))
+
+	cmd := []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", volume.Name)}
+	stdout, _, _ := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
+
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
 func hasDataFilesystem(pod *corev1.Pod, volume asdbv1alpha1.VolumeSpec) bool {
-	stdout, _, _ := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Name))
+	// stdout, _, _ := ExecuteCommandOnPod(cfg, pod, asdbv1alpha1.AerospikeServerContainerName, "bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Name))
+
+	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", volume.Name)}
+	stdout, _, _ := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
+
 	return strings.HasPrefix(stdout, magicBytes)
 }
 

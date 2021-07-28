@@ -2,9 +2,7 @@ package test
 
 import (
 	goctx "context"
-	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,7 +10,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/ashishshinde/aerospike-client-go/v5/pkg/ripemd160"
 
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -125,7 +122,7 @@ var _ = Describe("ClusterStorageCleanUp", func() {
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(lastRackID)
 			// This should not be removed
 
-			pvcName, err := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Name)
+			pvcName := aeroCluster.Spec.Storage.Volumes[0].Name
 			Expect(err).ToNot(HaveOccurred())
 
 			pvcNamePrefix := pvcName + "-" + stsName
@@ -187,6 +184,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		devName := "/test/dev/rackstorage"
+		devPVCName := "ns"
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
 		racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
@@ -214,7 +212,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 			},
 			Volumes: []asdbv1alpha1.VolumeSpec{
 				{
-					Name: "ns",
+					Name: devPVCName,
 					Source: asdbv1alpha1.VolumeSource{
 						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
 							Size:         resource.MustParse("1Gi"),
@@ -258,7 +256,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// There is only single rack
-			pvcName, err := getPVCName(devName)
+			pvcName := devPVCName
 			Expect(err).ToNot(HaveOccurred())
 
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(racks[0].ID)
@@ -412,7 +410,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: "workdirnew",
 						Source: asdbv1alpha1.VolumeSource{
 							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -429,7 +427,6 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				racks[0].InputStorage = getStorage(volumes)
 				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 				err = k8sClient.Update(goctx.TODO(), aeroCluster)
 				Expect(err).Should(HaveOccurred())
 
@@ -443,7 +440,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: "workdirnew",
 						Source: asdbv1alpha1.VolumeSource{
 							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -484,7 +481,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				// Rack is completely replaced
 				volumes := []asdbv1alpha1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: "workdirnew",
 						Source: asdbv1alpha1.VolumeSource{
 							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -512,7 +509,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				// Rack is completely replaced
 				volumes = []asdbv1alpha1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: "workdirnew2",
 						Source: asdbv1alpha1.VolumeSource{
 							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -552,40 +549,6 @@ func getStorage(volumes []asdbv1alpha1.VolumeSpec) *asdbv1alpha1.AerospikeStorag
 		Volumes: volumes,
 	}
 	return &storage
-}
-
-func truncateString(str string, num int) string {
-	if len(str) > num {
-		return str[0:num]
-	}
-	return str
-}
-
-func getPVCName(path string) (string, error) {
-	path = strings.Trim(path, "/")
-
-	hashPath, err := getHash(path)
-	if err != nil {
-		return "", err
-	}
-
-	reg, err := regexp.Compile("[^-a-z0-9]+")
-	if err != nil {
-		return "", err
-	}
-	newPath := reg.ReplaceAllString(path, "-")
-	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
-}
-
-func getHash(str string) (string, error) {
-	var digest []byte
-	hash := ripemd160.New()
-	hash.Reset()
-	if _, err := hash.Write([]byte(str)); err != nil {
-		return "", err
-	}
-	res := hash.Sum(digest)
-	return hex.EncodeToString(res), nil
 }
 
 func matchPVCList(oldPVCList, newPVCList []corev1.PersistentVolumeClaim) error {

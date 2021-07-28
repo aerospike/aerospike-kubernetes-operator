@@ -32,6 +32,18 @@ var _ = Describe("Using podspec feature", func() {
 		Command: []string{"sh", "-c", "echo The app is running! && sleep 3600"},
 	}
 
+	initCont1 := corev1.Container{
+		Name:    "init-myservice",
+		Image:   "busybox:1.28",
+		Command: []string{"sh", "-c", "echo The app is running; sleep 2"},
+	}
+
+	// initCont2 := corev1.Container{
+	// 	Name:    "init-mydb",
+	// 	Image:   "busybox:1.28",
+	// 	Command: []string{"sh", "-c", "until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done"},
+	// }
+
 	Context("When doing valid operation", func() {
 
 		BeforeEach(func() {
@@ -97,27 +109,27 @@ var _ = Describe("Using podspec feature", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, sidecar1)
+			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont1)
 
 			err = updateAndWait(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("Adding the container2")
+			// By("Adding the container2")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+			// aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			// Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, sidecar2)
+			// aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont2)
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			// err = updateAndWait(k8sClient, ctx, aeroCluster)
+			// Expect(err).ToNot(HaveOccurred())
 
 			By("Updating the container2")
 
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodSpec.InitContainers[1].Command = []string{"sh", "-c", "sleep 3600"}
+			aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{"sh", "-c", "echo The app is running; sleep 5"}
 
 			err = updateAndWait(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -200,8 +212,8 @@ var _ = Describe("Using podspec feature", func() {
 		It("Should fail for adding initcontainer container with same name", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, sidecar1)
-			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, sidecar1)
+			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont1)
+			aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont1)
 
 			err := k8sClient.Create(ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
