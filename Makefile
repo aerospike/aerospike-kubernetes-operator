@@ -17,7 +17,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
+CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=150"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -50,7 +50,7 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl create -f -
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 # Uninstall CRDs from a cluster
 uninstall: manifests kustomize
@@ -59,14 +59,14 @@ uninstall: manifests kustomize
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl create -f -
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 test-deploy: manifests kustomize
 	cp -r config test
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	cd test/config/manager && sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" manager.yaml
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
-	$(KUSTOMIZE) build test/config/default | kubectl create -f -
+	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
 # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
 test-undeploy:
