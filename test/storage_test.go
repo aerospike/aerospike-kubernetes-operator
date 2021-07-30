@@ -360,11 +360,17 @@ var _ = Describe("Using storage volumes", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Update
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
 				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Delete
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{}
 				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())

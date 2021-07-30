@@ -368,7 +368,9 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
@@ -518,7 +520,9 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
@@ -594,7 +598,9 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,
@@ -653,7 +659,7 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 
 func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "ns",
@@ -699,7 +705,7 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 
 func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "workdir",
@@ -746,7 +752,7 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 
 func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "device",
@@ -808,7 +814,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 
 func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "workdir",
@@ -840,7 +846,7 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 
 func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "nsvol1",

@@ -206,7 +206,7 @@ func getExpectedServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, po
 		} else {
 			port = asdbv1alpha1.ServiceTLSPort
 		}
-	} else if aeroCluster.Spec.MultiPodPerHost {
+	} else if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -354,7 +354,9 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 					},
 				},
 			},
-			MultiPodPerHost: multiPodPerHost,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: multiPodPerHost,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,

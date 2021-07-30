@@ -314,7 +314,7 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1alpha1.Aeros
 		return found, reconcileError(fmt.Errorf("failed scale up pre-check: %v", err))
 	}
 
-	if aeroCluster.Spec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		// Create services for each pod
 		for _, podName := range newPodNames {
 			if err := r.createPodService(aeroCluster, podName, aeroCluster.Namespace); err != nil {

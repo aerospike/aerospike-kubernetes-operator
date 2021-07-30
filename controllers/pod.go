@@ -380,7 +380,7 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 			r.alumniReset(aeroCluster, &np)
 		}
 
-		if aeroCluster.Spec.MultiPodPerHost {
+		if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 			// Remove service for pod
 			// TODO: make it more roboust, what if it fails
 			if err := r.deletePodService(podName, aeroCluster.Namespace); err != nil {
@@ -526,7 +526,7 @@ func (r *AerospikeClusterReconciler) getServicePortForPod(aeroCluster *asdbv1alp
 	var port int32
 	tlsName := getServiceTLSName(aeroCluster)
 
-	if aeroCluster.Spec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		svc, err := r.getServiceForPod(pod)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)

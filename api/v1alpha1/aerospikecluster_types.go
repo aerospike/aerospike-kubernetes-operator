@@ -38,18 +38,6 @@ type AerospikeClusterSpec struct {
 	Size int32 `json:"size"`
 	// Aerospike server image
 	Image string `json:"image"`
-	// If set true then multiple pods can be created per Kubernetes Node.
-	// This will create a NodePort service for each Pod.
-	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
-	// and any traffic that is sent to this port is forwarded to the service.
-	// Here service picks a random port in range (30000-32767), so these port should be open.
-	//
-	// If set false then only single pod can be created per Kubernetes Node.
-	// This will create Pods using hostPort setting.
-	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
-	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
-	// the hostPort is the port requested by the user.
-	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
@@ -144,6 +132,19 @@ type AerospikePodSpec struct {
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
 	SchedulingPolicy `json:",inline"`
+
+	// If set true then multiple pods can be created per Kubernetes Node.
+	// This will create a NodePort service for each Pod.
+	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
+	// and any traffic that is sent to this port is forwarded to the service.
+	// Here service picks a random port in range (30000-32767), so these port should be open.
+	//
+	// If set false then only single pod can be created per Kubernetes Node.
+	// This will create Pods using hostPort setting.
+	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
+	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
+	// the hostPort is the port requested by the user.
+	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 
 	// HostNetwork enables host networking for the pod.
 	// To enable hostNetwork multiPodPerHost must be true.
@@ -774,7 +775,6 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 
 	status.Size = spec.Size
 	status.Image = spec.Image
-	status.MultiPodPerHost = spec.MultiPodPerHost
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
@@ -814,39 +814,6 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 		}
 		status.Resources = statusResources
 	}
-
-	// 	if spec.ValidationPolicy != nil {
-	// 		// ValidationPolicy
-	// 		statusValidationPolicy := &ValidationPolicySpec{}
-	// 		if err := lib.DeepCopy(statusValidationPolicy, spec.ValidationPolicy); err != nil {
-	// 			return nil, err
-	// 		}
-	// 		status.ValidationPolicy = statusValidationPolicy
-	// 	}
-
-	// 	// RackConfig
-	// 	statusRackConfig := RackConfig{}
-	// 	if err := lib.DeepCopy(&statusRackConfig, &spec.RackConfig); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	status.RackConfig = statusRackConfig
-
-	// 	// AerospikeNetworkPolicy
-	// 	statusAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	// 	if err := lib.DeepCopy(&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
-
-	// 	// Storage
-	// 	statusPodSpec := AerospikePodSpec{}
-	// 	if err := lib.DeepCopy(&statusPodSpec, &spec.PodSpec); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	status.PodSpec = statusPodSpec
-
-	// 	return &status, nil
-	// }
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
@@ -889,87 +856,6 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 	return &status, nil
 }
 
-// // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-// func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
-
-// 	spec := AerospikeClusterSpec{}
-
-// 	spec.Size = status.Size
-// 	spec.Image = status.Image
-// 	spec.MultiPodPerHost = status.MultiPodPerHost
-
-// 	// Storage
-// 	specStorage := AerospikeStorageSpec{}
-// 	if err := lib.DeepCopy(&specStorage, &status.Storage); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.Storage = specStorage
-
-// 	// AerospikeConfigSecret
-// 	specAerospikeConfigSecret := AerospikeConfigSecretSpec{}
-// 	if err := lib.DeepCopy(&specAerospikeConfigSecret, &status.AerospikeConfigSecret); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.AerospikeConfigSecret = specAerospikeConfigSecret
-
-// 	if status.AerospikeAccessControl != nil {
-// 		// AerospikeAccessControl
-// 		specAerospikeAccessControl := &AerospikeAccessControlSpec{}
-// 		if err := lib.DeepCopy(specAerospikeAccessControl, status.AerospikeAccessControl); err != nil {
-// 			return nil, err
-// 		}
-// 		spec.AerospikeAccessControl = specAerospikeAccessControl
-// 	}
-
-// 	// AerospikeConfig
-// 	specAerospikeConfig := &AerospikeConfigSpec{}
-// 	if err := lib.DeepCopy(specAerospikeConfig, status.AerospikeConfig); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.AerospikeConfig = specAerospikeConfig
-
-// 	if status.Resources != nil {
-// 		// Resources
-// 		specResources := &corev1.ResourceRequirements{}
-// 		if err := lib.DeepCopy(specResources, status.Resources); err != nil {
-// 			return nil, err
-// 		}
-// 		spec.Resources = specResources
-// 	}
-
-// 	if status.ValidationPolicy != nil {
-// 		// ValidationPolicy
-// 		specValidationPolicy := &ValidationPolicySpec{}
-// 		if err := lib.DeepCopy(specValidationPolicy, status.ValidationPolicy); err != nil {
-// 			return nil, err
-// 		}
-// 		spec.ValidationPolicy = specValidationPolicy
-// 	}
-
-// 	// RackConfig
-// 	specRackConfig := RackConfig{}
-// 	if err := lib.DeepCopy(&specRackConfig, &status.RackConfig); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.RackConfig = specRackConfig
-
-// 	// AerospikeNetworkPolicy
-// 	specAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-// 	if err := lib.DeepCopy(&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
-
-// 	// Storage
-// 	specPodSpec := AerospikePodSpec{}
-// 	if err := lib.DeepCopy(&specPodSpec, &status.PodSpec); err != nil {
-// 		return nil, err
-// 	}
-// 	spec.PodSpec = specPodSpec
-
-// 	return &spec, nil
-// }
-
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
 func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
 
@@ -977,7 +863,6 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec,
 
 	spec.Size = status.Size
 	spec.Image = status.Image
-	spec.MultiPodPerHost = status.MultiPodPerHost
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}

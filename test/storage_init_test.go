@@ -495,7 +495,9 @@ func getStorageInitAerospikeCluster(clusterNamespacedName types.NamespacedName, 
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,

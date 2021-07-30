@@ -174,7 +174,7 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1alpha1.A
 	// Include initialization and restart scripts
 	initializeTemplateInput := initializeTemplateInput{
 		WorkDir:         workDir,
-		MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost,
+		MultiPodPerHost: aeroCluster.Spec.PodSpec.MultiPodPerHost,
 		NetworkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
 		PodPort:         asdbv1alpha1.ServicePort,
 		PodTLSPort:      asdbv1alpha1.ServiceTLSPort,

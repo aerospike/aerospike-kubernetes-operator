@@ -23,7 +23,7 @@ var _ = Describe("HostNetwork", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 		aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 2, image)
 		aeroCluster.Spec.PodSpec.HostNetwork = true
-		aeroCluster.Spec.MultiPodPerHost = true
+		aeroCluster.Spec.PodSpec.MultiPodPerHost = true
 
 		It("Should not work with MultiPodPerHost enabled", func() {
 			err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -32,7 +32,7 @@ var _ = Describe("HostNetwork", func() {
 
 		It("Should verify hostNetwork flag updates", func() {
 			By("Deploying cluster, Should not advertise node address when off")
-			aeroCluster.Spec.MultiPodPerHost = false
+			aeroCluster.Spec.PodSpec.MultiPodPerHost = false
 			aeroCluster.Spec.PodSpec.HostNetwork = false
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)

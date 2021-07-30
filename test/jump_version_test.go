@@ -270,7 +270,9 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 					},
 				},
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1alpha1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,

@@ -45,7 +45,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 
 	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
 
-	if aeroCluster.Spec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		// Create services for all statefulset pods
 		for i := 0; i < rackState.Size; i++ {
 			// Statefulset name created from cr name
@@ -56,7 +56,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 		}
 	}
 
-	ports := getSTSContainerPort(aeroCluster.Spec.MultiPodPerHost)
+	ports := getSTSContainerPort(aeroCluster.Spec.PodSpec.MultiPodPerHost)
 
 	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
 
@@ -512,7 +512,7 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 
 	// Set our rules in PodAntiAffinity
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
-	if !aeroCluster.Spec.MultiPodPerHost {
+	if !aeroCluster.Spec.PodSpec.MultiPodPerHost {
 
 		if affinity.PodAntiAffinity == nil {
 			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
