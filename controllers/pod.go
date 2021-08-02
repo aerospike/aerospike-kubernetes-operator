@@ -93,14 +93,6 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 			"currentHash", podStatus.PodSpecHash)
 	}
 
-	// Check if secret is updated
-	if r.isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
-		// TODO: If we can force the secret to mount or refresh on the pod,
-		// we can get away with QuickRestart in this case too.
-		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("AerospikeConfigSecret changed. Need rolling restart")
-	}
-
 	// Check if resources are updated
 	if r.isResourceUpdatedInAeroCluster(aeroCluster, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)

@@ -544,23 +544,22 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 		})
 
 		Context("InvalidAerospikeConfigSecret", func() {
-			It("WhenFeatureKeyExist: should fail for empty aerospikeConfigSecret when feature-key-file exist", func() {
+			It("WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume", func() {
 				aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 1, latestClusterImage)
-				aeroCluster.Spec.AerospikeConfigSecret = asdbv1alpha1.AerospikeConfigSecretSpec{}
 				aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
-					"feature-key-file": "/opt/aerospike/features.conf",
+					"feature-key-file": "/randompath/features.conf",
 				}
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
 			})
 
-			It("WhenTLSExist: should fail for empty aerospikeConfigSecret when tls exist", func() {
+			It("WhenTLSExist: should fail for no tls path in storage volume", func() {
 				aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 1, latestClusterImage)
-				aeroCluster.Spec.AerospikeConfigSecret = asdbv1alpha1.AerospikeConfigSecretSpec{}
 				aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 					"tls": []interface{}{
 						map[string]interface{}{
-							"name": "aerospike-a-0.test-runner",
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/randompath/svc_cluster_chain.pem",
 						},
 					},
 				}
@@ -804,27 +803,26 @@ func negativeUpdateClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 
-		It("WhenFeatureKeyExist: should fail for empty aerospikeConfigSecret when feature-key-file exist", func() {
+		It("WhenFeatureKeyExist: should fail for no feature-key-file path in storage volumes", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.AerospikeConfigSecret = asdbv1alpha1.AerospikeConfigSecretSpec{}
 			aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
-				"feature-key-file": "/opt/aerospike/features.conf",
+				"feature-key-file": "/randompath/features.conf",
 			}
 			err = k8sClient.Update(ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 		})
 
-		It("WhenTLSExist: should fail for empty aerospikeConfigSecret when tls exist", func() {
+		It("WhenTLSExist: should fail for no tls path in storage voluems", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.AerospikeConfigSecret = asdbv1alpha1.AerospikeConfigSecretSpec{}
 			aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 				"tls": []interface{}{
 					map[string]interface{}{
-						"name": "aerospike-a-0.test-runner",
+						"name":      "aerospike-a-0.test-runner",
+						"cert-file": "/randompath/svc_cluster_chain.pem",
 					},
 				},
 			}

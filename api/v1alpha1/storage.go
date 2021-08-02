@@ -150,6 +150,15 @@ func (v *AerospikeStorageSpec) GetAerospikeStorageList() (blockStorageDeviceList
 	return blockStorageDeviceList, fileStorageList, nil
 }
 
+func (v *AerospikeStorageSpec) IsVolumeExistForAerospikePath(path string) bool {
+	for _, volume := range v.Volumes {
+		if volume.Aerospike != nil && volume.Aerospike.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
 func validateStorage(storage *AerospikeStorageSpec, podSpec *AerospikePodSpec) error {
 	reservedPaths := map[string]int{
 		// Reserved mount paths for the operator.

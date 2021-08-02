@@ -47,6 +47,8 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
+const aerospikeConfigSecret string = "aerospike-config-secret"
+
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1alpha1.AerospikeVolumeInitMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {

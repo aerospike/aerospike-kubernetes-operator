@@ -8,7 +8,8 @@ spec:
   size: 2
   #image: aerospike/aerospike-server-enterprise:5.5.0.3
   image: aerospike/aerospike-server-enterprise:5.2.0.7
-  multiPodPerHost: true
+  podSpec:
+    multiPodPerHost: true
   storage:
     filesystemVolumePolicy:
       cascadeDelete: true
@@ -21,7 +22,14 @@ spec:
             volumeMode: Filesystem
             size: 3Gi
         aerospike:
-          path: /opt/aerospike     
+          path: /opt/aerospike
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
+
  
   aerospikeAccessControl:
     users:
@@ -30,10 +38,6 @@ spec:
         roles:
           - sys-admin
           - user-admin
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     logging:

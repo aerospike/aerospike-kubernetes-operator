@@ -442,7 +442,7 @@ func (r *AerospikeClusterReconciler) deletePodService(pName, pNamespace string) 
 func (r *AerospikeClusterReconciler) updateSTSStorage(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
 	r.updateSTSPVStorage(aeroCluster, st, rackState)
 	r.updateSTSNonPVStorage(aeroCluster, st, rackState)
-	r.updateSTSAerospikeSecretInfo(aeroCluster, st)
+	// r.updateSTSAerospikeSecretInfo(aeroCluster, st)
 }
 
 func (r *AerospikeClusterReconciler) updateSTSPVStorage(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
@@ -605,53 +605,6 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 		st.Spec.Template.Spec.Tolerations = rackState.Rack.Tolerations
 	} else {
 		st.Spec.Template.Spec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
-	}
-}
-
-// TODO: How to remove if user has removed this field? Should we find and remove volume
-// Called while creating new cluster and also during rolling restart
-func (r *AerospikeClusterReconciler) updateSTSAerospikeSecretInfo(aeroCluster *asdbv1alpha1.AerospikeCluster, st *appsv1.StatefulSet) {
-
-	if aeroCluster.Spec.AerospikeConfigSecret.SecretName != "" {
-		r.Log.Info("Add secret volume in statefulset pods")
-
-		// Add volume in template
-		secretVolume := corev1.Volume{
-			Name: secretVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: aeroCluster.Spec.AerospikeConfigSecret.SecretName,
-				},
-			},
-		}
-		var volFound bool
-		for i, vol := range st.Spec.Template.Spec.Volumes {
-			if vol.Name == secretVolumeName {
-				volFound = true
-				st.Spec.Template.Spec.Volumes[i] = secretVolume
-				break
-			}
-		}
-		if !volFound {
-			st.Spec.Template.Spec.Volumes = append(st.Spec.Template.Spec.Volumes, secretVolume)
-		}
-
-		// Add volume mount in aerospike container
-		secretVolumeMount := corev1.VolumeMount{
-			Name:      secretVolumeName,
-			MountPath: aeroCluster.Spec.AerospikeConfigSecret.MountPath,
-		}
-		var volmFound bool
-		for i, vol := range st.Spec.Template.Spec.Containers[0].VolumeMounts {
-			if vol.Name == secretVolumeName {
-				volmFound = true
-				st.Spec.Template.Spec.Containers[0].VolumeMounts[i] = secretVolumeMount
-				break
-			}
-		}
-		if !volmFound {
-			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, secretVolumeMount)
-		}
 	}
 }
 

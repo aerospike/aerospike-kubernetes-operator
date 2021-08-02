@@ -46,8 +46,15 @@ spec:
             path: /para/tomcat2
           - containerName: database
             path: /para/database  
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
         
   podSpec:
+    multiPodPerHost: true
     sidecars:
     - name: tomcat
       image: tomcat:8.0
@@ -67,10 +74,6 @@ spec:
         roles:
           - sys-admin
           - user-admin
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     logging:

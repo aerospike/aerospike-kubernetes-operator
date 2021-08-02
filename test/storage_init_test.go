@@ -233,6 +233,17 @@ var _ = Describe("StorageInit", func() {
 						},
 					},
 				},
+				{
+					Name: aerospikeConfigSecret,
+					Source: asdbv1alpha1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: tlsSecretName,
+						},
+					},
+					Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Path: "/etc/aerospike/secret",
+					},
+				},
 			},
 		}
 
@@ -474,10 +485,6 @@ func getStorageInitAerospikeCluster(clusterNamespacedName types.NamespacedName, 
 			RackConfig: asdbv1alpha1.RackConfig{
 				Namespaces: []string{"test"},
 				Racks:      racks,
-			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
 			},
 			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
 				Users: []asdbv1alpha1.AerospikeUserSpec{

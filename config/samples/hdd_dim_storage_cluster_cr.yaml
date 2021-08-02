@@ -29,9 +29,16 @@ spec:
             storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
 
-  multiPodPerHost: true
-
+  podSpec:
+    multiPodPerHost: true
+    
   aerospikeAccessControl:
     users:
       - name: admin
@@ -41,10 +48,6 @@ spec:
           - user-admin
           - write
           - read
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     service:

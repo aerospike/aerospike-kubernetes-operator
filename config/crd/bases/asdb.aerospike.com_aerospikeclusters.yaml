@@ -117,19 +117,6 @@ spec:
                   configs are taken as default
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              aerospikeConfigSecret:
-                description: AerospikeConfigSecret has secret info created by user.
-                  User needs to create this secret having tls files, feature key for
-                  cluster
-                properties:
-                  mountPath:
-                    type: string
-                  secretName:
-                    type: string
-                required:
-                - mountPath
-                - secretName
-                type: object
               aerospikeNetworkPolicy:
                 description: AerospikeNetworkPolicy specifies how clients and tools
                   access the Aerospike cluster.
@@ -171,10 +158,6 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
-              multiPodPerHost:
-                description: If set true then multiple pods can be created per Kubernetes
-                  Node. This will create a NodePort service for each Pod.
-                type: boolean
               operatorClientCertSpec:
                 description: Certificates to connect to Aerospike. If omitted then
                   certs are taken from the secret 'aerospike-secret'.
@@ -1668,6 +1651,11 @@ spec:
                       - name
                       type: object
                     type: array
+                  multiPodPerHost:
+                    description: If set true then multiple pods can be created per
+                      Kubernetes Node. This will create a NodePort service for each
+                      Pod.
+                    type: boolean
                   nodeSelector:
                     additionalProperties:
                       type: string
@@ -4694,19 +4682,6 @@ spec:
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              aerospikeConfigSecret:
-                description: AerospikeConfigSecret has secret info created by user.
-                  User needs to create this secret having tls files, feature key for
-                  cluster
-                properties:
-                  mountPath:
-                    type: string
-                  secretName:
-                    type: string
-                required:
-                - mountPath
-                - secretName
-                type: object
               aerospikeNetworkPolicy:
                 description: AerospikeNetworkPolicy specifies how clients and tools
                   access the Aerospike cluster.
@@ -6245,6 +6220,11 @@ spec:
                       - name
                       type: object
                     type: array
+                  multiPodPerHost:
+                    description: If set true then multiple pods can be created per
+                      Kubernetes Node. This will create a NodePort service for each
+                      Pod.
+                    type: boolean
                   nodeSelector:
                     additionalProperties:
                       type: string

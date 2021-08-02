@@ -40,8 +40,6 @@ type AerospikeClusterSpec struct {
 	Image string `json:"image"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
-	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
-	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
@@ -282,12 +280,6 @@ type AerospikeAccessControlSpec struct {
 	Users []AerospikeUserSpec `json:"users" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
-// AerospikeConfigSecretSpec has secret info created by user. User need to create secret having tls files, feature key for cluster
-type AerospikeConfigSecretSpec struct {
-	SecretName string `json:"secretName"`
-	MountPath  string `json:"mountPath"`
-}
-
 // AerospikeVolumeInitMethod specifies how block volumes should be initialized.
 // +kubebuilder:validation:Enum=none;dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
@@ -475,8 +467,6 @@ type AerospikeClusterStatusSpec struct {
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
-	// AerospikeConfigSecret has secret info created by user. User needs to create this secret having tls files, feature key for cluster
-	AerospikeConfigSecret AerospikeConfigSecretSpec `json:"aerospikeConfigSecret,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
@@ -712,14 +702,6 @@ func (v *AerospikeAccessControlSpec) DeepCopy() *AerospikeAccessControlSpec {
 	return &dst
 }
 
-// DeepCopy implements deepcopy func for Values
-func (v *AerospikeConfigSecretSpec) DeepCopy() *AerospikeConfigSecretSpec {
-	src := *v
-	var dst = AerospikeConfigSecretSpec{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
 // DeepCopy implements deepcopy func for AerospikePersistentVolumePolicySpec.
 func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVolumePolicySpec {
 	src := *v
@@ -782,13 +764,6 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (*AerospikeClusterStatusSpec, e
 		return nil, err
 	}
 	status.Storage = statusStorage
-
-	// AerospikeConfigSecret
-	statusAerospikeConfigSecret := AerospikeConfigSecretSpec{}
-	if err := lib.DeepCopy(&statusAerospikeConfigSecret, &spec.AerospikeConfigSecret); err != nil {
-		return nil, err
-	}
-	status.AerospikeConfigSecret = statusAerospikeConfigSecret
 
 	if spec.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
@@ -870,13 +845,6 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (*AerospikeClusterSpec,
 		return nil, err
 	}
 	spec.Storage = specStorage
-
-	// AerospikeConfigSecret
-	specAerospikeConfigSecret := AerospikeConfigSecretSpec{}
-	if err := lib.DeepCopy(&specAerospikeConfigSecret, &status.AerospikeConfigSecret); err != nil {
-		return nil, err
-	}
-	spec.AerospikeConfigSecret = specAerospikeConfigSecret
 
 	if status.AerospikeAccessControl != nil {
 		// AerospikeAccessControl

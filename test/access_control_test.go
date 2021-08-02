@@ -1330,9 +1330,20 @@ func getAerospikeClusterSpecWithAccessControl(clusterNamespacedName types.Namesp
 				SkipXdrDlogFileValidate: true,
 			},
 			AerospikeAccessControl: accessControl,
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
+			Storage: asdbv1alpha1.AerospikeStorageSpec{
+				Volumes: []asdbv1alpha1.VolumeSpec{
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1alpha1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
+					},
+				},
 			},
 			PodSpec: asdbv1alpha1.AerospikePodSpec{
 				MultiPodPerHost: true,

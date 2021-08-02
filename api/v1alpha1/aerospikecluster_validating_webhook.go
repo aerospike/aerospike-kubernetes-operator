@@ -140,14 +140,7 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
-	// TODO: Validate if multiPodPerHost is false then number of kubernetes host should be >= size
-
-	// Validate for AerospikeConfigSecret.
-	// TODO: Should we validate mount path also. Config has tls info at different paths, fetching and validating that may be little complex
 	configMap := r.Spec.AerospikeConfig
-	if isSecretNeeded(*configMap) && r.Spec.AerospikeConfigSecret.SecretName == "" {
-		return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `aerospikeConfigSecret` field")
-	}
 
 	// Validate Image version
 	version, err := getImageVersion(r.Spec.Image)
@@ -187,8 +180,11 @@ func (r *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	err = validateRequiredFileStorage(aslog, *configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version)
-	if err != nil {
+	if err := validateRequiredFileStorageForMetadata(aslog, *configMap, &r.Spec.Storage, r.Spec.ValidationPolicy, version); err != nil {
+		return err
+	}
+
+	if err := validateRequiredFileStorageForFeatureConf(aslog, *configMap, &r.Spec.Storage); err != nil {
 		return err
 	}
 
@@ -860,7 +856,7 @@ func validateAerospikeConfigSchema(aslog logr.Logger, version string, configSpec
 	return nil
 }
 
-func validateRequiredFileStorage(aslog logr.Logger, configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
+func validateRequiredFileStorageForMetadata(aslog logr.Logger, configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec, version string) error {
 
 	_, fileStorageList, err := storage.GetAerospikeStorageList()
 	if err != nil {
@@ -906,6 +902,22 @@ func validateRequiredFileStorage(aslog logr.Logger, configSpec AerospikeConfigSp
 		}
 	}
 
+	return nil
+}
+
+func validateRequiredFileStorageForFeatureConf(aslog logr.Logger, configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec) error {
+	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
+	tlsPaths := getTLSFilePaths(configSpec)
+
+	var allPaths []string
+	allPaths = append(allPaths, featureKeyFilePaths...)
+	allPaths = append(allPaths, tlsPaths...)
+
+	for _, path := range allPaths {
+		if !storage.IsVolumeExistForAerospikePath(filepath.Dir(path)) {
+			return fmt.Errorf("aerospikeConfig has feature-key-file path or tls paths. User need to create a secret for these and provide its info in `storage.volumes`")
+		}
+	}
 	return nil
 }
 
@@ -976,6 +988,54 @@ func isSecretNeeded(configSpec AerospikeConfigSpec) bool {
 	}
 
 	return false
+}
+
+// isSecretNeeded indicates if aerospikeConfig needs secret
+func getFeatureKeyFilePaths(configSpec AerospikeConfigSpec) []string {
+	config := configSpec.Value
+
+	// feature-key-file needs secret
+	if svc, ok := config["service"]; ok {
+		if path, ok := svc.(map[string]interface{})["feature-key-file"]; ok {
+			return []string{path.(string)}
+
+		} else if pathsInterface, ok := svc.(map[string]interface{})["feature-key-files"]; ok {
+			if pathsList, ok := pathsInterface.([]interface{}); ok {
+				var paths []string
+				for _, pathInt := range pathsList {
+					paths = append(paths, pathInt.(string))
+				}
+				return paths
+			}
+		}
+	}
+
+	return nil
+}
+
+func getTLSFilePaths(configSpec AerospikeConfigSpec) []string {
+	config := configSpec.Value
+
+	var paths []string
+	// feature-key-file needs secret
+	if network, ok := config["network"]; ok {
+		if tlsListInterface, ok := network.(map[string]interface{})["tls"]; ok {
+			if tlsList, ok := tlsListInterface.([]interface{}); ok {
+				for _, tlsInterface := range tlsList {
+					if path, ok := tlsInterface.(map[string]interface{})["cert-file"]; ok {
+						paths = append(paths, path.(string))
+					}
+					if path, ok := tlsInterface.(map[string]interface{})["key-file"]; ok {
+						paths = append(paths, path.(string))
+					}
+					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
+						paths = append(paths, path.(string))
+					}
+				}
+			}
+		}
+	}
+	return paths
 }
 
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.

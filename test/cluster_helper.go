@@ -350,6 +350,17 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 							Path: "/opt/aerospike",
 						},
 					},
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1alpha1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
+					},
 				},
 			},
 			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
@@ -364,10 +375,7 @@ func createAerospikeClusterPost460(clusterNamespacedName types.NamespacedName, s
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
-			},
+
 			PodSpec: asdbv1alpha1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
@@ -501,6 +509,17 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 							Path: "/opt/aerospike",
 						},
 					},
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1alpha1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
+					},
 				},
 			},
 			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
@@ -516,10 +535,7 @@ func createDummyAerospikeCluster(clusterNamespacedName types.NamespacedName, siz
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
-			},
+
 			PodSpec: asdbv1alpha1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
@@ -581,6 +597,32 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 					InputCascadeDelete: &cascadeDeleteTrue,
 				},
+				Volumes: []asdbv1alpha1.VolumeSpec{
+					{
+						Name: "workdir",
+						Source: asdbv1alpha1.VolumeSource{
+							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike",
+						},
+					},
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1alpha1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
+					},
+				},
 			},
 			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
 				Users: []asdbv1alpha1.AerospikeUserSpec{
@@ -594,10 +636,7 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
-			},
+
 			PodSpec: asdbv1alpha1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
@@ -660,7 +699,7 @@ func createBasicTLSCluster(clusterNamespacedName types.NamespacedName, size int3
 func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "ns",
 			Source: asdbv1alpha1.VolumeSource{
@@ -674,20 +713,7 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 				Path: "/test/dev/xvdf",
 			},
 		},
-		{
-			Name: "workdir",
-			Source: asdbv1alpha1.VolumeSource{
-				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-					Size:         resource.MustParse("1Gi"),
-					StorageClass: storageClass,
-					VolumeMode:   v1.PersistentVolumeFilesystem,
-				},
-			},
-			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
-				Path: "/opt/aerospike",
-			},
-		},
-	}
+	}...)
 
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
@@ -706,20 +732,8 @@ func createSSDStorageCluster(clusterNamespacedName types.NamespacedName, size in
 func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, []asdbv1alpha1.VolumeSpec{
 		{
-			Name: "workdir",
-			Source: asdbv1alpha1.VolumeSource{
-				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-					Size:         resource.MustParse("1Gi"),
-					StorageClass: storageClass,
-					VolumeMode:   v1.PersistentVolumeFilesystem,
-				},
-			},
-			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
-				Path: "/opt/aerospike",
-			},
-		}, {
 			Name: "ns",
 			Source: asdbv1alpha1.VolumeSource{
 				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
@@ -732,7 +746,7 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 				Path: "/opt/aerospike/data",
 			},
 		},
-	}
+	}...)
 
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
@@ -753,7 +767,7 @@ func createHDDAndDataInMemStorageCluster(clusterNamespacedName types.NamespacedN
 func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "device",
 			Source: asdbv1alpha1.VolumeSource{
@@ -765,19 +779,6 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 			},
 			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
 				Path: "/dev/xvdf1",
-			},
-		},
-		{
-			Name: "workdir",
-			Source: asdbv1alpha1.VolumeSource{
-				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-					Size:         resource.MustParse("1Gi"),
-					StorageClass: storageClass,
-					VolumeMode:   v1.PersistentVolumeFilesystem,
-				},
-			},
-			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
-				Path: "/opt/aerospike",
 			},
 		},
 		{
@@ -793,7 +794,7 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 				Path: "/opt/aerospike/data",
 			},
 		},
-	}
+	}...)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -815,21 +816,6 @@ func createHDDAndDataInIndexStorageCluster(clusterNamespacedName types.Namespace
 func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
-		{
-			Name: "workdir",
-			Source: asdbv1alpha1.VolumeSource{
-				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-					Size:         resource.MustParse("1Gi"),
-					StorageClass: storageClass,
-					VolumeMode:   v1.PersistentVolumeFilesystem,
-				},
-			},
-			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
-				Path: "/opt/aerospike",
-			},
-		},
-	}
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -847,7 +833,7 @@ func createDataInMemWithoutPersistentStorageCluster(clusterNamespacedName types.
 func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName, size int32, repFact int32, multiPodPerHost bool) *asdbv1alpha1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, []asdbv1alpha1.VolumeSpec{
 		{
 			Name: "nsvol1",
 			Source: asdbv1alpha1.VolumeSource{
@@ -874,20 +860,7 @@ func createShadowDeviceStorageCluster(clusterNamespacedName types.NamespacedName
 				Path: "/dev/nvme0n1",
 			},
 		},
-		{
-			Name: "workdir",
-			Source: asdbv1alpha1.VolumeSource{
-				PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-					Size:         resource.MustParse("1Gi"),
-					StorageClass: storageClass,
-					VolumeMode:   v1.PersistentVolumeFilesystem,
-				},
-			},
-			Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
-				Path: "/opt/aerospike",
-			},
-		},
-	}
+	}...)
 
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{

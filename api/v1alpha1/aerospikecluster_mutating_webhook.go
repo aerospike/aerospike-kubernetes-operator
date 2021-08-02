@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"fmt"
 	"reflect"
+
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -64,10 +65,13 @@ func (r *AerospikeCluster) setDefaults(aslog logr.Logger) error {
 		return err
 	}
 
-	// Set common aerospikeConfig defaults
-	// Update configMap
-	if err := r.setDefaultAerospikeConfigs(aslog, *r.Spec.AerospikeConfig); err != nil {
-		return err
+	// cluster level aerospike config may be empty and
+	if r.Spec.AerospikeConfig != nil {
+		// Set common aerospikeConfig defaults
+		// Update configMap
+		if err := r.setDefaultAerospikeConfigs(aslog, *r.Spec.AerospikeConfig); err != nil {
+			return err
+		}
 	}
 
 	// Update racks configuration using global values where required.
