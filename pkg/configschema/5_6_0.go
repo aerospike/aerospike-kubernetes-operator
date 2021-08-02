@@ -16,6 +16,14 @@ const conf5_6_0 = `
         "required": ["feature-key-files"]
       }],
       "properties": {
+        "query-buf-size": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 2147483647,
+          "description": "",
+          "dynamic": true
+        },
         "user": {
           "type": "string",
           "default": "",
@@ -45,6 +53,14 @@ const conf5_6_0 = `
         "proto-fd-max": {
           "type": "integer",
           "default": 15000,
+          "minimum": 0,
+          "maximum": 2147483647,
+          "description": "",
+          "dynamic": true
+        },
+        "proto-slow-netio-sleep-ms": {
+          "type": "integer",
+          "default": 1,
           "minimum": 0,
           "maximum": 2147483647,
           "description": "",
@@ -152,7 +168,7 @@ const conf5_6_0 = `
           "minimum": 0,
           "maximum": 2147483647,
           "description": "",
-          "dynamic": false
+          "dynamic": true
         },
         "keep-caps-ssd-health": {
           "type": "boolean",
@@ -263,6 +279,12 @@ const conf5_6_0 = `
           "default": 500,
           "minimum": 1,
           "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
+        "query-microbenchmark": {
+          "type": "boolean",
+          "default": false,
           "description": "",
           "dynamic": true
         },
@@ -378,7 +400,7 @@ const conf5_6_0 = `
           "minimum": 1,
           "maximum": 4096,
           "description": "",
-          "dynamic": false
+          "dynamic": true
         },
         "sindex-builder-threads": {
           "type": "integer",
@@ -1045,7 +1067,7 @@ const conf5_6_0 = `
               "minimum": 50,
               "maximum": 600000,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "timeout": {
               "type": "integer",
@@ -1053,7 +1075,7 @@ const conf5_6_0 = `
               "minimum": 3,
               "maximum": 4294967295,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "connect-timeout-ms": {
               "type": "integer",
@@ -1069,7 +1091,7 @@ const conf5_6_0 = `
               "minimum": 0,
               "maximum": 4294967295,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "multicast-ttl": {
               "type": "integer",
@@ -1082,7 +1104,7 @@ const conf5_6_0 = `
             "protocol": {
               "type": "string",
               "description": "",
-              "dynamic": false,
+              "dynamic": true,
               "default": "v3",
               "enum": ["none", "v3"]
             },
@@ -1156,7 +1178,7 @@ const conf5_6_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-ctrl-fds": {
               "type": "integer",
@@ -1172,7 +1194,7 @@ const conf5_6_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-meta-fds": {
               "type": "integer",
@@ -1188,7 +1210,7 @@ const conf5_6_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-rw-fds": {
               "type": "integer",
@@ -1212,7 +1234,7 @@ const conf5_6_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "keepalive-enabled": {
               "type": "boolean",
@@ -1258,7 +1280,7 @@ const conf5_6_0 = `
               "minimum": 0,
               "maximum": 1048576,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "send-threads": {
               "type": "integer",
@@ -1830,7 +1852,7 @@ const conf5_6_0 = `
           "conflict-resolution-policy": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "generation",
             "enum": ["generation", "last-update-time"]
           },
@@ -2117,7 +2139,7 @@ const conf5_6_0 = `
           "read-consistency-level-override": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "off",
             "enum": ["all", "off", "one"]
           },
@@ -2198,7 +2220,7 @@ const conf5_6_0 = `
                 "minimum": 0,
                 "maximum": 30,
                 "description": "",
-                "dynamic": false
+                "dynamic": true
               },
               "max-level": {
                 "type": "integer",
@@ -2206,7 +2228,7 @@ const conf5_6_0 = `
                 "minimum": 0,
                 "maximum": 30,
                 "description": "",
-                "dynamic": false
+                "dynamic": true
               },
               "max-cells": {
                 "type": "integer",
@@ -2303,7 +2325,7 @@ const conf5_6_0 = `
           "write-commit-level-override": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "off",
             "enum": ["all", "master", "off"]
           },
@@ -2380,7 +2402,7 @@ const conf5_6_0 = `
           "minimum": 1,
           "maximum": 64,
           "description": "",
-          "dynamic": true
+          "dynamic": false
         },
         "privilege-refresh-period": {
           "type": "integer",
@@ -2803,7 +2825,7 @@ const conf5_6_0 = `
               "auth-mode": {
                 "type": "string",
                 "description": "",
-                "dynamic": false,
+                "dynamic": true,
                 "default": "internal",
                 "enum": ["internal", "external", "external-insecure"]
               },
