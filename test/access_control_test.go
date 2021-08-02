@@ -1756,6 +1756,18 @@ func validateRoles(clientP *as.Client, clusterSpec *asdbv1alpha1.AerospikeCluste
 			return fmt.Errorf("For role %s actual privileges %v do not match expected privileges %v", asRole.Name, currentPrivilegeNames, expectedPrivilegeNames)
 		}
 
+		// Validate Write Quota
+		if expectedRoleSpec.WriteQuota != asRole.WriteQuota {
+			return fmt.Errorf("for role %s actual write-qouta %d does not match expected write-quota %d",
+				asRole.Name, asRole.WriteQuota, expectedRoleSpec.WriteQuota)
+		}
+
+		// Validate Read Quota
+		if expectedRoleSpec.ReadQuota != asRole.ReadQuota {
+			return fmt.Errorf("for role %s actual read-quota %v does not match expected read-quota %v",
+				asRole.Name, asRole.ReadQuota, expectedRoleSpec.ReadQuota)
+		}
+
 		// Validate whitelists.
 		if !reflect.DeepEqual(expectedRoleSpec.Whitelist, asRole.Whitelist) {
 			return fmt.Errorf("For role %s actual whitelist %v does not match expected whitelist %v", asRole.Name, asRole.Whitelist, expectedRoleSpec.Whitelist)
