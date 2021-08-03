@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -504,8 +503,8 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 	affinity := &corev1.Affinity{}
 
 	// Use rack affinity, if given
-	if rackState.Rack.Affinity != nil {
-		lib.DeepCopy(affinity, rackState.Rack.Affinity)
+	if rackState.Rack.PodSpec.Affinity != nil {
+		lib.DeepCopy(affinity, rackState.Rack.PodSpec.Affinity)
 	} else if aeroCluster.Spec.PodSpec.Affinity != nil {
 		lib.DeepCopy(affinity, aeroCluster.Spec.PodSpec.Affinity)
 	}
@@ -594,15 +593,15 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdb
 	st.Spec.Template.Spec.Affinity = affinity
 
 	// Use rack nodeSelector, if given
-	if len(rackState.Rack.NodeSelector) != 0 {
-		st.Spec.Template.Spec.NodeSelector = rackState.Rack.NodeSelector
+	if len(rackState.Rack.PodSpec.NodeSelector) != 0 {
+		st.Spec.Template.Spec.NodeSelector = rackState.Rack.PodSpec.NodeSelector
 	} else {
 		st.Spec.Template.Spec.NodeSelector = aeroCluster.Spec.PodSpec.NodeSelector
 	}
 
 	// Use rack tolerations, if given
-	if len(rackState.Rack.Tolerations) != 0 {
-		st.Spec.Template.Spec.Tolerations = rackState.Rack.Tolerations
+	if len(rackState.Rack.PodSpec.Tolerations) != 0 {
+		st.Spec.Template.Spec.Tolerations = rackState.Rack.PodSpec.Tolerations
 	} else {
 		st.Spec.Template.Spec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
 	}
@@ -857,7 +856,7 @@ func createVolumeForVolumeAttachment(volume asdbv1alpha1.VolumeSpec) corev1.Volu
 }
 
 // Add dummy volumeAttachment for aerospike, init container
-func getFinalVolumeAttachmentsForVolume(volume asdbv1alpha1.VolumeSpec) (initContainerAttachments, containerAttachments []v1alpha1.VolumeAttachment) {
+func getFinalVolumeAttachmentsForVolume(volume asdbv1alpha1.VolumeSpec) (initContainerAttachments, containerAttachments []asdbv1alpha1.VolumeAttachment) {
 	// Create dummy attachment for initcontainer
 	initVolumePath := "/" + volume.Name // Using volume name for initContainer
 	if volume.Aerospike != nil {
@@ -865,16 +864,16 @@ func getFinalVolumeAttachmentsForVolume(volume asdbv1alpha1.VolumeSpec) (initCon
 	}
 	// All volumes should be mounted in init container to allow initialization
 	initContainerAttachments = append(initContainerAttachments, volume.InitContainers...)
-	initContainerAttachments = append(initContainerAttachments, v1alpha1.VolumeAttachment{
-		ContainerName: v1alpha1.AerospikeServerInitContainerName,
+	initContainerAttachments = append(initContainerAttachments, asdbv1alpha1.VolumeAttachment{
+		ContainerName: asdbv1alpha1.AerospikeServerInitContainerName,
 		Path:          initVolumePath,
 	})
 
 	// Create dummy attachment for aerospike server conatiner
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
 	if volume.Aerospike != nil {
-		containerAttachments = append(containerAttachments, v1alpha1.VolumeAttachment{
-			ContainerName: v1alpha1.AerospikeServerContainerName,
+		containerAttachments = append(containerAttachments, asdbv1alpha1.VolumeAttachment{
+			ContainerName: asdbv1alpha1.AerospikeServerContainerName,
 			Path:          volume.Aerospike.Path,
 		})
 	}
@@ -912,23 +911,6 @@ func addVolumeDeviceInContainer(volumeName string, volumeAttachments []asdbv1alp
 				break
 			}
 		}
-	}
-}
-
-func removeConfigMapVolumeMountFromSTS(containers []corev1.Container, volume corev1.Volume) {
-	// Update volume mounts.
-	for i := range containers {
-		container := &containers[i]
-		j := 0
-		for _, mount := range container.VolumeMounts {
-			if mount.Name != volume.Name {
-				// This mount point must be retained.
-				container.VolumeMounts[j] = mount
-				j++
-			}
-		}
-
-		container.VolumeMounts = container.VolumeMounts[:j]
 	}
 }
 

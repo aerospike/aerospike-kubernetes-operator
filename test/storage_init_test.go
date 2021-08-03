@@ -160,41 +160,41 @@ var _ = Describe("StorageInit", func() {
 						},
 					},
 				},
-				{
-					Name: "file-init-1",
-					AerospikePersistentVolumePolicySpec: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
-						InputInitMethod: &fileDeleteInitMethod,
-					},
-					Source: asdbv1alpha1.VolumeSource{
-						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-							Size:         resource.MustParse("1Gi"),
-							StorageClass: storageClass,
-							VolumeMode:   corev1.PersistentVolumeFilesystem,
-						},
-					},
-					Sidecars: []asdbv1alpha1.VolumeAttachment{
-						{
-							ContainerName: containerName,
-							Path:          "/opt/aerospike/filesystem-init",
-						},
-					},
-				},
-				{
-					Name: "device-noinit-1",
-					Source: asdbv1alpha1.VolumeSource{
-						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-							Size:         resource.MustParse("1Gi"),
-							StorageClass: storageClass,
-							VolumeMode:   corev1.PersistentVolumeBlock,
-						},
-					},
-					Sidecars: []asdbv1alpha1.VolumeAttachment{
-						{
-							ContainerName: containerName,
-							Path:          "/opt/aerospike/blockdevice-noinit",
-						},
-					},
-				},
+				// {
+				// 	Name: "file-init-1",
+				// 	AerospikePersistentVolumePolicySpec: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+				// 		InputInitMethod: &fileDeleteInitMethod,
+				// 	},
+				// 	Source: asdbv1alpha1.VolumeSource{
+				// 		PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+				// 			Size:         resource.MustParse("1Gi"),
+				// 			StorageClass: storageClass,
+				// 			VolumeMode:   corev1.PersistentVolumeFilesystem,
+				// 		},
+				// 	},
+				// 	Sidecars: []asdbv1alpha1.VolumeAttachment{
+				// 		{
+				// 			ContainerName: containerName,
+				// 			Path:          "/opt/aerospike/filesystem-init",
+				// 		},
+				// 	},
+				// },
+				// {
+				// 	Name: "device-noinit-1",
+				// 	Source: asdbv1alpha1.VolumeSource{
+				// 		PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+				// 			Size:         resource.MustParse("1Gi"),
+				// 			StorageClass: storageClass,
+				// 			VolumeMode:   corev1.PersistentVolumeBlock,
+				// 		},
+				// 	},
+				// 	Sidecars: []asdbv1alpha1.VolumeAttachment{
+				// 		{
+				// 			ContainerName: containerName,
+				// 			Path:          "/opt/aerospike/blockdevice-noinit",
+				// 		},
+				// 	},
+				// },
 				{
 					Name: "device-dd-1",
 					AerospikePersistentVolumePolicySpec: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
@@ -214,25 +214,25 @@ var _ = Describe("StorageInit", func() {
 						},
 					},
 				},
-				{
-					Name: "device-blkdiscard-1",
-					AerospikePersistentVolumePolicySpec: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
-						InputInitMethod: &blkDiscardInitMethod,
-					},
-					Source: asdbv1alpha1.VolumeSource{
-						PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
-							Size:         resource.MustParse("1Gi"),
-							StorageClass: storageClass,
-							VolumeMode:   corev1.PersistentVolumeBlock,
-						},
-					},
-					Sidecars: []asdbv1alpha1.VolumeAttachment{
-						{
-							ContainerName: containerName,
-							Path:          "/opt/aerospike/blockdevice-init-blkdiscard",
-						},
-					},
-				},
+				// {
+				// 	Name: "device-blkdiscard-1",
+				// 	AerospikePersistentVolumePolicySpec: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+				// 		InputInitMethod: &blkDiscardInitMethod,
+				// 	},
+				// 	Source: asdbv1alpha1.VolumeSource{
+				// 		PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+				// 			Size:         resource.MustParse("1Gi"),
+				// 			StorageClass: storageClass,
+				// 			VolumeMode:   corev1.PersistentVolumeBlock,
+				// 		},
+				// 	},
+				// 	Sidecars: []asdbv1alpha1.VolumeAttachment{
+				// 		{
+				// 			ContainerName: containerName,
+				// 			Path:          "/opt/aerospike/blockdevice-init-blkdiscard",
+				// 		},
+				// 	},
+				// },
 				{
 					Name: aerospikeConfigSecret,
 					Source: asdbv1alpha1.VolumeSource{
@@ -354,6 +354,9 @@ func checkData(aeroCluster *asdbv1alpha1.AerospikeCluster, assertHasData bool, w
 			}
 		}
 		for _, volume := range storage.Volumes {
+			if volume.Source.PersistentVolume == nil {
+				continue
+			}
 			// t.Logf("Check data for volume %v", volume.Path)
 			var volumeHasData bool
 			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
@@ -403,6 +406,9 @@ func writeDataToVolumes(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
 
 func writeDataToPodVolumes(storage asdbv1alpha1.AerospikeStorageSpec, pod *corev1.Pod) error {
 	for _, volume := range storage.Volumes {
+		if volume.Source.PersistentVolume == nil {
+			continue
+		}
 		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
 			err := writeDataToVolumeBlock(pod, volume)
 			if err != nil {

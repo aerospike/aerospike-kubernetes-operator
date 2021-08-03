@@ -128,21 +128,21 @@ func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1alph
 }
 
 func creatPodSpecForRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (*asdbv1alpha1.AerospikePodSpec, error) {
-	rackPodSpec := asdbv1alpha1.AerospikePodSpec{}
-	if err := lib.DeepCopy(&rackPodSpec, &aeroCluster.Spec.PodSpec); err != nil {
+	rackFullPodSpec := asdbv1alpha1.AerospikePodSpec{}
+	if err := lib.DeepCopy(&rackFullPodSpec, &aeroCluster.Spec.PodSpec); err != nil {
 		return nil, err
 	}
 
-	if rack.Affinity != nil {
-		rackPodSpec.Affinity = rack.Affinity
+	if rack.PodSpec.Affinity != nil {
+		rackFullPodSpec.Affinity = rack.PodSpec.Affinity
 	}
-	if rack.Tolerations != nil {
-		rackPodSpec.Tolerations = rack.Tolerations
+	if rack.PodSpec.Tolerations != nil {
+		rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
 	}
-	if rack.NodeSelector != nil {
-		rackPodSpec.NodeSelector = rack.NodeSelector
+	if rack.PodSpec.NodeSelector != nil {
+		rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
 	}
-	return &rackPodSpec, nil
+	return &rackFullPodSpec, nil
 }
 
 func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (string, error) {

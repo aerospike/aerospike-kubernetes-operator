@@ -331,15 +331,13 @@ var _ = Describe("Using storage volumes", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				containerName := "tomcat"
-				aeroCluster.Spec.PodSpec = v1alpha1.AerospikePodSpec{
-					Sidecars: []v1.Container{
-						{
-							Name:  containerName,
-							Image: "tomcat:8.0",
-							Ports: []v1.ContainerPort{
-								{
-									ContainerPort: 7500,
-								},
+				aeroCluster.Spec.PodSpec.Sidecars = []v1.Container{
+					{
+						Name:  containerName,
+						Image: "tomcat:8.0",
+						Ports: []v1.ContainerPort{
+							{
+								ContainerPort: 7500,
 							},
 						},
 					},

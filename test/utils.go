@@ -266,7 +266,7 @@ func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster 
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return (5 * time.Minute * time.Duration(nodes))
+	return (10 * time.Minute * time.Duration(nodes))
 }
 
 // ExecuteCommandOnPod executes a command in the specified container,

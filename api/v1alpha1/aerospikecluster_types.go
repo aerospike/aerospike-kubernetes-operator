@@ -155,6 +155,10 @@ type AerospikePodSpec struct {
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
 }
 
+type RackPodSpec struct {
+	SchedulingPolicy `json:",inline"`
+}
+
 type SchedulingPolicy struct {
 	Affinity     *corev1.Affinity    `json:"affinity,omitempty"`
 	Tolerations  []corev1.Toleration `json:"tolerations,omitempty"`
@@ -213,9 +217,10 @@ type Rack struct {
 	InputStorage *AerospikeStorageSpec `json:"storage,omitempty"`
 	// Effective/operative storage. The resultant is user input if specified else global storage
 	Storage AerospikeStorageSpec `json:"effectiveStorage,omitempty"`
-
-	// TODO: should we allow its update and do rolling restart
-	SchedulingPolicy `json:",inline"`
+	// PodSpec to use for the pods in this rack. This value overwrites the global storage config
+	InputPodSpec *RackPodSpec `json:"podSpec,omitempty"`
+	// Effective/operative PodSpec. The resultant is user input if specified else global PodSpec
+	PodSpec RackPodSpec `json:"effectivePodSpec,omitempty"`
 }
 
 // ValidationPolicySpec controls validation of the Aerospike cluster resource.

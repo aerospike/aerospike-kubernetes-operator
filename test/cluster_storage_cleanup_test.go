@@ -237,6 +237,17 @@ var _ = Describe("RackUsingLocalStorage", func() {
 						Path: "/opt/aerospike",
 					},
 				},
+				{
+					Name: aerospikeConfigSecret,
+					Source: asdbv1alpha1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: tlsSecretName,
+						},
+					},
+					Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Path: "/etc/aerospike/secret",
+					},
+				},
 			},
 		}
 

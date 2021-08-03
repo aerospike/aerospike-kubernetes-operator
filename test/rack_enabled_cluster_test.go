@@ -136,8 +136,10 @@ var _ = Describe("RackLifeCycleOp", func() {
 				Racks: []asdbv1alpha1.Rack{
 					{
 						ID: 3,
-						SchedulingPolicy: v1alpha1.SchedulingPolicy{
-							Affinity: affinity,
+						InputPodSpec: &v1alpha1.RackPodSpec{
+							SchedulingPolicy: v1alpha1.SchedulingPolicy{
+								Affinity: affinity,
+							},
 						},
 					},
 				},

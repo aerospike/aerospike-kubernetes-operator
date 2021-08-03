@@ -97,8 +97,10 @@ func (r *AerospikeCluster) setDefaults(aslog logr.Logger) error {
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.
 func (r *AerospikeCluster) setDefaultRackConf(aslog logr.Logger) error {
+	defaultRack := Rack{ID: DefaultRackID}
+
 	if len(r.Spec.RackConfig.Racks) == 0 {
-		r.Spec.RackConfig.Racks = append(r.Spec.RackConfig.Racks, Rack{ID: DefaultRackID})
+		r.Spec.RackConfig.Racks = append(r.Spec.RackConfig.Racks, defaultRack)
 		aslog.Info("No rack given. Added default rack-id for all nodes", "racks", r.Spec.RackConfig, "DefaultRackID", DefaultRackID)
 	} else {
 		for _, rack := range r.Spec.RackConfig.Racks {
@@ -106,7 +108,7 @@ func (r *AerospikeCluster) setDefaultRackConf(aslog logr.Logger) error {
 				// User has modified defaultRackConfig or used defaultRackID
 				if len(r.Spec.RackConfig.Racks) > 1 ||
 					rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" ||
-					rack.InputAerospikeConfig != nil || rack.InputStorage != nil {
+					rack.InputAerospikeConfig != nil || rack.InputStorage != nil || rack.InputPodSpec != nil {
 					return fmt.Errorf("invalid RackConfig %v. RackID %d is reserved", r.Spec.RackConfig, DefaultRackID)
 				}
 			}
@@ -116,23 +118,25 @@ func (r *AerospikeCluster) setDefaultRackConf(aslog logr.Logger) error {
 }
 
 func (r *AerospikeCluster) updateRacks(aslog logr.Logger) error {
-	err := r.updateRacksStorageFromGlobal(aslog)
-
-	if err != nil {
+	if err := r.updateRacksStorageFromGlobal(aslog); err != nil {
 		return fmt.Errorf("error updating rack storage: %v", err)
 	}
 
-	err = r.updateRacksAerospikeConfigFromGlobal(aslog)
-
-	if err != nil {
+	if err := r.updateRacksAerospikeConfigFromGlobal(aslog); err != nil {
 		return fmt.Errorf("error updating rack aerospike config: %v", err)
+	}
+
+	if err := r.updateRacksPodSpecFromGlobal(aslog); err != nil {
+		return fmt.Errorf("error updating rack podSpec: %v", err)
 	}
 
 	return nil
 }
 
 func (r *AerospikeCluster) updateRacksStorageFromGlobal(aslog logr.Logger) error {
-	for i, rack := range r.Spec.RackConfig.Racks {
+	for i := range r.Spec.RackConfig.Racks {
+		rack := &r.Spec.RackConfig.Racks[i]
+
 		if rack.InputStorage == nil {
 			rack.Storage = r.Spec.Storage
 			aslog.V(1).Info("Updated rack storage with global storage", "rack id", rack.ID, "storage", rack.Storage)
@@ -142,9 +146,20 @@ func (r *AerospikeCluster) updateRacksStorageFromGlobal(aslog logr.Logger) error
 
 		// Set storage defaults if rack has storage section
 		rack.Storage.SetDefaults()
+	}
+	return nil
+}
 
-		// Copy over to the actual slice.
-		r.Spec.RackConfig.Racks[i].Storage = rack.Storage
+func (r *AerospikeCluster) updateRacksPodSpecFromGlobal(aslog logr.Logger) error {
+	for i := range r.Spec.RackConfig.Racks {
+		rack := &r.Spec.RackConfig.Racks[i]
+
+		if rack.InputPodSpec == nil {
+			rack.PodSpec.SchedulingPolicy = r.Spec.PodSpec.SchedulingPolicy
+			aslog.V(1).Info("Updated rack podSpec with global podSpec", "rack id", rack.ID, "podSpec", rack.PodSpec)
+		} else {
+			rack.PodSpec = *rack.InputPodSpec
+		}
 	}
 	return nil
 }
