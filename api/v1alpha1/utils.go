@@ -230,6 +230,27 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	return xdrConf != nil
 }
 
+func getTLSAuthenticateClientNames(serviceConf map[string]interface{}) ([]string, error){
+	tlsAuthenticateClient, ok := serviceConf["tls-authenticate-client"]
+	if !ok {
+		return nil, fmt.Errorf("missing tls-authenticate-client configuration")
+	}
+	switch value := tlsAuthenticateClient.(type) {
+	case []interface{}:
+		names := make([]string, len(value))
+		for i := 0; i < len(names); i++ {
+			name, ok := value[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("tls-authenticate-client configuration contains wrong value")
+			}
+			names[i] = name
+		}
+	case string, bool:
+		return []string{}, nil
+	}
+	return nil, fmt.Errorf("tls-authenticate-client invalid configuration")
+}
+
 func readClientNamesFromConfig(serviceConf map[string]interface{}) ([]string, error) {
 	var result []string
 	clientNames, exists := serviceConf["tls-authenticate-client"]

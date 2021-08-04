@@ -971,10 +971,21 @@ const conf5_6_0 = `
               "dynamic": false
             },
             "tls-authenticate-client": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
+              "oneOf": [{
+                "type": "string",
+                "description": "",
+                "dynamic": false,
+                "default": "any",
+                "enum": ["any", "false"]
+              }, {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "not": {
+                    "enum": ["any", "false"]
+                  }
+                }
+              }]
             },
             "tls-name": {
               "type": "string",
@@ -1477,7 +1488,6 @@ const conf5_6_0 = `
                 },
                 "scheduler-mode": {
                   "type": "string",
-                  "default": "",
                   "enum": ["anticipatory", "cfq", "deadline", "noop", "null"],
                   "description": "",
                   "dynamic": false
