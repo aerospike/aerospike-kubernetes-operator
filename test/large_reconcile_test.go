@@ -36,10 +36,10 @@ var _ = Describe(
 					clusterNamespacedName, 5,
 				)
 				networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
-					AccessType:             asdbv1beta1.AerospikeNetworkTypeHostExternal,
-					AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypeHostExternal,
-					TLSAccessType:          asdbv1beta1.AerospikeNetworkTypeHostExternal,
-					TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal,
+					AccessType:             asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+					AlternateAccessType:    asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+					TLSAccessType:          asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+					TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
 				}
 				aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
 
@@ -203,9 +203,9 @@ func loadDataInCluster(
 
 	var hostList []*as.Host
 	for _, pod := range aeroCluster.Status.Pods {
-		host := &as.Host{
-			Name: pod.HostExternalIP, Port: int(pod.ServicePort),
-			TLSName: pod.Aerospike.TLSName,
+		host, err := createHost(pod)
+		if err != nil {
+			return err
 		}
 		hostList = append(hostList, host)
 	}

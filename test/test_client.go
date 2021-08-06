@@ -128,8 +128,21 @@ func getClientPolicy(
 	// do not fail the client if not connected.
 	policy.FailIfNotConnected = false
 
+	tlsName := getServiceTLSName(aeroCluster)
+
+	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
+	if tlsName != "" {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != networkType && aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == networkType {
+			policy.UseServicesAlternate = true
+		}
+	} else {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != networkType && aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == networkType {
+			policy.UseServicesAlternate = true
+		}
+	}
+
 	// tls config
-	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
+	if tlsName != "" {
 		// r.Log.V(1).Info("Set tls config in aerospike client policy")
 		clientCertSpec := aeroCluster.Spec.OperatorClientCertSpec
 		tlsConf := tls.Config{

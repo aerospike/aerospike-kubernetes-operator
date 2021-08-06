@@ -84,7 +84,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 	var isStable bool
 	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
-		r.Log.V(1).Info("Waiting for migrations to be zero")
+		r.Log.V(1).Info("Waiting for migrations to be zero before stopping pod", "pod", pod.Name)
 		time.Sleep(retryInterval)
 
 		// This should fail if coldstart is going on.

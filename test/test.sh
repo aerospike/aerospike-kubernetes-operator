@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 ####################################
 # Should be run from repository root
@@ -15,12 +16,19 @@ go get github.com/onsi/ginkgo/ginkgo
 go get github.com/onsi/gomega/...
 
 # Cleanup
-echo "Removing residual k8s resources...."
-"$DIR"/cleanup-test-namespace.sh
+echo "---------------------------------------"
+echo "| Removing residual k8s resources.... |"
+echo "---------------------------------------"
+"$DIR"/cleanup-test-namespace.sh || true
 
 # Setup the deploy-test-operator.sh
-echo "Deploying the operator...."
+echo "------------------------------"
+echo "| Deploying the operator.... |"
+echo "------------------------------"
 "$DIR"/deploy-test-operator.sh $1
 
 # Run tests
+echo "---------------------"
+echo "| Starting tests.... |"
+echo "---------------------"
 make test TEST_ARGS="$2"

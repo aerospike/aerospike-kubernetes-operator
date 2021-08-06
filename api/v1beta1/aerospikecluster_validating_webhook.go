@@ -51,7 +51,7 @@ var _ webhook.Validator = &AerospikeCluster{}
 func (c *AerospikeCluster) ValidateCreate() error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
-	aslog.Info("Validate create", "aerospikecluster.Spec", c.Spec)
+	aslog.Info("Validate create")
 
 	return c.validate(aslog)
 }
@@ -68,6 +68,8 @@ func (c *AerospikeCluster) ValidateDelete() error {
 // ValidateUpdate validate update
 func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
+
+	aslog.Info("validate update")
 
 	old := oldObj.(*AerospikeCluster)
 	if err := c.validate(aslog); err != nil {

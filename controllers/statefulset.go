@@ -687,10 +687,12 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
 
-	if err := r.Client.Get(
-		context.TODO(),
-		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
-	); err != nil {
+	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
+	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("Can't find service for pod while trying to delete it. Skipping...", "service", serviceName)
+			return nil
+		}
 		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
 	}
 	if err := r.Client.Delete(context.TODO(), service); err != nil {
