@@ -100,7 +100,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1alpha1.Aerospi
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1alpha1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.14",
+						Image: asdbv1alpha1.AerospikeServerInitContainerImage,
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
@@ -615,18 +615,26 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.
 
 	st.Spec.Template.Spec.DNSPolicy = aeroCluster.Spec.PodSpec.DNSPolicy
 
+	st.Spec.Template.Spec.Containers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.Containers, aeroCluster.Spec.PodSpec.Sidecars)
+
+	st.Spec.Template.Spec.InitContainers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.InitContainers, aeroCluster.Spec.PodSpec.InitContainers)
+}
+
+func updateStatefulSetContainers(stsContainers []corev1.Container, specContainers []corev1.Container) []corev1.Container {
 	// Add new sidecars.
-	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	for _, specContainer := range specContainers {
 		found := false
 
 		// Create a copy because updating stateful sets sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		sideCarCopy := corev1.Container{}
-		lib.DeepCopy(&sideCarCopy, &newSidecar)
-		for i, container := range st.Spec.Template.Spec.Containers {
-			if newSidecar.Name == container.Name {
+		specContainerCopy := corev1.Container{}
+		lib.DeepCopy(&specContainerCopy, &specContainer)
+		for i, stsContainer := range stsContainers {
+			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
-				st.Spec.Template.Spec.Containers[i] = sideCarCopy
+				stsContainers[i] = specContainerCopy
 				found = true
 				break
 			}
@@ -634,16 +642,16 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.
 
 		if !found {
 			// Add to stateful set containers.
-			st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, sideCarCopy)
+			stsContainers = append(stsContainers, specContainerCopy)
 		}
 	}
 
 	// Remove deleted sidecars.
 	j := 0
-	for i, container := range st.Spec.Template.Spec.Containers {
+	for i, stsContainer := range stsContainers {
 		found := i == 0
-		for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
-			if newSidecar.Name == container.Name {
+		for _, specContainer := range specContainers {
+			if specContainer.Name == stsContainer.Name {
 				found = true
 				break
 			}
@@ -651,53 +659,11 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1alpha1.
 
 		if found {
 			// Retain main aerospike container or a matched sidecar.
-			st.Spec.Template.Spec.Containers[j] = container
+			stsContainers[j] = stsContainer
 			j++
 		}
 	}
-	st.Spec.Template.Spec.Containers = st.Spec.Template.Spec.Containers[:j]
-
-	// Add additional init containers
-	for _, newAddIC := range aeroCluster.Spec.PodSpec.InitContainers {
-		found := false
-
-		// Create a copy because updating stateful sets sets defaults
-		// on the init container object which mutates original aeroCluster object.
-		addICCopy := corev1.Container{}
-		lib.DeepCopy(&addICCopy, &newAddIC)
-		for i, container := range st.Spec.Template.Spec.InitContainers {
-			if newAddIC.Name == container.Name {
-				// Update the init container in case something has changed.
-				st.Spec.Template.Spec.InitContainers[i] = newAddIC
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			// Add to stateful set init containers.
-			st.Spec.Template.Spec.InitContainers = append(st.Spec.Template.Spec.InitContainers, addICCopy)
-		}
-	}
-
-	// Remove deleted additional init containers.
-	j = 0
-	for i, container := range st.Spec.Template.Spec.InitContainers {
-		found := i == 0
-		for _, newAddIC := range aeroCluster.Spec.PodSpec.InitContainers {
-			if newAddIC.Name == container.Name {
-				found = true
-				break
-			}
-		}
-
-		if found {
-			// Retain main aerospike-init container or a matched sidecar.
-			st.Spec.Template.Spec.InitContainers[j] = container
-			j++
-		}
-	}
-	st.Spec.Template.Spec.InitContainers = st.Spec.Template.Spec.InitContainers[:j]
+	return stsContainers[:j]
 }
 
 func (r *AerospikeClusterReconciler) waitForAllSTSToBeReady(aeroCluster *asdbv1alpha1.AerospikeCluster) error {

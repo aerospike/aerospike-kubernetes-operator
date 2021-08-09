@@ -16,7 +16,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -183,19 +182,19 @@ func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1alpha1.Aeros
 
 func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
 
-	r.Log.Info("Reconcile existing Aerospike cluster statefulset")
+	r.Log.Info("Reconcile existing Aerospike cluster statefulset", "stsName", found.Name)
 
 	var err error
 	var res reconcileResult
 
-	r.Log.Info("Ensure rack StatefulSet size is the same as the spec")
+	r.Log.Info("Ensure rack StatefulSet size is the same as the spec", "stsName", found.Name)
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
 		found, res = r.scaleDownRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to scaleDown StatefulSet pods", "err", res.err)
+				r.Log.Error(err, "Failed to scaleDown StatefulSet pods", "err", "stsName", found.Name)
 			}
 			return res
 		}
@@ -208,7 +207,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	// So a check based on spec and status will skip configMap update.
 	// Hence a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(aeroCluster, getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
-		r.Log.Error(err, "Failed to update configMap from AerospikeConfig")
+		r.Log.Error(err, "Failed to update configMap from AerospikeConfig", "stsName", found.Name)
 		return reconcileError(err)
 	}
 
@@ -219,10 +218,10 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState, ignorablePods)
+		found, res = r.upgradeRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to update StatefulSet image", "err", res.err)
+				r.Log.Error(res.err, "Failed to update StatefulSet image", "stsName", found.Name)
 			}
 			return res
 		}
@@ -235,7 +234,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 			found, res = r.rollingRestartRack(aeroCluster, found, rackState, ignorablePods)
 			if !res.isSuccess {
 				if res.err != nil {
-					r.Log.Error(err, "Failed to do rolling restart", "err", res.err)
+					r.Log.Error(res.err, "Failed to do rolling restart", "stsName", found.Name)
 				}
 				return res
 			}
@@ -246,7 +245,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	if *found.Spec.Replicas < desiredSize {
 		found, res = r.scaleUpRack(aeroCluster, found, rackState)
 		if !res.isSuccess {
-			r.Log.Error(err, "Failed to scaleUp StatefulSet pods", "err", res.err)
+			r.Log.Error(res.err, "Failed to scaleUp StatefulSet pods", "stsName", found.Name)
 			return res
 		}
 	}
@@ -340,22 +339,11 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1alpha1.Aeros
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1alpha1.AerospikeCluster, containers []corev1.Container) bool {
+	updated := false
 
-	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
-	if err != nil {
-		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
-	}
-
-	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
-	// Update will happen only when a pod is deleted.
-	// So first update image and then delete a pod. Pod will come up with new image.
-	// Repeat the above process.
-	needsUpdate := false
-	for i, container := range found.Spec.Template.Spec.Containers {
+	for i, container := range containers {
 		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
-
 		if err != nil {
 			// Maybe a deleted sidecar.
 			continue
@@ -363,50 +351,70 @@ func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.Aeros
 
 		if !utils.IsImageEqual(container.Image, desiredImage) {
 			r.Log.Info("Updating image in statefulset spec", "container", container.Name, "desiredImage", desiredImage, "currentImage", container.Image)
-			found.Spec.Template.Spec.Containers[i].Image = desiredImage
-			needsUpdate = true
+			containers[i].Image = desiredImage
+			updated = true
 		}
 	}
+	return updated
+}
 
-	if needsUpdate {
+func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1alpha1.AerospikeCluster, podName string) bool {
+	for _, ps := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
+		if err != nil {
+			continue
+		}
+
+		if !utils.IsImageEqual(ps.Image, desiredImage) {
+			r.Log.Info("Found at least one image for upgrading/downgrading in pod.", "podName", podName, "currentImage", ps.Image, "desiredImage", desiredImage)
+			return true
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+
+	// List the pods for this aeroCluster's statefulset
+	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
+	if err != nil {
+		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
+	// Update will happen only when a pod is deleted.
+	// So first update image and then delete a pod. Pod will come up with new image.
+	// Repeat the above process.
+	containersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.Containers)
+	initContainersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.InitContainers)
+
+	if containersUpdated || initContainersUpdated {
 		err = r.Client.Update(context.TODO(), found, updateOption)
 		if err != nil {
 			return found, reconcileError(fmt.Errorf("failed to update image for StatefulSet %s: %v", found.Name, err))
+		} else {
+			r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
 		}
 	}
 
 	for _, p := range podList {
-		r.Log.Info("Check if pod needs upgrade or not")
-		var needPodUpgrade bool
-		for _, ps := range p.Spec.Containers {
-			desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
-			if err != nil {
-				continue
-			}
-
-			if !utils.IsImageEqual(ps.Image, desiredImage) {
-				r.Log.Info("Upgrading/downgrading pod", "podName", p.Name, "currentImage", ps.Image, "desiredImage", desiredImage)
-				needPodUpgrade = true
-				break
-			}
-		}
+		r.Log.Info("Check if pod needs upgrade or not", "podName", p.Name)
+		needPodUpgrade := r.needsToUpdateContainers(p.Spec.Containers, aeroCluster, p.Name) ||
+			r.needsToUpdateContainers(p.Spec.InitContainers, aeroCluster, p.Name)
 
 		if !needPodUpgrade {
-			r.Log.Info("Pod doesn't need upgrade")
+			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
 		}
 
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p, ignorablePods)
+		res := r.deletePodAndEnsureImageUpdated(aeroCluster, rackState, p, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
-
 		// Handle the next pod in subsequent reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
-
 	// return a fresh copy
 	found, err = r.getSTS(aeroCluster, rackState)
 	if err != nil {
@@ -552,225 +560,12 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1alph
 	}
 	for _, p := range podList.Items {
 		if !utils.IsPodOnDesiredImage(&p, aeroCluster) {
-			r.Log.Info("Pod need upgrade/downgrade")
+			r.Log.Info("Pod need upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}
 
 	}
 	return false, nil
-}
-
-func (r *AerospikeClusterReconciler) isRackConfigMapsUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
-	configMaps := rackState.Rack.Storage.GetConfigMaps()
-
-	var volumesToBeMatched []corev1.Volume
-	for _, volume := range pod.Spec.Volumes {
-		if volume.ConfigMap == nil ||
-			volume.Name == confDirName ||
-			volume.Name == initConfDirName {
-			continue
-		}
-		volumesToBeMatched = append(volumesToBeMatched, volume)
-	}
-
-	if len(configMaps) != len(volumesToBeMatched) {
-		return true
-	}
-
-	for _, configMapVolume := range configMaps {
-		pvcName := configMapVolume.Name
-		found := false
-		for _, volume := range volumesToBeMatched {
-			if volume.Name == pvcName {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return true
-		}
-
-	}
-	return false
-}
-
-func (r *AerospikeClusterReconciler) isRackPVStorageUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
-
-	PVs := rackState.Rack.Storage.GetPVs()
-
-	// Check for Added/Updated volumeMounts
-	for _, volume := range PVs {
-
-		// aerospike cont
-		// sidecars
-		// additionalInitCont
-		var newMounts []v1alpha1.VolumeAttachment
-		newMounts = append(newMounts, volume.Sidecars...)
-		if volume.Aerospike.Path != "" {
-			newMounts = append(newMounts, v1alpha1.VolumeAttachment{
-				ContainerName: v1alpha1.AerospikeServerContainerName,
-				// TODO fix path name
-				Path: volume.Aerospike.Path,
-			})
-		}
-
-		if r.isPVAttachmentAddedOrUpdated(volume.Name, volume.Source.PersistentVolume.VolumeMode, newMounts, pod.Spec.Containers, false) ||
-			r.isPVAttachmentAddedOrUpdated(volume.Name, volume.Source.PersistentVolume.VolumeMode, volume.InitContainers, pod.Spec.InitContainers, true) {
-			r.Log.Info("New volumeMount added/updated in rack storage. Pod Need rolling restart")
-			return true
-		}
-
-	}
-
-	// Check for removed volumeMounts
-	if r.isPVAttachmentRemoved(PVs, pod.Spec.Containers, false) ||
-		r.isPVAttachmentRemoved(PVs, pod.Spec.InitContainers, true) {
-		r.Log.Info("volumeMount removed rack storage. Pod Need rolling restart")
-		return true
-	}
-
-	return false
-}
-
-func (r *AerospikeClusterReconciler) isPVAttachmentAddedOrUpdated(volumeName string, volumeMode v1.PersistentVolumeMode, volumeAttachments []v1alpha1.VolumeAttachment, podContainers []v1.Container, isInitContainers bool) bool {
-
-	for _, attachment := range volumeAttachments {
-		for _, container := range podContainers {
-			var pathPrefix string
-			// Find container in the pod and then look for volumeAttachments
-			if attachment.ContainerName == container.Name {
-				if volumeMode == v1.PersistentVolumeBlock {
-					if isInitContainers {
-						pathPrefix = "/block-volumes"
-					}
-
-					for _, volumeDevice := range container.VolumeDevices {
-
-						var found bool
-						if volumeDevice.Name == volumeName {
-							found = true
-							if volumeDevice.DevicePath != pathPrefix+attachment.Path {
-								r.Log.Info("volumeMount path updated in rack storage", "oldpath", volumeDevice.DevicePath, "newpath", pathPrefix+attachment.Path)
-								// Updated volume
-								return true
-							}
-							break
-						}
-						if !found {
-							// Added volume
-							r.Log.Info("volumeMount added in rack storage", "volume", volumeName, "containerName", container.Name)
-							return true
-						}
-					}
-
-				} else if volumeMode == v1.PersistentVolumeFilesystem {
-					if isInitContainers {
-						pathPrefix = "/filesystem-volumes"
-					}
-
-					var found bool
-					for _, volumeMount := range container.VolumeMounts {
-						if volumeMount.Name == volumeName {
-							found = true
-							if volumeMount.MountPath != pathPrefix+attachment.Path {
-								// Updated volume
-								r.Log.Info("volumeMount path updated in rack storage", "oldpath", volumeMount.MountPath, "newpath", pathPrefix+attachment.Path)
-								return true
-							}
-							break
-						}
-					}
-					if !found {
-						// Added volume
-						r.Log.Info("volumeMount added in rack storage", "volume", volumeName, "containerName", container.Name)
-						return true
-					}
-				} else {
-					// Nothing should come here
-					continue
-				}
-				break
-			}
-		}
-	}
-
-	return false
-}
-
-func (r *AerospikeClusterReconciler) isPVAttachmentRemoved(volumes []v1alpha1.VolumeSpec, podContainers []v1.Container, isInitContainers bool) bool {
-	var storageVDevices []v1alpha1.VolumeSpec
-	var storageVMounts []v1alpha1.VolumeSpec
-
-	for _, volume := range volumes {
-		if volume.Source.PersistentVolume == nil {
-			continue
-		}
-
-		if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			storageVDevices = append(storageVDevices, volume)
-		} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-			storageVMounts = append(storageVMounts, volume)
-		} else {
-			continue
-		}
-	}
-
-	for _, container := range podContainers {
-		if isInitContainers && container.Name == v1alpha1.AerospikeServerInitContainerName {
-			// Initcontainer has all the volumes mounted, there is no specific entry in storage for initcontainer
-			continue
-		}
-		for _, volumeDevice := range container.VolumeDevices {
-			if volumeDevice.Name == confDirName ||
-				volumeDevice.Name == initConfDirName {
-				continue
-			}
-			if !r.isContainerVolumeInStorage(storageVDevices, volumeDevice.Name, container.Name, isInitContainers) {
-				r.Log.Info("volumeMount removed from rack storage", "volumeDevice", volumeDevice.Name, "containerName", container.Name)
-				return true
-			}
-		}
-
-		for _, volumeMount := range container.VolumeMounts {
-			if volumeMount.Name == confDirName ||
-				volumeMount.Name == initConfDirName {
-				continue
-			}
-			if !r.isContainerVolumeInStorage(storageVMounts, volumeMount.Name, container.Name, isInitContainers) {
-				r.Log.Info("volumeMount removed from rack storage", "volumeDevice", volumeMount.Name, "containerName", container.Name)
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (r *AerospikeClusterReconciler) isContainerVolumeMountInStorage(volumes []v1alpha1.VolumeSpec, volumeMount v1.VolumeMount, containerName string, isInitContainers bool) bool {
-
-	for _, volume := range volumes {
-		if volumeMount.Name == volume.Name {
-			if isInitContainers {
-				if !isContainerNameInStorageVolumeAttachments(containerName, volume.InitContainers) {
-					return false
-				}
-			} else {
-				if containerName == v1alpha1.AerospikeServerContainerName {
-					if volume.Aerospike == nil {
-						return false
-					}
-				} else {
-					if !isContainerNameInStorageVolumeAttachments(containerName, volume.Sidecars) {
-						return false
-					}
-				}
-			}
-			return true
-		}
-	}
-	// volumeMount should be in storage volumes, if it is not there then it was not created by storage volumes.
-	// because storage volumes can not be removed, only mounts can be added or removed inside them
-	return true
 }
 
 func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {

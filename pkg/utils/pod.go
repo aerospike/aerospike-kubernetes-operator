@@ -29,7 +29,7 @@ func CheckPodFailed(pod *corev1.Pod) error {
 
 	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
 	if pod.Status.Phase == corev1.PodFailed {
-		return fmt.Errorf("pod has failed status")
+		return fmt.Errorf("pod %s has failed status", pod.Name)
 	}
 
 	// grab the status of every container in the pod (including its init containers)
@@ -44,7 +44,7 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
 		if waiting := container.State.Waiting; waiting != nil && (isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason)) {
-			return fmt.Errorf("pod failed message: %s reason: %s", waiting.Message, waiting.Reason)
+			return fmt.Errorf("pod failed message in container %s: %s reason: %s", container.Name, waiting.Message, waiting.Reason)
 		}
 	}
 
@@ -129,41 +129,30 @@ func IsPodUpgraded(pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster) 
 	return IsPodOnDesiredImage(pod, aeroCluster)
 }
 
-// getPodContainerStatus provides status for container in a pod if present else nil.
-// Abstracted into a function because in come cases pod.Status.ContainerStatuses was empty.
-func getPodContainerStatus(pod *corev1.Pod, containerName string) *corev1.ContainerStatus {
-	for _, status := range pod.Status.ContainerStatuses {
-		if status.Name == containerName {
-			return &status
-		}
-	}
-
-	return nil
-}
-
 // IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
 func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster) bool {
-	for _, ps := range pod.Spec.Containers {
+	return allContainersAreOnDesiredImages(aeroCluster, pod.Spec.Containers) &&
+		allContainersAreOnDesiredImages(aeroCluster, pod.Spec.InitContainers)
+}
+
+func allContainersAreOnDesiredImages(aeroCluster *asdbv1alpha1.AerospikeCluster, containers []corev1.Container) bool {
+	for _, ps := range containers {
 		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
 		if err != nil {
 			// Maybe a deleted sidecar. Ignore.
 			desiredImage = ps.Image
 		}
-
 		// TODO: Should we check status here?
 		// status may not be ready due to any bad config (e.g. bad podSpec).
 		// Due to this check, flow will be stuck at this place (upgradeImage)
-
 		// status := getPodContainerStatus(pod, ps.Name)
 		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
 		// 	return false
 		// }
-
 		if !IsImageEqual(ps.Image, desiredImage) {
 			return false
 		}
 	}
-
 	return true
 }
 
