@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -41,7 +41,7 @@ type FromSecretPasswordProvider struct {
 var pkglog = log.New(log.Ctx{"module": "test_aerospike_cluster"})
 
 // Get returns the password for the username using userSpec.
-func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1alpha1.AerospikeUserSpec) (string, error) {
+func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1beta1.AerospikeUserSpec) (string, error) {
 	secret := &corev1.Secret{}
 	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
@@ -57,13 +57,13 @@ func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1alpha1
 	return string(passbyte), nil
 }
 
-func getPasswordProvider(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) FromSecretPasswordProvider {
+func getPasswordProvider(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) FromSecretPasswordProvider {
 	return FromSecretPasswordProvider{k8sClient: k8sClient, namespace: aeroCluster.Namespace}
 }
 
-func getClient(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
+func getClient(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
 	pp := getPasswordProvider(aeroCluster, k8sClient)
-	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func getClient(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Clie
 }
 
 // TODO: username, password not used. check the use of this function
-func getClientForUser(username string, password string, aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
+func getClientForUser(username string, password string, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
 	conns, err := newAllHostConn(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
@@ -100,7 +100,7 @@ func getClientForUser(username string, password string, aeroCluster *asdbv1alpha
 	return aeroClient, nil
 }
 
-func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
+func getServiceTLSName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig.Value["network"]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
 		if _, ok := networkConf["service"]; !ok {
@@ -114,7 +114,7 @@ func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
 	return ""
 }
 
-func getClientCertificate(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*tls.Certificate, error) {
+func getClientCertificate(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*tls.Certificate, error) {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// get the tls info from secret
@@ -148,7 +148,7 @@ func getClientCertificate(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 	return nil, fmt.Errorf("failed to get tls config for creating client certificate")
 }
 
-func getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) *x509.CertPool {
+func getClusterServerPool(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) *x509.CertPool {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	// Try to load system CA certs, otherwise just make an empty pool
@@ -185,7 +185,7 @@ func getClusterServerPool(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient 
 	return serverPool
 }
 
-func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) *as.ClientPolicy {
+func getClientPolicy(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) *as.ClientPolicy {
 	logger := pkglog.New(log.Ctx{"AerospikeCluster": utils.ClusterNamespacedName(aeroCluster)})
 
 	policy := as.NewClientPolicy()
@@ -198,11 +198,11 @@ func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient clien
 	tlsName := getServiceTLSName(aeroCluster)
 
 	if tlsName != "" {
-		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != asdbv1alpha1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == asdbv1alpha1.AerospikeNetworkTypeHostExternal {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != asdbv1beta1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == asdbv1beta1.AerospikeNetworkTypeHostExternal {
 			policy.UseServicesAlternate = true
 		}
 	} else {
-		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != asdbv1alpha1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == asdbv1alpha1.AerospikeNetworkTypeHostExternal {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != asdbv1beta1.AerospikeNetworkTypeHostExternal && aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == asdbv1beta1.AerospikeNetworkTypeHostExternal {
 			policy.UseServicesAlternate = true
 		}
 	}
@@ -229,7 +229,7 @@ func getClientPolicy(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient clien
 		policy.TlsConfig = &tlsConf
 	}
 
-	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		logger.Error("failed to get spec from status", log.Ctx{"err": err})
 		return policy
@@ -253,7 +253,7 @@ func getServiceForPod(pod *corev1.Pod, k8sClient client.Client) (*corev1.Service
 	return service, nil
 }
 
-func newAsConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.ASConn, error) {
+func newAsConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.ASConn, error) {
 	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
 
@@ -276,9 +276,9 @@ func newAsConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sC
 		}
 	} else {
 		if tlsName == "" {
-			port = asdbv1alpha1.ServicePort
+			port = asdbv1beta1.ServicePort
 		} else {
-			port = asdbv1alpha1.ServiceTLSPort
+			port = asdbv1beta1.ServiceTLSPort
 		}
 	}
 
@@ -319,7 +319,7 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 	return &ip, nil
 }
 
-func newHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.HostConn, error) {
+func newHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.HostConn, error) {
 	asConn, err := newAsConn(aeroCluster, pod, k8sClient)
 	if err != nil {
 		return nil, err
@@ -328,7 +328,7 @@ func newHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8
 	return deployment.NewHostConn(host, asConn, nil), nil
 }
 
-func getPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*corev1.PodList, error) {
+func getPodList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*corev1.PodList, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
 	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
@@ -339,7 +339,7 @@ func getPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Cli
 	return podList, nil
 }
 
-func newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {
+func newAllHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err
@@ -359,7 +359,7 @@ func newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client
 	return hostConns, nil
 }
 
-func getAeroClusterPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) ([]corev1.PersistentVolumeClaim, error) {
+func getAeroClusterPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -371,7 +371,7 @@ func getAeroClusterPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient
 	return pvcList.Items, nil
 }
 
-func getPodsPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
+func getPodsPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
 	pvcListItems, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err

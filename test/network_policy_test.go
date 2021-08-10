@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 )
 
@@ -56,7 +56,7 @@ func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx goctx.Context
 		clusterNamespacedName := getClusterNamespacedName("np-default", multiClusterNs1)
 
 		// Ensures that default network policy is applied.
-		defaultNetworkPolicy := asdbv1alpha1.AerospikeNetworkPolicy{}
+		defaultNetworkPolicy := asdbv1beta1.AerospikeNetworkPolicy{}
 		aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName, defaultNetworkPolicy, multiPodPerHost, enableTLS, ctx)
 
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -72,7 +72,7 @@ func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx goctx.Context
 		clusterNamespacedName := getClusterNamespacedName("np-pod-external", multiClusterNs1)
 
 		// Ensures that default network policy is applied.
-		networkPolicy := asdbv1alpha1.AerospikeNetworkPolicy{AccessType: asdbv1alpha1.AerospikeNetworkTypePod, AlternateAccessType: asdbv1alpha1.AerospikeNetworkTypeHostExternal, TLSAccessType: asdbv1alpha1.AerospikeNetworkTypePod, TLSAlternateAccessType: asdbv1alpha1.AerospikeNetworkTypeHostExternal}
+		networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{AccessType: asdbv1beta1.AerospikeNetworkTypePod, AlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal, TLSAccessType: asdbv1beta1.AerospikeNetworkTypePod, TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal}
 		aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName, networkPolicy, multiPodPerHost, enableTLS, ctx)
 
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -86,8 +86,8 @@ func doTestNetworkPolicy(multiPodPerHost bool, enableTLS bool, ctx goctx.Context
 }
 
 // validateNetworkPolicy validates that the new network policy is applied correctly.
-func validateNetworkPolicy(ctx goctx.Context, desired *asdbv1alpha1.AerospikeCluster) error {
-	current := &asdbv1alpha1.AerospikeCluster{}
+func validateNetworkPolicy(ctx goctx.Context, desired *asdbv1beta1.AerospikeCluster) error {
+	current := &asdbv1beta1.AerospikeCluster{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, current)
 	if err != nil {
 		return fmt.Errorf("error reading cluster spec:%v", err)
@@ -156,7 +156,7 @@ func validateNetworkPolicy(ctx goctx.Context, desired *asdbv1alpha1.AerospikeClu
 	return nil
 }
 
-func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster, networkType asdbv1alpha1.AerospikeNetworkType, isTLS bool, actual []string) error {
+func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster, networkType asdbv1beta1.AerospikeNetworkType, isTLS bool, actual []string) error {
 	podIP, hostInternalIP, hostExternalIP, _ := getIPs(ctx, pod)
 	endpoint := actual[0]
 	host, portStr, err := net.SplitHostPort(endpoint)
@@ -168,17 +168,17 @@ func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1
 
 	// Validate the IP address.
 	switch networkType {
-	case asdbv1alpha1.AerospikeNetworkTypePod:
+	case asdbv1beta1.AerospikeNetworkTypePod:
 		if podIP != host {
 			return fmt.Errorf("Expected podIP %v got %v", podIP, host)
 		}
 
-	case asdbv1alpha1.AerospikeNetworkTypeHostInternal:
+	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if hostInternalIP != host {
 			return fmt.Errorf("Expected host internal IP %v got %v", hostInternalIP, host)
 		}
 
-	case asdbv1alpha1.AerospikeNetworkTypeHostExternal:
+	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		if hostExternalIP != host {
 			return fmt.Errorf("Expected host external IP %v got %v", hostExternalIP, host)
 		}
@@ -196,14 +196,14 @@ func validatePodEndpoint(ctx goctx.Context, pod *corev1.Pod, aeroCluster *asdbv1
 	return nil
 }
 
-func getExpectedServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, networkType asdbv1alpha1.AerospikeNetworkType, isTLS bool) (int32, error) {
+func getExpectedServicePortForPod(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, networkType asdbv1beta1.AerospikeNetworkType, isTLS bool) (int32, error) {
 	var port int32
 
-	if networkType == asdbv1alpha1.AerospikeNetworkTypePod {
+	if networkType == asdbv1beta1.AerospikeNetworkTypePod {
 		if !isTLS {
-			port = asdbv1alpha1.ServicePort
+			port = asdbv1beta1.ServicePort
 		} else {
-			port = asdbv1alpha1.ServiceTLSPort
+			port = asdbv1beta1.ServiceTLSPort
 		}
 	} else if aeroCluster.Spec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, k8sClient)
@@ -222,9 +222,9 @@ func getExpectedServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, po
 		}
 	} else {
 		if !isTLS {
-			port = asdbv1alpha1.ServicePort
+			port = asdbv1beta1.ServicePort
 		} else {
-			port = asdbv1alpha1.ServiceTLSPort
+			port = asdbv1beta1.ServiceTLSPort
 		}
 	}
 
@@ -256,7 +256,7 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (string, string, string, error) 
 }
 
 // getAerospikeClusterSpecWithNetworkPolicy create a spec with input network policy.
-func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.NamespacedName, networkPolicy asdbv1alpha1.AerospikeNetworkPolicy, multiPodPerHost bool, enableTLS bool, ctx goctx.Context) *asdbv1alpha1.AerospikeCluster {
+func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.NamespacedName, networkPolicy asdbv1beta1.AerospikeNetworkPolicy, multiPodPerHost bool, enableTLS bool, ctx goctx.Context) *asdbv1beta1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
@@ -264,7 +264,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 
 	var networkConf map[string]interface{} = map[string]interface{}{}
 
-	var operatorClientCertSpec *asdbv1alpha1.AerospikeOperatorClientCertSpec = nil
+	var operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec = nil
 
 	if enableTLS {
 		networkConf = map[string]interface{}{
@@ -281,9 +281,9 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 			},
 		}
 
-		operatorClientCertSpec = &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec = &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         tlsSecretName,
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -293,42 +293,42 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 		}
 	}
 
-	return &asdbv1alpha1.AerospikeCluster{
+	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
 			Namespace: clusterNamespacedName.Namespace,
 		},
-		Spec: asdbv1alpha1.AerospikeClusterSpec{
+		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  networkTestPolicyClusterSize,
 			Image: "aerospike/aerospike-server-enterprise:5.0.0.4",
-			Storage: asdbv1alpha1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+			Storage: asdbv1beta1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				BlockVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				Volumes: []asdbv1beta1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/opt/aerospike",
 						SizeInGB:     1,
 						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
 					},
 					{
 						Path:         "/opt/aerospike/data",
 						SizeInGB:     1,
 						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
+			AerospikeConfigSecret: asdbv1beta1.AerospikeConfigSecretSpec{
 				SecretName: tlsSecretName,
 				MountPath:  "/etc/aerospike/secret",
 			},
-			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
-				Users: []asdbv1alpha1.AerospikeUserSpec{
+			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
+				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
 						Name:       "admin",
 						SecretName: authSecretName,
@@ -351,7 +351,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(clusterNamespacedName types.Namesp
 				},
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
-			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",

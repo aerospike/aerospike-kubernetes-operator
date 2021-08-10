@@ -1,4 +1,4 @@
-package v1alpha1
+package v1beta1
 
 // Aerospike access control functions provides validation and reconciliation of access control.
 

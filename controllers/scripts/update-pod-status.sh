@@ -42,7 +42,7 @@ AERO_CLUSTER_NAME=${MY_POD_NAME%-*}
 AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
 # Read this pod's Aerospike pod status from the cluster status.
-AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
+AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1beta1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
 
 if [ $? -ne 0 ]
 then
@@ -85,4 +85,4 @@ fi
 cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
      -H 'Accept: application/json' \
      -H 'Content-Type: application/json-patch+json' \
-     "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1alpha1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
+     "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1beta1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"

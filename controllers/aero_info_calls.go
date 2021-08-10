@@ -20,7 +20,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -29,7 +29,7 @@ import (
 // Aerospike helper
 //------------------------------------------------------------------------------------
 
-func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (string, error) {
+func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) (string, error) {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return "", err
@@ -47,7 +47,7 @@ func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluste
 }
 
 // waitForNodeSafeStopReady waits util the input pod is safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
-func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
 	// TODO: Check post quiesce recluster conditions first.
 	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
 
@@ -98,23 +98,23 @@ func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, clearPodName string) error {
+func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, clearPodName string) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), asdbv1alpha1.HeartbeatPort)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), asdbv1beta1.HeartbeatPort)
 }
 
-func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, clearPod *corev1.Pod) error {
+func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, clearPod *corev1.Pod) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
 	}
-	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), asdbv1alpha1.HeartbeatPort)
+	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), asdbv1beta1.HeartbeatPort)
 }
 
-func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) error {
+func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) error {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return err
@@ -122,12 +122,12 @@ func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1alpha1.Aeros
 	return deployment.AlumniReset(r.getClientPolicy(aeroCluster), asConn)
 }
 
-func (r *AerospikeClusterReconciler) newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]*deployment.HostConn, error) {
+func (r *AerospikeClusterReconciler) newAllHostConn(aeroCluster *asdbv1beta1.AerospikeCluster) ([]*deployment.HostConn, error) {
 	return r.newAllHostConnWithOption(aeroCluster, nil)
 }
 
 // newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and present in ignorablePods.
-func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv1alpha1.AerospikeCluster, ignorablePods []corev1.Pod) ([]*deployment.HostConn, error) {
+func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv1beta1.AerospikeCluster, ignorablePods []corev1.Pod) ([]*deployment.HostConn, error) {
 	podList, err := r.getClusterPodList(aeroCluster)
 	if err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func (r *AerospikeClusterReconciler) newAllHostConnWithOption(aeroCluster *asdbv
 	return hostConns, nil
 }
 
-func (r *AerospikeClusterReconciler) newHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (*deployment.HostConn, error) {
+func (r *AerospikeClusterReconciler) newHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) (*deployment.HostConn, error) {
 	asConn, err := r.newAsConn(aeroCluster, pod)
 	if err != nil {
 		return nil, err
@@ -178,15 +178,15 @@ func (r *AerospikeClusterReconciler) newHostConn(aeroCluster *asdbv1alpha1.Aeros
 	return deployment.NewHostConn(host, asConn, nil), nil
 }
 
-func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
+func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
 	// Use pod IP and direct service port from within the operator for info calls.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
 	if tlsName == "" {
-		port = asdbv1alpha1.ServicePort
+		port = asdbv1beta1.ServicePort
 	} else {
-		port = asdbv1alpha1.ServiceTLSPort
+		port = asdbv1beta1.ServiceTLSPort
 	}
 
 	host := pod.Status.PodIP
