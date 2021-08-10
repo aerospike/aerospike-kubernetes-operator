@@ -35,6 +35,7 @@ import (
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
+var immutableNetworkParams = []string{"tls-name", "tls-authenticate-client", "port", "access-port", "alternate-access-port", "tls-port", "tls-access-port", "tls-alternate-access-port"}
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1alpha1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1alpha1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
@@ -219,7 +220,7 @@ func validateClientCertSpec(clientCertSpec *AerospikeOperatorClientCertSpec, con
 	if !networkConfExist {
 		return nil
 	}
-	serviceConf, serviceConfExists := networkConf.(map[string]interface{})["service"]
+	serviceConf, serviceConfExists := networkConf.(map[string]interface{})[confKeyNetworkService]
 	if !serviceConfExists {
 		return nil
 	}
@@ -360,6 +361,18 @@ func (r *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		// Allow DefaultRackID
 		if rack.ID > MaxRackID {
 			return fmt.Errorf("invalid rackID. RackID range (%d, %d)", MinRackID, MaxRackID)
+		}
+
+		if rack.InputAerospikeConfig != nil {
+			if _, ok := rack.InputAerospikeConfig.Value["network"]; ok {
+				// Aerospike K8s Operator doesn't support different network configurations for different racks.
+				// I.e.
+				//    - the same heartbeat port (taken from current node) is used for all peers regardless to racks.
+				//    - a single target port is used in headless service and LB.
+				//    - we need to refactor how connection is created to AS to take into account rack's network config.
+				// So, just reject rack specific network connections for now.
+				return fmt.Errorf("you can't specify network configuration for rack %d (network should be the same for all racks)", rack.ID)
+			}
 		}
 
 		config := rack.AerospikeConfig
@@ -751,28 +764,27 @@ func validateAerospikeConfigUpdate(aslog logr.Logger, newConfSpec, oldConfSpec *
 		return fmt.Errorf("cannot update cluster network.tls config")
 	}
 
-	// network.service
-	if isValueUpdated(oldConf["network"].(map[string]interface{})["service"].(map[string]interface{}), newConf["network"].(map[string]interface{})["service"].(map[string]interface{}), "tls-name") {
-		return fmt.Errorf("cannot update tls-name for network.service")
-	}
-	if isValueUpdated(oldConf["network"].(map[string]interface{})["service"].(map[string]interface{}), newConf["network"].(map[string]interface{})["service"].(map[string]interface{}), "tls-authenticate-client") {
-		return fmt.Errorf("cannot update tls-authenticate-client for network.service")
-	}
-
-	// network.heartbeat
-	if isValueUpdated(oldConf["network"].(map[string]interface{})["heartbeat"].(map[string]interface{}), newConf["network"].(map[string]interface{})["heartbeat"].(map[string]interface{}), "tls-name") {
-		return fmt.Errorf("cannot update tls-name for network.heartbeat")
-	}
-
-	// network.fabric
-	if isValueUpdated(oldConf["network"].(map[string]interface{})["fabric"].(map[string]interface{}), newConf["network"].(map[string]interface{})["fabric"].(map[string]interface{}), "tls-name") {
-		return fmt.Errorf("cannot update tls-name for network.fabric")
+	for _, connectionType := range networkConnectionTypes {
+		if err := validateNetworkConnectionUpdate(newConf, oldConf, connectionType); err != nil {
+			return err
+		}
 	}
 
 	if err := validateNsConfUpdate(aslog, newConfSpec, oldConfSpec); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func validateNetworkConnectionUpdate(newConf, oldConf map[string]interface{}, connectionType string) error {
+	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	for _, param := range immutableNetworkParams {
+		if isValueUpdated(oldConnectionConfig, newConnectionConfig, param) {
+			return fmt.Errorf("cannot update %s for network.%s", param, connectionType)
+		}
+	}
 	return nil
 }
 

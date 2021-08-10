@@ -77,8 +77,9 @@ substituteEndpoint() {
 	echo export global_${varName}_port="$accessPort" >> $GENERATED_ENV
 
     # Substitute in the configuration file.
-    sed -i "s/^\(\s*\)${addressType}-address.*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}
-    sed -i "s/^\(\s*\)${addressType}-port.*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
+    sed -i "s/^\(\s*\)${addressType}-address\s*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}
+    # This port is set in api/v1alpha1/aerospikecluster_mutating_webhook.go and is used as placeholder.
+    sed -i "s/^\(\s*\)${addressType}-port\s*65535/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 
 substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
@@ -92,6 +93,7 @@ fi
 # ------------------------------------------------------------------------------
 # Update mesh seeds in the configuration file
 # ------------------------------------------------------------------------------
+HEARTBEAT_PORT=$(grep -zoe "heartbeat {[^}]*port\s\+\d*[^}]*}" ${CFG} | sed -n "s/^\s*port\s*\([0-9]\+\)$/\1/p")
 cat $PEERS | while read PEER || [ -n "$PEER" ]; do
     if [[ "$PEER" == "$MY_POD_NAME."* ]] ;
 	then
@@ -101,7 +103,7 @@ cat $PEERS | while read PEER || [ -n "$PEER" ]; do
 
 	# 8 spaces, fixed in configwriter file config manager lib
 	# TODO: The search pattern is not robust. Add a better marker in management lib.
-	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} 3002" ${CFG}
+	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} ${HEARTBEAT_PORT}" ${CFG}
 done
 
 
