@@ -55,9 +55,9 @@ type AerospikeClusterSpec struct {
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
-	// Certificates to connect to Aerospike. If omitted then certs are taken from the secret 'aerospike-secret'.
+	// Certificates to connect to Aerospike.
 	// +optional
-	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCertSpec,omitempty"`
+	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 }

@@ -156,9 +156,8 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
-              operatorClientCertSpec:
-                description: Certificates to connect to Aerospike. If omitted then
-                  certs are taken from the secret 'aerospike-secret'.
+              operatorClientCert:
+                description: Certificates to connect to Aerospike.
                 properties:
                   certPathInOperator:
                     description: AerospikeCertPathInOperatorSource contain configuration
