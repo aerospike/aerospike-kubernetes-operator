@@ -171,6 +171,17 @@ func getClusterIfExists(k8sClient client.Client, ctx goctx.Context, clusterNames
 	return aeroCluster, nil
 }
 
+func getPodsList(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) (*corev1.PodList, error) {
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(clusterNamespacedName.Name))
+	listOps := &client.ListOptions{Namespace: clusterNamespacedName.Namespace, LabelSelector: labelSelector}
+
+	if err := k8sClient.List(ctx, podList, listOps); err != nil {
+		return nil, err
+	}
+	return podList, nil
+}
+
 func deleteCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster) error {
 	if err := k8sClient.Delete(ctx, aeroCluster); err != nil {
 		return err
