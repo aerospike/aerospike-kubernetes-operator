@@ -1122,7 +1122,6 @@
         "fabric": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["port"],
           "properties": {
             "addresses": {
               "type": "array",

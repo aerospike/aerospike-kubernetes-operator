@@ -536,6 +536,7 @@ func createAerospikeClusterPost460(
 							"tls-name": "aerospike-a-0.test-runner",
 						},
 						"fabric": map[string]interface{}{
+							"port":     3001,
 							"tls-name": "aerospike-a-0.test-runner",
 						},
 						"tls": []map[string]interface{}{

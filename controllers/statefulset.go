@@ -1245,25 +1245,27 @@ func getSTSContainerPort(
 ) []corev1.ContainerPort {
 	var ports []corev1.ContainerPort
 	for portName, portInfo := range defaultContainerPorts {
-		containerPort := corev1.ContainerPort{
-			Name: portName,
-			ContainerPort: int32(
-				asdbv1beta1.GetPortFromConfig(
-					aeroConf, portInfo.connectionType, portInfo.configParam,
-					portInfo.defaultPort,
+		if asdbv1beta1.IsPortSetInConfig(aeroConf, portInfo.connectionType, portInfo.configParam) {
+			containerPort := corev1.ContainerPort{
+				Name: portName,
+				ContainerPort: int32(
+					asdbv1beta1.GetPortFromConfig(
+						aeroConf, portInfo.connectionType, portInfo.configParam,
+						portInfo.defaultPort,
+					),
 				),
-			),
-		}
-		// Single pod per host. Enable hostPort setting
-		// The hostPort setting applies to the Kubernetes containers.
-		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
-		// where the hostIP is the IP address of the Kubernetes node where
-		// the container is running and the hostPort is the port requested by the user
+			}
+			// Single pod per host. Enable hostPort setting
+			// The hostPort setting applies to the Kubernetes containers.
+			// The container port will be exposed to the external network at <hostIP>:<hostPort>,
+			// where the hostIP is the IP address of the Kubernetes node where
+			// the container is running and the hostPort is the port requested by the user
 
-		if (!multiPodPerHost) && portInfo.exposedOnHost {
-			containerPort.HostPort = containerPort.ContainerPort
+			if (!multiPodPerHost) && portInfo.exposedOnHost {
+				containerPort.HostPort = containerPort.ContainerPort
+			}
+			ports = append(ports, containerPort)
 		}
-		ports = append(ports, containerPort)
 	}
 	return ports
 }

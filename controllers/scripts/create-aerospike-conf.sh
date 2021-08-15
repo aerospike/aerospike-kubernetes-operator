@@ -111,11 +111,25 @@ done
 # If host networking is used force heartbeat and fabric to advertise network
 # interface bound to K8s node's host network.
 # ------------------------------------------------------------------------------
-{{- if .HostNetwork}}
+{{- if .SetHeartbeatAddress}}
 # 8 spaces, fixed in configwriter file config manager lib
 # TODO: The search pattern is not robust. Add a better marker in management lib.
 sed -i -e "/heartbeat {/a \\        address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if .SetHeartbeatTLSAddress}}
+# 8 spaces, fixed in configwriter file config manager lib
+# TODO: The search pattern is not robust. Add a better marker in management lib.
+sed -i -e "/heartbeat {/a \\        tls-address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if .SetFabricAddress}}
+# 8 spaces, fixed in configwriter file config manager lib
+# TODO: The search pattern is not robust. Add a better marker in management lib.
 sed -i -e "/fabric {/a \\        address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if .SetFabricTLSAddress}}
+# 8 spaces, fixed in configwriter file config manager lib
+# TODO: The search pattern is not robust. Add a better marker in management lib.
+sed -i -e "/fabric {/a \\        tls-address ${MY_POD_IP}" ${CFG}
 {{- end}}
 
 echo "---------------------------------"

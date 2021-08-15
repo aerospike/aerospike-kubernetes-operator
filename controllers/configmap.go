@@ -34,12 +34,15 @@ const (
 )
 
 type initializeTemplateInput struct {
-	WorkDir         string
-	MultiPodPerHost bool
-	NetworkPolicy   asdbv1beta1.AerospikeNetworkPolicy
-	PodPort         int32
-	PodTLSPort      int32
-	HostNetwork     bool
+	WorkDir                string
+	MultiPodPerHost        bool
+	NetworkPolicy          asdbv1beta1.AerospikeNetworkPolicy
+	PodPort                int32
+	PodTLSPort             int32
+	SetHeartbeatAddress    bool
+	SetHeartbeatTLSAddress bool
+	SetFabricAddress       bool
+	SetFabricTLSAddress    bool
 }
 
 //go:embed scripts
@@ -200,15 +203,31 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		)
 	}
 
+	var setHeartbeatAddress bool
+	var setHeartbeatTLSAddress bool
+	var setFabricAddress bool
+	var setFabricTLSAddress bool
+	aerospikeConf := r.aeroCluster.Spec.AerospikeConfig
+	if r.aeroCluster.Spec.PodSpec.HostNetwork {
+		networkCfg := aerospikeConf.Value["network"].(map[string]interface{})
+		setHeartbeatAddress = asdbv1beta1.IsHeartbeatPortSet(aerospikeConf) && !isAddressesSet(networkCfg, "heartbeat", false)
+		setHeartbeatTLSAddress = asdbv1beta1.IsHeartbeatTLSPortSet(aerospikeConf) && !isAddressesSet(networkCfg, "heartbeat", true)
+		setFabricAddress = asdbv1beta1.IsFabricPortSet(aerospikeConf) && !isAddressesSet(networkCfg, "fabric", false)
+		setFabricTLSAddress = asdbv1beta1.IsFabricTLSPortSet(aerospikeConf) && !isAddressesSet(networkCfg, "fabric", true)
+	}
+
 	// Include initialization and restart scripts
-	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aerospikeConf)
 	initializeTemplateInput := initializeTemplateInput{
-		WorkDir:         workDir,
-		MultiPodPerHost: r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		NetworkPolicy:   r.aeroCluster.Spec.AerospikeNetworkPolicy,
-		PodPort:         int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
-		PodTLSPort:      int32(tlsPort),
-		HostNetwork:     r.aeroCluster.Spec.PodSpec.HostNetwork,
+		WorkDir:                workDir,
+		MultiPodPerHost:        r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		NetworkPolicy:          r.aeroCluster.Spec.AerospikeNetworkPolicy,
+		PodPort:                int32(asdbv1beta1.GetServicePort(aerospikeConf)),
+		PodTLSPort:             int32(tlsPort),
+		SetHeartbeatAddress:    setHeartbeatAddress,
+		SetHeartbeatTLSAddress: setHeartbeatTLSAddress,
+		SetFabricAddress:       setFabricAddress,
+		SetFabricTLSAddress:    setFabricTLSAddress,
 	}
 
 	baseConfData := map[string]string{}
@@ -230,6 +249,22 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 
 	baseConfData["peers"] = strings.Join(peers, "\n")
 	return baseConfData, nil
+}
+
+func isAddressesSet(networkCfg map[string]interface{}, stanzaName string, isTls bool) bool {
+	if connectionCfg, exist := networkCfg[stanzaName]; exist {
+		var paramName string
+		if isTls {
+			paramName = "tls-addresses"
+		} else {
+			paramName = "addresses"
+		}
+		if addresses, set := connectionCfg.(map[string]interface{})[paramName]; set {
+			addressesSlice, ok := addresses.([]interface{})
+			return ok && len(addressesSlice) > 0
+		}
+	}
+	return false
 }
 
 func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {

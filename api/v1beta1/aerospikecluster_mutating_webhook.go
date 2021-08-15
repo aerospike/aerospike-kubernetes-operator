@@ -491,9 +491,10 @@ func setDefaultNetworkConf(
 	}
 
 	fabricDefaults := map[string]interface{}{}
-	fabricDefaults["port"] = GetFabricPort(configSpec)
 	if _, ok := fabricConf["tls-name"]; ok {
 		fabricDefaults["tls-port"] = GetFabricTLSPort(configSpec)
+	} else {
+		fabricDefaults["port"] = GetFabricPort(configSpec)
 	}
 
 	if err := setDefaultsInConfigMap(

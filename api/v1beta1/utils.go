@@ -308,20 +308,36 @@ func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) int {
 	)
 }
 
+func IsHeartbeatPortSet(aeroConf *AerospikeConfigSpec) bool {
+	return IsPortSetInConfig(aeroConf, confKeyNetworkHeartbeat, "port")
+}
+
 func GetHeartbeatTLSPort(aeroConf *AerospikeConfigSpec) int {
 	return GetPortFromConfig(
 		aeroConf, confKeyNetworkHeartbeat, "tls-port", HeartbeatTLSPort,
 	)
 }
 
+func IsHeartbeatTLSPortSet(aeroConf *AerospikeConfigSpec) bool {
+	return IsPortSetInConfig(aeroConf, confKeyNetworkHeartbeat, "tls-port")
+}
+
 func GetFabricPort(aeroConf *AerospikeConfigSpec) int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port", FabricPort)
+}
+
+func IsFabricPortSet(aeroConf *AerospikeConfigSpec) bool {
+	return IsPortSetInConfig(aeroConf, confKeyNetworkFabric, "port")
 }
 
 func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) int {
 	return GetPortFromConfig(
 		aeroConf, confKeyNetworkFabric, "tls-port", FabricTLSPort,
 	)
+}
+
+func IsFabricTLSPortSet(aeroConf *AerospikeConfigSpec) bool {
+	return IsPortSetInConfig(aeroConf, confKeyNetworkFabric, "tls-port")
 }
 
 func GetPortFromConfig(
@@ -336,4 +352,14 @@ func GetPortFromConfig(
 		}
 	}
 	return defaultValue
+}
+
+func IsPortSetInConfig(aeroConf *AerospikeConfigSpec, connectionType string, paramName string) bool {
+	if networkConf, ok := aeroConf.Value[confKeyNetwork]; ok {
+		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
+			_, set := connectionConfig.(map[string]interface{})[paramName]
+			return set
+		}
+	}
+	return false
 }
