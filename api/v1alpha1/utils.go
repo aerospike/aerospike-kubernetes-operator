@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -230,52 +229,26 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	return xdrConf != nil
 }
 
-func getTLSAuthenticateClientNames(serviceConf map[string]interface{}) ([]string, error){
-	tlsAuthenticateClient, ok := serviceConf["tls-authenticate-client"]
+func ReadTlsAuthenticateClient(serviceConf map[string]interface{}) ([]string, error) {
+	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
 	if !ok {
-		return nil, fmt.Errorf("missing tls-authenticate-client configuration")
+		return nil, nil
 	}
-	switch value := tlsAuthenticateClient.(type) {
-	case []interface{}:
-		names := make([]string, len(value))
-		for i := 0; i < len(names); i++ {
-			name, ok := value[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("tls-authenticate-client configuration contains wrong value")
-			}
-			names[i] = name
-		}
-	case string, bool:
-		return []string{}, nil
-	}
-	return nil, fmt.Errorf("tls-authenticate-client invalid configuration")
-}
-
-func readClientNamesFromConfig(serviceConf map[string]interface{}) ([]string, error) {
-	var result []string
-	clientNames, exists := serviceConf["tls-authenticate-client"]
-	if !exists {
-		return result, nil
-	}
-	switch clientNames.(type) {
+	switch value := tlsAuthenticateClientConfig.(type) {
 	case string:
-		result = append(result, clientNames.(string))
-	case bool:
-		result = append(result, strconv.FormatBool(clientNames.(bool)))
+		return []string{value}, nil
 	case []interface{}:
-		for _, name := range clientNames.([]interface{}) {
-			if nameStr, ok := name.(string); ok {
-				result = append(result, nameStr)
-			} else if nameBool, ok := name.(bool); ok {
-				result = append(result, strconv.FormatBool(nameBool))
-			} else {
-				return result, fmt.Errorf("tls-authenticate-client value \"%v\" has a wrong type (%t)", name, name)
+		tlsAuthenticateClientDomains := make([]string, len(value))
+		for i := 0; i < len(value); i++ {
+			item, ok := value[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid configuration element")
 			}
+			tlsAuthenticateClientDomains[i] = item
 		}
-	default:
-		return result, fmt.Errorf("wrong type (%T) for tls-authenticate-client (%v)", clientNames, clientNames)
+		return tlsAuthenticateClientDomains, nil
 	}
-	return result, nil
+	return nil, fmt.Errorf("invalid configuration")
 }
 
 func isClientCertNameValidationEnabled(clientNames []string) bool {
