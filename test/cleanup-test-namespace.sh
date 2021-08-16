@@ -37,6 +37,10 @@ kubectl -n test delete serviceaccount aerospike-cluster || true
 kubectl -n test1 delete serviceaccount aerospike-cluster || true
 kubectl -n test2 delete serviceaccount aerospike-cluster || true
 
+# # Delete the operator deployment
+echo "Removing test operator deployment"
+make test-undeploy NS="test"
+
 # Ensure all unlisted resources are also deleted
 kubectl -n test1 delete all --all
 kubectl -n test2 delete all --all
