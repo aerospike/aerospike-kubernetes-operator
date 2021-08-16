@@ -22,7 +22,6 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -62,7 +61,7 @@ func main() {
 
 	// Create a new Cmd to provide shared dependencies and start components
 	options := ctrl.Options{
-		ClientBuilder:          &newClientBuilder{},
+		NewClient:              newClient,
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
@@ -143,15 +142,21 @@ func getWatchNamespace() (string, error) {
 	return ns, nil
 }
 
-// TODO: Verify: without this reconciler was picking object from cache.
-// reconciler was getting empty object... only having values set by mutating webhook
-type newClientBuilder struct{}
-
-func (n *newClientBuilder) WithUncached(objs ...crclient.Object) manager.ClientBuilder {
-	return n
-}
-
-func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options crclient.Options) (crclient.Client, error) {
-	// Create the Client for Write operations.
+// newClient creates the default caching client
+// this will read/write directly from api-server
+func newClient(cache cache.Cache, config *rest.Config, options crclient.Options, uncachedObjects ...crclient.Object) (crclient.Client, error) {
 	return crclient.New(config, options)
 }
+
+// // TODO: Verify: without this reconciler was picking object from cache.
+// // reconciler was getting empty object... only having values set by mutating webhook
+// type newClientBuilder struct{}
+
+// func (n *newClientBuilder) WithUncached(objs ...crclient.Object) manager.ClientBuilder {
+// 	return n
+// }
+
+// func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options crclient.Options) (crclient.Client, error) {
+// 	// Create the Client for Write operations.
+// 	return crclient.New(config, options)
+// }
