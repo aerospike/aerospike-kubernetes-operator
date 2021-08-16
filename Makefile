@@ -66,11 +66,13 @@ test-deploy: manifests kustomize
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	cd test/config/manager && sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" manager.yaml
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
+	
+	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
-# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-test-undeploy: kustomize
-	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
+# # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
+# test-undeploy: kustomize
+# 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
 # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
 undeploy: kustomize
