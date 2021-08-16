@@ -981,9 +981,7 @@ const conf5_6_0 = `
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "not": {
-                    "enum": ["any", "false"]
-                  }
+					"format": "hostname"
                 }
               }]
             },

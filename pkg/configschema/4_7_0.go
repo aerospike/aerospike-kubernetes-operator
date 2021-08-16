@@ -925,14 +925,19 @@ const conf4_7_0 = `
               "dynamic": false
             },
             "tls-authenticate-client": {
-		      "type": "array",
-              "minItems": 1,
-              "items": {
+              "oneOf": [{
                 "type": "string",
-                "default": "",
                 "description": "",
-                "dynamic": false
-              }
+                "dynamic": false,
+                "default": "any",
+                "enum": ["any", "false"]
+              }, {
+                "type": "array",
+                "items": {
+                  "type": "string",
+					"format": "hostname"
+                }
+              }]
             },
             "tls-name": {
               "type": "string",
