@@ -1,4 +1,4 @@
-package v1alpha1
+package v1beta1
 
 import (
 	"fmt"
@@ -76,9 +76,14 @@ const (
 	confKeyFilesize      = "filesize"
 	confKeyDevice        = "devices"
 	confKeyFile          = "files"
-	confKeyNetwork       = "network"
 	confKeyTLS           = "tls"
 	confKeySecurity      = "security"
+
+	// Network section keys.
+	confKeyNetwork          = "network"
+	confKeyNetworkService   = "service"
+	confKeyNetworkHeartbeat = "heartbeat"
+	confKeyNetworkFabric    = "fabric"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -287,4 +292,50 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (*string, error) 
 	}
 
 	return nil, fmt.Errorf("xdr not configured")
+}
+
+func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, int) {
+	if networkConfTmp, ok := aeroConf.Value[confKeyNetwork]; ok {
+		networkConf := networkConfTmp.(map[string]interface{})
+		serviceConf := networkConf[confKeyService].(map[string]interface{})
+		if tlsName, ok := serviceConf["tls-name"]; ok {
+			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
+				return tlsName.(string), int(tlsPort.(float64))
+			} else {
+				return tlsName.(string), ServiceTLSPort
+			}
+		}
+	}
+	return "", 0
+}
+
+func GetServicePort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkService, "port", ServicePort)
+}
+
+func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port", HeartbeatPort)
+}
+
+func GetHeartbeatTLSPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "tls-port", HeartbeatTLSPort)
+}
+
+func GetFabricPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port", FabricPort)
+}
+
+func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "tls-port", FabricTLSPort)
+}
+
+func GetPortFromConfig(aeroConf *AerospikeConfigSpec, connectionType string, paramName string, defaultValue int) int {
+	if networkConf, ok := aeroConf.Value[confKeyNetwork]; ok {
+		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
+			if port, ok := connectionConfig.(map[string]interface{})[paramName]; ok {
+				return int(port.(float64))
+			}
+		}
+	}
+	return defaultValue
 }

@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -37,10 +37,10 @@ var _ = Describe("RackLifeCycleOp", func() {
 		// Will be used in Update also
 		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 		// This needs to be changed based on setup. update zone, region, nodeName according to setup
-		racks := []asdbv1alpha1.Rack{
+		racks := []asdbv1beta1.Rack{
 			{ID: 1, Zone: zone1, Region: region},
 			{ID: 2, Zone: zone2, Region: region}}
-		rackConf := asdbv1alpha1.RackConfig{
+		rackConf := asdbv1beta1.RackConfig{
 			Racks: racks,
 		}
 		aeroCluster.Spec.RackConfig = rackConf

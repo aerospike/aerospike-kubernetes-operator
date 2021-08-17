@@ -73,12 +73,13 @@ test-deploy: manifests kustomize
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
-# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-test-undeploy:
+test-undeploy: kustomize
+	cp -r config test
+	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
 # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-undeploy:
+undeploy: kustomize
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.

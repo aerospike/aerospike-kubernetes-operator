@@ -1,4 +1,4 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- asdb_v1alpha1_aerospikecluster.yaml
+- asdb_v1beta1_aerospikecluster.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

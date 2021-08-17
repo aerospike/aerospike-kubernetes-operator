@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -58,7 +58,7 @@ var _ = Describe("HostNetwork", func() {
 	})
 })
 
-func checkAdvertisedAddress(ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, expectNodIp bool) {
+func checkAdvertisedAddress(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, expectNodIp bool) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 

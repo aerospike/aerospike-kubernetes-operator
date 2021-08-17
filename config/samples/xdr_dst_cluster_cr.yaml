@@ -1,4 +1,4 @@
-apiVersion: asdb.aerospike.com/v1alpha1
+apiVersion: asdb.aerospike.com/v1beta1
 kind: AerospikeCluster
 metadata:
   name: aeroclusterdst

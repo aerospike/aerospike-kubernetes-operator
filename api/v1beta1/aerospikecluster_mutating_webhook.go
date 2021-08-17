@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1beta1
 
 import (
 	"fmt"
 	"reflect"
+
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -27,7 +28,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1alpha1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1alpha1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeCluster) Default() admission.Response {
@@ -307,16 +308,24 @@ func setDefaultNetworkConf(aslog logr.Logger, configSpec *AerospikeConfigSpec, c
 	// TODO: These values lines will be replaces with runtime info by script in init-container
 	// See if we can get better way to make template
 	serviceDefaults := map[string]interface{}{}
-	serviceDefaults["port"] = ServicePort
-	serviceDefaults["access-port"] = ServicePort // must be greater that or equal to 1024
+	srvPort := GetServicePort(configSpec)
+	serviceDefaults["port"] = srvPort
+	// Here all access ports are explicitly set to hardcoded constant 65535. These values will
+	// be replaced by aerospike-init container with an appropriate port in accordance to
+	// MultiPodPerHost flag (NodePort of Service or Host Port of Pod).
+	// Alternatively, we can set all access ports to srvPort, but in this case if user changes srvPort in CR
+	// we will get a confusing error for the rack scope config. Rack scope config will have merged global network config
+	// (thus have all access ports set to service.port value) and got confusing error message that "non-default values
+	// can't be set". In order to avoid this confusing message we are going to use hardcoded constant 65535 as a placeholder.
+	serviceDefaults["access-port"] = 65535 // must be greater that or equal to 1024,
 	serviceDefaults["access-addresses"] = []string{"<access-address>"}
-	serviceDefaults["alternate-access-port"] = ServicePort // must be greater that or equal to 1024,
+	serviceDefaults["alternate-access-port"] = 65535 // must be greater that or equal to 1024,
 	serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
-	if _, ok := serviceConf["tls-name"]; ok {
-		serviceDefaults["tls-port"] = ServiceTLSPort
-		serviceDefaults["tls-access-port"] = ServiceTLSPort
+	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" {
+		serviceDefaults["tls-port"] = tlsPort
+		serviceDefaults["tls-access-port"] = 65535 // must be greater that or equal to 1024,
 		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
-		serviceDefaults["tls-alternate-access-port"] = ServiceTLSPort // must be greater that or equal to 1024,
+		serviceDefaults["tls-alternate-access-port"] = 65535 // must be greater that or equal to 1024,
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
 	}
 
@@ -337,9 +346,9 @@ func setDefaultNetworkConf(aslog logr.Logger, configSpec *AerospikeConfigSpec, c
 
 	hbDefaults := map[string]interface{}{}
 	hbDefaults["mode"] = "mesh"
-	hbDefaults["port"] = HeartbeatPort
+	hbDefaults["port"] = GetHeartbeatPort(configSpec)
 	if _, ok := heartbeatConf["tls-name"]; ok {
-		hbDefaults["tls-port"] = HeartbeatTLSPort
+		hbDefaults["tls-port"] = GetHeartbeatTLSPort(configSpec)
 	}
 
 	if err := setDefaultsInConfigMap(aslog, heartbeatConf, hbDefaults); err != nil {
@@ -358,9 +367,9 @@ func setDefaultNetworkConf(aslog logr.Logger, configSpec *AerospikeConfigSpec, c
 	}
 
 	fabricDefaults := map[string]interface{}{}
-	fabricDefaults["port"] = FabricPort
+	fabricDefaults["port"] = GetFabricPort(configSpec)
 	if _, ok := fabricConf["tls-name"]; ok {
-		fabricDefaults["tls-port"] = FabricTLSPort
+		fabricDefaults["tls-port"] = GetFabricTLSPort(configSpec)
 	}
 
 	if err := setDefaultsInConfigMap(aslog, fabricConf, fabricDefaults); err != nil {

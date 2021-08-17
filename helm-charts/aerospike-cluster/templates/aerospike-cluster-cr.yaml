@@ -15,7 +15,7 @@ spec:
   image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "5.5.0.7" }}
 
   # Multi pod per host
-  multiPodPerHost: {{ .Values.multiPodPerHost | default true }}
+  multiPodPerHost: {{ .Values.multiPodPerHost }}
 
   # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}

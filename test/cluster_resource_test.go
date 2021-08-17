@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -47,7 +47,7 @@ var _ = Describe("ClusterResource", func() {
 
 			By("UpdateClusterWithResource")
 
-			aeroCluster = &asdbv1alpha1.AerospikeCluster{}
+			aeroCluster = &asdbv1beta1.AerospikeCluster{}
 			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: clusterName, Namespace: namespace}, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 

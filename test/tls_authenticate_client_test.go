@@ -13,7 +13,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +52,7 @@ var _ = Describe("TlsAuthenticateClient", func() {
 
 })
 
-func getTlsAuthenticateClient(config *asdbv1alpha1.AerospikeCluster) ([]string, error) {
+func getTlsAuthenticateClient(config *asdbv1beta1.AerospikeCluster) ([]string, error) {
 	configSpec := config.Spec.AerospikeConfig.Value
 	networkConf, ok := configSpec["network"].(map[string]interface{})
 	if !ok {
@@ -62,7 +62,7 @@ func getTlsAuthenticateClient(config *asdbv1alpha1.AerospikeCluster) ([]string, 
 	if !ok {
 		return nil, fmt.Errorf("service configuration not found")
 	}
-	tlsAuthenticateClient, err := asdbv1alpha1.ReadTlsAuthenticateClient(serviceConf)
+	tlsAuthenticateClient, err := asdbv1beta1.ReadTlsAuthenticateClient(serviceConf)
 	if err != nil {
 		return nil, err
 	}
@@ -71,45 +71,45 @@ func getTlsAuthenticateClient(config *asdbv1alpha1.AerospikeCluster) ([]string, 
 
 func getAerospikeConfig(
 	networkConf map[string]interface{},
-	operatorClientCertSpec *asdbv1alpha1.AerospikeOperatorClientCertSpec) *asdbv1alpha1.AerospikeCluster {
+	operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec) *asdbv1beta1.AerospikeCluster {
 
 	cascadeDelete := true
-	return &asdbv1alpha1.AerospikeCluster{
+	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "tls-auth-client",
 			Namespace: "test",
 		},
-		Spec: asdbv1alpha1.AerospikeClusterSpec{
+		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  1,
 			Image: "aerospike/aerospike-server-enterprise:5.6.0.7",
-			Storage: asdbv1alpha1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+			Storage: asdbv1beta1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				BlockVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				Volumes: []asdbv1beta1.AerospikePersistentVolumeSpec{
 					{
 						Path:         "/opt/aerospike",
 						SizeInGB:     1,
 						StorageClass: "ssd",
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
 					},
 					{
 						Path:         "/opt/aerospike/data",
 						SizeInGB:     1,
 						StorageClass: "ssd",
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1alpha1.AerospikeConfigSecretSpec{
+			AerospikeConfigSecret: asdbv1beta1.AerospikeConfigSecretSpec{
 				SecretName: "aerospike-secret",
 				MountPath:  "/etc/aerospike/secret",
 			},
-			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
-				Users: []asdbv1alpha1.AerospikeUserSpec{
+			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
+				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
 						Name:       "admin",
 						SecretName: "auth-update",
@@ -130,7 +130,7 @@ func getAerospikeConfig(
 					corev1.ResourceMemory: resource.MustParse("2Gi"),
 				},
 			},
-			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
@@ -175,10 +175,10 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
 			TLSClientName: "aerospike-a-0.test-runner",
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -219,9 +219,9 @@ func doTestTLSAuthenticateClientEmptyString(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -255,9 +255,9 @@ func doTestTLSNameMissing(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -285,9 +285,9 @@ func doTestTLSMissing(ctx goctx.Context) {
 				"tls-authenticate-client": "any",
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -349,9 +349,9 @@ func doTestTLSAuthenticateClientRandomString(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -388,10 +388,10 @@ func doTestTLSAuthenticateClientDomainList(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
 			TLSClientName: "aerospike-a-0.tls-client-name",
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -433,9 +433,9 @@ func doTestTlsClientNameMissing(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",
@@ -471,9 +471,9 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 				},
 			},
 		}
-		operatorClientCertSpec := &asdbv1alpha1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1alpha1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1alpha1.AerospikeSecretCertSource{
+		operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
+			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 					SecretName:         "aerospike-secret",
 					CaCertsFilename:    "cacert.pem",
 					ClientCertFilename: "svc_cluster_chain.pem",

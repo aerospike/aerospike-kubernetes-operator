@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,7 +35,7 @@ const (
 type initializeTemplateInput struct {
 	WorkDir         string
 	MultiPodPerHost bool
-	NetworkPolicy   asdbv1alpha1.AerospikeNetworkPolicy
+	NetworkPolicy   asdbv1beta1.AerospikeNetworkPolicy
 	PodPort         int32
 	PodTLSPort      int32
 	HostNetwork     bool
@@ -75,7 +75,7 @@ func init() {
 }
 
 // CreateConfigMapData create configMap data
-func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (map[string]string, error) {
+func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (map[string]string, error) {
 	// Add config template
 	confTemp, err := r.buildConfigTemplate(aeroCluster, rack)
 	if err != nil {
@@ -123,7 +123,7 @@ func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1alph
 	return confData, nil
 }
 
-func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (string, error) {
+func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (string, error) {
 	log := pkglog.WithValues("aerospikecluster", utils.ClusterNamespacedName(aeroCluster))
 
 	version := strings.Split(aeroCluster.Spec.Image, ":")
@@ -145,17 +145,18 @@ func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1alph
 }
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1alpha1.AerospikeCluster, rack asdbv1alpha1.Rack) (map[string]string, error) {
+func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (map[string]string, error) {
 
-	workDir := asdbv1alpha1.GetWorkDirectory(rack.AerospikeConfig)
+	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
 
 	// Include initialization and restart scripts
+	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
 	initializeTemplateInput := initializeTemplateInput{
 		WorkDir:         workDir,
 		MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost,
 		NetworkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
-		PodPort:         asdbv1alpha1.ServicePort,
-		PodTLSPort:      asdbv1alpha1.ServiceTLSPort,
+		PodPort:         int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
+		PodTLSPort:      int32(tlsPort),
 		HostNetwork:     aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
@@ -180,7 +181,7 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1alpha1.A
 	return baseConfData, nil
 }
 
-func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]string, error) {
+func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1beta1.AerospikeCluster) ([]string, error) {
 
 	podNameMap := make(map[string]bool)
 
