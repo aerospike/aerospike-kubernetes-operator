@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -86,7 +86,7 @@ var _ = BeforeSuite(func(done Done) {
 	err = clientgoscheme.AddToScheme(clientgoscheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = asdbv1alpha1.AddToScheme(clientgoscheme.Scheme)
+	err = asdbv1beta1.AddToScheme(clientgoscheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = admissionv1.AddToScheme(scheme)

@@ -78,7 +78,7 @@ substituteEndpoint() {
 
     # Substitute in the configuration file.
     sed -i "s/^\(\s*\)${addressType}-address\s*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}
-    # This port is set in api/v1alpha1/aerospikecluster_mutating_webhook.go and is used as placeholder.
+    # This port is set in api/v1beta1/aerospikecluster_mutating_webhook.go and is used as placeholder.
     sed -i "s/^\(\s*\)${addressType}-port\s*65535/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 

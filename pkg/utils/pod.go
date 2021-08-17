@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -121,7 +121,7 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 }
 
 // IsPodUpgraded assume that all container have same image or take containerID
-func IsPodUpgraded(pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster) bool {
+func IsPodUpgraded(pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster) bool {
 	if !IsPodRunningAndReady(pod) {
 		return false
 	}
@@ -142,7 +142,7 @@ func getPodContainerStatus(pod *corev1.Pod, containerName string) *corev1.Contai
 }
 
 // IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
-func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *asdbv1alpha1.AerospikeCluster) bool {
+func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster) bool {
 	for _, ps := range pod.Spec.Containers {
 		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
 		if err != nil {

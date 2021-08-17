@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -47,7 +47,7 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
-var aerospikeVolumeInitMethodDeleteFiles = asdbv1alpha1.AerospikeVolumeInitMethodDeleteFiles
+var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
@@ -199,11 +199,11 @@ func getLabels() map[string]string {
 	return map[string]string{"app": "aerospike-cluster"}
 }
 
-func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
 	var isValid bool
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
-		newCluster := &asdbv1alpha1.AerospikeCluster{}
+		newCluster := &asdbv1beta1.AerospikeCluster{}
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -228,13 +228,13 @@ func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroClu
 	return nil
 }
 
-func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster *asdbv1alpha1.AerospikeCluster, replicas int) bool {
+func isClusterStateValid(aeroCluster *asdbv1beta1.AerospikeCluster, newCluster *asdbv1beta1.AerospikeCluster, replicas int) bool {
 	if int(newCluster.Status.Size) != replicas {
 		pkgLog.Info("Cluster size is not correct")
 		return false
 	}
 
-	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
