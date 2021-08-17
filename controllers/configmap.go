@@ -150,12 +150,13 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1beta1.Ae
 	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
 
 	// Include initialization and restart scripts
+	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
 	initializeTemplateInput := initializeTemplateInput{
 		WorkDir:         workDir,
 		MultiPodPerHost: aeroCluster.Spec.MultiPodPerHost,
 		NetworkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
-		PodPort:         asdbv1beta1.ServicePort,
-		PodTLSPort:      asdbv1beta1.ServiceTLSPort,
+		PodPort:         int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
+		PodTLSPort:      int32(tlsPort),
 		HostNetwork:     aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 

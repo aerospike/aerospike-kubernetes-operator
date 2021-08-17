@@ -56,7 +56,7 @@ func (r *AerospikeClusterReconciler) getClientPolicy(aeroCluster *asdbv1beta1.Ae
 	policy.ClusterName = aeroCluster.Name
 
 	// tls config
-	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
+	if tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig); tlsName != "" {
 		r.Log.V(1).Info("Set tls config in aerospike client policy")
 		clientCertSpec := aeroCluster.Spec.OperatorClientCertSpec
 		tlsConf := tls.Config{

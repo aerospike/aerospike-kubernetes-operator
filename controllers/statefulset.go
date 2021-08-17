@@ -38,6 +38,54 @@ const (
 	initConfDirName = "initconfigs"
 )
 
+type PortInfo struct {
+	connectionType string
+	configParam    string
+	defaultPort    int
+	exposedOnHost  bool
+}
+
+var defaultContainerPorts = map[string]PortInfo{
+	asdbv1beta1.ServicePortName: {
+		connectionType: "service",
+		configParam:    "port",
+		defaultPort:    asdbv1beta1.ServicePort,
+		exposedOnHost:  true,
+	},
+	asdbv1beta1.ServiceTLSPortName: {
+		connectionType: "service",
+		configParam:    "tls-port",
+		defaultPort:    asdbv1beta1.ServiceTLSPort,
+		exposedOnHost:  true,
+	},
+	asdbv1beta1.FabricPortName: {
+		connectionType: "fabric",
+		configParam:    "port",
+		defaultPort:    asdbv1beta1.FabricPort,
+	},
+	asdbv1beta1.FabricTLSPortName: {
+		connectionType: "fabric",
+		configParam:    "tls-port",
+		defaultPort:    asdbv1beta1.FabricTLSPort,
+	},
+	asdbv1beta1.HeartbeatPortName: {
+		connectionType: "heartbeat",
+		configParam:    "port",
+		defaultPort:    asdbv1beta1.HeartbeatPort,
+	},
+	asdbv1beta1.HeartbeatTLSPortName: {
+		connectionType: "heartbeat",
+		configParam:    "tls-port",
+		defaultPort:    asdbv1beta1.HeartbeatTLSPort,
+	},
+	asdbv1beta1.InfoPortName: {
+		connectionType: "info",
+		configParam:    "port",
+		defaultPort:    asdbv1beta1.InfoPort,
+		exposedOnHost:  true,
+	},
+}
+
 func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.AerospikeCluster, namespacedName types.NamespacedName, rackState RackState) (*appsv1.StatefulSet, error) {
 	replicas := int32(rackState.Size)
 
@@ -54,20 +102,21 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 		}
 	}
 
-	ports := getSTSContainerPort(aeroCluster.Spec.MultiPodPerHost)
+	ports := getSTSContainerPort(aeroCluster.Spec.MultiPodPerHost, aeroCluster.Spec.AerospikeConfig)
 
 	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
 
+	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
 	envVarList := []corev1.EnvVar{
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
 		newSTSEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newSTSEnvVar("MY_POD_IP", "status.podIP"),
 		newSTSEnvVar("MY_HOST_IP", "status.hostIP"),
-		newSTSEnvVarStatic("MY_POD_TLS_NAME", getServiceTLSName(aeroCluster)),
+		newSTSEnvVarStatic("MY_POD_TLS_NAME", tlsName),
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
 	}
 
-	if name := getServiceTLSName(aeroCluster); name != "" {
+	if tlsName != "" {
 		envVarList = append(envVarList, newSTSEnvVarStatic("MY_POD_TLS_ENABLED", "true"))
 	}
 
@@ -396,7 +445,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 					Selector:                 ls,
 					Ports: []corev1.ServicePort{
 						{
-							Port: 3000,
+							Port: int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
 							Name: "info",
 						},
 					},
@@ -438,16 +487,16 @@ func (r *AerospikeClusterReconciler) createPodService(aeroCluster *asdbv1beta1.A
 			Ports: []corev1.ServicePort{
 				{
 					Name: "info",
-					Port: asdbv1beta1.ServicePort,
+					Port: int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
 				},
 			},
 			ExternalTrafficPolicy: "Local",
 		},
 	}
-	if name := getServiceTLSName(aeroCluster); name != "" {
+	if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig); tlsName != "" {
 		service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{
 			Name: "tls",
-			Port: asdbv1beta1.ServiceTLSPort,
+			Port: int32(tlsPort),
 		})
 	}
 	// Set AerospikeCluster instance as the owner and controller.
@@ -852,79 +901,23 @@ func (r *AerospikeClusterReconciler) updateSTSContainerResources(aeroCluster *as
 	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
 }
 
-func getSTSContainerPort(multiPodPerHost bool) []corev1.ContainerPort {
+func getSTSContainerPort(multiPodPerHost bool, aeroConf *asdbv1beta1.AerospikeConfigSpec) []corev1.ContainerPort {
 	var ports []corev1.ContainerPort
-	if multiPodPerHost {
-		// Create ports without hostPort setting
-		ports = []corev1.ContainerPort{
-			{
-				Name:          asdbv1beta1.ServicePortName,
-				ContainerPort: asdbv1beta1.ServicePort,
-			},
-			{
-				Name:          asdbv1beta1.ServiceTLSPortName,
-				ContainerPort: asdbv1beta1.ServiceTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.HeartbeatPortName,
-				ContainerPort: asdbv1beta1.HeartbeatPort,
-			},
-			{
-				Name:          asdbv1beta1.HeartbeatTLSPortName,
-				ContainerPort: asdbv1beta1.HeartbeatTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.FabricPortName,
-				ContainerPort: asdbv1beta1.FabricPort,
-			},
-			{
-				Name:          asdbv1beta1.FabricTLSPortName,
-				ContainerPort: asdbv1beta1.FabricTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.InfoPortName,
-				ContainerPort: asdbv1beta1.InfoPort,
-			},
+	for portName, portInfo := range defaultContainerPorts {
+		containerPort := corev1.ContainerPort{
+			Name:          portName,
+			ContainerPort: int32(asdbv1beta1.GetPortFromConfig(aeroConf, portInfo.connectionType, portInfo.configParam, portInfo.defaultPort)),
 		}
-	} else {
 		// Single pod per host. Enable hostPort setting
 		// The hostPort setting applies to the Kubernetes containers.
 		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 		// where the hostIP is the IP address of the Kubernetes node where
 		// the container is running and the hostPort is the port requested by the user
-		ports = []corev1.ContainerPort{
-			{
-				Name:          asdbv1beta1.ServicePortName,
-				ContainerPort: asdbv1beta1.ServicePort,
-				HostPort:      asdbv1beta1.ServicePort,
-			},
-			{
-				Name:          asdbv1beta1.ServiceTLSPortName,
-				ContainerPort: asdbv1beta1.ServiceTLSPort,
-				HostPort:      asdbv1beta1.ServiceTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.HeartbeatPortName,
-				ContainerPort: asdbv1beta1.HeartbeatPort,
-			},
-			{
-				Name:          asdbv1beta1.HeartbeatTLSPortName,
-				ContainerPort: asdbv1beta1.HeartbeatTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.FabricPortName,
-				ContainerPort: asdbv1beta1.FabricPort,
-			},
-			{
-				Name:          asdbv1beta1.FabricTLSPortName,
-				ContainerPort: asdbv1beta1.FabricTLSPort,
-			},
-			{
-				Name:          asdbv1beta1.InfoPortName,
-				ContainerPort: asdbv1beta1.InfoPort,
-				HostPort:      asdbv1beta1.InfoPort,
-			},
+
+		if (!multiPodPerHost) && portInfo.exposedOnHost {
+			containerPort.HostPort = containerPort.ContainerPort
 		}
+		ports = append(ports, containerPort)
 	}
 	return ports
 }

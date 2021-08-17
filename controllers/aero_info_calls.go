@@ -103,7 +103,9 @@ func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1beta1.A
 	if err != nil {
 		return err
 	}
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), asdbv1beta1.HeartbeatPort)
+
+	heartbeatPort := asdbv1beta1.GetHeartbeatPort(aeroCluster.Spec.AerospikeConfig)
+	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), heartbeatPort)
 }
 
 func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, clearPod *corev1.Pod) error {
@@ -111,7 +113,9 @@ func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1beta1.Aerosp
 	if err != nil {
 		return err
 	}
-	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), asdbv1beta1.HeartbeatPort)
+
+	heartbeatPort := asdbv1beta1.GetHeartbeatPort(aeroCluster.Spec.AerospikeConfig)
+	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), heartbeatPort)
 }
 
 func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) error {
@@ -180,19 +184,15 @@ func (r *AerospikeClusterReconciler) newHostConn(aeroCluster *asdbv1beta1.Aerosp
 
 func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
 	// Use pod IP and direct service port from within the operator for info calls.
-	var port int32
-
-	tlsName := getServiceTLSName(aeroCluster)
+	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
 	if tlsName == "" {
-		port = asdbv1beta1.ServicePort
-	} else {
-		port = asdbv1beta1.ServiceTLSPort
+		port = asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)
 	}
 
 	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{
 		AerospikeHostName: host,
-		AerospikePort:     int(port),
+		AerospikePort:     port,
 		AerospikeTLSName:  tlsName,
 	}
 
