@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -62,7 +62,7 @@ func rollCluster(ctx goctx.Context, image string, expectWarmStart bool) {
 }
 
 // getAsdPids returns a map from pod name to corresponding Aerospike server pid.
-func getAsdPids(ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) (map[string]string, error) {
+func getAsdPids(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster) (map[string]string, error) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func getAsdPids(ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster) (
 			"ps -A -o pid,cmd|grep 'asd' | grep -v grep | grep -v tini |head -n 1 | awk '{print $1}'",
 		}
 
-		stdout, _, err := utils.Exec(&pod, asdbv1alpha1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
+		stdout, _, err := utils.Exec(&pod, asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset, cfg)
 
 		if err != nil {
 			return nil, fmt.Errorf("Error reading ASD Pid from pod %s - %v", pod.Name, err)

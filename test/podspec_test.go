@@ -3,6 +3,7 @@ package test
 import (
 	goctx "context"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -47,8 +48,19 @@ var _ = Describe("Using podspec feature", func() {
 	Context("When doing valid operation", func() {
 
 		BeforeEach(func() {
+			zones, err := getZones(k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Deploy everything in single rack
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			err := deployCluster(k8sClient, ctx, aeroCluster)
+			racks := []asdbv1beta1.Rack{
+				{ID: 1, Zone: zones[0]},
+			}
+			aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{
+				Racks: racks,
+			}
+
+			err = deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

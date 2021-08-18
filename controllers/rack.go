@@ -7,8 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -21,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func (r *AerospikeClusterReconciler) reconcileRacks(aeroCluster *asdbv1alpha1.AerospikeCluster) reconcileResult {
+func (r *AerospikeClusterReconciler) reconcileRacks(aeroCluster *asdbv1beta1.AerospikeCluster) reconcileResult {
 
 	r.Log.Info("Reconciling rack for AerospikeCluster")
 
@@ -100,7 +99,7 @@ func (r *AerospikeClusterReconciler) reconcileRacks(aeroCluster *asdbv1alpha1.Ae
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) createRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) createRack(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Create new Aerospike cluster if needed")
 
@@ -129,14 +128,14 @@ func (r *AerospikeClusterReconciler) createRack(aeroCluster *asdbv1alpha1.Aerosp
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) getRacksToDelete(aeroCluster *asdbv1alpha1.AerospikeCluster, rackStateList []RackState) ([]asdbv1alpha1.Rack, error) {
+func (r *AerospikeClusterReconciler) getRacksToDelete(aeroCluster *asdbv1beta1.AerospikeCluster, rackStateList []RackState) ([]asdbv1beta1.Rack, error) {
 	oldRacks, err := r.getCurrentRackList(aeroCluster)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toDelete := []asdbv1alpha1.Rack{}
+	toDelete := []asdbv1beta1.Rack{}
 	for _, oldRack := range oldRacks {
 		var rackFound bool
 		for _, newRack := range rackStateList {
@@ -154,7 +153,7 @@ func (r *AerospikeClusterReconciler) getRacksToDelete(aeroCluster *asdbv1alpha1.
 	return toDelete, nil
 }
 
-func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1alpha1.AerospikeCluster, racksToDelete []asdbv1alpha1.Rack, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1beta1.AerospikeCluster, racksToDelete []asdbv1beta1.Rack, ignorablePods []corev1.Pod) reconcileResult {
 	for _, rack := range racksToDelete {
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForSTS(aeroCluster, rack.ID)
@@ -180,7 +179,7 @@ func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1alpha1.Aeros
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
 
 	r.Log.Info("Reconcile existing Aerospike cluster statefulset", "stsName", found.Name)
 
@@ -259,7 +258,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1alpha1.Aer
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState) (bool, error) {
+func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState) (bool, error) {
 	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
 	if err != nil {
 		return false, fmt.Errorf("failed to list pods: %v", err)
@@ -277,7 +276,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1a
 	return false, nil
 }
 
-func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState) (*appsv1.StatefulSet, reconcileResult) {
 
 	desiredSize := int32(rackState.Size)
 
@@ -339,7 +338,7 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1alpha1.Aeros
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1alpha1.AerospikeCluster, containers []corev1.Container) bool {
+func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1beta1.AerospikeCluster, containers []corev1.Container) bool {
 	updated := false
 
 	for i, container := range containers {
@@ -358,7 +357,7 @@ func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1al
 	return updated
 }
 
-func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1alpha1.AerospikeCluster, podName string) bool {
+func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1beta1.AerospikeCluster, podName string) bool {
 	for _, ps := range containers {
 		desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
 		if err != nil {
@@ -373,7 +372,7 @@ func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1
 	return false
 }
 
-func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
@@ -423,7 +422,7 @@ func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1alpha1.Aeros
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) scaleDownRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) scaleDownRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 
 	desiredSize := int32(rackState.Size)
 
@@ -490,7 +489,7 @@ func (r *AerospikeClusterReconciler) scaleDownRack(aeroCluster *asdbv1alpha1.Aer
 	return found, reconcileRequeueAfter(0)
 }
 
-func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1alpha1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
 
@@ -552,7 +551,7 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1alpha
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) (bool, error) {
+func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (bool, error) {
 
 	podList, err := r.getRackPodList(aeroCluster, rackID)
 	if err != nil {
@@ -568,7 +567,7 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1alph
 	return false, nil
 }
 
-func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
 
 	volumes := rackState.Rack.Storage.Volumes
 
@@ -581,11 +580,11 @@ func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroClust
 		}
 
 		// Check for Added/Updated volumeAttachments
-		var containerAttachments []v1alpha1.VolumeAttachment
+		var containerAttachments []asdbv1beta1.VolumeAttachment
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 		if volume.Aerospike != nil {
-			containerAttachments = append(containerAttachments, v1alpha1.VolumeAttachment{
-				ContainerName: v1alpha1.AerospikeServerContainerName,
+			containerAttachments = append(containerAttachments, asdbv1beta1.VolumeAttachment{
+				ContainerName: asdbv1beta1.AerospikeServerContainerName,
 				Path:          volume.Aerospike.Path,
 			})
 		}
@@ -608,7 +607,7 @@ func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroClust
 	return false
 }
 
-func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume v1alpha1.VolumeSpec, pod corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume asdbv1beta1.VolumeSpec, pod corev1.Pod) bool {
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
 		// Volume not found in pod.volumes. This is newly aaded volume
@@ -616,7 +615,7 @@ func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume v1alpha
 		return true
 	}
 
-	var volumeCopy v1alpha1.VolumeSpec
+	var volumeCopy asdbv1beta1.VolumeSpec
 	lib.DeepCopy(&volumeCopy, &volume)
 
 	if volumeCopy.Source.Secret != nil {
@@ -641,7 +640,7 @@ func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume v1alpha
 	return false
 }
 
-func (r *AerospikeClusterReconciler) isVolumeAttachmentAddedOrUpdated(volumeName string, volumeAttachments []v1alpha1.VolumeAttachment, podContainers []corev1.Container) bool {
+func (r *AerospikeClusterReconciler) isVolumeAttachmentAddedOrUpdated(volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment, podContainers []corev1.Container) bool {
 
 	for _, attachment := range volumeAttachments {
 		container := getContainer(podContainers, attachment.ContainerName)
@@ -683,9 +682,9 @@ func (r *AerospikeClusterReconciler) isVolumeAttachmentAddedOrUpdated(volumeName
 	return false
 }
 
-func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []v1alpha1.VolumeSpec, podContainers []corev1.Container, isInitContainers bool) bool {
+func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []asdbv1beta1.VolumeSpec, podContainers []corev1.Container, isInitContainers bool) bool {
 	for _, container := range podContainers {
-		if isInitContainers && container.Name == v1alpha1.AerospikeServerInitContainerName {
+		if isInitContainers && container.Name == asdbv1beta1.AerospikeServerInitContainerName {
 			// Initcontainer has all the volumes mounted, there is no specific entry in storage for initcontainer
 			continue
 		}
@@ -716,7 +715,7 @@ func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []v1alpha
 	return false
 }
 
-func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []v1alpha1.VolumeSpec, containerVolumeName string, containerName string, isInitContainers bool) bool {
+func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []asdbv1beta1.VolumeSpec, containerVolumeName string, containerName string, isInitContainers bool) bool {
 	volume := getStorageVolume(volumes, containerVolumeName)
 	if volume == nil {
 		// Volume may have been removed, we allow removal of all volumes (except pv type)
@@ -729,7 +728,7 @@ func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []v1alph
 			return false
 		}
 	} else {
-		if containerName == v1alpha1.AerospikeServerContainerName {
+		if containerName == asdbv1beta1.AerospikeServerContainerName {
 			if volume.Aerospike == nil {
 				return false
 			}
@@ -742,7 +741,7 @@ func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []v1alph
 	return true
 }
 
-func (r *AerospikeClusterReconciler) getRackPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
+func (r *AerospikeClusterReconciler) getRackPodList(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackID))
@@ -755,7 +754,7 @@ func (r *AerospikeClusterReconciler) getRackPodList(aeroCluster *asdbv1alpha1.Ae
 	return podList, nil
 }
 
-func (r *AerospikeClusterReconciler) getOrderedRackPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) ([]corev1.Pod, error) {
+func (r *AerospikeClusterReconciler) getOrderedRackPodList(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) ([]corev1.Pod, error) {
 	podList, err := r.getRackPodList(aeroCluster, rackID)
 	if err != nil {
 		return nil, err
@@ -774,8 +773,8 @@ func (r *AerospikeClusterReconciler) getOrderedRackPodList(aeroCluster *asdbv1al
 	return sortedList, nil
 }
 
-func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]asdbv1alpha1.Rack, error) {
-	var rackList []asdbv1alpha1.Rack = []asdbv1alpha1.Rack{}
+func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1beta1.AerospikeCluster) ([]asdbv1beta1.Rack, error) {
+	var rackList []asdbv1beta1.Rack = []asdbv1beta1.Rack{}
 	rackList = append(rackList, aeroCluster.Status.RackConfig.Racks...)
 
 	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack before status was updated.
@@ -801,7 +800,7 @@ func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1alpha
 		if !found {
 			// Create a dummy rack config using globals.
 			// TODO: Refactor and reuse code in mutate setting.
-			dummyRack := asdbv1alpha1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: *aeroCluster.Spec.AerospikeConfig}
+			dummyRack := asdbv1beta1.Rack{ID: *rackID, Storage: aeroCluster.Spec.Storage, AerospikeConfig: *aeroCluster.Spec.AerospikeConfig}
 
 			rackList = append(rackList, dummyRack)
 		}
@@ -810,7 +809,7 @@ func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1alpha
 	return rackList, nil
 }
 
-func isContainerNameInStorageVolumeAttachments(containerName string, mounts []v1alpha1.VolumeAttachment) bool {
+func isContainerNameInStorageVolumeAttachments(containerName string, mounts []asdbv1beta1.VolumeAttachment) bool {
 	for _, mount := range mounts {
 		if mount.ContainerName == containerName {
 			return true
@@ -836,7 +835,7 @@ func splitRacks(nodes, racks int) []int {
 	return topology
 }
 
-func getConfiguredRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
@@ -890,7 +889,7 @@ func getPodVolume(pod corev1.Pod, name string) *corev1.Volume {
 	return nil
 }
 
-func getStorageVolume(volumes []v1alpha1.VolumeSpec, name string) *v1alpha1.VolumeSpec {
+func getStorageVolume(volumes []asdbv1beta1.VolumeSpec, name string) *asdbv1beta1.VolumeSpec {
 	for _, volume := range volumes {
 		if name == volume.Name {
 			return &volume

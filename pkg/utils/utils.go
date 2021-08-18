@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -28,12 +28,12 @@ const (
 )
 
 // ClusterNamespacedName return namespaced name
-func ClusterNamespacedName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
+func ClusterNamespacedName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
 }
 
 // ConfigMapName returns the name to use for a aeroCluster cluster's config map.
-func ConfigMapName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
+func ConfigMapName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 	return fmt.Sprintf("%s-%s", aerospikeConfConfigMapPrefix, aeroCluster.Name)
 }
 
@@ -70,12 +70,12 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 }
 
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
-func GetDesiredImage(aeroCluster *asdbv1alpha1.AerospikeCluster, containerName string) (string, error) {
-	if containerName == asdbv1alpha1.AerospikeServerContainerName {
+func GetDesiredImage(aeroCluster *asdbv1beta1.AerospikeCluster, containerName string) (string, error) {
+	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
-	if containerName == asdbv1alpha1.AerospikeServerInitContainerName {
-		return asdbv1alpha1.AerospikeServerInitContainerImage, nil
+	if containerName == asdbv1beta1.AerospikeServerInitContainerName {
+		return asdbv1beta1.AerospikeServerInitContainerImage, nil
 	}
 
 	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {

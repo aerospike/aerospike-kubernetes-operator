@@ -65,15 +65,16 @@ test-deploy: manifests kustomize
 	cp -r config test
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	cd test/config/manager && sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" manager.yaml
-	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
+	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}	
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
-# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-test-undeploy:
+test-undeploy: kustomize
+	cp -r config test
+	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
 # UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-undeploy:
+undeploy: kustomize
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.

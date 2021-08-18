@@ -11,7 +11,7 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -67,7 +67,7 @@ func ignoreSecondaryResource() predicate.Predicate {
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&asdbv1alpha1.AerospikeCluster{}).
+		For(&asdbv1beta1.AerospikeCluster{}).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(
 			predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
@@ -96,7 +96,7 @@ type AerospikeClusterReconciler struct {
 
 // RackState contains the rack configuration and rack size.
 type RackState struct {
-	Rack asdbv1alpha1.Rack
+	Rack asdbv1beta1.Rack
 	Size int
 }
 
@@ -125,7 +125,7 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 	r.Log.Info("Reconciling AerospikeCluster")
 
 	// Fetch the AerospikeCluster instance
-	aeroCluster := &asdbv1alpha1.AerospikeCluster{}
+	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 	err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -193,7 +193,7 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 	return reconcile.Result{}, nil
 }
 
-func (r *AerospikeClusterReconciler) handleClusterDeletion(aeroCluster *asdbv1alpha1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) handleClusterDeletion(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
 
 	r.Log.Info("Handle cluster deletion")
 
@@ -205,7 +205,7 @@ func (r *AerospikeClusterReconciler) handleClusterDeletion(aeroCluster *asdbv1al
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 
 	r.Log.Info("Handle previously failed cluster")
 
@@ -233,9 +233,9 @@ func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 
-	enabled, err := asdbv1alpha1.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
+	enabled, err := asdbv1beta1.IsSecurityEnabled(aeroCluster.Spec.AerospikeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}
@@ -273,11 +273,11 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 	// reconcileAccessControl uses many helper func over spec object. So statusSpec to spec conversion
 	// help in reusing those functions over statusSpec.
 	// See if this can be done in better manner
-	// statusSpec := asdbv1alpha1.AerospikeClusterSpec{}
+	// statusSpec := asdbv1beta1.AerospikeClusterSpec{}
 	// if err := lib.DeepCopy(&statusSpec, &aeroCluster.Status.AerospikeClusterStatusSpec); err != nil {
 	// 	return err
 	// }
-	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		return err
 	}
@@ -289,12 +289,12 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1a
 	return err
 }
 
-func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 
 	r.Log.Info("Update status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
-	newAeroCluster := &asdbv1alpha1.AerospikeCluster{}
+	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
 	if err != nil {
 		return err
@@ -303,12 +303,12 @@ func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1alpha1.Aero
 	// TODO: FIXME: Copy only required fields, StatusSpec may not have all the fields in Spec.
 	// Deepcopy at that location may create problem
 	// Deep copy merges so blank out the spec part of status before copying over.
-	// newAeroCluster.Status.AerospikeClusterStatusSpec = asdbv1alpha1.AerospikeClusterStatusSpec{}
+	// newAeroCluster.Status.AerospikeClusterStatusSpec = asdbv1beta1.AerospikeClusterStatusSpec{}
 	// if err := lib.DeepCopy(&newAeroCluster.Status.AerospikeClusterStatusSpec, &aeroCluster.Spec); err != nil {
 	// 	return err
 	// }
 
-	specToStatus, err := asdbv1alpha1.CopySpecToStatus(aeroCluster.Spec)
+	specToStatus, err := asdbv1beta1.CopySpecToStatus(aeroCluster.Spec)
 	if err != nil {
 		return err
 	}
@@ -322,19 +322,19 @@ func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1alpha1.Aero
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 
 	r.Log.Info("Creating status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
-	newAeroCluster := &asdbv1alpha1.AerospikeCluster{}
+	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
 	if err != nil {
 		return err
 	}
 
 	if newAeroCluster.Status.Pods == nil {
-		newAeroCluster.Status.Pods = map[string]asdbv1alpha1.AerospikePodStatus{}
+		newAeroCluster.Status.Pods = map[string]asdbv1beta1.AerospikePodStatus{}
 	}
 
 	if err = r.Client.Status().Update(context.TODO(), newAeroCluster); err != nil {
@@ -344,7 +344,7 @@ func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1alpha1.Aero
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1alpha1.AerospikeCluster) (bool, error) {
+func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1beta1.AerospikeCluster) (bool, error) {
 	if aeroCluster.Status.AerospikeConfig != nil {
 		// We have valid status, cluster cannot be new.
 		return false, nil
@@ -361,7 +361,7 @@ func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1alpha1.Aero
 	return len(statefulSetList.Items) == 0, nil
 }
 
-func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1alpha1.AerospikeCluster) (bool, error) {
+func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1beta1.AerospikeCluster) (bool, error) {
 	isNew, err := r.isNewCluster(aeroCluster)
 
 	if err != nil {
@@ -372,7 +372,7 @@ func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1alpha1.
 	return !isNew && aeroCluster.Status.AerospikeConfig == nil, nil
 }
 
-func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster *asdbv1beta1.AerospikeCluster) error {
 
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
@@ -434,7 +434,7 @@ func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster 
 // validation for ip and port.
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
-func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 
 	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration.")
 
@@ -475,7 +475,7 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1alph
 	return fmt.Errorf("forcing recreate of the cluster as status is nil")
 }
 
-func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1alpha1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
@@ -488,7 +488,7 @@ func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1alpha1.Aero
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(aeroCluster *asdbv1alpha1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
 	// The object is being deleted
 	if utils.ContainsString(aeroCluster.ObjectMeta.Finalizers, finalizerName) {
 		// Handle any external dependency
@@ -509,7 +509,7 @@ func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(aeroCluster *asdb
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1alpha1.AerospikeCluster) error {
+func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 	// Delete should be idempotent
 
 	r.Log.Info("Removing pvc for removed cluster")
@@ -557,7 +557,7 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(aeroCluster *asdbv1alpha1.AerospikeCluster, pod corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, pod corev1.Pod) bool {
 	res := aeroCluster.Spec.Resources
 	if res == nil {
 		res = &corev1.ResourceRequirements{}

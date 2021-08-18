@@ -3,7 +3,7 @@ package test
 import (
 	goctx "context"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -64,7 +64,7 @@ var _ = Describe("Using storage volumes", func() {
 			It("Should specify one source", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-				aeroCluster.Spec.Storage.Volumes[0].Source = v1alpha1.VolumeSource{}
+				aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1beta1.VolumeSource{}
 
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -96,7 +96,7 @@ var _ = Describe("Using storage volumes", func() {
 			It("Should not use invalid container name", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
 					{
 						ContainerName: "invalid",
 						Path:          "/opt/aerospike",
@@ -110,8 +110,8 @@ var _ = Describe("Using storage volumes", func() {
 			It("Should give at least one of the following -> sidecar, initcontainer, aerospike", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{}
-				aeroCluster.Spec.Storage.Volumes[0].InitContainers = []v1alpha1.VolumeAttachment{}
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{}
+				aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1beta1.VolumeAttachment{}
 				aeroCluster.Spec.Storage.Volumes[0].Aerospike = nil
 
 				err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -121,14 +121,14 @@ var _ = Describe("Using storage volumes", func() {
 			It("Should not allow mounting same volume at multiple path in a container", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 				containerName := "container"
-				aeroCluster.Spec.PodSpec = v1alpha1.AerospikePodSpec{
+				aeroCluster.Spec.PodSpec = asdbv1beta1.AerospikePodSpec{
 					Sidecars: []v1.Container{
 						{
 							Name: containerName,
 						},
 					},
 				}
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
 					{
 						ContainerName: containerName,
 						Path:          "/opt/aerospike",
@@ -146,20 +146,20 @@ var _ = Describe("Using storage volumes", func() {
 			It("Should not allow mounting multiple volumes at same path in a container", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 				containerName := "container"
-				aeroCluster.Spec.PodSpec = v1alpha1.AerospikePodSpec{
+				aeroCluster.Spec.PodSpec = asdbv1beta1.AerospikePodSpec{
 					Sidecars: []v1.Container{
 						{
 							Name: containerName,
 						},
 					},
 				}
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
 					{
 						ContainerName: containerName,
 						Path:          "/opt/aerospike",
 					},
 				}
-				aeroCluster.Spec.Storage.Volumes[1].Sidecars = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[1].Sidecars = []asdbv1beta1.VolumeAttachment{
 					{
 						ContainerName: containerName,
 						Path:          "/opt/aerospike",
@@ -171,9 +171,9 @@ var _ = Describe("Using storage volumes", func() {
 
 			It("Should not use aerospike-server container name in sidecars", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
 					{
-						ContainerName: v1alpha1.AerospikeServerContainerName,
+						ContainerName: asdbv1beta1.AerospikeServerContainerName,
 						Path:          "/opt/aerospike/newpath",
 					},
 				}
@@ -184,9 +184,9 @@ var _ = Describe("Using storage volumes", func() {
 
 			It("Should not use aerospike-init container name in initcontainers", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				aeroCluster.Spec.Storage.Volumes[0].InitContainers = []v1alpha1.VolumeAttachment{
+				aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1beta1.VolumeAttachment{
 					{
-						ContainerName: v1alpha1.AerospikeServerInitContainerName,
+						ContainerName: asdbv1beta1.AerospikeServerInitContainerName,
 						Path:          "/opt/aerospike/newpath",
 					},
 				}
@@ -219,16 +219,16 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				volume := v1alpha1.VolumeSpec{
+				volume := asdbv1beta1.VolumeSpec{
 					Name: "newvolume",
-					Source: v1alpha1.VolumeSource{
-						PersistentVolume: &v1alpha1.PersistentVolumeSpec{
+					Source: asdbv1beta1.VolumeSource{
+						PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 							Size:         resource.MustParse("1Gi"),
 							StorageClass: storageClass,
 							VolumeMode:   v1.PersistentVolumeFilesystem,
 						},
 					},
-					Aerospike: &v1alpha1.AerospikeServerVolumeAttachment{
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 						Path: "/newvolume",
 					},
 				}
@@ -241,7 +241,7 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.Storage.Volumes = []v1alpha1.VolumeSpec{}
+				aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{}
 
 				err = k8sClient.Update(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -251,12 +251,12 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				volume := v1alpha1.VolumeSpec{
+				volume := asdbv1beta1.VolumeSpec{
 					Name: "newvolume",
-					Source: v1alpha1.VolumeSource{
+					Source: asdbv1beta1.VolumeSource{
 						EmptyDir: &v1.EmptyDirVolumeSource{},
 					},
-					Aerospike: &v1alpha1.AerospikeServerVolumeAttachment{
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 						Path: "/newvolume",
 					},
 				}
@@ -282,7 +282,7 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.Storage.Volumes[0].Source = v1alpha1.VolumeSource{
+				aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1beta1.VolumeSource{
 					EmptyDir: &v1.EmptyDirVolumeSource{},
 				}
 
@@ -295,12 +295,12 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				volume := v1alpha1.VolumeSpec{
+				volume := asdbv1beta1.VolumeSpec{
 					Name: "newvolume",
-					Source: v1alpha1.VolumeSource{
+					Source: asdbv1beta1.VolumeSource{
 						EmptyDir: &v1.EmptyDirVolumeSource{},
 					},
-					Aerospike: &v1alpha1.AerospikeServerVolumeAttachment{
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 						Path: "/newvolume",
 					},
 				}
@@ -314,7 +314,7 @@ var _ = Describe("Using storage volumes", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				volumes := aeroCluster.Spec.Storage.Volumes
-				aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = v1alpha1.VolumeSource{
+				aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1beta1.VolumeSource{
 					Secret: &v1.SecretVolumeSource{
 						SecretName: authSecretName,
 					},
@@ -349,7 +349,7 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				va := v1alpha1.VolumeAttachment{
+				va := asdbv1beta1.VolumeAttachment{
 					ContainerName: containerName,
 					Path:          "/newpath",
 				}
@@ -369,7 +369,7 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []v1alpha1.VolumeAttachment{}
+				aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{}
 				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			})

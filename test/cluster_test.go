@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -204,30 +204,30 @@ func UpdateClusterTest(ctx goctx.Context) {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				new := []asdbv1alpha1.VolumeSpec{
+				new := []asdbv1beta1.VolumeSpec{
 					{
 						Name: "ns",
-						Source: asdbv1alpha1.VolumeSource{
-							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								StorageClass: storageClass,
 								VolumeMode:   v1.PersistentVolumeBlock,
 								Size:         resource.MustParse("1Gi"),
 							},
 						},
-						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 							Path: "/dev/xvdf2",
 						},
 					},
 					{
 						Name: "workdir",
-						Source: asdbv1alpha1.VolumeSource{
-							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								StorageClass: storageClass,
 								VolumeMode:   v1.PersistentVolumeFilesystem,
 								Size:         resource.MustParse("1Gi"),
 							},
 						},
-						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aeropsike/ns1",
 						},
 					},
@@ -341,12 +341,12 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 		Context("InvalidAerospikeConfig: should fail for empty/invalid aerospikeConfig", func() {
 			It("should fail for empty/invalid aerospikeConfig", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-				aeroCluster.Spec.AerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{}
+				aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{}
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
 
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 1)
-				aeroCluster.Spec.AerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"namespaces": "invalidConf",
 					},
@@ -392,43 +392,43 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 					It("InvalidStorageEngineDevice: should fail for invalid storage-engine.device, cannot have 3 devices in single device string", func() {
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 						if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-							aeroCluster.Spec.Storage.Volumes = []asdbv1alpha1.VolumeSpec{
+							aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{
 								{
 									Name: "nsvol1",
-									Source: asdbv1alpha1.VolumeSource{
-										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 											Size:         resource.MustParse("1Gi"),
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeBlock,
 										},
 									},
-									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 										Path: "/dev/xvdf1",
 									},
 								},
 								{
 									Name: "nsvol2",
-									Source: asdbv1alpha1.VolumeSource{
-										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 											Size:         resource.MustParse("1Gi"),
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeBlock,
 										},
 									},
-									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 										Path: "/dev/xvdf2",
 									},
 								},
 								{
 									Name: "nsvol3",
-									Source: asdbv1alpha1.VolumeSource{
-										PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 											Size:         resource.MustParse("1Gi"),
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeBlock,
 										},
 									},
-									Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 										Path: "/dev/xvdf3",
 									},
 								},
@@ -463,7 +463,7 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 					It("InvalidxdrConfig: should fail for invalid xdr config. mountPath for digestlog not present in storage", func() {
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 						if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-							aeroCluster.Spec.Storage = asdbv1alpha1.AerospikeStorageSpec{}
+							aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
 							aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 								"enable-xdr":         false,
 								"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
@@ -622,14 +622,14 @@ func negativeUpdateClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.AerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{}
+				aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{}
 				err = k8sClient.Update(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
 
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.AerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"namespaces": "invalidConf",
 					},

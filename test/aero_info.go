@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -32,7 +32,7 @@ func getServiceForPod(pod *corev1.Pod, k8sClient client.Client) (*corev1.Service
 	return service, nil
 }
 
-func newAsConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.ASConn, error) {
+func newAsConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.ASConn, error) {
 	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
 
@@ -55,9 +55,9 @@ func newAsConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sC
 		}
 	} else {
 		if tlsName == "" {
-			port = asdbv1alpha1.ServicePort
+			port = asdbv1beta1.ServicePort
 		} else {
-			port = asdbv1alpha1.ServiceTLSPort
+			port = asdbv1beta1.ServiceTLSPort
 		}
 	}
 
@@ -98,7 +98,7 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 	return &ip, nil
 }
 
-func newHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.HostConn, error) {
+func newHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.HostConn, error) {
 	asConn, err := newAsConn(aeroCluster, pod, k8sClient)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func newHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod, k8
 	return deployment.NewHostConn(host, asConn, nil), nil
 }
 
-func getPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) (*corev1.PodList, error) {
+func getPodList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*corev1.PodList, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
 	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
@@ -118,7 +118,31 @@ func getPodList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Cli
 	return podList, nil
 }
 
-func newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {
+func getNodeList(k8sClient client.Client) (*corev1.NodeList, error) {
+	nodeList := &corev1.NodeList{}
+	if err := k8sClient.List(context.TODO(), nodeList); err != nil {
+		return nil, err
+	}
+	return nodeList, nil
+}
+
+func getZones(k8sClient client.Client) ([]string, error) {
+	unqZones := map[string]int{}
+	nodes, err := getNodeList(k8sClient)
+	if err != nil {
+		return nil, err
+	}
+	for _, node := range nodes.Items {
+		unqZones[node.Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
+	}
+	var zones []string
+	for zone := range unqZones {
+		zones = append(zones, zone)
+	}
+	return zones, nil
+}
+
+func newAllHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err
@@ -138,7 +162,7 @@ func newAllHostConn(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client
 	return hostConns, nil
 }
 
-func getAeroClusterPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client) ([]corev1.PersistentVolumeClaim, error) {
+func getAeroClusterPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -150,7 +174,7 @@ func getAeroClusterPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient
 	return pvcList.Items, nil
 }
 
-func getPodsPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, k8sClient client.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
+func getPodsPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
 	pvcListItems, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err

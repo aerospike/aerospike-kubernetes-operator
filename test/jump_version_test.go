@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 const (
@@ -206,68 +206,68 @@ var _ = Describe("JumpVersion", func() {
 	})
 })
 
-func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.NamespacedName, aerospikeConfig map[string]interface{}, image string, ctx goctx.Context) *asdbv1alpha1.AerospikeCluster {
+func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.NamespacedName, aerospikeConfig map[string]interface{}, image string, ctx goctx.Context) *asdbv1beta1.AerospikeCluster {
 	mem := resource.MustParse("2Gi")
 	cpu := resource.MustParse("200m")
 
 	cascadeDelete := true
 
 	// create Aerospike custom resource
-	return &asdbv1alpha1.AerospikeCluster{
+	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
 			Namespace: clusterNamespacedName.Namespace,
 		},
-		Spec: asdbv1alpha1.AerospikeClusterSpec{
+		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  jumpTestClusterSize,
 			Image: image,
-			Storage: asdbv1alpha1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+			Storage: asdbv1beta1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1alpha1.VolumeSpec{
+				Volumes: []asdbv1beta1.VolumeSpec{
 					{
 						Name: "workdir",
-						Source: asdbv1alpha1.VolumeSource{
-							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
 								VolumeMode:   v1.PersistentVolumeFilesystem,
 							},
 						},
-						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aerospike",
 						},
 					},
 					{
 						Name: "ns",
-						Source: asdbv1alpha1.VolumeSource{
-							PersistentVolume: &asdbv1alpha1.PersistentVolumeSpec{
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
 								VolumeMode:   v1.PersistentVolumeFilesystem,
 							},
 						},
-						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aerospike/data",
 						},
 					},
 					{
 						Name: aerospikeConfigSecret,
-						Source: asdbv1alpha1.VolumeSource{
+						Source: asdbv1beta1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								SecretName: tlsSecretName,
 							},
 						},
-						Aerospike: &asdbv1alpha1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
 							Path: "/etc/aerospike/secret",
 						},
 					},
 				},
 			},
 
-			AerospikeAccessControl: &asdbv1alpha1.AerospikeAccessControlSpec{
-				Users: []asdbv1alpha1.AerospikeUserSpec{
+			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
+				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
 						Name:       "admin",
 						SecretName: authSecretName,
@@ -278,7 +278,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 					},
 				},
 			},
-			PodSpec: asdbv1alpha1.AerospikePodSpec{
+			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
 			Resources: &corev1.ResourceRequirements{
@@ -291,7 +291,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 					corev1.ResourceMemory: mem,
 				},
 			},
-			AerospikeConfig: &asdbv1alpha1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: aerospikeConfig,
 			},
 		},
@@ -299,7 +299,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 }
 
 // waitForVersion waits for the cluster to have all nodes at input Aerospike version.
-func waitForVersion(ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, image string, retryInterval, timeout time.Duration) error {
+func waitForVersion(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, image string, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Refresh cluster object.
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, aeroCluster)

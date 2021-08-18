@@ -7,8 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -21,11 +20,10 @@ import (
 // )
 
 // Jenkins tests var
-var (
-	zone1  = "us-west1-a"
-	zone2  = "us-west1-a"
-	region = "us-west1"
-)
+// var (
+// 	zone1  = "us-west1-a"
+// 	zone2  = "us-west1-a"
+// )
 
 // Test cluster cr updation
 var _ = Describe("RackLifeCycleOp", func() {
@@ -37,18 +35,27 @@ var _ = Describe("RackLifeCycleOp", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		BeforeEach(func() {
+			zones, err := getZones(k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			zone1 := zones[0]
+			zone2 := zones[0]
+			if len(zones) > 1 {
+				zone2 = zones[1]
+			}
+
 			// Will be used in Update also
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			// This needs to be changed based on setup. update zone, region, nodeName according to setup
-			racks := []asdbv1alpha1.Rack{
-				{ID: 1, Zone: zone1, Region: region},
-				{ID: 2, Zone: zone2, Region: region}}
-			rackConf := asdbv1alpha1.RackConfig{
+			racks := []asdbv1beta1.Rack{
+				{ID: 1, Zone: zone1},
+				{ID: 2, Zone: zone2}}
+			rackConf := asdbv1beta1.RackConfig{
 				Racks: racks,
 			}
 			aeroCluster.Spec.RackConfig = rackConf
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
+			err = deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
@@ -132,12 +139,12 @@ var _ = Describe("RackLifeCycleOp", func() {
 				RequiredDuringSchedulingIgnoredDuringExecution: ns,
 			}
 
-			rackConf := asdbv1alpha1.RackConfig{
-				Racks: []asdbv1alpha1.Rack{
+			rackConf := asdbv1beta1.RackConfig{
+				Racks: []asdbv1beta1.Rack{
 					{
 						ID: 3,
-						InputPodSpec: &v1alpha1.RackPodSpec{
-							SchedulingPolicy: v1alpha1.SchedulingPolicy{
+						InputPodSpec: &asdbv1beta1.RackPodSpec{
+							SchedulingPolicy: asdbv1beta1.SchedulingPolicy{
 								Affinity: affinity,
 							},
 						},

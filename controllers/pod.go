@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,7 +47,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
-func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
+func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
 
 	restartType := NoRestart
 
@@ -108,7 +108,7 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 	return restartType, nil
 }
 
-func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod) reconcileResult {
 
 	if restartType == NoRestart {
 		r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
@@ -174,7 +174,7 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1alpha1
 	return r.podRestart(aeroCluster, rackState, pFound)
 }
 
-func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
 	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
 	cmd := []string{
 		"bash",
@@ -185,7 +185,7 @@ func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.Aero
 
 	// Quick restart attempt should not take significant time.
 	// Therefore its ok to block the operator on the quick restart attempt.
-	stdout, stderr, err := utils.Exec(pod, asdbv1alpha1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+	stdout, stderr, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
 	if err != nil {
 		r.Log.V(1).Info("Failed warm restart", "err", err, "podName", pod.Name, "stdout", stdout, "stderr", stderr)
 
@@ -197,7 +197,7 @@ func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1alpha1.Aero
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
 	var err error = nil
 
 	// Delete pod
@@ -243,7 +243,7 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1alpha1.Aerosp
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster *asdbv1alpha1.AerospikeCluster, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
 	// If already dead node, so no need to check node safety, migration
 	if err := utils.CheckPodFailed(&p); err == nil {
 		if res := r.waitForNodeSafeStopReady(aeroCluster, &p, ignorablePods); !res.isSuccess {
@@ -297,7 +297,7 @@ func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster 
 }
 
 // cleanupPods checks pods and status before scaleup to detect and fix any status anomalies.
-func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.AerospikeCluster, podNames []string, rackState RackState) error {
+func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string, rackState RackState) error {
 
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
@@ -364,7 +364,7 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1alpha1.Aeros
 
 // removePodStatus removes podNames from the cluster's pod status.
 // Assumes the pods are not running so that the no concurrent update to this pod status is possbile.
-func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1alpha1.AerospikeCluster, podNames []string) error {
+func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string) error {
 	if len(podNames) == 0 {
 		return nil
 	}
@@ -390,7 +390,7 @@ func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1alpha1.A
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1alpha1.AerospikeCluster, sts *appsv1.StatefulSet, rackState RackState) error {
+func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1beta1.AerospikeCluster, sts *appsv1.StatefulSet, rackState RackState) error {
 	// Clean up any dangling resources associated with the new pods.
 	// This implements a safety net to protect scale up against failed cleanup operations when cluster
 	// is scaled down.
@@ -428,7 +428,7 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 }
 
 // getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability checks.
-func (r *AerospikeClusterReconciler) getIgnorablePods(aeroCluster *asdbv1alpha1.AerospikeCluster, racksToDelete []asdbv1alpha1.Rack) ([]corev1.Pod, error) {
+func (r *AerospikeClusterReconciler) getIgnorablePods(aeroCluster *asdbv1beta1.AerospikeCluster, racksToDelete []asdbv1beta1.Rack) ([]corev1.Pod, error) {
 	ignorablePods := []corev1.Pod{}
 	for _, rack := range racksToDelete {
 		rackPods, err := r.getRackPodList(aeroCluster, rack.ID)
@@ -479,37 +479,7 @@ func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (*corev1.
 	return service, nil
 }
 
-func (r *AerospikeClusterReconciler) getServicePortForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, pod *corev1.Pod) (int32, error) {
-	var port int32
-	tlsName := getServiceTLSName(aeroCluster)
-
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
-		svc, err := r.getServiceForPod(pod)
-		if err != nil {
-			return 0, fmt.Errorf("error getting service port: %v", err)
-		}
-		if tlsName == "" {
-			port = svc.Spec.Ports[0].NodePort
-		} else {
-			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
-					port = portInfo.NodePort
-					break
-				}
-			}
-		}
-	} else {
-		if tlsName == "" {
-			port = asdbv1alpha1.ServicePort
-		} else {
-			port = asdbv1alpha1.ServiceTLSPort
-		}
-	}
-
-	return port, nil
-}
-
-func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, podNames []string, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string, rackID int) ([]corev1.PersistentVolumeClaim, error) {
 	pvcListItems, err := r.getRackPVCList(aeroCluster, rackID)
 	if err != nil {
 		return nil, err
@@ -529,7 +499,7 @@ func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1alpha1.Ae
 	return newPVCItems, nil
 }
 
-func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1alpha1.AerospikeCluster) (*corev1.PodList, error) {
+func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1beta1.AerospikeCluster) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -542,7 +512,7 @@ func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1alpha1
 	return podList, nil
 }
 
-func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1alpha1.AerospikeCluster, podList []corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1beta1.AerospikeCluster, podList []corev1.Pod) bool {
 
 	for _, p := range podList {
 		for _, ps := range p.Status.ContainerStatuses {
@@ -558,20 +528,7 @@ func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1al
 	return false
 }
 
-func getServiceTLSName(aeroCluster *asdbv1alpha1.AerospikeCluster) string {
-	// TODO: Should we return err, should have failed in validation
-	aeroConf := aeroCluster.Spec.AerospikeConfig.Value
-
-	if networkConfTmp, ok := aeroConf["network"]; ok {
-		networkConf := networkConfTmp.(map[string]interface{})
-		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
-			return tlsName.(string)
-		}
-	}
-	return ""
-}
-
-func getFQDNForPod(aeroCluster *asdbv1alpha1.AerospikeCluster, host string) string {
+func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
