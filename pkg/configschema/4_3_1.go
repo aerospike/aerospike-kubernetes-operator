@@ -991,7 +991,8 @@ const conf4_3_1 = `
                 "type": "array",
                 "items": {
                   "type": "string",
-					"format": "hostname"
+					"format": "hostname",
+					"not": {"enum":["any","false"]}
                 }
               }]
             },
