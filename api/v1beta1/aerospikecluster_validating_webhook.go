@@ -231,9 +231,9 @@ func validateClientCertSpec(clientCertSpec *AerospikeOperatorClientCertSpec, con
 	}
 
 	switch {
-	case reflect.DeepEqual([]string{"false"}, tlsAuthenticateClientConfig), reflect.DeepEqual("false", tlsAuthenticateClientConfig):
+	case reflect.DeepEqual("false", tlsAuthenticateClientConfig):
 		return nil
-	case reflect.DeepEqual([]string{"any"}, tlsAuthenticateClientConfig), reflect.DeepEqual("any", tlsAuthenticateClientConfig):
+	case reflect.DeepEqual("any", tlsAuthenticateClientConfig):
 		if clientCertSpec == nil {
 			return fmt.Errorf("operator client cert is not specified")
 		}

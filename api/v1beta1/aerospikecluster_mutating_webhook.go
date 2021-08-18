@@ -393,13 +393,13 @@ func addOperatorClientNameIfNeeded(aslog logr.Logger, serviceConf map[string]int
 	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
 	if !ok {
 		if IsTLS(configSpec) {
-			serviceConf["tls-authenticate-client"] = []string{"any"}
+			serviceConf["tls-authenticate-client"] = "any"
 		}
 		return nil
 	}
 
 	if value, ok := tlsAuthenticateClientConfig.([]interface{}); ok {
-		if !reflect.DeepEqual([]string{"any"}, value) && !reflect.DeepEqual(value, []string{"false"}) {
+		if !reflect.DeepEqual("any", value) && !reflect.DeepEqual(value, "false") {
 			if !func() bool {
 				for i := 0; i < len(value); i++ {
 					if reflect.DeepEqual(value[i], clientCertSpec.TLSClientName) {
