@@ -195,7 +195,7 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 			Expect(err).ToNot(HaveOccurred())
 		}
 		Expect(reflect.DeepEqual([]string{"any"}, tlsAuthenticateClient)).To(BeTrue(),
-			"TlsAuthenticateClientAny Validation Failed")
+			fmt.Sprintf("TlsAuthenticateClientAny Validation Failed with following value: %v", tlsAuthenticateClient))
 
 		deleteCluster(k8sClient, ctx, aeroCluster)
 	})
@@ -490,7 +490,7 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 			Expect(err).ToNot(HaveOccurred())
 		}
 		Expect(reflect.DeepEqual([]string{"false"}, tlsAuthenticateClient)).To(BeTrue(),
-			"TlsAuthenticateClientAny Validation Failed")
+			fmt.Sprintf("TlsAuthenticateClientAny Validation Failed with following value: %v", tlsAuthenticateClient))
 		deleteCluster(k8sClient, ctx, aeroCluster)
 	})
 }
