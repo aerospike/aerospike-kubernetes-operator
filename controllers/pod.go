@@ -102,7 +102,7 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 	// Check if RACKSTORAGE is updated
 	if r.isRackStorageUpdatedInAeroCluster(aeroCluster, rackState, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("Aerospike rack storage configMaps changed. Need rolling restart")
+		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
 	return restartType, nil

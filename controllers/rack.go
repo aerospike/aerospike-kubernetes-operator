@@ -264,7 +264,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1b
 		return false, fmt.Errorf("failed to list pods: %v", err)
 	}
 	for _, pod := range podList {
-		// Check if this pod need restart
+		// Check if this pod needs restart
 		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return false, err
@@ -358,14 +358,14 @@ func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1be
 }
 
 func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1beta1.AerospikeCluster, podName string) bool {
-	for _, ps := range containers {
-		desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
+	for _, container := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
 		if err != nil {
 			continue
 		}
 
-		if !utils.IsImageEqual(ps.Image, desiredImage) {
-			r.Log.Info("Found at least one image for upgrading/downgrading in pod.", "podName", podName, "currentImage", ps.Image, "desiredImage", desiredImage)
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			r.Log.Info("Found container for upgrading/downgrading in pod", "pod", podName, "container", container.Name, "currentImage", container.Image, "desiredImage", desiredImage)
 			return true
 		}
 	}
@@ -390,9 +390,8 @@ func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1beta1.Aerosp
 		err = r.Client.Update(context.TODO(), found, updateOption)
 		if err != nil {
 			return found, reconcileError(fmt.Errorf("failed to update image for StatefulSet %s: %v", found.Name, err))
-		} else {
-			r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
 		}
+		r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
 	}
 
 	for _, p := range podList {
@@ -523,7 +522,7 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1beta1
 	r.Log.Info("Statefulset spec updated. Doing rolling restart with new config")
 
 	for _, pod := range podList {
-		// Check if this pod need restart
+		// Check if this pod needs restart
 		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return found, reconcileError(err)
@@ -559,7 +558,7 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1beta
 	}
 	for _, p := range podList.Items {
 		if !utils.IsPodOnDesiredImage(&p, aeroCluster) {
-			r.Log.Info("Pod need upgrade/downgrade", "podName", p.Name)
+			r.Log.Info("pod needs upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}
 
@@ -575,7 +574,7 @@ func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroClust
 
 		// Check for Updated volumeSource
 		if r.isStorageVolumeSourceUpdated(volume, pod) {
-			r.Log.Info("Volume added or volume source updated in rack storage. Pod Need rolling restart")
+			r.Log.Info("volume added or volume source updated in rack storage - pod needs rolling restart")
 			return true
 		}
 
@@ -591,7 +590,7 @@ func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroClust
 
 		if r.isVolumeAttachmentAddedOrUpdated(volume.Name, containerAttachments, pod.Spec.Containers) ||
 			r.isVolumeAttachmentAddedOrUpdated(volume.Name, volume.InitContainers, pod.Spec.InitContainers) {
-			r.Log.Info("New volume or VolumeAttachment added/updated in rack storage. Pod Need rolling restart")
+			r.Log.Info("new volume or volume attachment added/updated in rack storage - pod needs rolling restart")
 			return true
 		}
 
@@ -600,7 +599,7 @@ func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroClust
 	// Check for removed volumeAttachments
 	if r.isVolumeAttachmentRemoved(volumes, pod.Spec.Containers, false) ||
 		r.isVolumeAttachmentRemoved(volumes, pod.Spec.InitContainers, true) {
-		r.Log.Info("volume or VolumeAttachment removed from rack storage. Pod Need rolling restart")
+		r.Log.Info("volume or volume attachment removed from rack storage - pod needs rolling restart")
 		return true
 	}
 
@@ -611,7 +610,7 @@ func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume asdbv1b
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
 		// Volume not found in pod.volumes. This is newly aaded volume
-		r.Log.Info("New volume added in rack storage. Pod Need rolling restart")
+		r.Log.Info("new volume added in rack storage - pod needs rolling restart")
 		return true
 	}
 
@@ -619,10 +618,10 @@ func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume asdbv1b
 	lib.DeepCopy(&volumeCopy, &volume)
 
 	if volumeCopy.Source.Secret != nil {
-		setDefaults_SecretVolumeSource(volumeCopy.Source.Secret)
+		setDefaultsSecretVolumeSource(volumeCopy.Source.Secret)
 	}
 	if volumeCopy.Source.ConfigMap != nil {
-		setDefaults_ConfigMapVolumeSource(volumeCopy.Source.ConfigMap)
+		setDefaultsConfigMapVolumeSource(volumeCopy.Source.ConfigMap)
 	}
 
 	if !reflect.DeepEqual(podVolume.Secret, volumeCopy.Source.Secret) {
@@ -702,7 +701,6 @@ func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []asdbv1b
 		for _, volumeMount := range container.VolumeMounts {
 			if volumeMount.Name == confDirName ||
 				volumeMount.Name == initConfDirName ||
-				volumeMount.Name == secretVolumeName ||
 				volumeMount.MountPath == podServiceAccountMountPath {
 				continue
 			}
@@ -848,14 +846,14 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 }
 
 // TODO: These func are available in client-go@v1.5.2, for now creating our own
-func setDefaults_SecretVolumeSource(obj *corev1.SecretVolumeSource) {
+func setDefaultsSecretVolumeSource(obj *corev1.SecretVolumeSource) {
 	if obj.DefaultMode == nil {
 		perm := int32(corev1.SecretVolumeSourceDefaultMode)
 		obj.DefaultMode = &perm
 	}
 }
 
-func setDefaults_ConfigMapVolumeSource(obj *corev1.ConfigMapVolumeSource) {
+func setDefaultsConfigMapVolumeSource(obj *corev1.ConfigMapVolumeSource) {
 	if obj.DefaultMode == nil {
 		perm := int32(corev1.ConfigMapVolumeSourceDefaultMode)
 		obj.DefaultMode = &perm

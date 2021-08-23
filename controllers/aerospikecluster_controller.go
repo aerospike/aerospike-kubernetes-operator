@@ -283,7 +283,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1b
 	}
 
 	// // TODO: FIXME: REMOVE LOGGER
-	// logger := pkglog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
+	// logger := pkgLog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
 
 	err = ReconcileAccessControl(&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log)
 	return err

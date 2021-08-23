@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var pkglog = ctrl.Log.WithName("lib.asconfig")
+var pkgLog = ctrl.Log.WithName("lib.asconfig")
 
 const (
 	// AerospikeTemplateConfFileName is the name of the aerospike conf template
@@ -49,25 +49,27 @@ var scripts embed.FS
 var scriptTemplates = make(map[string]*template.Template)
 
 func init() {
-	err := fs.WalkDir(scripts, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			content, err := fs.ReadFile(scripts, path)
+	err := fs.WalkDir(
+		scripts, ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
+			if !d.IsDir() {
+				content, err := fs.ReadFile(scripts, path)
+				if err != nil {
+					return err
+				}
 
-			evaluated, err := template.New(path).Parse(string(content))
-			if err != nil {
-				return err
+				evaluated, err := template.New(path).Parse(string(content))
+				if err != nil {
+					return err
+				}
+				key := filepath.Base(path)
+				scriptTemplates[key] = evaluated
 			}
-			key := filepath.Base(path)
-			scriptTemplates[key] = evaluated
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 
 	if err != nil {
 		// Error reading embedded script templates.
@@ -76,7 +78,9 @@ func init() {
 }
 
 // CreateConfigMapData create configMap data
-func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (map[string]string, error) {
+func (r *AerospikeClusterReconciler) CreateConfigMapData(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
+) (map[string]string, error) {
 	// Add config template
 	confTemp, err := r.buildConfigTemplate(aeroCluster, rack)
 	if err != nil {
@@ -127,9 +131,13 @@ func (r *AerospikeClusterReconciler) CreateConfigMapData(aeroCluster *asdbv1beta
 	return confData, nil
 }
 
-func creatPodSpecForRack(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (*asdbv1beta1.AerospikePodSpec, error) {
+func creatPodSpecForRack(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
+) (*asdbv1beta1.AerospikePodSpec, error) {
 	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}
-	if err := lib.DeepCopy(&rackFullPodSpec, &aeroCluster.Spec.PodSpec); err != nil {
+	if err := lib.DeepCopy(
+		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
+	); err != nil {
 		return nil, err
 	}
 
@@ -145,13 +153,19 @@ func creatPodSpecForRack(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1b
 	return &rackFullPodSpec, nil
 }
 
-func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (string, error) {
-	log := pkglog.WithValues("aerospikecluster", utils.ClusterNamespacedName(aeroCluster))
+func (r *AerospikeClusterReconciler) buildConfigTemplate(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
+) (string, error) {
+	log := pkgLog.WithValues(
+		"aerospikecluster", utils.ClusterNamespacedName(aeroCluster),
+	)
 
 	version := strings.Split(aeroCluster.Spec.Image, ":")
 
 	configMap := rack.AerospikeConfig.Value
-	log.V(1).Info("AerospikeConfig", "config", configMap, "image", aeroCluster.Spec.Image)
+	log.V(1).Info(
+		"AerospikeConfig", "config", configMap, "image", aeroCluster.Spec.Image,
+	)
 
 	asConf, err := asconfig.NewMapAsConfig(version[1], configMap)
 	if err != nil {
@@ -167,9 +181,23 @@ func (r *AerospikeClusterReconciler) buildConfigTemplate(aeroCluster *asdbv1beta
 }
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack) (map[string]string, error) {
-
+func (r *AerospikeClusterReconciler) getBaseConfData(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
+) (map[string]string, error) {
 	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
+	volume := rack.Storage.GetVolumeForAerospikePath(workDir)
+
+	if volume != nil {
+		// Init container mounts all volumes by name. Update workdir to reflect that path.
+		// For example
+		// volume name: aerospike-workdir
+		// path: /opt/aerospike
+		// config-workdir: /opt/aerospike/workdir/
+		// workDir = aerospike-workdir/workdir
+		workDir = "/" + volume.Name + "/" + strings.TrimPrefix(
+			workDir, volume.Aerospike.Path,
+		)
+	}
 
 	// Include initialization and restart scripts
 	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
@@ -183,9 +211,9 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1beta1.Ae
 	}
 
 	baseConfData := map[string]string{}
-	for path, template := range scriptTemplates {
+	for path, scriptTemplate := range scriptTemplates {
 		var script bytes.Buffer
-		err := template.Execute(&script, initializeTemplateInput)
+		err := scriptTemplate.Execute(&script, initializeTemplateInput)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +231,9 @@ func (r *AerospikeClusterReconciler) getBaseConfData(aeroCluster *asdbv1beta1.Ae
 	return baseConfData, nil
 }
 
-func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1beta1.AerospikeCluster) ([]string, error) {
+func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1beta1.AerospikeCluster) (
+	[]string, error,
+) {
 
 	podNameMap := make(map[string]bool)
 
@@ -219,7 +249,7 @@ func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1beta1
 		podNameMap[fqdn] = true
 	}
 
-	podNames := []string{}
+	podNames := make([]string, 0)
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
@@ -227,8 +257,10 @@ func (r *AerospikeClusterReconciler) getFQDNsForCluster(aeroCluster *asdbv1beta1
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(aeroCluster, rackState.Rack.ID)
 		for i := 0; i < size; i++ {
-			fqdn := getFQDNForPod(aeroCluster,
-				getSTSPodName(stsName.Name, int32(i)))
+			fqdn := getFQDNForPod(
+				aeroCluster,
+				getSTSPodName(stsName.Name, int32(i)),
+			)
 			podNameMap[fqdn] = true
 		}
 	}

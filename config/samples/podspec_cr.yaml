@@ -6,8 +6,7 @@ metadata:
 
 spec:
   size: 2
-  #image: aerospike/aerospike-server-enterprise:5.5.0.3
-  image: aerospike/aerospike-server-enterprise:5.2.0.7
+  image: aerospike/aerospike-server-enterprise:5.5.0.3
   multiPodPerHost: true
   storage:
     filesystemVolumePolicy:
@@ -21,10 +20,10 @@ spec:
             volumeMode: Filesystem
             size: 3Gi
         aerospike:
-          path: /opt/aerospike     
+          path: /opt/aerospike
       - name: sidecar-volume1
         source:
-          persistentVolume:      
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
@@ -45,14 +44,14 @@ spec:
           - containerName: tomcat
             path: /para/tomcat2
           - containerName: database
-            path: /para/database  
+            path: /para/database
       - name: aerospike-config-secret
         source:
           secret:
             secretName: aerospike-secret
         aerospike:
           path: /etc/aerospike/secret
-        
+
   podSpec:
     multiPodPerHost: true
     sidecars:
@@ -65,7 +64,7 @@ spec:
       image: mongo:4.4.6
       ports:
         - containerPort: 7501
-      imagePullPolicy: Always 
+      imagePullPolicy: Always
 
   aerospikeAccessControl:
     users:

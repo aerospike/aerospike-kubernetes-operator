@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // ValidateStorageSpecChange indicates if a change to storage spec is safe to apply.
@@ -15,7 +16,10 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 			if oldVolume.Name == newVolume.Name {
 				if !oldVolume.IsSafeChange(newVolume) {
 					// Validate same volumes
-					return fmt.Errorf("cannot change volumes old: %v new %v", oldVolume, newVolume)
+					return fmt.Errorf(
+						"cannot change volumes old: %v new %v", oldVolume,
+						newVolume,
+					)
 				}
 				break
 			}
@@ -27,8 +31,10 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 }
 
 // validateAddedOrRemovedVolumes returns volumes that were added or removed.
-// Currently only configMap volume is allowed to be added or removed dynamically
-func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error) {
+// Currently, only configMap volume is allowed to be added or removed dynamically
+func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (
+	addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error,
+) {
 	// Validate Persistent volume
 	for _, newVolume := range new.Volumes {
 		matched := false
@@ -41,7 +47,9 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 
 		if !matched {
 			if newVolume.Source.PersistentVolume != nil {
-				return []VolumeSpec{}, []VolumeSpec{}, fmt.Errorf("cannot add persistent volume: %v", newVolume)
+				return []VolumeSpec{}, []VolumeSpec{}, fmt.Errorf(
+					"cannot add persistent volume: %v", newVolume,
+				)
 			}
 			addedVolumes = append(addedVolumes, newVolume)
 		}
@@ -57,7 +65,9 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 
 		if !matched {
 			if oldVolume.Source.PersistentVolume != nil {
-				return []VolumeSpec{}, []VolumeSpec{}, fmt.Errorf("cannot remove persistent volume: %v", oldVolume)
+				return []VolumeSpec{}, []VolumeSpec{}, fmt.Errorf(
+					"cannot remove persistent volume: %v", oldVolume,
+				)
 			}
 			removedVolumes = append(removedVolumes, oldVolume)
 		}
@@ -70,15 +80,21 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 func (v *AerospikeStorageSpec) SetDefaults() {
 	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
 	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
-	defaultCascadeDelete := false
-
 	// Set storage level defaults.
-	v.FileSystemVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultFilesystemInitMethod, CascadeDelete: defaultCascadeDelete})
-	v.BlockVolumePolicy.SetDefaults(&AerospikePersistentVolumePolicySpec{InitMethod: defaultBlockInitMethod, CascadeDelete: defaultCascadeDelete})
+	v.FileSystemVolumePolicy.SetDefaults(
+		&AerospikePersistentVolumePolicySpec{
+			InitMethod: defaultFilesystemInitMethod, CascadeDelete: false,
+		},
+	)
+	v.BlockVolumePolicy.SetDefaults(
+		&AerospikePersistentVolumePolicySpec{
+			InitMethod: defaultBlockInitMethod, CascadeDelete: false,
+		},
+	)
 
 	for i := range v.Volumes {
 		if v.Volumes[i].Source.PersistentVolume == nil {
-			// All other sources are considered to be mount, for now.
+			// All other sources are considered to be mounted, for now.
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
 		} else if v.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
 			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.BlockVolumePolicy)
@@ -119,7 +135,9 @@ func (v *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
 }
 
 // GetAerospikeStorageList gives blockStorageDeviceList and fileStorageList
-func (v *AerospikeStorageSpec) GetAerospikeStorageList() (blockStorageDeviceList []string, fileStorageList []string, err error) {
+func (v *AerospikeStorageSpec) GetAerospikeStorageList() (
+	blockStorageDeviceList []string, fileStorageList []string, err error,
+) {
 
 	for _, volume := range v.Volumes {
 
@@ -129,37 +147,47 @@ func (v *AerospikeStorageSpec) GetAerospikeStorageList() (blockStorageDeviceList
 				continue
 			}
 			if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-				if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
-					return nil, nil, fmt.Errorf("invalid init method %v for block volume: %v", volume.InitMethod, volume)
-				}
-
-				blockStorageDeviceList = append(blockStorageDeviceList, volume.Aerospike.Path)
-				// TODO: Add validation for invalid initMethod (e.g. any random value)
+				blockStorageDeviceList = append(
+					blockStorageDeviceList, volume.Aerospike.Path,
+				)
 			} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-				if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
-					return nil, nil, fmt.Errorf("invalid init method %v for filesystem volume: %v2", volume.InitMethod, volume)
-				}
-
 				fileStorageList = append(fileStorageList, volume.Aerospike.Path)
 			} else {
-				return nil, nil, fmt.Errorf("invalid volumemode %s, valid volumemods %s, %s", volume.Source.PersistentVolume.VolumeMode, v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem)
+				return nil, nil, fmt.Errorf(
+					"invalid volumemode %s, valid volumemods %s, %s",
+					volume.Source.PersistentVolume.VolumeMode,
+					v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
+				)
 			}
-
 		}
 	}
 	return blockStorageDeviceList, fileStorageList, nil
 }
 
-func (v *AerospikeStorageSpec) IsVolumeExistForAerospikePath(path string) bool {
-	for _, volume := range v.Volumes {
-		if volume.Aerospike != nil && volume.Aerospike.Path == path {
-			return true
-		}
-	}
-	return false
+// IsVolumePresentForAerospikePath checks if configuration has a volume defined for given path for Aerospike server container.
+func (v *AerospikeStorageSpec) IsVolumePresentForAerospikePath(path string) bool {
+	return v.GetVolumeForAerospikePath(path) != nil
 }
 
-func validateStorage(storage *AerospikeStorageSpec, podSpec *AerospikePodSpec) error {
+// GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
+func (v *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
+	var matchedVolume *VolumeSpec
+	for i := range v.Volumes {
+		volume := &v.Volumes[i]
+		if volume.Aerospike != nil && isPathParentOrSame(
+			volume.Aerospike.Path, path,
+		) {
+			if matchedVolume == nil || matchedVolume.Aerospike.Path < volume.Aerospike.Path {
+				matchedVolume = volume
+			}
+		}
+	}
+	return matchedVolume
+}
+
+func validateStorage(
+	storage *AerospikeStorageSpec, podSpec *AerospikePodSpec,
+) error {
 	reservedPaths := map[string]int{
 		// Reserved mount paths for the operator.
 		"/etc/aerospike": 1,
@@ -172,51 +200,83 @@ func validateStorage(storage *AerospikeStorageSpec, podSpec *AerospikePodSpec) e
 	initContainerAttachmentPaths := map[string]map[string]int{}
 
 	for _, volume := range storage.Volumes {
-		if err := validateStorageVolumeSource(volume.Source); err != nil {
-			return fmt.Errorf("invalid volumeSource: %v, volume %v", err, volume)
+		errors := validation.IsDNS1123Label(volume.Name)
+		if len(errors) > 0 {
+			return fmt.Errorf(
+				"invalid volume name '%s' - %v", volume.Name,
+				errors,
+			)
+		}
+
+		if err := validateStorageVolumeSource(volume); err != nil {
+			return fmt.Errorf(
+				"invalid volumeSource: %v, volume %v", err, volume,
+			)
 		}
 
 		if volume.Aerospike == nil && len(volume.Sidecars) == 0 && len(volume.InitContainers) == 0 {
-			return fmt.Errorf("invalid volume, no container provided to attach the volume. At least one of the following must be provided: volume.Aerospike, volume.Sidecars, volume.InitContainers, volume %v", volume)
+			return fmt.Errorf(
+				"invalid volume, no container provided to attach the volume. At least one of the following must be provided: volume.Aerospike, volume.Sidecars, volume.InitContainers, volume %v",
+				volume,
+			)
 		}
 
 		// Validate Aerospike attachment
 		if volume.Aerospike != nil {
 			if !filepath.IsAbs(volume.Aerospike.Path) {
-				return fmt.Errorf("volume path should be absolute: %s", volume.Aerospike.Path)
+				return fmt.Errorf(
+					"volume path should be absolute: %s", volume.Aerospike.Path,
+				)
 			}
 
 			if _, ok := reservedPaths[volume.Aerospike.Path]; ok {
-				return fmt.Errorf("reserved volume path %s", volume.Aerospike.Path)
+				return fmt.Errorf(
+					"reserved volume path %s", volume.Aerospike.Path,
+				)
 			}
 
 			if _, ok := storagePaths[volume.Aerospike.Path]; ok {
-				return fmt.Errorf("duplicate volume path %s", volume.Aerospike.Path)
+				return fmt.Errorf(
+					"duplicate volume path %s", volume.Aerospike.Path,
+				)
 			}
 			storagePaths[volume.Aerospike.Path] = 1
 		}
 
 		// Validate sidecars attachments
-		if err := validateAttachment(volume.Sidecars, getContainerNames(podSpec.Sidecars)); err != nil {
+		if err := validateAttachment(
+			volume.Sidecars, getContainerNames(podSpec.Sidecars),
+		); err != nil {
 			return fmt.Errorf("sidecar volumeMount validation failed, %v", err)
 		}
-		// Validate initcontainer attachments
-		if err := validateAttachment(volume.InitContainers, getContainerNames(podSpec.InitContainers)); err != nil {
-			return fmt.Errorf("additionalInitContainer volumeMount validation failed, %v", err)
+		// Validate initContainer attachments
+		if err := validateAttachment(
+			volume.InitContainers, getContainerNames(podSpec.InitContainers),
+		); err != nil {
+			return fmt.Errorf(
+				"initContainer volumeMount validation failed, %v", err,
+			)
 		}
 
 		// Validate attachments path
-		if err := validateContainerAttachmentPaths(volume.Sidecars, sidecarAttachmentPaths); err != nil {
+		if err := validateContainerAttachmentPaths(
+			volume.Sidecars, sidecarAttachmentPaths,
+		); err != nil {
 			return err
 		}
-		if err := validateContainerAttachmentPaths(volume.InitContainers, initContainerAttachmentPaths); err != nil {
+		if err := validateContainerAttachmentPaths(
+			volume.InitContainers, initContainerAttachmentPaths,
+		); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateContainerAttachmentPaths(volumeAttachments []VolumeAttachment, containerAttachmentPaths map[string]map[string]int) error {
+func validateContainerAttachmentPaths(
+	volumeAttachments []VolumeAttachment,
+	containerAttachmentPaths map[string]map[string]int,
+) error {
 	for _, attachment := range volumeAttachments {
 		if _, ok := containerAttachmentPaths[attachment.ContainerName]; !ok {
 			containerAttachmentPaths[attachment.ContainerName] = map[string]int{attachment.Path: 1}
@@ -224,28 +284,52 @@ func validateContainerAttachmentPaths(volumeAttachments []VolumeAttachment, cont
 		}
 
 		if _, ok := containerAttachmentPaths[attachment.ContainerName][attachment.Path]; ok {
-			return fmt.Errorf("duplicate path %s for volumeAttachments %v in container %s", attachment.Path, volumeAttachments, attachment.ContainerName)
+			return fmt.Errorf(
+				"duplicate path %s for volumeAttachments %v in container %s",
+				attachment.Path, volumeAttachments, attachment.ContainerName,
+			)
 		}
 		containerAttachmentPaths[attachment.ContainerName][attachment.Path] = 1
 	}
 	return nil
 }
 
-func validateAttachment(volumeAttachments []VolumeAttachment, containerNames []string) error {
-	attachmentConatiners := map[string]int{}
+func validateAttachment(
+	volumeAttachments []VolumeAttachment, containerNames []string,
+) error {
+	attachmentContainers := map[string]int{}
 
 	for _, attachment := range volumeAttachments {
+		if attachment.ContainerName == AerospikeServerInitContainerImage {
+			return fmt.Errorf(
+				"cannot attach volumes to: %s",
+				AerospikeServerInitContainerName,
+			)
+		}
+
+		if attachment.ContainerName == AerospikeServerContainerName {
+			return fmt.Errorf(
+				"use storage.aerospike for attaching volumes to Aerospike server container %s for path %s",
+				AerospikeServerContainerName, attachment.Path,
+			)
+		}
+
 		if !filepath.IsAbs(attachment.Path) {
-			return fmt.Errorf("volume path should be absolute: %s", attachment.Path)
+			return fmt.Errorf(
+				"volume path should be absolute: %s", attachment.Path,
+			)
 		}
 
-		// Check for duplicate path
-		if _, ok := attachmentConatiners[attachment.ContainerName]; ok {
-			return fmt.Errorf("duplicate container name %s in volumeAttachments %v", attachment.ContainerName, volumeAttachments)
+		// Check for duplicate container entries
+		if _, ok := attachmentContainers[attachment.ContainerName]; ok {
+			return fmt.Errorf(
+				"duplicate container name %s in volumeAttachments %v",
+				attachment.ContainerName, volumeAttachments,
+			)
 		}
-		attachmentConatiners[attachment.ContainerName] = 1
+		attachmentContainers[attachment.ContainerName] = 1
 
-		// Check container name, should be valid
+		// Check container name, should be valid.
 		var found bool
 		for _, name := range containerNames {
 			if attachment.ContainerName == name {
@@ -253,8 +337,12 @@ func validateAttachment(volumeAttachments []VolumeAttachment, containerNames []s
 				break
 			}
 		}
+
 		if !found {
-			return fmt.Errorf("volumeMount containerName `%s` not found in container names %v", attachment.ContainerName, containerNames)
+			return fmt.Errorf(
+				"volumeMount containerName `%s` not found in container names %v",
+				attachment.ContainerName, containerNames,
+			)
 		}
 	}
 	return nil
@@ -280,12 +368,14 @@ func (v *VolumeSpec) IsSafeChange(new VolumeSpec) bool {
 		return false
 	}
 
-	oldpv := v.Source.PersistentVolume
-	newpv := new.Source.PersistentVolume
-	return reflect.DeepEqual(oldpv, newpv)
+	oldPV := v.Source.PersistentVolume
+	newPV := new.Source.PersistentVolume
+	return reflect.DeepEqual(oldPV, newPV)
 }
 
-func validateStorageVolumeSource(source VolumeSource) error {
+func validateStorageVolumeSource(volume VolumeSpec) error {
+	source := volume.Source
+
 	var sourceFound bool
 	if source.EmptyDir != nil {
 		sourceFound = true
@@ -293,23 +383,43 @@ func validateStorageVolumeSource(source VolumeSource) error {
 	if source.Secret != nil {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
-		} else {
-			sourceFound = true
 		}
+		sourceFound = true
 	}
 	if source.ConfigMap != nil {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
-		} else {
-			sourceFound = true
 		}
+		sourceFound = true
 	}
 	if source.PersistentVolume != nil {
+		// Validate InitMethod
+		if source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf(
+					"invalid init method %v for block volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+			// Note: Add validation for invalid initMethod if new get added.
+		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf(
+					"invalid init method %v for filesystem volume: %v2",
+					volume.InitMethod, volume,
+				)
+			}
+		}
+
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode
+
 		if vm != v1.PersistentVolumeBlock &&
 			vm != v1.PersistentVolumeFilesystem {
-			return fmt.Errorf("invalid VolumeMode `%s`. Valid VolumeModes: %s, %s", vm, v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem)
+			return fmt.Errorf(
+				"invalid VolumeMode `%s`. Valid VolumeModes: %s, %s", vm,
+				v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
+			)
 		}
 
 		// Validate accessModes
@@ -317,16 +427,19 @@ func validateStorageVolumeSource(source VolumeSource) error {
 			if am != v1.ReadOnlyMany &&
 				am != v1.ReadWriteMany &&
 				am != v1.ReadWriteOnce {
-				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s", am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
+				return fmt.Errorf(
+					"invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
+					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce,
+				)
 			}
 		}
 
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
-		} else {
-			sourceFound = true
 		}
+		sourceFound = true
 	}
+
 	if !sourceFound {
 		return fmt.Errorf("no volume source found")
 	}

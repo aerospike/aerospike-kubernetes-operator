@@ -57,7 +57,8 @@ if 'pods' in status and podname in status['pods'] and 'initializedVolumePaths' i
 else:
     alreadyInitialized = []
 
-# Initialize unintialized volumes.
+# Initialize uninitialized volumes. This script also run on Aerospike server containers while warm restarting. It
+# should automatically noop in that case.
 initialized = []
 for volume in volumes:
     if 'persistentVolume' not in volume['source']:
@@ -65,12 +66,9 @@ for volume in volumes:
 
     # volume path is always absolute.
     volumePath = '/' + volume['name']
-    if 'aerospike' in volume :
-        volumePath = volume['aerospike']['path']
-
 
     volumeMode = volume['source']['persistentVolume']['volumeMode']
-    
+
     if volumeMode == 'Block':
         localVolumePath = blockMountPoint + volumePath
     elif volumeMode == 'Filesystem':
@@ -78,11 +76,12 @@ for volume in volumes:
     else:
         continue
 
-    if not os.path.exists(localVolumePath):
-        raise Exception(
-            'Volume ' + volume['name'] + ' not attached to path ' + localVolumePath)
-
     if volume['name'] not in alreadyInitialized:
+        # This check should happen only on init container and not on Aerospike server container.
+        # Hence it should in the uninitialized code path which will only be executed on the init container.
+        if not os.path.exists(localVolumePath):
+            raise Exception('Volume ' + volume['name'] + ' not attached to path ' + localVolumePath)
+
         if volumeMode == 'Block':
             localVolumePath = blockMountPoint + volumePath
             if volume['effectiveInitMethod'] == 'dd':
