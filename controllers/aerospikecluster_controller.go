@@ -283,7 +283,7 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1b
 	}
 
 	// // TODO: FIXME: REMOVE LOGGER
-	// logger := pkglog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
+	// logger := pkgLog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
 
 	err = ReconcileAccessControl(&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log)
 	return err
@@ -566,47 +566,6 @@ func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(aeroCluster 
 	if !isClusterResourceListEqual(pod.Spec.Containers[0].Resources.Requests, res.Requests) ||
 		!isClusterResourceListEqual(pod.Spec.Containers[0].Resources.Limits, res.Limits) {
 		return true
-	}
-	return false
-}
-
-func (r *AerospikeClusterReconciler) isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, pod corev1.Pod) bool {
-	// TODO: Should we restart when secret is removed completely
-	// Can secret be even empty for enterprise cluster (feature-key is alsways required)?
-	if aeroCluster.Spec.AerospikeConfigSecret.SecretName != "" {
-		const secretVolumeName = "secretinfo"
-		var volFound bool
-		for _, vol := range pod.Spec.Volumes {
-			if vol.Name == secretVolumeName {
-
-				if vol.VolumeSource.Secret.SecretName != aeroCluster.Spec.AerospikeConfigSecret.SecretName {
-					// Pod volume secret doesn't match. It needs restart
-					return true
-				}
-				volFound = true
-				break
-			}
-		}
-		if !volFound {
-			// Pod volume secret not found. It needs restart
-			return true
-		}
-
-		var volmFound bool
-		for _, volMount := range pod.Spec.Containers[0].VolumeMounts {
-			if volMount.Name == secretVolumeName {
-				if volMount.MountPath != aeroCluster.Spec.AerospikeConfigSecret.MountPath {
-					// Pod volume mount doesn't match. It needs restart
-					return true
-				}
-				volmFound = true
-				break
-			}
-		}
-		if !volmFound {
-			// Pod volume mount not found. It needs restart
-			return true
-		}
 	}
 	return false
 }

@@ -6,46 +6,36 @@ metadata:
 
 spec:
   size: 2
-  #image: aerospike/aerospike-server-enterprise:5.5.0.3
   image: aerospike/aerospike-server-enterprise:5.6.0.7
-  multiPodPerHost: true
-  # rackConfig:
-  #   namespaces:
-  #     - test
-  #   racks:
-  #     - id: 1
-  #       aerospikeConfig:
-  #         service:
-  #           proto-fd-max: 18000
-  #     - id: 2
-  #       aerospikeConfig:
-  #         service:
-  #           proto-fd-max: 18000
-  #     - id: 3
-  #       aerospikeConfig:
-  #         service:
-  #           proto-fd-max: 18000
+  podSpec:
+    multiPodPerHost: true
   storage:
     filesystemVolumePolicy:
       cascadeDelete: true
       initMethod: deleteFiles
     volumes:
-      - path: /opt/aerospike
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
+      - name: workdir
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 3Gi
+        aerospike:
+          path: /opt/aerospike
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
 
-  aerospikeAccessControl:
+   aerospikeAccessControl:
     users:
       - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
           - user-admin
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     logging:

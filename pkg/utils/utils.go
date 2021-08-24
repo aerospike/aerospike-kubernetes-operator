@@ -74,14 +74,22 @@ func GetDesiredImage(aeroCluster *asdbv1beta1.AerospikeCluster, containerName st
 	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
+	if containerName == asdbv1beta1.AerospikeServerInitContainerName {
+		return asdbv1beta1.AerospikeServerInitContainerImage, nil
+	}
 
 	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {
 		if sidecar.Name == containerName {
 			return sidecar.Image, nil
 		}
 	}
+	for _, initSidecar := range aeroCluster.Spec.PodSpec.InitContainers {
+		if initSidecar.Name == containerName {
+			return initSidecar.Image, nil
+		}
+	}
 
-	return "", fmt.Errorf("Container %s not found", containerName)
+	return "", fmt.Errorf("container %s not found", containerName)
 }
 
 // LabelsForAerospikeCluster returns the labels for selecting the resources

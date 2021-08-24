@@ -5,6 +5,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
@@ -303,21 +305,45 @@ var _ = Describe("RackManagement", func() {
 						It("should fail for invalid storage-engine.device, cannot have 3 devices in single device string", func() {
 							aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 							if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-								vd := []asdbv1beta1.AerospikePersistentVolumeSpec{
+								vd := []asdbv1beta1.VolumeSpec{
 									{
-										Path:       "/dev/xvdf1",
-										SizeInGB:   1,
-										VolumeMode: asdbv1beta1.AerospikeVolumeModeBlock,
+										Name: "nsvol1",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf1",
+										},
 									},
 									{
-										Path:       "/dev/xvdf2",
-										SizeInGB:   1,
-										VolumeMode: asdbv1beta1.AerospikeVolumeModeBlock,
+										Name: "nsvol2",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf2",
+										},
 									},
 									{
-										Path:       "/dev/xvdf3",
-										SizeInGB:   1,
-										VolumeMode: asdbv1beta1.AerospikeVolumeModeBlock,
+										Name: "nsvol3",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf3",
+										},
 									},
 								}
 								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vd...)

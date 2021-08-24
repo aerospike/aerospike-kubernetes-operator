@@ -23,36 +23,41 @@ var _ = Describe("HostNetwork", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 		aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 2, image)
 		aeroCluster.Spec.PodSpec.HostNetwork = true
-		aeroCluster.Spec.MultiPodPerHost = true
+		aeroCluster.Spec.PodSpec.MultiPodPerHost = true
 
 		It("Should not work with MultiPodPerHost enabled", func() {
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("Should not advertise node address when off", func() {
-			aeroCluster.Spec.MultiPodPerHost = false
+		It("Should verify hostNetwork flag updates", func() {
+			By("Deploying cluster, Should not advertise node address when off")
+			aeroCluster.Spec.PodSpec.MultiPodPerHost = false
 			aeroCluster.Spec.PodSpec.HostNetwork = false
-			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, false)
-		})
 
-		It("Should advertise node address when dynamically enabled", func() {
+			By("Updating cluster, Should advertise node address when dynamically enabled")
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
 			aeroCluster.Spec.PodSpec.HostNetwork = true
-			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, true)
-		})
 
-		It("Should not advertise node address when dynamically disabled", func() {
+			By("Updating cluster, Should not advertise node address when dynamically disabled")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
 			aeroCluster.Spec.PodSpec.HostNetwork = false
-			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			checkAdvertisedAddress(ctx, aeroCluster, false)
-		})
 
-		It("Should destroy cluster", func() {
+			By("Deleting cluster")
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 	})

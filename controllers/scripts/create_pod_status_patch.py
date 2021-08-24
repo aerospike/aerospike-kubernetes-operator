@@ -57,42 +57,51 @@ if 'pods' in status and podname in status['pods'] and 'initializedVolumePaths' i
 else:
     alreadyInitialized = []
 
-# Initialize unintialized volumes.
+# Initialize uninitialized volumes. This script also run on Aerospike server containers while warm restarting. It
+# should automatically noop in that case.
 initialized = []
 for volume in volumes:
+    if 'persistentVolume' not in volume['source']:
+        continue
+
     # volume path is always absolute.
-    if volume['volumeMode'] == 'block':
-        localVolumePath = blockMountPoint + volume['path']
-    elif volume['volumeMode'] == 'filesystem':
-        localVolumePath = fileSystemMountPoint + volume['path']
+    volumePath = '/' + volume['name']
+
+    volumeMode = volume['source']['persistentVolume']['volumeMode']
+
+    if volumeMode == 'Block':
+        localVolumePath = blockMountPoint + volumePath
+    elif volumeMode == 'Filesystem':
+        localVolumePath = fileSystemMountPoint + volumePath
     else:
         continue
 
-    if volume['path'] not in alreadyInitialized:
+    if volume['name'] not in alreadyInitialized:
+        # This check should happen only on init container and not on Aerospike server container.
+        # Hence it should in the uninitialized code path which will only be executed on the init container.
         if not os.path.exists(localVolumePath):
-            raise Exception(
-                'Volume ' + volume['path'] + ' not attached to path ' + localVolumePath)
+            raise Exception('Volume ' + volume['name'] + ' not attached to path ' + localVolumePath)
 
-        if volume['volumeMode'] == 'block':
-            localVolumePath = blockMountPoint + volume['path']
+        if volumeMode == 'Block':
+            localVolumePath = blockMountPoint + volumePath
             if volume['effectiveInitMethod'] == 'dd':
                 # If device size and block size are not exact multiples or there os overhead on the device we will get "no space left on device". Ignore that error.
                 executeCommand('dd if=/dev/zero of=' +
                                localVolumePath + ' bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" /tmp/init-stderr')
             elif volume['effectiveInitMethod'] == 'blkdiscard':
                 executeCommand('blkdiscard ' + localVolumePath)
-        elif volume['volumeMode'] == 'filesystem':
+        elif volumeMode == 'Filesystem':
             # volume path is always absolute.
-            localVolumePath = fileSystemMountPoint + volume['path']
+            localVolumePath = fileSystemMountPoint + volumePath
             if volume['effectiveInitMethod'] == 'deleteFiles':
                 executeCommand(
                     'find ' + localVolumePath + ' -type f -delete')
-        print('device ' + volume['path'] + ' initialized')
+        print('device ' + volume['name'] + ' initialized')
 
     else:
-        print('device ' + volume['path'] + ' already initialized')
+        print('device ' + volume['name'] + ' already initialized')
 
-    initialized.append(volume['path'])
+    initialized.append(volume['name'])
 
 
 def isIpv6Address(host):
