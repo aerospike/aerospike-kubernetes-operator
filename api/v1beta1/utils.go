@@ -98,8 +98,9 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName     string = "aerospike-server"
-	AerospikeServerInitContainerName string = "aerospike-init"
+	AerospikeServerContainerName      string = "aerospike-server"
+	AerospikeServerInitContainerName  string = "aerospike-init"
+	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.14"
 )
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {

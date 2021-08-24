@@ -13,17 +13,32 @@ spec:
       cascadeDelete: true
       initMethod: deleteFiles
     volumes:
-      - path: /opt/aerospike
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 1
-      - path: /opt/aerospike/data
-        storageClass: ssd
-        volumeMode: filesystem
-        sizeInGB: 3
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: ns
+        aerospike:
+          path: /opt/aerospike/data
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 3Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
 
-  multiPodPerHost: true
-
+  podSpec:
+    multiPodPerHost: true
+    
   aerospikeAccessControl:
     users:
       - name: admin
@@ -34,10 +49,6 @@ spec:
           - read-write
   aerospikeNetworkPolicy:
     access: "pod"
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     service:

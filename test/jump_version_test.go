@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -224,25 +225,47 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1beta1.AerospikePersistentVolumeSpec{
+				Volumes: []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike",
+						},
 					},
 					{
-						Path:         "/opt/aerospike/data",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
+						Name: "ns",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/data",
+						},
+					},
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1beta1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
 					},
 				},
 			},
-			AerospikeConfigSecret: asdbv1beta1.AerospikeConfigSecretSpec{
-				SecretName: tlsSecretName,
-				MountPath:  "/etc/aerospike/secret",
-			},
+
 			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
@@ -255,7 +278,9 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 					},
 				},
 			},
-			MultiPodPerHost: true,
+			PodSpec: asdbv1beta1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    cpu,

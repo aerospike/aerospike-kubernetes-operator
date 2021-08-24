@@ -19,7 +19,7 @@ import (
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
 type FromSecretPasswordProvider struct {
 	// Client to read secrets.
-	client *client.Client
+	k8sClient *client.Client
 
 	// The secret namespace.
 	namespace string
@@ -30,7 +30,7 @@ func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1beta1.
 	secret := &corev1.Secret{}
 	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
-	err := (*pp.client).Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret)
+	err := (*pp.k8sClient).Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret %s: %v", secretName, err)
 	}
@@ -43,7 +43,7 @@ func (pp FromSecretPasswordProvider) Get(username string, userSpec *asdbv1beta1.
 }
 
 func (r *AerospikeClusterReconciler) getPasswordProvider(aeroCluster *asdbv1beta1.AerospikeCluster) FromSecretPasswordProvider {
-	return FromSecretPasswordProvider{client: &r.Client, namespace: aeroCluster.Namespace}
+	return FromSecretPasswordProvider{k8sClient: &r.Client, namespace: aeroCluster.Namespace}
 }
 
 func (r *AerospikeClusterReconciler) getClientPolicy(aeroCluster *asdbv1beta1.AerospikeCluster) *as.ClientPolicy {

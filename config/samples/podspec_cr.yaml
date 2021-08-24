@@ -7,28 +7,44 @@ metadata:
 spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:5.5.0.3
-
+  multiPodPerHost: true
   storage:
     filesystemVolumePolicy:
-      cascadeDelete: false
+      cascadeDelete: true
       initMethod: deleteFiles
     volumes:
       - name: workdir
-        aerospike:
-          path: /opt/aerospike
         source:
-          persistentVolume: 
-            storageClass: ssd
-            volumeMode: Filesystem
-            size: 1Gi
-      - name: ns
-        aerospike:
-          path: /opt/aerospike/data
-        source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
+        aerospike:
+          path: /opt/aerospike
+      - name: sidecar-volume1
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+        aerospike:
+          path: /para/sidecar1
+        sidecars:
+          - containerName: tomcat
+            path: /para/tomcat1
+      - name: sidecar-volume2
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+        aerospike:
+          path: /para/sidecar2
+        sidecars:
+          - containerName: tomcat
+            path: /para/tomcat2
+          - containerName: database
+            path: /para/database
       - name: aerospike-config-secret
         source:
           secret:
@@ -38,7 +54,18 @@ spec:
 
   podSpec:
     multiPodPerHost: true
-    
+    sidecars:
+    - name: tomcat
+      image: tomcat:8.0
+      ports:
+        - containerPort: 7500
+      imagePullPolicy: Always
+    - name: database
+      image: mongo:4.4.6
+      ports:
+        - containerPort: 7501
+      imagePullPolicy: Always
+
   aerospikeAccessControl:
     users:
       - name: admin
@@ -46,24 +73,25 @@ spec:
         roles:
           - sys-admin
           - user-admin
-          - write
-          - read
 
   aerospikeConfig:
+    logging:
+      - name: /var/log/aerospike/aerospike.log
+        any: info
+        clustering: debug
+
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
+
     security:
       enable-security: true
+
     namespaces:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
-          type: device
-          files:
-            - /opt/aerospike/data/test.dat
-          filesize: 2000000000
-          data-in-memory: true
+          type: memory
 
   resources:
     requests:

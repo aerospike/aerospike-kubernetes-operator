@@ -16,21 +16,40 @@ spec:
     blockVolumePolicy:
       cascadeDelete: true
     volumes:
-      - storageClass: ssd
-        path: /opt/aerospike
-        volumeMode: filesystem
-        sizeInGB: 1
-      - path: /dev/nvme0n1
-        storageClass: local-ssd
-        volumeMode: block
-        sizeInGB: 5
-      - path: /dev/sdf
-        storageClass: ssd
-        volumeMode: block
-        sizeInGB: 5
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: nsvol1
+        aerospike:
+          path: /dev/nvme0n1
+        source:
+          persistentVolume: 
+            storageClass: local-ssd
+            volumeMode: Block
+            size: 5Gi
+      - name: nsvol2
+        aerospike:
+          path: /dev/sdf
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Block
+            size: 5Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
 
-  multiPodPerHost: true
-
+  podSpec:
+    multiPodPerHost: true
+    
   aerospikeAccessControl:
     users:
       - name: admin
@@ -38,10 +57,6 @@ spec:
         roles:
           - sys-admin
           - user-admin
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     service:

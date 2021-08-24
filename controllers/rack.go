@@ -3,10 +3,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -179,19 +181,19 @@ func (r *AerospikeClusterReconciler) deleteRacks(aeroCluster *asdbv1beta1.Aerosp
 
 func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) reconcileResult {
 
-	r.Log.Info("Reconcile existing Aerospike cluster statefulset")
+	r.Log.Info("Reconcile existing Aerospike cluster statefulset", "stsName", found.Name)
 
 	var err error
 	var res reconcileResult
 
-	r.Log.Info("Ensure rack StatefulSet size is the same as the spec")
+	r.Log.Info("Ensure rack StatefulSet size is the same as the spec", "stsName", found.Name)
 	desiredSize := int32(rackState.Size)
 	// Scale down
 	if *found.Spec.Replicas > desiredSize {
 		found, res = r.scaleDownRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to scaleDown StatefulSet pods", "err", res.err)
+				r.Log.Error(err, "Failed to scaleDown StatefulSet pods", "err", "stsName", found.Name)
 			}
 			return res
 		}
@@ -204,7 +206,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.Aero
 	// So a check based on spec and status will skip configMap update.
 	// Hence a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(aeroCluster, getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID), rackState.Rack); err != nil {
-		r.Log.Error(err, "Failed to update configMap from AerospikeConfig")
+		r.Log.Error(err, "Failed to update configMap from AerospikeConfig", "stsName", found.Name)
 		return reconcileError(err)
 	}
 
@@ -215,10 +217,10 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.Aero
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(aeroCluster, found, aeroCluster.Spec.Image, rackState, ignorablePods)
+		found, res = r.upgradeRack(aeroCluster, found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
-				r.Log.Error(err, "Failed to update StatefulSet image", "err", res.err)
+				r.Log.Error(res.err, "Failed to update StatefulSet image", "stsName", found.Name)
 			}
 			return res
 		}
@@ -231,7 +233,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.Aero
 			found, res = r.rollingRestartRack(aeroCluster, found, rackState, ignorablePods)
 			if !res.isSuccess {
 				if res.err != nil {
-					r.Log.Error(err, "Failed to do rolling restart", "err", res.err)
+					r.Log.Error(res.err, "Failed to do rolling restart", "stsName", found.Name)
 				}
 				return res
 			}
@@ -242,7 +244,7 @@ func (r *AerospikeClusterReconciler) reconcileRack(aeroCluster *asdbv1beta1.Aero
 	if *found.Spec.Replicas < desiredSize {
 		found, res = r.scaleUpRack(aeroCluster, found, rackState)
 		if !res.isSuccess {
-			r.Log.Error(err, "Failed to scaleUp StatefulSet pods", "err", res.err)
+			r.Log.Error(res.err, "Failed to scaleUp StatefulSet pods", "stsName", found.Name)
 			return res
 		}
 	}
@@ -262,7 +264,7 @@ func (r *AerospikeClusterReconciler) needRollingRestartRack(aeroCluster *asdbv1b
 		return false, fmt.Errorf("failed to list pods: %v", err)
 	}
 	for _, pod := range podList {
-		// Check if this pod need restart
+		// Check if this pod needs restart
 		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return false, err
@@ -310,7 +312,7 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1beta1.Aerosp
 		return found, reconcileError(fmt.Errorf("failed scale up pre-check: %v", err))
 	}
 
-	if aeroCluster.Spec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		// Create services for each pod
 		for _, podName := range newPodNames {
 			if err := r.createPodService(aeroCluster, podName, aeroCluster.Namespace); err != nil {
@@ -336,22 +338,11 @@ func (r *AerospikeClusterReconciler) scaleUpRack(aeroCluster *asdbv1beta1.Aerosp
 	return found, reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, desiredImage string, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+func (r *AerospikeClusterReconciler) updateContainersImage(aeroCluster *asdbv1beta1.AerospikeCluster, containers []corev1.Container) bool {
+	updated := false
 
-	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
-	if err != nil {
-		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
-	}
-
-	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
-	// Update will happen only when a pod is deleted.
-	// So first update image and then delete a pod. Pod will come up with new image.
-	// Repeat the above process.
-	needsUpdate := false
-	for i, container := range found.Spec.Template.Spec.Containers {
+	for i, container := range containers {
 		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
-
 		if err != nil {
 			// Maybe a deleted sidecar.
 			continue
@@ -359,50 +350,69 @@ func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1beta1.Aerosp
 
 		if !utils.IsImageEqual(container.Image, desiredImage) {
 			r.Log.Info("Updating image in statefulset spec", "container", container.Name, "desiredImage", desiredImage, "currentImage", container.Image)
-			found.Spec.Template.Spec.Containers[i].Image = desiredImage
-			needsUpdate = true
+			containers[i].Image = desiredImage
+			updated = true
 		}
 	}
+	return updated
+}
 
-	if needsUpdate {
+func (r *AerospikeClusterReconciler) needsToUpdateContainers(containers []corev1.Container, aeroCluster *asdbv1beta1.AerospikeCluster, podName string) bool {
+	for _, container := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
+		if err != nil {
+			continue
+		}
+
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			r.Log.Info("Found container for upgrading/downgrading in pod", "pod", podName, "container", container.Name, "currentImage", container.Image, "desiredImage", desiredImage)
+			return true
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) upgradeRack(aeroCluster *asdbv1beta1.AerospikeCluster, found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+
+	// List the pods for this aeroCluster's statefulset
+	podList, err := r.getOrderedRackPodList(aeroCluster, rackState.Rack.ID)
+	if err != nil {
+		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
+	// Update will happen only when a pod is deleted.
+	// So first update image and then delete a pod. Pod will come up with new image.
+	// Repeat the above process.
+	containersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.Containers)
+	initContainersUpdated := r.updateContainersImage(aeroCluster, found.Spec.Template.Spec.InitContainers)
+
+	if containersUpdated || initContainersUpdated {
 		err = r.Client.Update(context.TODO(), found, updateOption)
 		if err != nil {
 			return found, reconcileError(fmt.Errorf("failed to update image for StatefulSet %s: %v", found.Name, err))
 		}
+		r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
 	}
 
 	for _, p := range podList {
-		r.Log.Info("Check if pod needs upgrade or not")
-		var needPodUpgrade bool
-		for _, ps := range p.Spec.Containers {
-			desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
-			if err != nil {
-				continue
-			}
-
-			if !utils.IsImageEqual(ps.Image, desiredImage) {
-				r.Log.Info("Upgrading/downgrading pod", "podName", p.Name, "currentImage", ps.Image, "desiredImage", desiredImage)
-				needPodUpgrade = true
-				break
-			}
-		}
+		r.Log.Info("Check if pod needs upgrade or not", "podName", p.Name)
+		needPodUpgrade := r.needsToUpdateContainers(p.Spec.Containers, aeroCluster, p.Name) ||
+			r.needsToUpdateContainers(p.Spec.InitContainers, aeroCluster, p.Name)
 
 		if !needPodUpgrade {
-			r.Log.Info("Pod doesn't need upgrade")
+			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
 		}
 
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.ensurePodImageUpdated(aeroCluster, desiredImage, rackState, p, ignorablePods)
+		res := r.deletePodAndEnsureImageUpdated(aeroCluster, rackState, p, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
-
 		// Handle the next pod in subsequent reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
-
 	// return a fresh copy
 	found, err = r.getSTS(aeroCluster, rackState)
 	if err != nil {
@@ -491,14 +501,18 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1beta1
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
+	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
+
 	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(aeroCluster, found)
+	r.updateSTSPodSpec(aeroCluster, found, ls, rackState)
+
+	// This should be called before updating storage
+	initializeSTSStorage(aeroCluster, found, rackState)
+
+	// TODO: Add validation. device, file, both should not exist in same storage class
+	r.updateSTSStorage(aeroCluster, found, rackState)
 
 	r.updateSTSContainerResources(aeroCluster, found)
-
-	r.updateSTSSecretInfo(aeroCluster, found)
-
-	r.updateSTSConfigMapVolumes(aeroCluster, found, rackState)
 
 	r.Log.Info("Updating statefulset spec")
 
@@ -508,7 +522,7 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1beta1
 	r.Log.Info("Statefulset spec updated. Doing rolling restart with new config")
 
 	for _, pod := range podList {
-		// Check if this pod need restart
+		// Check if this pod needs restart
 		restartType, err := r.getRollingRestartTypePod(aeroCluster, rackState, pod)
 		if err != nil {
 			return found, reconcileError(err)
@@ -544,7 +558,7 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1beta
 	}
 	for _, p := range podList.Items {
 		if !utils.IsPodOnDesiredImage(&p, aeroCluster) {
-			r.Log.Info("Pod need upgrade/downgrade")
+			r.Log.Info("pod needs upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}
 
@@ -552,40 +566,177 @@ func (r *AerospikeClusterReconciler) isRackUpgradeNeeded(aeroCluster *asdbv1beta
 	return false, nil
 }
 
-func (r *AerospikeClusterReconciler) isRackConfigMapsUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
-	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
+func (r *AerospikeClusterReconciler) isRackStorageUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod) bool {
 
-	var volumesToBeMatched []corev1.Volume
-	for _, volume := range pod.Spec.Volumes {
-		if volume.ConfigMap == nil ||
-			volume.Name == confDirName ||
-			volume.Name == initConfDirName {
-			continue
-		}
-		volumesToBeMatched = append(volumesToBeMatched, volume)
-	}
+	volumes := rackState.Rack.Storage.Volumes
 
-	if len(configMaps) != len(volumesToBeMatched) {
-		return true
-	}
+	for _, volume := range volumes {
 
-	for _, configMapVolume := range configMaps {
-		// Ignore error since its not possible.
-		pvcName, _ := getPVCName(configMapVolume.Path)
-		found := false
-		for _, volume := range volumesToBeMatched {
-			if volume.Name == pvcName {
-				found = true
-				break
-			}
+		// Check for Updated volumeSource
+		if r.isStorageVolumeSourceUpdated(volume, pod) {
+			r.Log.Info("volume added or volume source updated in rack storage - pod needs rolling restart")
+			return true
 		}
 
-		if !found {
+		// Check for Added/Updated volumeAttachments
+		var containerAttachments []asdbv1beta1.VolumeAttachment
+		containerAttachments = append(containerAttachments, volume.Sidecars...)
+		if volume.Aerospike != nil {
+			containerAttachments = append(containerAttachments, asdbv1beta1.VolumeAttachment{
+				ContainerName: asdbv1beta1.AerospikeServerContainerName,
+				Path:          volume.Aerospike.Path,
+			})
+		}
+
+		if r.isVolumeAttachmentAddedOrUpdated(volume.Name, containerAttachments, pod.Spec.Containers) ||
+			r.isVolumeAttachmentAddedOrUpdated(volume.Name, volume.InitContainers, pod.Spec.InitContainers) {
+			r.Log.Info("new volume or volume attachment added/updated in rack storage - pod needs rolling restart")
 			return true
 		}
 
 	}
+
+	// Check for removed volumeAttachments
+	if r.isVolumeAttachmentRemoved(volumes, pod.Spec.Containers, false) ||
+		r.isVolumeAttachmentRemoved(volumes, pod.Spec.InitContainers, true) {
+		r.Log.Info("volume or volume attachment removed from rack storage - pod needs rolling restart")
+		return true
+	}
+
 	return false
+}
+
+func (r *AerospikeClusterReconciler) isStorageVolumeSourceUpdated(volume asdbv1beta1.VolumeSpec, pod corev1.Pod) bool {
+	podVolume := getPodVolume(pod, volume.Name)
+	if podVolume == nil {
+		// Volume not found in pod.volumes. This is newly aaded volume
+		r.Log.Info("new volume added in rack storage - pod needs rolling restart")
+		return true
+	}
+
+	var volumeCopy asdbv1beta1.VolumeSpec
+	lib.DeepCopy(&volumeCopy, &volume)
+
+	if volumeCopy.Source.Secret != nil {
+		setDefaultsSecretVolumeSource(volumeCopy.Source.Secret)
+	}
+	if volumeCopy.Source.ConfigMap != nil {
+		setDefaultsConfigMapVolumeSource(volumeCopy.Source.ConfigMap)
+	}
+
+	if !reflect.DeepEqual(podVolume.Secret, volumeCopy.Source.Secret) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	if !reflect.DeepEqual(podVolume.ConfigMap, volumeCopy.Source.ConfigMap) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	if !reflect.DeepEqual(podVolume.EmptyDir, volumeCopy.Source.EmptyDir) {
+		r.Log.Info("volume source updated", "old volume.source ", podVolume.VolumeSource, "new volume.source", volume.Source)
+		return true
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isVolumeAttachmentAddedOrUpdated(volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment, podContainers []corev1.Container) bool {
+
+	for _, attachment := range volumeAttachments {
+		container := getContainer(podContainers, attachment.ContainerName)
+		// Not possible, only valid containerName should be there in attachment
+		if container == nil {
+			continue
+		}
+
+		volumeDevice := getContainerVolumeDevice(container.VolumeDevices, volumeName)
+		if volumeDevice != nil {
+			// Found, check for updated
+			if getOriginalPath(volumeDevice.DevicePath) != attachment.Path {
+				r.Log.Info("volume updated in rack storage", "old", volumeDevice, "new", attachment)
+				return true
+			}
+			continue
+		}
+
+		volumeMount := getContainerVolumeMounts(container.VolumeMounts, volumeName)
+		if volumeMount != nil {
+			// Found, check for updated
+			if getOriginalPath(volumeMount.MountPath) != attachment.Path ||
+				volumeMount.ReadOnly != attachment.ReadOnly ||
+				volumeMount.SubPath != attachment.SubPath ||
+				volumeMount.SubPathExpr != attachment.SubPathExpr ||
+				!reflect.DeepEqual(volumeMount.MountPropagation, attachment.MountPropagation) {
+
+				r.Log.Info("volume updated in rack storage", "old", volumeMount, "new", attachment)
+				return true
+			}
+			continue
+		}
+
+		// Added volume
+		r.Log.Info("volume added in rack storage", "volume", volumeName, "containerName", container.Name)
+		return true
+	}
+
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isVolumeAttachmentRemoved(volumes []asdbv1beta1.VolumeSpec, podContainers []corev1.Container, isInitContainers bool) bool {
+	for _, container := range podContainers {
+		if isInitContainers && container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+			// Initcontainer has all the volumes mounted, there is no specific entry in storage for initcontainer
+			continue
+		}
+		for _, volumeDevice := range container.VolumeDevices {
+			if volumeDevice.Name == confDirName ||
+				volumeDevice.Name == initConfDirName {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(volumes, volumeDevice.Name, container.Name, isInitContainers) {
+				r.Log.Info("volume for container.volumeDevice removed from rack storage", "container.volumeDevice", volumeDevice.Name, "containerName", container.Name)
+				return true
+			}
+		}
+
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name == confDirName ||
+				volumeMount.Name == initConfDirName ||
+				volumeMount.MountPath == podServiceAccountMountPath {
+				continue
+			}
+			if !r.isContainerVolumeInStorage(volumes, volumeMount.Name, container.Name, isInitContainers) {
+				r.Log.Info("volume for container.volumeMount removed from rack storage", "container.volumeMount", volumeMount.Name, "containerName", container.Name)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *AerospikeClusterReconciler) isContainerVolumeInStorage(volumes []asdbv1beta1.VolumeSpec, containerVolumeName string, containerName string, isInitContainers bool) bool {
+	volume := getStorageVolume(volumes, containerVolumeName)
+	if volume == nil {
+		// Volume may have been removed, we allow removal of all volumes (except pv type)
+		r.Log.Info("volume removed from rack storage", "volumeName", containerVolumeName)
+		return false
+	}
+
+	if isInitContainers {
+		if !isContainerNameInStorageVolumeAttachments(containerName, volume.InitContainers) {
+			return false
+		}
+	} else {
+		if containerName == asdbv1beta1.AerospikeServerContainerName {
+			if volume.Aerospike == nil {
+				return false
+			}
+		} else {
+			if !isContainerNameInStorageVolumeAttachments(containerName, volume.Sidecars) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (r *AerospikeClusterReconciler) getRackPodList(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (*corev1.PodList, error) {
@@ -656,6 +807,15 @@ func (r *AerospikeClusterReconciler) getCurrentRackList(aeroCluster *asdbv1beta1
 	return rackList, nil
 }
 
+func isContainerNameInStorageVolumeAttachments(containerName string, mounts []asdbv1beta1.VolumeAttachment) bool {
+	for _, mount := range mounts {
+		if mount.ContainerName == containerName {
+			return true
+		}
+	}
+	return false
+}
+
 func splitRacks(nodes, racks int) []int {
 	nodesPerRack, extraNodes := nodes/racks, nodes%racks
 
@@ -683,4 +843,70 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 		})
 	}
 	return rackStateList
+}
+
+// TODO: These func are available in client-go@v1.5.2, for now creating our own
+func setDefaultsSecretVolumeSource(obj *corev1.SecretVolumeSource) {
+	if obj.DefaultMode == nil {
+		perm := int32(corev1.SecretVolumeSourceDefaultMode)
+		obj.DefaultMode = &perm
+	}
+}
+
+func setDefaultsConfigMapVolumeSource(obj *corev1.ConfigMapVolumeSource) {
+	if obj.DefaultMode == nil {
+		perm := int32(corev1.ConfigMapVolumeSourceDefaultMode)
+		obj.DefaultMode = &perm
+	}
+}
+
+func getContainerVolumeDevice(devices []corev1.VolumeDevice, name string) *corev1.VolumeDevice {
+	for _, device := range devices {
+		if device.Name == name {
+			return &device
+		}
+	}
+	return nil
+}
+
+func getContainerVolumeMounts(mounts []corev1.VolumeMount, name string) *corev1.VolumeMount {
+	for _, mount := range mounts {
+		if mount.Name == name {
+			return &mount
+		}
+	}
+	return nil
+}
+
+func getPodVolume(pod corev1.Pod, name string) *corev1.Volume {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == name {
+			return &volume
+		}
+	}
+	return nil
+}
+
+func getStorageVolume(volumes []asdbv1beta1.VolumeSpec, name string) *asdbv1beta1.VolumeSpec {
+	for _, volume := range volumes {
+		if name == volume.Name {
+			return &volume
+		}
+	}
+	return nil
+}
+
+func getContainer(podContainers []corev1.Container, name string) *corev1.Container {
+	for _, container := range podContainers {
+		if name == container.Name {
+			return &container
+		}
+	}
+	return nil
+}
+
+func getOriginalPath(path string) string {
+	path = strings.TrimPrefix(path, "/filesystem-volumes")
+	path = strings.TrimPrefix(path, "/block-volumes")
+	return path
 }

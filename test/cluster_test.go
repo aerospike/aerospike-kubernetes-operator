@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -192,7 +194,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.MultiPodPerHost = !aeroCluster.Spec.MultiPodPerHost
+				aeroCluster.Spec.PodSpec.MultiPodPerHost = !aeroCluster.Spec.PodSpec.MultiPodPerHost
 
 				err = k8sClient.Update(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -202,18 +204,32 @@ func UpdateClusterTest(ctx goctx.Context) {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				new := []asdbv1beta1.AerospikePersistentVolumeSpec{
+				new := []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/dev/xvdf2",
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1beta1.AerospikeVolumeModeBlock,
-						SizeInGB:     1,
+						Name: "ns",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeBlock,
+								Size:         resource.MustParse("1Gi"),
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/dev/xvdf2",
+						},
 					},
 					{
-						Path:         "/opt/aeropsike/ns1",
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1beta1.AerospikeVolumeModeFilesystem,
-						SizeInGB:     1,
+						Name: "workdir",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+								Size:         resource.MustParse("1Gi"),
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aeropsike/ns1",
+						},
 					},
 				}
 				aeroCluster.Spec.Storage.Volumes = new
@@ -376,24 +392,45 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 					It("InvalidStorageEngineDevice: should fail for invalid storage-engine.device, cannot have 3 devices in single device string", func() {
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 						if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-							aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.AerospikePersistentVolumeSpec{
+							aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{
 								{
-									Path:         "/dev/xvdf1",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1beta1.AerospikeVolumeModeBlock,
+									Name: "nsvol1",
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf1",
+									},
 								},
 								{
-									Path:         "/dev/xvdf2",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1beta1.AerospikeVolumeModeBlock,
+									Name: "nsvol2",
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf2",
+									},
 								},
 								{
-									Path:         "/dev/xvdf3",
-									SizeInGB:     1,
-									StorageClass: storageClass,
-									VolumeMode:   asdbv1beta1.AerospikeVolumeModeBlock,
+									Name: "nsvol3",
+									Source: asdbv1beta1.VolumeSource{
+										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   v1.PersistentVolumeBlock,
+										},
+									},
+									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+										Path: "/dev/xvdf3",
+									},
 								},
 							}
 
@@ -507,23 +544,22 @@ func negativeDeployClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 		})
 
 		Context("InvalidAerospikeConfigSecret", func() {
-			It("WhenFeatureKeyExist: should fail for empty aerospikeConfigSecret when feature-key-file exist", func() {
+			It("WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume", func() {
 				aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 1, latestClusterImage)
-				aeroCluster.Spec.AerospikeConfigSecret = asdbv1beta1.AerospikeConfigSecretSpec{}
 				aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
-					"feature-key-file": "/opt/aerospike/features.conf",
+					"feature-key-file": "/randompath/features.conf",
 				}
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
 			})
 
-			It("WhenTLSExist: should fail for empty aerospikeConfigSecret when tls exist", func() {
+			It("WhenTLSExist: should fail for no tls path in storage volume", func() {
 				aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 1, latestClusterImage)
-				aeroCluster.Spec.AerospikeConfigSecret = asdbv1beta1.AerospikeConfigSecretSpec{}
 				aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 					"tls": []interface{}{
 						map[string]interface{}{
-							"name": "aerospike-a-0.test-runner",
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/randompath/svc_cluster_chain.pem",
 						},
 					},
 				}
@@ -767,27 +803,26 @@ func negativeUpdateClusterValidationTest(ctx goctx.Context, clusterNamespacedNam
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 
-		It("WhenFeatureKeyExist: should fail for empty aerospikeConfigSecret when feature-key-file exist", func() {
+		It("WhenFeatureKeyExist: should fail for no feature-key-file path in storage volumes", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.AerospikeConfigSecret = asdbv1beta1.AerospikeConfigSecretSpec{}
 			aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
-				"feature-key-file": "/opt/aerospike/features.conf",
+				"feature-key-file": "/randompath/features.conf",
 			}
 			err = k8sClient.Update(ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 		})
 
-		It("WhenTLSExist: should fail for empty aerospikeConfigSecret when tls exist", func() {
+		It("WhenTLSExist: should fail for no tls path in storage voluems", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.AerospikeConfigSecret = asdbv1beta1.AerospikeConfigSecretSpec{}
 			aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 				"tls": []interface{}{
 					map[string]interface{}{
-						"name": "aerospike-a-0.test-runner",
+						"name":      "aerospike-a-0.test-runner",
+						"cert-file": "/randompath/svc_cluster_chain.pem",
 					},
 				},
 			}

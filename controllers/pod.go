@@ -93,24 +93,16 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 			"currentHash", podStatus.PodSpecHash)
 	}
 
-	// Check if secret is updated
-	if r.isAerospikeConfigSecretUpdatedInAeroCluster(aeroCluster, pod) {
-		// TODO: If we can force the secret to mount or refresh on the pod,
-		// we can get away with QuickRestart in this case too.
-		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("AerospikeConfigSecret changed. Need rolling restart")
-	}
-
 	// Check if resources are updated
 	if r.isResourceUpdatedInAeroCluster(aeroCluster, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike resources changed. Need rolling restart")
 	}
 
-	// Check if RACKSTORAGE/CONFIGMAP is updated
-	if r.isRackConfigMapsUpdatedInAeroCluster(aeroCluster, rackState, pod) {
+	// Check if RACKSTORAGE is updated
+	if r.isRackStorageUpdatedInAeroCluster(aeroCluster, rackState, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("Aerospike rack storage configMaps changed. Need rolling restart")
+		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
 	return restartType, nil
@@ -251,92 +243,57 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.Aerospi
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) ensurePodImageUpdated(aeroCluster *asdbv1beta1.AerospikeCluster, desiredImage string, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+	// If already dead node, so no need to check node safety, migration
+	if err := utils.CheckPodFailed(&p); err == nil {
+		if res := r.waitForNodeSafeStopReady(aeroCluster, &p, ignorablePods); !res.isSuccess {
+			return res
+		}
+	}
 
-	needsDeletion := false
-	// Also check if statefulSet is in stable condition
-	// Check for all containers. Spec.Containers doesn't include init container
-	for _, ps := range p.Spec.Containers {
-		desiredImage, err := utils.GetDesiredImage(aeroCluster, ps.Name)
+	r.Log.V(1).Info("Delete the Pod", "podName", p.Name)
+	// Delete pod
+	if err := r.Client.Delete(context.TODO(), &p); err != nil {
+		return reconcileError(err)
+	}
+	r.Log.V(1).Info("Pod deleted", "podName", p.Name)
 
+	// Wait for pod to come up
+	const maxRetries = 6
+	const retryInterval = time.Second * 10
+	for i := 0; i < maxRetries; i++ {
+		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", p.Name)
+
+		pFound := &corev1.Pod{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
 		if err != nil {
-			// Maybe a deleted sidecar.
+			r.Log.Error(err, "Failed to get pod", "podName", p.Name, "err", err)
+
+			if _, err = r.getSTS(aeroCluster, rackState); err != nil {
+				// Stateful set has been deleted.
+				// TODO Ashish to rememeber which scenario this can happen.
+				r.Log.Error(err, "Statefulset has been deleted for pod", "podName", p.Name, "err", err)
+				return reconcileError(err)
+			}
+
+			time.Sleep(retryInterval)
 			continue
 		}
-
-		if utils.IsImageEqual(ps.Image, desiredImage) {
-			if err := utils.CheckPodFailed(&p); err != nil {
-				// Looks like bad image
-				return reconcileError(err)
-			}
-		}
-
-		if !utils.IsImageEqual(ps.Image, desiredImage) {
-			r.Log.Info("Upgrading/downgrading pod", "podName", p.Name, "currentImage", ps.Image, "desiredImage", desiredImage)
-			needsDeletion = true
-			break
-		}
-	}
-
-	if needsDeletion {
-		r.Log.V(1).Info("Delete the Pod", "podName", p.Name)
-
-		// If already dead node, so no need to check node safety, migration
-		if err := utils.CheckPodFailed(&p); err == nil {
-			if res := r.waitForNodeSafeStopReady(aeroCluster, &p, ignorablePods); !res.isSuccess {
-				return res
-			}
-		}
-
-		// Delete pod
-		if err := r.Client.Delete(context.TODO(), &p); err != nil {
+		if err := utils.CheckPodFailed(pFound); err != nil {
 			return reconcileError(err)
 		}
-		r.Log.V(1).Info("Pod deleted", "podName", p.Name)
 
-		// Wait for pod to come up
-		const maxRetries = 6
-		const retryInterval = time.Second * 10
-		var isUpgraded bool
-		for i := 0; i < maxRetries; i++ {
-			r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", p.Name)
-
-			pFound := &corev1.Pod{}
-			err := r.Client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
-			if err != nil {
-				r.Log.Error(err, "Failed to get pod", "podName", p.Name, "err", err)
-
-				if _, err = r.getSTS(aeroCluster, rackState); err != nil {
-					// Stateful set has been deleted.
-					// TODO Ashish to rememeber which scenario this can happen.
-					r.Log.Error(err, "Statefulset has been deleted for pod", "podName", p.Name, "err", err)
-					return reconcileError(err)
-				}
-
-				time.Sleep(retryInterval)
-				continue
-			}
-			if err := utils.CheckPodFailed(pFound); err != nil {
-				return reconcileError(err)
-			}
-
-			if utils.IsPodUpgraded(pFound, aeroCluster) {
-				isUpgraded = true
-				r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
-				break
-			}
-
-			r.Log.V(1).Info("Waiting for pod to come up with new image", "podName", p.Name)
-			time.Sleep(retryInterval)
+		if utils.IsPodUpgraded(pFound, aeroCluster) {
+			r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
+			return reconcileSuccess()
 		}
 
-		if !isUpgraded {
-			r.Log.Info("Timed out waiting for pod to come up with new image", "podName", p.Name)
-			return reconcileRequeueAfter(10)
-		}
+		r.Log.V(1).Info("Waiting for pod to come up with new image", "podName", p.Name)
+		time.Sleep(retryInterval)
 	}
 
-	return reconcileSuccess()
+	r.Log.Info("Timed out waiting for pod to come up with new image", "podName", p.Name)
+	return reconcileRequeueAfter(10)
 }
 
 // cleanupPods checks pods and status before scaleup to detect and fix any status anomalies.
@@ -380,7 +337,7 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.Aerosp
 			r.alumniReset(aeroCluster, &np)
 		}
 
-		if aeroCluster.Spec.MultiPodPerHost {
+		if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 			// Remove service for pod
 			// TODO: make it more roboust, what if it fails
 			if err := r.deletePodService(podName, aeroCluster.Namespace); err != nil {

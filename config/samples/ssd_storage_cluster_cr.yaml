@@ -8,11 +8,6 @@ spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:5.5.0.3
 
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m
-
   storage:
     filesystemVolumePolicy:
       initMethod: deleteFiles
@@ -20,17 +15,32 @@ spec:
     blockVolumePolicy:
       cascadeDelete: true
     volumes:
-      - storageClass: ssd
-        path: /opt/aerospike
-        volumeMode: filesystem
-        sizeInGB: 1
-      - path: /test/dev/xvdf
-        storageClass: ssd
-        volumeMode: block
-        sizeInGB: 5
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: ns
+        aerospike:
+          path: /test/dev/xvdf
+        source:
+          persistentVolume: 
+            storageClass: ssd
+            volumeMode: Block
+            size: 5Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
 
-  multiPodPerHost: true
-
+  podSpec:
+    multiPodPerHost: true
+    
   aerospikeAccessControl:
     users:
       - name: admin
@@ -38,10 +48,6 @@ spec:
         roles:
           - sys-admin
           - user-admin
-
-  aerospikeConfigSecret:
-    secretName: aerospike-secret
-    mountPath:  /etc/aerospike/secret
 
   aerospikeConfig:
     service:
@@ -56,3 +62,8 @@ spec:
           type: device
           devices:
             - /test/dev/xvdf
+
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 200m

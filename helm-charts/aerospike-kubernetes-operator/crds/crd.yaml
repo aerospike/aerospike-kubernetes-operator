@@ -1228,8 +1228,8 @@ spec:
                                     'block' mode volumes are attached to the pod or
                                     the mount path for 'filesystem' mode.
                                   type: string
-                                sizeInGB:
-                                  description: SizeInGB Size of volume in GB.
+                                size:
+                                  description: Size of volume.
                                   format: int32
                                   type: integer
                                 storageClass:
@@ -1247,7 +1247,7 @@ spec:
                               required:
                               - effectiveCascadeDelete
                               - path
-                              - sizeInGB
+                              - size
                               - storageClass
                               - volumeMode
                               type: object
@@ -1389,8 +1389,8 @@ spec:
                                     'block' mode volumes are attached to the pod or
                                     the mount path for 'filesystem' mode.
                                   type: string
-                                sizeInGB:
-                                  description: SizeInGB Size of volume in GB.
+                                size:
+                                  description: Size of volume.
                                   format: int32
                                   type: integer
                                 storageClass:
@@ -1408,7 +1408,7 @@ spec:
                               required:
                               - effectiveCascadeDelete
                               - path
-                              - sizeInGB
+                              - size
                               - storageClass
                               - volumeMode
                               type: object
@@ -1568,8 +1568,8 @@ spec:
                           volumes are attached to the pod or the mount path for 'filesystem'
                           mode.
                         type: string
-                      sizeInGB:
-                        description: SizeInGB Size of volume in GB.
+                      size:
+                        description: Size of volume.
                         format: int32
                         type: integer
                       storageClass:
@@ -1586,7 +1586,7 @@ spec:
                     required:
                     - effectiveCascadeDelete
                     - path
-                    - sizeInGB
+                    - size
                     - storageClass
                     - volumeMode
                     type: object

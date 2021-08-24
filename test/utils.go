@@ -47,6 +47,8 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
+const aerospikeConfigSecret string = "aerospike-config-secret"
+
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {
@@ -240,7 +242,7 @@ func isClusterStateValid(aeroCluster *asdbv1beta1.AerospikeCluster, newCluster *
 		return false
 	}
 	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-		pkgLog.Info("Cluster status is not the matching spec")
+		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
 
@@ -264,7 +266,7 @@ func isClusterStateValid(aeroCluster *asdbv1beta1.AerospikeCluster, newCluster *
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return (5 * time.Minute * time.Duration(nodes))
+	return (10 * time.Minute * time.Duration(nodes))
 }
 
 // ExecuteCommandOnPod executes a command in the specified container,

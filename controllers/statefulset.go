@@ -3,15 +3,14 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	// log "github.com/inconshreveable/log15"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,7 +24,6 @@ import (
 
 const (
 	aeroClusterServiceAccountName string = "aerospike-cluster"
-	configMaPodListKey            string = "podList.json"
 )
 
 // The default cpu request for the aerospike-server container
@@ -34,8 +32,9 @@ const (
 	// while deleting pvc
 	storagePathAnnotationKey = "storage-path"
 
-	confDirName     = "confdir"
-	initConfDirName = "initconfigs"
+	confDirName                = "confdir"
+	initConfDirName            = "initconfigs"
+	podServiceAccountMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
 )
 
 type PortInfo struct {
@@ -91,7 +90,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 
 	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
 
-	if aeroCluster.Spec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		// Create services for all statefulset pods
 		for i := 0; i < rackState.Size; i++ {
 			// Statefulset name created from cr name
@@ -102,7 +101,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 		}
 	}
 
-	ports := getSTSContainerPort(aeroCluster.Spec.MultiPodPerHost, aeroCluster.Spec.AerospikeConfig)
+	ports := getSTSContainerPort(aeroCluster.Spec.PodSpec.MultiPodPerHost, aeroCluster.Spec.AerospikeConfig)
 
 	ls := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackState.Rack.ID)
 
@@ -148,22 +147,13 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{{
 						Name:  asdbv1beta1.AerospikeServerInitContainerName,
-						Image: "aerospike/aerospike-kubernetes-init:0.0.14",
+						Image: asdbv1beta1.AerospikeServerInitContainerImage,
 						// Change to PullAlways for image testing.
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      confDirName,
-								MountPath: "/etc/aerospike",
-							},
-							{
-								Name:      initConfDirName,
-								MountPath: "/configs",
-							},
-						},
+						VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 						Env: append(envVarList, []corev1.EnvVar{
 							{
-								// Headless service has same name as AerospikeCluster
+								// Headless service has the same name as AerospikeCluster
 								Name:  "SERVICE",
 								Value: getSTSHeadLessSvcName(aeroCluster),
 							},
@@ -181,53 +171,27 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports:           ports,
 						Env:             envVarList,
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      confDirName,
-								MountPath: "/etc/aerospike",
-							},
-						},
+						VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),
 						// Resources to be updated later
 					}},
 
-					Volumes: []corev1.Volume{
-						{
-							Name: confDirName,
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: initConfDirName,
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID).Name,
-									},
-								},
-							},
-						},
-					},
+					Volumes: getDefaultSTSVolumes(aeroCluster, rackState),
 				},
 			},
 		},
 	}
 
-	r.updateSTSPodSpec(aeroCluster, st)
+	r.updateSTSPodSpec(aeroCluster, st, ls, rackState)
 
 	r.updateSTSContainerResources(aeroCluster, st)
+
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	if err := r.updateSTSStorage(aeroCluster, st, rackState); err != nil {
+	r.updateSTSStorage(aeroCluster, st, rackState)
+
+	// Set AerospikeCluster instance as the owner and controller
+	if err := controllerutil.SetControllerReference(aeroCluster, st, r.Scheme); err != nil {
 		return nil, err
 	}
-
-	r.updateSTSSecretInfo(aeroCluster, st)
-
-	r.updateSTSConfigMapVolumes(aeroCluster, st, rackState)
-
-	r.updateSTSAffinity(aeroCluster, st, ls, rackState)
-	// Set AerospikeCluster instance as the owner and controller
-	controllerutil.SetControllerReference(aeroCluster, st, r.Scheme)
 
 	if err := r.Client.Create(context.TODO(), st, createOption); err != nil {
 		return nil, fmt.Errorf("failed to create new StatefulSet: %v", err)
@@ -297,8 +261,8 @@ func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet)
 		}
 	}
 
-	// Check for statfulset at the end,
-	// if we check if before pods then we would not know status of individual pods
+	// Check for statefulset at the end,
+	// if we check before pods then we would not know status of individual pods
 	const stsStatusMaxRetry = 10
 	const stsStatusRetryInterval = time.Second * 2
 
@@ -316,13 +280,13 @@ func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet)
 			updated = true
 			break
 		}
-		r.Log.V(1).Info("Statefulset spec.replica not matching status.replica", "staus", st.Status.Replicas, "spec", *st.Spec.Replicas)
+		r.Log.V(1).Info("StatefulSet spec.replica not matching status.replica", "status", st.Status.Replicas, "spec", *st.Spec.Replicas)
 	}
 	if !updated {
 		return fmt.Errorf("statefulset status is not updated")
 	}
 
-	r.Log.Info("Statefulset is ready")
+	r.Log.Info("StatefulSet is ready")
 
 	return nil
 }
@@ -361,7 +325,10 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(aeroCluster *asdbv1beta1.
 				Data: configMapData,
 			}
 			// Set AerospikeCluster instance as the owner and controller
-			controllerutil.SetControllerReference(aeroCluster, confMap, r.Scheme)
+			err = controllerutil.SetControllerReference(aeroCluster, confMap, r.Scheme)
+			if err != nil {
+				return err
+			}
 
 			if err := r.Client.Create(context.TODO(), confMap, createOption); err != nil {
 				return fmt.Errorf("failed to create new confMap for StatefulSet: %v", err)
@@ -429,7 +396,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 		if errors.IsNotFound(err) {
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
-					// Headless service has same name as AerospikeCluster
+					// Headless service has the same name as AerospikeCluster
 					Name:      getSTSHeadLessSvcName(aeroCluster),
 					Namespace: aeroCluster.Namespace,
 					// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
@@ -452,7 +419,10 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 				},
 			}
 			// Set AerospikeCluster instance as the owner and controller
-			controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
+			err := controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
+			if err != nil {
+				return err
+			}
 
 			if err := r.Client.Create(context.TODO(), service, createOption); err != nil {
 				return fmt.Errorf("failed to create headless service for statefulset: %v", err)
@@ -501,7 +471,10 @@ func (r *AerospikeClusterReconciler) createPodService(aeroCluster *asdbv1beta1.A
 	}
 	// Set AerospikeCluster instance as the owner and controller.
 	// It is created before Pod, so Pod cannot be the owner
-	controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
+	err := controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
+	if err != nil {
+		return err
+	}
 
 	if err := r.Client.Create(context.TODO(), service, createOption); err != nil {
 		return fmt.Errorf("failed to create new service for pod %s: %v", pName, err)
@@ -521,91 +494,99 @@ func (r *AerospikeClusterReconciler) deletePodService(pName, pNamespace string) 
 	return nil
 }
 
-// Called only when new cluster is created
-func (r *AerospikeClusterReconciler) updateSTSStorage(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) error {
+// Called while creating new cluster and also during rolling restart.
+// Note: STS podSpec must be updated before updating storage
+func (r *AerospikeClusterReconciler) updateSTSStorage(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	r.updateSTSPVStorage(aeroCluster, st, rackState)
+	r.updateSTSNonPVStorage(aeroCluster, st, rackState)
 
-	storage := rackState.Rack.Storage
-	// TODO: Add validation. device, file, both should not exist in same storage class
-	for _, volume := range storage.Volumes {
-		r.Log.Info("Add PVC for volume", "volume", volume)
-		var volumeMode corev1.PersistentVolumeMode
-		var initContainerVolumePathPrefix string
+	// Sort volume attachments so that overlapping paths do not shadow each other.
+	// For e.g. mount for /etc should be listed before mount for /etc/aerospike
+	// otherwise /etc/aerospike will get shadowed.
+	sortContainerVolumeAttachments(st.Spec.Template.Spec.InitContainers)
+	sortContainerVolumeAttachments(st.Spec.Template.Spec.Containers)
+}
 
-		pvcName, err := getPVCName(volume.Path)
-		if err != nil {
-			return fmt.Errorf("failed to create ripemd hash for pvc name from volume.path %s", volume.Path)
-		}
+func sortContainerVolumeAttachments(containers []corev1.Container) {
+	for i := range containers {
+		sort.Slice(containers[i].VolumeMounts, func(p, q int) bool {
+			return containers[i].VolumeMounts[p].MountPath < containers[i].VolumeMounts[q].MountPath
+		})
 
-		if volume.VolumeMode == asdbv1beta1.AerospikeVolumeModeBlock {
-			volumeMode = corev1.PersistentVolumeBlock
-			initContainerVolumePathPrefix = "/block-volumes"
+		sort.Slice(containers[i].VolumeDevices, func(p, q int) bool {
+			return containers[i].VolumeDevices[p].DevicePath < containers[i].VolumeDevices[q].DevicePath
+		})
+	}
+}
 
-			r.Log.Info("Add volume device for volume", "volume", volume)
-			volumeDevice := corev1.VolumeDevice{
-				Name:       pvcName,
-				DevicePath: volume.Path,
-			}
-			st.Spec.Template.Spec.Containers[0].VolumeDevices = append(st.Spec.Template.Spec.Containers[0].VolumeDevices, volumeDevice)
+func (r *AerospikeClusterReconciler) updateSTSPVStorage(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	volumes := rackState.Rack.Storage.GetPVs()
 
-			initVolumeDevice := corev1.VolumeDevice{
-				Name:       pvcName,
-				DevicePath: initContainerVolumePathPrefix + volume.Path,
-			}
-			st.Spec.Template.Spec.InitContainers[0].VolumeDevices = append(st.Spec.Template.Spec.InitContainers[0].VolumeDevices, initVolumeDevice)
-		} else if volume.VolumeMode == asdbv1beta1.AerospikeVolumeModeFilesystem {
-			volumeMode = corev1.PersistentVolumeFilesystem
-			initContainerVolumePathPrefix = "/filesystem-volumes"
+	for _, volume := range volumes {
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
-			r.Log.Info("Add volume mount for volume", "volume", volume)
-			volumeMount := corev1.VolumeMount{
-				Name:      pvcName,
-				MountPath: volume.Path,
-			}
-			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, volumeMount)
+		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
+			initContainerVolumePathPrefix := "/block-volumes"
 
-			initVolumeMount := corev1.VolumeMount{
-				Name:      pvcName,
-				MountPath: initContainerVolumePathPrefix + volume.Path,
-			}
-			st.Spec.Template.Spec.InitContainers[0].VolumeMounts = append(st.Spec.Template.Spec.InitContainers[0].VolumeMounts, initVolumeMount)
+			r.Log.V(1).Info("added volume device for volume", "volume", volume)
+
+			addVolumeDeviceInContainer(volume.Name, initContainerAttachments, st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix)
+			addVolumeDeviceInContainer(volume.Name, containerAttachments, st.Spec.Template.Spec.Containers, "")
+		} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
+			initContainerVolumePathPrefix := "/filesystem-volumes"
+
+			r.Log.V(1).Info("added volume mount for volume", "volume", volume)
+
+			addVolumeMountInContainer(volume.Name, initContainerAttachments, st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix)
+			addVolumeMountInContainer(volume.Name, containerAttachments, st.Spec.Template.Spec.Containers, "")
 		} else {
-			// No volume claims for config maps.
+			// Should never come here
 			continue
 		}
 
-		storageClass := volume.StorageClass
-		pvc := corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pvcName,
-				Namespace: aeroCluster.Namespace,
-				// Use this path annotation while matching pvc with storage volume
-				Annotations: map[string]string{
-					storagePathAnnotationKey: volume.Path,
-				},
-			},
-			Spec: corev1.PersistentVolumeClaimSpec{
-				VolumeMode:  &volumeMode,
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(fmt.Sprintf("%dGi", volume.SizeInGB)),
-					},
-				},
-				StorageClassName: &storageClass,
-			},
-		}
+		r.Log.V(1).Info("added PVC for volume", "volume", volume)
+
+		pvc := createPVCForVolumeAttachment(aeroCluster, volume)
 		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
 	}
-	return nil
 }
 
-func (r *AerospikeClusterReconciler) updateSTSAffinity(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
+func (r *AerospikeClusterReconciler) updateSTSNonPVStorage(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	volumes := rackState.Rack.Storage.GetNonPVs()
 
+	for _, volume := range volumes {
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
+
+		r.Log.V(1).Info("added volume mount in statefulSet pod containers for volume", "volume", volume)
+
+		// Add volumeMount in statefulSet pod containers for volume
+		addVolumeMountInContainer(volume.Name, initContainerAttachments, st.Spec.Template.Spec.InitContainers, "")
+		addVolumeMountInContainer(volume.Name, containerAttachments, st.Spec.Template.Spec.Containers, "")
+
+		// Add volume in statefulSet template
+		k8sVolume := createVolumeForVolumeAttachment(volume)
+		st.Spec.Template.Spec.Volumes = append(st.Spec.Template.Spec.Volumes, k8sVolume)
+	}
+}
+
+func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
 	affinity := &corev1.Affinity{}
 
+	// Use rack affinity, if given
+	if rackState.Rack.PodSpec.Affinity != nil {
+		lib.DeepCopy(affinity, rackState.Rack.PodSpec.Affinity)
+	} else if aeroCluster.Spec.PodSpec.Affinity != nil {
+		lib.DeepCopy(affinity, aeroCluster.Spec.PodSpec.Affinity)
+	}
+
+	// Set our rules in PodAntiAffinity
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
-	if !aeroCluster.Spec.MultiPodPerHost {
-		r.Log.Info("Adding pod affinity rules for statefulset pod")
+	if !aeroCluster.Spec.PodSpec.MultiPodPerHost {
+		if affinity.PodAntiAffinity == nil {
+			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
+		}
+
+		r.Log.Info("Adding pod affinity rules for statefulSet pod")
 		antiAffinity := &corev1.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
 				{
@@ -616,9 +597,13 @@ func (r *AerospikeClusterReconciler) updateSTSAffinity(aeroCluster *asdbv1beta1.
 				},
 			},
 		}
-		affinity.PodAntiAffinity = antiAffinity
+
+		affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = append(
+			affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			antiAffinity.RequiredDuringSchedulingIgnoredDuringExecution...)
 	}
 
+	// Set our rules in NodeAffinity
 	var matchExpressions []corev1.NodeSelectorRequirement
 
 	if rackState.Rack.Zone != "" {
@@ -642,7 +627,6 @@ func (r *AerospikeClusterReconciler) updateSTSAffinity(aeroCluster *asdbv1beta1.
 			Values:   []string{rackState.Rack.RackLabel},
 		})
 	}
-
 	if rackState.Rack.NodeName != "" {
 		matchExpressions = append(matchExpressions, corev1.NodeSelectorRequirement{
 			Key:      "kubernetes.io/hostname",
@@ -652,84 +636,73 @@ func (r *AerospikeClusterReconciler) updateSTSAffinity(aeroCluster *asdbv1beta1.
 	}
 
 	if len(matchExpressions) != 0 {
-		nodeAffinity := &corev1.NodeAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+		if affinity.NodeAffinity == nil {
+			affinity.NodeAffinity = &corev1.NodeAffinity{}
+		}
+
+		selector := affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+
+		if selector == nil || len(selector.NodeSelectorTerms) == 0 {
+			ns := &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{
 					{
 						MatchExpressions: matchExpressions,
 					},
 				},
-			},
+			}
+			affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = ns
+		} else {
+			for i := range selector.NodeSelectorTerms {
+				selector.NodeSelectorTerms[i].MatchExpressions = append(selector.NodeSelectorTerms[i].MatchExpressions, matchExpressions...)
+			}
 		}
-		affinity.NodeAffinity = nodeAffinity
 	}
 
 	st.Spec.Template.Spec.Affinity = affinity
-}
 
-// TODO: How to remove if user has removed this field? Should we find and remove volume
-// Called while creating new cluster and also during rolling restart
-func (r *AerospikeClusterReconciler) updateSTSSecretInfo(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
+	// Use rack nodeSelector, if given
+	if len(rackState.Rack.PodSpec.NodeSelector) != 0 {
+		st.Spec.Template.Spec.NodeSelector = rackState.Rack.PodSpec.NodeSelector
+	} else {
+		st.Spec.Template.Spec.NodeSelector = aeroCluster.Spec.PodSpec.NodeSelector
+	}
 
-	if aeroCluster.Spec.AerospikeConfigSecret.SecretName != "" {
-		const secretVolumeName = "secretinfo"
-		r.Log.Info("Add secret volume in statefulset pods")
-		var volFound bool
-		for _, vol := range st.Spec.Template.Spec.Volumes {
-			if vol.Name == secretVolumeName {
-				vol.VolumeSource.Secret.SecretName = aeroCluster.Spec.AerospikeConfigSecret.SecretName
-				volFound = true
-				break
-			}
-		}
-		if !volFound {
-			secretVolume := corev1.Volume{
-				Name: secretVolumeName,
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: aeroCluster.Spec.AerospikeConfigSecret.SecretName,
-					},
-				},
-			}
-			st.Spec.Template.Spec.Volumes = append(st.Spec.Template.Spec.Volumes, secretVolume)
-		}
-
-		var volmFound bool
-		for _, vol := range st.Spec.Template.Spec.Containers[0].VolumeMounts {
-			if vol.Name == secretVolumeName {
-				volmFound = true
-				break
-			}
-		}
-		if !volmFound {
-			secretVolumeMount := corev1.VolumeMount{
-				Name:      secretVolumeName,
-				MountPath: aeroCluster.Spec.AerospikeConfigSecret.MountPath,
-			}
-			st.Spec.Template.Spec.Containers[0].VolumeMounts = append(st.Spec.Template.Spec.Containers[0].VolumeMounts, secretVolumeMount)
-		}
+	// Use rack tolerations, if given
+	if len(rackState.Rack.PodSpec.Tolerations) != 0 {
+		st.Spec.Template.Spec.Tolerations = rackState.Rack.PodSpec.Tolerations
+	} else {
+		st.Spec.Template.Spec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
 	}
 }
 
 // Called while creating new cluster and also during rolling restart.
-func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
-	// Update pod spec.
+func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, labels map[string]string, rackState RackState) {
+	r.updateSTSSchedulingPolicy(aeroCluster, st, labels, rackState)
+
 	st.Spec.Template.Spec.HostNetwork = aeroCluster.Spec.PodSpec.HostNetwork
 
 	st.Spec.Template.Spec.DNSPolicy = aeroCluster.Spec.PodSpec.DNSPolicy
 
+	st.Spec.Template.Spec.Containers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.Containers, aeroCluster.Spec.PodSpec.Sidecars)
+
+	st.Spec.Template.Spec.InitContainers =
+		updateStatefulSetContainers(st.Spec.Template.Spec.InitContainers, aeroCluster.Spec.PodSpec.InitContainers)
+}
+
+func updateStatefulSetContainers(stsContainers []corev1.Container, specContainers []corev1.Container) []corev1.Container {
 	// Add new sidecars.
-	for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
+	for _, specContainer := range specContainers {
 		found := false
 
-		// Create a copy because updating stateful sets sets defaults
+		// Create a copy because updating stateful sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		sideCarCopy := corev1.Container{}
-		lib.DeepCopy(&sideCarCopy, &newSidecar)
-		for i, container := range st.Spec.Template.Spec.Containers {
-			if newSidecar.Name == container.Name {
+		specContainerCopy := corev1.Container{}
+		lib.DeepCopy(&specContainerCopy, &specContainer)
+		for i, stsContainer := range stsContainers {
+			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
-				st.Spec.Template.Spec.Containers[i] = sideCarCopy
+				stsContainers[i] = specContainerCopy
 				found = true
 				break
 			}
@@ -737,16 +710,16 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1beta1.A
 
 		if !found {
 			// Add to stateful set containers.
-			st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, sideCarCopy)
+			stsContainers = append(stsContainers, specContainerCopy)
 		}
 	}
 
 	// Remove deleted sidecars.
 	j := 0
-	for i, container := range st.Spec.Template.Spec.Containers {
+	for i, stsContainer := range stsContainers {
 		found := i == 0
-		for _, newSidecar := range aeroCluster.Spec.PodSpec.Sidecars {
-			if newSidecar.Name == container.Name {
+		for _, specContainer := range specContainers {
+			if specContainer.Name == stsContainer.Name {
 				found = true
 				break
 			}
@@ -754,72 +727,11 @@ func (r *AerospikeClusterReconciler) updateSTSPodSpec(aeroCluster *asdbv1beta1.A
 
 		if found {
 			// Retain main aerospike container or a matched sidecar.
-			st.Spec.Template.Spec.Containers[j] = container
+			stsContainers[j] = stsContainer
 			j++
 		}
 	}
-	st.Spec.Template.Spec.Containers = st.Spec.Template.Spec.Containers[:j]
-}
-
-// Called while creating new cluster and also during rolling restart.
-func (r *AerospikeClusterReconciler) updateSTSConfigMapVolumes(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
-	configMaps, _ := rackState.Rack.Storage.GetConfigMaps()
-
-	// Add to stateful set volumes.
-	for _, configMapVolume := range configMaps {
-		// Ignore error since its not possible.
-		pvcName, _ := getPVCName(configMapVolume.Path)
-		found := false
-		for _, volume := range st.Spec.Template.Spec.Volumes {
-			if volume.Name == pvcName {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			k8sVolume := corev1.Volume{
-				Name: pvcName,
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: configMapVolume.ConfigMapName,
-						},
-					},
-				},
-			}
-			st.Spec.Template.Spec.Volumes = append(st.Spec.Template.Spec.Volumes, k8sVolume)
-		}
-
-		addConfigMapVolumeMountInSTS(st.Spec.Template.Spec.InitContainers, configMapVolume)
-		addConfigMapVolumeMountInSTS(st.Spec.Template.Spec.Containers, configMapVolume)
-	}
-
-	// Remove to stateful set volumes.
-	j := 0
-	for _, volume := range st.Spec.Template.Spec.Volumes {
-		found := volume.ConfigMap == nil || volume.Name == confDirName || volume.Name == initConfDirName
-		for _, configMapVolume := range configMaps {
-			// Ignore error since its not possible.
-			pvcName, _ := getPVCName(configMapVolume.Path)
-			if volume.Name == pvcName {
-				// Do not touch non confimap volumes or reserved config map volumes.
-				found = true
-				break
-			}
-		}
-
-		if found {
-			// Retain internal volumen or a matched volume
-			st.Spec.Template.Spec.Volumes[j] = volume
-			j++
-		} else {
-			// Remove volume mounts from the containers.
-			removeConfigMapVolumeMountFromSTS(st.Spec.Template.Spec.InitContainers, volume)
-			removeConfigMapVolumeMountFromSTS(st.Spec.Template.Spec.Containers, volume)
-		}
-	}
-	st.Spec.Template.Spec.Volumes = st.Spec.Template.Spec.Volumes[:j]
+	return stsContainers[:j]
 }
 
 func (r *AerospikeClusterReconciler) waitForAllSTSToBeReady(aeroCluster *asdbv1beta1.AerospikeCluster) error {
@@ -855,50 +767,183 @@ func (r *AerospikeClusterReconciler) getClusterSTSList(aeroCluster *asdbv1beta1.
 	}
 	return statefulSetList, nil
 }
-func addConfigMapVolumeMountInSTS(containers []corev1.Container, configMapVolume asdbv1beta1.AerospikePersistentVolumeSpec) {
-	// Update volume mounts.
-	for i := range containers {
-		container := &containers[i]
-		// Ignore error since its not possible.
-		pvcName, _ := getPVCName(configMapVolume.Path)
-		mountFound := false
-		for _, mount := range container.VolumeMounts {
-			if mount.Name == pvcName {
-				mountFound = true
+
+func (r *AerospikeClusterReconciler) updateSTSContainerResources(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
+	// These resources are for main aerospike container. Other sidecar can mention their own resources.
+	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
+}
+
+func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      confDirName,
+			MountPath: "/etc/aerospike",
+		},
+		{
+			Name:      initConfDirName,
+			MountPath: "/configs",
+		},
+	}
+}
+
+func getDefaultSTSVolumes(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState) []corev1.Volume {
+	return []corev1.Volume{
+		{
+			Name: confDirName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: initConfDirName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID).Name,
+					},
+				},
+			},
+		},
+	}
+}
+
+func getDefaultAerospikeContainerVolumeMounts() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      confDirName,
+			MountPath: "/etc/aerospike",
+		},
+	}
+}
+
+func initializeSTSStorage(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet, rackState RackState) {
+	// Initialize sts storage
+	for i := range st.Spec.Template.Spec.InitContainers {
+		if i == 0 {
+			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
+		} else {
+			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = []corev1.VolumeMount{}
+		}
+
+		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = []corev1.VolumeDevice{}
+	}
+
+	for i := range st.Spec.Template.Spec.Containers {
+		if i == 0 {
+			st.Spec.Template.Spec.Containers[i].VolumeMounts = getDefaultAerospikeContainerVolumeMounts()
+		} else {
+			st.Spec.Template.Spec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
+		}
+
+		st.Spec.Template.Spec.Containers[i].VolumeDevices = []corev1.VolumeDevice{}
+	}
+
+	st.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{}
+
+	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(aeroCluster, rackState)
+}
+
+func createPVCForVolumeAttachment(aeroCluster *asdbv1beta1.AerospikeCluster, volume asdbv1beta1.VolumeSpec) corev1.PersistentVolumeClaim {
+
+	pv := volume.Source.PersistentVolume
+
+	var accessModes []corev1.PersistentVolumeAccessMode
+	accessModes = append(accessModes, pv.AccessModes...)
+	if len(accessModes) == 0 {
+		accessModes = append(accessModes, "ReadWriteOnce")
+	}
+
+	return corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      volume.Name,
+			Namespace: aeroCluster.Namespace,
+			// Use this path annotation while matching pvc with storage volume
+			Annotations: map[string]string{
+				storagePathAnnotationKey: volume.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			VolumeMode:  &pv.VolumeMode,
+			AccessModes: accessModes,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: pv.Size,
+				},
+			},
+			StorageClassName: &pv.StorageClass,
+			Selector:         pv.Selector,
+		},
+	}
+}
+
+func createVolumeForVolumeAttachment(volume asdbv1beta1.VolumeSpec) corev1.Volume {
+	return corev1.Volume{
+		Name: volume.Name,
+		// Add all type of source,
+		// we have already validated in webhook that only one of the source is present, rest are nil.
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: volume.Source.ConfigMap,
+			Secret:    volume.Source.Secret,
+			EmptyDir:  volume.Source.EmptyDir,
+		},
+	}
+}
+
+// Add dummy volumeAttachment for aerospike, init container
+func getFinalVolumeAttachmentsForVolume(volume asdbv1beta1.VolumeSpec) (initContainerAttachments, containerAttachments []asdbv1beta1.VolumeAttachment) {
+	// Create dummy attachment for initContainer
+	initVolumePath := "/" + volume.Name // Using volume name for initContainer
+
+	// All volumes should be mounted in init container to allow initialization
+	initContainerAttachments = append(initContainerAttachments, volume.InitContainers...)
+	initContainerAttachments = append(initContainerAttachments, asdbv1beta1.VolumeAttachment{
+		ContainerName: asdbv1beta1.AerospikeServerInitContainerName,
+		Path:          initVolumePath,
+	})
+
+	// Create dummy attachment for aerospike server container
+	containerAttachments = append(containerAttachments, volume.Sidecars...)
+	if volume.Aerospike != nil {
+		containerAttachments = append(containerAttachments, asdbv1beta1.VolumeAttachment{
+			ContainerName: asdbv1beta1.AerospikeServerContainerName,
+			Path:          volume.Aerospike.Path,
+		})
+	}
+	return initContainerAttachments, containerAttachments
+}
+
+func addVolumeMountInContainer(volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment, containers []corev1.Container, pathPrefix string) {
+	for _, volumeAttachment := range volumeAttachments {
+		for i := range containers {
+			container := &containers[i]
+
+			if container.Name == volumeAttachment.ContainerName {
+				volumeMount := corev1.VolumeMount{
+					Name:      volumeName,
+					MountPath: pathPrefix + volumeAttachment.Path,
+				}
+				container.VolumeMounts = append(container.VolumeMounts, volumeMount)
 				break
 			}
 		}
-
-		if !mountFound {
-			volumeMount := corev1.VolumeMount{
-				Name:      pvcName,
-				MountPath: configMapVolume.Path,
-			}
-			container.VolumeMounts = append(container.VolumeMounts, volumeMount)
-		}
 	}
 }
 
-func removeConfigMapVolumeMountFromSTS(containers []corev1.Container, volume corev1.Volume) {
-	// Update volume mounts.
-	for i := range containers {
-		container := &containers[i]
-		j := 0
-		for _, mount := range container.VolumeMounts {
-			if mount.Name != volume.Name {
-				// This mount point must be retained.
-				container.VolumeMounts[j] = mount
-				j++
+func addVolumeDeviceInContainer(volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment, containers []corev1.Container, pathPrefix string) {
+	for _, volumeAttachment := range volumeAttachments {
+		for i := range containers {
+			container := &containers[i]
+
+			if container.Name == volumeAttachment.ContainerName {
+				volumeDevice := corev1.VolumeDevice{
+					Name:       volumeName,
+					DevicePath: pathPrefix + volumeAttachment.Path,
+				}
+				container.VolumeDevices = append(container.VolumeDevices, volumeDevice)
+				break
 			}
 		}
-
-		container.VolumeMounts = container.VolumeMounts[:j]
 	}
-}
-
-func (r *AerospikeClusterReconciler) updateSTSContainerResources(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
-	// These resource is for main aerospike container. Other sidecar can mention their own resource
-	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
 }
 
 func getSTSContainerPort(multiPodPerHost bool, aeroConf *asdbv1beta1.AerospikeConfigSpec) []corev1.ContainerPort {
