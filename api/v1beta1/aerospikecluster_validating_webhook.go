@@ -28,6 +28,7 @@ import (
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -241,30 +242,35 @@ func validateClientCertSpec(
 	if !serviceConfExists {
 		return nil
 	}
-	clientNames, err := readClientNamesFromConfig(serviceConf.(map[string]interface{}))
-	if err != nil {
-		return err
-	}
-	if isClientCertNeeded(
-		clientNames, configSpec,
-	) && (clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured()) {
-		return fmt.Errorf(
-			"mTLS is configured for AerospikeCluster (%v) but operator's client cert is not: %+v",
-			clientNames, clientCertSpec,
-		)
-	}
-	if isClientCertNameValidationEnabled(clientNames) && (clientCertSpec == nil || clientCertSpec.TLSClientName == "") {
-		return fmt.Errorf(
-			"client name validation is enabled in mTLS (%+v) but TLSClientName is not provided in operatorClientCertSpec",
-			clientNames,
-		)
-	}
-	if clientCertSpec == nil {
+	tlsAuthenticateClientConfig, ok := serviceConf.(map[string]interface{})["tls-authenticate-client"]
+	if !ok {
 		return nil
 	}
-	if err := clientCertSpec.validate(); err != nil {
-		return err
+
+	switch {
+	case reflect.DeepEqual("false", tlsAuthenticateClientConfig):
+		return nil
+	case reflect.DeepEqual("any", tlsAuthenticateClientConfig):
+		if clientCertSpec == nil {
+			return fmt.Errorf("operator client cert is not specified")
+		}
+		if !clientCertSpec.IsClientCertConfigured() {
+			return fmt.Errorf("operator client cert is not configured")
+		}
+		return nil
+	default:
+		if clientCertSpec == nil {
+			return fmt.Errorf("operator client cert is not specified")
+		}
+		if clientCertSpec.TLSClientName == "" {
+			return fmt.Errorf("operator TLSClientName is not specified")
+		}
+		if err := clientCertSpec.validate(); err != nil {
+			return err
+		}
+
 	}
+
 	return nil
 }
 
@@ -583,39 +589,58 @@ func (r *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 	return nil
 }
 
-func validateTlsClientNames(
-	serviceConf map[string]interface{},
-	clientCertSpec *AerospikeOperatorClientCertSpec,
-) error {
-	clientNames, err := readClientNamesFromConfig(serviceConf)
-	if err != nil {
-		return err
+func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) ([]string, error) {
+	config, ok := serviceConf["tls-authenticate-client"]
+	if !ok {
+		return []string{}, nil
 	}
-	clientNameValidationEnabled := isClientCertNameValidationEnabled(clientNames)
-	if !clientNameValidationEnabled && len(clientNames) > 1 {
-		return fmt.Errorf(
-			"tls-authenticate-client may not mix \"any\" or \"false\" with other values: %+v",
-			clientNames,
-		)
-	}
-	namesFromCert, err := readNamesFromLocalCertificate(clientCertSpec)
-	if err != nil {
-		return err
-	}
-	if clientNameValidationEnabled && len(namesFromCert) > 0 && !containsAnyName(
-		clientNames, namesFromCert,
-	) {
-		certNames := make([]string, 0, len(namesFromCert))
-		for name := range namesFromCert {
-			certNames = append(certNames, name)
+	switch value := config.(type) {
+	case string:
+		if value == "any" || value == "false" {
+			return []string{}, nil
 		}
-		return fmt.Errorf(
-			"tls-authenticate-client (%+v) doesn't contain name from Operator's certificate (%+v) configured in %s, configure OperatorClientCertSpec.TLSClientName properly",
-			clientNames, certNames,
-			clientCertSpec.CertPathInOperator.ClientCertPath,
-		)
+		return nil, fmt.Errorf("tls-authenticate-client contains invalid value: %s", value)
+	case bool:
+		if value == false {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("tls-authenticate-client contains invalid value: %t", value)
+	case []interface{}:
+		dnsnames := make([]string, len(value))
+		for i := 0; i < len(value); i++ {
+			dnsname, ok := value[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("tls-authenticate-client contains invalid type value: %v", value)
+			}
+			if !validate.IsDNSName(dnsname) {
+				return nil, fmt.Errorf("tls-authenticate-client contains invalid dns-name: %v", dnsname)
+			}
+			dnsnames[i] = dnsname
+		}
+		return dnsnames, nil
+	}
+	return nil, fmt.Errorf("tls-authenticate-client contains invalid type value: %v", config)
+}
+
+func validateTlsClientNames(serviceConf map[string]interface{}, clientCertSpec *AerospikeOperatorClientCertSpec) error {
+	dnsnames, err := ValidateTLSAuthenticateClient(serviceConf)
+	if err != nil {
+		return err
+	}
+	if len(dnsnames) == 0 {
+		return nil
+	}
+
+	localCertNames, err := readNamesFromLocalCertificate(clientCertSpec)
+	if err != nil {
+		return err
+	}
+	if !containsAnyName(dnsnames, localCertNames) && len(localCertNames) > 0 {
+		return fmt.Errorf("tls-authenticate-client (%+v) doesn't contain name from Operator's certificate (%+v), configure OperatorClientCertSpec.TLSClientName properly",
+			dnsnames, localCertNames)
 	}
 	return nil
+
 }
 
 func containsAnyName(
@@ -667,10 +692,7 @@ func validateNetworkConnection(
 		} else {
 			for param := range connectionConfigMap {
 				if strings.HasPrefix(param, "tls-") {
-					return fmt.Errorf(
-						"you cann't specify %s for network.%s without specifying tls-name",
-						param, connectionType,
-					)
+					return fmt.Errorf("you can't specify %s for network.%s without specifying tls-name", param, connectionType)
 				}
 			}
 		}
@@ -928,11 +950,17 @@ func validateAerospikeConfigUpdate(
 	// Security can not be updated dynamically
 	// TODO: How to enable dynamic security update, need to pass policy for individual nodes.
 	// auth-enabled and auth-disabled node can co-exist
-	oldSec, ok1 := oldConf["security"]
-	newSec, ok2 := newConf["security"]
-	if ok1 != ok2 ||
-		ok1 && ok2 && (!reflect.DeepEqual(oldSec, newSec)) {
+	oldSec, oldSecConfFound := oldConf["security"]
+	newSec, newSecConfFound := newConf["security"]
+	if oldSecConfFound != oldSecConfFound {
 		return fmt.Errorf("cannot update cluster security config")
+	}
+	if oldSecConfFound && newSecConfFound {
+		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
+		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
+		if oldEnableSecurityFlagFound != newEnableSecurityFlagFound || !reflect.DeepEqual(oldSecFlag, newSecFlag) {
+			return fmt.Errorf("cannot update cluster security config enable-security was changed")
+		}
 	}
 
 	// TLS can not be updated dynamically

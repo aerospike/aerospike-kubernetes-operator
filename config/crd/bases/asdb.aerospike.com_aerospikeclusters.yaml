@@ -64,6 +64,11 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        readQuota:
+                          description: ReadQuota specifies permitted rate of read
+                            records for current role (the value is in RPS)
+                          format: int32
+                          type: integer
                         whitelist:
                           description: Whitelist of host address allowed for this
                             role.
@@ -71,6 +76,11 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        writeQuota:
+                          description: WriteQuota specifies permitted rate of write
+                            records for current role (the value is in RPS)
+                          format: int32
+                          type: integer
                       required:
                       - name
                       - privileges
@@ -4894,6 +4904,11 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        readQuota:
+                          description: ReadQuota specifies permitted rate of read
+                            records for current role (the value is in RPS)
+                          format: int32
+                          type: integer
                         whitelist:
                           description: Whitelist of host address allowed for this
                             role.
@@ -4901,6 +4916,11 @@ spec:
                             type: string
                           type: array
                           x-kubernetes-list-type: set
+                        writeQuota:
+                          description: WriteQuota specifies permitted rate of write
+                            records for current role (the value is in RPS)
+                          format: int32
+                          type: integer
                       required:
                       - name
                       - privileges

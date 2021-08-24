@@ -17,6 +17,7 @@ import (
 	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/hashicorp/go-version"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -352,4 +353,65 @@ func Copy(dst interface{}, src interface{}) error {
 		return fmt.Errorf("unable to unmarshal into dst: %s", err)
 	}
 	return nil
+}
+
+type AerospikeConfSpec struct {
+	version     *version.Version
+	constraints *version.Constraints
+	service     map[string]interface{}
+	security    map[string]interface{}
+	namespaces  []interface{}
+}
+
+func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
+	service := map[string]interface{}{
+		"feature-key-file": "/etc/aerospike/secret/features.conf",
+	}
+	namespaces := []interface{}{
+		map[string]interface{}{
+			"name":               "test",
+			"memory-size":        1000955200,
+			"replication-factor": 1,
+			"storage-engine": map[string]interface{}{
+				"type": "memory",
+			},
+		},
+	}
+
+	security := map[string]interface{}{}
+
+	constraints, err := version.NewConstraint(">= 5.6")
+	if err != nil {
+		return nil, err
+	}
+
+	return &AerospikeConfSpec{
+		version:     v,
+		constraints: &constraints,
+		service:     service,
+		namespaces:  namespaces,
+		security:    security,
+	}, nil
+}
+
+func (acs *AerospikeConfSpec) getVersion() string {
+	return acs.version.String()
+}
+
+func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) {
+	acs.security["enable-security"] = enableSecurity
+}
+
+func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) {
+	if acs.constraints.Check(acs.version) {
+		acs.security["enable-quotas"] = enableQuotas
+	}
+}
+
+func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
+	return map[string]interface{}{
+		"service":    acs.service,
+		"security":   acs.security,
+		"namespaces": acs.namespaces,
+	}
 }

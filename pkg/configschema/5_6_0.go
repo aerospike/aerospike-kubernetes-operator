@@ -1,6 +1,6 @@
 package configschema
 
-const conf5_4_0 = `
+const conf5_6_0 = `
 {
   "$schema": "http://json-schema.org/draft-06/schema",
   "additionalProperties": false,
@@ -10,7 +10,20 @@ const conf5_4_0 = `
     "service": {
       "type": "object",
       "additionalProperties": false,
+      "oneOf": [{
+        "required": ["feature-key-file"]
+      }, {
+        "required": ["feature-key-files"]
+      }],
       "properties": {
+        "query-buf-size": {
+          "type": "integer",
+          "default": 2097152,
+          "minimum": 0,
+          "maximum": 2147483647,
+          "description": "",
+          "dynamic": true
+        },
         "user": {
           "type": "string",
           "default": "",
@@ -40,6 +53,14 @@ const conf5_4_0 = `
         "proto-fd-max": {
           "type": "integer",
           "default": 15000,
+          "minimum": 0,
+          "maximum": 2147483647,
+          "description": "",
+          "dynamic": true
+        },
+        "proto-slow-netio-sleep-ms": {
+          "type": "integer",
+          "default": 1,
           "minimum": 0,
           "maximum": 2147483647,
           "description": "",
@@ -132,13 +153,22 @@ const conf5_4_0 = `
           "description": "",
           "dynamic": false
         },
+        "feature-key-files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "",
+          "dynamic": false,
+          "default": ["/opt/aerospike/data/features.conf"]
+        },
         "info-threads": {
           "type": "integer",
           "default": 16,
           "minimum": 0,
           "maximum": 2147483647,
           "description": "",
-          "dynamic": false
+          "dynamic": true
         },
         "keep-caps-ssd-health": {
           "type": "boolean",
@@ -198,13 +228,19 @@ const conf5_4_0 = `
         },
         "node-id": {
           "type": "string",
-          "default": "BB989E07C0B51A0",
+          "default": "BB9138953270008",
           "description": "",
           "dynamic": false
         },
         "node-id-interface": {
           "type": "string",
           "default": "",
+          "description": "",
+          "dynamic": false
+        },
+        "os-group-perms": {
+          "type": "boolean",
+          "default": false,
           "description": "",
           "dynamic": false
         },
@@ -243,6 +279,12 @@ const conf5_4_0 = `
           "default": 500,
           "minimum": 1,
           "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
+        "query-microbenchmark": {
+          "type": "boolean",
+          "default": false,
           "description": "",
           "dynamic": true
         },
@@ -358,7 +400,7 @@ const conf5_4_0 = `
           "minimum": 1,
           "maximum": 4096,
           "description": "",
-          "dynamic": false
+          "dynamic": true
         },
         "sindex-builder-threads": {
           "type": "integer",
@@ -901,6 +943,12 @@ const conf5_4_0 = `
               "description": "",
               "dynamic": false
             },
+            "disable-localhost": {
+              "type": "boolean",
+              "default": false,
+              "description": "",
+              "dynamic": false
+            },
             "tls-access-addresses": {
               "type": "array",
               "items": {
@@ -956,7 +1004,9 @@ const conf5_4_0 = `
                 "items": {
                   "type": "string",
                   "format": "hostname",
-                  "not": {"enum":["any","false"]}
+                  "not": {
+                    "enum": ["any", "false"]
+                  }
                 }
               }]
             },
@@ -1029,7 +1079,7 @@ const conf5_4_0 = `
               "minimum": 50,
               "maximum": 600000,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "timeout": {
               "type": "integer",
@@ -1037,7 +1087,7 @@ const conf5_4_0 = `
               "minimum": 3,
               "maximum": 4294967295,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "connect-timeout-ms": {
               "type": "integer",
@@ -1053,7 +1103,7 @@ const conf5_4_0 = `
               "minimum": 0,
               "maximum": 4294967295,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "multicast-ttl": {
               "type": "integer",
@@ -1066,7 +1116,7 @@ const conf5_4_0 = `
             "protocol": {
               "type": "string",
               "description": "",
-              "dynamic": false,
+              "dynamic": true,
               "default": "v3",
               "enum": ["none", "v3"]
             },
@@ -1140,7 +1190,7 @@ const conf5_4_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-ctrl-fds": {
               "type": "integer",
@@ -1156,7 +1206,7 @@ const conf5_4_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-meta-fds": {
               "type": "integer",
@@ -1172,7 +1222,7 @@ const conf5_4_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "channel-rw-fds": {
               "type": "integer",
@@ -1196,7 +1246,7 @@ const conf5_4_0 = `
               "minimum": 1,
               "maximum": 128,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "keepalive-enabled": {
               "type": "boolean",
@@ -1242,7 +1292,7 @@ const conf5_4_0 = `
               "minimum": 0,
               "maximum": 1048576,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "send-threads": {
               "type": "integer",
@@ -1461,7 +1511,6 @@ const conf5_4_0 = `
                 },
                 "scheduler-mode": {
                   "type": "string",
-                  "default": "",
                   "enum": ["anticipatory", "cfq", "deadline", "noop", "null"],
                   "description": "",
                   "dynamic": false
@@ -1814,7 +1863,7 @@ const conf5_4_0 = `
           "conflict-resolution-policy": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "generation",
             "enum": ["generation", "last-update-time"]
           },
@@ -2101,7 +2150,7 @@ const conf5_4_0 = `
           "read-consistency-level-override": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "off",
             "enum": ["all", "off", "one"]
           },
@@ -2129,13 +2178,19 @@ const conf5_4_0 = `
                   "description": "",
                   "dynamic": false
                 },
-                "set-disable-eviction": {
+                "disable-eviction": {
                   "type": "boolean",
                   "default": false,
                   "description": "",
-                  "dynamic": false
+                  "dynamic": true
                 },
-                "set-stop-writes-count": {
+                "enable-index": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "",
+                  "dynamic": true
+                },
+                "stop-writes-count": {
                   "type": "integer",
                   "default": 0,
                   "minimum": 0,
@@ -2176,7 +2231,7 @@ const conf5_4_0 = `
                 "minimum": 0,
                 "maximum": 30,
                 "description": "",
-                "dynamic": false
+                "dynamic": true
               },
               "max-level": {
                 "type": "integer",
@@ -2184,7 +2239,7 @@ const conf5_4_0 = `
                 "minimum": 0,
                 "maximum": 30,
                 "description": "",
-                "dynamic": false
+                "dynamic": true
               },
               "max-cells": {
                 "type": "integer",
@@ -2281,7 +2336,7 @@ const conf5_4_0 = `
           "write-commit-level-override": {
             "type": "string",
             "description": "",
-            "dynamic": false,
+            "dynamic": true,
             "default": "off",
             "enum": ["all", "master", "off"]
           },
@@ -2340,6 +2395,12 @@ const conf5_4_0 = `
           "description": "",
           "dynamic": false
         },
+        "enable-quotas": {
+          "type": "boolean",
+          "default": false,
+          "description": "",
+          "dynamic": false
+        },
         "enable-security": {
           "type": "boolean",
           "default": false,
@@ -2352,13 +2413,21 @@ const conf5_4_0 = `
           "minimum": 1,
           "maximum": 64,
           "description": "",
-          "dynamic": true
+          "dynamic": false
         },
         "privilege-refresh-period": {
           "type": "integer",
           "default": 300,
           "minimum": 10,
           "maximum": 86400,
+          "description": "",
+          "dynamic": true
+        },
+        "tps-weight": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 2,
+          "maximum": 20,
           "description": "",
           "dynamic": true
         },
@@ -2467,9 +2536,27 @@ const conf5_4_0 = `
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-data-op": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "",
+              "dynamic": true,
+              "default": []
+            },
+            "report-data-op-role": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "",
+              "dynamic": true,
+              "default": []
+            },
+            "report-data-op-user": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -2482,19 +2569,19 @@ const conf5_4_0 = `
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-user-admin": {
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-violation": {
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             }
           }
         },
@@ -2514,9 +2601,27 @@ const conf5_4_0 = `
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-data-op": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "",
+              "dynamic": true,
+              "default": []
+            },
+            "report-data-op-role": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "",
+              "dynamic": true,
+              "default": []
+            },
+            "report-data-op-user": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -2529,19 +2634,19 @@ const conf5_4_0 = `
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-user-admin": {
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             },
             "report-violation": {
               "type": "boolean",
               "default": false,
               "description": "",
-              "dynamic": false
+              "dynamic": true
             }
           }
         }
@@ -2731,7 +2836,7 @@ const conf5_4_0 = `
               "auth-mode": {
                 "type": "string",
                 "description": "",
-                "dynamic": false,
+                "dynamic": true,
                 "default": "internal",
                 "enum": ["internal", "external", "external-insecure"]
               },
@@ -2750,6 +2855,14 @@ const conf5_4_0 = `
               "connector": {
                 "type": "boolean",
                 "default": false,
+                "description": "",
+                "dynamic": true
+              },
+              "max-recoveries-interleaved": {
+                "type": "integer",
+                "default": 0,
+                "minimum": 0,
+                "maximum": 4294967295,
                 "description": "",
                 "dynamic": true
               },
