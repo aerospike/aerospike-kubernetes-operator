@@ -1,6 +1,3 @@
-package configschema
-
-const conf4_6_0 = `
 {
   "$schema": "http://json-schema.org/draft-06/schema",
   "additionalProperties": false,
@@ -58,10 +55,10 @@ const conf4_6_0 = `
           "default": "none",
           "enum": ["none", "cpu", "numa"]
         },
-        "batch-index-threads": {
+        "batch-threads": {
           "type": "integer",
-          "default": 1,
-          "minimum": 1,
+          "default": 4,
+          "minimum": 0,
           "maximum": 256,
           "description": "",
           "dynamic": true
@@ -90,6 +87,22 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": true
         },
+        "batch-priority": {
+          "type": "integer",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
+        "batch-index-threads": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 256,
+          "description": "",
+          "dynamic": true
+        },
         "cluster-name": {
           "type": "string",
           "default": "",
@@ -108,12 +121,6 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": true
         },
-        "enable-health-check": {
-          "type": "boolean",
-          "default": false,
-          "description": "",
-          "dynamic": true
-        },
         "enable-hist-info": {
           "type": "boolean",
           "default": false,
@@ -122,7 +129,7 @@ const conf4_6_0 = `
         },
         "feature-key-file": {
           "type": "string",
-          "default": "/opt/aerospike/data/features.conf",
+          "default": "/etc/aerospike/features.conf",
           "description": "",
           "dynamic": false
         },
@@ -156,12 +163,6 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": false
         },
-        "keep-caps-ssd-health": {
-          "type": "boolean",
-          "default": false,
-          "description": "",
-          "dynamic": false
-        },
         "log-local-time": {
           "type": "boolean",
           "default": false,
@@ -173,14 +174,6 @@ const conf4_6_0 = `
           "default": false,
           "description": "",
           "dynamic": false
-        },
-        "migrate-fill-delay": {
-          "type": "integer",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 4294967295,
-          "description": "",
-          "dynamic": true
         },
         "migrate-max-num-incoming": {
           "type": "integer",
@@ -208,13 +201,35 @@ const conf4_6_0 = `
         },
         "node-id": {
           "type": "string",
-          "default": "BB989E07C0B51A0",
+          "default": "",
           "description": "",
           "dynamic": false
         },
         "node-id-interface": {
           "type": "string",
           "default": "",
+          "description": "",
+          "dynamic": false
+        },
+        "nsup-delete-sleep": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
+        "nsup-period": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
+        "nsup-startup-evict": {
+          "type": "boolean",
+          "default": true,
           "description": "",
           "dynamic": false
         },
@@ -274,15 +289,15 @@ const conf4_6_0 = `
           "type": "integer",
           "default": 1,
           "minimum": 0,
-          "maximum": 18446744073709552000,
+          "maximum": 18446744073709551615,
           "description": "",
           "dynamic": true
         },
         "query-rec-count-bound": {
           "type": "integer",
-          "default": 18446744073709552000,
+          "default": 18446744073709551615,
           "minimum": 1,
-          "maximum": 18446744073709552000,
+          "maximum": 18446744073709551615,
           "description": "",
           "dynamic": true
         },
@@ -328,7 +343,7 @@ const conf4_6_0 = `
           "type": "integer",
           "default": 1000,
           "minimum": 1,
-          "maximum": 18446744073709552000,
+          "maximum": 18446744073709551615,
           "description": "",
           "dynamic": true
         },
@@ -426,6 +441,14 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": true
         },
+        "transaction-pending-limit": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "",
+          "dynamic": true
+        },
         "transaction-queues": {
           "type": "integer",
           "default": 4,
@@ -469,11 +492,13 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": true
         },
-        "indent-allocations": {
-          "type": "boolean",
-          "default": false,
+        "prole-extra-ttl": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 4294967295,
           "description": "",
-          "dynamic": false
+          "dynamic": true
         }
       }
     },
@@ -543,12 +568,6 @@ const conf4_6_0 = `
             "dynamic": true,
             "default": "INFO"
           },
-          "xmem": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
           "aggr": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
@@ -591,6 +610,18 @@ const conf4_6_0 = `
             "dynamic": true,
             "default": "INFO"
           },
+          "compression": {
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
+            "description": "",
+            "dynamic": true,
+            "default": "INFO"
+          },
+          "demarshal": {
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
+            "description": "",
+            "dynamic": true,
+            "default": "INFO"
+          },
           "drv_ssd": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
@@ -609,12 +640,6 @@ const conf4_6_0 = `
             "dynamic": true,
             "default": "INFO"
           },
-          "flat": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
           "geo": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
@@ -622,12 +647,6 @@ const conf4_6_0 = `
             "default": "INFO"
           },
           "hb": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "health": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -771,18 +790,6 @@ const conf4_6_0 = `
             "dynamic": true,
             "default": "INFO"
           },
-          "service": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "service-list": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
           "sindex": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
@@ -826,18 +833,6 @@ const conf4_6_0 = `
             "default": "INFO"
           },
           "xdr": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "xdr-client": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "xdr-http": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -1344,15 +1339,9 @@ const conf4_6_0 = `
                 "description": "",
                 "dynamic": false
               },
-              "key-file-password": {
-                "type": "string",
-                "default": "",
-                "description": "",
-                "dynamic": false
-              },
               "protocols": {
                 "type": "string",
-                "default": "TLSv1.2",
+                "default": "",
                 "description": "",
                 "dynamic": false
               }
@@ -1367,7 +1356,6 @@ const conf4_6_0 = `
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["memory-size"],
         "properties": {
           "name": {
             "type": "string",
@@ -1385,9 +1373,9 @@ const conf4_6_0 = `
           },
           "memory-size": {
             "type": "integer",
-            "default": 0,
+            "default": 4294967296,
             "minimum": 0,
-            "maximum": 18446744073709552000,
+            "maximum": 18446744073709551615,
             "description": "",
             "dynamic": true
           },
@@ -1395,7 +1383,7 @@ const conf4_6_0 = `
             "type": "integer",
             "default": 0,
             "minimum": 0,
-            "maximum": 18446744073709552000,
+            "maximum": 18446744073709551615,
             "description": "",
             "dynamic": true
           },
@@ -1449,7 +1437,7 @@ const conf4_6_0 = `
                 },
                 "filesize": {
                   "type": "integer",
-                  "default": 0,
+                  "default": 17179869184,
                   "minimum": 1048576,
                   "maximum": 2199023255552,
                   "description": "",
@@ -1466,7 +1454,7 @@ const conf4_6_0 = `
                   "type": "integer",
                   "default": 1048576,
                   "minimum": 1024,
-                  "maximum": 8388608,
+                  "maximum": 1048576,
                   "description": "",
                   "dynamic": false
                 },
@@ -1492,24 +1480,9 @@ const conf4_6_0 = `
                   "type": "integer",
                   "default": 0,
                   "minimum": 0,
-                  "maximum": 8388608,
+                  "maximum": 1048576,
                   "description": "",
                   "dynamic": false
-                },
-                "compression": {
-                  "type": "string",
-                  "description": "",
-                  "dynamic": true,
-                  "default": "none",
-                  "enum": ["none", "lz4", "snappy", "zstd"]
-                },
-                "compression-level": {
-                  "type": "integer",
-                  "default": 0,
-                  "minimum": 0,
-                  "maximum": 9,
-                  "description": "",
-                  "dynamic": true
                 },
                 "defrag-lwm-pct": {
                   "type": "integer",
@@ -1543,13 +1516,7 @@ const conf4_6_0 = `
                   "description": "",
                   "dynamic": false
                 },
-                "direct-files": {
-                  "type": "boolean",
-                  "default": false,
-                  "description": "",
-                  "dynamic": false
-                },
-                "disable-odsync": {
+                "disable-odirect": {
                   "type": "boolean",
                   "default": false,
                   "description": "",
@@ -1561,12 +1528,11 @@ const conf4_6_0 = `
                   "description": "",
                   "dynamic": true
                 },
-                "encryption": {
-                  "type": "string",
+                "enable-osync": {
+                  "type": "boolean",
+                  "default": false,
                   "description": "",
-                  "dynamic": false,
-                  "default": "aes-128",
-                  "enum": ["aes-128", "aes-256"]
+                  "dynamic": false
                 },
                 "encryption-key-file": {
                   "type": "string",
@@ -1582,11 +1548,19 @@ const conf4_6_0 = `
                   "description": "",
                   "dynamic": true
                 },
+                "fsync-max-sec": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
+                },
                 "max-write-cache": {
                   "type": "integer",
                   "default": 67108864,
                   "minimum": 0,
-                  "maximum": 18446744073709552000,
+                  "maximum": 18446744073709551615,
                   "description": "",
                   "dynamic": true
                 },
@@ -1605,18 +1579,6 @@ const conf4_6_0 = `
                   "maximum": 4096,
                   "description": "",
                   "dynamic": true
-                },
-                "read-page-cache": {
-                  "type": "boolean",
-                  "default": false,
-                  "description": "",
-                  "dynamic": true
-                },
-                "serialize-tomb-raider": {
-                  "type": "boolean",
-                  "default": false,
-                  "description": "",
-                  "dynamic": false
                 },
                 "tomb-raider-sleep": {
                   "type": "integer",
@@ -1668,6 +1630,14 @@ const conf4_6_0 = `
             "description": "",
             "dynamic": true
           },
+          "cold-start-evict-ttl": {
+            "type": "integer",
+            "default": 4294967295,
+            "minimum": 0,
+            "maximum": 4294967295,
+            "description": "",
+            "dynamic": false
+          },
           "conflict-resolution-policy": {
             "type": "string",
             "description": "",
@@ -1676,12 +1646,6 @@ const conf4_6_0 = `
             "enum": ["generation", "last-update-time"]
           },
           "data-in-index": {
-            "type": "boolean",
-            "default": false,
-            "description": "",
-            "dynamic": false
-          },
-          "disable-cold-start-eviction": {
             "type": "boolean",
             "default": false,
             "description": "",
@@ -1767,105 +1731,13 @@ const conf4_6_0 = `
             "description": "",
             "dynamic": true
           },
-          "index-stage-size": {
+          "max-ttl": {
             "type": "integer",
-            "default": 1073741824,
-            "minimum": 134217728,
-            "maximum": 17179869184,
+            "default": 315360000,
+            "minimum": 1,
+            "maximum": 315360000,
             "description": "",
-            "dynamic": false
-          },
-          "index-type": {
-            "oneOf": [{
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["type"],
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "description": "",
-                  "dynamic": false,
-                  "default": "shmem",
-                  "enum": ["shmem"]
-                }
-              }
-            }, {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["type", "mounts", "mounts-size-limit"],
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "description": "",
-                  "dynamic": false,
-                  "default": "pmem",
-                  "enum": ["pmem"]
-                },
-                "mounts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "",
-                  "dynamic": false,
-                  "default": []
-                },
-                "mounts-high-water-pct": {
-                  "type": "integer",
-                  "default": 80,
-                  "minimum": 0,
-                  "maximum": 100,
-                  "description": "",
-                  "dynamic": true
-                },
-                "mounts-size-limit": {
-                  "type": "integer",
-                  "default": 0,
-                  "minimum": 1073741824,
-                  "maximum": 18446744073709551615,
-                  "description": "",
-                  "dynamic": true
-                }
-              }
-            }, {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["type", "mounts", "mounts-size-limit"],
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "description": "",
-                  "dynamic": false,
-                  "default": "flash",
-                  "enum": ["flash"]
-                },
-                "mounts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "",
-                  "dynamic": false,
-                  "default": []
-                },
-                "mounts-high-water-pct": {
-                  "type": "integer",
-                  "default": 80,
-                  "minimum": 0,
-                  "maximum": 100,
-                  "description": "",
-                  "dynamic": true
-                },
-                "mounts-size-limit": {
-                  "type": "integer",
-                  "default": 0,
-                  "minimum": 4294967296,
-                  "maximum": 18446744073709551615,
-                  "description": "",
-                  "dynamic": true
-                }
-              }
-            }]
+            "dynamic": true
           },
           "migrate-order": {
             "type": "integer",
@@ -1891,43 +1763,29 @@ const conf4_6_0 = `
             "description": "",
             "dynamic": true
           },
-          "nsup-hist-period": {
+          "obj-size-hist-max": {
             "type": "integer",
-            "default": 3600,
+            "default": 100,
             "minimum": 0,
             "maximum": 4294967295,
             "description": "",
             "dynamic": true
           },
-          "nsup-period": {
+          "partition-tree-locks": {
             "type": "integer",
-            "default": 120,
-            "minimum": 0,
-            "maximum": 4294967295,
-            "description": "",
-            "dynamic": true
-          },
-          "nsup-threads": {
-            "type": "integer",
-            "default": 1,
+            "default": 8,
             "minimum": 1,
-            "maximum": 128,
+            "maximum": 256,
             "description": "",
-            "dynamic": true
+            "dynamic": false
           },
           "partition-tree-sprigs": {
             "type": "integer",
-            "default": 256,
+            "default": 64,
             "minimum": 16,
             "maximum": 4096,
             "description": "",
             "dynamic": false
-          },
-          "prefer-uniform-balance": {
-            "type": "boolean",
-            "default": false,
-            "description": "",
-            "dynamic": true
           },
           "rack-id": {
             "type": "integer",
@@ -1941,7 +1799,7 @@ const conf4_6_0 = `
             "type": "string",
             "description": "",
             "dynamic": false,
-            "default": "off",
+            "default": "all",
             "enum": ["all", "off", "one"]
           },
           "sets": {
@@ -1972,7 +1830,7 @@ const conf4_6_0 = `
                   "type": "integer",
                   "default": 0,
                   "minimum": 0,
-                  "maximum": 18446744073709552000,
+                  "maximum": 18446744073709551615,
                   "description": "",
                   "dynamic": true
                 }
@@ -2023,7 +1881,7 @@ const conf4_6_0 = `
                 "type": "integer",
                 "default": 12,
                 "minimum": 1,
-                "maximum": 256,
+                "maximum": 32,
                 "description": "",
                 "dynamic": true
               },
@@ -2087,22 +1945,6 @@ const conf4_6_0 = `
             "description": "",
             "dynamic": true
           },
-          "transaction-pending-limit": {
-            "type": "integer",
-            "default": 20,
-            "minimum": 0,
-            "maximum": 4294967295,
-            "description": "",
-            "dynamic": true
-          },
-          "truncate-threads": {
-            "type": "integer",
-            "default": 4,
-            "minimum": 1,
-            "maximum": 128,
-            "description": "",
-            "dynamic": true
-          },
           "write-commit-level-override": {
             "type": "string",
             "description": "",
@@ -2123,6 +1965,12 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": false
         },
+        "system-path": {
+          "type": "string",
+          "default": "/opt/aerospike/sys/udf/lua",
+          "description": "",
+          "dynamic": false
+        },
         "user-path": {
           "type": "string",
           "default": "/opt/aerospike/usr/udf/lua",
@@ -2135,25 +1983,11 @@ const conf4_6_0 = `
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enable-ldap": {
-          "type": "boolean",
-          "default": false,
-          "description": "",
-          "dynamic": false
-        },
         "enable-security": {
           "type": "boolean",
           "default": false,
           "description": "",
           "dynamic": false
-        },
-        "ldap-login-threads": {
-          "type": "integer",
-          "default": 8,
-          "minimum": 1,
-          "maximum": 64,
-          "description": "",
-          "dynamic": true
         },
         "privilege-refresh-period": {
           "type": "integer",
@@ -2162,103 +1996,6 @@ const conf4_6_0 = `
           "maximum": 86400,
           "description": "",
           "dynamic": true
-        },
-        "ldap": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "disable-tls": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": false
-            },
-            "polling-period": {
-              "type": "integer",
-              "default": 300,
-              "minimum": 0,
-              "maximum": 86400,
-              "description": "",
-              "dynamic": true
-            },
-            "query-base-dn": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "query-user-dn": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "query-user-password-file": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "role-query-base-dn": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "role-query-patterns": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "",
-              "dynamic": false,
-              "default": []
-            },
-            "role-query-search-ou": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": false
-            },
-            "server": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "session-ttl": {
-              "type": "integer",
-              "default": 86400,
-              "minimum": 120,
-              "maximum": 864000,
-              "description": "",
-              "dynamic": true
-            },
-            "tls-ca-file": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "token-hash-method": {
-              "type": "string",
-              "default": "sha-256",
-              "description": "",
-              "dynamic": false
-            },
-            "user-dn-pattern": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            },
-            "user-query-pattern": {
-              "type": "string",
-              "default": "",
-              "description": "",
-              "dynamic": false
-            }
-          }
         },
         "log": {
           "type": "object",
@@ -2359,12 +2096,6 @@ const conf4_6_0 = `
           "description": "",
           "dynamic": true
         },
-        "enable-change-notification": {
-          "type": "boolean",
-          "default": false,
-          "description": "",
-          "dynamic": false
-        },
         "xdr-digestlog-path": {
           "type": "string",
           "default": "null 0",
@@ -2383,6 +2114,15 @@ const conf4_6_0 = `
                 "default": " ",
                 "description": "",
                 "dynamic": false
+              },
+              "dc-node-address-ports": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "",
+                "dynamic": false,
+                "default": []
               },
               "dc-connections": {
                 "type": "integer",
@@ -2409,53 +2149,15 @@ const conf4_6_0 = `
                 "dynamic": true,
                 "default": []
               },
-              "dc-node-address-ports": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "",
-                "dynamic": false,
-                "default": []
-              },
               "dc-security-config-file": {
                 "type": "string",
                 "default": "",
                 "description": "",
                 "dynamic": true
               },
-              "dc-ship-bins": {
-                "type": "boolean",
-                "default": true,
-                "description": "",
-                "dynamic": true
-              },
-              "dc-type": {
-                "type": "string",
-                "default": "aerospike",
-                "enum": ["aerospike", "http", "null"],
-                "description": "",
-                "dynamic": true
-              },
               "dc-use-alternate-services": {
                 "type": "boolean",
                 "default": false,
-                "description": "",
-                "dynamic": true
-              },
-              "http-urls": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "",
-                "dynamic": false,
-                "default": []
-              },
-              "http-version": {
-                "type": "string",
-                "default": "v2",
-                "enum": ["v1", "v2", "null"],
                 "description": "",
                 "dynamic": true
               },
@@ -2612,4 +2314,4 @@ const conf4_6_0 = `
       }
     }
   }
-}`
+}
