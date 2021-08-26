@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1beta1
 
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,7 +29,7 @@ func (r *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 
 	aerospikeclusterlog.Info("registering mutating webhook to the webhook server")
-	hookServer.Register("/mutate-asdb-aerospike-com-v1alpha1-aerospikecluster", &webhook.Admission{Handler: &mutatingHandler{}})
+	hookServer.Register("/mutate-asdb-aerospike-com-v1beta1-aerospikecluster", &webhook.Admission{Handler: &mutatingHandler{}})
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).

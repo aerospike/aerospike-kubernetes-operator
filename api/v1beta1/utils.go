@@ -1,9 +1,8 @@
-package v1alpha1
+package v1beta1
 
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -77,9 +76,14 @@ const (
 	confKeyFilesize      = "filesize"
 	confKeyDevice        = "devices"
 	confKeyFile          = "files"
-	confKeyNetwork       = "network"
 	confKeyTLS           = "tls"
 	confKeySecurity      = "security"
+
+	// Network section keys.
+	confKeyNetwork          = "network"
+	confKeyNetworkService   = "service"
+	confKeyNetworkHeartbeat = "heartbeat"
+	confKeyNetworkFabric    = "fabric"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -93,8 +97,9 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName     string = "aerospike-server"
-	AerospikeServerInitContainerName string = "aerospike-init"
+	AerospikeServerContainerName      string = "aerospike-server"
+	AerospikeServerInitContainerName  string = "aerospike-init"
+	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.14"
 )
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
@@ -133,25 +138,49 @@ func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can a invalid map come here
 func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
+	return IsAttributeEnabled(aerospikeConfigSpec, "security", "enable-security")
+}
+
+func IsAttributeEnabled(aerospikeConfigSpec *AerospikeConfigSpec, context, key string) (bool, error) {
 	aerospikeConfig := aerospikeConfigSpec.Value
 	if len(aerospikeConfig) == 0 {
 		return false, fmt.Errorf("missing aerospike configuration in cluster state")
 	}
-	// security conf
-	if confInterface, ok := aerospikeConfig[confKeySecurity]; ok {
-		if secConf, ok := confInterface.(map[string]interface{}); ok {
-			if enabled, ok := secConf["enable-security"]; ok {
-				if _, ok := enabled.(bool); ok {
-					return enabled.(bool), nil
-				}
-				return false, fmt.Errorf("invalid aerospike.security conf. enable-security not valid %v", confInterface)
-
-			}
-			return false, fmt.Errorf("invalid aerospike.security conf. enable-security key not present %v", confInterface)
-		}
-		return false, fmt.Errorf("invalid aerospike.security conf. Not a valid map %v", confInterface)
+	securityConfMap, err := GetConfigContext(aerospikeConfigSpec, context)
+	if err != nil {
+		return false, err
 	}
-	return false, nil
+	enabled, err := GetBoolConfig(securityConfMap, key)
+	if err != nil {
+		return false, fmt.Errorf("invalid aerospike.%s conf. %s", context, err.Error())
+	}
+	return enabled, nil
+}
+
+func GetConfigContext(aerospikeConfigSpec *AerospikeConfigSpec, context string) (map[string]interface{}, error) {
+	aerospikeConfig := aerospikeConfigSpec.Value
+	if len(aerospikeConfig) == 0 {
+		return nil, fmt.Errorf("missing aerospike configuration in cluster state")
+	}
+	if contextConfigMap, ok := aerospikeConfig[context]; ok {
+
+		if validConfigMap, ok := contextConfigMap.(map[string]interface{}); ok {
+			return validConfigMap, nil
+		}
+		return nil, fmt.Errorf("invalid aerospike.%s conf. Not a valid map", context)
+
+	}
+	return nil, fmt.Errorf("no such context: %v", context)
+}
+
+func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
+	if enabled, ok := configMap[key]; ok {
+		if _, ok := enabled.(bool); ok {
+			return enabled.(bool), nil
+		}
+		return false, fmt.Errorf("%s: not valid", key)
+	}
+	return false, fmt.Errorf("%s: not present", key)
 }
 
 // ListAerospikeNamespaces returns the list of namespaecs in the input aerospikeConfig.
@@ -206,31 +235,26 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	return xdrConf != nil
 }
 
-func readClientNamesFromConfig(serviceConf map[string]interface{}) ([]string, error) {
-	var result []string
-	clientNames, exists := serviceConf["tls-authenticate-client"]
-	if !exists {
-		return result, nil
+func ReadTlsAuthenticateClient(serviceConf map[string]interface{}) ([]string, error) {
+	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
+	if !ok {
+		return nil, nil
 	}
-	switch clientNames.(type) {
+	switch value := tlsAuthenticateClientConfig.(type) {
 	case string:
-		result = append(result, clientNames.(string))
-	case bool:
-		result = append(result, strconv.FormatBool(clientNames.(bool)))
+		return []string{value}, nil
 	case []interface{}:
-		for _, name := range clientNames.([]interface{}) {
-			if nameStr, ok := name.(string); ok {
-				result = append(result, nameStr)
-			} else if nameBool, ok := name.(bool); ok {
-				result = append(result, strconv.FormatBool(nameBool))
-			} else {
-				return result, fmt.Errorf("tls-authenticate-client value \"%v\" has a wrong type (%t)", name, name)
+		tlsAuthenticateClientDomains := make([]string, len(value))
+		for i := 0; i < len(value); i++ {
+			item, ok := value[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid configuration element")
 			}
+			tlsAuthenticateClientDomains[i] = item
 		}
-	default:
-		return result, fmt.Errorf("wrong type (%T) for tls-authenticate-client (%v)", clientNames, clientNames)
+		return tlsAuthenticateClientDomains, nil
 	}
-	return result, nil
+	return nil, fmt.Errorf("invalid configuration")
 }
 
 func isClientCertNameValidationEnabled(clientNames []string) bool {
@@ -269,4 +293,50 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (*string, error) 
 	}
 
 	return nil, fmt.Errorf("xdr not configured")
+}
+
+func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, int) {
+	if networkConfTmp, ok := aeroConf.Value[confKeyNetwork]; ok {
+		networkConf := networkConfTmp.(map[string]interface{})
+		serviceConf := networkConf[confKeyService].(map[string]interface{})
+		if tlsName, ok := serviceConf["tls-name"]; ok {
+			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
+				return tlsName.(string), int(tlsPort.(float64))
+			} else {
+				return tlsName.(string), ServiceTLSPort
+			}
+		}
+	}
+	return "", 0
+}
+
+func GetServicePort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkService, "port", ServicePort)
+}
+
+func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port", HeartbeatPort)
+}
+
+func GetHeartbeatTLSPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "tls-port", HeartbeatTLSPort)
+}
+
+func GetFabricPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port", FabricPort)
+}
+
+func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "tls-port", FabricTLSPort)
+}
+
+func GetPortFromConfig(aeroConf *AerospikeConfigSpec, connectionType string, paramName string, defaultValue int) int {
+	if networkConf, ok := aeroConf.Value[confKeyNetwork]; ok {
+		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
+			if port, ok := connectionConfig.(map[string]interface{})[paramName]; ok {
+				return int(port.(float64))
+			}
+		}
+	}
+	return defaultValue
 }

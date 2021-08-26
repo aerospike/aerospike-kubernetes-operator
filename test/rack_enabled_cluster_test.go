@@ -5,8 +5,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -19,11 +20,10 @@ import (
 // )
 
 // Jenkins tests var
-var (
-	zone1  = "us-west1-a"
-	zone2  = "us-west1-a"
-	region = "us-west1"
-)
+// var (
+// 	zone1  = "us-west1-a"
+// 	zone2  = "us-west1-a"
+// )
 
 // Test cluster cr updation
 var _ = Describe("RackLifeCycleOp", func() {
@@ -34,31 +34,48 @@ var _ = Describe("RackLifeCycleOp", func() {
 		clusterName := "rack-enabled"
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
-		// Will be used in Update also
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-		// This needs to be changed based on setup. update zone, region, nodeName according to setup
-		racks := []asdbv1alpha1.Rack{
-			{ID: 1, Zone: zone1, Region: region},
-			{ID: 2, Zone: zone2, Region: region}}
-		rackConf := asdbv1alpha1.RackConfig{
-			Racks: racks,
-		}
-		aeroCluster.Spec.RackConfig = rackConf
+		BeforeEach(func() {
+			zones, err := getZones(k8sClient)
+			Expect(err).ToNot(HaveOccurred())
 
-		It("Should validate rack enabled cluster flow", func() {
-			// Op1: deploy
-			By("Deploying rack enabled cluster")
+			zone1 := zones[0]
+			zone2 := zones[0]
+			if len(zones) > 1 {
+				zone2 = zones[1]
+			}
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
+			// Will be used in Update also
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			// This needs to be changed based on setup. update zone, region, nodeName according to setup
+			racks := []asdbv1beta1.Rack{
+				{ID: 1, Zone: zone1},
+				{ID: 2, Zone: zone2}}
+			rackConf := asdbv1beta1.RackConfig{
+				Racks: racks,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
+
+			err = deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("Should validate rack enabled cluster flow", func() {
 
 			// Op2: scale up
 			By("Scaling up the cluster")
 
-			err = scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
+			err := scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
@@ -92,11 +109,68 @@ var _ = Describe("RackLifeCycleOp", func() {
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			// cleanup: Remove the cluster
-			By("Cleaning up the cluster")
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("Should validate affinity", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			pods, err := getPodList(aeroCluster, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			// All pods will be moved to this node
+			nodeName := pods.Items[0].Spec.NodeName
+
+			affinity := &corev1.Affinity{}
+			ns := &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "kubernetes.io/hostname",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{nodeName},
+							},
+						},
+					},
+				},
+			}
+			affinity.NodeAffinity = &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: ns,
+			}
+
+			rackConf := asdbv1beta1.RackConfig{
+				Racks: []asdbv1beta1.Rack{
+					{
+						ID: 3,
+						InputPodSpec: &asdbv1beta1.RackPodSpec{
+							SchedulingPolicy: asdbv1beta1.SchedulingPolicy{
+								Affinity: affinity,
+							},
+						},
+					},
+				},
+			}
+
+			aeroCluster.Spec.RackConfig = rackConf
+
+			// All pods should move to node with nodeName
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify if all the pods are moved to given node
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			pods, err = getPodList(aeroCluster, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			for _, pod := range pods.Items {
+				Expect(pod.Spec.NodeName).Should(Equal(nodeName))
+			}
+			// Test toleration
+			// Test nodeSelector
+		})
+
 	})
 })

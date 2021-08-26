@@ -3,18 +3,16 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *AerospikeClusterReconciler) removePVCs(aeroCluster *asdbv1alpha1.AerospikeCluster, storage *asdbv1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
+func (r *AerospikeClusterReconciler) removePVCs(aeroCluster *asdbv1beta1.AerospikeCluster, storage *asdbv1beta1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
 	deletedPVCs, err := r.removePVCsAsync(aeroCluster, storage, pvcItems)
 	if err != nil {
 		return err
@@ -23,7 +21,7 @@ func (r *AerospikeClusterReconciler) removePVCs(aeroCluster *asdbv1alpha1.Aerosp
 	return r.waitForPVCTermination(aeroCluster, deletedPVCs)
 }
 
-func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1alpha1.AerospikeCluster, storage *asdbv1alpha1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) ([]corev1.PersistentVolumeClaim, error) {
+func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1beta1.AerospikeCluster, storage *asdbv1beta1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) ([]corev1.PersistentVolumeClaim, error) {
 	// aeroClusterNamespacedName := getNamespacedNameForCluster(aeroCluster)
 
 	deletedPVCs := []corev1.PersistentVolumeClaim{}
@@ -71,7 +69,7 @@ func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1alpha1.A
 	return deletedPVCs, nil
 }
 
-func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1alpha1.AerospikeCluster, deletedPVCs []corev1.PersistentVolumeClaim) error {
+func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1beta1.AerospikeCluster, deletedPVCs []corev1.PersistentVolumeClaim) error {
 	if len(deletedPVCs) == 0 {
 		return nil
 	}
@@ -122,7 +120,7 @@ func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1al
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) getClusterPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
+func (r *AerospikeClusterReconciler) getClusterPVCList(aeroCluster *asdbv1beta1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -134,7 +132,7 @@ func (r *AerospikeClusterReconciler) getClusterPVCList(aeroCluster *asdbv1alpha1
 	return pvcList.Items, nil
 }
 
-func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackID))
@@ -146,27 +144,12 @@ func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1alpha1.Ae
 	return pvcList.Items, nil
 }
 
-func getPVCVolumeConfig(storage *asdbv1alpha1.AerospikeStorageSpec, pvcPathAnnotation string) *asdbv1alpha1.AerospikePersistentVolumeSpec {
+func getPVCVolumeConfig(storage *asdbv1beta1.AerospikeStorageSpec, pvcPathAnnotation string) *asdbv1beta1.VolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
-		if pvcPathAnnotation == v.Path {
+		if pvcPathAnnotation == v.Name {
 			return &v
 		}
 	}
 	return nil
-}
-func getPVCName(path string) (string, error) {
-	path = strings.Trim(path, "/")
-
-	hashPath, err := utils.GetHash(path)
-	if err != nil {
-		return "", err
-	}
-
-	reg, err := regexp.Compile("[^-a-z0-9]+")
-	if err != nil {
-		return "", err
-	}
-	newPath := reg.ReplaceAllString(path, "-")
-	return utils.TruncateString(hashPath, 30) + "-" + utils.TruncateString(newPath, 20), nil
 }

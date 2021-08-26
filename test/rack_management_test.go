@@ -5,8 +5,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe("RackManagement", func() {
@@ -26,11 +28,11 @@ var _ = Describe("RackManagement", func() {
 
 			// Op1: AddRackInCluster
 			By("Adding 1st rack in the cluster")
-			addRack(k8sClient, ctx, clusterNamespacedName, asdbv1alpha1.Rack{ID: 1})
+			addRack(k8sClient, ctx, clusterNamespacedName, asdbv1beta1.Rack{ID: 1})
 			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
 			By("Adding rack in existing racks list")
-			addRack(k8sClient, ctx, clusterNamespacedName, asdbv1alpha1.Rack{ID: 2})
+			addRack(k8sClient, ctx, clusterNamespacedName, asdbv1beta1.Rack{ID: 2})
 			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
 			// Op2: UpdateRackEnabledNamespacesList
@@ -81,7 +83,7 @@ var _ = Describe("RackManagement", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			rackConf := asdbv1alpha1.RackConfig{}
+			rackConf := asdbv1beta1.RackConfig{}
 			aeroCluster.Spec.RackConfig = rackConf
 
 			// This will also indirectly check if older rack is removed or not.
@@ -111,13 +113,13 @@ var _ = Describe("RackManagement", func() {
 				// Op1: Add rack.AerospikeConfig
 				By("Deploying cluster having rack.AerospikeConfig")
 
-				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": 10000,
 						},
 					}}
-				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": 12000,
@@ -125,11 +127,11 @@ var _ = Describe("RackManagement", func() {
 					}}
 
 				// Make a copy to validate later
-				racksCopy := []asdbv1alpha1.Rack{}
+				racksCopy := []asdbv1beta1.Rack{}
 				err := Copy(&racksCopy, &racks)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 				err = deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -144,13 +146,13 @@ var _ = Describe("RackManagement", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": 12000,
 						},
 					}}
-				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": 14000,
@@ -158,11 +160,11 @@ var _ = Describe("RackManagement", func() {
 					}}
 
 				// Make a copy to validate later
-				racksCopy = []asdbv1alpha1.Rack{}
+				racksCopy = []asdbv1beta1.Rack{}
 				err = Copy(&racksCopy, &racks)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 
 				err = updateAndWait(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -182,11 +184,11 @@ var _ = Describe("RackManagement", func() {
 				racks[1].InputAerospikeConfig = nil
 
 				// Make a copy to validate later
-				racksCopy = []asdbv1alpha1.Rack{}
+				racksCopy = []asdbv1beta1.Rack{}
 				err = Copy(&racksCopy, &racks)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racksCopy}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 				// Increase size also so that below wait func wait for new cluster
 				aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
 
@@ -197,13 +199,13 @@ var _ = Describe("RackManagement", func() {
 
 				// Config for both rack should have been taken from default config
 				// Default proto-fd-max is 15000. So check for default value
-				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": defaultProtofdmax,
 						},
 					}}
-				racks[1].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"service": map[string]interface{}{
 							"proto-fd-max": defaultProtofdmax,
@@ -229,8 +231,8 @@ var _ = Describe("RackManagement", func() {
 		Context("when deploy cluster with invalid rack ", func() {
 			It("should fail for InvalidSize. Cluster sz less than number of racks", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				rackConf := asdbv1alpha1.RackConfig{
-					Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: 2}, {ID: 3}},
+				rackConf := asdbv1beta1.RackConfig{
+					Racks: []asdbv1beta1.Rack{{ID: 1}, {ID: 2}, {ID: 3}},
 				}
 				aeroCluster.Spec.RackConfig = rackConf
 				err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -240,8 +242,8 @@ var _ = Describe("RackManagement", func() {
 			Context("InvalidRackID", func() {
 				It("should fail for DuplicateRackID", func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-					rackConf := asdbv1alpha1.RackConfig{
-						Racks: []asdbv1alpha1.Rack{{ID: 2}, {ID: 2}},
+					rackConf := asdbv1beta1.RackConfig{
+						Racks: []asdbv1beta1.Rack{{ID: 2}, {ID: 2}},
 					}
 					aeroCluster.Spec.RackConfig = rackConf
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -249,8 +251,8 @@ var _ = Describe("RackManagement", func() {
 				})
 				It("should fail for OutOfRangeRackID", func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-					rackConf := asdbv1alpha1.RackConfig{
-						Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: asdbv1alpha1.MaxRackID + 1}},
+					rackConf := asdbv1beta1.RackConfig{
+						Racks: []asdbv1beta1.Rack{{ID: 1}, {ID: asdbv1beta1.MaxRackID + 1}},
 					}
 					aeroCluster.Spec.RackConfig = rackConf
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -258,8 +260,8 @@ var _ = Describe("RackManagement", func() {
 				})
 				It("should fail for using defaultRackID", func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-					rackConf := asdbv1alpha1.RackConfig{
-						Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: asdbv1alpha1.DefaultRackID}},
+					rackConf := asdbv1beta1.RackConfig{
+						Racks: []asdbv1beta1.Rack{{ID: 1}, {ID: asdbv1beta1.DefaultRackID}},
 					}
 					aeroCluster.Spec.RackConfig = rackConf
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -272,7 +274,7 @@ var _ = Describe("RackManagement", func() {
 				It("should fail for invalid aerospikeConfig", func() {
 					aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 
-					aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+					aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 						Value: map[string]interface{}{
 							"namespaces": "invalidConf",
 						}}
@@ -284,7 +286,7 @@ var _ = Describe("RackManagement", func() {
 
 					It("should fail for replication-factor greater than node sz", func() {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-						aeroConfig := asdbv1alpha1.AerospikeConfigSpec{
+						aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 							Value: map[string]interface{}{
 								"namespaces": []interface{}{
 									map[string]interface{}{
@@ -303,26 +305,50 @@ var _ = Describe("RackManagement", func() {
 						It("should fail for invalid storage-engine.device, cannot have 3 devices in single device string", func() {
 							aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 							if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-								vd := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+								vd := []asdbv1beta1.VolumeSpec{
 									{
-										Path:       "/dev/xvdf1",
-										SizeInGB:   1,
-										VolumeMode: asdbv1alpha1.AerospikeVolumeModeBlock,
+										Name: "nsvol1",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf1",
+										},
 									},
 									{
-										Path:       "/dev/xvdf2",
-										SizeInGB:   1,
-										VolumeMode: asdbv1alpha1.AerospikeVolumeModeBlock,
+										Name: "nsvol2",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf2",
+										},
 									},
 									{
-										Path:       "/dev/xvdf3",
-										SizeInGB:   1,
-										VolumeMode: asdbv1alpha1.AerospikeVolumeModeBlock,
+										Name: "nsvol3",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/dev/xvdf3",
+										},
 									},
 								}
 								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vd...)
 
-								aeroConfig := asdbv1alpha1.AerospikeConfigSpec{
+								aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"namespaces": []interface{}{
 											map[string]interface{}{
@@ -343,7 +369,7 @@ var _ = Describe("RackManagement", func() {
 						It("should fail for invalid storage-engine.device, cannot a device which doesn't exist in BlockStorage", func() {
 							aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 							if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-								aeroConfig := asdbv1alpha1.AerospikeConfigSpec{
+								aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"namespaces": []interface{}{
 											map[string]interface{}{
@@ -365,8 +391,8 @@ var _ = Describe("RackManagement", func() {
 					It("should fail for invalid xdr config. mountPath for digestlog not present in fileStorage", func() {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 						if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-							aeroCluster.Spec.Storage = asdbv1alpha1.AerospikeStorageSpec{}
-							aeroConfig := asdbv1alpha1.AerospikeConfigSpec{
+							aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
+							aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 								Value: map[string]interface{}{
 									"xdr": map[string]interface{}{
 										"enable-xdr":         false,
@@ -388,8 +414,8 @@ var _ = Describe("RackManagement", func() {
 
 			BeforeEach(func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				rackConf := asdbv1alpha1.RackConfig{
-					Racks: []asdbv1alpha1.Rack{{ID: 1}, {ID: 2}},
+				rackConf := asdbv1beta1.RackConfig{
+					Racks: []asdbv1beta1.Rack{{ID: 1}, {ID: 2}},
 				}
 				aeroCluster.Spec.RackConfig = rackConf
 
@@ -434,7 +460,7 @@ var _ = Describe("RackManagement", func() {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, asdbv1alpha1.Rack{ID: 20000000000})
+					aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, asdbv1beta1.Rack{ID: 20000000000})
 					err = updateAndWait(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				})

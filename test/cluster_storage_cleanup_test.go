@@ -2,9 +2,7 @@ package test
 
 import (
 	goctx "context"
-	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,10 +10,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/ashishshinde/aerospike-client-go/v5/pkg/ripemd160"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Test cluster cr updation
@@ -34,7 +33,7 @@ var _ = Describe("ClusterStorageCleanUp", func() {
 			// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1, 2)
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+			aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -123,7 +122,7 @@ var _ = Describe("ClusterStorageCleanUp", func() {
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(lastRackID)
 			// This should not be removed
 
-			pvcName, err := getPVCName(aeroCluster.Spec.Storage.Volumes[0].Path)
+			pvcName := aeroCluster.Spec.Storage.Volumes[0].Name
 			Expect(err).ToNot(HaveOccurred())
 
 			pvcNamePrefix := pvcName + "-" + stsName
@@ -185,9 +184,10 @@ var _ = Describe("RackUsingLocalStorage", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		devName := "/test/dev/rackstorage"
+		devPVCName := "ns"
 		racks := getDummyRackConf(1)
 		// AerospikeConfig is only patched
-		racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+		racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 			Value: map[string]interface{}{
 				"namespaces": []interface{}{
 					map[string]interface{}{
@@ -202,33 +202,58 @@ var _ = Describe("RackUsingLocalStorage", func() {
 		}
 		remove := true
 		// Rack is completely replaced
-		racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{
-			BlockVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+		racks[0].InputStorage = &asdbv1beta1.AerospikeStorageSpec{
+			BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 				InputCascadeDelete: &remove,
 			},
-			FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+			FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 				InputCascadeDelete: &remove,
 				InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 			},
-			Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+			Volumes: []asdbv1beta1.VolumeSpec{
 				{
-					Path:         devName,
-					SizeInGB:     1,
-					StorageClass: storageClass,
-					VolumeMode:   asdbv1alpha1.AerospikeVolumeModeBlock,
+					Name: devPVCName,
+					Source: asdbv1beta1.VolumeSource{
+						PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeBlock,
+						},
+					},
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Path: devName,
+					},
 				},
 				{
-					Path:         "/opt/aerospike",
-					SizeInGB:     1,
-					StorageClass: storageClass,
-					VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+					Name: "workdir",
+					Source: asdbv1beta1.VolumeSource{
+						PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeFilesystem,
+						},
+					},
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Path: "/opt/aerospike",
+					},
+				},
+				{
+					Name: aerospikeConfigSecret,
+					Source: asdbv1beta1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: tlsSecretName,
+						},
+					},
+					Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Path: "/etc/aerospike/secret",
+					},
 				},
 			},
 		}
 
 		BeforeEach(func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+			aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -242,7 +267,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// There is only single rack
-			pvcName, err := getPVCName(devName)
+			pvcName := devPVCName
 			Expect(err).ToNot(HaveOccurred())
 
 			stsName := aeroCluster.Name + "-" + strconv.Itoa(racks[0].ID)
@@ -305,7 +330,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 				racks := getDummyRackConf(1)
 				// AerospikeConfig is only patched
-				racks[0].InputAerospikeConfig = &asdbv1alpha1.AerospikeConfigSpec{
+				racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 					Value: map[string]interface{}{
 						"namespaces": []interface{}{
 							map[string]interface{}{
@@ -320,22 +345,29 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				}
 
 				// Rack is completely replaced
-				racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{
-					FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+				racks[0].InputStorage = &asdbv1beta1.AerospikeStorageSpec{
+					FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 						InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 						InputCascadeDelete: &cascadeDeleteTrue,
 					},
-					Volumes: []asdbv1alpha1.AerospikePersistentVolumeSpec{
+					Volumes: []asdbv1beta1.VolumeSpec{
 						{
-							Path:         "/opt/aerospike",
-							SizeInGB:     1,
-							StorageClass: storageClass,
-							VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+							Name: "workdir",
+							Source: asdbv1beta1.VolumeSource{
+								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+									Size:         resource.MustParse("1Gi"),
+									StorageClass: storageClass,
+									VolumeMode:   v1.PersistentVolumeFilesystem,
+								},
+							},
+							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+								Path: "/opt/aerospike",
+							},
 						},
 					},
 				}
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err := k8sClient.Create(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -347,16 +379,23 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdir",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				racks[0].InputStorage = getStorage(volumes)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err := k8sClient.Create(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -370,7 +409,7 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -380,19 +419,25 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdirnew",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
 				racks[0].InputStorage = getStorage(volumes)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
 				err = k8sClient.Update(goctx.TODO(), aeroCluster)
 				Expect(err).Should(HaveOccurred())
 
@@ -404,17 +449,24 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdirnew",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
 				racks[0].InputStorage = getStorage(volumes)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -424,8 +476,8 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Rack is completely replaced
-				racks[0].InputStorage = &asdbv1alpha1.AerospikeStorageSpec{}
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				racks[0].InputStorage = &asdbv1beta1.AerospikeStorageSpec{}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err = k8sClient.Update(goctx.TODO(), aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -438,17 +490,24 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
 				racks := getDummyRackConf(1)
 				// Rack is completely replaced
-				volumes := []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes := []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdirnew",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
 				racks[0].InputStorage = getStorage(volumes)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				// Deploy cluster
 				err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -459,17 +518,24 @@ var _ = Describe("RackUsingLocalStorage", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Rack is completely replaced
-				volumes = []asdbv1alpha1.AerospikePersistentVolumeSpec{
+				volumes = []asdbv1beta1.VolumeSpec{
 					{
-						Path:         "/opt/aerospike/new2",
-						SizeInGB:     1,
-						StorageClass: storageClass,
-						VolumeMode:   asdbv1alpha1.AerospikeVolumeModeFilesystem,
+						Name: "workdirnew2",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/new2",
+						},
 					},
 				}
 				volumes = append(volumes, aeroCluster.Spec.Storage.Volumes...)
 				racks[0].InputStorage = getStorage(volumes)
-				aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: racks}
+				aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
 
 				err = k8sClient.Update(goctx.TODO(), aeroCluster)
 				Expect(err).Should(HaveOccurred())
@@ -481,53 +547,19 @@ var _ = Describe("RackUsingLocalStorage", func() {
 
 })
 
-func getStorage(volumes []asdbv1alpha1.AerospikePersistentVolumeSpec) *asdbv1alpha1.AerospikeStorageSpec {
+func getStorage(volumes []asdbv1beta1.VolumeSpec) *asdbv1beta1.AerospikeStorageSpec {
 	cascadeDelete := true
-	storage := asdbv1alpha1.AerospikeStorageSpec{
-		BlockVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+	storage := asdbv1beta1.AerospikeStorageSpec{
+		BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 			InputCascadeDelete: &cascadeDelete,
 		},
-		FileSystemVolumePolicy: asdbv1alpha1.AerospikePersistentVolumePolicySpec{
+		FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 			InputCascadeDelete: &cascadeDelete,
 			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 		},
 		Volumes: volumes,
 	}
 	return &storage
-}
-
-func truncateString(str string, num int) string {
-	if len(str) > num {
-		return str[0:num]
-	}
-	return str
-}
-
-func getPVCName(path string) (string, error) {
-	path = strings.Trim(path, "/")
-
-	hashPath, err := getHash(path)
-	if err != nil {
-		return "", err
-	}
-
-	reg, err := regexp.Compile("[^-a-z0-9]+")
-	if err != nil {
-		return "", err
-	}
-	newPath := reg.ReplaceAllString(path, "-")
-	return truncateString(hashPath, 30) + "-" + truncateString(newPath, 20), nil
-}
-
-func getHash(str string) (string, error) {
-	var digest []byte
-	hash := ripemd160.New()
-	hash.Reset()
-	if _, err := hash.Write([]byte(str)); err != nil {
-		return "", err
-	}
-	res := hash.Sum(digest)
-	return hex.EncodeToString(res), nil
 }
 
 func matchPVCList(oldPVCList, newPVCList []corev1.PersistentVolumeClaim) error {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 )
@@ -30,11 +30,11 @@ const (
 //
 // Returns a tuple of admin username and password to use. If the cluster is not security
 // enabled both username and password will be zero strings.
-func AerospikeAdminCredentials(desiredState *asdbv1alpha1.AerospikeClusterSpec, currentState *asdbv1alpha1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
-	enabled, err := asdbv1alpha1.IsSecurityEnabled(currentState.AerospikeConfig)
+func AerospikeAdminCredentials(desiredState *asdbv1beta1.AerospikeClusterSpec, currentState *asdbv1beta1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
+	enabled, err := asdbv1beta1.IsSecurityEnabled(currentState.AerospikeConfig)
 	if err != nil {
 		// Its possible this is a new cluster and current state is empty.
-		enabled, err = asdbv1alpha1.IsSecurityEnabled(desiredState.AerospikeConfig)
+		enabled, err = asdbv1beta1.IsSecurityEnabled(desiredState.AerospikeConfig)
 
 		if err != nil {
 			return "", "", err
@@ -48,45 +48,45 @@ func AerospikeAdminCredentials(desiredState *asdbv1alpha1.AerospikeClusterSpec, 
 
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
-		return asdbv1alpha1.AdminUsername, asdbv1alpha1.DefaultAdminPAssword, nil
+		return asdbv1beta1.AdminUsername, asdbv1beta1.DefaultAdminPAssword, nil
 	}
 
-	adminUserSpec, ok := asdbv1alpha1.GetUsersFromSpec(currentState)[asdbv1alpha1.AdminUsername]
+	adminUserSpec, ok := asdbv1beta1.GetUsersFromSpec(currentState)[asdbv1beta1.AdminUsername]
 
 	if !ok {
 		// Should not happen on a validated spec.
-		return "", "", fmt.Errorf("%s user missing in access control", asdbv1alpha1.AdminUsername)
+		return "", "", fmt.Errorf("%s user missing in access control", asdbv1beta1.AdminUsername)
 	}
 
-	password, err := passwordProvider.Get(asdbv1alpha1.AdminUsername, &adminUserSpec)
+	password, err := passwordProvider.Get(asdbv1beta1.AdminUsername, &adminUserSpec)
 
 	if err != nil {
 		return "", "", err
 	}
 
-	return asdbv1alpha1.AdminUsername, password, nil
+	return asdbv1beta1.AdminUsername, password, nil
 }
 
 // ReconcileAccessControl reconciles access control to ensure current state moves to the desired state.
-func ReconcileAccessControl(desired *asdbv1alpha1.AerospikeClusterSpec, current *asdbv1alpha1.AerospikeClusterSpec, client *as.Client, passwordProvider AerospikeUserPasswordProvider, logger Logger) error {
+func ReconcileAccessControl(desired *asdbv1beta1.AerospikeClusterSpec, current *asdbv1beta1.AerospikeClusterSpec, client *as.Client, passwordProvider AerospikeUserPasswordProvider, logger Logger) error {
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
 	adminPolicy := GetAdminPolicy(desired)
 
-	desiredRoles := asdbv1alpha1.GetRolesFromSpec(desired)
-	currentRoles := asdbv1alpha1.GetRolesFromSpec(current)
+	desiredRoles := asdbv1beta1.GetRolesFromSpec(desired)
+	currentRoles := asdbv1beta1.GetRolesFromSpec(current)
 	err := reconcileRoles(desiredRoles, currentRoles, client, adminPolicy, logger)
 	if err != nil {
 		return err
 	}
 
-	desiredUsers := asdbv1alpha1.GetUsersFromSpec(desired)
-	currentUsers := asdbv1alpha1.GetUsersFromSpec(current)
+	desiredUsers := asdbv1beta1.GetUsersFromSpec(desired)
+	currentUsers := asdbv1beta1.GetUsersFromSpec(current)
 	err = reconcileUsers(desiredUsers, currentUsers, passwordProvider, client, adminPolicy, logger)
 	return err
 }
 
 // GetAdminPolicy returns the AdminPolicy to use for performing access control operations.
-func GetAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPolicy {
+func GetAdminPolicy(clusterSpec *asdbv1beta1.AerospikeClusterSpec) as.AdminPolicy {
 	if clusterSpec.AerospikeAccessControl == nil || clusterSpec.AerospikeAccessControl.AdminPolicy == nil {
 		return *as.NewAdminPolicy()
 	}
@@ -96,7 +96,7 @@ func GetAdminPolicy(clusterSpec *asdbv1alpha1.AerospikeClusterSpec) as.AdminPoli
 }
 
 // reconcileRoles reconciles roles to take them from current to desired.
-func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current map[string]asdbv1alpha1.AerospikeRoleSpec, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+func reconcileRoles(desired map[string]asdbv1beta1.AerospikeRoleSpec, current map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
 	var err error
 
 	// Get list of existing roles from the cluster.
@@ -125,7 +125,7 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 	rolesToDrop := SliceSubtract(currentRoleNames, requiredRoleNames)
 
 	for _, roleToDrop := range rolesToDrop {
-		_, ok := asdbv1alpha1.PredefinedRoles[roleToDrop]
+		_, ok := asdbv1beta1.PredefinedRoles[roleToDrop]
 
 		if !ok {
 			// Not a predefined role and can be dropped.
@@ -134,7 +134,7 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 	}
 
 	for roleName, roleSpec := range desired {
-		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist})
+		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist, readQuota: roleSpec.ReadQuota, writeQuota: roleSpec.WriteQuota})
 	}
 
 	// Execute all commands.
@@ -150,7 +150,7 @@ func reconcileRoles(desired map[string]asdbv1alpha1.AerospikeRoleSpec, current m
 }
 
 // reconcileUsers reconciles users to take them from current to desired.
-func reconcileUsers(desired map[string]asdbv1alpha1.AerospikeUserSpec, current map[string]asdbv1alpha1.AerospikeUserSpec, passwordProvider AerospikeUserPasswordProvider, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+func reconcileUsers(desired map[string]asdbv1beta1.AerospikeUserSpec, current map[string]asdbv1beta1.AerospikeUserSpec, passwordProvider AerospikeUserPasswordProvider, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
 	var err error
 
 	// Get list of existing users from the cluster.
@@ -192,7 +192,7 @@ func reconcileUsers(desired map[string]asdbv1alpha1.AerospikeUserSpec, current m
 		}
 
 		cmd := AerospikeUserCreateUpdate{name: userName, password: &password, roles: userSpec.Roles}
-		if userName == asdbv1alpha1.AdminUsername {
+		if userName == asdbv1beta1.AdminUsername {
 			adminUpdateCmd = &cmd
 		} else {
 			userReconcileCmds = append(userReconcileCmds, cmd)
@@ -222,7 +222,7 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 	for _, privilege := range privilegeStrings {
 		parts := strings.Split(privilege, ".")
 
-		_, ok := asdbv1alpha1.Privileges[parts[0]]
+		_, ok := asdbv1beta1.Privileges[parts[0]]
 		if !ok {
 			// First part of the privilege is not part of defined privileges.
 			return nil, fmt.Errorf("invalid privilege %s", privilege)
@@ -327,7 +327,7 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]
 // AerospikeUserPasswordProvider provides password for a give user..
 type AerospikeUserPasswordProvider interface {
 	// Return the password for username.
-	Get(username string, userSpec *asdbv1alpha1.AerospikeUserSpec) (string, error)
+	Get(username string, userSpec *asdbv1beta1.AerospikeUserSpec) (string, error)
 }
 
 // AerospikeAccessControlReconcileCmd commands neeeded to reconcile a single access control entiry,
@@ -347,6 +347,12 @@ type AerospikeRoleCreateUpdate struct {
 
 	// The whitelist to set for the role. These whitelist addresses and only these whitelist addresses will be granted to the role after this operation.
 	whitelist []string
+
+	// The readQuota specifies the read query rate that is permitted for the current role.
+	readQuota uint32
+
+	// The writeQuota specifies the write query rate that is permitted for the current role.
+	writeQuota uint32
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
@@ -379,8 +385,7 @@ func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminP
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	// TODO: Add and use quotas for this role from configuration.
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, 0, 0)
+	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.readQuota, roleCreate.writeQuota)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}

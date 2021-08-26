@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
@@ -20,19 +20,19 @@ import (
 )
 
 type RackState struct {
-	Rack asdbv1alpha1.Rack
+	Rack asdbv1beta1.Rack
 	Size int
 }
 
-func addRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1alpha1.Rack) error {
+func addRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}
 	// Remove default rack
-	defaultRackID := asdbv1alpha1.DefaultRackID
+	defaultRackID := asdbv1beta1.DefaultRackID
 	if len(aeroCluster.Spec.RackConfig.Racks) == 1 && aeroCluster.Spec.RackConfig.Racks[0].ID == defaultRackID {
-		aeroCluster.Spec.RackConfig = asdbv1alpha1.RackConfig{Racks: []asdbv1alpha1.Rack{}}
+		aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: []asdbv1beta1.Rack{}}
 	}
 
 	aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, rack)
@@ -65,7 +65,7 @@ func removeLastRack(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	return nil
 }
 
-func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1alpha1.Rack) error {
+func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func isNamespaceRackEnabled(k8sClient client.Client, ctx goctx.Context, clusterN
 		return false, fmt.Errorf("cluster has empty pod list in status")
 	}
 
-	var pod asdbv1alpha1.AerospikePodStatus
+	var pod asdbv1beta1.AerospikePodStatus
 	for _, p := range aeroCluster.Status.Pods {
 		pod = p
 	}
@@ -288,7 +288,7 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 	return nil
 }
 
-func getConfiguredRackStateList(aeroCluster *asdbv1alpha1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
@@ -317,7 +317,7 @@ func splitRacks(nodeCount, rackCount int) []int {
 	return topology
 }
 
-func getNamespacedNameForStatefulSet(aeroCluster *asdbv1alpha1.AerospikeCluster, rackID int) types.NamespacedName {
+func getNamespacedNameForStatefulSet(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
 		Namespace: aeroCluster.Namespace,
@@ -369,10 +369,10 @@ func isNodePartOfRack(nodeID string, rackID string) bool {
 	return rackID == toks[0]
 }
 
-func getDummyRackConf(rackIDs ...int) []asdbv1alpha1.Rack {
-	var racks []asdbv1alpha1.Rack
+func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
+	var racks []asdbv1beta1.Rack
 	for _, rID := range rackIDs {
-		racks = append(racks, asdbv1alpha1.Rack{ID: rID})
+		racks = append(racks, asdbv1beta1.Rack{ID: rID})
 	}
 	return racks
 }

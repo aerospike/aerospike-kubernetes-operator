@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -32,7 +32,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(asdbv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(asdbv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -106,7 +106,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeCluster")
 		os.Exit(1)
 	}
-	if err = (&asdbv1alpha1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&asdbv1beta1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeCluster")
 		os.Exit(1)
 	}
@@ -147,16 +147,3 @@ func getWatchNamespace() (string, error) {
 func newClient(cache cache.Cache, config *rest.Config, options crclient.Options, uncachedObjects ...crclient.Object) (crclient.Client, error) {
 	return crclient.New(config, options)
 }
-
-// // TODO: Verify: without this reconciler was picking object from cache.
-// // reconciler was getting empty object... only having values set by mutating webhook
-// type newClientBuilder struct{}
-
-// func (n *newClientBuilder) WithUncached(objs ...crclient.Object) manager.ClientBuilder {
-// 	return n
-// }
-
-// func (n *newClientBuilder) Build(cache cache.Cache, config *rest.Config, options crclient.Options) (crclient.Client, error) {
-// 	// Create the Client for Write operations.
-// 	return crclient.New(config, options)
-// }

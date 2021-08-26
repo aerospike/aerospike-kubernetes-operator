@@ -13,10 +13,11 @@ import (
 	"strings"
 	"time"
 
-	asdbv1alpha1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1alpha1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/hashicorp/go-version"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -47,7 +48,9 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
-var aerospikeVolumeInitMethodDeleteFiles = asdbv1alpha1.AerospikeVolumeInitMethodDeleteFiles
+const aerospikeConfigSecret string = "aerospike-config-secret"
+
+var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
@@ -199,11 +202,11 @@ func getLabels() map[string]string {
 	return map[string]string{"app": "aerospike-cluster"}
 }
 
-func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1alpha1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
+func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
 	var isValid bool
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Fetch the AerospikeCluster instance
-		newCluster := &asdbv1alpha1.AerospikeCluster{}
+		newCluster := &asdbv1beta1.AerospikeCluster{}
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -228,19 +231,19 @@ func waitForAerospikeCluster(k8sClient client.Client, ctx goctx.Context, aeroClu
 	return nil
 }
 
-func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster *asdbv1alpha1.AerospikeCluster, replicas int) bool {
+func isClusterStateValid(aeroCluster *asdbv1beta1.AerospikeCluster, newCluster *asdbv1beta1.AerospikeCluster, replicas int) bool {
 	if int(newCluster.Status.Size) != replicas {
 		pkgLog.Info("Cluster size is not correct")
 		return false
 	}
 
-	statusToSpec, err := asdbv1alpha1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
 	}
 	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-		pkgLog.Info("Cluster status is not the matching spec")
+		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
 
@@ -264,7 +267,7 @@ func isClusterStateValid(aeroCluster *asdbv1alpha1.AerospikeCluster, newCluster 
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return (5 * time.Minute * time.Duration(nodes))
+	return (10 * time.Minute * time.Duration(nodes))
 }
 
 // ExecuteCommandOnPod executes a command in the specified container,
@@ -350,4 +353,65 @@ func Copy(dst interface{}, src interface{}) error {
 		return fmt.Errorf("unable to unmarshal into dst: %s", err)
 	}
 	return nil
+}
+
+type AerospikeConfSpec struct {
+	version     *version.Version
+	constraints *version.Constraints
+	service     map[string]interface{}
+	security    map[string]interface{}
+	namespaces  []interface{}
+}
+
+func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
+	service := map[string]interface{}{
+		"feature-key-file": "/etc/aerospike/secret/features.conf",
+	}
+	namespaces := []interface{}{
+		map[string]interface{}{
+			"name":               "test",
+			"memory-size":        1000955200,
+			"replication-factor": 1,
+			"storage-engine": map[string]interface{}{
+				"type": "memory",
+			},
+		},
+	}
+
+	security := map[string]interface{}{}
+
+	constraints, err := version.NewConstraint(">= 5.6")
+	if err != nil {
+		return nil, err
+	}
+
+	return &AerospikeConfSpec{
+		version:     v,
+		constraints: &constraints,
+		service:     service,
+		namespaces:  namespaces,
+		security:    security,
+	}, nil
+}
+
+func (acs *AerospikeConfSpec) getVersion() string {
+	return acs.version.String()
+}
+
+func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) {
+	acs.security["enable-security"] = enableSecurity
+}
+
+func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) {
+	if acs.constraints.Check(acs.version) {
+		acs.security["enable-quotas"] = enableQuotas
+	}
+}
+
+func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
+	return map[string]interface{}{
+		"service":    acs.service,
+		"security":   acs.security,
+		"namespaces": acs.namespaces,
+	}
 }

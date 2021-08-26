@@ -8,6 +8,7 @@
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 0.0.1
 
+OS := $(shell uname -s)
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -41,7 +42,7 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
+CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=80"
 
 # # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 # ENVTEST_K8S_VERSION = 1.21
@@ -93,18 +94,7 @@ vet: ## Run go vet against code.
 
 test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" cd $(shell pwd)/test; go test ${TEST_ARGS}  -ginkgo.v -ginkgo.progress -timeout=300m -coverprofile cover.out
-
-# # Run tests
-# ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
-# # test: generate fmt vet manifests
-# test: generate fmt vet
-# 	# export TEST_USE_EXISTING_CLUSTER="true"
-# 	#  TODO: Uncomment tests
-# 	mkdir -p ${ENVTEST_ASSETS_DIR}
-# 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
-# 	# TODO: to run tests in all dir, replace go test with (go test ./... -coverprofile cover.out). Currently all the tests are in test dir, so no need to replace
-# 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); cd $(shell pwd)/test; go test ${TEST_ARGS}  -ginkgo.v -ginkgo.progress -timeout=300m -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" cd $(shell pwd)/test; go test ${TEST_ARGS}  -ginkgo.v -ginkgo.progress -timeout=600m -coverprofile cover.out
 
 ##@ Build
 
@@ -139,12 +129,17 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 test-deploy: manifests kustomize
 	cp -r config test
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	cd test/config/manager && sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" manager.yaml
+	if [[ $(OS) = Darwin ]]; then \
+  		sed -I '' "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+  	else \
+		sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+  	fi
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
-# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-test-undeploy:
+test-undeploy: kustomize
+	cp -r config test
+	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
 
