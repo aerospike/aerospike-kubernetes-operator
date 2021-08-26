@@ -165,6 +165,11 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 		return res.result, res.err
 	}
 
+	if err := r.createSTSLoadBalancerSvc(aeroCluster); err != nil {
+		r.Log.Error(err, "Failed to create LoadBalancer service")
+		return reconcile.Result{}, err
+	}
+
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
 	allHostConns, err := r.newAllHostConn(aeroCluster)
