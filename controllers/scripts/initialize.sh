@@ -39,7 +39,7 @@ done
 
 {{- if .WorkDir }}
 # Create required directories.
-DEFAULT_WORK_DIR="/filesystem-volumes{{.WorkDir}}"
+DEFAULT_WORK_DIR="/workdir/filesystem-volumes{{.WorkDir}}"
 REQUIRED_DIRS=("smd"  "usr/udf/lua" "xdr")
 
 for d in ${REQUIRED_DIRS[*]}; do
@@ -55,8 +55,8 @@ mkdir -p "${CONFIG_VOLUME}"
 bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
 
 # Copy scripts and binaries needed for warm restart.
-cp /usr/local/bin/curl-amd64 "${CONFIG_VOLUME}"/curl
-cp /usr/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
+cp /workdir/bin/curl-amd64 "${CONFIG_VOLUME}"/curl
+cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
 cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
 
 if [ -f /configs/features.conf ]; then
