@@ -39,7 +39,7 @@ done
 
 {{- if .WorkDir }}
 # Create required directories.
-DEFAULT_WORK_DIR="/workdir/filesystem-volumes{{.WorkDir}}"
+DEFAULT_WORK_DIR="/filesystem-volumes{{.WorkDir}}"
 REQUIRED_DIRS=("smd"  "usr/udf/lua" "xdr")
 
 for d in ${REQUIRED_DIRS[*]}; do
