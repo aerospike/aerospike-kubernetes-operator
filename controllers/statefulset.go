@@ -121,9 +121,10 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      namespacedName.Name,
-			Namespace: namespacedName.Namespace,
-			Labels:    ls,
+			Name:        namespacedName.Name,
+			Namespace:   namespacedName.Namespace,
+			Labels:      ls,
+			Annotations: aeroCluster.Annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy: appsv1.ParallelPodManagement,
