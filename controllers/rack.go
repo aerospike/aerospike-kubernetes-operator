@@ -906,7 +906,7 @@ func getContainer(podContainers []corev1.Container, name string) *corev1.Contain
 }
 
 func getOriginalPath(path string) string {
-	path = strings.TrimPrefix(path, "/filesystem-volumes")
-	path = strings.TrimPrefix(path, "/block-volumes")
+	path = strings.TrimPrefix(path, "/workdir/filesystem-volumes")
+	path = strings.TrimPrefix(path, "/workdir/block-volumes")
 	return path
 }

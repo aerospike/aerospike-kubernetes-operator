@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -602,14 +602,14 @@ func (r *AerospikeClusterReconciler) updateSTSPVStorage(aeroCluster *asdbv1beta1
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-			initContainerVolumePathPrefix := "/block-volumes"
+			initContainerVolumePathPrefix := "/workdir/block-volumes"
 
 			r.Log.V(1).Info("added volume device for volume", "volume", volume)
 
 			addVolumeDeviceInContainer(volume.Name, initContainerAttachments, st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix)
 			addVolumeDeviceInContainer(volume.Name, containerAttachments, st.Spec.Template.Spec.Containers, "")
 		} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
-			initContainerVolumePathPrefix := "/filesystem-volumes"
+			initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 			r.Log.V(1).Info("added volume mount for volume", "volume", volume)
 
