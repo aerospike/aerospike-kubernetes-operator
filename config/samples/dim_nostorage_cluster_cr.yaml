@@ -3,7 +3,6 @@ kind: AerospikeCluster
 metadata:
   name: aerocluster
   namespace: aerospike
-
 spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:5.6.0.7
@@ -28,34 +27,28 @@ spec:
             secretName: aerospike-secret
         aerospike:
           path: /etc/aerospike/secret
-
-   aerospikeAccessControl:
+  aerospikeAccessControl:
     users:
       - name: admin
         secretName: auth-secret
         roles:
           - sys-admin
           - user-admin
-
   aerospikeConfig:
     logging:
       - name: /var/log/aerospike/aerospike.log
         any: info
         clustering: debug
-
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-
     security:
       enable-security: true
-
     namespaces:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
         storage-engine:
           type: memory
-
   resources:
     requests:
       memory: 2Gi
