@@ -105,6 +105,19 @@ func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string 
 	return labels
 }
 
+// MergeLabels merges operator an user defined labels
+func MergeLabels(operatorLabels, userLabels map[string]string) (map[string]string, error) {
+	for label, value := range userLabels {
+		_, ok := operatorLabels[label]
+		if ok {
+			return nil, fmt.Errorf(
+				"label: %s is automatically defined by operator and shouldn't be specified by user", label)
+		}
+		operatorLabels[label] = value
+	}
+	return operatorLabels, nil
+}
+
 // GetHash return ripmd160 hash for given string
 func GetHash(str string) (string, error) {
 	var digest []byte

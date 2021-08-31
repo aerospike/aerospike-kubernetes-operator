@@ -136,6 +136,8 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 
 // AerospikePodSpec contain configuration for created Aeropsike cluster pods.
 type AerospikePodSpec struct {
+	// MetaData to add to pods.
+	metav1.ObjectMeta
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
