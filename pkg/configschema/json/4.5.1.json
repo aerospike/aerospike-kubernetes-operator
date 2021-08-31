@@ -1,6 +1,3 @@
-package configschema
-
-const conf4_5_1 = `
 {
   "$schema": "http://json-schema.org/draft-06/schema",
   "additionalProperties": false,
@@ -2586,4 +2583,4 @@ const conf4_5_1 = `
       }
     }
   }
-}`
+}

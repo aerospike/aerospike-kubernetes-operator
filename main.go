@@ -95,7 +95,12 @@ func main() {
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
 	setupLog.Info("Init aerospike-server config schemas")
-	asconfig.InitFromMap(configschema.SchemaMap)
+	schemamap, err := configschema.NewSchemaMap()
+	if err != nil {
+		setupLog.Error(err, "Unable to Load SchemaMap")
+		os.Exit(1)
+	}
+	asconfig.InitFromMap(schemamap)
 
 	if err := (&aerospikecluster.AerospikeClusterReconciler{
 		Client:     mgr.GetClient(),
