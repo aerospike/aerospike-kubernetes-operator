@@ -167,9 +167,6 @@ type AerospikePodSpec struct {
 
 	// Effective value of the DNSPolicy
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
-
-	// Annotations to add for operator created statefulset
-	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // RackPodSpec provides rack specific overrides to the global pod spec.
