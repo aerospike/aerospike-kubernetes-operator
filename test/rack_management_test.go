@@ -14,7 +14,7 @@ import (
 var _ = Describe("RackManagement", func() {
 	ctx := goctx.TODO()
 
-	FContext("When doing valid operations", func() {
+	Context("When doing valid operations", func() {
 
 		It("Should validate rack management flow", func() {
 			clusterName := "rack-management1"
