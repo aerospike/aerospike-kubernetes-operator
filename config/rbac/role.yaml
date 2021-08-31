@@ -110,6 +110,7 @@ rules:
   - nodes
   verbs:
   - get
+  - list
 - apiGroups:
   - ""
   resources:

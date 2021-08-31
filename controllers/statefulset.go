@@ -23,7 +23,9 @@ import (
 )
 
 const (
-	aeroClusterServiceAccountName string = "aerospike-cluster"
+	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
+	// Need to modify this name if prefix is changed in yaml file
+	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
 )
 
 // The default cpu request for the aerospike-server container

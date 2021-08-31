@@ -3,7 +3,7 @@
 resources:
 - bases/aerospike-kubernetes-operator.clusterserviceversion.yaml
 - ../default
-- ../samples
+#- ../samples
 - ../scorecard
 
 # [WEBHOOK] To enable webhooks, uncomment all the sections with [WEBHOOK] prefix.
