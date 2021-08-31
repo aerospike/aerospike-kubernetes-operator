@@ -292,6 +292,10 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
+		if topology[idx] == 0 {
+			// Skip the rack, if it's size is 0
+			continue
+		}
 		rackStateList = append(rackStateList, RackState{
 			Rack: rack,
 			Size: topology[idx],
