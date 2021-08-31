@@ -102,6 +102,11 @@ func (r *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return err
 	}
 
+	// Validate Load Balancer update
+	if err := validateLoadBalancerUpdate(aslog, r.Spec.SeedsFinderServices.LoadBalancer, old.Spec.SeedsFinderServices.LoadBalancer); err != nil {
+		return err
+	}
+
 	// Validate RackConfig update
 	if err := r.validateRackUpdate(aslog, old); err != nil {
 		return err
@@ -935,6 +940,16 @@ func validateNamespaceReplicationFactor(
 			"namespace replication-factor %v not valid int or int64",
 			rfInterface,
 		)
+	}
+
+	return nil
+}
+
+func validateLoadBalancerUpdate(aslog logr.Logger, newLBSpec, oldLBSpec *LoadBalancerSpec) error {
+	aslog.Info("Validate LoadBalancer update")
+
+	if oldLBSpec != nil && !reflect.DeepEqual(oldLBSpec, newLBSpec) {
+		return fmt.Errorf("cannot update existing LoadBalancer Service")
 	}
 
 	return nil

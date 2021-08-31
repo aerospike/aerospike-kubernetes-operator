@@ -60,6 +60,42 @@ type AerospikeClusterSpec struct {
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
+	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
+	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+}
+
+type SeedsFinderServices struct {
+	// LoadBalancer configuration. Mostly this load balancer is only used for Aerospike Cluster
+	// discovery from outside of Kubernetes cluster.
+	LoadBalancer *LoadBalancerSpec `json:"loadBalancer,omitempty"`
+}
+
+// LoadBalancerSpec contains specification for Service with type LoadBalancer.
+// +k8s:openapi-gen=true
+type LoadBalancerSpec struct {
+	// +kubebuilder:validation:Enum=Local;Cluster
+	// +optional
+	ExternalTrafficPolicy corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
+
+	// +patchStrategy=merge
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" patchStrategy:"merge"`
+
+	// Port Exposed port on load balancer. If not specified TargetPort is used.
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int32 `json:"port,omitempty"`
+
+	// TargetPort Target port. If not specified the tls-port of network.service stanza is used from Aerospike config.
+	// If there is no tls port configured then regular port from network.service is used.
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	TargetPort int32 `json:"targetPort,omitempty"`
+
+	// +optional
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" patchStrategy:"merge"`
 }
 
 type AerospikeOperatorClientCertSpec struct {
@@ -532,6 +568,8 @@ type AerospikeClusterStatusSpec struct {
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCertSpec,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
+	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
+	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -886,6 +924,12 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	}
 	status.PodSpec = statusPodSpec
 
+	seedsFinderServices := SeedsFinderServices{}
+	if err := lib.DeepCopy(&seedsFinderServices, &spec.SeedsFinderServices); err != nil {
+		return nil, err
+	}
+	status.SeedsFinderServices = seedsFinderServices
+
 	return &status, nil
 }
 
@@ -978,6 +1022,12 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		return nil, err
 	}
 	spec.PodSpec = specPodSpec
+
+	seedsFinderServices := SeedsFinderServices{}
+	if err := lib.DeepCopy(&seedsFinderServices, &status.SeedsFinderServices); err != nil {
+		return nil, err
+	}
+	spec.SeedsFinderServices = seedsFinderServices
 
 	return &spec, nil
 }

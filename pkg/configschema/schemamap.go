@@ -1,13 +1,42 @@
 package configschema
 
-// SchemaMap has all supported json schema in string form
-var SchemaMap = map[string]string{
-	"4.9.0": conf4_9_0,
-	"5.0.0": conf5_0_0,
-	"5.1.0": conf5_1_0,
-	"5.2.0": conf5_2_0,
-	"5.3.0": conf5_3_0,
-	"5.4.0": conf5_4_0,
-	"5.5.0": conf5_5_0,
-	"5.6.0": conf5_6_0,
+import (
+	"embed"
+	_ "embed"
+	"io/fs"
+	"path/filepath"
+	"strings"
+)
+
+//go:embed json
+var schemas embed.FS
+
+type SchemaMap map[string]string
+
+func NewSchemaMap() (SchemaMap, error) {
+
+	schemamap := make(SchemaMap)
+
+	if err := fs.WalkDir(schemas, ".", func(path string, d fs.DirEntry, err error) error {
+
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			content, err := fs.ReadFile(schemas, path)
+			if err != nil {
+				return err
+			}
+			baseName := filepath.Base(path)
+			key := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+			schemamap[key] = string(content)
+		}
+		return nil
+
+	}); err != nil {
+		return nil, err
+	}
+
+	return schemamap, nil
+
 }
