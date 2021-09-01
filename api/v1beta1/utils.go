@@ -100,6 +100,10 @@ const (
 	AerospikeServerContainerName      string = "aerospike-server"
 	AerospikeServerInitContainerName  string = "aerospike-init"
 	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.14"
+
+	AerospikeAppLabel            = "app"
+	AerospikeCustomResourceLabel = "aerospike.com/cr"
+	AerospikeRackIdLabel         = "aerospike.com/rack-id"
 )
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {

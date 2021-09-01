@@ -95,27 +95,23 @@ func GetDesiredImage(aeroCluster *asdbv1beta1.AerospikeCluster, containerName st
 // LabelsForAerospikeCluster returns the labels for selecting the resources
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
-	return map[string]string{"app": "aerospike-cluster", "aerospike.com/cr": clName}
+	return map[string]string{
+		asdbv1beta1.AerospikeAppLabel: "aerospike-cluster", asdbv1beta1.AerospikeRackIdLabel: clName}
 }
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
 func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
-	labels["aerospike.com/rack-id"] = strconv.Itoa(rackID)
+	labels[asdbv1beta1.AerospikeRackIdLabel] = strconv.Itoa(rackID)
 	return labels
 }
 
 // MergeLabels merges operator an user defined labels
-func MergeLabels(operatorLabels, userLabels map[string]string) (map[string]string, error) {
+func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string {
 	for label, value := range userLabels {
-		_, ok := operatorLabels[label]
-		if ok {
-			return nil, fmt.Errorf(
-				"label: %s is automatically defined by operator and shouldn't be specified by user", label)
-		}
 		operatorLabels[label] = value
 	}
-	return operatorLabels, nil
+	return operatorLabels
 }
 
 // GetHash return ripmd160 hash for given string

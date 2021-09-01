@@ -1348,7 +1348,9 @@ func (r *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 	var allContainers []v1.Container
 	allContainers = append(allContainers, r.Spec.PodSpec.Sidecars...)
 	allContainers = append(allContainers, r.Spec.PodSpec.InitContainers...)
-
+	if err := ValidateAerospikeObjectMeta(&r.Spec.PodSpec.AerospikeObjectMeta); err != nil {
+		return err
+	}
 	// Duplicate names are not allowed across sidecars and initContainers
 	return validatePodSpecContainer(allContainers)
 }
@@ -1380,5 +1382,16 @@ func validatePodSpecContainer(containers []v1.Container) error {
 		// }
 	}
 
+	return nil
+}
+
+func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error {
+	for label, _ := range aerospikeObjectMeta.Labels {
+		if label == AerospikeAppLabel || label == AerospikeRackIdLabel || label == AerospikeCustomResourceLabel {
+			return fmt.Errorf(
+				"label: %s is automatically defined by operator and shouldn't be specified by user", label)
+		}
+
+	}
 	return nil
 }
