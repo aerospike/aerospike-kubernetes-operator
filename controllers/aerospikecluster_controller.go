@@ -50,37 +50,27 @@ var (
 	}
 )
 
-func ignoreSecondaryResource() predicate.Predicate {
-	p := predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			// Ignore updates to CR status in which case metadata.Generation does not change
-			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			// Evaluates to false if the object has been confirmed deleted.
-			return !e.DeleteStateUnknown
-		},
-	}
-	return p
-}
-
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&asdbv1beta1.AerospikeCluster{}).
-		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(
-			predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					return false
+		Owns(
+			&appsv1.StatefulSet{}, builder.WithPredicates(
+				predicate.Funcs{
+					CreateFunc: func(e event.CreateEvent) bool {
+						return false
+					},
+					UpdateFunc: func(e event.UpdateEvent) bool {
+						return false
+					},
 				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return false
-				},
+			),
+		).
+		WithOptions(
+			controller.Options{
+				MaxConcurrentReconciles: maxConcurrentReconciles,
 			},
-		)).
-		WithOptions(controller.Options{
-			MaxConcurrentReconciles: maxConcurrentReconciles,
-		}).
+		).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
@@ -119,7 +109,9 @@ type RackState struct {
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikeclusters/finalizers,verbs=update
 
 // Reconcile AerospikeCluster object
-func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reconcile.Request) (ctrl.Result, error) {
+func (r *AerospikeClusterReconciler) Reconcile(
+	_ context.Context, request reconcile.Request,
+) (ctrl.Result, error) {
 	_ = r.Log.WithValues("aerospikecluster", request.NamespacedName)
 
 	r.Log.Info("Reconciling AerospikeCluster")
@@ -136,13 +128,18 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 		return reconcile.Result{Requeue: true}, err
 	}
 
-	r.Log.V(1).Info("AerospikeCluster", "Spec", aeroCluster.Spec, "Status", aeroCluster.Status)
+	r.Log.V(1).Info(
+		"AerospikeCluster", "Spec", aeroCluster.Spec, "Status",
+		aeroCluster.Status,
+	)
 
 	// Check DeletionTimestamp to see if cluster is being deleted
 	if !aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
 		// TODO: LOG FOR CLUSTER DELETION
 		// The cluster is being deleted
-		if err := r.handleClusterDeletion(aeroCluster, finalizerName); err != nil {
+		if err := r.handleClusterDeletion(
+			aeroCluster, finalizerName,
+		); err != nil {
 			return reconcile.Result{}, err
 		}
 		// Stop reconciliation as the cluster is being deleted
@@ -174,11 +171,15 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 	// It may have been left from previous steps
 	allHostConns, err := r.newAllHostConn(aeroCluster)
 	if err != nil {
-		e := fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err)
+		e := fmt.Errorf(
+			"failed to get hostConn for aerospike cluster nodes: %v", err,
+		)
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
 		return reconcile.Result{}, e
 	}
-	if err := deployment.InfoQuiesceUndo(r.getClientPolicy(aeroCluster), allHostConns); err != nil {
+	if err := deployment.InfoQuiesceUndo(
+		r.getClientPolicy(aeroCluster), allHostConns,
+	); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")
 		return reconcile.Result{}, err
 	}
@@ -198,12 +199,16 @@ func (r *AerospikeClusterReconciler) Reconcile(ctx context.Context, request reco
 	return reconcile.Result{}, nil
 }
 
-func (r *AerospikeClusterReconciler) handleClusterDeletion(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) handleClusterDeletion(
+	aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string,
+) error {
 
 	r.Log.Info("Handle cluster deletion")
 
 	// The cluster is being deleted
-	if err := r.cleanUpAndremoveFinalizer(aeroCluster, finalizerName); err != nil {
+	if err := r.cleanUpAndremoveFinalizer(
+		aeroCluster, finalizerName,
+	); err != nil {
 		r.Log.Error(err, "Failed to remove finalizer")
 		return err
 	}
@@ -228,7 +233,9 @@ func (r *AerospikeClusterReconciler) handlePreviouslyFailedCluster(aeroCluster *
 		r.Log.V(1).Info("It's not a new cluster, check if it is failed and needs recovery")
 		hasFailed, err := r.hasClusterFailed(aeroCluster)
 		if err != nil {
-			return fmt.Errorf("error determining if cluster has failed: %v", err)
+			return fmt.Errorf(
+				"error determining if cluster has failed: %v", err,
+			)
 		}
 
 		if hasFailed {
@@ -256,11 +263,13 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1b
 	}
 	var hosts []*as.Host
 	for _, conn := range conns {
-		hosts = append(hosts, &as.Host{
-			Name:    conn.ASConn.AerospikeHostName,
-			TLSName: conn.ASConn.AerospikeTLSName,
-			Port:    conn.ASConn.AerospikePort,
-		})
+		hosts = append(
+			hosts, &as.Host{
+				Name:    conn.ASConn.AerospikeHostName,
+				TLSName: conn.ASConn.AerospikeTLSName,
+				Port:    conn.ASConn.AerospikePort,
+			},
+		)
 	}
 	// Create policy using status, status has current connection info
 	clientPolicy := r.getClientPolicy(aeroCluster)
@@ -290,7 +299,9 @@ func (r *AerospikeClusterReconciler) reconcileAccessControl(aeroCluster *asdbv1b
 	// // TODO: FIXME: REMOVE LOGGER
 	// logger := pkgLog.New("AerospikeCluster", utils.ClusterNamespacedName(aeroCluster))
 
-	err = ReconcileAccessControl(&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log)
+	err = ReconcileAccessControl(
+		&aeroCluster.Spec, statusToSpec, aeroClient, pp, r.Log,
+	)
 	return err
 }
 
@@ -300,7 +311,11 @@ func (r *AerospikeClusterReconciler) updateStatus(aeroCluster *asdbv1beta1.Aeros
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
+		}, newAeroCluster,
+	)
 	if err != nil {
 		return err
 	}
@@ -333,7 +348,11 @@ func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1beta1.Aeros
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newAeroCluster)
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
+		}, newAeroCluster,
+	)
 	if err != nil {
 		return err
 	}
@@ -342,14 +361,18 @@ func (r *AerospikeClusterReconciler) createStatus(aeroCluster *asdbv1beta1.Aeros
 		newAeroCluster.Status.Pods = map[string]asdbv1beta1.AerospikePodStatus{}
 	}
 
-	if err = r.Client.Status().Update(context.TODO(), newAeroCluster); err != nil {
+	if err = r.Client.Status().Update(
+		context.TODO(), newAeroCluster,
+	); err != nil {
 		return fmt.Errorf("error creating status: %v", err)
 	}
 
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1beta1.AerospikeCluster) (bool, error) {
+func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1beta1.AerospikeCluster) (
+	bool, error,
+) {
 	if aeroCluster.Status.AerospikeConfig != nil {
 		// We have valid status, cluster cannot be new.
 		return false, nil
@@ -366,7 +389,9 @@ func (r *AerospikeClusterReconciler) isNewCluster(aeroCluster *asdbv1beta1.Aeros
 	return len(statefulSetList.Items) == 0, nil
 }
 
-func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1beta1.AerospikeCluster) (bool, error) {
+func (r *AerospikeClusterReconciler) hasClusterFailed(aeroCluster *asdbv1beta1.AerospikeCluster) (
+	bool, error,
+) {
 	isNew, err := r.isNewCluster(aeroCluster)
 
 	if err != nil {
@@ -389,19 +414,21 @@ func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster 
 		return fmt.Errorf("error marshalling new status: %v", err)
 	}
 
-	jsonpatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
+	jsonPatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
 	if err != nil {
 		return fmt.Errorf("error creating json patch: %v", err)
 	}
 
 	// Pick changes to the status object only.
-	filteredPatch := []jsonpatch.JsonPatchOperation{}
-	for _, operation := range jsonpatchPatch {
+	var filteredPatch []jsonpatch.JsonPatchOperation
+	for _, operation := range jsonPatchPatch {
 		// pods should never be updated here
 		// pods is updated only from 2 places
 		// 1: While pod init, it will add pod in pods
 		// 2: While pod cleanup, it will remove pod from pods
-		if strings.HasPrefix(operation.Path, "/status") && !strings.HasPrefix(operation.Path, "/status/pods") {
+		if strings.HasPrefix(
+			operation.Path, "/status",
+		) && !strings.HasPrefix(operation.Path, "/status/pods") {
 			filteredPatch = append(filteredPatch, operation)
 		}
 	}
@@ -410,17 +437,23 @@ func (r *AerospikeClusterReconciler) patchStatus(oldAeroCluster, newAeroCluster 
 		r.Log.Info("No status change required")
 		return nil
 	}
-	r.Log.V(1).Info("Filtered status patch ", "patch", filteredPatch, "oldObj.status", oldAeroCluster.Status, "newObj.status", newAeroCluster.Status)
+	r.Log.V(1).Info(
+		"Filtered status patch ", "patch", filteredPatch, "oldObj.status",
+		oldAeroCluster.Status, "newObj.status", newAeroCluster.Status,
+	)
 
-	jsonpatchJSON, err := json.Marshal(filteredPatch)
+	jsonPatchJSON, err := json.Marshal(filteredPatch)
 
 	if err != nil {
 		return fmt.Errorf("error marshalling json patch: %v", err)
 	}
 
-	patch := client.RawPatch(types.JSONPatchType, jsonpatchJSON)
+	patch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-	if err = r.Client.Status().Patch(context.TODO(), oldAeroCluster, patch, client.FieldOwner(patchFieldOwner)); err != nil {
+	if err = r.Client.Status().Patch(
+		context.TODO(), oldAeroCluster, patch,
+		client.FieldOwner(patchFieldOwner),
+	); err != nil {
 		return fmt.Errorf("error patching status: %v", err)
 	}
 
@@ -446,18 +479,27 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1beta
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
 	statefulSetList, err := r.getClusterSTSList(aeroCluster)
 	if err != nil {
-		return fmt.Errorf("error getting statefulsets while forcing recreate of the cluster as status is nil: %v", err)
+		return fmt.Errorf(
+			"error getting statefulsets while forcing recreate of the cluster as status is nil: %v",
+			err,
+		)
 	}
 
-	r.Log.V(1).Info("Found statefulset for cluster. Need to delete them", "nSTS", len(statefulSetList.Items))
+	r.Log.V(1).Info(
+		"Found statefulset for cluster. Need to delete them", "nSTS",
+		len(statefulSetList.Items),
+	)
 	for _, statefulset := range statefulSetList.Items {
-		if err := r.deleteSTS(aeroCluster, &statefulset); err != nil {
-			return fmt.Errorf("error deleting statefulset while forcing recreate of the cluster as status is nil: %v", err)
+		if err := r.deleteSTS(&statefulset); err != nil {
+			return fmt.Errorf(
+				"error deleting statefulset while forcing recreate of the cluster as status is nil: %v",
+				err,
+			)
 		}
 	}
 
 	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
-	// This is not necessary since scale-up would cleanup danglin pod status. However done here for general
+	// This is not necessary since scale-up would cleanup dangling pod status. However, done here for general
 	// cleanliness.
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for _, state := range rackStateList {
@@ -466,7 +508,7 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1beta
 			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 
-		newPodNames := []string{}
+		newPodNames := make([]string, 0)
 		for i := 0; i < len(pods.Items); i++ {
 			newPodNames = append(newPodNames, pods.Items[i].Name)
 		}
@@ -480,12 +522,16 @@ func (r *AerospikeClusterReconciler) recoverFailedCreate(aeroCluster *asdbv1beta
 	return fmt.Errorf("forcing recreate of the cluster as status is nil")
 }
 
-func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) addFinalizer(
+	aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string,
+) error {
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
 	if !utils.ContainsString(aeroCluster.ObjectMeta.Finalizers, finalizerName) {
-		aeroCluster.ObjectMeta.Finalizers = append(aeroCluster.ObjectMeta.Finalizers, finalizerName)
+		aeroCluster.ObjectMeta.Finalizers = append(
+			aeroCluster.ObjectMeta.Finalizers, finalizerName,
+		)
 		if err := r.Client.Update(context.TODO(), aeroCluster); err != nil {
 			return err
 		}
@@ -493,7 +539,9 @@ func (r *AerospikeClusterReconciler) addFinalizer(aeroCluster *asdbv1beta1.Aeros
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string) error {
+func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(
+	aeroCluster *asdbv1beta1.AerospikeCluster, finalizerName string,
+) error {
 	// The object is being deleted
 	if utils.ContainsString(aeroCluster.ObjectMeta.Finalizers, finalizerName) {
 		// Handle any external dependency
@@ -504,7 +552,9 @@ func (r *AerospikeClusterReconciler) cleanUpAndremoveFinalizer(aeroCluster *asdb
 		}
 
 		// Remove finalizer from the list
-		aeroCluster.ObjectMeta.Finalizers = utils.RemoveString(aeroCluster.ObjectMeta.Finalizers, finalizerName)
+		aeroCluster.ObjectMeta.Finalizers = utils.RemoveString(
+			aeroCluster.ObjectMeta.Finalizers, finalizerName,
+		)
 		if err := r.Client.Update(context.TODO(), aeroCluster); err != nil {
 			return err
 		}
@@ -527,7 +577,9 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 		}
 		storage := rack.Storage
 
-		if _, err := r.removePVCsAsync(aeroCluster, &storage, rackPVCItems); err != nil {
+		if _, err := r.removePVCsAsync(
+			aeroCluster, &storage, rackPVCItems,
+		); err != nil {
 			return fmt.Errorf("failed to remove cluster PVCs: %v", err)
 		}
 	}
@@ -543,8 +595,10 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 	for _, pvc := range pvcItems {
 		var found bool
 		for _, rack := range aeroCluster.Spec.RackConfig.Racks {
-			rackLables := utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rack.ID)
-			if reflect.DeepEqual(pvc.Labels, rackLables) {
+			rackLabels := utils.LabelsForAerospikeClusterRack(
+				aeroCluster.Name, rack.ID,
+			)
+			if reflect.DeepEqual(pvc.Labels, rackLabels) {
 				found = true
 				break
 			}
@@ -555,21 +609,29 @@ func (r *AerospikeClusterReconciler) deleteExternalResources(aeroCluster *asdbv1
 	}
 
 	// Delete pvc for commmon storage.
-	if _, err := r.removePVCsAsync(aeroCluster, &aeroCluster.Spec.Storage, fileredPVCItems); err != nil {
+	if _, err := r.removePVCsAsync(
+		aeroCluster, &aeroCluster.Spec.Storage, fileredPVCItems,
+	); err != nil {
 		return fmt.Errorf("failed to remove cluster PVCs: %v", err)
 	}
 
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(aeroCluster *asdbv1beta1.AerospikeCluster, pod corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isResourceUpdatedInAeroCluster(
+	aeroCluster *asdbv1beta1.AerospikeCluster, pod corev1.Pod,
+) bool {
 	res := aeroCluster.Spec.Resources
 	if res == nil {
 		res = &corev1.ResourceRequirements{}
 	}
 
-	if !isClusterResourceListEqual(pod.Spec.Containers[0].Resources.Requests, res.Requests) ||
-		!isClusterResourceListEqual(pod.Spec.Containers[0].Resources.Limits, res.Limits) {
+	if !isClusterResourceListEqual(
+		pod.Spec.Containers[0].Resources.Requests, res.Requests,
+	) ||
+		!isClusterResourceListEqual(
+			pod.Spec.Containers[0].Resources.Limits, res.Limits,
+		) {
 		return true
 	}
 	return false
