@@ -11,7 +11,7 @@ pipeline {
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY=""
         OPERATOR_NAME = "aerospike-kubernetes-operator"
-        OPERATOR_VERSION = "candidate-${env.BRANCH_NAME}-{env.BUILD_NUMBER}"
+        OPERATOR_VERSION = "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
         OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}aerospike/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
     }
 
