@@ -4,8 +4,8 @@ import os
 from ipaddress import ip_address, IPv4Address
 
 # Constants
-fileSystemMountPoint = '/filesystem-volumes'
-blockMountPoint = '/block-volumes'
+fileSystemMountPoint = '/workdir/filesystem-volumes'
+blockMountPoint = '/workdir/block-volumes'
 
 
 def executeCommand(command):
