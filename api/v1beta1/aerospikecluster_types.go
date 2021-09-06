@@ -172,6 +172,9 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 
 // AerospikePodSpec contain configuration for created Aeropsike cluster pods.
 type AerospikePodSpec struct {
+	// AerospikeContainerSpec contains settings for aerospike-server container created by operator.
+	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
+
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
@@ -203,6 +206,11 @@ type AerospikePodSpec struct {
 
 	// Effective value of the DNSPolicy
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
+}
+
+type AerospikeContainerSpec struct {
+	// SecurityContext that will be added to aerospike-server container created by operator.
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 // RackPodSpec provides rack specific overrides to the global pod spec.

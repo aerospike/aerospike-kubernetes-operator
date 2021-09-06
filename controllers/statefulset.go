@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -171,6 +172,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 						Name:            asdbv1beta1.AerospikeServerContainerName,
 						Image:           aeroCluster.Spec.Image,
 						ImagePullPolicy: corev1.PullIfNotPresent,
+						SecurityContext: aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 						Ports:           ports,
 						Env:             envVarList,
 						VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),
@@ -185,7 +187,7 @@ func (r *AerospikeClusterReconciler) createSTS(aeroCluster *asdbv1beta1.Aerospik
 
 	r.updateSTSPodSpec(aeroCluster, st, ls, rackState)
 
-	r.updateSTSContainerResources(aeroCluster, st)
+	r.updateAerospikeContainer(aeroCluster, st)
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(aeroCluster, st, rackState)
@@ -603,14 +605,14 @@ func (r *AerospikeClusterReconciler) updateSTSPVStorage(aeroCluster *asdbv1beta1
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-			initContainerVolumePathPrefix := "/block-volumes"
+			initContainerVolumePathPrefix := "/workdir/block-volumes"
 
 			r.Log.V(1).Info("added volume device for volume", "volume", volume)
 
 			addVolumeDeviceInContainer(volume.Name, initContainerAttachments, st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix)
 			addVolumeDeviceInContainer(volume.Name, containerAttachments, st.Spec.Template.Spec.Containers, "")
 		} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
-			initContainerVolumePathPrefix := "/filesystem-volumes"
+			initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 			r.Log.V(1).Info("added volume mount for volume", "volume", volume)
 
@@ -845,9 +847,11 @@ func (r *AerospikeClusterReconciler) getClusterSTSList(aeroCluster *asdbv1beta1.
 	return statefulSetList, nil
 }
 
-func (r *AerospikeClusterReconciler) updateSTSContainerResources(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
+func (r *AerospikeClusterReconciler) updateAerospikeContainer(aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet) {
 	// These resources are for main aerospike container. Other sidecar can mention their own resources.
 	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
+	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
+	st.Spec.Template.Spec.Containers[0].SecurityContext = aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {

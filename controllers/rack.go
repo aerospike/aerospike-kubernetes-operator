@@ -512,7 +512,7 @@ func (r *AerospikeClusterReconciler) rollingRestartRack(aeroCluster *asdbv1beta1
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(aeroCluster, found, rackState)
 
-	r.updateSTSContainerResources(aeroCluster, found)
+	r.updateAerospikeContainer(aeroCluster, found)
 
 	r.Log.Info("Updating statefulset spec")
 
@@ -910,7 +910,7 @@ func getContainer(podContainers []corev1.Container, name string) *corev1.Contain
 }
 
 func getOriginalPath(path string) string {
-	path = strings.TrimPrefix(path, "/filesystem-volumes")
-	path = strings.TrimPrefix(path, "/block-volumes")
+	path = strings.TrimPrefix(path, "/workdir/filesystem-volumes")
+	path = strings.TrimPrefix(path, "/workdir/block-volumes")
 	return path
 }
