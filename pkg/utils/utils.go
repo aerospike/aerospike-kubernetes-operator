@@ -108,10 +108,15 @@ func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string 
 
 // MergeLabels merges operator an user defined labels
 func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string {
+	mergedMap := make(map[string]string, len(operatorLabels) + len(userLabels))
 	for label, value := range userLabels {
-		operatorLabels[label] = value
+		mergedMap[label] = value
 	}
-	return operatorLabels
+
+	for label, value := range operatorLabels {
+		mergedMap[label] = value
+	}
+	return mergedMap
 }
 
 // GetHash return ripmd160 hash for given string
