@@ -115,16 +115,6 @@ func isPodReady(pod *corev1.Pod) bool {
 	return true
 }
 
-// isPodCreated returns true if pod has been created and is maintained by the API server
-func isPodCreated(pod *corev1.Pod) bool {
-	return pod.Status.Phase != ""
-}
-
-// isPodFailed returns true if pod has a Phase of PodFailed
-func isPodFailed(pod *corev1.Pod) bool {
-	return pod.Status.Phase == corev1.PodFailed
-}
-
 // IsPodTerminating returns true if pod's DeletionTimestamp has been set
 func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
@@ -170,15 +160,6 @@ func allContainersAreOnDesiredImages(
 		}
 	}
 	return true
-}
-
-// GetPodNames returns the pod names of the array of pods passed in
-func GetPodNames(pods []corev1.Pod) []string {
-	var podNames []string
-	for _, pod := range pods {
-		podNames = append(podNames, pod.Name)
-	}
-	return podNames
 }
 
 // GetPod get pod from pod list by name

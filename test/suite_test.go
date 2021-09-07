@@ -60,7 +60,8 @@ func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(t,
+	RunSpecsWithDefaultAndCustomReporters(
+		t,
 		"Controller Suite",
 		[]Reporter{junitReporter},
 	)
@@ -69,78 +70,84 @@ func TestAPIs(t *testing.T) {
 // This is used when running tests on existing cluster
 // user has to install its own operator then run cleanup and then start this
 
-var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+var _ = BeforeSuite(
+	func(done Done) {
+		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	By("Bootstrapping test environment")
-	t := true
-	testEnv = &envtest.Environment{
-		UseExistingCluster: &t,
-	}
-	var err error
+		By("Bootstrapping test environment")
+		t := true
+		testEnv = &envtest.Environment{
+			UseExistingCluster: &t,
+		}
+		var err error
 
-	cfg, err = testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
+		cfg, err = testEnv.Start()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg).NotTo(BeNil())
 
-	err = clientgoscheme.AddToScheme(clientgoscheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+		err = clientgoscheme.AddToScheme(clientgoscheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = asdbv1beta1.AddToScheme(clientgoscheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+		err = asdbv1beta1.AddToScheme(clientgoscheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
 
-	err = admissionv1.AddToScheme(scheme)
-	Expect(err).NotTo(HaveOccurred())
+		err = admissionv1.AddToScheme(scheme)
+		Expect(err).NotTo(HaveOccurred())
 
-	// +kubebuilder:scaffold:scheme
+		// +kubebuilder:scaffold:scheme
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient).NotTo(BeNil())
+		k8sClient, err = client.New(
+			cfg, client.Options{Scheme: clientgoscheme.Scheme},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient).NotTo(BeNil())
 
-	k8sClientset = kubernetes.NewForConfigOrDie(cfg)
-	Expect(k8sClient).NotTo(BeNil())
+		k8sClientset = kubernetes.NewForConfigOrDie(cfg)
+		Expect(k8sClient).NotTo(BeNil())
 
-	ctx := goctx.TODO()
-	createNamespace(k8sClient, ctx, namespace)
+		ctx := goctx.TODO()
+		_ = createNamespace(k8sClient, ctx, namespace)
 
-	// Setup by user function
-	// test creating resource
-	// IN operator namespace
-	// Create aerospike-secret
-	// Create auth-secret (admin)
-	// Create auth-update (admin123)
+		// Setup by user function
+		// test creating resource
+		// IN operator namespace
+		// Create aerospike-secret
+		// Create auth-secret (admin)
+		// Create auth-update (admin123)
 
-	// For test1
-	// Create aerospike-secret
-	// Create auth-secret (admin)
+		// For test1
+		// Create aerospike-secret
+		// Create auth-secret (admin)
 
-	// For test2
-	// Create aerospike-secret
-	// Create auth-secret (admin)
+		// For test2
+		// Create aerospike-secret
+		// Create auth-secret (admin)
 
-	// For common
-	// Create namespace test1, test2
-	// ServiceAccount: aerospike-cluster (operatorNs, test1, test2)
-	// ClusterRole: aerospike-cluster
-	// ClusterRoleBinding: aerospike-cluster
+		// For common
+		// Create namespace test1, test2
+		// ServiceAccount: aerospike-cluster (operatorNs, test1, test2)
+		// ClusterRole: aerospike-cluster
+		// ClusterRoleBinding: aerospike-cluster
 
-	// Need to create storageclass if not created already
+		// Need to create storageclass if not created already
 
-	err = setupByUser(k8sClient, ctx)
-	Expect(err).ToNot(HaveOccurred())
+		err = setupByUser(k8sClient, ctx)
+		Expect(err).ToNot(HaveOccurred())
 
-	close(done)
-}, 120)
+		close(done)
+	}, 120,
+)
 
-var _ = AfterSuite(func() {
-	By("Cleaning up all pvcs")
-	cleanupPVC(k8sClient, namespace)
-	cleanupPVC(k8sClient, multiClusterNs1)
-	cleanupPVC(k8sClient, multiClusterNs2)
+var _ = AfterSuite(
+	func() {
+		By("Cleaning up all pvcs")
+		_ = cleanupPVC(k8sClient, namespace)
+		_ = cleanupPVC(k8sClient, multiClusterNs1)
+		_ = cleanupPVC(k8sClient, multiClusterNs2)
 
-	By("tearing down the test environment")
-	gexec.KillAndWait(5 * time.Second)
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
-})
+		By("tearing down the test environment")
+		gexec.KillAndWait(5 * time.Second)
+		err := testEnv.Stop()
+		Expect(err).ToNot(HaveOccurred())
+	},
+)

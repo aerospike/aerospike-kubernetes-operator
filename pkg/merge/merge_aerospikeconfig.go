@@ -46,7 +46,9 @@ func Merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 		}
 		// Special check for key "storage-engine"
 		// Check value type and replace if it's type has changed
-		if key == "storage-engine" && isStorageEngineTypeChanged(baseValue, patchValue) {
+		if key == "storage-engine" && isStorageEngineTypeChanged(
+			baseValue, patchValue,
+		) {
 			res[key] = patchValue
 			continue
 		}
@@ -130,7 +132,9 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 				// get namespace name in patch
 				pName, ok := pEle["name"]
 				if !ok {
-					return "", fmt.Errorf("object %v should have `name` key", pEle)
+					return "", fmt.Errorf(
+						"object %v should have `name` key", pEle,
+					)
 				}
 
 				if pName == bName {
@@ -177,20 +181,6 @@ func isPrimList(list []interface{}) bool {
 		case string, float64, bool, int, int64, int32:
 			continue
 		default:
-			return false
-		}
-	}
-	return true
-}
-
-func isMapList(list []interface{}) bool {
-	for _, e := range list {
-		me, ok := e.(map[string]interface{})
-		if !ok {
-			return false
-		}
-		// Check name key
-		if _, ok := me["name"]; !ok {
 			return false
 		}
 	}

@@ -18,139 +18,181 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("LargeReconcile", func() {
+var _ = Describe(
+	"LargeReconcile", func() {
 
-	ctx := goctx.Background()
+		ctx := goctx.Background()
 
-	Context("When doing valid operations", func() {
+		Context(
+			"When doing valid operations", func() {
 
-		clusterName := "large-reconcile"
-		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+				clusterName := "large-reconcile"
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
 
-		// Create a 5 node cluster
-		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 5)
-		networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
-			AccessType:             asdbv1beta1.AerospikeNetworkTypeHostExternal,
-			AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypeHostExternal,
-			TLSAccessType:          asdbv1beta1.AerospikeNetworkTypeHostExternal,
-			TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal,
-		}
-		aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
+				// Create a 5 node cluster
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 5,
+				)
+				networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
+					AccessType:             asdbv1beta1.AerospikeNetworkTypeHostExternal,
+					AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypeHostExternal,
+					TLSAccessType:          asdbv1beta1.AerospikeNetworkTypeHostExternal,
+					TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal,
+				}
+				aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
 
-		It("Should try large reconcile operations", func() {
+				It(
+					"Should try large reconcile operations", func() {
 
-			By("Deploy and load data")
+						By("Deploy and load data")
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			err = loadDataInCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						err = loadDataInCluster(k8sClient, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			By("ScaleDown")
+						By("ScaleDown")
 
-			// Create a 5 node cluster
-			// Add some data to make migration time taking
-			// Change size to 2
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Create a 5 node cluster
+						// Add some data to make migration time taking
+						// Change size to 2
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.Size = 2
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.Size = 2
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Change size to 4 immediately
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Change size to 4 immediately
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.Size = 4
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.Size = 4
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Cluster size should never go below 4,
-			// as only one node is removed at a time and before reducing 2nd node, we changed the size to 4
-			err = waitForClusterScaleDown(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(4))
-			Expect(err).ToNot(HaveOccurred())
+						// Cluster size should never go below 4,
+						// as only one node is removed at a time and before reducing 2nd node, we changed the size to 4
+						err = waitForClusterScaleDown(
+							k8sClient, ctx, aeroCluster,
+							int(aeroCluster.Spec.Size), retryInterval,
+							getTimeout(4),
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			By("RollingRestart")
+						By("RollingRestart")
 
-			// Create a 5 node cluster
-			// Add some data to make migration time taking
-			// Change config
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Create a 5 node cluster
+						// Add some data to make migration time taking
+						// Change config
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			// oldService := aeroCluster.Spec.AerospikeConfig.Value["service"]
-			tempConf := 18000
-			aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = tempConf
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						// oldService := aeroCluster.Spec.AerospikeConfig.Value["service"]
+						tempConf := 18000
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = tempConf
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Change config back to original value
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Change config back to original value
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Cluster status should never get updated with old conf "tempConf"
-			err = waitForClusterRollingRestart(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), tempConf, retryInterval, getTimeout(4))
-			Expect(err).ToNot(HaveOccurred())
+						// Cluster status should never get updated with old conf "tempConf"
+						err = waitForClusterRollingRestart(
+							k8sClient, aeroCluster, int(aeroCluster.Spec.Size),
+							tempConf, retryInterval, getTimeout(4),
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			By("Upgrade")
+						By("Upgrade")
 
-			// Test1
-			// Create a 5 node cluster
-			// Add some data to make migration time taking
-			// Change build
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Test1
+						// Create a 5 node cluster
+						// Add some data to make migration time taking
+						// Change build
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			tempImage := imageToUpgrade
-			aeroCluster.Spec.Image = imageToUpgrade
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						tempImage := imageToUpgrade
+						aeroCluster.Spec.Image = imageToUpgrade
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Change build back to original
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						// Change build back to original
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.Image = latestClusterImage
-			err = k8sClient.Update(goctx.TODO(), aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.Image = latestClusterImage
+						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Only 1 pod need upgrade
-			err = waitForClusterUpgrade(k8sClient, aeroCluster, int(aeroCluster.Spec.Size), tempImage, retryInterval, getTimeout(4))
-			Expect(err).ToNot(HaveOccurred())
+						// Only 1 pod need upgrade
+						err = waitForClusterUpgrade(
+							k8sClient, aeroCluster, int(aeroCluster.Spec.Size),
+							tempImage, retryInterval, getTimeout(4),
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			// Test2
-			// Create a 5 node cluster
-			// Add some data to make migration time taking
-			// Change build to build1
-			// Change build to build2
-			// Only a single pod may have build1 at max in whole upgrade..ultimately all should reach build2
+						// Test2
+						// Create a 5 node cluster
+						// Add some data to make migration time taking
+						// Change build to build1
+						// Change build to build2
+						// Only a single pod may have build1 at max in whole upgrade..ultimately all should reach build2
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
-		})
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					},
+				)
 
-		Context("WaitingForStableCluster", func() {
-			It("LargeMigration", func() {
-				// Need to create large migration...is there any way to mimic or olny way is to load data
-				// Tested manually
-			})
-			It("ColdStart", func() {
-				// Not needed for this, isClusterStable call should fail and this will requeue request.
-			})
-		})
-	})
+				Context(
+					"WaitingForStableCluster", func() {
+						It(
+							"LargeMigration", func() {
+								// Need to create large migration...is there any way to mimic or olny way is to load data
+								// Tested manually
+							},
+						)
+						It(
+							"ColdStart", func() {
+								// Not needed for this, isClusterStable call should fail and this will requeue request.
+							},
+						)
+					},
+				)
+			},
+		)
 
-})
+	},
+)
 
-func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster) error {
+func loadDataInCluster(
+	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+) error {
 
 	policy := getClientPolicy(aeroCluster, k8sClient)
 	policy.Timeout = time.Minute * 2
@@ -160,19 +202,24 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 
 	var hostList []*as.Host
 	for _, pod := range aeroCluster.Status.Pods {
-		host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
+		host := &as.Host{
+			Name: pod.HostExternalIP, Port: int(pod.ServicePort),
+			TLSName: pod.Aerospike.TLSName,
+		}
 		hostList = append(hostList, host)
 	}
 
 	clientP, err := as.NewClientWithPolicyAndHost(policy, hostList...)
 	if err != nil {
-		return fmt.Errorf("failed to create aerospike cluster client: %v", err)
+		return fmt.Errorf(
+			"failed to create aerospike cluster asClient: %v", err,
+		)
 	}
 
-	client := *clientP
-	defer client.Close()
+	asClient := *clientP
+	defer asClient.Close()
 
-	client.WarmUp(-1)
+	_, _ = asClient.WarmUp(-1)
 
 	keyPrefix := "testkey"
 
@@ -182,7 +229,7 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 	rand.Read(token)
 
 	fmt.Printf("Loading record, isClusterConnected %v\n", clientP.IsConnected())
-	fmt.Println(client.GetNodes())
+	fmt.Println(asClient.GetNodes())
 
 	wp := as.NewWritePolicy(0, 0)
 	wp.MaxRetries = 1000
@@ -198,7 +245,7 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 			"testbin": token,
 		}
 
-		err = client.Put(wp, key, binMap)
+		err = asClient.Put(wp, key, binMap)
 		if err != nil {
 			return err
 		}
@@ -209,38 +256,48 @@ func loadDataInCluster(k8sClient client.Client, ctx goctx.Context, aeroCluster *
 	return nil
 }
 
-func waitForClusterScaleDown(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, replicas int, retryInterval, timeout time.Duration) error {
-	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		// Fetch the AerospikeCluster instance
-		newCluster := &asdbv1beta1.AerospikeCluster{}
-		err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
-				return false, nil
+func waitForClusterScaleDown(
+	k8sClient client.Client, ctx goctx.Context,
+	aeroCluster *asdbv1beta1.AerospikeCluster, replicas int,
+	retryInterval, timeout time.Duration,
+) error {
+	err := wait.Poll(
+		retryInterval, timeout, func() (done bool, err error) {
+			// Fetch the AerospikeCluster instance
+			newCluster := &asdbv1beta1.AerospikeCluster{}
+			err = k8sClient.Get(
+				goctx.TODO(), types.NamespacedName{
+					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
+				}, newCluster,
+			)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
+					return false, nil
+				}
+				return false, err
 			}
-			return false, err
-		}
-		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
+			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		if int(newCluster.Status.Size) < replicas {
-			err := fmt.Errorf("cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
-			// t.Logf(err.Error())
-			return false, err
-		}
+			if int(newCluster.Status.Size) < replicas {
+				err := fmt.Errorf("cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
+				// t.Logf(err.Error())
+				return false, err
+			}
 
-		podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-		if err != nil {
-			return false, err
-		}
-		if len(podList.Items) < replicas {
-			err := fmt.Errorf("cluster pods number can not go below replica size")
-			// t.Logf(err.Error())
-			return false, err
-		}
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+			if err != nil {
+				return false, err
+			}
+			if len(podList.Items) < replicas {
+				err := fmt.Errorf("cluster pods number can not go below replica size")
+				// t.Logf(err.Error())
+				return false, err
+			}
 
-		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
-	})
+			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -249,30 +306,42 @@ func waitForClusterScaleDown(k8sClient client.Client, ctx goctx.Context, aeroClu
 	return nil
 }
 
-func waitForClusterRollingRestart(k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster, replicas int, tempConf int, retryInterval, timeout time.Duration) error {
-	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		// Fetch the AerospikeCluster instance
-		newCluster := &asdbv1beta1.AerospikeCluster{}
-		err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
-				return false, nil
+func waitForClusterRollingRestart(
+	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	replicas int, tempConf int, retryInterval, timeout time.Duration,
+) error {
+	err := wait.Poll(
+		retryInterval, timeout, func() (done bool, err error) {
+			// Fetch the AerospikeCluster instance
+			newCluster := &asdbv1beta1.AerospikeCluster{}
+			err = k8sClient.Get(
+				goctx.TODO(), types.NamespacedName{
+					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
+				}, newCluster,
+			)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
+					return false, nil
+				}
+				return false, err
 			}
-			return false, err
-		}
-		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
+			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		protofdmax := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"].(float64)
-		if int(protofdmax) == tempConf {
-			err := fmt.Errorf("cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow", tempConf)
-			// t.Logf(err.Error())
-			return false, err
-		}
-		// t.Logf("conf value to check proto-fd-max %d", protofdmax)
+			protofdmax := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"].(float64)
+			if int(protofdmax) == tempConf {
+				err := fmt.Errorf(
+					"cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow",
+					tempConf,
+				)
+				// t.Logf(err.Error())
+				return false, err
+			}
+			// t.Logf("conf value to check proto-fd-max %d", protofdmax)
 
-		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
-	})
+			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -281,28 +350,40 @@ func waitForClusterRollingRestart(k8sClient client.Client, aeroCluster *asdbv1be
 	return nil
 }
 
-func waitForClusterUpgrade(k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster, replicas int, tempImage string, retryInterval, timeout time.Duration) error {
-	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		// Fetch the AerospikeCluster instance
-		newCluster := &asdbv1beta1.AerospikeCluster{}
-		err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, newCluster)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
-				return false, nil
+func waitForClusterUpgrade(
+	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	replicas int, tempImage string, retryInterval, timeout time.Duration,
+) error {
+	err := wait.Poll(
+		retryInterval, timeout, func() (done bool, err error) {
+			// Fetch the AerospikeCluster instance
+			newCluster := &asdbv1beta1.AerospikeCluster{}
+			err = k8sClient.Get(
+				goctx.TODO(), types.NamespacedName{
+					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
+				}, newCluster,
+			)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
+					return false, nil
+				}
+				return false, err
 			}
-			return false, err
-		}
-		// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
+			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
-		if newCluster.Status.Image == tempImage {
-			err := fmt.Errorf("cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow", tempImage)
-			// t.Logf(err.Error())
-			return false, err
-		}
+			if newCluster.Status.Image == tempImage {
+				err := fmt.Errorf(
+					"cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow",
+					tempImage,
+				)
+				// t.Logf(err.Error())
+				return false, err
+			}
 
-		return isClusterStateValid(aeroCluster, newCluster, replicas), nil
-	})
+			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+		},
+	)
 	if err != nil {
 		return err
 	}

@@ -35,5 +35,3 @@ features.conf
 GPATH
 GRTAGS
 GTAGS
-test/config
-test/junit.xml

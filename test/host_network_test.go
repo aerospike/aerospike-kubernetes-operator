@@ -15,55 +15,77 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("HostNetwork", func() {
-	ctx := goctx.TODO()
-	Context("HostNetwork", func() {
-		clusterName := "host-network-cluster"
-		image := fmt.Sprintf("aerospike/aerospike-server-enterprise:%s", "5.5.0.13")
-		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-		aeroCluster := createAerospikeClusterPost460(clusterNamespacedName, 2, image)
-		aeroCluster.Spec.PodSpec.HostNetwork = true
-		aeroCluster.Spec.PodSpec.MultiPodPerHost = true
+var _ = Describe(
+	"HostNetwork", func() {
+		ctx := goctx.TODO()
+		Context(
+			"HostNetwork", func() {
+				clusterName := "host-network-cluster"
+				image := fmt.Sprintf(
+					"aerospike/aerospike-server-enterprise:%s", "5.5.0.13",
+				)
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := createAerospikeClusterPost460(
+					clusterNamespacedName, 2, image,
+				)
+				aeroCluster.Spec.PodSpec.HostNetwork = true
+				aeroCluster.Spec.PodSpec.MultiPodPerHost = true
 
-		It("Should not work with MultiPodPerHost enabled", func() {
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
-		})
+				It(
+					"Should not work with MultiPodPerHost enabled", func() {
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+					},
+				)
 
-		It("Should verify hostNetwork flag updates", func() {
-			By("Deploying cluster, Should not advertise node address when off")
-			aeroCluster.Spec.PodSpec.MultiPodPerHost = false
-			aeroCluster.Spec.PodSpec.HostNetwork = false
+				It(
+					"Should verify hostNetwork flag updates", func() {
+						By("Deploying cluster, Should not advertise node address when off")
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+						aeroCluster.Spec.PodSpec.HostNetwork = false
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			checkAdvertisedAddress(ctx, aeroCluster, false)
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+						checkAdvertisedAddress(ctx, aeroCluster, false)
 
-			By("Updating cluster, Should advertise node address when dynamically enabled")
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						By("Updating cluster, Should advertise node address when dynamically enabled")
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodSpec.HostNetwork = true
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			checkAdvertisedAddress(ctx, aeroCluster, true)
+						aeroCluster.Spec.PodSpec.HostNetwork = true
+						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+						checkAdvertisedAddress(ctx, aeroCluster, true)
 
-			By("Updating cluster, Should not advertise node address when dynamically disabled")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+						By("Updating cluster, Should not advertise node address when dynamically disabled")
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodSpec.HostNetwork = false
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			checkAdvertisedAddress(ctx, aeroCluster, false)
+						aeroCluster.Spec.PodSpec.HostNetwork = false
+						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+						checkAdvertisedAddress(ctx, aeroCluster, false)
 
-			By("Deleting cluster")
-			deleteCluster(k8sClient, ctx, aeroCluster)
-		})
-	})
-})
+						By("Deleting cluster")
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
+	},
+)
 
-func checkAdvertisedAddress(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, expectNodIp bool) {
+func checkAdvertisedAddress(
+	ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster,
+	expectNodIp bool,
+) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 

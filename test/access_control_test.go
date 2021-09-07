@@ -2080,7 +2080,7 @@ func validateRoles(
 		return fmt.Errorf("error querying roles: %v", err)
 	}
 
-	currentRoleNames := []string{}
+	var currentRoleNames []string
 
 	for _, role := range asRoles {
 		_, isPredefined := asdbv1beta1.PredefinedRoles[role.Name]
@@ -2090,7 +2090,7 @@ func validateRoles(
 		}
 	}
 
-	expectedRoleNames := []string{}
+	var expectedRoleNames []string
 	accessControl := clusterSpec.AerospikeAccessControl
 	for _, role := range accessControl.Roles {
 		expectedRoleNames = append(expectedRoleNames, role.Name)
@@ -2098,7 +2098,7 @@ func validateRoles(
 
 	if len(currentRoleNames) != len(expectedRoleNames) {
 		return fmt.Errorf(
-			"Actual roles %v do not match expected roles %v", currentRoleNames,
+			"actual roles %v do not match expected roles %v", currentRoleNames,
 			expectedRoleNames,
 		)
 	}
@@ -2110,7 +2110,7 @@ func validateRoles(
 		),
 	) != 0 {
 		return fmt.Errorf(
-			"Actual roles %v do not match expected roles %v", currentRoleNames,
+			"actual roles %v do not match expected roles %v", currentRoleNames,
 			expectedRoleNames,
 		)
 	}
@@ -2126,7 +2126,7 @@ func validateRoles(
 		expectedRoleSpec := *getRole(accessControl.Roles, asRole.Name)
 		expectedPrivilegeNames := expectedRoleSpec.Privileges
 
-		currentPrivilegeNames := []string{}
+		var currentPrivilegeNames []string
 		for _, privilege := range asRole.Privileges {
 			temp, _ := aerospikecluster.AerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
 			currentPrivilegeNames = append(currentPrivilegeNames, temp[0])
@@ -2134,7 +2134,8 @@ func validateRoles(
 
 		if len(currentPrivilegeNames) != len(expectedPrivilegeNames) {
 			return fmt.Errorf(
-				"For role %s actual privileges %v do not match expected privileges %v",
+				"for role %s actual privileges %v do not match expected"+
+					" privileges %v",
 				asRole.Name, currentPrivilegeNames, expectedPrivilegeNames,
 			)
 		}
@@ -2146,7 +2147,8 @@ func validateRoles(
 			),
 		) != 0 {
 			return fmt.Errorf(
-				"For role %s actual privileges %v do not match expected privileges %v",
+				"for role %s actual privileges %v do not match expected"+
+					" privileges %v",
 				asRole.Name, currentPrivilegeNames, expectedPrivilegeNames,
 			)
 		}
@@ -2170,7 +2172,8 @@ func validateRoles(
 		// Validate whitelists.
 		if !reflect.DeepEqual(expectedRoleSpec.Whitelist, asRole.Whitelist) {
 			return fmt.Errorf(
-				"For role %s actual whitelist %v does not match expected whitelist %v",
+				"for role %s actual whitelist %v does not match expected"+
+					" whitelist %v",
 				asRole.Name, asRole.Whitelist, expectedRoleSpec.Whitelist,
 			)
 		}
@@ -2193,13 +2196,13 @@ func validateUsers(
 		return fmt.Errorf("error querying users: %v", err)
 	}
 
-	currentUserNames := []string{}
+	var currentUserNames []string
 
 	for _, user := range asUsers {
 		currentUserNames = append(currentUserNames, user.User)
 	}
 
-	expectedUserNames := []string{}
+	var expectedUserNames []string
 	accessControl := clusterSpec.AerospikeAccessControl
 	for _, user := range accessControl.Users {
 		expectedUserNames = append(expectedUserNames, user.Name)
@@ -2207,7 +2210,7 @@ func validateUsers(
 
 	if len(currentUserNames) != len(expectedUserNames) {
 		return fmt.Errorf(
-			"Actual users %v do not match expected users %v", currentUserNames,
+			"actual users %v do not match expected users %v", currentUserNames,
 			expectedUserNames,
 		)
 	}
@@ -2219,7 +2222,7 @@ func validateUsers(
 		),
 	) != 0 {
 		return fmt.Errorf(
-			"Actual users %v do not match expected users %v", currentUserNames,
+			"actual users %v do not match expected users %v", currentUserNames,
 			expectedUserNames,
 		)
 	}
@@ -2232,7 +2235,7 @@ func validateUsers(
 
 		if err != nil {
 			return fmt.Errorf(
-				"For user %s cannot get password %v", asUser.User, err,
+				"for user %s cannot get password %v", asUser.User, err,
 			)
 		}
 
@@ -2241,19 +2244,19 @@ func validateUsers(
 		)
 		if err != nil {
 			return fmt.Errorf(
-				"For user %s cannot get client. Possible auth error :%v",
+				"for user %s cannot get client. Possible auth error :%v",
 				asUser.User, err,
 			)
 		}
 		(*userClient).Close()
 
 		expectedRoleNames := expectedUserSpec.Roles
-		currentRoleNames := []string{}
+		var currentRoleNames []string
 		currentRoleNames = append(currentRoleNames, asUser.Roles...)
 
 		if len(currentRoleNames) != len(expectedRoleNames) {
 			return fmt.Errorf(
-				"For user %s actual roles %v do not match expected roles %v",
+				"for user %s actual roles %v do not match expected roles %v",
 				asUser.User, currentRoleNames, expectedRoleNames,
 			)
 		}
@@ -2265,7 +2268,7 @@ func validateUsers(
 			),
 		) != 0 {
 			return fmt.Errorf(
-				"For user %s actual roles %v do not match expected roles %v",
+				"for user %s actual roles %v do not match expected roles %v",
 				asUser.User, currentRoleNames, expectedRoleNames,
 			)
 		}

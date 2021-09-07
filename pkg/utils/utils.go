@@ -23,18 +23,11 @@ const (
 	ReasonErrImagePull = "ErrImagePull"
 	// ReasonRegistryUnavailable is the http error when pulling image from registry.
 	ReasonRegistryUnavailable = "RegistryUnavailable"
-
-	aerospikeConfConfigMapPrefix = "aerospike-conf"
 )
 
 // ClusterNamespacedName return namespaced name
 func ClusterNamespacedName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
-}
-
-// ConfigMapName returns the name to use for a aeroCluster cluster's config map.
-func ConfigMapName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
-	return fmt.Sprintf("%s-%s", aerospikeConfConfigMapPrefix, aeroCluster.Name)
 }
 
 // NamespacedName return namespaced name
@@ -55,7 +48,9 @@ func IsImageEqual(image1 string, image2 string) bool {
 }
 
 // ParseDockerImageTag parses input tag into registry, name and version.
-func ParseDockerImageTag(tag string) (registry string, name string, version string) {
+func ParseDockerImageTag(tag string) (
+	registry string, name string, version string,
+) {
 	if tag == "" {
 		return "", "", ""
 	}
@@ -70,7 +65,9 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 }
 
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
-func GetDesiredImage(aeroCluster *asdbv1beta1.AerospikeCluster, containerName string) (string, error) {
+func GetDesiredImage(
+	aeroCluster *asdbv1beta1.AerospikeCluster, containerName string,
+) (string, error) {
 	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
@@ -95,11 +92,15 @@ func GetDesiredImage(aeroCluster *asdbv1beta1.AerospikeCluster, containerName st
 // LabelsForAerospikeCluster returns the labels for selecting the resources
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
-	return map[string]string{"app": "aerospike-cluster", "aerospike.com/cr": clName}
+	return map[string]string{
+		"app": "aerospike-cluster", "aerospike.com/cr": clName,
+	}
 }
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
-func LabelsForAerospikeClusterRack(clName string, rackID int) map[string]string {
+func LabelsForAerospikeClusterRack(
+	clName string, rackID int,
+) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	labels["aerospike.com/rack-id"] = strconv.Itoa(rackID)
 	return labels
@@ -120,7 +121,9 @@ func GetHash(str string) (string, error) {
 func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 	parts := strings.Split(statefulSetName, "-")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("failed to get rackID from statefulSetName %s", statefulSetName)
+		return nil, fmt.Errorf(
+			"failed to get rackID from statefulSetName %s", statefulSetName,
+		)
 	}
 	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-1]
@@ -132,6 +135,7 @@ func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 }
 
 // Helper functions to check and remove string from a slice of strings.
+
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -149,11 +153,4 @@ func RemoveString(slice []string, s string) (result []string) {
 		result = append(result, item)
 	}
 	return
-}
-
-func TruncateString(str string, num int) string {
-	if len(str) > num {
-		return str[0:num]
-	}
-	return str
 }

@@ -12,7 +12,7 @@ require (
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/hashicorp/go-version v1.3.0
-	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
+	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/onsi/ginkgo v1.16.4

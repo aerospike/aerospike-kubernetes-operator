@@ -148,7 +148,9 @@ func makePath(path string, newPart interface{}) string {
 }
 
 // diff returns the (recursive) difference between a and b as an array of JsonPatchOperations.
-func diff(a, b map[string]interface{}, path string, patch []JsonPatchOperation) ([]JsonPatchOperation, error) {
+func diff(
+	a, b map[string]interface{}, path string, patch []JsonPatchOperation,
+) ([]JsonPatchOperation, error) {
 	for key, bv := range b {
 		p := makePath(path, key)
 		av, ok := a[key]
@@ -181,7 +183,9 @@ func diff(a, b map[string]interface{}, path string, patch []JsonPatchOperation) 
 	return patch, nil
 }
 
-func handleValues(av, bv interface{}, p string, patch []JsonPatchOperation) ([]JsonPatchOperation, error) {
+func handleValues(
+	av, bv interface{}, p string, patch []JsonPatchOperation,
+) ([]JsonPatchOperation, error) {
 	var err error
 	switch at := av.(type) {
 	case map[string]interface{}:
@@ -234,7 +238,7 @@ func handleValues(av, bv interface{}, p string, patch []JsonPatchOperation) ([]J
 }
 
 func compareArray(av, bv []interface{}, p string) []JsonPatchOperation {
-	retval := []JsonPatchOperation{}
+	var retVal []JsonPatchOperation
 	//	var err error
 	for i, v := range av {
 		found := false
@@ -245,7 +249,7 @@ func compareArray(av, bv []interface{}, p string) []JsonPatchOperation {
 			}
 		}
 		if !found {
-			retval = append(retval, NewPatch("remove", makePath(p, i), nil))
+			retVal = append(retVal, NewPatch("remove", makePath(p, i), nil))
 		}
 	}
 
@@ -258,11 +262,11 @@ func compareArray(av, bv []interface{}, p string) []JsonPatchOperation {
 			}
 		}
 		if !found {
-			retval = append(retval, NewPatch("add", makePath(p, i), v))
+			retVal = append(retVal, NewPatch("add", makePath(p, i), v))
 		}
 	}
 
-	return retval
+	return retVal
 }
 
 func min(x, y int) int {
