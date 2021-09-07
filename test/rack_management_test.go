@@ -476,14 +476,6 @@ var _ = Describe("RackManagement", func() {
 			})
 
 			Context("InvalidRackID", func() {
-				It("should fail for InvalidSize. Cluster sz less than number of racks", func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.Size = 1
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
-				})
 				It("should fail for DuplicateRackID", func() {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
