@@ -12,14 +12,14 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
@@ -31,8 +31,8 @@ var (
 )
 
 func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(asdbv1beta1.AddToScheme(scheme))
+	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
+	utilRuntime.Must(asdbv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -40,11 +40,19 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	flag.StringVar(
+		&metricsAddr, "metrics-bind-address", ":8080",
+		"The address the metric endpoint binds to.",
+	)
+	flag.StringVar(
+		&probeAddr, "health-probe-bind-address", ":8081",
+		"The address the probe endpoint binds to.",
+	)
+	flag.BoolVar(
+		&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+			"Enabling this will ensure there is only one active controller manager.",
+	)
 	opts := zap.Options{
 		Development: true,
 	}
@@ -94,12 +102,12 @@ func main() {
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
 	setupLog.Info("Init aerospike-server config schemas")
-	schemamap, err := configschema.NewSchemaMap()
+	schemaMap, err := configschema.NewSchemaMap()
 	if err != nil {
 		setupLog.Error(err, "Unable to Load SchemaMap")
 		os.Exit(1)
 	}
-	asconfig.InitFromMap(schemamap)
+	asconfig.InitFromMap(schemaMap)
 
 	if err := (&aerospikecluster.AerospikeClusterReconciler{
 		Client:     mgr.GetClient(),
@@ -108,11 +116,16 @@ func main() {
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
 		Scheme:     mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AerospikeCluster")
+		setupLog.Error(
+			err, "unable to create controller", "controller",
+			"AerospikeCluster",
+		)
 		os.Exit(1)
 	}
 	if err = (&asdbv1beta1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeCluster")
+		setupLog.Error(
+			err, "unable to create webhook", "webhook", "AerospikeCluster",
+		)
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
@@ -149,6 +162,9 @@ func getWatchNamespace() (string, error) {
 
 // newClient creates the default caching client
 // this will read/write directly from api-server
-func newClient(cache cache.Cache, config *rest.Config, options crclient.Options, uncachedObjects ...crclient.Object) (crclient.Client, error) {
-	return crclient.New(config, options)
+func newClient(
+	_ cache.Cache, config *rest.Config, options crClient.Options,
+	_ ...crClient.Object,
+) (crClient.Client, error) {
+	return crClient.New(config, options)
 }

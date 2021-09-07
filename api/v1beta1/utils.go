@@ -99,7 +99,7 @@ const (
 const (
 	AerospikeServerContainerName      string = "aerospike-server"
 	AerospikeServerInitContainerName  string = "aerospike-init"
-	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.14"
+	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.15"
 )
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {

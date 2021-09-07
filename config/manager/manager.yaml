@@ -29,6 +29,7 @@ spec:
         - /manager
         args:
         - --leader-elect
+        - --zap-log-level=info
         image: controller:latest
         name: manager
         # TODO: only in dev
@@ -47,22 +48,10 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources:
-          limits:
-            cpu: 200m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi            
         env:
         - name: WATCH_NAMESPACE
-          value: aerospike
           # for watching multiple namespaces by operator, give a list of namespaces (e.g. aerospike,test,test1,test2)
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: LOG_LEVEL
-          value: debug 
+          value: aerospike
       serviceAccountName: controller-manager
+
       terminationGracePeriodSeconds: 10

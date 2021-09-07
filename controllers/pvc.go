@@ -12,19 +12,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *AerospikeClusterReconciler) removePVCs(aeroCluster *asdbv1beta1.AerospikeCluster, storage *asdbv1beta1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) error {
-	deletedPVCs, err := r.removePVCsAsync(aeroCluster, storage, pvcItems)
+func (r *SingleClusterReconciler) removePVCs(
+	storage *asdbv1beta1.AerospikeStorageSpec,
+	pvcItems []corev1.PersistentVolumeClaim,
+) error {
+	deletedPVCs, err := r.removePVCsAsync(storage, pvcItems)
 	if err != nil {
 		return err
 	}
 
-	return r.waitForPVCTermination(aeroCluster, deletedPVCs)
+	return r.waitForPVCTermination(deletedPVCs)
 }
 
-func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1beta1.AerospikeCluster, storage *asdbv1beta1.AerospikeStorageSpec, pvcItems []corev1.PersistentVolumeClaim) ([]corev1.PersistentVolumeClaim, error) {
-	// aeroClusterNamespacedName := getNamespacedNameForCluster(aeroCluster)
+func (r *SingleClusterReconciler) removePVCsAsync(
+	storage *asdbv1beta1.AerospikeStorageSpec,
+	pvcItems []corev1.PersistentVolumeClaim,
+) ([]corev1.PersistentVolumeClaim, error) {
+	// aeroClusterNamespacedName := getNamespacedNameForCluster(r.aeroCluster)
 
-	deletedPVCs := []corev1.PersistentVolumeClaim{}
+	var deletedPVCs []corev1.PersistentVolumeClaim
 
 	for _, pvc := range pvcItems {
 		if utils.IsPVCTerminating(&pvc) {
@@ -37,7 +43,10 @@ func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1beta1.Ae
 		path, ok := pvc.Annotations[storagePathAnnotationKey]
 		if !ok {
 			err := fmt.Errorf("PVC can not be removed, it does not have storage-path annotation")
-			r.Log.Error(err, "Failed to remove PVC", "PVC", pvc.Name, "annotations", pvc.Annotations)
+			r.Log.Error(
+				err, "Failed to remove PVC", "PVC", pvc.Name, "annotations",
+				pvc.Annotations,
+			)
 			continue
 		}
 
@@ -49,7 +58,10 @@ func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1beta1.Ae
 			} else {
 				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
 			}
-			r.Log.Info("PVC path not found in configured storage volumes. Use storage level cascadeDelete policy", "PVC", pvc.Name, "path", path, "cascadeDelete", cascadeDelete)
+			r.Log.Info(
+				"PVC path not found in configured storage volumes. Use storage level cascadeDelete policy",
+				"PVC", pvc.Name, "path", path, "cascadeDelete", cascadeDelete,
+			)
 
 		} else {
 			cascadeDelete = v.CascadeDelete
@@ -58,23 +70,31 @@ func (r *AerospikeClusterReconciler) removePVCsAsync(aeroCluster *asdbv1beta1.Ae
 		if cascadeDelete {
 			deletedPVCs = append(deletedPVCs, pvc)
 			if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
-				return nil, fmt.Errorf("could not delete pvc %s: %v", pvc.Name, err)
+				return nil, fmt.Errorf(
+					"could not delete pvc %s: %v", pvc.Name, err,
+				)
 			}
-			r.Log.Info("PVC removed", "PVC", pvc.Name, "PVCCascadeDelete", cascadeDelete)
+			r.Log.Info(
+				"PVC removed", "PVC", pvc.Name, "PVCCascadeDelete",
+				cascadeDelete,
+			)
 		} else {
-			r.Log.Info("PVC not removed", "PVC", pvc.Name, "PVCCascadeDelete", cascadeDelete)
+			r.Log.Info(
+				"PVC not removed", "PVC", pvc.Name, "PVCCascadeDelete",
+				cascadeDelete,
+			)
 		}
 	}
 
 	return deletedPVCs, nil
 }
 
-func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1beta1.AerospikeCluster, deletedPVCs []corev1.PersistentVolumeClaim) error {
+func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.PersistentVolumeClaim) error {
 	if len(deletedPVCs) == 0 {
 		return nil
 	}
 
-	// aeroClusterNamespacedName := getNamespacedNameForCluster(aeroCluster)
+	// aeroClusterNamespacedName := getNamespacedNameForCluster(r.aeroCluster)
 
 	// Wait for the PVCs to actually be deleted.
 	pollAttempts := 15
@@ -83,7 +103,7 @@ func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1be
 	pending := false
 	for i := 0; i < pollAttempts; i++ {
 		pending = false
-		existingPVCs, err := r.getClusterPVCList(aeroCluster)
+		existingPVCs, err := r.getClusterPVCList()
 		if err != nil {
 			return err
 		}
@@ -120,11 +140,15 @@ func (r *AerospikeClusterReconciler) waitForPVCTermination(aeroCluster *asdbv1be
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) getClusterPVCList(aeroCluster *asdbv1beta1.AerospikeCluster) ([]corev1.PersistentVolumeClaim, error) {
+func (r *SingleClusterReconciler) getClusterPVCList() (
+	[]corev1.PersistentVolumeClaim, error,
+) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
-	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(r.aeroCluster.Name))
+	listOps := &client.ListOptions{
+		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
 
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
@@ -132,11 +156,19 @@ func (r *AerospikeClusterReconciler) getClusterPVCList(aeroCluster *asdbv1beta1.
 	return pvcList.Items, nil
 }
 
-func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
+	[]corev1.PersistentVolumeClaim, error,
+) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeClusterRack(aeroCluster.Name, rackID))
-	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+	labelSelector := labels.SelectorFromSet(
+		utils.LabelsForAerospikeClusterRack(
+			r.aeroCluster.Name, rackID,
+		),
+	)
+	listOps := &client.ListOptions{
+		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
 
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
@@ -144,7 +176,9 @@ func (r *AerospikeClusterReconciler) getRackPVCList(aeroCluster *asdbv1beta1.Aer
 	return pvcList.Items, nil
 }
 
-func getPVCVolumeConfig(storage *asdbv1beta1.AerospikeStorageSpec, pvcPathAnnotation string) *asdbv1beta1.VolumeSpec {
+func getPVCVolumeConfig(
+	storage *asdbv1beta1.AerospikeStorageSpec, pvcPathAnnotation string,
+) *asdbv1beta1.VolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
 		if pvcPathAnnotation == v.Name {

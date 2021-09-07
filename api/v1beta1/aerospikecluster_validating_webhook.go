@@ -385,10 +385,6 @@ func (r *AerospikeCluster) validateResourceAndLimits(aslog logr.Logger) error {
 }
 
 func (r *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
-	if len(r.Spec.RackConfig.Racks) != 0 && (int(r.Spec.Size) < len(r.Spec.RackConfig.Racks)) {
-		return fmt.Errorf("cluster size can not be less than number of Racks")
-	}
-
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range r.Spec.RackConfig.Namespaces {
