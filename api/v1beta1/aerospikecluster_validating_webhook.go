@@ -102,6 +102,11 @@ func (r *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return err
 	}
 
+	// Validate Load Balancer update
+	if err := validateLoadBalancerUpdate(aslog, r.Spec.SeedsFinderServices.LoadBalancer, old.Spec.SeedsFinderServices.LoadBalancer); err != nil {
+		return err
+	}
+
 	// Validate RackConfig update
 	if err := r.validateRackUpdate(aslog, old); err != nil {
 		return err
@@ -380,10 +385,6 @@ func (r *AerospikeCluster) validateResourceAndLimits(aslog logr.Logger) error {
 }
 
 func (r *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
-	if len(r.Spec.RackConfig.Racks) != 0 && (int(r.Spec.Size) < len(r.Spec.RackConfig.Racks)) {
-		return fmt.Errorf("cluster size can not be less than number of Racks")
-	}
-
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range r.Spec.RackConfig.Namespaces {
@@ -935,6 +936,16 @@ func validateNamespaceReplicationFactor(
 			"namespace replication-factor %v not valid int or int64",
 			rfInterface,
 		)
+	}
+
+	return nil
+}
+
+func validateLoadBalancerUpdate(aslog logr.Logger, newLBSpec, oldLBSpec *LoadBalancerSpec) error {
+	aslog.Info("Validate LoadBalancer update")
+
+	if oldLBSpec != nil && !reflect.DeepEqual(oldLBSpec, newLBSpec) {
+		return fmt.Errorf("cannot update existing LoadBalancer Service")
 	}
 
 	return nil

@@ -23,6 +23,14 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
+type CloudProvider string
+
+const (
+	CloudProviderUnknown CloudProvider = "Unknown"
+	CloudProviderAWS                   = "AWS"
+	CloudProviderGCP                   = "GCP"
+)
+
 func getServiceForPod(pod *corev1.Pod, k8sClient client.Client) (*corev1.Service, error) {
 	service := &corev1.Service{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
@@ -140,6 +148,30 @@ func getZones(k8sClient client.Client) ([]string, error) {
 		zones = append(zones, zone)
 	}
 	return zones, nil
+}
+
+func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
+	labelKeys := map[string]struct{}{}
+	nodes, err := getNodeList(k8sClient)
+	if err != nil {
+		return CloudProviderUnknown, err
+	}
+	for _, node := range nodes.Items {
+		for labelKey := range node.Labels {
+			if strings.Contains(labelKey, "cloud.google.com") {
+				return CloudProviderGCP, nil
+			}
+			if strings.Contains(labelKey, "eks.amazonaws.com") {
+				return CloudProviderAWS, nil
+			}
+			labelKeys[labelKey] = struct{}{}
+		}
+	}
+	var labelKeysSlice []string
+	for labelKey := range labelKeys {
+		labelKeysSlice = append(labelKeysSlice, labelKey)
+	}
+	return CloudProviderUnknown, fmt.Errorf("can't determin cloud platform by node's labels: %v", labelKeysSlice)
 }
 
 func newAllHostConn(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {

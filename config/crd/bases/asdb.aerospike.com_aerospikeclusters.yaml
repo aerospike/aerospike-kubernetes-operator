@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.6.1
   creationTimestamp: null
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -203,6 +203,116 @@ spec:
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
+                  aerospikeContainer:
+                    description: AerospikeContainerSpec contains settings for aerospike-server
+                      container created by operator.
+                    properties:
+                      securityContext:
+                        description: SecurityContext that will be added to aerospike-server
+                          container created by operator.
+                        properties:
+                          allowPrivilegeEscalation:
+                            description: AllowPrivilegeEscalation controls whether
+                              a process can gain more privileges than its parent process
+                            type: boolean
+                          capabilities:
+                            description: The capabilities to add/drop when running
+                              containers.
+                            properties:
+                              add:
+                                description: Added capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                              drop:
+                                description: Removed capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                            type: object
+                          privileged:
+                            description: Run container in privileged mode.
+                            type: boolean
+                          procMount:
+                            description: procMount denotes the type of proc mount
+                              to use for the containers.
+                            type: string
+                          readOnlyRootFilesystem:
+                            description: Whether this container has a read-only root
+                              filesystem. Default is false.
+                            type: boolean
+                          runAsGroup:
+                            description: The GID to run the entrypoint of the container
+                              process. Uses runtime default if unset.
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            description: Indicates that the container must run as
+                              a non-root user.
+                            type: boolean
+                          runAsUser:
+                            description: The UID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            description: The SELinux context to be applied to the
+                              container.
+                            properties:
+                              level:
+                                description: Level is SELinux level label that applies
+                                  to the container.
+                                type: string
+                              role:
+                                description: Role is a SELinux role label that applies
+                                  to the container.
+                                type: string
+                              type:
+                                description: Type is a SELinux type label that applies
+                                  to the container.
+                                type: string
+                              user:
+                                description: User is a SELinux user label that applies
+                                  to the container.
+                                type: string
+                            type: object
+                          seccompProfile:
+                            description: The seccomp options to use by this container.
+                            properties:
+                              localhostProfile:
+                                description: localhostProfile indicates a profile
+                                  defined in a file on the node should be used.
+                                type: string
+                              type:
+                                description: type indicates which kind of seccomp
+                                  profile will be applied.
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            description: The Windows specific settings applied to
+                              all containers.
+                            properties:
+                              gmsaCredentialSpec:
+                                description: GMSACredentialSpec is where the GMSA
+                                  admission webhook (https://github.
+                                type: string
+                              gmsaCredentialSpecName:
+                                description: GMSACredentialSpecName is the name of
+                                  the GMSA credential spec to use.
+                                type: string
+                              runAsUserName:
+                                description: The UserName in Windows to run the entrypoint
+                                  of the container process.
+                                type: string
+                            type: object
+                        type: object
+                    type: object
                   affinity:
                     description: Affinity rules for pod placement.
                     properties:
@@ -4448,6 +4558,43 @@ spec:
                       resources required.
                     type: object
                 type: object
+              seedsFinderServices:
+                description: SeedsFinderServices describes services which are used
+                  for seeding Aerospike nodes.
+                properties:
+                  loadBalancer:
+                    description: LoadBalancer configuration.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: Service External Traffic Policy Type string
+                        enum:
+                        - Local
+                        - Cluster
+                        type: string
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      port:
+                        description: Port Exposed port on load balancer. If not specified
+                          TargetPort is used.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
+                      targetPort:
+                        description: TargetPort Target port. If not specified the
+                          tls-port of network.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
+                    type: object
+                type: object
               size:
                 description: Aerospike cluster size
                 format: int32
@@ -5048,6 +5195,116 @@ spec:
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
+                  aerospikeContainer:
+                    description: AerospikeContainerSpec contains settings for aerospike-server
+                      container created by operator.
+                    properties:
+                      securityContext:
+                        description: SecurityContext that will be added to aerospike-server
+                          container created by operator.
+                        properties:
+                          allowPrivilegeEscalation:
+                            description: AllowPrivilegeEscalation controls whether
+                              a process can gain more privileges than its parent process
+                            type: boolean
+                          capabilities:
+                            description: The capabilities to add/drop when running
+                              containers.
+                            properties:
+                              add:
+                                description: Added capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                              drop:
+                                description: Removed capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                            type: object
+                          privileged:
+                            description: Run container in privileged mode.
+                            type: boolean
+                          procMount:
+                            description: procMount denotes the type of proc mount
+                              to use for the containers.
+                            type: string
+                          readOnlyRootFilesystem:
+                            description: Whether this container has a read-only root
+                              filesystem. Default is false.
+                            type: boolean
+                          runAsGroup:
+                            description: The GID to run the entrypoint of the container
+                              process. Uses runtime default if unset.
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            description: Indicates that the container must run as
+                              a non-root user.
+                            type: boolean
+                          runAsUser:
+                            description: The UID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            description: The SELinux context to be applied to the
+                              container.
+                            properties:
+                              level:
+                                description: Level is SELinux level label that applies
+                                  to the container.
+                                type: string
+                              role:
+                                description: Role is a SELinux role label that applies
+                                  to the container.
+                                type: string
+                              type:
+                                description: Type is a SELinux type label that applies
+                                  to the container.
+                                type: string
+                              user:
+                                description: User is a SELinux user label that applies
+                                  to the container.
+                                type: string
+                            type: object
+                          seccompProfile:
+                            description: The seccomp options to use by this container.
+                            properties:
+                              localhostProfile:
+                                description: localhostProfile indicates a profile
+                                  defined in a file on the node should be used.
+                                type: string
+                              type:
+                                description: type indicates which kind of seccomp
+                                  profile will be applied.
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            description: The Windows specific settings applied to
+                              all containers.
+                            properties:
+                              gmsaCredentialSpec:
+                                description: GMSACredentialSpec is where the GMSA
+                                  admission webhook (https://github.
+                                type: string
+                              gmsaCredentialSpecName:
+                                description: GMSACredentialSpecName is the name of
+                                  the GMSA credential spec to use.
+                                type: string
+                              runAsUserName:
+                                description: The UserName in Windows to run the entrypoint
+                                  of the container process.
+                                type: string
+                            type: object
+                        type: object
+                    type: object
                   affinity:
                     description: Affinity rules for pod placement.
                     properties:
@@ -9396,6 +9653,43 @@ spec:
                       x-kubernetes-int-or-string: true
                     description: Requests describes the minimum amount of compute
                       resources required.
+                    type: object
+                type: object
+              seedsFinderServices:
+                description: SeedsFinderServices describes services which are used
+                  for seeding Aerospike nodes.
+                properties:
+                  loadBalancer:
+                    description: LoadBalancer configuration.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: Service External Traffic Policy Type string
+                        enum:
+                        - Local
+                        - Cluster
+                        type: string
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      port:
+                        description: Port Exposed port on load balancer. If not specified
+                          TargetPort is used.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
+                      targetPort:
+                        description: TargetPort Target port. If not specified the
+                          tls-port of network.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1024
+                        type: integer
                     type: object
                 type: object
               size:

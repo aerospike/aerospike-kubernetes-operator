@@ -11,8 +11,8 @@ pipeline {
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY=""
         OPERATOR_NAME = "aerospike-kubernetes-operator"
-        OPERATOR_VERSION = "candidate-${env.BRANCH_NAME}"
-        OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}aerospike/${env.OPERATOR_NAME}:${env.OPERATOR_VERSION}"
+        OPERATOR_VERSION = getImageName()
+        OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}aerospike/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
     }
 
     stages {
@@ -63,4 +63,16 @@ pipeline {
             junit testResults: '**/junit.xml', keepLongStdio: true
         }
     }
+}
+
+boolean isNightly() {
+    return env.BRANCH_NAME == null
+}
+
+String getImageName() {
+    if(isNightly()) {
+        def timestamp = new Date().format("yyyy-MM-dd")
+        return "nightly-${timestamp}-${env.BUILD_NUMBER}"
+    }
+    return "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
 }
