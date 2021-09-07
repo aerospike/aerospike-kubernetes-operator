@@ -17,7 +17,7 @@ var _ = Describe("RackManagement", func() {
 	Context("When doing valid operations", func() {
 
 		It("Should validate rack management flow", func() {
-			clusterName := "rack-management"
+			clusterName := "rack-management1"
 			clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -89,6 +89,52 @@ var _ = Describe("RackManagement", func() {
 			// This will also indirectly check if older rack is removed or not.
 			// If older node is not deleted then cluster sz will not be as expected
 			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+
+			// cleanup: Remove the cluster
+			By("Cleaning up the cluster")
+
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should allow Cluster sz less than number of racks", func() {
+			clusterName := "rack-management2"
+			clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+			racks := getDummyRackConf(1, 2, 3, 4, 5)
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			// Setup: Deploy cluster without rack
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Op1: AddRackInCluster
+			By("Adding 1st rack in the cluster")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			racks = getDummyRackConf(1, 2, 3, 4, 5, 6)
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+
+			// Op2: RemoveRack
+			By("Removing single rack")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			racks = getDummyRackConf(1, 2, 3, 4, 5)
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			updateAndWait(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
@@ -229,16 +275,6 @@ var _ = Describe("RackManagement", func() {
 		clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 		Context("when deploy cluster with invalid rack ", func() {
-			It("should fail for InvalidSize. Cluster sz less than number of racks", func() {
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				rackConf := asdbv1beta1.RackConfig{
-					Racks: []asdbv1beta1.Rack{{ID: 1}, {ID: 2}, {ID: 3}},
-				}
-				aeroCluster.Spec.RackConfig = rackConf
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).Should(HaveOccurred())
-			})
-
 			Context("InvalidRackID", func() {
 				It("should fail for DuplicateRackID", func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -440,14 +476,6 @@ var _ = Describe("RackManagement", func() {
 			})
 
 			Context("InvalidRackID", func() {
-				It("should fail for InvalidSize. Cluster sz less than number of racks", func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.Size = 1
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
-				})
 				It("should fail for DuplicateRackID", func() {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())

@@ -67,8 +67,10 @@ test-deploy: manifests kustomize
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	if [[ $(OS) = Darwin ]]; then \
   		sed -I '' "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+  		sed -I '' "s/--zap-log-level=info/--zap-log-level=debug/g" test/config/manager/manager.yaml; \
   	else \
 		sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
+		sed -i "s/--zap-log-level=info/--zap-log-level=debug/g" test/config/manager/manager.yaml; \
   	fi
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -

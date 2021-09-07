@@ -47,7 +47,10 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
-func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod) (RestartType, error) {
+func (r *AerospikeClusterReconciler) getRollingRestartTypePod(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
+	pod corev1.Pod,
+) (RestartType, error) {
 
 	restartType := NoRestart
 
@@ -72,25 +75,31 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
 		restartType = mergeRestartType(restartType, QuickRestart)
-		r.Log.Info("AerospikeConfig changed. Need rolling restart",
+		r.Log.Info(
+			"AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
-			"currentHash", podStatus.AerospikeConfigHash)
+			"currentHash", podStatus.AerospikeConfigHash,
+		)
 	}
 
 	// Check if networkPolicy is updated
 	if podStatus.NetworkPolicyHash != requiredNetworkPolicyHash {
 		restartType = mergeRestartType(restartType, QuickRestart)
-		r.Log.Info("Aerospike network policy changed. Need rolling restart",
+		r.Log.Info(
+			"Aerospike network policy changed. Need rolling restart",
 			"requiredHash", requiredNetworkPolicyHash,
-			"currentHash", podStatus.NetworkPolicyHash)
+			"currentHash", podStatus.NetworkPolicyHash,
+		)
 	}
 
 	// Check if podSpec is updated
 	if podStatus.PodSpecHash != requiredPodSpecHash {
 		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("Aerospike pod spec changed. Need rolling restart",
+		r.Log.Info(
+			"Aerospike pod spec changed. Need rolling restart",
 			"requiredHash", requiredPodSpecHash,
-			"currentHash", podStatus.PodSpecHash)
+			"currentHash", podStatus.PodSpecHash,
+		)
 	}
 
 	// Check if resources are updated
@@ -100,7 +109,7 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 	}
 
 	// Check if RACKSTORAGE is updated
-	if r.isRackStorageUpdatedInAeroCluster(aeroCluster, rackState, pod) {
+	if r.isRackStorageUpdatedInAeroCluster(rackState, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
@@ -108,17 +117,27 @@ func (r *AerospikeClusterReconciler) getRollingRestartTypePod(aeroCluster *asdbv
 	return restartType, nil
 }
 
-func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) rollingRestartPod(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
+	pod corev1.Pod, restartType RestartType, ignorablePods []corev1.Pod,
+) reconcileResult {
 
 	if restartType == NoRestart {
-		r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
+		r.Log.Info(
+			"This Pod doesn't need rolling restart, Skip this", "pod", pod.Name,
+		)
 		return reconcileSuccess()
 	}
 
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
 	if pod.Status.ContainerStatuses == nil {
-		return reconcileError(fmt.Errorf("pod %s containerStatus is nil, pod may be in unscheduled state", pod.Name))
+		return reconcileError(
+			fmt.Errorf(
+				"pod %s containerStatus is nil, pod may be in unscheduled state",
+				pod.Name,
+			),
+		)
 	}
 
 	r.Log.Info("Rolling restart pod", "podName", pod.Name)
@@ -128,7 +147,11 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1beta1.
 		r.Log.V(1).Info("Waiting for pod to be ready", "podName", pod.Name)
 
 		pFound = &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, pFound)
+		err := r.Client.Get(
+			context.TODO(),
+			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
+			pFound,
+		)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod, try retry after 5 sec")
 			time.Sleep(time.Second * 5)
@@ -156,7 +179,9 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1beta1.
 	err := utils.CheckPodFailed(pFound)
 	if err == nil {
 		// Check for migration
-		if res := r.waitForNodeSafeStopReady(aeroCluster, pFound, ignorablePods); !res.isSuccess {
+		if res := r.waitForNodeSafeStopReady(
+			aeroCluster, pFound, ignorablePods,
+		); !res.isSuccess {
 			return res
 		}
 	} else {
@@ -174,7 +199,10 @@ func (r *AerospikeClusterReconciler) rollingRestartPod(aeroCluster *asdbv1beta1.
 	return r.podRestart(aeroCluster, rackState, pFound)
 }
 
-func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) quickRestart(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
+	pod *corev1.Pod,
+) reconcileResult {
 	cmName := getNamespacedNameForSTSConfigMap(aeroCluster, rackState.Rack.ID)
 	cmd := []string{
 		"bash",
@@ -185,9 +213,15 @@ func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1beta1.Aeros
 
 	// Quick restart attempt should not take significant time.
 	// Therefore its ok to block the operator on the quick restart attempt.
-	stdout, stderr, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+	stdout, stderr, err := utils.Exec(
+		pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
+		r.KubeConfig,
+	)
 	if err != nil {
-		r.Log.V(1).Info("Failed warm restart", "err", err, "podName", pod.Name, "stdout", stdout, "stderr", stderr)
+		r.Log.V(1).Info(
+			"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+			stdout, "stderr", stderr,
+		)
 
 		// Fallback to pod restart.
 		return r.podRestart(aeroCluster, rackState, pod)
@@ -197,7 +231,10 @@ func (r *AerospikeClusterReconciler) quickRestart(aeroCluster *asdbv1beta1.Aeros
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, pod *corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) podRestart(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
+	pod *corev1.Pod,
+) reconcileResult {
 	var err error = nil
 
 	// Delete pod
@@ -210,10 +247,18 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.Aerospi
 	// Wait for pod to come up
 	var started bool
 	for i := 0; i < 20; i++ {
-		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		r.Log.V(1).Info(
+			"Waiting for pod to be ready after delete", "podName", pod.Name,
+			"status", pod.Status.Phase, "DeletionTimestamp",
+			pod.DeletionTimestamp,
+		)
 
 		updatedPod := &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+		err := r.Client.Get(
+			context.TODO(),
+			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
+			updatedPod,
+		)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod")
 			time.Sleep(time.Second * 5)
@@ -225,7 +270,11 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.Aerospi
 		}
 
 		if !utils.IsPodRunningAndReady(updatedPod) {
-			r.Log.V(1).Info("Waiting for pod to be ready", "podName", updatedPod.Name, "status", updatedPod.Status.Phase, "DeletionTimestamp", updatedPod.DeletionTimestamp)
+			r.Log.V(1).Info(
+				"Waiting for pod to be ready", "podName", updatedPod.Name,
+				"status", updatedPod.Status.Phase, "DeletionTimestamp",
+				updatedPod.DeletionTimestamp,
+			)
 			time.Sleep(time.Second * 5)
 			continue
 		}
@@ -237,16 +286,25 @@ func (r *AerospikeClusterReconciler) podRestart(aeroCluster *asdbv1beta1.Aerospi
 
 	// TODO: In what situation this can happen?
 	if !started {
-		r.Log.Error(err, "Pod is not running or ready. Pod might also be terminating", "podName", pod.Name, "status", pod.Status.Phase, "DeletionTimestamp", pod.DeletionTimestamp)
+		r.Log.Error(
+			err, "Pod is not running or ready. Pod might also be terminating",
+			"podName", pod.Name, "status", pod.Status.Phase,
+			"DeletionTimestamp", pod.DeletionTimestamp,
+		)
 	}
 
 	return reconcileSuccess()
 }
 
-func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod) reconcileResult {
+func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
+	p corev1.Pod, ignorablePods []corev1.Pod,
+) reconcileResult {
 	// If already dead node, so no need to check node safety, migration
 	if err := utils.CheckPodFailed(&p); err == nil {
-		if res := r.waitForNodeSafeStopReady(aeroCluster, &p, ignorablePods); !res.isSuccess {
+		if res := r.waitForNodeSafeStopReady(
+			aeroCluster, &p, ignorablePods,
+		); !res.isSuccess {
 			return res
 		}
 	}
@@ -262,17 +320,25 @@ func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster 
 	const maxRetries = 6
 	const retryInterval = time.Second * 10
 	for i := 0; i < maxRetries; i++ {
-		r.Log.V(1).Info("Waiting for pod to be ready after delete", "podName", p.Name)
+		r.Log.V(1).Info(
+			"Waiting for pod to be ready after delete", "podName", p.Name,
+		)
 
 		pFound := &corev1.Pod{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound)
+		err := r.Client.Get(
+			context.TODO(),
+			types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound,
+		)
 		if err != nil {
 			r.Log.Error(err, "Failed to get pod", "podName", p.Name, "err", err)
 
 			if _, err = r.getSTS(aeroCluster, rackState); err != nil {
 				// Stateful set has been deleted.
 				// TODO Ashish to rememeber which scenario this can happen.
-				r.Log.Error(err, "Statefulset has been deleted for pod", "podName", p.Name, "err", err)
+				r.Log.Error(
+					err, "Statefulset has been deleted for pod", "podName",
+					p.Name, "err", err,
+				)
 				return reconcileError(err)
 			}
 
@@ -288,16 +354,23 @@ func (r *AerospikeClusterReconciler) deletePodAndEnsureImageUpdated(aeroCluster 
 			return reconcileSuccess()
 		}
 
-		r.Log.V(1).Info("Waiting for pod to come up with new image", "podName", p.Name)
+		r.Log.V(1).Info(
+			"Waiting for pod to come up with new image", "podName", p.Name,
+		)
 		time.Sleep(retryInterval)
 	}
 
-	r.Log.Info("Timed out waiting for pod to come up with new image", "podName", p.Name)
+	r.Log.Info(
+		"Timed out waiting for pod to come up with new image", "podName", p.Name,
+	)
 	return reconcileRequeueAfter(10)
 }
 
 // cleanupPods checks pods and status before scaleup to detect and fix any status anomalies.
-func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string, rackState RackState) error {
+func (r *AerospikeClusterReconciler) cleanupPods(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string,
+	rackState RackState,
+) error {
 
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
@@ -340,7 +413,9 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.Aerosp
 		if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 			// Remove service for pod
 			// TODO: make it more roboust, what if it fails
-			if err := r.deletePodService(podName, aeroCluster.Namespace); err != nil {
+			if err := r.deletePodService(
+				podName, aeroCluster.Namespace,
+			); err != nil {
 				return err
 			}
 		}
@@ -354,7 +429,9 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.Aerosp
 	if len(needStatusCleanup) > 0 {
 		r.Log.Info("Removing pod status for dangling pods", "pods", podNames)
 
-		if err := r.removePodStatus(aeroCluster, needStatusCleanup); err != nil {
+		if err := r.removePodStatus(
+			aeroCluster, needStatusCleanup,
+		); err != nil {
 			return fmt.Errorf("could not cleanup pod status: %v", err)
 		}
 	}
@@ -364,7 +441,9 @@ func (r *AerospikeClusterReconciler) cleanupPods(aeroCluster *asdbv1beta1.Aerosp
 
 // removePodStatus removes podNames from the cluster's pod status.
 // Assumes the pods are not running so that the no concurrent update to this pod status is possbile.
-func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string) error {
+func (r *AerospikeClusterReconciler) removePodStatus(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string,
+) error {
 	if len(podNames) == 0 {
 		return nil
 	}
@@ -383,14 +462,19 @@ func (r *AerospikeClusterReconciler) removePodStatus(aeroCluster *asdbv1beta1.Ae
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonpatchJSON)
 
 	// Since the pod status is updated from pod init container, set the fieldowner to "pod" for pod status updates.
-	if err = r.Client.Status().Patch(context.TODO(), aeroCluster, constantPatch, client.FieldOwner("pod")); err != nil {
+	if err = r.Client.Status().Patch(
+		context.TODO(), aeroCluster, constantPatch, client.FieldOwner("pod"),
+	); err != nil {
 		return fmt.Errorf("error updating status: %v", err)
 	}
 
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1beta1.AerospikeCluster, sts *appsv1.StatefulSet, rackState RackState) error {
+func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(
+	aeroCluster *asdbv1beta1.AerospikeCluster, sts *appsv1.StatefulSet,
+	rackState RackState,
+) error {
 	// Clean up any dangling resources associated with the new pods.
 	// This implements a safety net to protect scale up against failed cleanup operations when cluster
 	// is scaled down.
@@ -401,7 +485,9 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 		for podName := range aeroCluster.Status.Pods {
 			rackID, err := utils.GetRackIDFromPodName(podName)
 			if err != nil {
-				return fmt.Errorf("failed to get rackID for the pod %s", podName)
+				return fmt.Errorf(
+					"failed to get rackID for the pod %s", podName,
+				)
 			}
 			if *rackID != rackState.Rack.ID {
 				// This pod is from other rack, so skip it
@@ -428,7 +514,9 @@ func (r *AerospikeClusterReconciler) cleanupDanglingPodsRack(aeroCluster *asdbv1
 }
 
 // getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability checks.
-func (r *AerospikeClusterReconciler) getIgnorablePods(aeroCluster *asdbv1beta1.AerospikeCluster, racksToDelete []asdbv1beta1.Rack) ([]corev1.Pod, error) {
+func (r *AerospikeClusterReconciler) getIgnorablePods(
+	aeroCluster *asdbv1beta1.AerospikeCluster, racksToDelete []asdbv1beta1.Rack,
+) ([]corev1.Pod, error) {
 	ignorablePods := []corev1.Pod{}
 	for _, rack := range racksToDelete {
 		rackPods, err := r.getRackPodList(aeroCluster, rack.ID)
@@ -448,15 +536,22 @@ func (r *AerospikeClusterReconciler) getIgnorablePods(aeroCluster *asdbv1beta1.A
 
 // getPodIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
 // Note: the IPs returned from here should match the IPs generated in the pod intialization script for the init container.
-func (r *AerospikeClusterReconciler) getPodIPs(pod *corev1.Pod) (string, string, string, error) {
+func (r *AerospikeClusterReconciler) getPodIPs(pod *corev1.Pod) (
+	string, string, string, error,
+) {
 	podIP := pod.Status.PodIP
 	hostInternalIP := pod.Status.HostIP
 	hostExternalIP := hostInternalIP
 
 	k8sNode := &corev1.Node{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
+	)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return "", "", "", fmt.Errorf(
+			"failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName,
+			pod.Name, err,
+		)
 	}
 	// If externalIP is present than give external ip
 	for _, add := range k8sNode.Status.Addresses {
@@ -470,16 +565,25 @@ func (r *AerospikeClusterReconciler) getPodIPs(pod *corev1.Pod) (string, string,
 	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
-func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (*corev1.Service, error) {
+func (r *AerospikeClusterReconciler) getServiceForPod(pod *corev1.Pod) (
+	*corev1.Service, error,
+) {
 	service := &corev1.Service{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
+	err := r.Client.Get(
+		context.TODO(),
+		types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service for pod %s: %v", pod.Name, err)
+		return nil, fmt.Errorf(
+			"failed to get service for pod %s: %v", pod.Name, err,
+		)
 	}
 	return service, nil
 }
 
-func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string, rackID int) ([]corev1.PersistentVolumeClaim, error) {
+func (r *AerospikeClusterReconciler) getPodsPVCList(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podNames []string, rackID int,
+) ([]corev1.PersistentVolumeClaim, error) {
 	pvcListItems, err := r.getRackPVCList(aeroCluster, rackID)
 	if err != nil {
 		return nil, err
@@ -499,11 +603,15 @@ func (r *AerospikeClusterReconciler) getPodsPVCList(aeroCluster *asdbv1beta1.Aer
 	return newPVCItems, nil
 }
 
-func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1beta1.AerospikeCluster) (*corev1.PodList, error) {
+func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1beta1.AerospikeCluster) (
+	*corev1.PodList, error,
+) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
-	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+	listOps := &client.ListOptions{
+		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
 	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
@@ -512,7 +620,9 @@ func (r *AerospikeClusterReconciler) getClusterPodList(aeroCluster *asdbv1beta1.
 	return podList, nil
 }
 
-func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1beta1.AerospikeCluster, podList []corev1.Pod) bool {
+func (r *AerospikeClusterReconciler) isAnyPodInFailedState(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podList []corev1.Pod,
+) bool {
 
 	for _, p := range podList {
 		for _, ps := range p.Status.ContainerStatuses {
@@ -520,7 +630,10 @@ func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1be
 			// scaleDown, rollingRestart should work even if node is crashed
 			// If node was crashed due to wrong config then only rollingRestart can bring it back.
 			if err := utils.CheckPodImageFailed(&p); err != nil {
-				r.Log.Info("AerospikeCluster Pod is in failed state", "currentImage", ps.Image, "podName", p.Name, "err", err)
+				r.Log.Info(
+					"AerospikeCluster Pod is in failed state", "currentImage",
+					ps.Image, "podName", p.Name, "err", err,
+				)
 				return true
 			}
 		}
@@ -528,14 +641,21 @@ func (r *AerospikeClusterReconciler) isAnyPodInFailedState(aeroCluster *asdbv1be
 	return false
 }
 
-func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) string {
-	return fmt.Sprintf("%s.%s.%s.svc.cluster.local", host, aeroCluster.Name, aeroCluster.Namespace)
+func getFQDNForPod(
+	aeroCluster *asdbv1beta1.AerospikeCluster, host string,
+) string {
+	return fmt.Sprintf(
+		"%s.%s.%s.svc.cluster.local", host, aeroCluster.Name,
+		aeroCluster.Namespace,
+	)
 }
 
 // GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
 //
 // E.g. addressName are access, alternate-access
-func GetEndpointsFromInfo(addressName string, endpointsMap map[string]interface{}) []string {
+func GetEndpointsFromInfo(
+	addressName string, endpointsMap map[string]interface{},
+) []string {
 	endpoints := []string{}
 
 	portStr, ok := endpointsMap["service."+addressName+"-port"]
@@ -557,7 +677,9 @@ func GetEndpointsFromInfo(addressName string, endpointsMap map[string]interface{
 	hosts := strings.Split(fmt.Sprintf("%v", hostsStr), ",")
 
 	for _, host := range hosts {
-		endpoints = append(endpoints, net.JoinHostPort(host, strconv.Itoa(int(port))))
+		endpoints = append(
+			endpoints, net.JoinHostPort(host, strconv.Itoa(int(port))),
+		)
 	}
 	return endpoints
 }
