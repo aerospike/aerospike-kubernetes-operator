@@ -74,5 +74,5 @@ String getImageName() {
         def timestamp = new Date().format("yyyy-MM-dd")
         return "nightly-${timestamp}-${env.BUILD_NUMBER}"
     }
-    return "candidate-${env.BRANCH_NAME}"
+    return "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
 }
