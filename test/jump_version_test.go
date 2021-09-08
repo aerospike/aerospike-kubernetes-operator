@@ -332,9 +332,6 @@ func getAerospikeClusterSpecWithAerospikeConfig(
 	clusterNamespacedName types.NamespacedName,
 	aerospikeConfig map[string]interface{}, image string,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
-
 	cascadeDelete := true
 
 	// create Aerospike custom resource
@@ -405,16 +402,6 @@ func getAerospikeClusterSpecWithAerospikeConfig(
 			},
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: aerospikeConfig,

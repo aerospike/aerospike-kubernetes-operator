@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -1971,9 +1970,6 @@ func getAerospikeClusterSpecWithAccessControl(
 	accessControl *asdbv1beta1.AerospikeAccessControlSpec,
 	aerospikeConfSpec *AerospikeConfSpec,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
-
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2007,16 +2003,6 @@ func getAerospikeClusterSpecWithAccessControl(
 			},
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),

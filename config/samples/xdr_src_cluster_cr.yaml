@@ -17,7 +17,7 @@ spec:
         aerospike:
           path: /opt/aerospike
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
@@ -25,7 +25,7 @@ spec:
         aerospike:
           path: /opt/aerospike/data
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
@@ -33,7 +33,7 @@ spec:
         aerospike:
           path: /opt/aerospike/xdr
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
@@ -46,7 +46,7 @@ spec:
 
   podSpec:
     multiPodPerHost: true
-    
+
   aerospikeAccessControl:
     users:
       - name: admin
@@ -88,8 +88,3 @@ spec:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true
-
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m

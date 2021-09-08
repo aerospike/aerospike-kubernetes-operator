@@ -20,7 +20,7 @@ spec:
         aerospike:
           path: /opt/aerospike
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
@@ -28,7 +28,7 @@ spec:
         aerospike:
           path: /dev/nvme0n1
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: local-ssd
             volumeMode: Block
             size: 5Gi
@@ -36,7 +36,7 @@ spec:
         aerospike:
           path: /dev/sdf
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Block
             size: 5Gi
@@ -49,7 +49,7 @@ spec:
 
   podSpec:
     multiPodPerHost: true
-    
+
   aerospikeAccessControl:
     users:
       - name: admin
@@ -71,8 +71,3 @@ spec:
           type: device
           devices:
             - /dev/nvme0n1	/dev/sdf
-
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m

@@ -49,7 +49,3 @@ spec:
         replication-factor: 2
         storage-engine:
           type: memory
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m

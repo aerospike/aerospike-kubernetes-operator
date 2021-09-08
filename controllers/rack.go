@@ -199,7 +199,6 @@ func (r *SingleClusterReconciler) deleteRacks(
 	}
 	return reconcileSuccess()
 }
-
 func (r *SingleClusterReconciler) reconcileRack(
 	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
 ) reconcileResult {
@@ -434,7 +433,6 @@ func (r *SingleClusterReconciler) updateContainersImage(containers []corev1.Cont
 	}
 	return updated
 }
-
 func (r *SingleClusterReconciler) needsToUpdateContainers(
 	containers []corev1.Container, podName string,
 ) bool {
@@ -497,6 +495,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		if !needPodUpgrade {
 			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
+
 		}
 
 		// Also check if statefulSet is in stable condition

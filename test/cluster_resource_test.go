@@ -37,7 +37,7 @@ var _ = Describe(
 						// It should be greater than given in cluster namespace
 						mem := resource.MustParse("2Gi")
 						cpu := resource.MustParse("200m")
-						aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceCPU:    cpu,
 								corev1.ResourceMemory: mem,
@@ -47,6 +47,7 @@ var _ = Describe(
 								corev1.ResourceMemory: mem,
 							},
 						}
+
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -66,7 +67,7 @@ var _ = Describe(
 						// It should be greater than given in cluster namespace
 						mem = resource.MustParse("1Gi")
 						cpu = resource.MustParse("250m")
-						aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceCPU:    cpu,
 								corev1.ResourceMemory: mem,
@@ -103,18 +104,6 @@ var _ = Describe(
 						)
 
 						It(
-							"NoResourceRequest: should fail for nil resource.request",
-							func() {
-								aeroCluster.Spec.Resources = &corev1.ResourceRequirements{}
-
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
-							},
-						)
-
-						It(
 							"DeployClusterWithResource: should fail for request exceeding limit",
 							func() {
 								// It should be greater than given in cluster namespace
@@ -122,7 +111,7 @@ var _ = Describe(
 								resourceCPU := resource.MustParse("250m")
 								limitMem := resource.MustParse("2Gi")
 								limitCPU := resource.MustParse("200m")
-								aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
+								aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceCPU:    resourceCPU,
 										corev1.ResourceMemory: resourceMem,
@@ -167,7 +156,7 @@ var _ = Describe(
 								resourceCPU := resource.MustParse("250m")
 								limitMem := resource.MustParse("2Gi")
 								limitCPU := resource.MustParse("200m")
-								aeroCluster.Spec.Resources = &corev1.ResourceRequirements{
+								aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceCPU:    resourceCPU,
 										corev1.ResourceMemory: resourceMem,

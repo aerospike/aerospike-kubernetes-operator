@@ -452,7 +452,7 @@ func isUserSpecValid(
 	return true, nil
 }
 
-// isUserNameValid Indicates if a user name is valid.
+// isUserNameValid Indicates if a username is valid.
 func isUserNameValid(userName string) (bool, error) {
 	if len(strings.TrimSpace(userName)) == 0 {
 		return false, fmt.Errorf("username cannot be empty")
