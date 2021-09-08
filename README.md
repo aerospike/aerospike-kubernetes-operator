@@ -37,7 +37,7 @@ Run the following command with the appropriate name and version for the operator
 ```sh
 IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator
 VERSION=2.0.0-dev
-make docker-build docker-push IMG=$(IMAGE_TAG_BASE):$(VERSION)
+make docker-build docker-push IMG=${IMAGE_TAG_BASE}:${VERSION}
 ```
 
 ### Deploy
@@ -46,7 +46,7 @@ Make sure cert-manager is deployed on your Kubernetes cluster using instructions
 To deploy the operator build in the previous step run
 
 ```sh
-make deploy IMG=$(IMAGE_TAG_BASE):$(VERSION)
+make deploy IMG=${IMAGE_TAG_BASE}:${VERSION}
 ```
 
 Setup RBAC
@@ -60,7 +60,7 @@ kubectl apply -f cluster_rbac.yaml
 Run
 
 ```sh
-make undeploy IMG=$(IMAGE_TAG_BASE):$(VERSION)
+make undeploy IMG=${IMAGE_TAG_BASE}:${VERSION}
 ```
 
 ## Architecture
