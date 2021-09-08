@@ -24,7 +24,9 @@ import (
 )
 
 const (
-	aeroClusterServiceAccountName string = "aerospike-cluster"
+	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
+	// Need to modify this name if prefix is changed in yaml file
+	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
 )
 
 // The default cpu request for the aerospike-server container
@@ -86,21 +88,20 @@ var defaultContainerPorts = map[string]PortInfo{
 	},
 }
 
-func (r *AerospikeClusterReconciler) createSTS(
-	aeroCluster *asdbv1beta1.AerospikeCluster,
+func (r *SingleClusterReconciler) createSTS(
 	namespacedName types.NamespacedName, rackState RackState,
 ) (*appsv1.StatefulSet, error) {
 	replicas := int32(rackState.Size)
 
 	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
 
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		// Create services for all statefulset pods
 		for i := 0; i < rackState.Size; i++ {
 			// Statefulset name created from cr name
 			name := fmt.Sprintf("%s-%d", namespacedName.Name, i)
 			if err := r.createPodService(
-				aeroCluster, name, aeroCluster.Namespace,
+				name, r.aeroCluster.Namespace,
 			); err != nil {
 				return nil, err
 			}
@@ -108,22 +109,22 @@ func (r *AerospikeClusterReconciler) createSTS(
 	}
 
 	ports := getSTSContainerPort(
-		aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		aeroCluster.Spec.AerospikeConfig,
+		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		r.aeroCluster.Spec.AerospikeConfig,
 	)
 
 	ls := utils.LabelsForAerospikeClusterRack(
-		aeroCluster.Name, rackState.Rack.ID,
+		r.aeroCluster.Name, rackState.Rack.ID,
 	)
 
-	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
+	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	envVarList := []corev1.EnvVar{
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
 		newSTSEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newSTSEnvVar("MY_POD_IP", "status.podIP"),
 		newSTSEnvVar("MY_HOST_IP", "status.hostIP"),
 		newSTSEnvVarStatic("MY_POD_TLS_NAME", tlsName),
-		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", aeroCluster.Name),
+		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
 	}
 
 	if tlsName != "" {
@@ -147,7 +148,7 @@ func (r *AerospikeClusterReconciler) createSTS(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: ls,
 			},
-			ServiceName: aeroCluster.Name,
+			ServiceName: r.aeroCluster.Name,
 			Template: corev1.PodTemplateSpec{
 
 				ObjectMeta: metav1.ObjectMeta{
@@ -155,8 +156,8 @@ func (r *AerospikeClusterReconciler) createSTS(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: aeroClusterServiceAccountName,
-					HostNetwork:        aeroCluster.Spec.PodSpec.HostNetwork,
-					DNSPolicy:          aeroCluster.Spec.PodSpec.DNSPolicy,
+					HostNetwork:        r.aeroCluster.Spec.PodSpec.HostNetwork,
+					DNSPolicy:          r.aeroCluster.Spec.PodSpec.DNSPolicy,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{
 						{
@@ -170,13 +171,13 @@ func (r *AerospikeClusterReconciler) createSTS(
 									{
 										// Headless service has the same name as AerospikeCluster
 										Name:  "SERVICE",
-										Value: getSTSHeadLessSvcName(aeroCluster),
+										Value: getSTSHeadLessSvcName(r.aeroCluster),
 									},
 									// TODO: Do we need this var?
 									{
 										Name: "CONFIG_MAP_NAME",
 										Value: getNamespacedNameForSTSConfigMap(
-											aeroCluster, rackState.Rack.ID,
+											r.aeroCluster, rackState.Rack.ID,
 										).Name,
 									},
 								}...,
@@ -187,9 +188,9 @@ func (r *AerospikeClusterReconciler) createSTS(
 					Containers: []corev1.Container{
 						{
 							Name:            asdbv1beta1.AerospikeServerContainerName,
-							Image:           aeroCluster.Spec.Image,
+							Image:           r.aeroCluster.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							SecurityContext: aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
+							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 							Ports:           ports,
 							Env:             envVarList,
 							VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),
@@ -197,22 +198,22 @@ func (r *AerospikeClusterReconciler) createSTS(
 						},
 					},
 
-					Volumes: getDefaultSTSVolumes(aeroCluster, rackState),
+					Volumes: getDefaultSTSVolumes(r.aeroCluster, rackState),
 				},
 			},
 		},
 	}
 
-	r.updateSTSPodSpec(aeroCluster, st, ls, rackState)
+	r.updateSTSPodSpec(st, ls, rackState)
 
-	r.updateAerospikeContainer(aeroCluster, st)
+	r.updateAerospikeContainer(st)
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
-	r.updateSTSStorage(aeroCluster, st, rackState)
+	r.updateSTSStorage(st, rackState)
 
 	// Set AerospikeCluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(
-		aeroCluster, st, r.Scheme,
+		r.aeroCluster, st, r.Scheme,
 	); err != nil {
 		return nil, err
 	}
@@ -231,10 +232,10 @@ func (r *AerospikeClusterReconciler) createSTS(
 		)
 	}
 
-	return r.getSTS(aeroCluster, rackState)
+	return r.getSTS(rackState)
 }
 
-func (r *AerospikeClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
+func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	r.Log.Info("Delete statefulset")
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
@@ -242,7 +243,7 @@ func (r *AerospikeClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	return r.Client.Delete(context.TODO(), st)
 }
 
-func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) error {
+func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) error {
 
 	const podStatusMaxRetry = 18
 	const podStatusRetryInterval = time.Second * 10
@@ -344,12 +345,13 @@ func (r *AerospikeClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet)
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) getSTS(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rackState RackState,
-) (*appsv1.StatefulSet, error) {
+func (r *SingleClusterReconciler) getSTS(rackState RackState) (
+	*appsv1.StatefulSet, error,
+) {
 	found := &appsv1.StatefulSet{}
 	err := r.Client.Get(
-		context.TODO(), getNamespacedNameForSTS(aeroCluster, rackState.Rack.ID),
+		context.TODO(),
+		getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID),
 		found,
 	)
 	if err != nil {
@@ -358,8 +360,7 @@ func (r *AerospikeClusterReconciler) getSTS(
 	return found, nil
 }
 
-func (r *AerospikeClusterReconciler) buildSTSConfigMap(
-	aeroCluster *asdbv1beta1.AerospikeCluster,
+func (r *SingleClusterReconciler) buildSTSConfigMap(
 	namespacedName types.NamespacedName, rack asdbv1beta1.Rack,
 ) error {
 
@@ -374,11 +375,11 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
-			configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
+			configMapData, err := r.CreateConfigMapData(rack)
 			if err != nil {
 				return fmt.Errorf("failed to build dotConfig from map: %v", err)
 			}
-			ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
+			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 
 			// return a configmap object containing aerospikeConfig
 			confMap = &corev1.ConfigMap{
@@ -391,7 +392,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(
 			}
 			// Set AerospikeCluster instance as the owner and controller
 			err = controllerutil.SetControllerReference(
-				aeroCluster, confMap, r.Scheme,
+				r.aeroCluster, confMap, r.Scheme,
 			)
 			if err != nil {
 				return err
@@ -420,7 +421,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(
 	)
 
 	// Update existing configmap as it might not be current.
-	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(rack)
 	if err != nil {
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
@@ -436,8 +437,7 @@ func (r *AerospikeClusterReconciler) buildSTSConfigMap(
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) updateSTSConfigMap(
-	aeroCluster *asdbv1beta1.AerospikeCluster,
+func (r *SingleClusterReconciler) updateSTSConfigMap(
 	namespacedName types.NamespacedName, rack asdbv1beta1.Rack,
 ) error {
 
@@ -450,7 +450,7 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(
 	}
 
 	// build the aerospike config file based on the current spec
-	configMapData, err := r.CreateConfigMapData(aeroCluster, rack)
+	configMapData, err := r.CreateConfigMapData(rack)
 	if err != nil {
 		return fmt.Errorf("failed to build dotConfig from map: %v", err)
 	}
@@ -468,17 +468,16 @@ func (r *AerospikeClusterReconciler) updateSTSConfigMap(
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-
+func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 	r.Log.Info("Create headless service for statefulSet")
 
-	ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
+	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 
-	serviceName := getSTSHeadLessSvcName(aeroCluster)
+	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 	err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
-			Name: serviceName, Namespace: aeroCluster.Namespace,
+			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
 	)
 	if err != nil {
@@ -487,7 +486,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 				ObjectMeta: metav1.ObjectMeta{
 					// Headless service has the same name as AerospikeCluster
 					Name:      serviceName,
-					Namespace: aeroCluster.Namespace,
+					Namespace: r.aeroCluster.Namespace,
 					// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
 					Annotations: map[string]string{
 						"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
@@ -501,7 +500,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 					Selector:                 ls,
 					Ports: []corev1.ServicePort{
 						{
-							Port: int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
+							Port: int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
 							Name: "info",
 						},
 					},
@@ -509,7 +508,7 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 			}
 			// Set AerospikeCluster instance as the owner and controller
 			err := controllerutil.SetControllerReference(
-				aeroCluster, service, r.Scheme,
+				r.aeroCluster, service, r.Scheme,
 			)
 			if err != nil {
 				return err
@@ -536,32 +535,32 @@ func (r *AerospikeClusterReconciler) createSTSHeadlessSvc(aeroCluster *asdbv1bet
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) createSTSLoadBalancerSvc(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-	loadBalancer := aeroCluster.Spec.SeedsFinderServices.LoadBalancer
+func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
+	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
 	if loadBalancer == nil {
 		r.Log.Info("LoadBalancer is not configured. Skipping...")
 		return nil
 	}
 
-	serviceName := aeroCluster.Name + "-lb"
+	serviceName := r.aeroCluster.Name + "-lb"
 	service := &corev1.Service{}
 	err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
-			Name: serviceName, Namespace: aeroCluster.Namespace,
+			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
 	)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Creating LoadBalancer service for cluster")
-			ls := utils.LabelsForAerospikeCluster(aeroCluster.Name)
+			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 			var targetPort int32
 			if loadBalancer.TargetPort >= 1024 {
 				// if target port is specified in CR.
 				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig); tlsName != "" {
+			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" {
 				targetPort = int32(tlsPort)
 			} else {
-				targetPort = int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig))
+				targetPort = int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
 			}
 			var port int32
 			if loadBalancer.Port >= 1024 {
@@ -574,7 +573,7 @@ func (r *AerospikeClusterReconciler) createSTSLoadBalancerSvc(aeroCluster *asdbv
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        serviceName,
-					Namespace:   aeroCluster.Namespace,
+					Namespace:   r.aeroCluster.Namespace,
 					Annotations: loadBalancer.Annotations,
 					Labels:      ls,
 				},
@@ -598,7 +597,7 @@ func (r *AerospikeClusterReconciler) createSTSLoadBalancerSvc(aeroCluster *asdbv
 
 			// Set AerospikeCluster instance as the owner and controller
 			if err := controllerutil.SetControllerReference(
-				aeroCluster, service, r.Scheme,
+				r.aeroCluster, service, r.Scheme,
 			); err != nil {
 				return err
 			}
@@ -624,9 +623,7 @@ func (r *AerospikeClusterReconciler) createSTSLoadBalancerSvc(aeroCluster *asdbv
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) createPodService(
-	aeroCluster *asdbv1beta1.AerospikeCluster, pName, pNamespace string,
-) error {
+func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
 	if err := r.Client.Get(
 		context.TODO(),
@@ -649,13 +646,13 @@ func (r *AerospikeClusterReconciler) createPodService(
 			Ports: []corev1.ServicePort{
 				{
 					Name: "info",
-					Port: int32(asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig)),
+					Port: int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
 				},
 			},
 			ExternalTrafficPolicy: "Local",
 		},
 	}
-	if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig); tlsName != "" {
+	if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{
 				Name: "tls",
@@ -665,7 +662,9 @@ func (r *AerospikeClusterReconciler) createPodService(
 	}
 	// Set AerospikeCluster instance as the owner and controller.
 	// It is created before Pod, so Pod cannot be the owner
-	err := controllerutil.SetControllerReference(aeroCluster, service, r.Scheme)
+	err := controllerutil.SetControllerReference(
+		r.aeroCluster, service, r.Scheme,
+	)
 	if err != nil {
 		return err
 	}
@@ -680,7 +679,7 @@ func (r *AerospikeClusterReconciler) createPodService(
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) deletePodService(pName, pNamespace string) error {
+func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
 
 	if err := r.Client.Get(
@@ -697,11 +696,10 @@ func (r *AerospikeClusterReconciler) deletePodService(pName, pNamespace string) 
 
 // Called while creating new cluster and also during rolling restart.
 // Note: STS podSpec must be updated before updating storage
-func (r *AerospikeClusterReconciler) updateSTSStorage(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
-	rackState RackState,
+func (r *SingleClusterReconciler) updateSTSStorage(
+	st *appsv1.StatefulSet, rackState RackState,
 ) {
-	r.updateSTSPVStorage(aeroCluster, st, rackState)
+	r.updateSTSPVStorage(st, rackState)
 	r.updateSTSNonPVStorage(st, rackState)
 
 	// Sort volume attachments so that overlapping paths do not shadow each other.
@@ -727,9 +725,8 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 	}
 }
 
-func (r *AerospikeClusterReconciler) updateSTSPVStorage(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
-	rackState RackState,
+func (r *SingleClusterReconciler) updateSTSPVStorage(
+	st *appsv1.StatefulSet, rackState RackState,
 ) {
 	volumes := rackState.Rack.Storage.GetPVs()
 
@@ -771,12 +768,12 @@ func (r *AerospikeClusterReconciler) updateSTSPVStorage(
 
 		r.Log.V(1).Info("added PVC for volume", "volume", volume)
 
-		pvc := createPVCForVolumeAttachment(aeroCluster, volume)
+		pvc := createPVCForVolumeAttachment(r.aeroCluster, volume)
 		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
 	}
 }
 
-func (r *AerospikeClusterReconciler) updateSTSNonPVStorage(
+func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 	st *appsv1.StatefulSet, rackState RackState,
 ) {
 	volumes := rackState.Rack.Storage.GetNonPVs()
@@ -807,22 +804,21 @@ func (r *AerospikeClusterReconciler) updateSTSNonPVStorage(
 	}
 }
 
-func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
-	labels map[string]string, rackState RackState,
+func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
+	st *appsv1.StatefulSet, labels map[string]string, rackState RackState,
 ) {
 	affinity := &corev1.Affinity{}
 
 	// Use rack affinity, if given
 	if rackState.Rack.PodSpec.Affinity != nil {
 		lib.DeepCopy(affinity, rackState.Rack.PodSpec.Affinity)
-	} else if aeroCluster.Spec.PodSpec.Affinity != nil {
-		lib.DeepCopy(affinity, aeroCluster.Spec.PodSpec.Affinity)
+	} else if r.aeroCluster.Spec.PodSpec.Affinity != nil {
+		lib.DeepCopy(affinity, r.aeroCluster.Spec.PodSpec.Affinity)
 	}
 
 	// Set our rules in PodAntiAffinity
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
-	if !aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if !r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		if affinity.PodAntiAffinity == nil {
 			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
 		}
@@ -917,37 +913,37 @@ func (r *AerospikeClusterReconciler) updateSTSSchedulingPolicy(
 	if len(rackState.Rack.PodSpec.NodeSelector) != 0 {
 		st.Spec.Template.Spec.NodeSelector = rackState.Rack.PodSpec.NodeSelector
 	} else {
-		st.Spec.Template.Spec.NodeSelector = aeroCluster.Spec.PodSpec.NodeSelector
+		st.Spec.Template.Spec.NodeSelector = r.aeroCluster.Spec.PodSpec.NodeSelector
 	}
 
 	// Use rack tolerations, if given
 	if len(rackState.Rack.PodSpec.Tolerations) != 0 {
 		st.Spec.Template.Spec.Tolerations = rackState.Rack.PodSpec.Tolerations
 	} else {
-		st.Spec.Template.Spec.Tolerations = aeroCluster.Spec.PodSpec.Tolerations
+		st.Spec.Template.Spec.Tolerations = r.aeroCluster.Spec.PodSpec.Tolerations
 	}
 }
 
 // Called while creating new cluster and also during rolling restart.
-func (r *AerospikeClusterReconciler) updateSTSPodSpec(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
-	labels map[string]string, rackState RackState,
+func (r *SingleClusterReconciler) updateSTSPodSpec(
+	st *appsv1.StatefulSet, labels map[string]string, rackState RackState,
 ) {
-	r.updateSTSSchedulingPolicy(aeroCluster, st, labels, rackState)
+	r.updateSTSSchedulingPolicy(st, labels, rackState)
 
-	st.Spec.Template.Spec.HostNetwork = aeroCluster.Spec.PodSpec.HostNetwork
+	st.Spec.Template.Spec.HostNetwork = r.aeroCluster.Spec.PodSpec.HostNetwork
 
-	st.Spec.Template.Spec.DNSPolicy = aeroCluster.Spec.PodSpec.DNSPolicy
+	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
 
 	st.Spec.Template.Spec.Containers =
 		updateStatefulSetContainers(
-			st.Spec.Template.Spec.Containers, aeroCluster.Spec.PodSpec.Sidecars,
+			st.Spec.Template.Spec.Containers,
+			r.aeroCluster.Spec.PodSpec.Sidecars,
 		)
 
 	st.Spec.Template.Spec.InitContainers =
 		updateStatefulSetContainers(
 			st.Spec.Template.Spec.InitContainers,
-			aeroCluster.Spec.PodSpec.InitContainers,
+			r.aeroCluster.Spec.PodSpec.InitContainers,
 		)
 }
 
@@ -997,14 +993,14 @@ func updateStatefulSetContainers(
 	return stsContainers[:j]
 }
 
-func (r *AerospikeClusterReconciler) waitForAllSTSToBeReady(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-	// User aeroCluster.Status to get all existing sts.
+func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
+	// User r.aeroCluster.Status to get all existing sts.
 	// Can status be empty here
 	r.Log.Info("Waiting for cluster to be ready")
 
-	for _, rack := range aeroCluster.Status.RackConfig.Racks {
+	for _, rack := range r.aeroCluster.Status.RackConfig.Racks {
 		st := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(aeroCluster, rack.ID)
+		stsName := getNamespacedNameForSTS(r.aeroCluster, rack.ID)
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
 				return err
@@ -1019,14 +1015,14 @@ func (r *AerospikeClusterReconciler) waitForAllSTSToBeReady(aeroCluster *asdbv1b
 	return nil
 }
 
-func (r *AerospikeClusterReconciler) getClusterSTSList(aeroCluster *asdbv1beta1.AerospikeCluster) (
+func (r *SingleClusterReconciler) getClusterSTSList() (
 	*appsv1.StatefulSetList, error,
 ) {
 	// List the pods for this aeroCluster's statefulset
 	statefulSetList := &appsv1.StatefulSetList{}
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(r.aeroCluster.Name))
 	listOps := &client.ListOptions{
-		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
 	if err := r.Client.List(
@@ -1037,13 +1033,11 @@ func (r *AerospikeClusterReconciler) getClusterSTSList(aeroCluster *asdbv1beta1.
 	return statefulSetList, nil
 }
 
-func (r *AerospikeClusterReconciler) updateAerospikeContainer(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
-) {
+func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSet) {
 	// These resources are for main aerospike container. Other sidecar can mention their own resources.
-	st.Spec.Template.Spec.Containers[0].Resources = *aeroCluster.Spec.Resources
+	st.Spec.Template.Spec.Containers[0].Resources = *r.aeroCluster.Spec.Resources
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
-	st.Spec.Template.Spec.Containers[0].SecurityContext = aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
+	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
@@ -1120,7 +1114,9 @@ func initializeSTSStorage(
 
 	st.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{}
 
-	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(aeroCluster, rackState)
+	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(
+		aeroCluster, rackState,
+	)
 }
 
 func createPVCForVolumeAttachment(

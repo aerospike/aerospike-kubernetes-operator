@@ -25,13 +25,16 @@ import (
 // log is for logging in this package.
 var aerospikeclusterlog = logf.Log.WithName("aerospikecluster-resource")
 
-func (r *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (c *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 
 	aerospikeclusterlog.Info("registering mutating webhook to the webhook server")
-	hookServer.Register("/mutate-asdb-aerospike-com-v1beta1-aerospikecluster", &webhook.Admission{Handler: &mutatingHandler{}})
+	hookServer.Register(
+		"/mutate-asdb-aerospike-com-v1beta1-aerospikecluster",
+		&webhook.Admission{Handler: &mutatingHandler{}},
+	)
 
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(c).
 		Complete()
 }

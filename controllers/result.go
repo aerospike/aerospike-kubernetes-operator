@@ -21,12 +21,16 @@ func reconcileSuccess() reconcileResult {
 }
 
 // func reconcileDone() reconcileResult {
-// 	return reconcileResult{result: reconcile.Result{}}
+// 	return reconcileResult{result: Reconcile.Result{}}
 // }
 
 func reconcileRequeueAfter(secs int) reconcileResult {
 	t := time.Duration(secs) * time.Second
-	return reconcileResult{result: reconcile.Result{Requeue: true, RequeueAfter: t}}
+	return reconcileResult{
+		result: reconcile.Result{
+			Requeue: true, RequeueAfter: t,
+		},
+	}
 }
 
 func reconcileError(e error) reconcileResult {
