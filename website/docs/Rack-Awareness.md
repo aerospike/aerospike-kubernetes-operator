@@ -5,7 +5,7 @@ description: Rack Awareness
 
 In many cloud environments, it is a best practice to build a cluster which spans multiple availability zones. Aerospike’s Rack Awareness is a good fit when you need to split the database across racks or zones. For example, if you configure a replication-factor of 2, the master copy of the partition and its replica will be stored on separate hardware failure groups. Rack Awareness provides a mechanism that allows database clients to read on a preferential basis from servers in their closely rack or zone, which can significantly reduce traffic charges by limiting cross-AZ traffic as well as provide lower latency and increased stability.
 
-For more details, visit [Rack Awareness](/architecture/rack-aware.md).
+For more details, visit [Rack Awareness](https://docs.aerospike.com/docs/architecture/rack-aware.md).
 
 ## To add Rack Awareness
 
@@ -65,9 +65,11 @@ Rack specific config for the Aerospike cluster CR file.
         storage-engine:
           type: memory
 ```
+
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/rack_enabled_cluster_cr.yaml).
 
 ## Deploy the cluster
+
 Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
 
 ## Cluster node distribution in racks
@@ -79,10 +81,11 @@ For e.g.
 Nodes: 10, Racks: 4
 
 Topology:
-  - NodesForRack1: 3
-  - NodesForRack2: 3
-  - NodesForRack3: 2
-  - NodesForRack4: 2
+
+- NodesForRack1: 3
+- NodesForRack2: 3
+- NodesForRack3: 2
+- NodesForRack4: 2
 
 ## Adding a new rack in config
 
@@ -99,6 +102,7 @@ Add a new rack section in config yaml file under `rackConfig.racks` section and 
       - id: 3
         zone: us-central1-c
 ```
+
 Operator redistribute cluster nodes across racks whenever cluster size is updated or number or racks is changed. If user adds a rack without increasing cluster size then old racks will be scaled down and new new rack will be scaled up based on new nodes redistribution.
 
 ## Setting rack lavel storage and aerospikeConfig
@@ -136,14 +140,14 @@ Rack also provide for setting local storage and aerospikeConfig. If local storag
 
 Local rack AerospikeConfig patch will be merged with common global base AerospikeConfig using given rules.
 
-  - New elements from the patch configMap then it will be added to base configMap
-  - Base element will be replaced with a new patch element if
-    - Element value type is changed
-    - Element value is a primitive type and updated
-    - Element value is primitive list type and updated
-    - Element key is `storage-engine` and its storage-engine type has been changed. (storage-engine can be of `device`, `file`, and `memory` type.
-  - If element is of map type then patch and base elements will be recursively merged
-  - If elements are list of maps then new list elements in the patch list will be appended to the base list and corresponding entries will be merged using the same merge algorithm. Here the order of elements in the base list will be maintained. (corresponding entries are found by matching the special `name` key in maps. Here this list of maps is actually a map of map and main map keys are added in sub-map with key as `name` to convert map of maps to a list of maps).
+- New elements from the patch configMap then it will be added to base configMap
+- Base element will be replaced with a new patch element if
+  - Element value type is changed
+  - Element value is a primitive type and updated
+  - Element value is primitive list type and updated
+  - Element key is `storage-engine` and its storage-engine type has been changed. (storage-engine can be of `device`, `file`, and `memory` type.
+- If element is of map type then patch and base elements will be recursively merged
+- If elements are list of maps then new list elements in the patch list will be appended to the base list and corresponding entries will be merged using the same merge algorithm. Here the order of elements in the base list will be maintained. (corresponding entries are found by matching the special `name` key in maps. Here this list of maps is actually a map of map and main map keys are added in sub-map with key as `name` to convert map of maps to a list of maps).
 
 e.g.
 

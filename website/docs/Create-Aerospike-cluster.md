@@ -1,4 +1,3 @@
-
 ---
 title: Create Aerospike Cluster
 description: Create Aerospike Cluster
@@ -78,7 +77,9 @@ Use the CR yaml file that you created to deploy an Aerospike cluster.
 $ kubectl apply -f deploy/samples/dim_nostorage_cluster_cr.yaml
 ```
 
-<div class="message note">Replace the file name with CR yaml file for your cluster.</div>
+:::note
+Replace the file name with CR yaml file for your cluster.
+:::
 
 ## Verify cluster status
 Ensure that the aerospike-kubernetes-operator creates a [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) for the CR.

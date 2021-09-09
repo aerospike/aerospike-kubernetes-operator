@@ -1,8 +1,3 @@
-
-<div>
-<header>
-    <meta id="page_description" name="description" content="" />
-</header>
 ---
 title: Storage Provisioning
 description: Storage Provisioning
@@ -50,7 +45,9 @@ $ sudo ln -s /dev/nvme0n1 /mnt/disks/
 $ sudo ln -s /dev/nvme0n2 /mnt/disks/
 ```
 
-<div class="message note">You can use also your own discovery directory, but make sure that the [provisioner](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/storage/aerospike_local_volume_provisioner.yaml) is also configured to point to the same directory.</div>
+:::note
+You can use also your own discovery directory, but make sure that the [provisioner](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/storage/aerospike_local_volume_provisioner.yaml) is also configured to point to the same directory.
+:::
 
 ### Configure and deploy local volume provisioner
 
@@ -79,5 +76,6 @@ local-pv-342b45ed   375Gi      RWO            Delete           Available        
 local-pv-3587dbec   375Gi      RWO            Delete           Available           "local-ssd"            3s
 ```
 
-<div class="message note">The `storageclass` configured here is `"local-ssd"`. We will provide this in the Aerospike cluster CR config. This storageclass will be used to talk to the provisioner and request PV resources for the cluster.</div>
-</div>
+:::note
+The `storageclass` configured here is `"local-ssd"`. We will provide this in the Aerospike cluster CR config. This storageclass will be used to talk to the provisioner and request PV resources for the cluster.
+:::

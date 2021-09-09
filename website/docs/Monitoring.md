@@ -1,14 +1,9 @@
-
-<div>
-<header>
-    <meta id="page_description" name="description" content="" />
-</header>
 ---
 title: Monitoring
 description: Monitoring
 ---
 
-[Aerospike Monitoring Stack](/tools/monitorstack/index.md) can be used to enable monitoring and alerting for Aerospike clusters deployed by the Aerospike Kubernetes Operator.
+[Aerospike Monitoring Stack](https://docs.aerospike.com/docs/tools/monitorstack/index.md) can be used to enable monitoring and alerting for Aerospike clusters deployed by the Aerospike Kubernetes Operator.
 
 ## Add Aerospike Prometheus Exporter Sidecar
 
@@ -63,7 +58,7 @@ scrape_configs:
       action: keep
 ```
 
-See [Aerospike Monitoring Stack](/tools/monitorstack/index.md) for its installation, configuration and setup guide.
+See [Aerospike Monitoring Stack](https://docs.aerospike.com/docstools/monitorstack/index.md) for its installation, configuration and setup guide.
 
 ## Quick Example
 
@@ -100,7 +95,7 @@ This example demonstrates monitoring of Aerospike clusters deployed by Kubernete
     EOF
     ```
 
-5. Deploy Prometheus-Grafana Stack using [aerospike-monitoring-stack.yaml](/cloud/assets/aerospike-monitoring-stack.yaml)
+5. Deploy Prometheus-Grafana Stack using [aerospike-monitoring-stack.yaml](https://docs.aerospike.com/docscloud/assets/aerospike-monitoring-stack.yaml)
     ```sh
     kubectl apply -f ./aerospike-monitoring-stack.yaml
     ```
@@ -112,4 +107,3 @@ This example demonstrates monitoring of Aerospike clusters deployed by Kubernete
     Open `localhost:3000` in browser, and login to Grafana as `admin`/`admin`.
 
 7. Import dashboards from [Aerospike Monitoring GitHub Repo](https://github.com/aerospike/aerospike-monitoring/tree/master/config/grafana/dashboards) and visualise metrics.
-</div>

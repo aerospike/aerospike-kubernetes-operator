@@ -3,14 +3,13 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
-  title: 'Skyhook',
-  tagline: 'Skyhook is a Redis API compatible gateway to Aerospike Database',
+  title: 'Aerospike Kubernetes Operator',
+  tagline: '',
   url: 'https://aerospike.github.io/',
   baseUrl: '/aerospike-kubernetes-operator/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
-  // Recommendation is to have this true but build fails if it is 
-  // trailingSlash: true,
+  trailingSlash: true,
   favicon: 'img/favicon.ico',
   organizationName: 'aerospike', // Usually your GitHub org/user name.
   projectName: 'aerospike-kubernetes-operator', // Usually your repo name.
@@ -92,6 +91,7 @@ module.exports = {
       '@docusaurus/preset-classic',
       {
         docs: {
+          sidebarCollapsed: false,
           sidebarPath: require.resolve('./sidebars.js'),
           routeBasePath: '/',
           // Please change this to your repo.

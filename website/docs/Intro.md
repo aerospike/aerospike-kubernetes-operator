@@ -1,6 +1,7 @@
 ---
 title: Aerospike Kubernetes Operator
 description: Learn about the Aerospike Kubernetes Operator.
+slug: /
 ---
 
 The Aerospike Kubernetes Operator automates the deployment and management of **Aerospike enterprise clusters** on Kubernetes. The Operator provides a controller that manages a [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) to extend the Kubernetes API for Aerospike Enterprise clusters. Aerospike cluster deployment and life cycle management are performed by updating an Aerospike cluster Custom Resource (CR).

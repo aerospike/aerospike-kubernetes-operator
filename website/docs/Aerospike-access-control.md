@@ -4,13 +4,15 @@ description: Aerospike Access Control
 ---
 
 
-Aerospike Access Control includes user, role, and privilege creation and maintenance. For more details see [here](https://docs.aerospike.com/docs/configure/security/access-control/). 
+Aerospike Access Control includes user, role, and privilege creation and maintenance. For more details see [here](https://docs.aerospike.com/docs/configure/security/access-control/).
 
 To manage your access controls from the operator, configure the `aerospikeAccessControl` section in the Aerospike cluster's Custom Resource (CR) file.
 
 Here are a few examples for common access control tasks:
 
-<div class="message note">For these examples, assume that cluster is deployed using a file named `aerospike-cluster.yaml`.</div>
+:::note
+For these examples, assume that cluster is deployed using a file named `aerospike-cluster.yaml`.
+:::
 
 - [Creating a role](Aerospike-access-control.md#creating-a-role)
 - [Adding privileges to a role](Aerospike-access-control.md#adding-privileges-to-a-role)
@@ -50,10 +52,11 @@ spec:
           - sys-admin
           - user-admin
 ```
+
 To apply the change, run this command:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Adding privileges to a role
@@ -84,10 +87,11 @@ spec:
           - sys-admin
           - user-admin
 ```
+
 To apply the change, run this command
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Removing privileges from a role
@@ -122,7 +126,7 @@ spec:
 Apply the change by running `apply` with the updated config.
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Creating a user with roles
@@ -132,8 +136,9 @@ Create the secret for the user and add the user in `users` list under `aerospike
 Create a secret `profile-user-secret` containing the password for the user `profiler` by passing the password from the command line:
 
 ```sh
-$ kubectl  -n aerospike create secret generic profile-user-secret --from-literal=password='userpass'
+kubectl  -n aerospike create secret generic profile-user-secret --from-literal=password='userpass'
 ```
+
 Add `profileUser` user having `profiler` role.
 
 ```yaml
@@ -167,7 +172,7 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Add new roles to a user
@@ -209,7 +214,7 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Removing roles from a user
@@ -250,7 +255,7 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Changing a user's password
@@ -258,8 +263,9 @@ $ kubectl apply -f aerospike-cluster.yaml
 Create a new secret `new-profile-user-secret` containing the password for Aerospike cluster user `profileUser` by passing the password from the command line:
 
 ```sh
-$ kubectl  -n aerospike create secret generic new-profile-user-secret --from-literal=password='newuserpass'
+kubectl  -n aerospike create secret generic new-profile-user-secret --from-literal=password='newuserpass'
 ```
+
 Update the `secretName` for `profileUser` to the new secret name `new-profile-user-secret`.
 
 ```yaml
@@ -294,7 +300,7 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Dropping a role
@@ -330,7 +336,7 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
 
 ## Dropping a user
@@ -361,5 +367,5 @@ spec:
 Apply the change:
 
 ```sh
-$ kubectl apply -f aerospike-cluster.yaml
+kubectl apply -f aerospike-cluster.yaml
 ```
