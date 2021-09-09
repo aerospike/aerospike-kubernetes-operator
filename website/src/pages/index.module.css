@@ -1,0 +1,92 @@
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+/* stylelint-disable docusaurus/copyright-header */
+
+/**
+ * CSS files with the .module.css suffix will be treated as CSS modules
+ * and scoped locally.
+ */
+
+.heroBanner {
+  padding: 0;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  background-image: url(../../static/img/hero-bg-right.webp);
+  background-color: #17104e;
+  background-repeat: repeat;
+  background-size: cover;
+  background-position: right center;
+}
+.contentBody {
+  background-color: #17104e;
+}
+.heroBanner h1 {
+  font-weight: normal;
+  font-size: 4rem;
+}
+.heroBanner h3 {
+  font-weight: normal;
+  padding-left: 5%;
+}
+.heroText {
+  display: inline-block;
+}
+.smallA {
+  width: 64px;
+  padding-right: 5px;
+  padding-left: 30px;
+  display: inline-block;
+}
+@media screen and (max-width: 966px) {
+  .heroBanner {
+    padding: 2rem;
+  }
+  .heroBanner h1 {
+    font-size: 3rem;
+  }
+  .heroBanner h3 {
+    font-size: 1.25rem;
+    padding-bottom: 10px;
+  }
+  .smallA {
+    width: 48px;
+  }
+}
+@media screen and (max-width: 595px) {
+  .heroBanner {
+    padding: 1.5rem;
+  }
+  .heroBanner h1 {
+    font-size: 2.5rem;
+  }
+  .heroBanner h3 {
+    font-size: 1.1rem;
+    padding-bottom: 10px;
+  }
+  .smallA {
+    width: 40px;
+  }
+}
+@media screen and (max-width: 496px) {
+  .heroBanner {
+    padding: 1.2rem;
+  }
+  .heroBanner h1 {
+    font-size: 1.5rem;
+  }
+  .heroBanner h3 {
+    font-size: 0.7rem;
+  }
+  .smallA {
+    width: 25px;
+  }
+}
+@media screen and (max-width: 412px) {
+  .heroBanner h1 {
+    font-size: 1.4rem;
+  }
+}

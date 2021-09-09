@@ -1,0 +1,140 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --blue: #3b69e5;
+  --indigo: #6610f2;
+  --purple: #6f42c1;
+  --pink: #e83e8c;
+  --red: #c22125;
+  --orange: #fd7e14;
+  --yellow: #ffc107;
+  --green: #28a745;
+  --teal: #20c997;
+  --cyan: #17a2b8;
+  --white: #fff;
+  --gray: #6c757d;
+  --gray-dark: #343a40;
+  --primary: #3b69e5;
+  --secondary: #6c757d;
+  --success: #28a745;
+  --info: #17a2b8;
+  --warning: #ffc107;
+  --danger: #c22125;
+  --light: #f8f9fa;
+  --dark: #0d0b1e;
+  --ifm-color-primary: #7ec0f9;
+  --ifm-color-primary-dark: #5aaff7;
+  --ifm-color-primary-darker: #48a6f6;
+  --ifm-color-primary-darkest: #128cf4;
+  --ifm-color-primary-light: #a2d2fb;
+  --ifm-color-primary-lighter: #b4dafc;
+  --ifm-color-primary-lightest: #eaf5fe;
+  --ifm-code-font-size: 95%;
+  --font-family-sans-serif: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+/* html[data-theme='dark'] {
+      --ifm-color-primary: #4e89e8;  
+      --ifm-color-primary-dark: #5a91ea;  
+      --ifm-hero-text-color: white;
+      --ifm-hero-subtitle: white;
+      --ifm-heading-color: white;
+      --ifm-hero-text-color: white;
+      --ifm-font-color: black;
+      --ifm-font-color-inverse: white;
+} 
+*/
+html {
+  font-family: sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: lighter;
+}
+h1 {
+  font-size: 3rem;
+}
+h2 {
+  font-size: 2rem;
+}
+h3 {
+  font-size: 1.5rem;
+}
+h4 {
+  font-size: 1.25rem;
+}
+
+.docusaurus-highlight-code-line {
+  background-color: rgb(72, 77, 91);
+  display: block;
+  margin: 0 calc(-1 * var(--ifm-pre-padding));
+  padding: 0 var(--ifm-pre-padding);
+}
+.navbar__title {
+  font-size: x-large;
+  font-weight: lighter;
+  padding-left: 10px;
+}
+.navbar__logo {
+  height: 25px;
+}
+.navbar__link svg {
+  display: none;
+}
+.navbar-sidebar__items svg {
+  display: none;
+}
+.footer__link-item svg {
+  display: none;
+}
+.footer__col {
+  padding-left: 12% !important;
+}
+.container {
+  margin: auto;
+  padding: 0;
+}
+.row {
+  margin: 0;
+}
+.dataframe tbody tr th:only-of-type {
+  vertical-align: middle;
+}
+.dataframe tbody tr th {
+  vertical-align: top;
+}
+.dataframe thead th {
+  text-align: right;
+}
+.hiddenTabs {
+  display: none;
+}
+#searchScript {
+  width: 95%;
+  margin: auto;
+  padding-bottom: 40px;
+}
+form.menu__list-item {
+  margin-left: 15px;
+}
+@media screen and (max-width: 555px) {
+  .navbar__title {
+    display: none;
+  }
+  .logoPics {
+    width: 100%;
+    margin-bottom: 50px;
+  }
+}
