@@ -13,7 +13,7 @@ module.exports = {
   onBrokenMarkdownLinks: 'throw',
   trailingSlash: true,
   favicon: 'img/favicon.ico',
-  organizationName: 'aerospike', // Usually your GitHub org/user name.
+  organizationName: 'arrowplum', // Usually your GitHub org/user name.
   projectName: 'aerospike-kubernetes-operator', // Usually your repo name.
   themeConfig: {
     colorMode: {
