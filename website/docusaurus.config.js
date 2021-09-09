@@ -4,7 +4,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
   title: 'Aerospike Kubernetes Operator',
-  tagline: '',
+  tagline: 'Aerospike database operator for Kubernetes',
   url: 'https://aerospike.github.io/',
   baseUrl: '/aerospike-kubernetes-operator/',
   onBrokenLinks: 'throw',
@@ -34,7 +34,7 @@ module.exports = {
         { to: '/blog', label: 'Blog', position: 'left' },
         { type: 'docsVersionDropdown', position: 'right'},
         {
-          href: 'https://github.com/aerospike/skyhook',
+          href: 'https://github.com/aerospike/aerospike-kubernetes-operator',
           label: 'GitHub',
           position: 'right',
         },
