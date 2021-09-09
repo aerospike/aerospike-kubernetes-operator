@@ -3,7 +3,7 @@ title: Kubernetes Secrets
 description: Kubernetes Secrets
 ---
 
-Kubernetes secrets are used to store information securely. You can create secrets to setup Aerospike authentication, TLS, and features.conf. See [Manage-TLS-Certificates](/cloud/kubernetes/operator/Manage-TLS-Certificates.md) for more details.
+Kubernetes secrets are used to store information securely. You can create secrets to setup Aerospike authentication, TLS, and features.conf. See [Manage-TLS-Certificates](Manage-TLS-Certificates.md) for more details.
 
 ## Create a Kubernetes secret for a folder
 
@@ -46,5 +46,5 @@ spec:
   .
 ```
 
-For guidelines to follow when creating passwords, refer to ["Local-to-Aerospike passwords"](/operations/configure/security/access-control/index.md#local-to-aerospike-passwords).
+For guidelines to follow when creating passwords, refer to ["Local-to-Aerospike passwords"](https://docs.aerospike.com/docs/configure/security/access-control/index.md#local-to-aerospike-passwords).
 

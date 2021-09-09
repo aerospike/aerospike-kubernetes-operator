@@ -30,10 +30,10 @@ A layered approach is taken to orchestration which allows the Operator to manage
 
 
 ## Get started
- * [System Requirements](/cloud/kubernetes/operator/System-Requirements.md)
- * [Install the Operator on Kubernetes](/cloud/kubernetes/operator/Install-the-Operator-on-Kubernetes.md)
- * [Create an Aerospike cluster](/cloud/kubernetes/operator/Create-Aerospike-cluster.md)
+ * [System Requirements](System-Requirements.md)
+ * [Install the Operator on Kubernetes](Install-the-Operator-on-Kubernetes.md)
+ * [Create an Aerospike cluster](Create-Aerospike-cluster.md)
 
 ## See also
  * [Kubernetes](https://kubernetes.io)
- * [Limitations](/cloud/kubernetes/operator/Limitations.md)
+ * [Limitations](Limitations.md)

@@ -5,7 +5,7 @@ description: HDD Storage With Data In Index
 
 Here we provide configuration for a specialized namespace where records have a single-bin and fit in 8 bytes.
 
-For more details, visit [configuration of HDD Storage Engine with Data in Index Engine](/operations/configure/namespace/storage/#recipe-for-a-hdd-storage-engine-with-data-in-index-engine).
+For more details, visit [configuration of HDD Storage Engine with Data in Index Engine](https://docs.aerospike.com/docs/configure/namespace/storage/#recipe-for-a-hdd-storage-engine-with-data-in-index-engine).
 
 ## Create the namespace configuration
 Following is the storage-specific config for the Aerospike cluster CR file.
@@ -59,4 +59,4 @@ storage:
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/hdd_dii_storage_cluster_cr.yaml).
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.

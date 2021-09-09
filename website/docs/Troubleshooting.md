@@ -3,12 +3,12 @@ title: Troubleshooting
 description: Troubleshooting
 ---
 
-- [Pods stuck in pending state](/cloud/kubernetes/operator/Troubleshooting.md#pods-stuck-in-pending-state)
-- [Pods keep crashing](/cloud/kubernetes/operator/Troubleshooting.md#pods-keep-crashing)
-- [Error connecting to the cluster from outside Kubernetes](/cloud/kubernetes/operator/Troubleshooting.md#error-connecting-to-the-cluster-from-outside-kubernetes)
-- [Troubleshooting](/cloud/kubernetes/operator/Troubleshooting.md#troubleshooting)
-  * [Events](/cloud/kubernetes/operator/Troubleshooting.md#events)
-  * [Operator logs](/cloud/kubernetes/operator/Troubleshooting.md#operator-logs)
+- [Pods stuck in pending state](Troubleshooting.md#pods-stuck-in-pending-state)
+- [Pods keep crashing](Troubleshooting.md#pods-keep-crashing)
+- [Error connecting to the cluster from outside Kubernetes](Troubleshooting.md#error-connecting-to-the-cluster-from-outside-kubernetes)
+- [Troubleshooting](Troubleshooting.md#troubleshooting)
+  * [Events](Troubleshooting.md#events)
+  * [Operator logs](Troubleshooting.md#operator-logs)
 
 ## Pods stuck in pending state
 After an Aerospike cluster has been created or updated if the pods are stuck with "Pending" status like so,
@@ -40,7 +40,7 @@ Events:
 ```
 
 Possible reasons are
- * Storage class incorrect or not created. Please see [persistent storage](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#configure-persistent-storage) configuration for details.
+ * Storage class incorrect or not created. Please see [persistent storage](Create-Aerospike-cluster.md#configure-persistent-storage) configuration for details.
  * 1 node(s) didn't match Pod's node affinity - Invalid zone, region, racklabel etc. for the rack configured for this pod.
  * Insufficient resources, CPU or memory available to schedule more pods.
 
@@ -66,12 +66,12 @@ kubectl -n aerospike logs aerocluster-0-0 -c aerospike-server
 ```
 
 Possible reasons are
- * Missing or incorrect feature key file - Fix by deleting the Aerospike secret and recreating it with correct feature key file. See [Aerospike secrets](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#create-secrets) for details.
- * Bad Aerospike configuration - The operator tries to validate the configuration before applying it to the cluster. However it's still possible to misconfigure the Aerospike server. The offending paramter will be logged in the server logs and should be fixed and applied again to the cluster. See [Aerospike configuration change](/cloud/kubernetes/operator/Aerospike-configuration-change.md) for details.
+ * Missing or incorrect feature key file - Fix by deleting the Aerospike secret and recreating it with correct feature key file. See [Aerospike secrets](Create-Aerospike-cluster.md#create-secrets) for details.
+ * Bad Aerospike configuration - The operator tries to validate the configuration before applying it to the cluster. However it's still possible to misconfigure the Aerospike server. The offending paramter will be logged in the server logs and should be fixed and applied again to the cluster. See [Aerospike configuration change](Aerospike-configuration-change.md) for details.
 
 ## Error connecting to the cluster from outside Kubernetes
 
-If the cluster runs fine as verfied by the pod status and asadm (see connecting with [asadm](/cloud/kubernetes/operator/Connect-to-the-Aerospike-cluster.md#with-asadm)), Ensure that firewall allows inbound traffic to the Kubenetes cluster for the Aerospike ports. See [Port access](/cloud/kubernetes/operator/Connect-to-the-Aerospike-cluster.md#port-access) for details.
+If the cluster runs fine as verfied by the pod status and asadm (see connecting with [asadm](Connect-to-the-Aerospike-cluster.md#with-asadm)), Ensure that firewall allows inbound traffic to the Kubenetes cluster for the Aerospike ports. See [Port access](Connect-to-the-Aerospike-cluster.md#port-access) for details.
 
 ## Troubleshooting
 ### Events

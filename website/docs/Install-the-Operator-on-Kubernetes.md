@@ -178,5 +178,5 @@ t=2020-03-26T06:23:43+0000 lvl=info msg="Registering Components" module=cmd call
 ```
 
 ## Next
- - [Create the Aerospike cluster](/cloud/kubernetes/operator/Create-Aerospike-cluster.md)
- - [Cluster configuration settings](/cloud/kubernetes/operator/Cluster-configuration-settings.md)
+ - [Create the Aerospike cluster](Create-Aerospike-cluster.md)
+ - [Cluster configuration settings](Cluster-configuration-settings.md)

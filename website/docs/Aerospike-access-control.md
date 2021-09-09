@@ -4,7 +4,7 @@ description: Aerospike Access Control
 ---
 
 
-Aerospike Access Control includes user, role, and privilege creation and maintenance. For more details see [here](/operations/configure/security/access-control/). 
+Aerospike Access Control includes user, role, and privilege creation and maintenance. For more details see [here](https://docs.aerospike.com/docs/configure/security/access-control/). 
 
 To manage your access controls from the operator, configure the `aerospikeAccessControl` section in the Aerospike cluster's Custom Resource (CR) file.
 
@@ -12,15 +12,15 @@ Here are a few examples for common access control tasks:
 
 <div class="message note">For these examples, assume that cluster is deployed using a file named `aerospike-cluster.yaml`.</div>
 
-- [Creating a role](/cloud/kubernetes/operator/Aerospike-access-control.md#creating-a-role)
-- [Adding privileges to a role](/cloud/kubernetes/operator/Aerospike-access-control.md#adding-privileges-to-a-role)
-- [Removing privileges from a role](/cloud/kubernetes/operator/Aerospike-access-control.md#removing-privileges-from-a-role)
-- [Creating a user with roles](/cloud/kubernetes/operator/Aerospike-access-control.md#creating-a-user-with-roles)
-- [Add roles to a user](/cloud/kubernetes/operator/Aerospike-access-control.md#add-new-roles-to-a-user)
-- [Removing roles from a user](/cloud/kubernetes/operator/Aerospike-access-control.md#removing-roles-from-a-user)
-- [Changing a user's password](/cloud/kubernetes/operator/Aerospike-access-control.md#changing-a-user-s-password)
-- [Dropping a role](/cloud/kubernetes/operator/Aerospike-access-control.md#dropping-a-role)
-- [Dropping a user](/cloud/kubernetes/operator/Aerospike-access-control.md#dropping-a-user)
+- [Creating a role](Aerospike-access-control.md#creating-a-role)
+- [Adding privileges to a role](Aerospike-access-control.md#adding-privileges-to-a-role)
+- [Removing privileges from a role](Aerospike-access-control.md#removing-privileges-from-a-role)
+- [Creating a user with roles](Aerospike-access-control.md#creating-a-user-with-roles)
+- [Add roles to a user](Aerospike-access-control.md#add-new-roles-to-a-user)
+- [Removing roles from a user](Aerospike-access-control.md#removing-roles-from-a-user)
+- [Changing a user's password](Aerospike-access-control.md#changing-a-user-s-password)
+- [Dropping a role](Aerospike-access-control.md#dropping-a-role)
+- [Dropping a user](Aerospike-access-control.md#dropping-a-user)
 
 ## Creating a role
 

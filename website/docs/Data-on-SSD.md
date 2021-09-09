@@ -5,7 +5,7 @@ description: Data On SSD
 
 Here we provide namespace storage configuration for storing namespace data on a provisioned SSD storage device.
 
-For more details, visit [configuration of SSD Storage Engine](/operations/configure/namespace/storage/#recipe-for-an-ssd-storage-engine).
+For more details, visit [configuration of SSD Storage Engine](https://docs.aerospike.com/docs/configure/namespace/storage/#recipe-for-an-ssd-storage-engine).
 
 ## Create the namespace configuration
 Following is the Storage specific config for aerospike cluster CR file.
@@ -41,4 +41,4 @@ Following is the Storage specific config for aerospike cluster CR file.
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/ssd_storage_cluster_cr.yaml).
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.

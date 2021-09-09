@@ -12,7 +12,7 @@ description: Monitoring
 
 ## Add Aerospike Prometheus Exporter Sidecar
 
-Add the exporter as a sidecar to each Aerospike server pod using the [PodSpec configuration](/cloud/kubernetes/operator/Cluster-configuration-settings.md#pod-spec). For example,
+Add the exporter as a sidecar to each Aerospike server pod using the [PodSpec configuration](Cluster-configuration-settings.md#pod-spec). For example,
 
 
 ```yaml
@@ -36,7 +36,7 @@ spec:
 
 ## Deploy or Update Aerospike Cluster (Custom Resource)
 
-[Create or update](/cloud/kubernetes/operator/Create-Aerospike-cluster.md) your clusters once the Prometheus exporter sidecar is added.
+[Create or update](Create-Aerospike-cluster.md) your clusters once the Prometheus exporter sidecar is added.
 
 ## Prometheus Configuration
 

@@ -6,11 +6,11 @@ description: Shadow Device
 ## Description
 This is specific to cloud environments. Here namespace storage-engine can be configured to use extremely high-performance cloud instance attached local SSDs that are ephemeral. Writes will also be duplicated to another network-attached shadow device for persistence in case the cloud instance terminates.
 
-For more details, visit [configuration of shadow devices](/operations/configure/namespace/storage/#recipe-for-shadow-device).
+For more details, visit [configuration of shadow devices](https://docs.aerospike.com/docs/configure/namespace/storage/#recipe-for-shadow-device).
 
 
 ## Create a local provisioner and local storage class
-Follow the instructions [here](/cloud/kubernetes/operator/Storage-provisioning.md#local-volume) to create a local volume provisioner and appropriate storage class.
+Follow the instructions [here](Storage-provisioning.md#local-volume) to create a local volume provisioner and appropriate storage class.
 
 ## Create the namespace configuration
 Storage specific config for aerospike cluster CR file.
@@ -53,4 +53,4 @@ Storage specific config for aerospike cluster CR file.
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/shadow_device_cluster_cr.yaml).
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.

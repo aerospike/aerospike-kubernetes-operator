@@ -6,7 +6,7 @@ description: Aerospike Configuration Mapping
 
 ## Mapping Between YAML and Aerospike Configuration
 
-Kubernetes uses [YAML](https://YAML.org/) to express it's configuration whereas the Aerospike DB uses [it's own format for configuration](/operations/configure/index.md) which it stores in `aerospike.conf`.
+Kubernetes uses [YAML](https://YAML.org/) to express it's configuration whereas the Aerospike DB uses [it's own format for configuration](https://docs.aerospike.com/docs/configure/index.md) which it stores in `aerospike.conf`.
 
 The Aerospike Kubernetes Operator translates it's YAML configurations to the Aerospike server's own `aerospike.conf` format.
 
@@ -18,7 +18,7 @@ These are the rules we use to translate between Kubernetes' YAML and Aerospike's
 
 ### Simple Key and Values
 
-Simple key value pairs file translate directly with the exception being [storage sizes](/cloud/kubernetes/operator/Aerospike-configuration-mapping.md#storage-sizes).
+Simple key value pairs file translate directly with the exception being [storage sizes](Aerospike-configuration-mapping.md#storage-sizes).
 
 YAML
 

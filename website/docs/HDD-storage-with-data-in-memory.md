@@ -5,7 +5,7 @@ description: HDD Storage With Data In Memory
 
 Here we provide namespace storage configuration for storing namespace data both in memory and on the persistent device as well.
 
-For more details, visit [HDD Storage Engine with Data in Memory](/operations/configure/namespace/storage/#recipe-for-an-hdd-storage-engine-with-data-in-memory)
+For more details, visit [HDD Storage Engine with Data in Memory](https://docs.aerospike.com/docs/configure/namespace/storage/#recipe-for-an-hdd-storage-engine-with-data-in-memory)
 
 ## Create the namespace configuration
 Following is the storage-specific config for the Aerospike cluster CR file.
@@ -42,4 +42,4 @@ Following is the storage-specific config for the Aerospike cluster CR file.
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/hdd_dim_storage_cluster_cr.yaml).
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.

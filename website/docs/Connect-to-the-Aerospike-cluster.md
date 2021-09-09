@@ -12,7 +12,7 @@ When the Aerospike cluster is configured to have multiple pods per Kubernetes ho
 
 Configure the firewall rules for the Kubernetes cluster accordingly.
 
-Also see [Cluster-configuration-settings](/cloud/kubernetes/operator/Cluster-configuration-settings.md) file for the use of `multiPodPerHost` setting.
+Also see [Cluster-configuration-settings](Cluster-configuration-settings.md) file for the use of `multiPodPerHost` setting.
 
 ## Obtain the Aerospike node endpoints
 
@@ -102,7 +102,7 @@ Status:
 ## Connecting to the cluster
 When connecting from outside the Kubernetes cluster network, you need to use the host external IPs. By default, the Operator configures access endpoints to use Kubernetes host internal IPs and alternate access endpoints to use host external IPs.
 
-Please refer to [network policy](/cloud/kubernetes/operator/Cluster-configuration-settings.md#network-policy) configuration for details.
+Please refer to [network policy](Cluster-configuration-settings.md#network-policy) configuration for details.
 
 From the example status output, for pod aerocluster-0-0, the alternate access endpoint is 34.70.193.192:31312
 

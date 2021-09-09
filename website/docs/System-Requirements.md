@@ -19,9 +19,9 @@ The Operator is supported on the following platforms:
 The Aerospike Operator extends Kubernetes by defining types that represent Aerospike clusters. These types are declarative; they define what the cluster should look like. The Operator monitors Kubernetes for Aerospike resources, creating or updating Aerospike Clusters to match the defined specification. 
 
 ## Get started
- * [Install the Operator](/cloud/kubernetes/operator/Install-the-Operator-on-Kubernetes.md)
- * [Create the Aerospike cluster](/cloud/kubernetes/operator/Create-Aerospike-cluster.md)
+ * [Install the Operator](Install-the-Operator-on-Kubernetes.md)
+ * [Create the Aerospike cluster](Create-Aerospike-cluster.md)
 
 ## See also
  * [Kubernetes](https://kubernetes.io)
- * [Limitations](/cloud/kubernetes/operator/Limitations.md)
+ * [Limitations](Limitations.md)

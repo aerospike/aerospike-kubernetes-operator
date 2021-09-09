@@ -25,7 +25,7 @@ The following restrictions are currently in place and apply to any cluster manag
 
 The following restrictions apply to an already deployed cluster:
 
-<div class="message note">Although they can't be updated in place, BlockStorage, FileStorage, MultiPodPerHost, and Namespace storage can be adjusted using the [workaround described here](/cloud/kubernetes/operator/Scaling-namespace-storage.md).</div>
+<div class="message note">Although they can't be updated in place, BlockStorage, FileStorage, MultiPodPerHost, and Namespace storage can be adjusted using the [workaround described here](Scaling-namespace-storage.md).</div>
 
   * Storage.Volumes config cannot be updated
   * MultiPodPerHost cannot be updated

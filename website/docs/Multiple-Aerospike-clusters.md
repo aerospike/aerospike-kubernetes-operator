@@ -122,4 +122,4 @@ Deploy XDR source cluster using this [cr.yaml](https://github.com/aerospike/aero
 kubectl apply -f deploy/samples/xdr_src_cluster_cr.yaml
 ```
 
-Here Source and Destination clusters are deployed in a single namespace. If the user wants to deploy these clusters in different namespaces then the user has to follow [these](/cloud/kubernetes/operator/Multiple-Aerospike-clusters.md#multiple-aerospike-clusters-in-multiple-k8s-namespaces) steps.
+Here Source and Destination clusters are deployed in a single namespace. If the user wants to deploy these clusters in different namespaces then the user has to follow [these](Multiple-Aerospike-clusters.md#multiple-aerospike-clusters-in-multiple-k8s-namespaces) steps.

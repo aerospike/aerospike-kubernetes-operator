@@ -5,7 +5,7 @@ description: XDR
 
 To deploy a cluster as XDR source, you should configure `dc-security-config-file` config in CR file in `aerospikeConfig.xdr.datacenter` section. Also configure `dc-node-address-port` in same section for destination DC. After configuring these values in the CR file  apply CR file to deploy the cluster.
 
-For more details, visit [configure cross-datacenter](/operations/configure/cross-datacenter/)
+For more details, visit [configure cross-datacenter](https://docs.aerospike.com/docs/configure/cross-datacenter/)
 
 ## Enable XDR and create a remote DC
 Following is the XDR specific config for the Aerospike cluster CR file.
@@ -56,4 +56,4 @@ credentials
 ```
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.

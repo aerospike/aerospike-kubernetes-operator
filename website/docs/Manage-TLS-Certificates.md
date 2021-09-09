@@ -5,7 +5,7 @@ description: Manage TLS Certificates
 
 Here we describe setting up a TLS enabled Aerospike cluster.
 
-For more details, visit [TLS configuration](/operations/configure/network/tls/).
+For more details, visit [TLS configuration](https://docs.aerospike.com/docs/configure/network/tls/).
 
 ## Create a secret containing TLS certificates and key.
 
@@ -47,6 +47,6 @@ TLS specific config for the Aerospike cluster CR file.
 Get full CR file [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples/tls_cluster_cr.yaml).
 
 ## Deploy the cluster
-Follow the instructions [here](/cloud/kubernetes/operator/Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
+Follow the instructions [here](Create-Aerospike-cluster.md#deploy-aerospike-cluster) to deploy this configuration.
 
 

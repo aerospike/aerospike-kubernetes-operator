@@ -18,7 +18,7 @@ Before deploying your Aerospike cluster ensure that you have:
 
 The Operator package contains example YAML configuration files for the cluster deployment. After unpacking the files, the resulting directory will be /aerospike-kubernetes-operator/deploy.  Make sure to cd into this directory before you run the commands.
 
-The use case for your cluster will help you to determine which configuration parameters that you need to set in the custom resource [(CR)](https://github.com/aerospike/aerospike-kubernetes-operator/wiki/Configuration) file. Identify your requirements for storage, if you plan to [enable XDR](/cloud/kubernetes/operator/XDR.md), or [manage TLS certificates](/cloud/kubernetes/operator/Manage-TLS-Certificates.md) for network security with your Aerospike clusters.
+The use case for your cluster will help you to determine which configuration parameters that you need to set in the custom resource [(CR)](https://github.com/aerospike/aerospike-kubernetes-operator/wiki/Configuration) file. Identify your requirements for storage, if you plan to [enable XDR](XDR.md), or [manage TLS certificates](Manage-TLS-Certificates.md) for network security with your Aerospike clusters.
 
 ## Configure persistent storage
 
@@ -48,10 +48,10 @@ For MicroK8s
 $ kubectl apply -f deploy/samples/storage/microk8s_filesystem_storage_class.yaml
 ```
 
-See [Storage Provisioning](/cloud/kubernetes/operator/Storage-provisioning.md) for more details on configuring persistent storage.
+See [Storage Provisioning](Storage-provisioning.md) for more details on configuring persistent storage.
 
 ## Create secrets
-Create secrets to setup Aerospike authentication, TLS, and features.conf. See [Manage-TLS-Certificates](/cloud/kubernetes/operator/Manage-TLS-Certificates.md) for more details.
+Create secrets to setup Aerospike authentication, TLS, and features.conf. See [Manage-TLS-Certificates](Manage-TLS-Certificates.md) for more details.
 
 Aerospike secrets like TLS certificates, security credentials, and features.conf can be packaged in a single directory and converted to Kubernetes secrets like so
 
@@ -66,7 +66,7 @@ $ kubectl  -n aerospike create secret generic auth-secret --from-literal=passwor
 
 ## Create Aerospike cluster Custom Resource (CR)
 
-Refer to the [cluster configuration settings](/cloud/kubernetes/operator/Cluster-configuration-settings.md) section for details on the Aerospike cluster custom resource (CR) file. Sample Aerospike cluster CR files for different configurations can be found [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.0/deploy/samples/).
+Refer to the [cluster configuration settings](Cluster-configuration-settings.md) section for details on the Aerospike cluster custom resource (CR) file. Sample Aerospike cluster CR files for different configurations can be found [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.0/deploy/samples/).
 
 This custom resource file can be edited later on to make any changes/manage the Aerospike cluster.
 
@@ -98,8 +98,8 @@ aerocluster-0-0     1/1     Running     0          48s
 aerocluster-0-1     1/1     Running     0          48s
 ```
 
-If the Aerospike cluster pods do not switch to Running status in a few minutes, please refer to [Troubleshooting](/cloud/kubernetes/operator/Troubleshooting.md) guide.
+If the Aerospike cluster pods do not switch to Running status in a few minutes, please refer to [Troubleshooting](Troubleshooting.md) guide.
 
 ## Next
-- [Cluster configuration settings](/cloud/kubernetes/operator/Cluster-configuration-settings.md)
-- [Connect to the Aerospike cluster](/cloud/kubernetes/operator/Connect-to-the-Aerospike-cluster.md)
+- [Cluster configuration settings](Cluster-configuration-settings.md)
+- [Connect to the Aerospike cluster](Connect-to-the-Aerospike-cluster.md)
