@@ -124,6 +124,7 @@ spec:
 Other sample Aerospike Cluster CR objects can be found [here](https://github.com/aerospike/aerospike-kubernetes-operator/tree/1.0.1/deploy/samples)
 
 ## Configuration
+
 The initial part of the CR selects the CRD and the namespace to use for the Aerospike cluster.
 
 ```yaml
@@ -155,7 +156,6 @@ The fields are described below
 | rackConfig            <br /><sub>`Dynamic`</sub>                         | No       | Structure |         | Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration. See [Rack Config](Cluster-configuration-settings.md#rack-config) for details.                                                                                                    |
 | podSpec            <br /><sub>`Dynamic` **`Rolling restart`**</sub>      | No       | Structure |         | Configures the Kubernetes pod running Aerospike server. See [Pod Spec](Cluster-configuration-settings.md#pod-spec) for details.                                                                                                                                                                                     |
 
-
 ## Validation Policy
 
 This section configures the policy for validating the cluster CR.
@@ -172,10 +172,10 @@ The fields in this structure are
 This section configures IP and port types used for access, alternate access, TLS access, and TLS alternate access endpoints on the Aerospike cluster.
 
 Three types of endpoint configurations are supported.
+
 - pod - uses the Kubernetes pod IP and Aerospike port that will work from other pods in the same Kubernetes cluster
 - hostInternal - uses the Kubernetes cluster node's host IP and a mapped Aerospike port that will work from the VPC or internal network used by the Kubernetes cluster.
 - hostExternal - uses the Kubernetes cluster node's host external/public IP and a mapped Aerospike port that should work even from outside the Kubernetes network.
-
 
 The fields in this structure are
 
@@ -185,8 +185,6 @@ The fields in this structure are
 | alternateAccess     <br /><sub>`Dynamic` **`Rolling restart`**</sub>    | No       | Enum [pod, hostInternal, hostExternal] | hostExternal | Configures Aerospike alternate access endpoint. |
 | tlsAccess     <br /><sub>`Dynamic` **`Rolling restart`**</sub>          | No       | Enum [pod, hostInternal, hostExternal] | hostInternal | Configures Aerospike TLS access endpoint.       |
 | tlsAlternateAccess     <br /><sub>`Dynamic` **`Rolling restart`**</sub> | No       | Enum [pod, hostInternal, hostExternal] | hostExternal | Configures Aerospike TLS alternate endpoint.    |
-
-
 
 ## Storage
 
@@ -220,7 +218,6 @@ For block volumes, initMethod can be `none`, `dd` or `blkdiscard`.
 
 Note: `blkdiscard` will only work for devices that support [TRIM](https://en.wikipedia.org/wiki/Trim_%28computing%29). For AWS please refer to the [storage volumes guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/InstanceStorage.html#instance-store-volumes) to check TRIM support. If trim is not supported please use the slower `dd` in the case your devices need initialization. For other devices please verify the support for TRIM command.
 
- 
 ### Volume
 
 Describes a persistent volume to be attached to Aerospike devices.
@@ -242,8 +239,7 @@ For block volumes, initMethod can be `none`, `dd` or `blkdiscard`.
 
 Note: `blkdiscard` will only work for devices that support [TRIM](https://en.wikipedia.org/wiki/Trim_%28computing%29). For AWS please refer to the [storage volumes guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/InstanceStorage.html#instance-store-volumes) to check TRIM support. If trim is not supported please use the slower `dd` in the case your devices need initialization. For other devices please verify the support for TRIM command.
 
-
-##  Aerospike Access Control
+## Aerospike Access Control
 
 Provides Aerospike [access control](https://docs.aerospike.com/docs/configure/security/access-control/index.md) configuration for the Aerospike cluster.
 
@@ -283,6 +279,7 @@ Configures the name of the secret to use and the mount path to mount the secret 
 | mountPath  <br /><sub>`Dynamic`</sub>  | Yes      | String |         | The path where the secret files will be mounted in the container. |
 
 ## Aerospike Config
+
 The YAML form of Aerospike server configuration.
 See [Aerospike Configuration](Aerospike-configuration-mapping.md) for details.
 
@@ -316,11 +313,9 @@ Rack specifies single rack config
 Configures the Kubernetes pod running Aerospike server.
 Sidecar containers for monitoring, or running connectors can be added to each Aerospike pod.
 
-
 | Field    | Required | Type                                                                            | Default | Description                                                                                                     |
 | -------- | -------- | ------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
 | sidecars | No       | List of [Container](https://pkg.go.dev/k8s.io/api/core/v1#Container) structures |         | List of side containers to run along with the main Aerospike server container. Volume mounts are not supported. |
-
 
 All config map volumes are attached to all sidecar containers.
 Other storage volume types are not supported for sidecar containers.
@@ -332,4 +327,3 @@ See [Monitoring](Monitoring.md) for details.
 - [Scale up/down](Scaling.md)
 - [Aerospike version upgrade/downgrade](Version-upgrade.md)
 - [Aerospike configuration change](Aerospike-configuration-change.md)
-
