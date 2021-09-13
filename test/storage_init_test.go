@@ -513,9 +513,6 @@ func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
 	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
-
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -548,16 +545,6 @@ func getStorageInitAerospikeCluster(
 			},
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{

@@ -375,13 +375,16 @@ func validateResource(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
+	if aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources == nil {
+		return fmt.Errorf("resources can not be nil for validation")
+	}
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
 
-	mem := aeroCluster.Spec.Resources.Requests.Memory()
-	cpu := aeroCluster.Spec.Resources.Requests.Cpu()
+	mem := aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources.Requests.Memory()
+	cpu := aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources.Requests.Cpu()
 
 	for _, p := range podList.Items {
 		for _, cnt := range p.Spec.Containers {
@@ -424,8 +427,7 @@ func createAerospikeClusterPost460(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
+
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
@@ -497,16 +499,6 @@ func createAerospikeClusterPost460(
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			OperatorClientCertSpec: &asdbv1beta1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
@@ -582,8 +574,6 @@ var defaultProtofdmax int64 = 15000
 func createDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("1Gi")
-	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
 		TypeMeta: metav1.TypeMeta{
@@ -662,16 +652,7 @@ func createDummyAerospikeCluster(
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-			},
+
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
@@ -703,8 +684,6 @@ func createDummyAerospikeCluster(
 func createBasicTLSCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("1Gi")
-	cpu := resource.MustParse("200m")
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -765,16 +744,7 @@ func createBasicTLSCluster(
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-			},
+
 			OperatorClientCertSpec: &asdbv1beta1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{

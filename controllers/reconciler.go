@@ -453,35 +453,6 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) isResourceUpdatedInAeroCluster(pod corev1.Pod) bool {
-	res := r.aeroCluster.Spec.Resources
-	if res == nil {
-		res = &corev1.ResourceRequirements{}
-	}
-
-	if !isClusterResourceListEqual(
-		pod.Spec.Containers[0].Resources.Requests, res.Requests,
-	) ||
-		!isClusterResourceListEqual(
-			pod.Spec.Containers[0].Resources.Limits, res.Limits,
-		) {
-		return true
-	}
-	return false
-}
-
-func isClusterResourceListEqual(res1, res2 corev1.ResourceList) bool {
-	if len(res1) != len(res2) {
-		return false
-	}
-	for k := range res1 {
-		if v2, ok := res2[k]; !ok || !res1[k].Equal(v2) {
-			return false
-		}
-	}
-	return true
-}
-
 func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) error {
 
 	r.Log.Info("Handle cluster deletion")

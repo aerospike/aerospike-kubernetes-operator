@@ -349,17 +349,21 @@ func (c *AerospikeCluster) validateAccessControl(_ logr.Logger) error {
 }
 
 func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
-	res := c.Spec.Resources
+	res := c.Spec.PodSpec.AerospikeContainerSpec.Resources
 
-	if res == nil || res.Requests == nil {
-		return fmt.Errorf("resources or resources.Requests cannot be nil")
+	if res == nil {
+		return nil
 	}
 
-	if res.Requests.Memory().IsZero() || res.Requests.Cpu().IsZero() {
+	if res.Requests != nil && res.Requests.Memory().IsZero() || res.Requests.Cpu().IsZero() {
 		return fmt.Errorf("resources.Requests.Memory or resources.Requests.Cpu cannot be zero")
 	}
 
-	if res.Limits != nil &&
+	if res.Limits != nil && res.Limits.Memory().IsZero() || res.Limits.Cpu().IsZero() {
+		return fmt.Errorf("resources.Limits.Memory or resources.Limits.Cpu cannot be zero")
+	}
+
+	if res.Limits != nil && res.Requests != nil &&
 		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
 			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
 		return fmt.Errorf(

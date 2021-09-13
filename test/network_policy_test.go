@@ -358,9 +358,6 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 	networkPolicy asdbv1beta1.AerospikeNetworkPolicy, multiPodPerHost bool,
 	enableTLS bool,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
-
 	cascadeDelete := true
 
 	var networkConf = map[string]interface{}{}
@@ -464,16 +461,6 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 			},
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: multiPodPerHost,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{

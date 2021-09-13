@@ -223,7 +223,7 @@ func validateLifecycleOperation(
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Upgrade/Downgrade")
-	// don't change image, it upgrade, check old version
+	// don't change image, it upgrades, check old version
 	err = upgradeClusterTest(
 		k8sClient, ctx, clusterNamespacedName, imageToUpgrade,
 	)

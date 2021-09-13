@@ -1034,8 +1034,12 @@ func (r *SingleClusterReconciler) getClusterSTSList() (
 }
 
 func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSet) {
-	// These resources are for main aerospike container. Other sidecar can mention their own resources.
-	st.Spec.Template.Spec.Containers[0].Resources = *r.aeroCluster.Spec.Resources
+	resources := r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources
+	if resources != nil {
+		// These resources are for main aerospike container. Other sidecar can mention their own resources.
+		st.Spec.Template.Spec.Containers[0].Resources = *resources
+	}
+
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
 	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 }

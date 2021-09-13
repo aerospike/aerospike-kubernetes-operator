@@ -166,16 +166,6 @@ func getAerospikeConfig(
 					},
 				},
 			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("200m"),
-					corev1.ResourceMemory: resource.MustParse("2Gi"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("200m"),
-					corev1.ResourceMemory: resource.MustParse("2Gi"),
-				},
-			},
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
@@ -239,9 +229,8 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			tlsAuthenticateClient, err := getTlsAuthenticateClient(aeroCluster)
-			if err != nil {
-				Expect(err).ToNot(HaveOccurred())
-			}
+			Expect(err).ToNot(HaveOccurred())
+
 			Expect(
 				reflect.DeepEqual(
 					[]string{"any"}, tlsAuthenticateClient,

@@ -101,12 +101,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		)
 	}
 
-	// Check if resources are updated
-	if r.isResourceUpdatedInAeroCluster(pod) {
-		restartType = mergeRestartType(restartType, PodRestart)
-		r.Log.Info("Aerospike resources changed. Need rolling restart")
-	}
-
 	// Check if rack storage is updated
 	if r.isRackStorageUpdatedInAeroCluster(rackState, pod) {
 		restartType = mergeRestartType(restartType, PodRestart)

@@ -205,6 +205,31 @@ spec:
                     description: 'AerospikeContainerSpec contains settings for aerospike-server
                       container created '
                     properties:
+                      resources:
+                        description: Define resources requests and limits for Aerospike
+                          Server Container.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Limits describes the maximum amount of compute
+                              resources allowed.
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Requests describes the minimum amount of
+                              compute resources required.
+                            type: object
+                        type: object
                       securityContext:
                         description: SecurityContext that will be added to aerospike-server
                           container created by oper
@@ -4890,31 +4915,6 @@ spec:
                     nullable: true
                     type: array
                 type: object
-              resources:
-                description: Define resources requests and limits for Aerospike Server
-                  Container.
-                properties:
-                  limits:
-                    additionalProperties:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
-                    description: Limits describes the maximum amount of compute resources
-                      allowed.
-                    type: object
-                  requests:
-                    additionalProperties:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
-                    description: Requests describes the minimum amount of compute
-                      resources required.
-                    type: object
-                type: object
               seedsFinderServices:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aerospike node
@@ -5360,7 +5360,6 @@ spec:
             required:
             - aerospikeConfig
             - image
-            - resources
             - size
             type: object
           status:
@@ -5543,6 +5542,31 @@ spec:
                     description: 'AerospikeContainerSpec contains settings for aerospike-server
                       container created '
                     properties:
+                      resources:
+                        description: Define resources requests and limits for Aerospike
+                          Server Container.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Limits describes the maximum amount of compute
+                              resources allowed.
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Requests describes the minimum amount of
+                              compute resources required.
+                            type: object
+                        type: object
                       securityContext:
                         description: SecurityContext that will be added to aerospike-server
                           container created by oper
