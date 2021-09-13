@@ -27,7 +27,7 @@ The Operator supports the following capabilities:
 * Standardize and validate configurations
 * Cluster security management
 
-## Building
+## Building and quick start
 
 ### Generate CRD manifests
 
@@ -36,7 +36,7 @@ make generate
 make manifests
 ```
 
-### Build and push operator's image
+### Build and push operator image
 
 Run the following command with the appropriate name and version for the operator's image.
 
@@ -46,7 +46,12 @@ VERSION=2.0.0-dev
 make docker-build docker-push IMG=${IMAGE_TAG_BASE}:${VERSION}
 ```
 
-### Deploy
+### Developer testing
+
+You can use the following for quickly trying out the operator without
+using [OLM](https://github.com/operator-framework/operator-lifecycle-manager/).
+
+#### Deploy
 
 Make sure cert-manager is deployed on your Kubernetes cluster using
 instructions [here](https://cert-manager.io/docs/installation/kubernetes/).
@@ -57,15 +62,78 @@ To deploy the operator build in the previous step run
 make deploy IMG=${IMAGE_TAG_BASE}:${VERSION}
 ```
 
-## Undeploy
-
-**Note**: This will also delete the deployed Aerospike clusters because the CRD definitions and all operator related
-objects are deleted.
+### Undeploy
 
 To undeploy run
 
 ```sh
 make undeploy IMG=${IMAGE_TAG_BASE}:${VERSION}
+```
+
+**Note**: This will also delete the deployed Aerospike clusters because the CRD definitions and all operator related
+objects are deleted.
+
+## Operator Lifecycle Manager (OLM) integration bundle
+
+Operator Lifecycle Manager (OLM) is a tool to help manage the Operators running on your cluster. This is the preferred
+way to manage Kubernetes operators in production. This section describes how to generate the OLM bundle and run the
+operator using OLM.
+
+### Install operator-sdk
+
+Install operator-sdk version 1.10.1 using the
+installation [guide](https://v1-10-x.sdk.operatorframework.io/docs/installation/)
+
+### Build the bundle
+
+Make sure the operator's image has also been [pushed](#build-and-push-operator-image).
+
+Set up the environment with image names.
+
+```shell
+export ACCOUNT=aerospike
+export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator-nightly
+export VERSION=2.0.0-dev
+export IMG=docker.io/${IMAGE_TAG_BASE}:${VERSION}
+export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle:${VERSION}
+```
+
+Create the bundle
+
+```shell
+make bundle
+```
+
+### Build bundle image and publish
+
+```shell
+make bundle-build bundle-push
+```
+
+### Deploy operator with OLM
+
+Install OLM if not already done
+
+```shell
+operator-sdk olm install
+```
+
+Create **aerospike** namespace if it does not exist
+
+```shell
+kubectl create namespace aerospike
+```
+
+Run the operator bundle
+
+```shell
+operator-sdk run bundle $BUNDLE_IMG --namespace=aerospike
+```
+
+### Undeploy operator with OLM
+
+```shell
+operator-sdk cleanup aerospike-kubernetes-operator --namespace=aerospike 
 ```
 
 ## Architecture
