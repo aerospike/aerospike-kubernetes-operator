@@ -81,6 +81,8 @@ github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d h1:Byv0BzEl
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914015026-1729915e231e h1:RUwwUkHqlylpG/lq96ZKpWExy2Pv8SFIOrfDk78nsbg=
 github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914015026-1729915e231e/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
+github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914073143-a3a70ef2c135 h1:TSOT9p51p52tLaXQwzQDB92PUi7cDUvRNQjYMgRfBjk=
+github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914073143-a3a70ef2c135/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
