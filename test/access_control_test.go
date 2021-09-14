@@ -6,23 +6,21 @@ import (
 	goctx "context"
 	"fmt"
 	"log"
-
 	"math/rand"
 	"reflect"
 	"strings"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
+	"github.com/hashicorp/go-version"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
-	"github.com/hashicorp/go-version"
 )
 
 const (
@@ -1963,7 +1961,8 @@ func testAccessControlReconcile(
 	}
 
 	// Ensure the desired spec access control is correctly applied.
-	return validateAccessControl(current)
+	logger := logr.Discard()
+	return validateAccessControl(&logger, current)
 }
 
 func getAerospikeClusterSpecWithAccessControl(
@@ -2026,8 +2025,8 @@ func getAerospikeClusterSpecWithAccessControl(
 }
 
 // validateAccessControl validates that the new access control have been applied correctly.
-func validateAccessControl(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-	clientP, err := getClient(aeroCluster, k8sClient)
+func validateAccessControl(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster) error {
+	clientP, err := getClient(log, aeroCluster, k8sClient)
 	if err != nil {
 		return fmt.Errorf("error creating client: %v", err)
 	}
@@ -2236,8 +2235,9 @@ func validateUsers(
 			)
 		}
 
+		logger := logr.Discard()
 		userClient, err := getClientForUser(
-			asUser.User, password, aeroCluster, k8sClient,
+			&logger, asUser.User, password, aeroCluster, k8sClient,
 		)
 		if err != nil {
 			return fmt.Errorf(

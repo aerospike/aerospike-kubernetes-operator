@@ -8,17 +8,16 @@ import (
 	"strings"
 	"time"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 const (
@@ -26,6 +25,8 @@ const (
 	jumpTestWaitForVersionInterval = 1 * time.Second
 	jumpTestWaitForVersionTO       = 10 * time.Minute
 )
+
+var logger = logr.Discard()
 
 var aerospikeConfigPre5 = map[string]interface{}{
 	"service": map[string]interface{}{
@@ -156,7 +157,7 @@ var _ = Describe("JumpVersion", func() {
 			err = aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have recovered - but did not: %v", err)
 
-			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+			err = waitForVersion(&logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
 		})
 
@@ -170,7 +171,7 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have recovered - but did not: %v", err)
 
-			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+			err = waitForVersion(&logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
 		})
 
@@ -181,15 +182,14 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have upgraded - but did not: %v", err)
 
-			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+			err = waitForVersion(&logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
 
 			deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
 			aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName, aerospikeConfigPost5, deployImage, ctx)
 			err = aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have upgraded - but did not: %v", err)
-
-			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+			err = waitForVersion(&logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
 		})
 
@@ -200,7 +200,7 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have upgraded - but did not: %v", err)
 
-			err = waitForVersion(ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
+			err = waitForVersion(&logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have been on %s - but is not: %v", deployImage, err)
 		})
 	})
@@ -299,7 +299,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(clusterNamespacedName types.Name
 }
 
 // waitForVersion waits for the cluster to have all nodes at input Aerospike version.
-func waitForVersion(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, image string, retryInterval, timeout time.Duration) error {
+func waitForVersion(log *logr.Logger, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, image string, retryInterval, timeout time.Duration) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		// Refresh cluster object.
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}, aeroCluster)
@@ -322,7 +322,7 @@ func waitForVersion(ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster
 		return err
 	}
 
-	client, err := getClient(aeroCluster, k8sClient)
+	client, err := getClient(log, aeroCluster, k8sClient)
 	if err != nil {
 		// Client should have been created.
 		return fmt.Errorf("could not create client: %v", err)

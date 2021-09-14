@@ -18,11 +18,10 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	corev1 "k8s.io/api/core/v1"
 )
 
 //------------------------------------------------------------------------------------
@@ -35,7 +34,7 @@ func (r *AerospikeClusterReconciler) getAerospikeServerVersionFromPod(aeroCluste
 		return "", err
 	}
 
-	res, err := deployment.RunInfo(r.getClientPolicy(aeroCluster), asConn, "build")
+	res, err := asConn.RunInfo(r.getClientPolicy(aeroCluster), "build")
 	if err != nil {
 		return "", err
 	}
@@ -74,7 +73,8 @@ func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv
 
 		// This should fail if coldstart is going on.
 		// Info command in coldstarting node should give error, is it? confirm.
-		isStable, err = deployment.IsClusterAndStable(r.getClientPolicy(aeroCluster), allHostConns)
+
+		isStable, err = deployment.IsClusterAndStable(&r.Log, r.getClientPolicy(aeroCluster), allHostConns)
 		if err != nil {
 			return reconcileError(err)
 		}
@@ -92,7 +92,7 @@ func (r *AerospikeClusterReconciler) waitForNodeSafeStopReady(aeroCluster *asdbv
 	if err != nil {
 		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes %v: %v", pod.Name, err))
 	}
-	if err := deployment.InfoQuiesce(r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
+	if err := deployment.InfoQuiesce(&r.Log, r.getClientPolicy(aeroCluster), allHostConns, selectedHostConn); err != nil {
 		return reconcileError(err)
 	}
 	return reconcileSuccess()
@@ -105,7 +105,8 @@ func (r *AerospikeClusterReconciler) tipClearHostname(aeroCluster *asdbv1beta1.A
 	}
 
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(aeroCluster.Spec.AerospikeConfig)
-	return deployment.TipClearHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPodName), heartbeatPort)
+	return asConn.TipClearHostname(r.getClientPolicy(aeroCluster), getFQDNForPod(aeroCluster, clearPodName), heartbeatPort)
+
 }
 
 func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, clearPod *corev1.Pod) error {
@@ -113,9 +114,8 @@ func (r *AerospikeClusterReconciler) tipHostname(aeroCluster *asdbv1beta1.Aerosp
 	if err != nil {
 		return err
 	}
-
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(aeroCluster.Spec.AerospikeConfig)
-	return deployment.TipHostname(r.getClientPolicy(aeroCluster), asConn, getFQDNForPod(aeroCluster, clearPod.Name), heartbeatPort)
+	return asConn.TipHostname(r.getClientPolicy(aeroCluster), getFQDNForPod(aeroCluster, clearPod.Name), heartbeatPort)
 }
 
 func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) error {
@@ -123,7 +123,7 @@ func (r *AerospikeClusterReconciler) alumniReset(aeroCluster *asdbv1beta1.Aerosp
 	if err != nil {
 		return err
 	}
-	return deployment.AlumniReset(r.getClientPolicy(aeroCluster), asConn)
+	return asConn.AlumniReset(r.getClientPolicy(aeroCluster))
 }
 
 func (r *AerospikeClusterReconciler) newAllHostConn(aeroCluster *asdbv1beta1.AerospikeCluster) ([]*deployment.HostConn, error) {
@@ -179,7 +179,7 @@ func (r *AerospikeClusterReconciler) newHostConn(aeroCluster *asdbv1beta1.Aerosp
 		return nil, err
 	}
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(host, asConn, nil), nil
+	return deployment.NewHostConn(&r.Log, host, asConn, nil), nil
 }
 
 func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod) (*deployment.ASConn, error) {
@@ -194,6 +194,7 @@ func (r *AerospikeClusterReconciler) newAsConn(aeroCluster *asdbv1beta1.Aerospik
 		AerospikeHostName: host,
 		AerospikePort:     port,
 		AerospikeTLSName:  tlsName,
+		Log:               &r.Log,
 	}
 
 	return asConn, nil

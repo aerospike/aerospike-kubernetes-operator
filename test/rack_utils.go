@@ -11,6 +11,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -65,7 +66,7 @@ func removeLastRack(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	return nil
 }
 
-func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
+func validateAerospikeConfigServiceUpdate(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -80,7 +81,7 @@ func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Con
 			// We may need to check for all keys in aerospikeConfig in rack
 			// but we know that we are changing for service only for now
 			host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
-			asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+			asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				return err
@@ -109,7 +110,7 @@ func validateAerospikeConfigServiceUpdate(k8sClient client.Client, ctx goctx.Con
 	return nil
 }
 
-func isNamespaceRackEnabled(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string) (bool, error) {
+func isNamespaceRackEnabled(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string) (bool, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return false, err
@@ -124,7 +125,7 @@ func isNamespaceRackEnabled(k8sClient client.Client, ctx goctx.Context, clusterN
 		pod = p
 	}
 	host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
-	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 
 	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {

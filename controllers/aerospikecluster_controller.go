@@ -8,21 +8,17 @@ import (
 	"runtime"
 	"strings"
 
-	as "github.com/ashishshinde/aerospike-client-go/v5"
-	"github.com/go-logr/logr"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
-
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-
+	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/apimachinery/pkg/api/errors"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -178,8 +174,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 		return reconcile.Result{}, e
 	}
 	if err := deployment.InfoQuiesceUndo(
-		r.getClientPolicy(aeroCluster), allHostConns,
-	); err != nil {
+		&r.Log, r.getClientPolicy(aeroCluster), allHostConns); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")
 		return reconcile.Result{}, err
 	}

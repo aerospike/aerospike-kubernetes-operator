@@ -2,10 +2,8 @@ package test
 
 import (
 	goctx "context"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -145,7 +143,7 @@ func validateLifecycleOperation(ctx goctx.Context, clusterNamespacedName types.N
 	validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
 	By("RollingRestart")
-	err = rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName)
+	err = rollingRestartClusterTest(&logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)

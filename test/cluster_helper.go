@@ -10,6 +10,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -65,7 +66,7 @@ func scaleDownClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNam
 	return waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(decreaseBy))
 }
 
-func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
+func rollingRestartClusterTest(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -89,10 +90,10 @@ func rollingRestartClusterTest(k8sClient client.Client, ctx goctx.Context, clust
 	}
 
 	// Verify that the change has been applied on the cluster.
-	return validateAerospikeConfigServiceClusterUpdate(k8sClient, ctx, clusterNamespacedName, aeroCluster, []string{"proto-fd-max"})
+	return validateAerospikeConfigServiceClusterUpdate(log, k8sClient, ctx, clusterNamespacedName, aeroCluster, []string{"proto-fd-max"})
 }
 
-func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, expectedAerospikeConfig *asdbv1beta1.AerospikeCluster, updatedKeys []string) error {
+func validateAerospikeConfigServiceClusterUpdate(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, expectedAerospikeConfig *asdbv1beta1.AerospikeCluster, updatedKeys []string) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -103,7 +104,7 @@ func validateAerospikeConfigServiceClusterUpdate(k8sClient client.Client, ctx go
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
 		host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
-		asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+		asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 		confs, err := getAsConfig(asinfo, "service")
 		if err != nil {
 			return err

@@ -100,7 +100,8 @@ func main() {
 		setupLog.Error(err, "Unable to Load SchemaMap")
 		os.Exit(1)
 	}
-	asconfig.InitFromMap(schemamap)
+	schemaMapLogger := ctrl.Log.WithName("schema-map")
+	asconfig.InitFromMap(&schemaMapLogger, schemamap)
 
 	if err := (&aerospikecluster.AerospikeClusterReconciler{
 		Client:     mgr.GetClient(),

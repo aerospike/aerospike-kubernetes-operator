@@ -10,16 +10,14 @@ import (
 	"net"
 	"reflect"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 )
 
 const (
@@ -152,7 +150,7 @@ func validateNetworkPolicy(
 	}
 
 	for _, pod := range podList.Items {
-		asConn, err := newAsConn(current, &pod, k8sClient)
+		asConn, err := newAsConn(&logger, current, &pod, k8sClient)
 		if err != nil {
 			return fmt.Errorf("failed to get aerospike connection: %v", err)
 		}

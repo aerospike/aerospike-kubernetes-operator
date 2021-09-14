@@ -3,12 +3,11 @@ package test
 import (
 	goctx "context"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe("RackManagement", func() {
@@ -52,7 +51,7 @@ var _ = Describe("RackManagement", func() {
 
 			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
-			enabled, err := isNamespaceRackEnabled(k8sClient, ctx, clusterNamespacedName, nsName)
+			enabled, err := isNamespaceRackEnabled(&logger, k8sClient, ctx, clusterNamespacedName, nsName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(enabled).Should(BeTrue())
 
@@ -68,7 +67,7 @@ var _ = Describe("RackManagement", func() {
 
 			validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 
-			enabled, err = isNamespaceRackEnabled(k8sClient, ctx, clusterNamespacedName, nsName)
+			enabled, err = isNamespaceRackEnabled(&logger, k8sClient, ctx, clusterNamespacedName, nsName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(enabled).Should(BeFalse())
 
@@ -183,7 +182,7 @@ var _ = Describe("RackManagement", func() {
 
 				validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 				for _, rack := range racks {
-					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+					validateAerospikeConfigServiceUpdate(&logger, k8sClient, ctx, clusterNamespacedName, rack)
 				}
 
 				// Op2: Update rack.AerospikeConfig
@@ -217,7 +216,7 @@ var _ = Describe("RackManagement", func() {
 
 				validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 				for _, rack := range racks {
-					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+					validateAerospikeConfigServiceUpdate(&logger, k8sClient, ctx, clusterNamespacedName, rack)
 				}
 
 				// Op3: Remove rack.AerospikeConfig
@@ -258,7 +257,7 @@ var _ = Describe("RackManagement", func() {
 						},
 					}}
 				for _, rack := range racks {
-					validateAerospikeConfigServiceUpdate(k8sClient, ctx, clusterNamespacedName, rack)
+					validateAerospikeConfigServiceUpdate(&logger, k8sClient, ctx, clusterNamespacedName, rack)
 				}
 
 				// cleanup: Remove the cluster
