@@ -89,7 +89,7 @@ func newAsConn(
 		AerospikeHostName: *host,
 		AerospikePort:     int(port),
 		AerospikeTLSName:  tlsName,
-		Log: logger,
+		Log:               logger,
 	}
 
 	return asConn, nil

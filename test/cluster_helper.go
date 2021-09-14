@@ -32,7 +32,7 @@ var (
 	retryInterval      = time.Second * 5
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
-	logger = logr.Discard()
+	logger             = logr.Discard()
 )
 
 func scaleUpClusterTest(

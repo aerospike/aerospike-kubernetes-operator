@@ -256,48 +256,48 @@ var _ = Describe(
 					},
 				)
 
-		It("Should validate adding new annotations flow", func() {
+				It("Should validate adding new annotations flow", func() {
 
-			By("Adding annotations")
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			actual := map[string]string{"annotation-test": "test"}
-			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = actual
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			expected, err := getAnnotations(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			for i := 0; i < len(expected); i++ {
-				fmt.Printf("Expected Value is: %v\n", expected[i])
-			}
-		})
+					By("Adding annotations")
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					actual := map[string]string{"annotation-test": "test"}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = actual
+					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+					expected, err := getAnnotations(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					for i := 0; i < len(expected); i++ {
+						fmt.Printf("Expected Value is: %v\n", expected[i])
+					}
+				})
 
-	})
+			})
 
-	//Context("Validate annotations and labels", func() {
-	//	clusterName := "annotation-cluster"
-	//	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
-	//	zones, err := getZones(k8sClient)
-	//	Expect(err).ToNot(HaveOccurred())
-	//	zone1 := zones[0]
-	//	zone2 := zones[0]
-	//	if len(zones) > 1 {
-	//		zone2 = zones[1]
-	//	}
-	//	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-	//	racks := []asdbv1beta1.Rack{
-	//		{ID: 1, Zone: zone1},
-	//		{ID: 2, Zone: zone2}}
-	//	rackConf := asdbv1beta1.RackConfig{
-	//		Racks: racks,
-	//	}
-	//	aeroCluster.Spec.RackConfig = rackConf
-	//	err = deployCluster(k8sClient, ctx, aeroCluster)
-	//	Expect(err).ToNot(HaveOccurred())
-	//
-	//
-	//
-	//},
+		//Context("Validate annotations and labels", func() {
+		//	clusterName := "annotation-cluster"
+		//	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+		//	zones, err := getZones(k8sClient)
+		//	Expect(err).ToNot(HaveOccurred())
+		//	zone1 := zones[0]
+		//	zone2 := zones[0]
+		//	if len(zones) > 1 {
+		//		zone2 = zones[1]
+		//	}
+		//	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+		//	racks := []asdbv1beta1.Rack{
+		//		{ID: 1, Zone: zone1},
+		//		{ID: 2, Zone: zone2}}
+		//	rackConf := asdbv1beta1.RackConfig{
+		//		Racks: racks,
+		//	}
+		//	aeroCluster.Spec.RackConfig = rackConf
+		//	err = deployCluster(k8sClient, ctx, aeroCluster)
+		//	Expect(err).ToNot(HaveOccurred())
+		//
+		//
+		//
+		//},
 
 		Context(
 			"When doing invalid operation", func() {

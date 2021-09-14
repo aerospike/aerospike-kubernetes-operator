@@ -90,8 +90,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		// This should fail if coldstart is going on.
 		// Info command in coldstarting node should give error, is it? confirm.
 
-		isStable, err = deployment.IsClusterAndStable(r.Log, r.getClientPolicy(), allHostConns,
-		)
+		isStable, err = deployment.IsClusterAndStable(r.Log, r.getClientPolicy(), allHostConns)
 		if err != nil {
 			return reconcileError(err)
 		}
@@ -132,7 +131,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	return asConn.TipClearHostname(
-		r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName), heartbeatPort,)
+		r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName), heartbeatPort)
 }
 
 func (r *SingleClusterReconciler) tipHostname(

@@ -157,16 +157,16 @@ var _ = Describe("JumpVersion", func() {
 			err = aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have recovered - but did not: %v", err)
 
-						err = waitForVersion(
-							logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have been on %s - but is not: %v",
-							deployImage, err,
-						)
-					},
-				)
+			err = waitForVersion(
+				logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have been on %s - but is not: %v",
+				deployImage, err,
+			)
+		},
+		)
 
 		It("Try RegularUpgrade", func() {
 
@@ -178,16 +178,16 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have recovered - but did not: %v", err)
 
-						err = waitForVersion(
-							logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have been on %s - but is not: %v",
-							deployImage, err,
-						)
-					},
-				)
+			err = waitForVersion(
+				logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have been on %s - but is not: %v",
+				deployImage, err,
+			)
+		},
+		)
 
 		It("Try ValidUpgrade", func() {
 			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.33"
@@ -196,41 +196,41 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have upgraded - but did not: %v", err)
 
-						err = waitForVersion(
-							logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have been on %s - but is not: %v",
-							deployImage, err,
-						)
+			err = waitForVersion(
+				logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have been on %s - but is not: %v",
+				deployImage, err,
+			)
 
-						deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
-						aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(
-							clusterNamespacedName, aerospikeConfigPost5,
-							deployImage,
-						)
-						err = aerospikeClusterCreateUpdateWithTO(
-							k8sClient, aeroCluster, ctx,
-							jumpTestWaitForVersionInterval,
-							jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have upgraded - but did not: %v",
-							err,
-)
+			deployImage = "aerospike/aerospike-server-enterprise:5.0.0.4"
+			aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(
+				clusterNamespacedName, aerospikeConfigPost5,
+				deployImage,
+			)
+			err = aerospikeClusterCreateUpdateWithTO(
+				k8sClient, aeroCluster, ctx,
+				jumpTestWaitForVersionInterval,
+				jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have upgraded - but did not: %v",
+				err,
+			)
 
-						err = waitForVersion(
-							logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have been on %s - but is not: %v",
-							deployImage, err,
-						)
-					},
-				)
+			err = waitForVersion(
+				logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have been on %s - but is not: %v",
+				deployImage, err,
+			)
+		},
+		)
 
 		It("Try ValidDowngrade", func() {
 			deployImage := "aerospike/aerospike-server-enterprise:4.9.0.33"
@@ -239,19 +239,19 @@ var _ = Describe("JumpVersion", func() {
 			err := aerospikeClusterCreateUpdateWithTO(k8sClient, aeroCluster, ctx, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO)
 			Expect(err).ToNot(HaveOccurred(), "Cluster should have upgraded - but did not: %v", err)
 
-						err = waitForVersion(
-							logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
-						)
-						Expect(err).ToNot(
-							HaveOccurred(),
-							"Cluster should have been on %s - but is not: %v",
-							deployImage, err,
-						)
-					},
-				)
-			},
+			err = waitForVersion(
+				logger, ctx, aeroCluster, deployImage, jumpTestWaitForVersionInterval, jumpTestWaitForVersionTO,
+			)
+			Expect(err).ToNot(
+				HaveOccurred(),
+				"Cluster should have been on %s - but is not: %v",
+				deployImage, err,
+			)
+		},
 		)
 	},
+	)
+},
 )
 
 func getAerospikeClusterSpecWithAerospikeConfig(
@@ -353,15 +353,15 @@ func waitForVersion(
 				return false, nil
 			}
 
-		for _, pod := range aeroCluster.Status.Pods {
-			if !strings.HasSuffix(pod.Image, image) {
-				// t.Logf("Node : %s expected image: %s status reported image: %s", pod.Aerospike.NodeID, image, pod.Image)
-				return false, nil
+			for _, pod := range aeroCluster.Status.Pods {
+				if !strings.HasSuffix(pod.Image, image) {
+					// t.Logf("Node : %s expected image: %s status reported image: %s", pod.Aerospike.NodeID, image, pod.Image)
+					return false, nil
+				}
 			}
-		}
 
-		return true, nil
-	})
+			return true, nil
+		})
 
 	if err != nil {
 		return err

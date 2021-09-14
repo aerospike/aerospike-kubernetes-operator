@@ -110,7 +110,7 @@ var _ = Describe(
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
-				
+
 				err = deleteCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			},
