@@ -6,20 +6,22 @@ package test
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
-	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type CloudProvider string
@@ -30,16 +32,25 @@ const (
 	CloudProviderGCP                   = "GCP"
 )
 
-func getServiceForPod(pod *corev1.Pod, k8sClient client.Client) (*corev1.Service, error) {
+func getServiceForPod(
+	pod *corev1.Pod, k8sClient client.Client,
+) (*corev1.Service, error) {
 	service := &corev1.Service{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service)
+	err := k8sClient.Get(
+		context.TODO(),
+		types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service for pod %s: %v", pod.Name, err)
+		return nil, fmt.Errorf(
+			"failed to get service for pod %s: %v", pod.Name, err,
+		)
 	}
 	return service, nil
 }
 
-func newAsConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.ASConn, error) {
+func newAsConn(
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
+) (*deployment.ASConn, error) {
 	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
 
@@ -78,6 +89,7 @@ func newAsConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod 
 		AerospikeHostName: *host,
 		AerospikePort:     int(port),
 		AerospikeTLSName:  tlsName,
+		Log: logger,
 	}
 
 	return asConn, nil
@@ -87,9 +99,14 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 	ip := pod.Status.HostIP
 
 	k8sNode := &corev1.Node{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+	err := k8sClient.Get(
+		context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName, pod.Name, err)
+		return nil, fmt.Errorf(
+			"failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName,
+			pod.Name, err,
+		)
 	}
 
 	// TODO: when refactoring this to use this as main code, this might need to be the
@@ -105,7 +122,9 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 	return &ip, nil
 }
 
-func newHostConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client) (*deployment.HostConn, error) {
+func newHostConn(
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
+) (*deployment.HostConn, error) {
 	asConn, err := newAsConn(log, aeroCluster, pod, k8sClient)
 	if err != nil {
 		return nil, err
@@ -114,10 +133,14 @@ func newHostConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, po
 	return deployment.NewHostConn(log, host, asConn, nil), nil
 }
 
-func getPodList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*corev1.PodList, error) {
+func getPodList(
+	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+) (*corev1.PodList, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
-	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+	listOps := &client.ListOptions{
+		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
 
 	if err := k8sClient.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
@@ -170,10 +193,14 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 	for labelKey := range labelKeys {
 		labelKeysSlice = append(labelKeysSlice, labelKey)
 	}
-	return CloudProviderUnknown, fmt.Errorf("can't determin cloud platform by node's labels: %v", labelKeysSlice)
+	return CloudProviderUnknown, fmt.Errorf(
+		"can't determin cloud platform by node's labels: %v", labelKeysSlice,
+	)
 }
 
-func newAllHostConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]*deployment.HostConn, error) {
+func newAllHostConn(
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err
@@ -193,36 +220,20 @@ func newAllHostConn(log *logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
 	return hostConns, nil
 }
 
-func getAeroClusterPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) ([]corev1.PersistentVolumeClaim, error) {
+func getAeroClusterPVCList(
+	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
-	listOps := &client.ListOptions{Namespace: aeroCluster.Namespace, LabelSelector: labelSelector}
+	listOps := &client.ListOptions{
+		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
 
 	if err := k8sClient.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 	return pvcList.Items, nil
-}
-
-func getPodsPVCList(aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client, podNames []string) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := getAeroClusterPVCList(aeroCluster, k8sClient)
-	if err != nil {
-		return nil, err
-	}
-	// https://github.com/kubernetes/kubernetes/issues/72196
-	// No regex support in field-selector
-	// Can not get pvc having matching podName. Need to check more.
-	var newPVCItems []corev1.PersistentVolumeClaim
-	for _, pvc := range pvcListItems {
-		for _, podName := range podNames {
-			// Get PVC belonging to pod only
-			if strings.HasSuffix(pvc.Name, podName) {
-				newPVCItems = append(newPVCItems, pvc)
-			}
-		}
-	}
-	return newPVCItems, nil
 }
 
 func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
@@ -238,7 +249,9 @@ func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
 	return nil, err
 }
 
-func runInfo(cp *as.ClientPolicy, asConn *deployment.ASConn, cmd string) (map[string]string, error) {
+func runInfo(
+	cp *as.ClientPolicy, asConn *deployment.ASConn, cmd string,
+) (map[string]string, error) {
 	var res map[string]string
 	var err error
 	for i := 0; i < 10; i++ {

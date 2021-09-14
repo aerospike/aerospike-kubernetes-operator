@@ -25,7 +25,10 @@ type RackState struct {
 	Size int
 }
 
-func addRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
+func addRack(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -36,7 +39,9 @@ func addRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName t
 		aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: []asdbv1beta1.Rack{}}
 	}
 
-	aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, rack)
+	aeroCluster.Spec.RackConfig.Racks = append(
+		aeroCluster.Spec.RackConfig.Racks, rack,
+	)
 	// Size shouldn't make any difference in working. Still put different size to check if it create any issue.
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
 	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
@@ -45,7 +50,10 @@ func addRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName t
 	return nil
 }
 
-func removeLastRack(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
+func removeLastRack(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -66,7 +74,9 @@ func removeLastRack(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	return nil
 }
 
-func validateAerospikeConfigServiceUpdate(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack) error {
+func validateAerospikeConfigServiceUpdate(
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -80,8 +90,13 @@ func validateAerospikeConfigServiceUpdate(log *logr.Logger, k8sClient client.Cli
 			// TODO:
 			// We may need to check for all keys in aerospikeConfig in rack
 			// but we know that we are changing for service only for now
-			host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
-			asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+			host := &as.Host{
+				Name: pod.HostExternalIP, Port: int(pod.ServicePort),
+				TLSName: pod.Aerospike.TLSName,
+			}
+			asinfo := info.NewAsInfo(
+				log, host, getClientPolicy(aeroCluster, k8sClient),
+			)
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				return err
@@ -95,22 +110,32 @@ func validateAerospikeConfigServiceUpdate(log *logr.Logger, k8sClient client.Cli
 				// t.Logf("Matching rack key %s, value %v", k, v)
 				cv, ok := svcConfs[k]
 				if !ok {
-					return fmt.Errorf("config %s missing in aerospikeConfig %v", k, svcConfs)
+					return fmt.Errorf(
+						"config %s missing in aerospikeConfig %v", k, svcConfs,
+					)
 				}
 				if !reflect.DeepEqual(cv, v) {
-					return fmt.Errorf("config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v", k, cv, cv, v, v, svcConfs)
+					return fmt.Errorf(
+						"config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v",
+						k, cv, cv, v, v, svcConfs,
+					)
 				}
 
 			}
 		}
 	}
 	if !found {
-		return fmt.Errorf("no pod found in for rack. Pods %v, Rack %v", aeroCluster.Status.Pods, rack)
+		return fmt.Errorf(
+			"no pod found in for rack. Pods %v, Rack %v",
+			aeroCluster.Status.Pods, rack,
+		)
 	}
 	return nil
 }
 
-func isNamespaceRackEnabled(log *logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string) (bool, error) {
+func isNamespaceRackEnabled(
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string,
+) (bool, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return false, err
@@ -124,7 +149,10 @@ func isNamespaceRackEnabled(log *logr.Logger, k8sClient client.Client, ctx goctx
 	for _, p := range aeroCluster.Status.Pods {
 		pod = p
 	}
-	host := &as.Host{Name: pod.HostExternalIP, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}
+	host := &as.Host{
+		Name: pod.HostExternalIP, Port: int(pod.ServicePort),
+		TLSName: pod.Aerospike.TLSName,
+	}
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 
 	confs, err := getAsConfig(asinfo, "racks")
@@ -165,7 +193,10 @@ func getAnnotations(
 	return annotations, nil
 }
 
-func validateRackEnabledCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
+func validateRackEnabledCluster(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -174,7 +205,9 @@ func validateRackEnabledCluster(k8sClient client.Client, ctx goctx.Context, clus
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for _, rackState := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		stsName := getNamespacedNameForStatefulSet(
+			aeroCluster, rackState.Rack.ID,
+		)
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
 			// statefulset should exist
@@ -183,17 +216,26 @@ func validateRackEnabledCluster(k8sClient client.Client, ctx goctx.Context, clus
 
 		// Match size
 		if int(*found.Spec.Replicas) != rackState.Size {
-			return fmt.Errorf("statefulset replica size %d, want %d", int(*found.Spec.Replicas), rackState.Size)
+			return fmt.Errorf(
+				"statefulset replica size %d, want %d",
+				int(*found.Spec.Replicas), rackState.Size,
+			)
 		}
 		// t.Logf("matched statefulset replica size with required rack size %d", rackState.Size)
 
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
-		validateSTSForRack(found, rackState)
+		err = validateSTSForRack(found, rackState)
+		if err != nil {
+			return err
+		}
 
 		// Match Pod's Node
-		validateSTSPodsForRack(k8sClient, ctx, found, rackState)
+		err = validateSTSPodsForRack(k8sClient, ctx, found, rackState)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -257,13 +299,18 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 		}
 	}
 	if !matched {
-		return fmt.Errorf("statefulset doesn't have required match strings. terms %v", terms)
+		return fmt.Errorf(
+			"statefulset doesn't have required match strings. terms %v", terms,
+		)
 	}
 	return nil
 	// t.Logf("matched statefulset selector terms %v", terms)
 }
 
-func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet, rackState RackState) error {
+func validateSTSPodsForRack(
+	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
+	rackState RackState,
+) error {
 
 	zoneKey := "failure-domain.beta.kubernetes.io/zone"
 	regionKey := "failure-domain.beta.kubernetes.io/region"
@@ -290,7 +337,9 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 	}
 	for _, pod := range rackPodList.Items {
 		node := &corev1.Node{}
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node)
+		err := k8sClient.Get(
+			ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node,
+		)
 		if err != nil {
 			return err
 		}
@@ -300,10 +349,16 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 		for k, v1 := range rackSelectorMap {
 			if v2, ok := node.Labels[k]; !ok {
 				// error
-				return fmt.Errorf("rack key %s, not present in node labels %v", k, node.Labels)
+				return fmt.Errorf(
+					"rack key %s, not present in node labels %v", k,
+					node.Labels,
+				)
 			} else if v1 != v2 {
 				// error
-				return fmt.Errorf("rack key:val %s:%s doesn't match in node labels %v", k, v1, node.Labels)
+				return fmt.Errorf(
+					"rack key:val %s:%s doesn't match in node labels %v", k, v1,
+					node.Labels,
+				)
 			}
 		}
 	}
@@ -311,17 +366,21 @@ func validateSTSPodsForRack(k8sClient client.Client, ctx goctx.Context, found *a
 }
 
 func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
-	topology := splitRacks(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
+	topology := splitRacks(
+		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
+	)
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
 		if topology[idx] == 0 {
 			// Skip the rack, if it's size is 0
 			continue
 		}
-		rackStateList = append(rackStateList, RackState{
-			Rack: rack,
-			Size: topology[idx],
-		})
+		rackStateList = append(
+			rackStateList, RackState{
+				Rack: rack,
+				Size: topology[idx],
+			},
+		)
 	}
 	return rackStateList
 }
@@ -343,7 +402,9 @@ func splitRacks(nodeCount, rackCount int) []int {
 	return topology
 }
 
-func getNamespacedNameForStatefulSet(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) types.NamespacedName {
+func getNamespacedNameForStatefulSet(
+	aeroCluster *asdbv1beta1.AerospikeCluster, rackID int,
+) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
 		Namespace: aeroCluster.Namespace,
@@ -357,11 +418,15 @@ func getClusterNamespacedName(name, namespace string) types.NamespacedName {
 	}
 }
 
-func getRackPodList(k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet) (*corev1.PodList, error) {
+func getRackPodList(
+	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
+) (*corev1.PodList, error) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(found.Spec.Template.Labels)
-	listOps := &client.ListOptions{Namespace: found.Namespace, LabelSelector: labelSelector}
+	listOps := &client.ListOptions{
+		Namespace: found.Namespace, LabelSelector: labelSelector,
+	}
 
 	if err := k8sClient.List(ctx, podList, listOps); err != nil {
 		return nil, err
@@ -369,30 +434,12 @@ func getRackPodList(k8sClient client.Client, ctx goctx.Context, found *appsv1.St
 	return podList, nil
 }
 
-func getParsedValue(val interface{}) interface{} {
-
-	valStr, ok := val.(string)
-	if !ok {
-		return val
-	}
-
-	if value, err := strconv.ParseInt(valStr, 10, 64); err == nil {
-		return value
-	} else if value, err := strconv.ParseFloat(valStr, 64); err == nil {
-		return value
-	} else if value, err := strconv.ParseBool(valStr); err == nil {
-		return value
-	} else {
-		return valStr
-	}
-}
-
 func isNodePartOfRack(nodeID string, rackID string) bool {
 	// NODE_ID="$RACK_ID$NODE_ID",  NODE_ID -> aINT
-	lnodeID := strings.ToLower(nodeID)
-	toks := strings.Split(lnodeID, "a")
-	// len(toks) can not be less than 2 if rack is there
-	return rackID == toks[0]
+	lNodeID := strings.ToLower(nodeID)
+	tokens := strings.Split(lNodeID, "a")
+	// len(tokens) can not be less than 2 if rack is there
+	return rackID == tokens[0]
 }
 
 func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {

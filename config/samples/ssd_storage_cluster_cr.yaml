@@ -19,7 +19,7 @@ spec:
         aerospike:
           path: /opt/aerospike
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
@@ -27,7 +27,7 @@ spec:
         aerospike:
           path: /test/dev/xvdf
         source:
-          persistentVolume: 
+          persistentVolume:
             storageClass: ssd
             volumeMode: Block
             size: 5Gi
@@ -40,7 +40,7 @@ spec:
 
   podSpec:
     multiPodPerHost: true
-    
+
   aerospikeAccessControl:
     users:
       - name: admin
@@ -62,8 +62,3 @@ spec:
           type: device
           devices:
             - /test/dev/xvdf
-
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m

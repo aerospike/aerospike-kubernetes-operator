@@ -92,7 +92,7 @@ var _ = Describe("RackLifeCycleOp", func() {
 			// Op4: rolling restart
 			By("RollingRestart the cluster")
 
-			err = rollingRestartClusterTest(&logger, k8sClient, ctx, clusterNamespacedName)
+			err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)

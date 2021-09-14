@@ -27,13 +27,15 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		return nil
 	}
 
-	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
+	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
 	if pod.Status.Phase == corev1.PodFailed {
 		return fmt.Errorf("pod %s has failed status", pod.Name)
 	}
 
 	// grab the status of every container in the pod (including its init containers)
-	containerStatus := append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...)
+	containerStatus := append(
+		pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...,
+	)
 
 	// inspect the status of each individual container for common failure states
 	for _, container := range containerStatus {
@@ -44,7 +46,10 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
 		if waiting := container.State.Waiting; waiting != nil && (isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason)) {
-			return fmt.Errorf("pod failed message in container %s: %s reason: %s", container.Name, waiting.Message, waiting.Reason)
+			return fmt.Errorf(
+				"pod failed message in container %s: %s reason: %s",
+				container.Name, waiting.Message, waiting.Reason,
+			)
 		}
 	}
 
@@ -64,7 +69,9 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 	}
 
 	// grab the status of every container in the pod (including its init containers)
-	containerStatus := append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...)
+	containerStatus := append(
+		pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...,
+	)
 
 	// inspect the status of each individual container for common failure states
 	for _, container := range containerStatus {
@@ -75,7 +82,10 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors
 		if waiting := container.State.Waiting; waiting != nil && isPodImageError(waiting.Reason) {
-			return fmt.Errorf("pod image pull failed with given container message: %s", waiting.Message)
+			return fmt.Errorf(
+				"pod image pull failed with given container message: %s",
+				waiting.Message,
+			)
 		}
 	}
 
@@ -105,23 +115,15 @@ func isPodReady(pod *corev1.Pod) bool {
 	return true
 }
 
-// isPodCreated returns true if pod has been created and is maintained by the API server
-func isPodCreated(pod *corev1.Pod) bool {
-	return pod.Status.Phase != ""
-}
-
-// isPodFailed returns true if pod has a Phase of PodFailed
-func isPodFailed(pod *corev1.Pod) bool {
-	return pod.Status.Phase == corev1.PodFailed
-}
-
 // IsPodTerminating returns true if pod's DeletionTimestamp has been set
 func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
 // IsPodUpgraded assume that all container have same image or take containerID
-func IsPodUpgraded(pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster) bool {
+func IsPodUpgraded(
+	pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster,
+) bool {
 	if !IsPodRunningAndReady(pod) {
 		return false
 	}
@@ -130,12 +132,16 @@ func IsPodUpgraded(pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster) b
 }
 
 // IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
-func IsPodOnDesiredImage(pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster) bool {
+func IsPodOnDesiredImage(
+	pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster,
+) bool {
 	return allContainersAreOnDesiredImages(aeroCluster, pod.Spec.Containers) &&
 		allContainersAreOnDesiredImages(aeroCluster, pod.Spec.InitContainers)
 }
 
-func allContainersAreOnDesiredImages(aeroCluster *asdbv1beta1.AerospikeCluster, containers []corev1.Container) bool {
+func allContainersAreOnDesiredImages(
+	aeroCluster *asdbv1beta1.AerospikeCluster, containers []corev1.Container,
+) bool {
 	for _, ps := range containers {
 		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
 		if err != nil {
@@ -154,15 +160,6 @@ func allContainersAreOnDesiredImages(aeroCluster *asdbv1beta1.AerospikeCluster, 
 		}
 	}
 	return true
-}
-
-// GetPodNames returns the pod names of the array of pods passed in
-func GetPodNames(pods []corev1.Pod) []string {
-	var podNames []string
-	for _, pod := range pods {
-		podNames = append(podNames, pod.Name)
-	}
-	return podNames
 }
 
 // GetPod get pod from pod list by name
@@ -192,7 +189,10 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 }
 
 // Exec executes a non interactive command on a pod.
-func Exec(pod *corev1.Pod, container string, cmd []string, kubeClient *kubernetes.Clientset, kubeConfig *rest.Config) (string, string, error) {
+func Exec(
+	pod *corev1.Pod, container string, cmd []string,
+	kubeClient *kubernetes.Clientset, kubeConfig *rest.Config,
+) (string, string, error) {
 	request := kubeClient.
 		CoreV1().
 		RESTClient().
@@ -201,21 +201,29 @@ func Exec(pod *corev1.Pod, container string, cmd []string, kubeClient *kubernete
 		Namespace(pod.Namespace).
 		Name(pod.Name).
 		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command:   cmd,
-			Container: container,
-			Stdout:    true,
-			Stderr:    true,
-			TTY:       true,
-		}, scheme.ParameterCodec)
+		VersionedParams(
+			&corev1.PodExecOptions{
+				Command:   cmd,
+				Container: container,
+				Stdout:    true,
+				Stderr:    true,
+				TTY:       true,
+			}, scheme.ParameterCodec,
+		)
 
-	exec, err := remotecommand.NewSPDYExecutor(kubeConfig, http.MethodPost, request.URL())
+	exec, err := remotecommand.NewSPDYExecutor(
+		kubeConfig, http.MethodPost, request.URL(),
+	)
 	if err != nil {
 		return "", "", err
 	}
 
 	var stdout, stderr bytes.Buffer
-	err = exec.Stream(remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr})
+	err = exec.Stream(
+		remotecommand.StreamOptions{
+			Stdout: &stdout, Stderr: &stderr,
+		},
+	)
 	return stdout.String(), stderr.String(), err
 }
 

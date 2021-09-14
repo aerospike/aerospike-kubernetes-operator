@@ -76,7 +76,7 @@ func doTestNetworkPolicy(
 			defaultNetworkPolicy := asdbv1beta1.AerospikeNetworkPolicy{}
 			aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
 				clusterNamespacedName, defaultNetworkPolicy, multiPodPerHost,
-				enableTLS, ctx,
+				enableTLS,
 			)
 
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -85,7 +85,8 @@ func doTestNetworkPolicy(
 			err = validateNetworkPolicy(ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 
@@ -104,7 +105,7 @@ func doTestNetworkPolicy(
 			}
 			aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
 				clusterNamespacedName, networkPolicy, multiPodPerHost,
-				enableTLS, ctx,
+				enableTLS,
 			)
 
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -113,7 +114,8 @@ func doTestNetworkPolicy(
 			err = validateNetworkPolicy(ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -150,7 +152,7 @@ func validateNetworkPolicy(
 	}
 
 	for _, pod := range podList.Items {
-		asConn, err := newAsConn(&logger, current, &pod, k8sClient)
+		asConn, err := newAsConn(logger, current, &pod, k8sClient)
 		if err != nil {
 			return fmt.Errorf("failed to get aerospike connection: %v", err)
 		}
@@ -245,25 +247,25 @@ func validatePodEndpoint(
 	switch networkType {
 	case asdbv1beta1.AerospikeNetworkTypePod:
 		if podIP != host {
-			return fmt.Errorf("Expected podIP %v got %v", podIP, host)
+			return fmt.Errorf("expected podIP %v got %v", podIP, host)
 		}
 
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if hostInternalIP != host {
 			return fmt.Errorf(
-				"Expected host internal IP %v got %v", hostInternalIP, host,
+				"expected host internal IP %v got %v", hostInternalIP, host,
 			)
 		}
 
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		if hostExternalIP != host {
 			return fmt.Errorf(
-				"Expected host external IP %v got %v", hostExternalIP, host,
+				"expected host external IP %v got %v", hostExternalIP, host,
 			)
 		}
 
 	default:
-		return fmt.Errorf("Unknowk network type %v", networkType)
+		return fmt.Errorf("unknowk network type %v", networkType)
 	}
 
 	// Validate port.
@@ -273,7 +275,7 @@ func validatePodEndpoint(
 
 	if portStr != fmt.Sprintf("%v", expectedPort) {
 		return fmt.Errorf(
-			"Incorrect port expected: %v actual: %v", expectedPort, portStr,
+			"incorrect port expected: %v actual: %v", expectedPort, portStr,
 		)
 	}
 	return nil
@@ -352,14 +354,11 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 func getAerospikeClusterSpecWithNetworkPolicy(
 	clusterNamespacedName types.NamespacedName,
 	networkPolicy asdbv1beta1.AerospikeNetworkPolicy, multiPodPerHost bool,
-	enableTLS bool, ctx goctx.Context,
+	enableTLS bool,
 ) *asdbv1beta1.AerospikeCluster {
-	mem := resource.MustParse("2Gi")
-	cpu := resource.MustParse("200m")
-
 	cascadeDelete := true
 
-	var networkConf map[string]interface{} = map[string]interface{}{}
+	var networkConf = map[string]interface{}{}
 
 	var operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec = nil
 
@@ -460,16 +459,6 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 			},
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: multiPodPerHost,
-			},
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    cpu,
-					corev1.ResourceMemory: mem,
-				},
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{

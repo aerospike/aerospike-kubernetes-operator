@@ -27,20 +27,20 @@ const (
 	// Maximum allowed length for a username.
 	userNameLengthMax int = 63
 
-	// The admin username.
+	// AdminUsername for aerospike cluster
 	AdminUsername = "admin"
 
-	// The default admin user password.
+	// DefaultAdminPAssword si default admin user password.
 	DefaultAdminPAssword = "admin"
 )
 
-// Chacacters forbidden in role name.
-var roleNameForbiddenChars []string = []string{";", ":"}
+// roleNameForbiddenChars are chacacters forbidden in role name.
+var roleNameForbiddenChars = []string{";", ":"}
 
-// Chacacters forbidden in username.
-var userNameForbiddenChars []string = []string{";", ":"}
+// userNameForbiddenChars are chacacters forbidden in username.
+var userNameForbiddenChars = []string{";", ":"}
 
-// Predefined roles names.
+// PredefinedRoles are predefined role names.
 var PredefinedRoles = map[string]struct{}{
 	"user-admin":     {},
 	"sys-admin":      {},
@@ -57,7 +57,7 @@ var requiredRoles = []string{
 	"user-admin",
 }
 
-// Privilege string allowed in the spec and associated scopes.
+// Privileges are privilege string allowed in the spec and associated scopes.
 var Privileges = map[string][]PrivilegeScope{
 	"read":           {Global, NamespaceSet},
 	"write":          {Global, NamespaceSet},
@@ -75,7 +75,9 @@ var Privileges = map[string][]PrivilegeScope{
 //    follows rules defined https://www.aerospike.com/docs/guide/limitations.html
 //    follows rules found through server code inspection for e.g. predefined roles
 //    meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
-func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (bool, error) {
+func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (
+	bool, error,
+) {
 	enabled, err := IsSecurityEnabled(aerospikeCluster.AerospikeConfig)
 	if err != nil {
 		return false, err
@@ -95,7 +97,10 @@ func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (bool
 	}
 
 	// Validate roles.
-	_, err = isRoleSpecValid(aerospikeCluster.AerospikeAccessControl.Roles, *aerospikeCluster.AerospikeConfig)
+	_, err = isRoleSpecValid(
+		aerospikeCluster.AerospikeAccessControl.Roles,
+		*aerospikeCluster.AerospikeConfig,
+	)
 	if err != nil {
 		return false, err
 	}
@@ -103,7 +108,9 @@ func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (bool
 	roleMap := GetRolesFromSpec(aerospikeCluster)
 
 	// Validate users.
-	_, err = isUserSpecValid(aerospikeCluster.AerospikeAccessControl.Users, roleMap)
+	_, err = isUserSpecValid(
+		aerospikeCluster.AerospikeAccessControl.Users, roleMap,
+	)
 
 	if err != nil {
 		return false, err
@@ -114,7 +121,7 @@ func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (bool
 
 // GetRolesFromSpec returns roles or an empty map from the spec.
 func GetRolesFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeRoleSpec {
-	var roles map[string]AerospikeRoleSpec = map[string]AerospikeRoleSpec{}
+	var roles = map[string]AerospikeRoleSpec{}
 	if spec.AerospikeAccessControl != nil {
 		for _, roleSpec := range spec.AerospikeAccessControl.Roles {
 			roles[roleSpec.Name] = roleSpec
@@ -125,7 +132,7 @@ func GetRolesFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeRoleSpec {
 
 // GetUsersFromSpec returns users or an empty map from the spec.
 func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
-	var users map[string]AerospikeUserSpec = map[string]AerospikeUserSpec{}
+	var users = map[string]AerospikeUserSpec{}
 	if spec.AerospikeAccessControl != nil {
 		for _, userSpec := range spec.AerospikeAccessControl.Users {
 			users[userSpec.Name] = userSpec
@@ -134,35 +141,48 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	return users
 }
 
-func validateRoleQuotaParam(roleSpec AerospikeRoleSpec, aerospikeConfigSpec *AerospikeConfigSpec) error {
+func validateRoleQuotaParam(
+	roleSpec AerospikeRoleSpec, aerospikeConfigSpec *AerospikeConfigSpec,
+) error {
 	if roleSpec.ReadQuota > 0 || roleSpec.WriteQuota > 0 {
-		enabled, err := IsAttributeEnabled(aerospikeConfigSpec, "security", "enable-quotas")
+		enabled, err := IsAttributeEnabled(
+			aerospikeConfigSpec, "security", "enable-quotas",
+		)
 		if err != nil {
 			return err
 		}
 		if !enabled {
-			return fmt.Errorf("security.enable-quotas is set to false but quota params are: "+
-				"ReadQuota: %d  WriteQuota: %d", roleSpec.ReadQuota, roleSpec.WriteQuota)
+			return fmt.Errorf(
+				"security.enable-quotas is set to false but quota params are: "+
+					"ReadQuota: %d  WriteQuota: %d", roleSpec.ReadQuota,
+				roleSpec.WriteQuota,
+			)
 		}
 	}
 	return nil
 }
 
 // isRoleSpecValid indicates if input role spec is valid.
-func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec) (bool, error) {
+func isRoleSpecValid(
+	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec,
+) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
 		_, isSeen := seenRoles[roleSpec.Name]
 		if isSeen {
 			// Cannot have duplicate role entries.
-			return false, fmt.Errorf("duplicate entry for role: %s", roleSpec.Name)
+			return false, fmt.Errorf(
+				"duplicate entry for role: %s", roleSpec.Name,
+			)
 		}
 		seenRoles[roleSpec.Name] = true
 
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
 			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+			return false, fmt.Errorf(
+				"cannot create or modify predefined role: %s", roleSpec.Name,
+			)
 		}
 
 		_, err := isRoleNameValid(roleSpec.Name)
@@ -170,7 +190,9 @@ func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeCon
 		if err != nil {
 			return false, err
 		}
-		if err := validateRoleQuotaParam(roleSpec, &aerospikeConfigSpec); err != nil {
+		if err := validateRoleQuotaParam(
+			roleSpec, &aerospikeConfigSpec,
+		); err != nil {
 			return false, err
 		}
 		// Validate privileges.
@@ -179,14 +201,19 @@ func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeCon
 			_, isSeen := seenPrivileges[privilege]
 			if isSeen {
 				// Cannot have duplicate privilege entries.
-				return false, fmt.Errorf("duplicate privilege: %s for role: %s", privilege, roleSpec.Name)
+				return false, fmt.Errorf(
+					"duplicate privilege: %s for role: %s", privilege,
+					roleSpec.Name,
+				)
 			}
 			seenPrivileges[privilege] = true
 
 			_, err = isPrivilegeValid(privilege, aerospikeConfigSpec)
 
 			if err != nil {
-				return false, fmt.Errorf("role '%s' has invalid privilege: %v", roleSpec.Name, err)
+				return false, fmt.Errorf(
+					"role '%s' has invalid privilege: %v", roleSpec.Name, err,
+				)
 			}
 		}
 
@@ -196,14 +223,19 @@ func isRoleSpecValid(roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeCon
 			_, isSeen := seenNetAddresses[netAddress]
 			if isSeen {
 				// Cannot have duplicate whitelist entries.
-				return false, fmt.Errorf("duplicate whitelist: %s for role: %s", netAddress, roleSpec.Name)
+				return false, fmt.Errorf(
+					"duplicate whitelist: %s for role: %s", netAddress,
+					roleSpec.Name,
+				)
 			}
 			seenNetAddresses[netAddress] = true
 
 			_, err = isNetAddressValid(netAddress)
 
 			if err != nil {
-				return false, fmt.Errorf("role '%s' has invalid whitelist: %v", roleSpec.Name, err)
+				return false, fmt.Errorf(
+					"role '%s' has invalid whitelist: %v", roleSpec.Name, err,
+				)
 			}
 		}
 
@@ -219,12 +251,17 @@ func isRoleNameValid(roleName string) (bool, error) {
 	}
 
 	if len(roleName) > roleNameLengthMax {
-		return false, fmt.Errorf("role name '%s' cannot have more than %d characters", roleName, roleNameLengthMax)
+		return false, fmt.Errorf(
+			"role name '%s' cannot have more than %d characters", roleName,
+			roleNameLengthMax,
+		)
 	}
 
 	for _, forbiddenChar := range roleNameForbiddenChars {
 		if strings.Index(roleName, forbiddenChar) > -1 {
-			return false, fmt.Errorf("role name '%s' cannot contain  %s", roleName, forbiddenChar)
+			return false, fmt.Errorf(
+				"role name '%s' cannot contain  %s", roleName, forbiddenChar,
+			)
 
 		}
 	}
@@ -233,7 +270,9 @@ func isRoleNameValid(roleName string) (bool, error) {
 }
 
 // Indicates if privilege is a valid privilege.
-func isPrivilegeValid(privilege string, aerospikeConfigSpec AerospikeConfigSpec) (bool, error) {
+func isPrivilegeValid(
+	privilege string, aerospikeConfigSpec AerospikeConfigSpec,
+) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
 	_, ok := Privileges[parts[0]]
@@ -252,13 +291,18 @@ func isPrivilegeValid(privilege string, aerospikeConfigSpec AerospikeConfigSpec)
 		// This privilege should necessarily have NamespaceSet scope.
 		scopes := Privileges[parts[0]]
 		if !scopeContains(scopes, NamespaceSet) {
-			return false, fmt.Errorf("privilege %s cannot have namespace or set scope", privilege)
+			return false, fmt.Errorf(
+				"privilege %s cannot have namespace or set scope", privilege,
+			)
 		}
 
 		namespaceName := parts[1]
 
 		if !IsAerospikeNamespacePresent(aerospikeConfigSpec, namespaceName) {
-			return false, fmt.Errorf("for privilege %s, namespace %s not configured", privilege, namespaceName)
+			return false, fmt.Errorf(
+				"for privilege %s, namespace %s not configured", privilege,
+				namespaceName,
+			)
 		}
 
 		if nParts == 3 {
@@ -266,7 +310,9 @@ func isPrivilegeValid(privilege string, aerospikeConfigSpec AerospikeConfigSpec)
 			setName := parts[2]
 
 			if len(strings.TrimSpace(setName)) == 0 {
-				return false, fmt.Errorf("for privilege %s invalid set name", privilege)
+				return false, fmt.Errorf(
+					"for privilege %s invalid set name", privilege,
+				)
 			}
 		}
 	}
@@ -291,7 +337,9 @@ func isNetAddressValid(address string) (bool, error) {
 	}
 
 	if ipNet.String() != address {
-		return false, fmt.Errorf("invalid CIDR %s - suggested CIDR %v", address, ipNet)
+		return false, fmt.Errorf(
+			"invalid CIDR %s - suggested CIDR %v", address, ipNet,
+		)
 	}
 
 	return true, nil
@@ -332,14 +380,18 @@ func subset(first, second []string) bool {
 }
 
 // isUserSpecValid indicates if input user specification is valid.
-func isUserSpecValid(users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec) (bool, error) {
+func isUserSpecValid(
+	users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec,
+) (bool, error) {
 	requiredRolesUserFound := false
 	seenUsers := map[string]bool{}
 	for _, userSpec := range users {
 		_, isSeen := seenUsers[userSpec.Name]
 		if isSeen {
 			// Cannot have duplicate user entries.
-			return false, fmt.Errorf("duplicate entry for user: %s", userSpec.Name)
+			return false, fmt.Errorf(
+				"duplicate entry for user: %s", userSpec.Name,
+			)
 		}
 		seenUsers[userSpec.Name] = true
 
@@ -355,7 +407,9 @@ func isUserSpecValid(users []AerospikeUserSpec, roles map[string]AerospikeRoleSp
 			_, isSeen := seenRoles[roleName]
 			if isSeen {
 				// Cannot have duplicate roles.
-				return false, fmt.Errorf("duplicate role: %s for user: %s", roleName, userSpec.Name)
+				return false, fmt.Errorf(
+					"duplicate role: %s for user: %s", roleName, userSpec.Name,
+				)
 			}
 			seenRoles[roleName] = true
 
@@ -365,7 +419,10 @@ func isUserSpecValid(users []AerospikeUserSpec, roles map[string]AerospikeRoleSp
 				_, ok = PredefinedRoles[roleName]
 				if !ok {
 					// Neither a specified role nor a predefined role.
-					return false, fmt.Errorf("user '%s' has non-existent role %s", userSpec.Name, roleName)
+					return false, fmt.Errorf(
+						"user '%s' has non-existent role %s", userSpec.Name,
+						roleName,
+					)
 				}
 			}
 		}
@@ -373,35 +430,46 @@ func isUserSpecValid(users []AerospikeUserSpec, roles map[string]AerospikeRoleSp
 		// TODO We should validate actual password here but we cannot read the secret here.
 		// Will have to be done at the time of creating the user!
 		if len(strings.TrimSpace(userSpec.SecretName)) == 0 {
-			return false, fmt.Errorf("user %s has empty secret name", userSpec.Name)
+			return false, fmt.Errorf(
+				"user %s has empty secret name", userSpec.Name,
+			)
 		}
 
-		if subset(requiredRoles, userSpec.Roles) && userSpec.Name == AdminUsername {
+		if subset(
+			requiredRoles, userSpec.Roles,
+		) && userSpec.Name == AdminUsername {
 			// We found admin user that has the required roles.
 			requiredRolesUserFound = true
 		}
 	}
 
 	if !requiredRolesUserFound {
-		return false, fmt.Errorf("no admin user with required roles: %v found", requiredRoles)
+		return false, fmt.Errorf(
+			"no admin user with required roles: %v found", requiredRoles,
+		)
 	}
 
 	return true, nil
 }
 
-// isUserNameValid Indicates if a user name is valid.
+// isUserNameValid Indicates if a username is valid.
 func isUserNameValid(userName string) (bool, error) {
 	if len(strings.TrimSpace(userName)) == 0 {
 		return false, fmt.Errorf("username cannot be empty")
 	}
 
 	if len(userName) > userNameLengthMax {
-		return false, fmt.Errorf("username '%s' cannot have more than %d characters", userName, userNameLengthMax)
+		return false, fmt.Errorf(
+			"username '%s' cannot have more than %d characters", userName,
+			userNameLengthMax,
+		)
 	}
 
 	for _, forbiddenChar := range userNameForbiddenChars {
 		if strings.Index(userName, forbiddenChar) > -1 {
-			return false, fmt.Errorf("username '%s' cannot contain  %s", userName, forbiddenChar)
+			return false, fmt.Errorf(
+				"username '%s' cannot contain  %s", userName, forbiddenChar,
+			)
 
 		}
 	}

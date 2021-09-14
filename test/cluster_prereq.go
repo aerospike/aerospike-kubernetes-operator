@@ -6,7 +6,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
+	// Need to modify this name if prefix is changed in yaml file
+	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
+	aeroClusterRoleBindingName    string = "aerospike-operator-manager-rolebinding"
 )
 
 func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
@@ -20,20 +28,11 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 
 	operatorNs := namespace
 
-	if err := createServiceAccount(k8sClient, ctx, "aerospike-cluster", operatorNs); err != nil {
-		return err
-	}
-
 	// Create service account for getting access in cluster specific namespaces
-	if err := createServiceAccount(k8sClient, ctx, "aerospike-cluster", multiClusterNs1); err != nil {
+	if err := createServiceAccount(k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs1); err != nil {
 		return err
 	}
-	if err := createServiceAccount(k8sClient, ctx, "aerospike-cluster", multiClusterNs2); err != nil {
-		return err
-	}
-
-	// Create clusterRole for service accounts
-	if err := createClusterRole(k8sClient, ctx, "aerospike-cluster"); err != nil {
+	if err := createServiceAccount(k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs2); err != nil {
 		return err
 	}
 
@@ -41,21 +40,21 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 	subjects := []rbac.Subject{
 		{
 			Kind:      "ServiceAccount",
-			Name:      "aerospike-cluster",
+			Name:      aeroClusterServiceAccountName,
 			Namespace: operatorNs,
 		},
 		{
 			Kind:      "ServiceAccount",
-			Name:      "aerospike-cluster",
+			Name:      aeroClusterServiceAccountName,
 			Namespace: multiClusterNs1,
 		},
 		{
 			Kind:      "ServiceAccount",
-			Name:      "aerospike-cluster",
+			Name:      aeroClusterServiceAccountName,
 			Namespace: multiClusterNs2,
 		},
 	}
-	if err := createRoleBinding(k8sClient, ctx, "aerospike-cluster", subjects, "aerospike-cluster"); err != nil {
+	if err := createRoleBinding(k8sClient, ctx, aeroClusterRoleBindingName, subjects); err != nil {
 		return err
 	}
 
@@ -81,43 +80,12 @@ func createServiceAccount(k8sClient client.Client, ctx goctx.Context, name strin
 	return k8sClient.Create(ctx, svcAct)
 }
 
-func createClusterRole(k8sClient client.Client, ctx goctx.Context, name string) error {
-	cr := &rbac.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Rules: []rbac.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "nodes", "services", "configmaps"},
-				Verbs:     []string{"get", "list"},
-			},
-			{
-				APIGroups: []string{"asdb.aerospike.com"},
-				Resources: []string{"*"},
-				Verbs:     []string{"*"},
-			},
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"*"},
-			},
-		},
+func createRoleBinding(k8sClient client.Client, ctx goctx.Context, name string, subjects []rbac.Subject) error {
+	crb := rbac.ClusterRoleBinding{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: name}, &crb); err != nil {
+		return err
 	}
-	return k8sClient.Create(ctx, cr)
-}
+	crb.Subjects = subjects
 
-func createRoleBinding(k8sClient client.Client, ctx goctx.Context, name string, subjects []rbac.Subject, roleRefName string) error {
-	crb := &rbac.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Subjects: subjects,
-		RoleRef: rbac.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Name:     roleRefName,
-			Kind:     "ClusterRole",
-		},
-	}
-	return k8sClient.Create(ctx, crb)
+	return k8sClient.Update(ctx, &crb)
 }

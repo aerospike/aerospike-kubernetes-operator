@@ -31,14 +31,15 @@ import (
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *AerospikeCluster) Default() admission.Response {
-	asLog := logf.Log.WithName(ClusterNamespacedName(r))
+func (c *AerospikeCluster) Default() admission.Response {
+	asLog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	asLog.Info(
-		"Setting defaults for aerospikeCluster", "aerospikecluster.Spec", r.Spec,
+		"Setting defaults for aerospikeCluster", "aerospikecluster.Spec",
+		c.Spec,
 	)
 
-	if err := r.setDefaults(asLog); err != nil {
+	if err := c.setDefaults(asLog); err != nil {
 		asLog.Error(err, "Mutate AerospikeCluster create failed")
 		return webhook.Denied(err.Error())
 	}
@@ -46,87 +47,87 @@ func (r *AerospikeCluster) Default() admission.Response {
 	asLog.Info("Setting defaults for aerospikeCluster completed")
 
 	asLog.Info(
-		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", r.Spec,
+		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", c.Spec,
 	)
 
 	return webhook.Patched(
 		"Patched aerospike spec with defaults",
-		webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: r.Spec},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec},
 	)
 }
 
-func (r *AerospikeCluster) setDefaults(asLog logr.Logger) error {
+func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 
-	asLog.Info("Set defaults for AerospikeCluster", "obj.Spec", r.Spec)
+	asLog.Info("Set defaults for AerospikeCluster", "obj.Spec", c.Spec)
 
 	// Set network defaults
-	r.Spec.AerospikeNetworkPolicy.SetDefaults()
+	c.Spec.AerospikeNetworkPolicy.SetDefaults()
 
 	// Set common storage defaults.
-	r.Spec.Storage.SetDefaults()
+	c.Spec.Storage.SetDefaults()
 
 	// Add default rackConfig if not already given. Disallow use of defaultRackID by user.
 	// Need to set before setting defaults in aerospikeConfig.
 	// aerospikeConfig.namespace checks for racks
-	if err := r.setDefaultRackConf(asLog); err != nil {
+	if err := c.setDefaultRackConf(asLog); err != nil {
 		return err
 	}
 
 	// cluster level aerospike config may be empty and
-	if r.Spec.AerospikeConfig != nil {
+	if c.Spec.AerospikeConfig != nil {
 		// Set common aerospikeConfig defaults
 		// Update configMap
-		if err := r.setDefaultAerospikeConfigs(
-			asLog, *r.Spec.AerospikeConfig,
+		if err := c.setDefaultAerospikeConfigs(
+			asLog, *c.Spec.AerospikeConfig,
 		); err != nil {
 			return err
 		}
 	}
 
 	// Update racks configuration using global values where required.
-	if err := r.updateRacks(asLog); err != nil {
+	if err := c.updateRacks(asLog); err != nil {
 		return err
 	}
 
 	// Set defaults for pod spec
-	if err := r.Spec.PodSpec.SetDefaults(); err != nil {
+	if err := c.Spec.PodSpec.SetDefaults(); err != nil {
 		return err
 	}
 
 	// Validation policy
-	if r.Spec.ValidationPolicy == nil {
+	if c.Spec.ValidationPolicy == nil {
 		validationPolicy := ValidationPolicySpec{}
 
 		asLog.Info(
 			"Set default validation policy", "validationPolicy",
 			validationPolicy,
 		)
-		r.Spec.ValidationPolicy = &validationPolicy
+		c.Spec.ValidationPolicy = &validationPolicy
 	}
 
 	return nil
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.
-func (r *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
+func (c *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
 	defaultRack := Rack{ID: DefaultRackID}
 
-	if len(r.Spec.RackConfig.Racks) == 0 {
-		r.Spec.RackConfig.Racks = append(r.Spec.RackConfig.Racks, defaultRack)
+	if len(c.Spec.RackConfig.Racks) == 0 {
+		c.Spec.RackConfig.Racks = append(c.Spec.RackConfig.Racks, defaultRack)
 		asLog.Info(
 			"No rack given. Added default rack-id for all nodes", "racks",
-			r.Spec.RackConfig, "DefaultRackID", DefaultRackID,
+			c.Spec.RackConfig, "DefaultRackID", DefaultRackID,
 		)
 	} else {
-		for _, rack := range r.Spec.RackConfig.Racks {
+		for _, rack := range c.Spec.RackConfig.Racks {
 			if rack.ID == DefaultRackID {
 				// User has modified defaultRackConfig or used defaultRackID
-				if len(r.Spec.RackConfig.Racks) > 1 ||
+				if len(c.Spec.RackConfig.Racks) > 1 ||
 					rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" ||
 					rack.InputAerospikeConfig != nil || rack.InputStorage != nil || rack.InputPodSpec != nil {
 					return fmt.Errorf(
 						"invalid RackConfig %v. RackID %d is reserved",
-						r.Spec.RackConfig, DefaultRackID,
+						c.Spec.RackConfig, DefaultRackID,
 					)
 				}
 			}
@@ -135,28 +136,28 @@ func (r *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacks(asLog logr.Logger) error {
-	if err := r.updateRacksStorageFromGlobal(asLog); err != nil {
+func (c *AerospikeCluster) updateRacks(asLog logr.Logger) error {
+	if err := c.updateRacksStorageFromGlobal(asLog); err != nil {
 		return fmt.Errorf("error updating rack storage: %v", err)
 	}
 
-	if err := r.updateRacksAerospikeConfigFromGlobal(asLog); err != nil {
+	if err := c.updateRacksAerospikeConfigFromGlobal(asLog); err != nil {
 		return fmt.Errorf("error updating rack aerospike config: %v", err)
 	}
 
-	if err := r.updateRacksPodSpecFromGlobal(asLog); err != nil {
+	if err := c.updateRacksPodSpecFromGlobal(asLog); err != nil {
 		return fmt.Errorf("error updating rack podSpec: %v", err)
 	}
 
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error {
-	for i := range r.Spec.RackConfig.Racks {
-		rack := &r.Spec.RackConfig.Racks[i]
+func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error {
+	for i := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[i]
 
 		if rack.InputStorage == nil {
-			rack.Storage = r.Spec.Storage
+			rack.Storage = c.Spec.Storage
 			asLog.V(1).Info(
 				"Updated rack storage with global storage", "rack id", rack.ID,
 				"storage", rack.Storage,
@@ -171,12 +172,12 @@ func (r *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) error {
-	for i := range r.Spec.RackConfig.Racks {
-		rack := &r.Spec.RackConfig.Racks[i]
+func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) error {
+	for i := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[i]
 
 		if rack.InputPodSpec == nil {
-			rack.PodSpec.SchedulingPolicy = r.Spec.PodSpec.SchedulingPolicy
+			rack.PodSpec.SchedulingPolicy = c.Spec.PodSpec.SchedulingPolicy
 			asLog.V(1).Info(
 				"Updated rack podSpec with global podSpec", "rack id", rack.ID,
 				"podSpec", rack.PodSpec,
@@ -188,26 +189,26 @@ func (r *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) error
 	return nil
 }
 
-func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logger) error {
-	for i, rack := range r.Spec.RackConfig.Racks {
+func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logger) error {
+	for i, rack := range c.Spec.RackConfig.Racks {
 		var m map[string]interface{}
 		var err error
 		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
 			m, err = merge.Merge(
-				r.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value,
+				c.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value,
 			)
 			asLog.V(1).Info(
 				"Merged rack config from global aerospikeConfig", "rack id",
 				rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig",
-				r.Spec.AerospikeConfig,
+				c.Spec.AerospikeConfig,
 			)
 			if err != nil {
 				return err
 			}
 		} else {
 			// Use the global config.
-			m = r.Spec.AerospikeConfig.Value
+			m = c.Spec.AerospikeConfig.Value
 		}
 
 		asLog.V(1).Info(
@@ -216,36 +217,36 @@ func (r *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 		)
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := r.setDefaultAerospikeConfigs(
+		if err := c.setDefaultAerospikeConfigs(
 			asLog, AerospikeConfigSpec{Value: m},
 		); err != nil {
 			return err
 		}
-		r.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
+		c.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
 	}
 	return nil
 }
 
-func (r *AerospikeCluster) setDefaultAerospikeConfigs(
+func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 	asLog logr.Logger, configSpec AerospikeConfigSpec,
 ) error {
 	config := configSpec.Value
 
 	// namespace conf
 	if err := setDefaultNsConf(
-		asLog, configSpec, r.Spec.RackConfig.Namespaces,
+		asLog, configSpec, c.Spec.RackConfig.Namespaces,
 	); err != nil {
 		return err
 	}
 
 	// service conf
-	if err := setDefaultServiceConf(asLog, configSpec, r.Name); err != nil {
+	if err := setDefaultServiceConf(asLog, configSpec, c.Name); err != nil {
 		return err
 	}
 
 	// network conf
 	if err := setDefaultNetworkConf(
-		asLog, &configSpec, r.Spec.OperatorClientCertSpec,
+		asLog, &configSpec, c.Spec.OperatorClientCertSpec,
 	); err != nil {
 		return err
 	}
@@ -278,7 +279,8 @@ func setDefaultNsConf(
 	nsConf, ok := config["namespaces"]
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.namespaces not present. aerospikeConfig %v", config,
+			"aerospikeConfig.namespaces not present. aerospikeConfig %v",
+			config,
 		)
 	} else if nsConf == nil {
 		return fmt.Errorf("aerospikeConfig.namespaces cannot be nil")
@@ -608,14 +610,14 @@ func setDefaultLoggingConf(
 }
 
 func setDefaultXDRConf(
-	asLog logr.Logger, configSpec AerospikeConfigSpec,
+	_ logr.Logger, _ AerospikeConfigSpec,
 ) error {
 	// Nothing to update for now
 	return nil
 }
 
 func setDefaultsInConfigMap(
-	asLog logr.Logger, baseConfigs, defaultConfigs map[string]interface{},
+	_ logr.Logger, baseConfigs, defaultConfigs map[string]interface{},
 ) error {
 	for k, v := range defaultConfigs {
 		// Special handling.

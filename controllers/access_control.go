@@ -30,7 +30,11 @@ const (
 //
 // Returns a tuple of admin username and password to use. If the cluster is not security
 // enabled both username and password will be zero strings.
-func AerospikeAdminCredentials(desiredState *asdbv1beta1.AerospikeClusterSpec, currentState *asdbv1beta1.AerospikeClusterSpec, passwordProvider AerospikeUserPasswordProvider) (string, string, error) {
+func AerospikeAdminCredentials(
+	desiredState *asdbv1beta1.AerospikeClusterSpec,
+	currentState *asdbv1beta1.AerospikeClusterSpec,
+	passwordProvider AerospikeUserPasswordProvider,
+) (string, string, error) {
 	enabled, err := asdbv1beta1.IsSecurityEnabled(currentState.AerospikeConfig)
 	if err != nil {
 		// Its possible this is a new cluster and current state is empty.
@@ -55,10 +59,14 @@ func AerospikeAdminCredentials(desiredState *asdbv1beta1.AerospikeClusterSpec, c
 
 	if !ok {
 		// Should not happen on a validated spec.
-		return "", "", fmt.Errorf("%s user missing in access control", asdbv1beta1.AdminUsername)
+		return "", "", fmt.Errorf(
+			"%s user missing in access control", asdbv1beta1.AdminUsername,
+		)
 	}
 
-	password, err := passwordProvider.Get(asdbv1beta1.AdminUsername, &adminUserSpec)
+	password, err := passwordProvider.Get(
+		asdbv1beta1.AdminUsername, &adminUserSpec,
+	)
 
 	if err != nil {
 		return "", "", err
@@ -68,20 +76,23 @@ func AerospikeAdminCredentials(desiredState *asdbv1beta1.AerospikeClusterSpec, c
 }
 
 // ReconcileAccessControl reconciles access control to ensure current state moves to the desired state.
-func ReconcileAccessControl(desired *asdbv1beta1.AerospikeClusterSpec, current *asdbv1beta1.AerospikeClusterSpec, client *as.Client, passwordProvider AerospikeUserPasswordProvider, logger Logger) error {
+func ReconcileAccessControl(
+	desired *asdbv1beta1.AerospikeClusterSpec, client *as.Client,
+	passwordProvider AerospikeUserPasswordProvider, logger Logger,
+) error {
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
 	adminPolicy := GetAdminPolicy(desired)
 
 	desiredRoles := asdbv1beta1.GetRolesFromSpec(desired)
-	currentRoles := asdbv1beta1.GetRolesFromSpec(current)
-	err := reconcileRoles(desiredRoles, currentRoles, client, adminPolicy, logger)
+	err := reconcileRoles(desiredRoles, client, adminPolicy, logger)
 	if err != nil {
 		return err
 	}
 
 	desiredUsers := asdbv1beta1.GetUsersFromSpec(desired)
-	currentUsers := asdbv1beta1.GetUsersFromSpec(current)
-	err = reconcileUsers(desiredUsers, currentUsers, passwordProvider, client, adminPolicy, logger)
+	err = reconcileUsers(
+		desiredUsers, passwordProvider, client, adminPolicy, logger,
+	)
 	return err
 }
 
@@ -96,7 +107,10 @@ func GetAdminPolicy(clusterSpec *asdbv1beta1.AerospikeClusterSpec) as.AdminPolic
 }
 
 // reconcileRoles reconciles roles to take them from current to desired.
-func reconcileRoles(desired map[string]asdbv1beta1.AerospikeRoleSpec, current map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+func reconcileRoles(
+	desired map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client,
+	adminPolicy as.AdminPolicy, logger Logger,
+) error {
 	var err error
 
 	// Get list of existing roles from the cluster.
@@ -105,21 +119,19 @@ func reconcileRoles(desired map[string]asdbv1beta1.AerospikeRoleSpec, current ma
 		return fmt.Errorf("error querying roles: %v", err)
 	}
 
-	currentRoleNames := []string{}
-
-	// List roles in the cluster.
+	var currentRoleNames []string // List roles in the cluster.
 	for _, role := range asRoles {
 		currentRoleNames = append(currentRoleNames, role.Name)
 	}
 
-	requiredRoleNames := []string{}
+	var requiredRoleNames []string
 
 	// List roles needed in the desired list.
 	for roleName := range desired {
 		requiredRoleNames = append(requiredRoleNames, roleName)
 	}
 
-	roleReconcileCmds := []AerospikeAccessControlReconcileCmd{}
+	var roleReconcileCmds []AerospikeAccessControlReconcileCmd
 
 	// Create a list of role commands to drop.
 	rolesToDrop := SliceSubtract(currentRoleNames, requiredRoleNames)
@@ -129,12 +141,20 @@ func reconcileRoles(desired map[string]asdbv1beta1.AerospikeRoleSpec, current ma
 
 		if !ok {
 			// Not a predefined role and can be dropped.
-			roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleDrop{name: roleToDrop})
+			roleReconcileCmds = append(
+				roleReconcileCmds, AerospikeRoleDrop{name: roleToDrop},
+			)
 		}
 	}
 
 	for roleName, roleSpec := range desired {
-		roleReconcileCmds = append(roleReconcileCmds, AerospikeRoleCreateUpdate{name: roleName, privileges: roleSpec.Privileges, whitelist: roleSpec.Whitelist, readQuota: roleSpec.ReadQuota, writeQuota: roleSpec.WriteQuota})
+		roleReconcileCmds = append(
+			roleReconcileCmds, AerospikeRoleCreateUpdate{
+				name: roleName, privileges: roleSpec.Privileges,
+				whitelist: roleSpec.Whitelist, readQuota: roleSpec.ReadQuota,
+				writeQuota: roleSpec.WriteQuota,
+			},
+		)
 	}
 
 	// Execute all commands.
@@ -150,7 +170,11 @@ func reconcileRoles(desired map[string]asdbv1beta1.AerospikeRoleSpec, current ma
 }
 
 // reconcileUsers reconciles users to take them from current to desired.
-func reconcileUsers(desired map[string]asdbv1beta1.AerospikeUserSpec, current map[string]asdbv1beta1.AerospikeUserSpec, passwordProvider AerospikeUserPasswordProvider, client *as.Client, adminPolicy as.AdminPolicy, logger Logger) error {
+func reconcileUsers(
+	desired map[string]asdbv1beta1.AerospikeUserSpec,
+	passwordProvider AerospikeUserPasswordProvider, client *as.Client,
+	adminPolicy as.AdminPolicy, logger Logger,
+) error {
 	var err error
 
 	// Get list of existing users from the cluster.
@@ -159,30 +183,32 @@ func reconcileUsers(desired map[string]asdbv1beta1.AerospikeUserSpec, current ma
 		return fmt.Errorf("error querying users: %v", err)
 	}
 
-	currentUserNames := []string{}
+	var currentUserNames []string
 
 	// List users in the cluster.
 	for _, user := range asUsers {
 		currentUserNames = append(currentUserNames, user.User)
 	}
 
-	requiredUserNames := []string{}
+	var requiredUserNames []string
 
 	// List users needed in the desired list.
 	for userName := range desired {
 		requiredUserNames = append(requiredUserNames, userName)
 	}
 
-	userReconcileCmds := []AerospikeAccessControlReconcileCmd{}
+	var userReconcileCmds []AerospikeAccessControlReconcileCmd
 
 	// Create a list of user commands to drop.
 	usersToDrop := SliceSubtract(currentUserNames, requiredUserNames)
 
 	for _, userToDrop := range usersToDrop {
-		userReconcileCmds = append(userReconcileCmds, AerospikeUserDrop{name: userToDrop})
+		userReconcileCmds = append(
+			userReconcileCmds, AerospikeUserDrop{name: userToDrop},
+		)
 	}
 
-	// Admin user update command should be execute last to ensure admin password
+	// Admin user update command should be executed last to ensure admin password
 	// update does not disrupt reconciliation.
 	var adminUpdateCmd *AerospikeUserCreateUpdate = nil
 	for userName, userSpec := range desired {
@@ -191,7 +217,9 @@ func reconcileUsers(desired map[string]asdbv1beta1.AerospikeUserSpec, current ma
 			return err
 		}
 
-		cmd := AerospikeUserCreateUpdate{name: userName, password: &password, roles: userSpec.Roles}
+		cmd := AerospikeUserCreateUpdate{
+			name: userName, password: &password, roles: userSpec.Roles,
+		}
 		if userName == asdbv1beta1.AdminUsername {
 			adminUpdateCmd = &cmd
 		} else {
@@ -215,9 +243,11 @@ func reconcileUsers(desired map[string]asdbv1beta1.AerospikeUserSpec, current ma
 	return nil
 }
 
-// privilegeStringtoAerospikePrivilege converts privilegeString to an Aerospike privilege.
-func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privilege, error) {
-	aerospikePrivileges := []as.Privilege{}
+// privilegeStringToAerospikePrivilege converts privilegeString to an Aerospike privilege.
+func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
+	[]as.Privilege, error,
+) {
+	var aerospikePrivileges []as.Privilege
 
 	for _, privilege := range privilegeStrings {
 		parts := strings.Split(privilege, ".")
@@ -269,7 +299,9 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 
 		}
 
-		aerospikePrivilege := as.Privilege{Code: code, Namespace: namespaceName, SetName: setName}
+		aerospikePrivilege := as.Privilege{
+			Code: code, Namespace: namespaceName, SetName: setName,
+		}
 		aerospikePrivileges = append(aerospikePrivileges, aerospikePrivilege)
 
 	}
@@ -278,8 +310,10 @@ func privilegeStringtoAerospikePrivilege(privilegeStrings []string) ([]as.Privil
 }
 
 // AerospikePrivilegeToPrivilegeString converts aerospikePrivilege to controller spec privilege string.
-func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]string, error) {
-	privileges := []string{}
+func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
+	[]string, error,
+) {
+	var privileges []string
 	for _, aerospikePrivilege := range aerospikePrivileges {
 		var buffer bytes.Buffer
 
@@ -306,7 +340,9 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]
 			buffer.WriteString("user-admin")
 
 		default:
-			return nil, fmt.Errorf("unknown privilege code %v", aerospikePrivilege.Code)
+			return nil, fmt.Errorf(
+				"unknown privilege code %v", aerospikePrivilege.Code,
+			)
 		}
 
 		if aerospikePrivilege.Namespace != "" {
@@ -326,11 +362,13 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) ([]
 
 // AerospikeUserPasswordProvider provides password for a give user..
 type AerospikeUserPasswordProvider interface {
-	// Return the password for username.
-	Get(username string, userSpec *asdbv1beta1.AerospikeUserSpec) (string, error)
+	// Get returns the password for username.
+	Get(username string, userSpec *asdbv1beta1.AerospikeUserSpec) (
+		string, error,
+	)
 }
 
-// AerospikeAccessControlReconcileCmd commands neeeded to reconcile a single access control entiry,
+// AerospikeAccessControlReconcileCmd commands needed to Reconcile a single access control entry,
 // for example a role or a user.
 type AerospikeAccessControlReconcileCmd interface {
 	// Execute executes the command. The implementation should be idempotent.
@@ -351,12 +389,14 @@ type AerospikeRoleCreateUpdate struct {
 	// The readQuota specifies the read query rate that is permitted for the current role.
 	readQuota uint32
 
-	// The writeQuota specifies the write query rate that is permitted for the current role.
+	// The writeQuota specifies the write rate that is permitted for the current role.
 	writeQuota uint32
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
-func (roleCreate AerospikeRoleCreateUpdate) Execute(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
+func (roleCreate AerospikeRoleCreateUpdate) Execute(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
 	role, err := client.QueryRole(adminPolicy, roleCreate.name)
 	isCreate := false
 
@@ -365,7 +405,9 @@ func (roleCreate AerospikeRoleCreateUpdate) Execute(client *as.Client, adminPoli
 			isCreate = true
 		} else {
 			// Failure to query for the role.
-			return fmt.Errorf("error querying role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"error querying role %s: %v", roleCreate.name, err,
+			)
 		}
 	}
 
@@ -377,27 +419,35 @@ func (roleCreate AerospikeRoleCreateUpdate) Execute(client *as.Client, adminPoli
 }
 
 // createRole creates a new Aerospike role.
-func (roleCreate AerospikeRoleCreateUpdate) createRole(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
-	logger.Info("Creating role", "rolename", roleCreate.name)
+func (roleCreate AerospikeRoleCreateUpdate) createRole(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
+	logger.Info("Creating role", "role name", roleCreate.name)
 
-	aerospikePrivileges, err := privilegeStringtoAerospikePrivilege(roleCreate.privileges)
+	aerospikePrivileges, err := privilegeStringToAerospikePrivilege(roleCreate.privileges)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
 
-	err = client.CreateRole(adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist, roleCreate.readQuota, roleCreate.writeQuota)
+	err = client.CreateRole(
+		adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist,
+		roleCreate.readQuota, roleCreate.writeQuota,
+	)
 	if err != nil {
 		return fmt.Errorf("could not create role %s: %v", roleCreate.name, err)
 	}
-	logger.Info("Created role", "rolename", roleCreate.name)
+	logger.Info("Created role", "role name", roleCreate.name)
 
 	return nil
 }
 
 // updateRole updates an existing Aerospike role.
-func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminPolicy *as.AdminPolicy, role *as.Role, logger Logger) error {
+func (roleCreate AerospikeRoleCreateUpdate) updateRole(
+	client *as.Client, adminPolicy *as.AdminPolicy, role *as.Role,
+	logger Logger,
+) error {
 	// Update the role.
-	logger.Info("Updating role", "rolename", roleCreate.name)
+	logger.Info("Updating role", "role name", roleCreate.name)
 
 	// Find the privileges to drop.
 	currentPrivileges, err := AerospikePrivilegeToPrivilegeString(role.Privileges)
@@ -410,46 +460,70 @@ func (roleCreate AerospikeRoleCreateUpdate) updateRole(client *as.Client, adminP
 	privilegesToGrant := SliceSubtract(desiredPrivileges, currentPrivileges)
 
 	if len(privilegesToRevoke) > 0 {
-		aerospikePrivileges, err := privilegeStringtoAerospikePrivilege(privilegesToRevoke)
+		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToRevoke)
 		if err != nil {
-			return fmt.Errorf("could not update role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"could not update role %s: %v", roleCreate.name, err,
+			)
 		}
 
-		err = client.RevokePrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
+		err = client.RevokePrivileges(
+			adminPolicy, roleCreate.name, aerospikePrivileges,
+		)
 
 		if err != nil {
-			return fmt.Errorf("error revoking privileges for role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"error revoking privileges for role %s: %v", roleCreate.name,
+				err,
+			)
 		}
 
-		logger.Info("Revoked privileges for role", "rolename", roleCreate.name, "privileges", privilegesToRevoke)
+		logger.Info(
+			"Revoked privileges for role", "role name", roleCreate.name,
+			"privileges", privilegesToRevoke,
+		)
 	}
 
 	if len(privilegesToGrant) > 0 {
-		aerospikePrivileges, err := privilegeStringtoAerospikePrivilege(privilegesToGrant)
+		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToGrant)
 		if err != nil {
-			return fmt.Errorf("could not update role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"could not update role %s: %v", roleCreate.name, err,
+			)
 		}
 
-		err = client.GrantPrivileges(adminPolicy, roleCreate.name, aerospikePrivileges)
+		err = client.GrantPrivileges(
+			adminPolicy, roleCreate.name, aerospikePrivileges,
+		)
 
 		if err != nil {
-			return fmt.Errorf("error granting privileges for role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"error granting privileges for role %s: %v", roleCreate.name,
+				err,
+			)
 		}
 
-		logger.Info("Granted privileges to role", "rolename", roleCreate.name, "privileges", privilegesToGrant)
+		logger.Info(
+			"Granted privileges to role", "role name", roleCreate.name,
+			"privileges", privilegesToGrant,
+		)
 	}
 
 	if !reflect.DeepEqual(role.Whitelist, roleCreate.whitelist) {
 		// Set whitelist.
-		err = client.SetWhitelist(adminPolicy, roleCreate.name, roleCreate.whitelist)
+		err = client.SetWhitelist(
+			adminPolicy, roleCreate.name, roleCreate.whitelist,
+		)
 
 		if err != nil {
-			return fmt.Errorf("error setting whitelist for role %s: %v", roleCreate.name, err)
+			return fmt.Errorf(
+				"error setting whitelist for role %s: %v", roleCreate.name, err,
+			)
 		}
 
 	}
 
-	logger.Info("Updated role", "rolename", roleCreate.name)
+	logger.Info("Updated role", "role name", roleCreate.name)
 	return nil
 }
 
@@ -466,7 +540,9 @@ type AerospikeUserCreateUpdate struct {
 }
 
 // Execute creates a new Aerospike user or updates an existing one.
-func (userCreate AerospikeUserCreateUpdate) Execute(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
+func (userCreate AerospikeUserCreateUpdate) Execute(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
 	user, err := client.QueryUser(adminPolicy, userCreate.name)
 	isCreate := false
 
@@ -475,7 +551,9 @@ func (userCreate AerospikeUserCreateUpdate) Execute(client *as.Client, adminPoli
 			isCreate = true
 		} else {
 			// Failure to query for the user.
-			return fmt.Errorf("error querying user %s: %v", userCreate.name, err)
+			return fmt.Errorf(
+				"error querying user %s: %v", userCreate.name, err,
+			)
 		}
 	}
 
@@ -487,13 +565,19 @@ func (userCreate AerospikeUserCreateUpdate) Execute(client *as.Client, adminPoli
 }
 
 // createUser creates a new Aerospike user.
-func (userCreate AerospikeUserCreateUpdate) createUser(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
+func (userCreate AerospikeUserCreateUpdate) createUser(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
 	logger.Info("Creating user", "username", userCreate.name)
 	if userCreate.password == nil {
-		return fmt.Errorf("error creating user %s. Password not specified", userCreate.name)
+		return fmt.Errorf(
+			"error creating user %s. Password not specified", userCreate.name,
+		)
 	}
 
-	err := client.CreateUser(adminPolicy, userCreate.name, *userCreate.password, userCreate.roles)
+	err := client.CreateUser(
+		adminPolicy, userCreate.name, *userCreate.password, userCreate.roles,
+	)
 	if err != nil {
 		return fmt.Errorf("could not create user %s: %v", userCreate.name, err)
 	}
@@ -503,14 +587,21 @@ func (userCreate AerospikeUserCreateUpdate) createUser(client *as.Client, adminP
 }
 
 // updateUser updates an existing Aerospike user.
-func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminPolicy *as.AdminPolicy, user *as.UserRoles, logger Logger) error {
+func (userCreate AerospikeUserCreateUpdate) updateUser(
+	client *as.Client, adminPolicy *as.AdminPolicy, user *as.UserRoles,
+	logger Logger,
+) error {
 	// Update the user.
 	logger.Info("Updating user", "username", userCreate.name)
 	if userCreate.password != nil {
 		logger.Info("Updating password for user", "username", userCreate.name)
-		err := client.ChangePassword(adminPolicy, userCreate.name, *userCreate.password)
+		err := client.ChangePassword(
+			adminPolicy, userCreate.name, *userCreate.password,
+		)
 		if err != nil {
-			return fmt.Errorf("error updating password for user %s: %v", userCreate.name, err)
+			return fmt.Errorf(
+				"error updating password for user %s: %v", userCreate.name, err,
+			)
 		}
 		logger.Info("Updated password for user", "username", userCreate.name)
 	}
@@ -525,20 +616,30 @@ func (userCreate AerospikeUserCreateUpdate) updateUser(client *as.Client, adminP
 		err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke)
 
 		if err != nil {
-			return fmt.Errorf("error revoking roles for user %s: %v", userCreate.name, err)
+			return fmt.Errorf(
+				"error revoking roles for user %s: %v", userCreate.name, err,
+			)
 		}
 
-		logger.Info("Revoked roles for user", "username", userCreate.name, "roles", rolesToRevoke)
+		logger.Info(
+			"Revoked roles for user", "username", userCreate.name, "roles",
+			rolesToRevoke,
+		)
 	}
 
 	if len(rolesToGrant) > 0 {
 		err := client.GrantRoles(adminPolicy, userCreate.name, rolesToGrant)
 
 		if err != nil {
-			return fmt.Errorf("error granting roles for user %s: %v", userCreate.name, err)
+			return fmt.Errorf(
+				"error granting roles for user %s: %v", userCreate.name, err,
+			)
 		}
 
-		logger.Info("Granted roles to user", "username", userCreate.name, "roles", rolesToGrant)
+		logger.Info(
+			"Granted roles to user", "username", userCreate.name, "roles",
+			rolesToGrant,
+		)
 	}
 
 	logger.Info("Updated user", "username", userCreate.name)
@@ -552,18 +653,20 @@ type AerospikeUserDrop struct {
 }
 
 // Execute implements dropping the user.
-func (userdrop AerospikeUserDrop) Execute(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
-	logger.Info("Dropping user", "username", userdrop.name)
-	err := client.DropUser(adminPolicy, userdrop.name)
+func (userDrop AerospikeUserDrop) Execute(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
+	logger.Info("Dropping user", "username", userDrop.name)
+	err := client.DropUser(adminPolicy, userDrop.name)
 
 	if err != nil {
 		if !strings.Contains(err.Error(), userNotFoundErr) {
 			// Failure to drop for the user.
-			return fmt.Errorf("error dropping user %s: %v", userdrop.name, err)
+			return fmt.Errorf("error dropping user %s: %v", userDrop.name, err)
 		}
 	}
 
-	logger.Info("Dropped user", "username", userdrop.name)
+	logger.Info("Dropped user", "username", userDrop.name)
 	return nil
 }
 
@@ -574,24 +677,26 @@ type AerospikeRoleDrop struct {
 }
 
 // Execute implements dropping the role.
-func (roledrop AerospikeRoleDrop) Execute(client *as.Client, adminPolicy *as.AdminPolicy, logger Logger) error {
-	logger.Info("Dropping role", "role", roledrop.name)
-	err := client.DropRole(adminPolicy, roledrop.name)
+func (roleDrop AerospikeRoleDrop) Execute(
+	client *as.Client, adminPolicy *as.AdminPolicy, logger Logger,
+) error {
+	logger.Info("Dropping role", "role", roleDrop.name)
+	err := client.DropRole(adminPolicy, roleDrop.name)
 
 	if err != nil {
 		if !strings.Contains(err.Error(), roleNotFoundErr) {
 			// Failure to drop for the role.
-			return fmt.Errorf("error dropping role %s: %v", roledrop.name, err)
+			return fmt.Errorf("error dropping role %s: %v", roleDrop.name, err)
 		}
 	}
 
-	logger.Info("Dropped role", "role", roledrop.name)
+	logger.Info("Dropped role", "role", roleDrop.name)
 	return nil
 }
 
 // SliceSubtract removes elements of slice2 from slice1 and returns the result.
 func SliceSubtract(slice1 []string, slice2 []string) []string {
-	result := []string{}
+	var result []string
 	for _, s1 := range slice1 {
 		found := false
 		for _, toSubtract := range slice2 {

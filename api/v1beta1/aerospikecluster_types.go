@@ -32,7 +32,7 @@ import (
 type AerospikeClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	// Adds custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 
 	// Aerospike cluster size
 	Size int32 `json:"size"`
@@ -45,10 +45,6 @@ type AerospikeClusterSpec struct {
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
-	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
-	// Only Memory and Cpu resources can be given
-	// Resources.Limits should be more than Resources.Requests.
-	Resources *corev1.ResourceRequirements `json:"resources"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 	// RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration
@@ -219,6 +215,10 @@ type AerospikePodSpec struct {
 type AerospikeContainerSpec struct {
 	// SecurityContext that will be added to aerospike-server container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
+	// Only Memory and Cpu resources can be given
+	// Resources.Limits should be more than Resources.Requests.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // RackPodSpec provides rack specific overrides to the global pod spec.
@@ -238,21 +238,21 @@ type SchedulingPolicy struct {
 }
 
 // ValidatePodSpecChange indicates if a change to pod spec is safe to apply.
-func (v *AerospikePodSpec) ValidatePodSpecChange(new AerospikePodSpec) error {
+func (p *AerospikePodSpec) ValidatePodSpecChange(_ AerospikePodSpec) error {
 	// All changes are valid for now.
 	return nil
 }
 
 // SetDefaults applies defaults to the pod spec.
-func (v *AerospikePodSpec) SetDefaults() error {
-	if v.InputDNSPolicy == nil {
-		if v.HostNetwork {
-			v.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+func (p *AerospikePodSpec) SetDefaults() error {
+	if p.InputDNSPolicy == nil {
+		if p.HostNetwork {
+			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
 		} else {
-			v.DNSPolicy = corev1.DNSClusterFirst
+			p.DNSPolicy = corev1.DNSClusterFirst
 		}
 	} else {
-		v.DNSPolicy = *v.InputDNSPolicy
+		p.DNSPolicy = *p.InputDNSPolicy
 	}
 
 	return nil
@@ -398,17 +398,17 @@ type AerospikePersistentVolumePolicySpec struct {
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
-func (v *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
-	if v.InputInitMethod == nil {
-		v.InitMethod = defaultPolicy.InitMethod
+func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
+	if p.InputInitMethod == nil {
+		p.InitMethod = defaultPolicy.InitMethod
 	} else {
-		v.InitMethod = *v.InputInitMethod
+		p.InitMethod = *p.InputInitMethod
 	}
 
-	if v.InputCascadeDelete == nil {
-		v.CascadeDelete = defaultPolicy.CascadeDelete
+	if p.InputCascadeDelete == nil {
+		p.CascadeDelete = defaultPolicy.CascadeDelete
 	} else {
-		v.CascadeDelete = *v.InputCascadeDelete
+		p.CascadeDelete = *p.InputCascadeDelete
 	}
 }
 
@@ -644,21 +644,21 @@ type AerospikeNetworkPolicy struct {
 }
 
 // SetDefaults applies default to unspecified fields on the network policy.
-func (v *AerospikeNetworkPolicy) SetDefaults() {
-	if v.AccessType == AerospikeNetworkTypeUnspecified {
-		v.AccessType = AerospikeNetworkTypeHostInternal
+func (n *AerospikeNetworkPolicy) SetDefaults() {
+	if n.AccessType == AerospikeNetworkTypeUnspecified {
+		n.AccessType = AerospikeNetworkTypeHostInternal
 	}
 
-	if v.AlternateAccessType == AerospikeNetworkTypeUnspecified {
-		v.AlternateAccessType = AerospikeNetworkTypeHostExternal
+	if n.AlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.AlternateAccessType = AerospikeNetworkTypeHostExternal
 	}
 
-	if v.TLSAccessType == AerospikeNetworkTypeUnspecified {
-		v.TLSAccessType = AerospikeNetworkTypeHostInternal
+	if n.TLSAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAccessType = AerospikeNetworkTypeHostInternal
 	}
 
-	if v.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
-		v.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
+	if n.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
 	}
 }
 
@@ -741,115 +741,6 @@ func init() {
 	SchemeBuilder.Register(&AerospikeCluster{}, &AerospikeClusterList{})
 }
 
-// Deepcopy.
-// TODO: Check if DeepCopy implementations are required.
-
-// DeepCopy implements deepcopy func for RackConfig
-func (v *RackConfig) DeepCopy() *RackConfig {
-	src := *v
-	var dst = RackConfig{Racks: []Rack{}}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for Rack
-func (v *Rack) DeepCopy() *Rack {
-	src := *v
-	var dst = Rack{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for ValidationPolicy.
-func (v *ValidationPolicySpec) DeepCopy() *ValidationPolicySpec {
-	src := *v
-	var dst = ValidationPolicySpec{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeRoleSpec
-func (v *AerospikeRoleSpec) DeepCopy() *AerospikeRoleSpec {
-	src := *v
-	var dst = AerospikeRoleSpec{Privileges: []string{}}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeUserSpec
-func (v *AerospikeUserSpec) DeepCopy() *AerospikeUserSpec {
-	src := *v
-	var dst = AerospikeUserSpec{Roles: []string{}}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeClientAdminPolicy
-func (v *AerospikeClientAdminPolicy) DeepCopy() *AerospikeClientAdminPolicy {
-	src := *v
-	var dst = AerospikeClientAdminPolicy{Timeout: 2000}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeAccessControlSpec
-func (v *AerospikeAccessControlSpec) DeepCopy() *AerospikeAccessControlSpec {
-	src := *v
-	var dst = AerospikeAccessControlSpec{
-		Roles: []AerospikeRoleSpec{}, Users: []AerospikeUserSpec{},
-	}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikePersistentVolumePolicySpec.
-func (v *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVolumePolicySpec {
-	src := *v
-	var dst = AerospikePersistentVolumePolicySpec{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikePersistentVolumeSpec.
-func (v *VolumeSpec) DeepCopy() *VolumeSpec {
-	src := *v
-	var dst = VolumeSpec{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeStorageSpec.
-func (v *AerospikeStorageSpec) DeepCopy() *AerospikeStorageSpec {
-	src := *v
-	var dst = AerospikeStorageSpec{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeNetworkpolicy
-func (v *AerospikeNetworkPolicy) DeepCopy() *AerospikeNetworkPolicy {
-	src := *v
-	var dst = AerospikeNetworkPolicy{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikeInstanceSummary
-func (v *AerospikeInstanceSummary) DeepCopy() *AerospikeInstanceSummary {
-	src := *v
-	var dst = AerospikeInstanceSummary{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
-// DeepCopy implements deepcopy func for AerospikePodStatus
-func (v *AerospikePodStatus) DeepCopy() *AerospikePodStatus {
-	src := *v
-	var dst = AerospikePodStatus{}
-	lib.DeepCopy(dst, src)
-	return &dst
-}
-
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
 func CopySpecToStatus(spec AerospikeClusterSpec) (
 	*AerospikeClusterStatusSpec, error,
@@ -886,15 +777,6 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 		return nil, err
 	}
 	status.AerospikeConfig = statusAerospikeConfig
-
-	if spec.Resources != nil {
-		// Resources
-		statusResources := &corev1.ResourceRequirements{}
-		if err := lib.DeepCopy(statusResources, spec.Resources); err != nil {
-			return nil, err
-		}
-		status.Resources = statusResources
-	}
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
@@ -941,7 +823,9 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	status.PodSpec = statusPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(&seedsFinderServices, &spec.SeedsFinderServices); err != nil {
+	if err := lib.DeepCopy(
+		&seedsFinderServices, &spec.SeedsFinderServices,
+	); err != nil {
 		return nil, err
 	}
 	status.SeedsFinderServices = seedsFinderServices
@@ -985,15 +869,6 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		return nil, err
 	}
 	spec.AerospikeConfig = specAerospikeConfig
-
-	if status.Resources != nil {
-		// Resources
-		specResources := &corev1.ResourceRequirements{}
-		if err := lib.DeepCopy(specResources, status.Resources); err != nil {
-			return nil, err
-		}
-		spec.Resources = specResources
-	}
 
 	if status.ValidationPolicy != nil {
 		// ValidationPolicy
@@ -1040,7 +915,9 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 	spec.PodSpec = specPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(&seedsFinderServices, &status.SeedsFinderServices); err != nil {
+	if err := lib.DeepCopy(
+		&seedsFinderServices, &status.SeedsFinderServices,
+	); err != nil {
 		return nil, err
 	}
 	spec.SeedsFinderServices = seedsFinderServices

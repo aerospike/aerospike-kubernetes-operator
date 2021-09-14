@@ -10,9 +10,9 @@ import (
 )
 
 // ValidateStorageSpecChange indicates if a change to storage spec is safe to apply.
-func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
+func (s *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
 	for _, newVolume := range new.Volumes {
-		for _, oldVolume := range v.Volumes {
+		for _, oldVolume := range s.Volumes {
 			if oldVolume.Name == newVolume.Name {
 				if !oldVolume.IsSafeChange(newVolume) {
 					// Validate same volumes
@@ -26,19 +26,19 @@ func (v *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpe
 		}
 	}
 
-	_, _, err := v.validateAddedOrRemovedVolumes(new)
+	_, _, err := s.validateAddedOrRemovedVolumes(new)
 	return err
 }
 
 // validateAddedOrRemovedVolumes returns volumes that were added or removed.
 // Currently, only configMap volume is allowed to be added or removed dynamically
-func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (
+func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (
 	addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error,
 ) {
 	// Validate Persistent volume
 	for _, newVolume := range new.Volumes {
 		matched := false
-		for _, oldVolume := range v.Volumes {
+		for _, oldVolume := range s.Volumes {
 			if oldVolume.Name == newVolume.Name {
 				matched = true
 				break
@@ -55,7 +55,7 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 		}
 	}
 
-	for _, oldVolume := range v.Volumes {
+	for _, oldVolume := range s.Volumes {
 		matched := false
 		for _, newVolume := range new.Volumes {
 			if oldVolume.Name == newVolume.Name {
@@ -77,36 +77,36 @@ func (v *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 }
 
 // SetDefaults sets default values for storage spec fields.
-func (v *AerospikeStorageSpec) SetDefaults() {
+func (s *AerospikeStorageSpec) SetDefaults() {
 	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
 	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
 	// Set storage level defaults.
-	v.FileSystemVolumePolicy.SetDefaults(
+	s.FileSystemVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
 			InitMethod: defaultFilesystemInitMethod, CascadeDelete: false,
 		},
 	)
-	v.BlockVolumePolicy.SetDefaults(
+	s.BlockVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
 			InitMethod: defaultBlockInitMethod, CascadeDelete: false,
 		},
 	)
 
-	for i := range v.Volumes {
-		if v.Volumes[i].Source.PersistentVolume == nil {
+	for i := range s.Volumes {
+		if s.Volumes[i].Source.PersistentVolume == nil {
 			// All other sources are considered to be mounted, for now.
-			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
-		} else if v.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.BlockVolumePolicy)
-		} else if v.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-			v.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&v.FileSystemVolumePolicy)
+			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
+		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
+		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
 		}
 	}
 }
 
 // GetConfigMaps returns the config map volumes from the storage spec.
-func (v *AerospikeStorageSpec) GetConfigMaps() (configMaps []VolumeSpec) {
-	for _, volume := range v.Volumes {
+func (s *AerospikeStorageSpec) GetConfigMaps() (configMaps []VolumeSpec) {
+	for _, volume := range s.Volumes {
 		if volume.Source.ConfigMap != nil {
 			configMaps = append(configMaps, volume)
 		}
@@ -115,8 +115,8 @@ func (v *AerospikeStorageSpec) GetConfigMaps() (configMaps []VolumeSpec) {
 }
 
 // GetPVs returns the PV volumes from the storage spec.
-func (v *AerospikeStorageSpec) GetPVs() (PVs []VolumeSpec) {
-	for _, volume := range v.Volumes {
+func (s *AerospikeStorageSpec) GetPVs() (PVs []VolumeSpec) {
+	for _, volume := range s.Volumes {
 		if volume.Source.PersistentVolume != nil {
 			PVs = append(PVs, volume)
 		}
@@ -125,8 +125,8 @@ func (v *AerospikeStorageSpec) GetPVs() (PVs []VolumeSpec) {
 }
 
 // GetNonPVs returns the non PV volumes from the storage spec.
-func (v *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
-	for _, volume := range v.Volumes {
+func (s *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
+	for _, volume := range s.Volumes {
 		if volume.Source.PersistentVolume == nil {
 			nonPVs = append(nonPVs, volume)
 		}
@@ -135,11 +135,11 @@ func (v *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
 }
 
 // GetAerospikeStorageList gives blockStorageDeviceList and fileStorageList
-func (v *AerospikeStorageSpec) GetAerospikeStorageList() (
+func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
 	blockStorageDeviceList []string, fileStorageList []string, err error,
 ) {
 
-	for _, volume := range v.Volumes {
+	for _, volume := range s.Volumes {
 
 		if volume.Aerospike != nil {
 			// TODO: Do we need to check for other type of sources
@@ -165,15 +165,15 @@ func (v *AerospikeStorageSpec) GetAerospikeStorageList() (
 }
 
 // IsVolumePresentForAerospikePath checks if configuration has a volume defined for given path for Aerospike server container.
-func (v *AerospikeStorageSpec) IsVolumePresentForAerospikePath(path string) bool {
-	return v.GetVolumeForAerospikePath(path) != nil
+func (s *AerospikeStorageSpec) IsVolumePresentForAerospikePath(path string) bool {
+	return s.GetVolumeForAerospikePath(path) != nil
 }
 
 // GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
-func (v *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
+func (s *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
 	var matchedVolume *VolumeSpec
-	for i := range v.Volumes {
-		volume := &v.Volumes[i]
+	for i := range s.Volumes {
+		volume := &s.Volumes[i]
 		if volume.Aerospike != nil && isPathParentOrSame(
 			volume.Aerospike.Path, path,
 		) {

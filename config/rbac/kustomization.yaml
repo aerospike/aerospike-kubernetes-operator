@@ -14,3 +14,4 @@ resources:
 - aerospikecluster_editor_role.yaml
 - aerospikecluster_viewer_role.yaml
 - aerospikecluster_role_binding.yaml
+- service_account.yaml

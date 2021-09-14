@@ -81,7 +81,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	err = createMarkerFile(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = rollingRestartClusterTest(&logger, k8sClient, ctx, clusterNamespacedName)
+	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)

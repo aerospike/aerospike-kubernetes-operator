@@ -17,7 +17,7 @@ spec:
         aerospike:
           path: /opt/aerospike
         source:
-          persistentVolume:        
+          persistentVolume:
             storageClass: ssd
             volumeMode: filesystem
             size: 1Gi
@@ -25,7 +25,7 @@ spec:
         aerospike:
           path: /opt/aerospike/data
         source:
-          persistentVolume:        
+          persistentVolume:
             storageClass: ssd
             volumeMode: filesystem
             size: 3Gi
@@ -62,8 +62,3 @@ spec:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true
-
-  resources:
-    requests:
-      memory: 2Gi
-      cpu: 200m
