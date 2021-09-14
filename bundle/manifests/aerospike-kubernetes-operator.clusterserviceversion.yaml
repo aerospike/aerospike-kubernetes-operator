@@ -12,11 +12,48 @@ metadata:
             "namespace": "aerospike"
           },
           "spec": {
-            "size": 2,
+            "aerospikeAccessControl": {
+              "users": [
+                {
+                  "name": "admin",
+                  "roles": [
+                    "sys-admin",
+                    "user-admin"
+                  ],
+                  "secretName": "auth-secret"
+                }
+              ]
+            },
+            "aerospikeConfig": {
+              "logging": [
+                {
+                  "any": "info",
+                  "clustering": "debug",
+                  "name": "/var/log/aerospike/aerospike.log"
+                }
+              ],
+              "namespaces": [
+                {
+                  "memory-size": 3000000000,
+                  "name": "test",
+                  "replication-factor": 2,
+                  "storage-engine": {
+                    "type": "memory"
+                  }
+                }
+              ],
+              "security": {
+                "enable-security": true
+              },
+              "service": {
+                "feature-key-file": "/etc/aerospike/secret/features.conf"
+              }
+            },
             "image": "aerospike/aerospike-server-enterprise:5.6.0.7",
             "podSpec": {
               "multiPodPerHost": true
             },
+            "size": 2,
             "storage": {
               "filesystemVolumePolicy": {
                 "cascadeDelete": true,
@@ -24,64 +61,27 @@ metadata:
               },
               "volumes": [
                 {
+                  "aerospike": {
+                    "path": "/opt/aerospike"
+                  },
                   "name": "workdir",
                   "source": {
                     "persistentVolume": {
+                      "size": "3Gi",
                       "storageClass": "ssd",
-                      "volumeMode": "Filesystem",
-                      "size": "3Gi"
+                      "volumeMode": "Filesystem"
                     }
-                  },
-                  "aerospike": {
-                    "path": "/opt/aerospike"
                   }
                 },
                 {
+                  "aerospike": {
+                    "path": "/etc/aerospike/secret"
+                  },
                   "name": "aerospike-config-secret",
                   "source": {
                     "secret": {
                       "secretName": "aerospike-secret"
                     }
-                  },
-                  "aerospike": {
-                    "path": "/etc/aerospike/secret"
-                  }
-                }
-              ]
-            },
-            "aerospikeAccessControl": {
-              "users": [
-                {
-                  "name": "admin",
-                  "secretName": "auth-secret",
-                  "roles": [
-                    "sys-admin",
-                    "user-admin"
-                  ]
-                }
-              ]
-            },
-            "aerospikeConfig": {
-              "logging": [
-                {
-                  "name": "/var/log/aerospike/aerospike.log",
-                  "any": "info",
-                  "clustering": "debug"
-                }
-              ],
-              "service": {
-                "feature-key-file": "/etc/aerospike/secret/features.conf"
-              },
-              "security": {
-                "enable-security": true
-              },
-              "namespaces": [
-                {
-                  "name": "test",
-                  "memory-size": 3000000000,
-                  "replication-factor": 2,
-                  "storage-engine": {
-                    "type": "memory"
                   }
                 }
               ]
@@ -89,16 +89,16 @@ metadata:
           }
         }
       ]
-
     capabilities: Seamless Upgrades
-    containerImage: docker.io/aerospike/aerospike-kubernetes-operator:2.0.0
-    createdAt: 2021-09-14T13:54:46Z
-    repository: https://github.com/aerospike/aerospike-kubernetes-operator/
     categories: Database
+    containerImage: docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-dev
+    createdAt: 2021-09-14T08:31:41UTC
+    description: The Aerospike Kubernetes Operator automates the deployment and management
+      of Aerospike enterprise clusters on Kubernetes.
+    operatorframework.io/suggested-namespace: aerospike
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-    operatorframework.io/suggested-namespace: aerospike
-    description: The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes.
+    repository: https://github.com/aerospike/aerospike-kubernetes-operator/
   name: aerospike-kubernetes-operator.v2.0.0-dev
   namespace: placeholder
 spec:
@@ -121,12 +121,10 @@ spec:
      -   Configure persistent storage and resource allocation
      -   Standardize and validate configurations
      -   Cluster security management
-
-
   displayName: Aerospike Kubernetes operator
   icon:
-  - base64data: "iVBORw0KGgoAAAANSUhEUgAAAKoAAACqBAMAAADPWMmxAAAAGFBMVEX////bNCr41NL86ejzt7PgTkXnc2ztl5Ktf7GpAAAC80lEQVRo3u2aO2/iQBSFP9k86kEYWpsVSWsFTFo7Jmy7hmBaSIzT8gjZv7/FDCRstnCUS4rVnAqJ0aej8T137lgGKysrKysrK6tv0uCzCitAHfVZtSzVUi3VUi3VUi1VkFpcgOo9uheg7pCnenvkqZ0UeWonRp6a+3+tk6AuNNQ9SFIXeq50DpIpKPSim5Vkth71muFKMLGegd5mgn3A2+sV15lgd/FSvaAh2bN07QORINXUPlCXo5radwpJr6b2h6u2oNfCQDPVlvNavJWpmNdj7V8ppcS8ejvdoybKUCW8mkC590rJeTW1f2p8Il47pkzXSsl57Wpo7a3xCXhdnMpUyXk10LPG92WvXQ1tnhG+7PVYqAcl6fWU1ImkV6XUQ/iWVcF6/fDAZLJljoDTqSrUBzrnQRDrWen7aUWuv+qu5WwlvZ4XruC5ZU4D917S6/s8tEXngWMeHmRnF5OHH6JeT9OLrNdTHmS9fjwZpWbt9B8d9+v3guNwMBG+ye8+NnKJ+9Zx6Mpk3zqYPLy7x4jcY00eboXv3DoP8u8H/EtQVSe+BFV56SWoyttfgqq8nX1PaKmWaqmWaqn/LZXxZ5Xab1msrCppFAONsixgVD77wLDcA87rDngtd+A8wcjnd8hVWT5Vom5nQJSXBQT5ug1OVs5j6OeZjzsv5z61FgRxYwpJRaqbd4FoAxDEbg71Kf0ZbMMhkNNfGurBh8SvtgG11hqI9oMQgpgSkhinC9sUcHPqhvrzAUjSQViFWl8GMURK/YLgZdKGrY+bw0gVQN7bbjR1NQUSpTZVqMHzYQlRMfYhmHsxJD5uF7jOYsjUItTUbg4kL+NKe7Caz1unfU23MQRLmm1wiZaQ90I0dZNsKu+r08bNISrGdxDEjRk0O73tEg53yQY313sPQdxsQ/JSqWs3Z3AIibJsAX3fyYGDWoRwpTohPAPUptCPWYf0s2xapbBCcMEdDMwPwO2FADchoJ/46T+9zsrKysrKysrqW/QHHEqsPN3w28oAAAAASUVORK5CYII="
-    mediatype: "image/webp"
+  - base64data: iVBORw0KGgoAAAANSUhEUgAAAKoAAACqBAMAAADPWMmxAAAAGFBMVEX////bNCr41NL86ejzt7PgTkXnc2ztl5Ktf7GpAAAC80lEQVRo3u2aO2/iQBSFP9k86kEYWpsVSWsFTFo7Jmy7hmBaSIzT8gjZv7/FDCRstnCUS4rVnAqJ0aej8T137lgGKysrKysrK6tv0uCzCitAHfVZtSzVUi3VUi3VUi1VkFpcgOo9uheg7pCnenvkqZ0UeWonRp6a+3+tk6AuNNQ9SFIXeq50DpIpKPSim5Vkth71muFKMLGegd5mgn3A2+sV15lgd/FSvaAh2bN07QORINXUPlCXo5radwpJr6b2h6u2oNfCQDPVlvNavJWpmNdj7V8ppcS8ejvdoybKUCW8mkC590rJeTW1f2p8Il47pkzXSsl57Wpo7a3xCXhdnMpUyXk10LPG92WvXQ1tnhG+7PVYqAcl6fWU1ImkV6XUQ/iWVcF6/fDAZLJljoDTqSrUBzrnQRDrWen7aUWuv+qu5WwlvZ4XruC5ZU4D917S6/s8tEXngWMeHmRnF5OHH6JeT9OLrNdTHmS9fjwZpWbt9B8d9+v3guNwMBG+ye8+NnKJ+9Zx6Mpk3zqYPLy7x4jcY00eboXv3DoP8u8H/EtQVSe+BFV56SWoyttfgqq8nX1PaKmWaqmWaqn/LZXxZ5Xab1msrCppFAONsixgVD77wLDcA87rDngtd+A8wcjnd8hVWT5Vom5nQJSXBQT5ug1OVs5j6OeZjzsv5z61FgRxYwpJRaqbd4FoAxDEbg71Kf0ZbMMhkNNfGurBh8SvtgG11hqI9oMQgpgSkhinC9sUcHPqhvrzAUjSQViFWl8GMURK/YLgZdKGrY+bw0gVQN7bbjR1NQUSpTZVqMHzYQlRMfYhmHsxJD5uF7jOYsjUItTUbg4kL+NKe7Caz1unfU23MQRLmm1wiZaQ90I0dZNsKu+r08bNISrGdxDEjRk0O73tEg53yQY313sPQdxsQ/JSqWs3Z3AIibJsAX3fyYGDWoRwpTohPAPUptCPWYf0s2xapbBCcMEdDMwPwO2FADchoJ/46T+9zsrKysrKysrqW/QHHEqsPN3w28oAAAAASUVORK5CYII=
+    mediatype: image/webp
   install:
     spec:
       clusterPermissions:
@@ -413,19 +411,17 @@ spec:
     type: AllNamespaces
   keywords:
   - Aerospike
-  - Aerospike Kubernetes Operator
-  - AKO
   links:
   - name: Documentation
     url: https://docs.aerospike.com/docs/cloud/kubernetes/operator/index.html
   - name: Aerospike
-    url: https://aerospike.com/
+    url: https://aerospike.com
+  maintainers:
+  - email: support@aerospike.com
+    name: Aerospike, Inc.
   maturity: beta
   provider:
     name: Aerospike
-  maintainers:
-   - name: Aerospike, Inc.
-     email: support@aerospike.com
   version: 2.0.0-dev
   webhookdefinitions:
   - admissionReviewVersions:

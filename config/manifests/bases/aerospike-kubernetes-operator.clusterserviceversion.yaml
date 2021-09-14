@@ -3,7 +3,14 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-    capabilities: Basic Install
+    capabilities: Seamless Upgrades
+    categories: Database
+    containerImage: controller:latest
+    createdAt: dateplaceholder
+    description: The Aerospike Kubernetes Operator automates the deployment and management
+      of Aerospike enterprise clusters on Kubernetes.
+    operatorframework.io/suggested-namespace: aerospike
+    repository: https://github.com/aerospike/aerospike-kubernetes-operator/
   name: aerospike-kubernetes-operator.v0.0.0
   namespace: placeholder
 spec:
@@ -15,11 +22,21 @@ spec:
       kind: AerospikeCluster
       name: aerospikeclusters.asdb.aerospike.com
       version: v1beta1
-  description: aerospike operator
-  displayName: aerospike-operator
+  description: |
+    The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes. The operator allows you to deploy multi-node Aerospike clusters, recover automatically from node failures, scale up or down automatically as load changes, ensure nodes are evenly split across racks or zones, automatically update to new versions of Aerospike and manage configuration changes in your clusters.
+
+    ### Capabilities:
+
+     -   Deploy Aerospike clusters
+     -   Scale up and down existing Aerospike clusters
+     -   Version upgrade and downgrade
+     -   Configure persistent storage and resource allocation
+     -   Standardize and validate configurations
+     -   Cluster security management
+  displayName: Aerospike Kubernetes operator
   icon:
-  - base64data: ""
-    mediatype: ""
+  - base64data: iVBORw0KGgoAAAANSUhEUgAAAKoAAACqBAMAAADPWMmxAAAAGFBMVEX////bNCr41NL86ejzt7PgTkXnc2ztl5Ktf7GpAAAC80lEQVRo3u2aO2/iQBSFP9k86kEYWpsVSWsFTFo7Jmy7hmBaSIzT8gjZv7/FDCRstnCUS4rVnAqJ0aej8T137lgGKysrKysrK6tv0uCzCitAHfVZtSzVUi3VUi3VUi1VkFpcgOo9uheg7pCnenvkqZ0UeWonRp6a+3+tk6AuNNQ9SFIXeq50DpIpKPSim5Vkth71muFKMLGegd5mgn3A2+sV15lgd/FSvaAh2bN07QORINXUPlCXo5radwpJr6b2h6u2oNfCQDPVlvNavJWpmNdj7V8ppcS8ejvdoybKUCW8mkC590rJeTW1f2p8Il47pkzXSsl57Wpo7a3xCXhdnMpUyXk10LPG92WvXQ1tnhG+7PVYqAcl6fWU1ImkV6XUQ/iWVcF6/fDAZLJljoDTqSrUBzrnQRDrWen7aUWuv+qu5WwlvZ4XruC5ZU4D917S6/s8tEXngWMeHmRnF5OHH6JeT9OLrNdTHmS9fjwZpWbt9B8d9+v3guNwMBG+ye8+NnKJ+9Zx6Mpk3zqYPLy7x4jcY00eboXv3DoP8u8H/EtQVSe+BFV56SWoyttfgqq8nX1PaKmWaqmWaqn/LZXxZ5Xab1msrCppFAONsixgVD77wLDcA87rDngtd+A8wcjnd8hVWT5Vom5nQJSXBQT5ug1OVs5j6OeZjzsv5z61FgRxYwpJRaqbd4FoAxDEbg71Kf0ZbMMhkNNfGurBh8SvtgG11hqI9oMQgpgSkhinC9sUcHPqhvrzAUjSQViFWl8GMURK/YLgZdKGrY+bw0gVQN7bbjR1NQUSpTZVqMHzYQlRMfYhmHsxJD5uF7jOYsjUItTUbg4kL+NKe7Caz1unfU23MQRLmm1wiZaQ90I0dZNsKu+r08bNISrGdxDEjRk0O73tEg53yQY313sPQdxsQ/JSqWs3Z3AIibJsAX3fyYGDWoRwpTohPAPUptCPWYf0s2xapbBCcMEdDMwPwO2FADchoJ/46T+9zsrKysrKysrqW/QHHEqsPN3w28oAAAAASUVORK5CYII=
+    mediatype: image/webp
   install:
     spec:
       deployments: null
@@ -36,9 +53,14 @@ spec:
   keywords:
   - Aerospike
   links:
-  - name: Aerospike Kubernetes Operator
-    url: https://aerospike-kubernetes-operator.domain
-  maturity: alpha
+  - name: Documentation
+    url: https://docs.aerospike.com/docs/cloud/kubernetes/operator/index.html
+  - name: Aerospike
+    url: https://aerospike.com
+  maintainers:
+  - email: support@aerospike.com
+    name: Aerospike, Inc.
+  maturity: beta
   provider:
     name: Aerospike
   version: 0.0.0
