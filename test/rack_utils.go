@@ -143,6 +143,27 @@ func isNamespaceRackEnabled(k8sClient client.Client, ctx goctx.Context, clusterN
 	return false, nil
 }
 
+func getAnnotations(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	annotations := make([]map[string]string, 0)
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	for _, rackState := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		err := k8sClient.Get(ctx, stsName, found)
+		if errors.IsNotFound(err) {
+			// statefulset should exist
+			return nil, err
+		}
+		annotations = append(annotations, found.Annotations)
+	}
+	return annotations, nil
+}
+
 func validateRackEnabledCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {

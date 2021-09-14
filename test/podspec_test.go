@@ -2,7 +2,7 @@ package test
 
 import (
 	goctx "context"
-
+	"fmt"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("Using podspec feature", func() {
+var _ = Describe("PodSpec", func() {
 
 	ctx := goctx.TODO()
 
@@ -207,7 +207,48 @@ var _ = Describe("Using podspec feature", func() {
 			// Test nodeSelector
 		})
 
+		It("Should validate adding new annotations flow", func() {
+
+			By("Adding annotations")
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			actual := map[string]string{"annotation-test": "test"}
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = actual
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			expected, err := getAnnotations(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			for i := 0; i < len(expected); i++ {
+				fmt.Printf("Expected Value is: %v\n", expected[i])
+			}
+		})
+
 	})
+
+	//Context("Validate annotations and labels", func() {
+	//	clusterName := "annotation-cluster"
+	//	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+	//	zones, err := getZones(k8sClient)
+	//	Expect(err).ToNot(HaveOccurred())
+	//	zone1 := zones[0]
+	//	zone2 := zones[0]
+	//	if len(zones) > 1 {
+	//		zone2 = zones[1]
+	//	}
+	//	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+	//	racks := []asdbv1beta1.Rack{
+	//		{ID: 1, Zone: zone1},
+	//		{ID: 2, Zone: zone2}}
+	//	rackConf := asdbv1beta1.RackConfig{
+	//		Racks: racks,
+	//	}
+	//	aeroCluster.Spec.RackConfig = rackConf
+	//	err = deployCluster(k8sClient, ctx, aeroCluster)
+	//	Expect(err).ToNot(HaveOccurred())
+	//
+	//
+	//
+	//})
 
 	Context("When doing invalid operation", func() {
 
