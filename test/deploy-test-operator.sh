@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ####################################
-# Should be run from reposiroty root
+# Should be run from repository root
 ####################################
 
 # Use the input operator image for testing if provided
