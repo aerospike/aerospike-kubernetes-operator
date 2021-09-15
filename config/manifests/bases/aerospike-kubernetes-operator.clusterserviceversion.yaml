@@ -7,6 +7,7 @@ metadata:
     categories: Database
     containerImage: controller:latest
     createdAt: dateplaceholder
+    operatorframework.io/suggested-namespace: aerospike
     description: The Aerospike Kubernetes Operator automates the deployment and management
       of Aerospike enterprise clusters on Kubernetes.
     repository: https://github.com/aerospike/aerospike-kubernetes-operator/
@@ -41,11 +42,11 @@ spec:
       deployments: null
     strategy: ""
   installModes:
-    - supported: false
+    - supported: true
       type: OwnNamespace
-    - supported: false
+    - supported: true
       type: SingleNamespace
-    - supported: false
+    - supported: true
       type: MultiNamespace
     - supported: true
       type: AllNamespaces
