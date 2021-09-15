@@ -91,15 +91,14 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database
-    containerImage: docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-dev
-    createdAt: 2021-09-14T08:31:41UTC
+    containerImage: docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-4-dev
+    createdAt: 2021-09-15T11:27:51UTC
     description: The Aerospike Kubernetes Operator automates the deployment and management
       of Aerospike enterprise clusters on Kubernetes.
-    operatorframework.io/suggested-namespace: aerospike
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/aerospike/aerospike-kubernetes-operator/
-  name: aerospike-kubernetes-operator.v2.0.0-dev
+  name: aerospike-kubernetes-operator.v2.0.0-4-dev
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -330,7 +329,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['olm.targetNamespaces']
-                image: docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-dev
+                image: docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-4-dev
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -422,7 +421,7 @@ spec:
   maturity: beta
   provider:
     name: Aerospike
-  version: 2.0.0-dev
+  version: 2.0.0-4-dev
   webhookdefinitions:
   - admissionReviewVersions:
     - v1

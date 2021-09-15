@@ -10,6 +10,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Delete Aeropsike clusters
+
 echo "Removing Aerospike clusters"
 kubectl -n test delete aerospikecluster --all
 kubectl -n test1 delete aerospikecluster --all

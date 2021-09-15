@@ -234,6 +234,7 @@ func loadDataInCluster(
 	// The k8s services take time to come up so the timeouts are on the
 	// higher side.
 	wp := as.NewWritePolicy(0, 0)
+	wp.MaxRetries = 1000
 	wp.SleepBetweenRetries = time.Second * 1
 	wp.TotalTimeout = time.Second * 200
 
