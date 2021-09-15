@@ -93,7 +93,7 @@ func GetDesiredImage(
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
 	return map[string]string{
-		asdbv1beta1.AerospikeAppLabel: "aerospike-cluster", asdbv1beta1.AerospikeRackIdLabel: clName,
+		asdbv1beta1.AerospikeAppLabel: "aerospike-cluster", asdbv1beta1.AerospikeCustomResourceLabel: clName,
 	}
 }
 

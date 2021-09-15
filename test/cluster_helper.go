@@ -586,7 +586,7 @@ func createDummyAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: latestClusterImage,
+			Image: fmt.Sprintf("%s:%s", baseImage, latestServerVersion),
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteFalse,
