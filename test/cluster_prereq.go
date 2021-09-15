@@ -13,7 +13,8 @@ const (
 	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
 	// Need to modify this name if prefix is changed in yaml file
 	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
-	aeroClusterRoleBindingName    string = "aerospike-operator-manager-rolebinding"
+	aeroClusterRoleBindingName    string = "aerospike-cluster-rolebinding"
+	aeroClusterRole               string = "aerospike-cluster-role"
 )
 
 func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
@@ -37,9 +38,7 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 		return err
 	}
 	// Create clusterRole for service accounts
-	if err := createClusterRole(
-		k8sClient, ctx, "aerospike-cluster",
-	); err != nil {
+	if err := createClusterRole(k8sClient, aeroClusterRole); err != nil {
 		return err
 	}
 	// Create clusterRoleBinding to bind clusterRole and accounts
@@ -56,8 +55,7 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 		},
 	}
 	if err := createRoleBinding(
-		k8sClient, ctx, aeroClusterRoleBindingName, subjects,
-		"aerospike-cluster",
+		k8sClient, aeroClusterRoleBindingName, subjects, aeroClusterRole,
 	); err != nil {
 		return err
 	}
@@ -65,10 +63,7 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 	return nil
 }
 
-func createClusterRole(
-	k8sClient client.Client,
-	ctx goctx.Context, name string,
-) error {
+func createClusterRole(k8sClient client.Client, name string) error {
 	cr := &rbac.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -118,8 +113,8 @@ func createServiceAccount(
 }
 
 func createRoleBinding(
-	k8sClient client.Client, ctx goctx.Context, name string,
-	subjects []rbac.Subject, roleRefName string,
+	k8sClient client.Client, name string, subjects []rbac.Subject,
+	roleRefName string,
 ) error {
 	crb := &rbac.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
