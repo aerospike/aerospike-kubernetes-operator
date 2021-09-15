@@ -16,5 +16,5 @@ fi
 
 kubectl create namespace test
 
-operator-sdk run bundle "$BUNDLE_IMG" --namespace=test
+operator-sdk run bundle "$BUNDLE_IMG" --install-mode AllNamespaces
 sleep 10

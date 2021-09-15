@@ -38,7 +38,7 @@ kubectl -n test2 delete serviceaccount aerospike-operator-controller-manager || 
 
 # Uninstall the operator
 echo "Removing test operator deployment"
-operator-sdk cleanup aerospike-kubernetes-operator --namespace=test
+operator-sdk cleanup aerospike-kubernetes-operator
 
 # Delete webhook configurations. Web hooks from older versions linger around and intercept requests.
 kubectl delete mutatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  mutatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
