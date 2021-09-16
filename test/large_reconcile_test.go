@@ -195,6 +195,7 @@ func loadDataInCluster(
 ) error {
 
 	policy := getClientPolicy(aeroCluster, k8sClient)
+	policy.FailIfNotConnected = false
 	policy.Timeout = time.Minute * 2
 	policy.UseServicesAlternate = true
 	policy.ConnectionQueueSize = 100
@@ -217,7 +218,10 @@ func loadDataInCluster(
 	}
 
 	asClient := *clientP
-	defer asClient.Close()
+	defer func() {
+		fmt.Println("Closing Aerospike client")
+		asClient.Close()
+	}()
 
 	_, _ = asClient.WarmUp(-1)
 
@@ -231,9 +235,9 @@ func loadDataInCluster(
 	fmt.Printf("Loading record, isClusterConnected %v\n", clientP.IsConnected())
 	fmt.Println(asClient.GetNodes())
 
+	// The k8s services take time to come up so the timeouts are on the
+	// higher side.
 	wp := as.NewWritePolicy(0, 0)
-	wp.MaxRetries = 1000
-	wp.TotalTimeout = time.Second * 10
 
 	// loads size * bufferSize data
 	for i := 0; i < size; i++ {
@@ -245,10 +249,19 @@ func loadDataInCluster(
 			"testbin": token,
 		}
 
-		err = asClient.Put(wp, key, binMap)
+		for j := 0; j < 1000; j++ {
+			err = asClient.Put(wp, key, binMap)
+			if err == nil {
+				break
+			}
+
+			time.Sleep(time.Second * 1)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		fmt.Print(strconv.Itoa(i) + ", ")
 	}
 	fmt.Println("added records")

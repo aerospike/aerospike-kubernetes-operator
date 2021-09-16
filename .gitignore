@@ -27,11 +27,17 @@ test/junit.xml
 *.swp
 *.swo
 
-# aerospike feature conf file
+# Aerospike feature conf file
 features.conf
+
+# Temporary files/caches created by editors/IDEs
 *~
 \#*\#
 .\#*
 GPATH
 GRTAGS
 GTAGS
+
+# OLM Bundle
+bundle/
+bundle.Dockerfile

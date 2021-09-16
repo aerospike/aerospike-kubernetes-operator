@@ -50,7 +50,7 @@ var _ = Describe(
 					k8sClient, ctx, clusterNamespacedName,
 				)
 				Expect(err).ToNot(HaveOccurred())
-				
+
 				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
