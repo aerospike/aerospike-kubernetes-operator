@@ -2,30 +2,21 @@ package test
 
 import (
 	goctx "context"
-
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 )
 
 const (
 	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
 	// Need to modify this name if prefix is changed in yaml file
 	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
-	aeroClusterRoleBindingName    string = "aerospike-cluster-rolebinding"
-	aeroClusterRole               string = "aerospike-cluster-role"
 )
 
 func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
-	// Create namespaces to test multicluster
-	if err := createNamespace(k8sClient, ctx, multiClusterNs1); err != nil {
-		return err
-	}
-	if err := createNamespace(k8sClient, ctx, multiClusterNs2); err != nil {
-		return err
-	}
-
 	// Create service account for getting access in cluster specific namespaces
 	if err := createServiceAccount(
 		k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs1,
@@ -37,12 +28,14 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 	); err != nil {
 		return err
 	}
-	// Create clusterRole for service accounts
-	if err := createClusterRole(k8sClient, aeroClusterRole); err != nil {
-		return err
-	}
+
 	// Create clusterRoleBinding to bind clusterRole and accounts
 	subjects := []rbac.Subject{
+		{
+			Kind:      "ServiceAccount",
+			Name:      aeroClusterServiceAccountName,
+			Namespace: namespace,
+		},
 		{
 			Kind:      "ServiceAccount",
 			Name:      aeroClusterServiceAccountName,
@@ -54,39 +47,42 @@ func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
 			Namespace: multiClusterNs2,
 		},
 	}
-	if err := createRoleBinding(
-		k8sClient, aeroClusterRoleBindingName, subjects, aeroClusterRole,
-	); err != nil {
+
+	return updateRoleBinding(k8sClient, ctx, subjects)
+}
+
+func getClusterRoleBinding(
+	k8sClient client.Client, ctx goctx.Context,
+) (*rbac.ClusterRoleBinding, error) {
+	crbs := &rbac.ClusterRoleBindingList{}
+	if err := k8sClient.List(ctx, crbs); err != nil {
+		return nil, err
+	}
+	for _, crb := range crbs.Items {
+		value, ok := crb.Labels["olm.owner"]
+		if !ok {
+			continue
+		}
+
+		if strings.HasPrefix(value, "aerospike-kubernetes-operator") {
+			return &crb, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find cluster role binding for operator")
+}
+
+func updateRoleBinding(
+	k8sClient client.Client, ctx goctx.Context,
+	subjects []rbac.Subject,
+) error {
+	crb, err := getClusterRoleBinding(k8sClient, ctx)
+	if err != nil {
 		return err
 	}
 
-	return nil
-}
+	crb.Subjects = subjects
 
-func createClusterRole(k8sClient client.Client, name string) error {
-	cr := &rbac.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Rules: []rbac.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "nodes", "services"},
-				Verbs:     []string{"get", "list"},
-			},
-			{
-				APIGroups: []string{"aerospike.com"},
-				Resources: []string{"*"},
-				Verbs:     []string{"*"},
-			},
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"*"},
-			},
-		},
-	}
-	return k8sClient.Create(goctx.TODO(), cr)
+	return k8sClient.Update(ctx, crb)
 }
 
 func createNamespace(
@@ -110,22 +106,4 @@ func createServiceAccount(
 		},
 	}
 	return k8sClient.Create(ctx, svcAct)
-}
-
-func createRoleBinding(
-	k8sClient client.Client, name string, subjects []rbac.Subject,
-	roleRefName string,
-) error {
-	crb := &rbac.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Subjects: subjects,
-		RoleRef: rbac.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Name:     roleRefName,
-			Kind:     "ClusterRole",
-		},
-	}
-	return k8sClient.Create(goctx.TODO(), crb)
 }

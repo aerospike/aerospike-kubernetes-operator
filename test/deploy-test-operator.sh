@@ -15,6 +15,17 @@ if ! operator-sdk olm status; then
 fi
 
 kubectl create namespace test
+kubectl create namespace test1
+kubectl create namespace test2
 
-operator-sdk run bundle "$BUNDLE_IMG" --install-mode AllNamespaces
+namespaces="test test1 test2"
+operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
+
+for namespace in $namespaces; do
+ATTEMPT=0
+until [ $ATTEMPT -eq 10 ] || kubectl get csv -n $namespace | grep Succeeded; do
+    sleep 2
+    ((ATTEMPT+=1))
+done
+done
 sleep 10

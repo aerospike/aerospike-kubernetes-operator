@@ -79,12 +79,6 @@ github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:l
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d h1:Byv0BzEl3/e6D5CLfI0j/7hiIEtvGVFPCZ7Ei2oq8iQ=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914015026-1729915e231e h1:RUwwUkHqlylpG/lq96ZKpWExy2Pv8SFIOrfDk78nsbg=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914015026-1729915e231e/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914073143-a3a70ef2c135 h1:TSOT9p51p52tLaXQwzQDB92PUi7cDUvRNQjYMgRfBjk=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210914073143-a3a70ef2c135/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915122441-ed98f561dccd h1:7z5/92MHJd261PShk2kTcX2s0NKZgRjmzjEqk3Bgnx8=
-github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915122441-ed98f561dccd/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
 github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83 h1:iiHxop0sVOZM9tg9T9j+8t4O20CmHAv6HvGsJ0ff0Fk=
 github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83/go.mod h1:xuGGrc/MuGD8/id1tLf0zxqOGPWAjhxRKduiAZr959A=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
