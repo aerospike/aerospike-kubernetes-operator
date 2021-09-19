@@ -18,11 +18,31 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Base image
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+
+# Maintainer
+LABEL maintainer="Aerospike <support@aerospike.com>"
+
+# Labels
+LABEL name="aerospike-kubernetes-operator" \
+    vendor="Aerospike" \
+    version="2.0.0" \
+    release="1" \
+    summary="Aerospike Kubernetes Operator" \
+    description="The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes" \
+    io.k8s.display-name="Aerospike Kubernetes Operator v2.0.0" \
+    io.k8s.description="Aerospike Kubernetes Operator"
+
+# Labels for RedHat Openshift platform
+LABEL io.openshift.tags="database,nosql,aerospike" \
+    io.openshift.non-scalable="false"
+
 WORKDIR /
+
 COPY --from=builder /workspace/manager .
-USER 65532:65532
+
+RUN chgrp 0 /manager \
+    && chmod g=u /manager
 
 ENTRYPOINT ["/manager"]
