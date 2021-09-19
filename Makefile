@@ -195,10 +195,10 @@ bundle: manifests kustomize
 # e.g. CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
 ifdef OPENSHIFT_VERSION
 	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' '/FROM/r$(ROOT_DIR)/config/manifests/Dockerfile.Openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
+		sed -I '' '/FROM/r$(ROOT_DIR)/config/manifests/bundle.dockerfile.openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
 		sed -I '' '0,/^LABEL.*/s/^LABEL.*/LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\n&/' $(ROOT_DIR)/bundle.Dockerfile; \
 	else \
-		sed -i '/FROM/r$(ROOT_DIR)/config/manifests/Dockerfile.Openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
+		sed -i '/FROM/r$(ROOT_DIR)/config/manifests/bundle.dockerfile.openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
 		sed -i '0,/^LABEL.*/s/^LABEL.*/LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\n&/' $(ROOT_DIR)/bundle.Dockerfile; \
 	fi
 endif
