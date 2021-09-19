@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.11 // indirect
 	github.com/aerospike/aerospike-management-lib v0.0.0-20210914135610-1cbec0d7bd44 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
-	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210711030305-604f00410716
+	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/hashicorp/go-version v1.3.0

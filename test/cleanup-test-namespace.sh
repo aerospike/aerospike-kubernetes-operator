@@ -1,15 +1,13 @@
 #!/bin/bash
 
 ################################################
-# Should be run from reposiroty root
+# Should be run from repository root
 #
 # Cleans up all resources created by test runs.
 #
 ################################################
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-
-# Delete Aeropsike clusters
+# Delete Aerospike clusters
 echo "Removing Aerospike clusters"
 kubectl -n test delete aerospikecluster --all
 kubectl -n test1 delete aerospikecluster --all
@@ -31,18 +29,20 @@ kubectl -n test delete secret --selector 'app=aerospike-cluster' || true
 
 # Delete rbac accounts and auth
 echo "Removing RBAC"
-kubectl delete clusterrolebinding aerospike-cluster || true
-kubectl delete clusterrole aerospike-cluster || true
-kubectl -n test delete serviceaccount aerospike-cluster || true
-kubectl -n test1 delete serviceaccount aerospike-cluster || true
-kubectl -n test2 delete serviceaccount aerospike-cluster || true
+kubectl delete clusterrolebinding aerospike-cluster-rolebinding || true
+kubectl delete clusterrole aerospike-cluster-role || true
 
+kubectl -n test delete serviceaccount aerospike-operator-controller-manager || true
 kubectl -n test1 delete serviceaccount aerospike-operator-controller-manager || true
 kubectl -n test2 delete serviceaccount aerospike-operator-controller-manager || true
 
-# # Delete the operator deployment
+# Uninstall the operator
 echo "Removing test operator deployment"
-make test-undeploy NS="test"
+operator-sdk cleanup aerospike-kubernetes-operator --namespace=test
+
+# Delete webhook configurations. Web hooks from older versions linger around and intercept requests.
+kubectl delete mutatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  mutatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
+kubectl delete validatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  validatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
 
 # Ensure all unlisted resources are also deleted
 kubectl -n test1 delete all --all

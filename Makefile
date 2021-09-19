@@ -9,6 +9,7 @@
 VERSION ?= 2.0.0
 
 OS := $(shell uname -s)
+DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
@@ -178,6 +179,13 @@ bundle: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+	if [[ $(OS) = Darwin ]]; then \
+		sed -I '' "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+		sed -I '' "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	else \
+		sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+		sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	fi
 
 # Build the bundle image.
 .PHONY: bundle-build

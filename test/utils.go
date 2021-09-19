@@ -107,7 +107,7 @@ func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
 		return err
 	}
 
-	// Create preReq for multiclusters
+	// Create preReq for multi-clusters
 	if err := createClusterResource(k8sClient, ctx); err != nil {
 		return err
 	}
