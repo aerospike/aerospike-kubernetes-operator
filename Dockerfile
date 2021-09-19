@@ -38,6 +38,9 @@ LABEL name="aerospike-kubernetes-operator" \
 LABEL io.openshift.tags="database,nosql,aerospike" \
     io.openshift.non-scalable="false"
 
+# License file
+COPY LICENSE /licenses/
+
 WORKDIR /
 
 COPY --from=builder /workspace/manager .
