@@ -1,6 +1,8 @@
 # # /bin/sh does not support source command needed in make test
 # SHELL := /bin/bash
 
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -175,10 +177,12 @@ endef
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
 bundle: manifests kustomize
+	rm -rf bundle.Dockerfile bundle/
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --kustomize-dir config/manifests --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+
 	if [[ $(OS) = Darwin ]]; then \
 		sed -I '' "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 		sed -I '' "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
@@ -186,6 +190,23 @@ bundle: manifests kustomize
 		sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 		sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 	fi
+
+# OPENSHIFT_VERSION has to be defined to build bundle for openshift platform
+# e.g. CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
+ifdef OPENSHIFT_VERSION
+	if [[ $(OS) = Darwin ]]; then \
+		sed -I '' '/FROM/r$(ROOT_DIR)/config/manifests/Dockerfile.Openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
+		sed -I '' '0,/^LABEL.*/s/^LABEL.*/LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\n&/' $(ROOT_DIR)/bundle.Dockerfile; \
+	else \
+		sed -i '/FROM/r$(ROOT_DIR)/config/manifests/Dockerfile.Openshift.patch' $(ROOT_DIR)/bundle.Dockerfile; \
+		sed -i '0,/^LABEL.*/s/^LABEL.*/LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\n&/' $(ROOT_DIR)/bundle.Dockerfile; \
+	fi
+endif
+
+# Remove generated bundle
+.PHONY: bundle-clean
+bundle-clean:
+	rm -rf bundle bundle.Dockerfile
 
 # Build the bundle image.
 .PHONY: bundle-build

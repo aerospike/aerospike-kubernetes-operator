@@ -1,0 +1,5 @@
+
+# Labels for RedHat Openshift Platform
+LABEL com.redhat.delivery.operator.bundle=true
+LABEL com.redhat.delivery.backport=true
+
