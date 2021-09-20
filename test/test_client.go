@@ -144,6 +144,10 @@ func getClientPolicy(
 	// cluster name
 	policy.ClusterName = aeroCluster.Name
 
+	// Pod services take time to come up.
+	// do not fail the client if not connected.
+	policy.FailIfNotConnected = false
+
 	// tls config
 	if tlsName := getServiceTLSName(aeroCluster); tlsName != "" {
 		// r.Log.V(1).Info("Set tls config in aerospike client policy")

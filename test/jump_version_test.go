@@ -448,7 +448,18 @@ func waitForVersion(
 		// Client should have been created.
 		return fmt.Errorf("could not create client: %v", err)
 	}
-	client.Close()
+
+	defer client.Close()
+
+	err = wait.Poll(
+		retryInterval, timeout, func() (done bool, err error) {
+			return client.IsConnected(), nil
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("could not connect aerospike client: %v", err)
+	}
 
 	return nil
 }
