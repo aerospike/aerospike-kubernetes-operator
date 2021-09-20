@@ -193,6 +193,27 @@ func getAnnotations(
 	return annotations, nil
 }
 
+func getStatefulSetLabels(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	labels := make([]map[string]string, 0)
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	for _, rackState := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		err := k8sClient.Get(ctx, stsName, found)
+		if errors.IsNotFound(err) {
+			// statefulset should exist
+			return nil, err
+		}
+		labels = append(labels, found.Labels)
+	}
+	return labels, nil
+}
+
 func validateRackEnabledCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName,

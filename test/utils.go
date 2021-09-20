@@ -395,3 +395,16 @@ func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
 		"namespaces": acs.namespaces,
 	}
 }
+
+func ValidateAttributes(actual []map[string]string, expected map[string]string) bool {
+	for key, val := range expected {
+		for i := 0; i < len(actual); i++ {
+			m := actual[i]
+			v, ok := m[key]
+			if ok && v == val {
+				return true
+			}
+		}
+	}
+	return false
+}

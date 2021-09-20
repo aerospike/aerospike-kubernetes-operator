@@ -1960,8 +1960,7 @@ func testAccessControlReconcile(
 	}
 
 	// Ensure the desired spec access control is correctly applied.
-	logger := logr.Discard()
-	return validateAccessControl(logger, current)
+	return validateAccessControl(pkgLog, current)
 }
 
 func getAerospikeClusterSpecWithAccessControl(
@@ -2224,9 +2223,8 @@ func validateUsers(
 			)
 		}
 
-		logger := logr.Discard()
 		userClient, err := getClientForUser(
-			logger, asUser.User, password, aeroCluster, k8sClient,
+			pkgLog, asUser.User, password, aeroCluster, k8sClient,
 		)
 		if err != nil {
 			return fmt.Errorf(

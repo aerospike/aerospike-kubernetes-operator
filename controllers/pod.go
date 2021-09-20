@@ -597,7 +597,7 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	listOps := &client.ListOptions{
 		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
-	
+
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
 	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
