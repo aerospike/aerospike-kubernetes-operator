@@ -10,6 +10,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +32,7 @@ var (
 	retryInterval      = time.Second * 5
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
+	logger             = logr.Discard()
 )
 
 func scaleUpClusterTest(
@@ -78,8 +80,7 @@ func scaleDownClusterTest(
 }
 
 func rollingRestartClusterTest(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -108,13 +109,12 @@ func rollingRestartClusterTest(
 
 	// Verify that the change has been applied on the cluster.
 	return validateAerospikeConfigServiceClusterUpdate(
-		k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
+		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
 	)
 }
 
 func validateAerospikeConfigServiceClusterUpdate(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, updatedKeys []string,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, updatedKeys []string,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -129,7 +129,7 @@ func validateAerospikeConfigServiceClusterUpdate(
 			Name: pod.HostExternalIP, Port: int(pod.ServicePort),
 			TLSName: pod.Aerospike.TLSName,
 		}
-		asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+		asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 		confs, err := getAsConfig(asinfo, "service")
 		if err != nil {
 			return err
@@ -586,7 +586,7 @@ func createDummyAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: latestClusterImage,
+			Image: fmt.Sprintf("%s:%s", baseImage, latestServerVersion),
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteFalse,

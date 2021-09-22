@@ -3,12 +3,11 @@ package test
 import (
 	goctx "context"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -81,7 +80,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						enabled, err := isNamespaceRackEnabled(
-							k8sClient, ctx, clusterNamespacedName, nsName,
+							logger, k8sClient, ctx, clusterNamespacedName, nsName,
 						)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(enabled).Should(BeTrue())
@@ -104,7 +103,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						enabled, err = isNamespaceRackEnabled(
-							k8sClient, ctx, clusterNamespacedName, nsName,
+							logger, k8sClient, ctx, clusterNamespacedName, nsName,
 						)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(enabled).Should(BeFalse())
@@ -261,8 +260,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 								for _, rack := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										k8sClient, ctx, clusterNamespacedName,
-										rack,
+										logger, k8sClient, ctx, clusterNamespacedName, rack,
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
@@ -306,8 +304,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 								for _, rack := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										k8sClient, ctx, clusterNamespacedName,
-										rack,
+										logger, k8sClient, ctx, clusterNamespacedName, rack,
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
@@ -358,8 +355,7 @@ var _ = Describe(
 								}
 								for _, rack := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										k8sClient, ctx, clusterNamespacedName,
-										rack,
+										logger, k8sClient, ctx, clusterNamespacedName, rack,
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}

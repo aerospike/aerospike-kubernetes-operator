@@ -81,6 +81,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, e
 	}
 	if err := deployment.InfoQuiesceUndo(
+		r.Log,
 		r.getClientPolicy(), allHostConns,
 	); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")

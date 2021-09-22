@@ -3,12 +3,12 @@ package test
 import (
 	goCtx "context"
 	"fmt"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	v1 "k8s.io/api/core/v1"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -81,7 +81,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	err = createMarkerFile(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName)
+	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)

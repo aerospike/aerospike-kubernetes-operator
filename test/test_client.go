@@ -8,6 +8,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	"io/ioutil"
 	"time"
 
@@ -15,11 +19,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-
-	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -66,7 +65,7 @@ func getPasswordProvider(
 }
 
 func getClient(
-	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
 ) (*as.Client, error) {
 	pp := getPasswordProvider(aeroCluster, k8sClient)
 	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
@@ -82,15 +81,12 @@ func getClient(
 		return nil, err
 	}
 
-	return getClientForUser(username, password, aeroCluster, k8sClient)
+	return getClientForUser(log, username, password, aeroCluster, k8sClient)
 }
 
 // TODO: username, password not used. check the use of this function
-func getClientForUser(
-	_ string, _ string, aeroCluster *asdbv1beta1.AerospikeCluster,
-	k8sClient client.Client,
-) (*as.Client, error) {
-	conns, err := newAllHostConn(aeroCluster, k8sClient)
+func getClientForUser(log logr.Logger, username string, password string, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
+	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
