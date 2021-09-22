@@ -2,14 +2,13 @@ package controllers
 
 import (
 	"context"
-	"github.com/go-logr/logr"
 	"runtime"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/apimachinery/pkg/api/errors"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"

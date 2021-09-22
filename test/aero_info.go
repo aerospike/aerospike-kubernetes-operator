@@ -6,6 +6,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	"strings"
 	"time"
 
@@ -48,8 +49,7 @@ func getServiceForPod(
 }
 
 func newAsConn(
-	aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
-	k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
 ) (*deployment.ASConn, error) {
 	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
@@ -89,6 +89,7 @@ func newAsConn(
 		AerospikeHostName: *host,
 		AerospikePort:     int(port),
 		AerospikeTLSName:  tlsName,
+		Log:               logger,
 	}
 
 	return asConn, nil
@@ -122,15 +123,14 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 }
 
 func newHostConn(
-	aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
-	k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
 ) (*deployment.HostConn, error) {
-	asConn, err := newAsConn(aeroCluster, pod, k8sClient)
+	asConn, err := newAsConn(log, aeroCluster, pod, k8sClient)
 	if err != nil {
 		return nil, err
 	}
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(host, asConn, nil), nil
+	return deployment.NewHostConn(log, host, asConn, nil), nil
 }
 
 func getPodList(
@@ -199,7 +199,7 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 }
 
 func newAllHostConn(
-	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
 ) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
@@ -211,7 +211,7 @@ func newAllHostConn(
 
 	var hostConns []*deployment.HostConn
 	for _, pod := range podList.Items {
-		hostConn, err := newHostConn(aeroCluster, &pod, k8sClient)
+		hostConn, err := newHostConn(log, aeroCluster, &pod, k8sClient)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +255,7 @@ func runInfo(
 	var res map[string]string
 	var err error
 	for i := 0; i < 10; i++ {
-		res, err = deployment.RunInfo(cp, asConn, cmd)
+		res, err = asConn.RunInfo(cp, cmd)
 		if err == nil {
 			return res, nil
 		}

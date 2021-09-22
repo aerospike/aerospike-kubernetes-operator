@@ -11,6 +11,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -74,8 +75,7 @@ func removeLastRack(
 }
 
 func validateAerospikeConfigServiceUpdate(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -95,7 +95,7 @@ func validateAerospikeConfigServiceUpdate(
 				TLSName: pod.Aerospike.TLSName,
 			}
 			asinfo := info.NewAsInfo(
-				host, getClientPolicy(aeroCluster, k8sClient),
+				log, host, getClientPolicy(aeroCluster, k8sClient),
 			)
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
@@ -134,8 +134,7 @@ func validateAerospikeConfigServiceUpdate(
 }
 
 func isNamespaceRackEnabled(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, nsName string,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string,
 ) (bool, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -154,7 +153,7 @@ func isNamespaceRackEnabled(
 		Name: pod.HostExternalIP, Port: int(pod.ServicePort),
 		TLSName: pod.Aerospike.TLSName,
 	}
-	asinfo := info.NewAsInfo(host, getClientPolicy(aeroCluster, k8sClient))
+	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 
 	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {
@@ -171,6 +170,48 @@ func isNamespaceRackEnabled(
 	}
 
 	return false, nil
+}
+
+func getAnnotations(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	annotations := make([]map[string]string, 0)
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	for _, rackState := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		err := k8sClient.Get(ctx, stsName, found)
+		if errors.IsNotFound(err) {
+			// statefulset should exist
+			return nil, err
+		}
+		annotations = append(annotations, found.Annotations)
+	}
+	return annotations, nil
+}
+
+func getStatefulSetLabels(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	labels := make([]map[string]string, 0)
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	for _, rackState := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		err := k8sClient.Get(ctx, stsName, found)
+		if errors.IsNotFound(err) {
+			// statefulset should exist
+			return nil, err
+		}
+		labels = append(labels, found.Labels)
+	}
+	return labels, nil
 }
 
 func validateRackEnabledCluster(

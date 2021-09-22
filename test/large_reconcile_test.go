@@ -211,7 +211,7 @@ func loadDataInCluster(
 	}
 
 	clientP, err := as.NewClientWithPolicyAndHost(policy, hostList...)
-	if err != nil {
+	if clientP == nil {
 		return fmt.Errorf(
 			"failed to create aerospike cluster asClient: %v", err,
 		)

@@ -93,7 +93,7 @@ func GetDesiredImage(
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
 	return map[string]string{
-		"app": "aerospike-cluster", "aerospike.com/cr": clName,
+		asdbv1beta1.AerospikeAppLabel: "aerospike-cluster", asdbv1beta1.AerospikeCustomResourceLabel: clName,
 	}
 }
 
@@ -102,8 +102,21 @@ func LabelsForAerospikeClusterRack(
 	clName string, rackID int,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
-	labels["aerospike.com/rack-id"] = strconv.Itoa(rackID)
+	labels[asdbv1beta1.AerospikeRackIdLabel] = strconv.Itoa(rackID)
 	return labels
+}
+
+// MergeLabels merges operator an user defined labels
+func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string {
+	mergedMap := make(map[string]string, len(operatorLabels)+len(userLabels))
+	for label, value := range userLabels {
+		mergedMap[label] = value
+	}
+
+	for label, value := range operatorLabels {
+		mergedMap[label] = value
+	}
+	return mergedMap
 }
 
 // GetHash return ripmd160 hash for given string
