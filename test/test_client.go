@@ -65,27 +65,9 @@ func getPasswordProvider(
 }
 
 func getClient(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client,
 ) (*as.Client, error) {
-	pp := getPasswordProvider(aeroCluster, k8sClient)
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
-	if err != nil {
-		return nil, err
-	}
-
-	username, password, err := aerospikecluster.AerospikeAdminCredentials(
-		&aeroCluster.Spec, statusToSpec, &pp,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return getClientForUser(log, username, password, aeroCluster, k8sClient)
-}
-
-// TODO: username, password not used. check the use of this function
-func getClientForUser(log logr.Logger, username string, password string, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
 	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
@@ -101,12 +83,14 @@ func getClientForUser(log logr.Logger, username string, password string, aeroClu
 		)
 	}
 	// Create policy using status, status has current connection info
-	aeroClient, err := as.NewClientWithPolicyAndHost(
-		getClientPolicy(
-			aeroCluster, k8sClient,
-		), hosts...,
+	policy := getClientPolicy(
+		aeroCluster, k8sClient,
 	)
-	if err != nil {
+	aeroClient, err := as.NewClientWithPolicyAndHost(
+		policy, hosts...,
+	)
+
+	if aeroClient == nil {
 		return nil, fmt.Errorf(
 			"failed to create aerospike cluster client: %v", err,
 		)
