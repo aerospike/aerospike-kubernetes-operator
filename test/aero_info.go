@@ -52,7 +52,8 @@ func newAsConn(
 	_ logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
 	k8sClient client.Client,
 ) (*deployment.ASConn, error) {
-	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
+	// Use the Kubernetes service port and IP since the test might run outside
+	//the Kubernetes cluster network.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
