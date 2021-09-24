@@ -49,7 +49,8 @@ func getServiceForPod(
 }
 
 func newAsConn(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
+	_ logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
+	k8sClient client.Client,
 ) (*deployment.ASConn, error) {
 	// Use the Kubenetes serice port and IP since the test might run outside the Kubernetes cluster network.
 	var port int32
@@ -65,7 +66,7 @@ func newAsConn(
 			port = svc.Spec.Ports[0].NodePort
 		} else {
 			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
+				if portInfo.Name == "service-tls" {
 					port = portInfo.NodePort
 					break
 				}
@@ -73,9 +74,18 @@ func newAsConn(
 		}
 	} else {
 		if tlsName == "" {
-			port = asdbv1beta1.ServicePort
+			port = int32(
+				*asdbv1beta1.GetServicePort(
+					aeroCluster.Spec.
+						AerospikeConfig,
+				),
+			)
 		} else {
-			port = asdbv1beta1.ServiceTLSPort
+			_, portP := asdbv1beta1.GetServiceTLSNameAndPort(
+				aeroCluster.Spec.
+					AerospikeConfig,
+			)
+			port = int32(*portP)
 		}
 	}
 
@@ -123,7 +133,8 @@ func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
 }
 
 func newHostConn(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod, k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
+	k8sClient client.Client,
 ) (*deployment.HostConn, error) {
 	asConn, err := newAsConn(log, aeroCluster, pod, k8sClient)
 	if err != nil {
@@ -199,7 +210,8 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 }
 
 func newAllHostConn(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client,
 ) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {

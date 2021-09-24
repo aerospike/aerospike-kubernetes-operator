@@ -79,7 +79,7 @@ substituteEndpoint() {
     # Substitute in the configuration file.
     sed -i "s/^\(\s*\)${addressType}-address\s*<${addressType}-address>/\1${addressType}-address    ${accessAddress}/" ${CFG}
     # This port is set in api/v1beta1/aerospikecluster_mutating_webhook.go and is used as placeholder.
-    sed -i "s/^\(\s*\)${addressType}-port\s*65535/\1${addressType}-port    ${accessPort}/" ${CFG}
+    sed -i "s/^\(\s*\)${addressType}-port\s*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 
 substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
@@ -93,7 +93,6 @@ fi
 # ------------------------------------------------------------------------------
 # Update mesh seeds in the configuration file
 # ------------------------------------------------------------------------------
-HEARTBEAT_PORT=$(grep -zoe "heartbeat {[^}]*port\s\+\d*[^}]*}" ${CFG} | sed -n "s/^\s*port\s*\([0-9]\+\)$/\1/p")
 cat $PEERS | while read PEER || [ -n "$PEER" ]; do
     if [[ "$PEER" == "$MY_POD_NAME."* ]] ;
 	then
@@ -101,9 +100,15 @@ cat $PEERS | while read PEER || [ -n "$PEER" ]; do
 		continue
 	fi
 
-	# 8 spaces, fixed in configwriter file config manager lib
+	# 8 spaces, fixed in config writer file config manager lib
 	# TODO: The search pattern is not robust. Add a better marker in management lib.
-	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} ${HEARTBEAT_PORT}" ${CFG}
+	{{- if ne .HeartBeatPort  0}}
+	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} {{.HeartBeatPort}}" ${CFG}
+	{{- end}}
+
+	{{- if ne .HeartBeatTlsPort 0}}
+  sed -i -e "/heartbeat {/a \\        tls-mesh-seed-address-port ${PEER} {{.HeartBeatTlsPort}}" ${CFG}
+  {{- end}}
 done
 
 
@@ -112,10 +117,12 @@ done
 # interface bound to K8s node's host network.
 # ------------------------------------------------------------------------------
 {{- if .HostNetwork}}
-# 8 spaces, fixed in configwriter file config manager lib
+# 8 spaces, fixed in config writer file config manager lib
 # TODO: The search pattern is not robust. Add a better marker in management lib.
 sed -i -e "/heartbeat {/a \\        address ${MY_POD_IP}" ${CFG}
+sed -i -e "/heartbeat {/a \\        tls-address ${MY_POD_IP}" ${CFG}
 sed -i -e "/fabric {/a \\        address ${MY_POD_IP}" ${CFG}
+sed -i -e "/fabric {/a \\        tls-address ${MY_POD_IP}" ${CFG}
 {{- end}}
 
 echo "---------------------------------"
