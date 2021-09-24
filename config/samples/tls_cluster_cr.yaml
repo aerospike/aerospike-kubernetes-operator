@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 
 spec:
-  size: 2
+  size: 4
   image: aerospike/aerospike-server-enterprise:5.6.0.7
 
   storage:
@@ -47,6 +47,13 @@ spec:
           - sys-admin
           - user-admin
 
+  operatorClientCert:
+    secretCertSource:
+      secretName: aerospike-secret
+      caCertsFilename: cacert.pem
+      clientCertFilename: svc_cluster_chain.pem
+      clientKeyFilename: svc_key.pem
+
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
@@ -56,23 +63,19 @@ spec:
       service:
         tls-name: aerospike-a-0.test-runner
         tls-authenticate-client: any
+        tls-port: 4333
       heartbeat:
         tls-name: aerospike-a-0.test-runner
+        tls-port: 3012
       fabric:
         tls-name: aerospike-a-0.test-runner
+        tls-port: 3011
       tls:
         - name: aerospike-a-0.test-runner
           cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
           key-file: /etc/aerospike/secret/svc_key.pem
           ca-file: /etc/aerospike/secret/cacert.pem
-        # - name: aerospike-a-0.test-runner
-        #   cert-file: /etc/aerospike/secret/hb_cluster_chain.pem
-        #   key-file: /etc/aerospike/secret/hb_key.pem
-        #   ca-file: /etc/aerospike/secret/cacert.pem
-        # - name: aerospike-a-0.test-runner
-        #   cert-file: /etc/aerospike/secret/fb_cluster_chain.pem
-        #   key-file: /etc/aerospike/secret/fb_key.pem
-        #   ca-file: /etc/aerospike/secret/cacert.pem
+
     namespaces:
       - name: bar
         memory-size: 3000000000

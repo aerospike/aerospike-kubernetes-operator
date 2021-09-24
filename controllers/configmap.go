@@ -34,12 +34,14 @@ const (
 )
 
 type initializeTemplateInput struct {
-	WorkDir         string
-	MultiPodPerHost bool
-	NetworkPolicy   asdbv1beta1.AerospikeNetworkPolicy
-	PodPort         int32
-	PodTLSPort      int32
-	HostNetwork     bool
+	WorkDir          string
+	MultiPodPerHost  bool
+	NetworkPolicy    asdbv1beta1.AerospikeNetworkPolicy
+	PodPort          int32
+	PodTLSPort       int32
+	HeartBeatPort    int32
+	HeartBeatTlsPort int32
+	HostNetwork      bool
 }
 
 //go:embed scripts
@@ -200,15 +202,49 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		)
 	}
 
-	// Include initialization and restart scripts
-	_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	_, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
+		r.aeroCluster.
+			Spec.
+			AerospikeConfig,
+	)
+	var serviceTlsPortParam int32
+	if serviceTlsPort != nil {
+		serviceTlsPortParam = int32(*serviceTlsPort)
+	}
+
+	servicePort := asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+	var servicePortParam int32
+	if servicePort != nil {
+		servicePortParam = int32(*servicePort)
+	}
+
+	_, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(
+		r.aeroCluster.Spec.
+			AerospikeConfig,
+	)
+	var hbTlsPortParam int32
+	if hbTlsPort != nil {
+		hbTlsPortParam = int32(*hbTlsPort)
+	}
+
+	hbPort := asdbv1beta1.GetHeartbeatPort(
+		r.aeroCluster.Spec.
+			AerospikeConfig,
+	)
+	var hbPortParam int32
+	if hbPort != nil {
+		hbPortParam = int32(*hbPort)
+	}
+
 	initializeTemplateInput := initializeTemplateInput{
-		WorkDir:         workDir,
-		MultiPodPerHost: r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		NetworkPolicy:   r.aeroCluster.Spec.AerospikeNetworkPolicy,
-		PodPort:         int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
-		PodTLSPort:      int32(tlsPort),
-		HostNetwork:     r.aeroCluster.Spec.PodSpec.HostNetwork,
+		WorkDir:          workDir,
+		MultiPodPerHost:  r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		NetworkPolicy:    r.aeroCluster.Spec.AerospikeNetworkPolicy,
+		PodPort:          servicePortParam,
+		PodTLSPort:       serviceTlsPortParam,
+		HeartBeatPort:    hbPortParam,
+		HeartBeatTlsPort: hbTlsPortParam,
+		HostNetwork:      r.aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
 	baseConfData := map[string]string{}

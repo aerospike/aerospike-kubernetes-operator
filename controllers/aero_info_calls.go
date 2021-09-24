@@ -90,7 +90,9 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		// This should fail if coldstart is going on.
 		// Info command in coldstarting node should give error, is it? confirm.
 
-		isStable, err = deployment.IsClusterAndStable(r.Log, r.getClientPolicy(), allHostConns)
+		isStable, err = deployment.IsClusterAndStable(
+			r.Log, r.getClientPolicy(), allHostConns,
+		)
 		if err != nil {
 			return reconcileError(err)
 		}
@@ -129,9 +131,27 @@ func (r *SingleClusterReconciler) tipClearHostname(
 		return err
 	}
 
+	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if heartbeatTlsPort != nil {
+		if err = asConn.TipClearHostname(
+			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
+			*heartbeatTlsPort,
+		); err != nil {
+			return err
+		}
+	}
+
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
-	return asConn.TipClearHostname(
-		r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName), heartbeatPort)
+	if heartbeatPort != nil {
+		if err = asConn.TipClearHostname(
+			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
+			*heartbeatPort,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) tipHostname(
@@ -141,10 +161,28 @@ func (r *SingleClusterReconciler) tipHostname(
 	if err != nil {
 		return err
 	}
+
+	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if heartbeatTlsPort != nil {
+		if err = asConn.TipHostname(
+			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
+			*heartbeatTlsPort,
+		); err != nil {
+			return err
+		}
+	}
+
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
-	return asConn.TipHostname(
-		r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name), heartbeatPort,
-	)
+	if heartbeatPort != nil {
+		if err = asConn.TipHostname(
+			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
+			*heartbeatPort,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) alumniReset(pod *corev1.Pod) error {
@@ -219,14 +257,14 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 ) {
 	// Use pod IP and direct service port from within the operator for info calls.
 	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	if tlsName == "" {
+	if tlsName == "" || port == nil {
 		port = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
 	}
 
 	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{
 		AerospikeHostName: host,
-		AerospikePort:     port,
+		AerospikePort:     *port,
 		AerospikeTLSName:  tlsName,
 		Log:               r.Log,
 	}

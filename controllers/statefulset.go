@@ -43,7 +43,6 @@ const (
 type PortInfo struct {
 	connectionType string
 	configParam    string
-	defaultPort    int
 	exposedOnHost  bool
 }
 
@@ -51,39 +50,32 @@ var defaultContainerPorts = map[string]PortInfo{
 	asdbv1beta1.ServicePortName: {
 		connectionType: "service",
 		configParam:    "port",
-		defaultPort:    asdbv1beta1.ServicePort,
 		exposedOnHost:  true,
 	},
 	asdbv1beta1.ServiceTLSPortName: {
 		connectionType: "service",
 		configParam:    "tls-port",
-		defaultPort:    asdbv1beta1.ServiceTLSPort,
 		exposedOnHost:  true,
 	},
 	asdbv1beta1.FabricPortName: {
 		connectionType: "fabric",
 		configParam:    "port",
-		defaultPort:    asdbv1beta1.FabricPort,
 	},
 	asdbv1beta1.FabricTLSPortName: {
 		connectionType: "fabric",
 		configParam:    "tls-port",
-		defaultPort:    asdbv1beta1.FabricTLSPort,
 	},
 	asdbv1beta1.HeartbeatPortName: {
 		connectionType: "heartbeat",
 		configParam:    "port",
-		defaultPort:    asdbv1beta1.HeartbeatPort,
 	},
 	asdbv1beta1.HeartbeatTLSPortName: {
 		connectionType: "heartbeat",
 		configParam:    "tls-port",
-		defaultPort:    asdbv1beta1.HeartbeatTLSPort,
 	},
 	asdbv1beta1.InfoPortName: {
 		connectionType: "info",
 		configParam:    "port",
-		defaultPort:    asdbv1beta1.InfoPort,
 		exposedOnHost:  true,
 	},
 }
@@ -485,6 +477,11 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 	)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			_, stsServicePort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+			if stsServicePort == nil {
+				stsServicePort = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+			}
+
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					// Headless service has the same name as AerospikeCluster
@@ -501,14 +498,11 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 					PublishNotReadyAddresses: true,
 					ClusterIP:                "None",
 					Selector:                 ls,
-					Ports: []corev1.ServicePort{
-						{
-							Port: int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
-							Name: "info",
-						},
-					},
 				},
 			}
+
+			r.appendServicePorts(service)
+
 			// Set AerospikeCluster instance as the owner and controller
 			err := controllerutil.SetControllerReference(
 				r.aeroCluster, service, r.Scheme,
@@ -560,10 +554,10 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 			if loadBalancer.TargetPort >= 1024 {
 				// if target port is specified in CR.
 				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" {
-				targetPort = int32(tlsPort)
+			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" && tlsPort != nil {
+				targetPort = int32(*tlsPort)
 			} else {
-				targetPort = int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
+				targetPort = int32(*asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
 			}
 			var port int32
 			if loadBalancer.Port >= 1024 {
@@ -646,23 +640,12 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 			Selector: map[string]string{
 				"statefulset.kubernetes.io/pod-name": pName,
 			},
-			Ports: []corev1.ServicePort{
-				{
-					Name: "info",
-					Port: int32(asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)),
-				},
-			},
 			ExternalTrafficPolicy: "Local",
 		},
 	}
-	if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" {
-		service.Spec.Ports = append(
-			service.Spec.Ports, corev1.ServicePort{
-				Name: "tls",
-				Port: int32(tlsPort),
-			},
-		)
-	}
+
+	r.appendServicePorts(service)
+
 	// Set AerospikeCluster instance as the owner and controller.
 	// It is created before Pod, so Pod cannot be the owner
 	err := controllerutil.SetControllerReference(
@@ -680,6 +663,31 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 		)
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
+	if svcPort := asdbv1beta1.GetServicePort(
+		r.aeroCluster.Spec.
+			AerospikeConfig,
+	); svcPort != nil {
+		service.Spec.Ports = append(
+			service.Spec.Ports, corev1.ServicePort{
+				Name: "service",
+				Port: int32(*svcPort),
+			},
+		)
+	}
+
+	if _, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
+		r.aeroCluster.Spec.AerospikeConfig,
+	); tlsPort != nil {
+		service.Spec.Ports = append(
+			service.Spec.Ports, corev1.ServicePort{
+				Name: "service-tls",
+				Port: int32(*tlsPort),
+			},
+		)
+	}
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -1252,24 +1260,27 @@ func getSTSContainerPort(
 ) []corev1.ContainerPort {
 	var ports []corev1.ContainerPort
 	for portName, portInfo := range defaultContainerPorts {
+		configPort := asdbv1beta1.GetPortFromConfig(
+			aeroConf, portInfo.connectionType, portInfo.configParam,
+		)
+
+		if configPort == nil {
+			continue
+		}
+
 		containerPort := corev1.ContainerPort{
-			Name: portName,
-			ContainerPort: int32(
-				asdbv1beta1.GetPortFromConfig(
-					aeroConf, portInfo.connectionType, portInfo.configParam,
-					portInfo.defaultPort,
-				),
-			),
+			Name:          portName,
+			ContainerPort: int32(*configPort),
 		}
 		// Single pod per host. Enable hostPort setting
 		// The hostPort setting applies to the Kubernetes containers.
 		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 		// where the hostIP is the IP address of the Kubernetes node where
 		// the container is running and the hostPort is the port requested by the user
-
 		if (!multiPodPerHost) && portInfo.exposedOnHost {
 			containerPort.HostPort = containerPort.ContainerPort
 		}
+
 		ports = append(ports, containerPort)
 	}
 	return ports
