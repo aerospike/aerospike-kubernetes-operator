@@ -1131,19 +1131,21 @@ func validateAerospikeConfigSchema(
 	}
 
 	valid, validationErr, err := asConf.IsValid(aslog, version)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate config for the version %s: %v", version, err,
-		)
-	}
 	if !valid {
+		if len(validationErr) <= 0 {
+			return fmt.Errorf(
+				"failed to validate config for the version %s: %v", version,
+				err,
+			)
+		}
+
 		errStrings := make([]string, 0)
 		for _, e := range validationErr {
 			errStrings = append(errStrings, fmt.Sprintf("\t%v\n", *e))
 		}
 
 		return fmt.Errorf(
-			"generated config not valid for version %s: %v", version,
+			"generated config not valid for version %s: %v %v", version, err,
 			errStrings,
 		)
 	}
@@ -1414,10 +1416,12 @@ func validatePodSpecContainer(containers []v1.Container) error {
 }
 
 func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error {
-	for label, _ := range aerospikeObjectMeta.Labels {
+	for label := range aerospikeObjectMeta.Labels {
 		if label == AerospikeAppLabel || label == AerospikeRackIdLabel || label == AerospikeCustomResourceLabel {
 			return fmt.Errorf(
-				"label: %s is automatically defined by operator and shouldn't be specified by user", label)
+				"label: %s is automatically defined by operator and shouldn't be specified by user",
+				label,
+			)
 		}
 
 	}

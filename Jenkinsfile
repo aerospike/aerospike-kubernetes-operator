@@ -14,9 +14,14 @@ pipeline {
         DOCKER_REGISTRY="docker.io"
         DOCKER_ACCOUNT="aerospike"
         OPERATOR_NAME = "aerospike-kubernetes-operator"
-        OPERATOR_VERSION = getImageName()
+        OPERATOR_VERSION = getVersion()
         OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-bundle-nightly:${env.OPERATOR_VERSION}"
+
+        // Variable names used in the operator make file.
+        VERSION="${env.OPERATOR_VERSION}"
+        IMG="${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
+        BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
     }
 
     stages {
@@ -75,10 +80,20 @@ boolean isNightly() {
     return env.BRANCH_NAME == null
 }
 
-String getImageName() {
+String getVersion() {
+    def prefix = "2.0.0"
+    def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
-        return "nightly-${timestamp}-${env.BUILD_NUMBER}"
+        candidateName =  "nightly-${timestamp}-${env.BUILD_NUMBER}"
+    } else {
+        candidateName =  "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
     }
-    return "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+
+    version = "${prefix}-${candidateName}"
+    return normalizeVersion(version)
+}
+
+String normalizeVersion(String version) {
+    return version.toLowerCase().replaceAll(/[^a-zA-Z0-9-.]+/, "-").replaceAll(/(^-+)|(-+$)/,"")
 }
