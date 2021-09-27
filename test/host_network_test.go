@@ -2,7 +2,6 @@ package test
 
 import (
 	"bufio"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -21,9 +20,7 @@ var _ = Describe(
 		Context(
 			"HostNetwork", func() {
 				clusterName := "host-network-cluster"
-				image := fmt.Sprintf(
-					"aerospike/aerospike-server-enterprise:%s", "5.5.0.13",
-				)
+				image := latestClusterImage
 				clusterNamespacedName := getClusterNamespacedName(
 					clusterName, namespace,
 				)

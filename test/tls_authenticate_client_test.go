@@ -197,31 +197,8 @@ func getAerospikeConfig(
 func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 	It(
 		"TlsAuthenticateClientAny", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "any",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				TLSClientName: "aerospike-a-0.test-runner",
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -253,30 +230,8 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 func doTestTLSAuthenticateClientEmptyString(ctx goctx.Context) {
 	It(
 		"TlsAuthenticateClientEmptyString", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -293,29 +248,10 @@ func doTestTLSAuthenticateClientEmptyString(ctx goctx.Context) {
 func doTestTLSNameMissing(ctx goctx.Context) {
 	It(
 		"TLSNameMissing", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-authenticate-client": "any",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			networkConf["service"].(map[string]interface{})["tls-name"] = ""
+
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -336,22 +272,10 @@ func doTestTLSMissing(ctx goctx.Context) {
 
 	It(
 		"TLSMissing", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "any",
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			networkConf["tls"] = map[string]interface{}{}
+
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -368,21 +292,7 @@ func doTestTLSMissing(ctx goctx.Context) {
 func doTestOperatorClientCertSpecMissing(ctx goctx.Context) {
 	It(
 		"OperatorClientCertSpecMissing", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "any",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-
+			networkConf := getNetworkTLSConfig()
 			aeroCluster := getAerospikeConfig(networkConf, nil)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			if !strings.Contains(
@@ -399,30 +309,8 @@ func doTestTLSAuthenticateClientRandomString(ctx goctx.Context) {
 
 	It(
 		"TLSAuthenticateClientRandomString", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "test",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -441,31 +329,8 @@ func doTestTLSAuthenticateClientDomainList(ctx goctx.Context) {
 
 	It(
 		"TlsAuthenticateClientDomainList", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": []string{"aerospike-a-0.test-runner"},
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				TLSClientName: "aerospike-a-0.tls-client-name",
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -500,30 +365,8 @@ func doTestTlsClientNameMissing(ctx goctx.Context) {
 
 	It(
 		"TlsClientNameMissing", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": []string{"test"},
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -544,30 +387,8 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 
 	It(
 		"TlsAuthenticateClientFalse", func() {
-			networkConf := map[string]interface{}{
-				"service": map[string]interface{}{
-					"tls-name":                "aerospike-a-0.test-runner",
-					"tls-authenticate-client": "false",
-				},
-				"tls": []interface{}{
-					map[string]interface{}{
-						"name":      "aerospike-a-0.test-runner",
-						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-						"key-file":  "/etc/aerospike/secret/svc_key.pem",
-						"ca-file":   "/etc/aerospike/secret/cacert.pem",
-					},
-				},
-			}
-			operatorClientCertSpec := &asdbv1beta1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-						SecretName:         "aerospike-secret",
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			}
+			networkConf := getNetworkTLSConfig()
+			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,

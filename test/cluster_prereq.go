@@ -5,6 +5,7 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
@@ -16,7 +17,7 @@ const (
 	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
 )
 
-func createClusterResource(k8sClient client.Client, ctx goctx.Context) error {
+func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	// Create service account for getting access in cluster specific namespaces
 	if err := createServiceAccount(
 		k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs1,
@@ -82,7 +83,11 @@ func updateRoleBinding(
 
 	crb.Subjects = subjects
 
-	return k8sClient.Update(ctx, crb)
+	err = k8sClient.Update(ctx, crb)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
 
 func createNamespace(
@@ -93,7 +98,11 @@ func createNamespace(
 			Name: name,
 		},
 	}
-	return k8sClient.Create(ctx, ns)
+	err := k8sClient.Create(ctx, ns)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
 
 func createServiceAccount(
@@ -105,5 +114,9 @@ func createServiceAccount(
 			Namespace: namespace,
 		},
 	}
-	return k8sClient.Create(ctx, svcAct)
+	err := k8sClient.Create(ctx, svcAct)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }

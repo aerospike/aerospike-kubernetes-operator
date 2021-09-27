@@ -287,13 +287,7 @@ func getExpectedServicePortForPod(
 ) (int32, error) {
 	var port int32
 
-	if networkType == asdbv1beta1.AerospikeNetworkTypePod {
-		if !isTLS {
-			port = asdbv1beta1.ServicePort
-		} else {
-			port = asdbv1beta1.ServiceTLSPort
-		}
-	} else if aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -310,9 +304,10 @@ func getExpectedServicePortForPod(
 		}
 	} else {
 		if !isTLS {
-			port = asdbv1beta1.ServicePort
+			port = int32(*asdbv1beta1.GetServicePort(aeroCluster.Spec.AerospikeConfig))
 		} else {
-			port = asdbv1beta1.ServiceTLSPort
+			_, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
+			port = int32(*tlsPort)
 		}
 	}
 
@@ -363,30 +358,11 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 	var operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec = nil
 
 	if enableTLS {
-		networkConf = map[string]interface{}{
-			"service": map[string]interface{}{
-				"tls-name": "aerospike-a-0.test-runner",
-			},
-			"tls": []interface{}{
-				map[string]interface{}{
-					"name":      "aerospike-a-0.test-runner",
-					"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-					"key-file":  "/etc/aerospike/secret/svc_key.pem",
-					"ca-file":   "/etc/aerospike/secret/cacert.pem",
-				},
-			},
-		}
+		networkConf = getNetworkTLSConfig()
 
-		operatorClientCertSpec = &asdbv1beta1.AerospikeOperatorClientCertSpec{
-			AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
-				SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
-					SecretName:         tlsSecretName,
-					CaCertsFilename:    "cacert.pem",
-					ClientCertFilename: "svc_cluster_chain.pem",
-					ClientKeyFilename:  "svc_key.pem",
-				},
-			},
-		}
+		operatorClientCertSpec = getOperatorCert()
+	} else {
+		networkConf = getNetworkConfig()
 	}
 
 	return &asdbv1beta1.AerospikeCluster{

@@ -14,11 +14,11 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/hashicorp/go-version"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -108,16 +108,15 @@ func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
 	}
 
 	// Create preReq for multi-clusters
-	if err := createClusterResource(k8sClient, ctx); err != nil {
-		return err
-	}
 	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs1); err != nil {
 		return err
 	}
 	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs2); err != nil {
 		return err
 	}
-
+	if err := createClusterRBAC(k8sClient, ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -125,6 +124,10 @@ func createClusterPreReq(
 	k8sClient client.Client, ctx goctx.Context, namespace string,
 ) error {
 	labels := getLabels()
+
+	if err := createNamespace(k8sClient, ctx, namespace); err != nil {
+		return err
+	}
 
 	if err := createConfigSecret(
 		k8sClient, ctx, namespace, labels,
@@ -159,7 +162,7 @@ func createConfigSecret(
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
 	err := k8sClient.Create(ctx, s)
-	if err != nil {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
@@ -184,10 +187,9 @@ func createAuthSecret(
 	}
 	// use TestCtx's create helper to create the object and add a cleanup function for the new object
 	err := k8sClient.Create(ctx, as)
-	if err != nil {
+	if !errors.IsAlreadyExists(err) {
 		return err
 	}
-
 	return nil
 }
 
@@ -211,7 +213,7 @@ func waitForAerospikeCluster(
 				}, newCluster,
 			)
 			if err != nil {
-				if apierrors.IsNotFound(err) {
+				if errors.IsNotFound(err) {
 					pkgLog.Info(
 						"Waiting for availability of %s AerospikeCluster\n",
 						aeroCluster.Name,
@@ -338,15 +340,68 @@ func Copy(dst interface{}, src interface{}) error {
 type AerospikeConfSpec struct {
 	version     *version.Version
 	constraints *version.Constraints
+	network     map[string]interface{}
 	service     map[string]interface{}
 	security    map[string]interface{}
 	namespaces  []interface{}
 }
 
+func getOperatorCert() *asdbv1beta1.AerospikeOperatorClientCertSpec {
+	return &asdbv1beta1.AerospikeOperatorClientCertSpec{
+		AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+			SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
+				SecretName:         "aerospike-secret",
+				CaCertsFilename:    "cacert.pem",
+				ClientCertFilename: "svc_cluster_chain.pem",
+				ClientKeyFilename:  "svc_key.pem",
+			},
+		},
+	}
+}
+func getNetworkTLSConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"service": map[string]interface{}{
+			"tls-name": "aerospike-a-0.test-runner",
+			"tls-port": 4333,
+		},
+		"fabric": map[string]interface{}{
+			"tls-name": "aerospike-a-0.test-runner",
+			"tls-port": 3011,
+		},
+		"heartbeat": map[string]interface{}{
+			"tls-name": "aerospike-a-0.test-runner",
+			"tls-port": 3012,
+		},
+
+		"tls": []interface{}{
+			map[string]interface{}{
+				"name":      "aerospike-a-0.test-runner",
+				"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+				"key-file":  "/etc/aerospike/secret/svc_key.pem",
+				"ca-file":   "/etc/aerospike/secret/cacert.pem",
+			},
+		},
+	}
+}
+
+func getNetworkConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"service": map[string]interface{}{
+			"port": 3000,
+		},
+		"heartbeat": map[string]interface{}{
+			"port": 3001,
+		},
+		"fabric": map[string]interface{}{
+			"port": 3002,
+		},
+	}
+}
 func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
 	service := map[string]interface{}{
 		"feature-key-file": "/etc/aerospike/secret/features.conf",
 	}
+	network := getNetworkConfig()
 	namespaces := []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -369,6 +424,7 @@ func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
 		version:     v,
 		constraints: &constraints,
 		service:     service,
+		network:     network,
 		namespaces:  namespaces,
 		security:    security,
 	}, nil
@@ -392,11 +448,14 @@ func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
 	return map[string]interface{}{
 		"service":    acs.service,
 		"security":   acs.security,
+		"network":    acs.network,
 		"namespaces": acs.namespaces,
 	}
 }
 
-func ValidateAttributes(actual []map[string]string, expected map[string]string) bool {
+func ValidateAttributes(
+	actual []map[string]string, expected map[string]string,
+) bool {
 	for key, val := range expected {
 		for i := 0; i < len(actual); i++ {
 			m := actual[i]
