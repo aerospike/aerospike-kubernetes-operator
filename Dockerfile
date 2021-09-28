@@ -34,7 +34,7 @@ LABEL name="aerospike-kubernetes-operator" \
     release="1" \
     summary="Aerospike Kubernetes Operator" \
     description="The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes" \
-    io.k8s.display-name="Aerospike Kubernetes Operator v2.0.0" \
+    io.k8s.display-name="Aerospike Kubernetes Operator v${VERSION}" \
     io.k8s.description="Aerospike Kubernetes Operator"
 
 # Labels for RedHat Openshift platform
