@@ -2,16 +2,14 @@ package test
 
 import (
 	goctx "context"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe(
-	"Using podspec feature", func() {
+	"PodSpec", func() {
 
 		ctx := goctx.TODO()
 
@@ -68,7 +66,10 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{
 							Racks: racks,
 						}
-
+						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+							"annotation-test": "test"}
+						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{
+							"label-test": "test"}
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
@@ -85,6 +86,22 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
+				It("Should validate annotations and labels flow", func() {
+					By("Validating annotations")
+					actual, err := getAnnotations(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					valid := ValidateAttributes(actual, map[string]string{"annotation-test": "test"})
+					Expect(valid).To(
+						BeTrue(), "Unable to find annotations",
+					)
+					By("Validating Labels")
+					actual, err = getStatefulSetLabels(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					valid = ValidateAttributes(actual, map[string]string{"label-test": "test"})
+					Expect(valid).To(
+						BeTrue(), "Unable to find labels",
+					)
+				})
 
 				It(
 					"Should validate the sidecar workflow", func() {
@@ -256,11 +273,21 @@ var _ = Describe(
 					},
 				)
 
-			},
-		)
-
+			})
 		Context(
 			"When doing invalid operation", func() {
+				It(
+					"Should fail adding reserved label",
+					func() {
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{
+							asdbv1beta1.AerospikeAppLabel: "test"}
+
+						err := k8sClient.Create(ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+					})
 
 				It(
 					"Should fail for adding sidecar container with same name",
