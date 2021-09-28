@@ -168,7 +168,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack asdbv1beta1.Rack) (
 		r.aeroCluster.Spec.Image,
 	)
 
-	asConf, err := asconfig.NewMapAsConfig(version[1], configMap)
+	asConf, err := asconfig.NewMapAsConfig(r.Log, version[1], configMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to load config map by lib: %v", err)
 	}

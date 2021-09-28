@@ -3,11 +3,10 @@ package test
 import (
 	goctx "context"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -93,7 +92,7 @@ var _ = Describe("RackLifeCycleOp", func() {
 			// Op4: rolling restart
 			By("RollingRestart the cluster")
 
-			err = rollingRestartClusterTest(k8sClient, ctx, clusterNamespacedName)
+			err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)

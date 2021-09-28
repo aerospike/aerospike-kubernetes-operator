@@ -113,9 +113,11 @@ func (r *SingleClusterReconciler) createSTS(
 		r.aeroCluster.Spec.AerospikeConfig,
 	)
 
-	ls := utils.LabelsForAerospikeClusterRack(
+	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
 		r.aeroCluster.Name, rackState.Rack.ID,
 	)
+	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
+	ls := utils.MergeLabels(operatorDefinedLabels, userDefinedLabels)
 
 	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	envVarList := []corev1.EnvVar{
@@ -135,9 +137,10 @@ func (r *SingleClusterReconciler) createSTS(
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      namespacedName.Name,
-			Namespace: namespacedName.Namespace,
-			Labels:    ls,
+			Name:        namespacedName.Name,
+			Namespace:   namespacedName.Namespace,
+			Labels:      ls,
+			Annotations: r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy: appsv1.ParallelPodManagement,

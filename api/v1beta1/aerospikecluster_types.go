@@ -166,11 +166,19 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 	return nil
 }
 
+type AerospikeObjectMeta struct {
+	// Key - Value pair that may be set by external tools to store and retrieve arbitrary metadata
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// Key - Value pairs that can be used to organize and categorize scope and select objects
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
 // AerospikePodSpec contain configuration for created Aeropsike cluster pods.
 type AerospikePodSpec struct {
 	// AerospikeContainerSpec contains settings for aerospike-server container created by operator.
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
-
+	// MetaData to add to pods.
+	AerospikeObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 	// Sidecars to add to pods.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 

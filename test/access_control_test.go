@@ -6,22 +6,20 @@ import (
 	goctx "context"
 	"fmt"
 	"log"
-
 	"math/rand"
 	"reflect"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
+	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-version"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -1962,7 +1960,7 @@ func testAccessControlReconcile(
 	}
 
 	// Ensure the desired spec access control is correctly applied.
-	return validateAccessControl(current)
+	return validateAccessControl(pkgLog, current)
 }
 
 func getAerospikeClusterSpecWithAccessControl(
@@ -2012,8 +2010,10 @@ func getAerospikeClusterSpecWithAccessControl(
 }
 
 // validateAccessControl validates that the new access control have been applied correctly.
-func validateAccessControl(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-	clientP, err := getClient(aeroCluster, k8sClient)
+func validateAccessControl(
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+) error {
+	clientP, err := getClient(log, aeroCluster, k8sClient)
 	if err != nil {
 		return fmt.Errorf("error creating client: %v", err)
 	}
@@ -2026,8 +2026,7 @@ func validateAccessControl(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 		return fmt.Errorf("error creating client: %v", err)
 	}
 
-	pp := getPasswordProvider(aeroCluster, k8sClient)
-	err = validateUsers(clientP, aeroCluster, pp)
+	err = validateUsers(clientP, aeroCluster)
 	return err
 }
 
@@ -2171,7 +2170,6 @@ func validateRoles(
 // validateUsers validates that the new users have been applied correctly.
 func validateUsers(
 	clientP *as.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
-	pp aerospikecluster.AerospikeUserPasswordProvider,
 ) error {
 	clusterSpec := &aeroCluster.Spec
 	client := *clientP
@@ -2216,17 +2214,9 @@ func validateUsers(
 	// Verify the roles are correct.
 	for _, asUser := range asUsers {
 		expectedUserSpec := *getUser(accessControl.Users, asUser.User)
-		// Validate that the new user password is applied
-		password, err := pp.Get(asUser.User, &expectedUserSpec)
 
-		if err != nil {
-			return fmt.Errorf(
-				"for user %s cannot get password %v", asUser.User, err,
-			)
-		}
-
-		userClient, err := getClientForUser(
-			asUser.User, password, aeroCluster, k8sClient,
+		userClient, err := getClient(
+			pkgLog, aeroCluster, k8sClient,
 		)
 		if err != nil {
 			return fmt.Errorf(

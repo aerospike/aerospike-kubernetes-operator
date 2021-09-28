@@ -1805,6 +1805,22 @@ spec:
                       - name
                       type: object
                     type: array
+                  metadata:
+                    description: MetaData to add to pods.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pair that may be set by external
+                          tools to store and retrieve arbitra
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pairs that can be used to organize
+                          and categorize scope and select o
+                        type: object
+                    type: object
                   multiPodPerHost:
                     description: If set true then multiple pods can be created per
                       Kubernetes Node.
@@ -7142,6 +7158,22 @@ spec:
                       - name
                       type: object
                     type: array
+                  metadata:
+                    description: MetaData to add to pods.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pair that may be set by external
+                          tools to store and retrieve arbitra
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pairs that can be used to organize
+                          and categorize scope and select o
+                        type: object
+                    type: object
                   multiPodPerHost:
                     description: If set true then multiple pods can be created per
                       Kubernetes Node.

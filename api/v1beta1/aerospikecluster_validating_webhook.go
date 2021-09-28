@@ -914,7 +914,7 @@ func validateNamespaceConfig(
 }
 
 func validateNamespaceReplicationFactor(
-	_ logr.Logger, nsConf map[string]interface{}, clSize int,
+	aslog logr.Logger, nsConf map[string]interface{}, clSize int,
 ) error {
 	// Validate replication-factor with cluster size only at the time of deployment
 	rfInterface, ok := nsConf["replication-factor"]
@@ -1033,7 +1033,7 @@ func validateNetworkConnectionUpdate(
 }
 
 func validateNsConfUpdate(
-	_ logr.Logger, newConfSpec, oldConfSpec *AerospikeConfigSpec,
+	aslog logr.Logger, newConfSpec, oldConfSpec *AerospikeConfigSpec,
 ) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
@@ -1121,29 +1121,31 @@ func validateNsConfUpdate(
 }
 
 func validateAerospikeConfigSchema(
-	_ logr.Logger, version string, configSpec AerospikeConfigSpec,
+	aslog logr.Logger, version string, configSpec AerospikeConfigSpec,
 ) error {
 	config := configSpec.Value
 
-	asConf, err := asconfig.NewMapAsConfig(version, config)
+	asConf, err := asconfig.NewMapAsConfig(aslog, version, config)
 	if err != nil {
 		return fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	valid, validationErr, err := asConf.IsValid(version)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate config for the version %s: %v", version, err,
-		)
-	}
+	valid, validationErr, err := asConf.IsValid(aslog, version)
 	if !valid {
+		if len(validationErr) <= 0 {
+			return fmt.Errorf(
+				"failed to validate config for the version %s: %v", version,
+				err,
+			)
+		}
+
 		errStrings := make([]string, 0)
 		for _, e := range validationErr {
 			errStrings = append(errStrings, fmt.Sprintf("\t%v\n", *e))
 		}
 
 		return fmt.Errorf(
-			"generated config not valid for version %s: %v", version,
+			"generated config not valid for version %s: %v %v", version, err,
 			errStrings,
 		)
 	}
@@ -1152,7 +1154,7 @@ func validateAerospikeConfigSchema(
 }
 
 func validateRequiredFileStorageForMetadata(
-	_ logr.Logger, configSpec AerospikeConfigSpec,
+	aslog logr.Logger, configSpec AerospikeConfigSpec,
 	storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec,
 	version string,
 ) error {
@@ -1219,7 +1221,7 @@ func validateRequiredFileStorageForMetadata(
 }
 
 func validateRequiredFileStorageForFeatureConf(
-	_ logr.Logger, configSpec AerospikeConfigSpec,
+	aslog logr.Logger, configSpec AerospikeConfigSpec,
 	storage *AerospikeStorageSpec,
 ) error {
 	// TODO Add validation for feature key file.
@@ -1368,7 +1370,7 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 	return false
 }
 
-func (c *AerospikeCluster) validatePodSpec(_ logr.Logger) error {
+func (c *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
 	if c.Spec.PodSpec.HostNetwork && c.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
 	}
@@ -1376,7 +1378,9 @@ func (c *AerospikeCluster) validatePodSpec(_ logr.Logger) error {
 	var allContainers []v1.Container
 	allContainers = append(allContainers, c.Spec.PodSpec.Sidecars...)
 	allContainers = append(allContainers, c.Spec.PodSpec.InitContainers...)
-
+	if err := ValidateAerospikeObjectMeta(&c.Spec.PodSpec.AerospikeObjectMeta); err != nil {
+		return err
+	}
 	// Duplicate names are not allowed across sidecars and initContainers
 	return validatePodSpecContainer(allContainers)
 }
@@ -1408,5 +1412,18 @@ func validatePodSpecContainer(containers []v1.Container) error {
 		// }
 	}
 
+	return nil
+}
+
+func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error {
+	for label, _ := range aerospikeObjectMeta.Labels {
+		if label == AerospikeAppLabel || label == AerospikeRackIdLabel || label == AerospikeCustomResourceLabel {
+			return fmt.Errorf(
+				"label: %s is automatically defined by operator and shouldn't be specified by user",
+				label,
+			)
+		}
+
+	}
 	return nil
 }
