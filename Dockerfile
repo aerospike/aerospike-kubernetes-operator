@@ -21,13 +21,16 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 # Base image
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
+# Version of Operator (build arg)
+ARG VERSION="2.0.0"
+
 # Maintainer
 LABEL maintainer="Aerospike <support@aerospike.com>"
 
 # Labels
 LABEL name="aerospike-kubernetes-operator" \
     vendor="Aerospike" \
-    version="2.0.0" \
+    version="${VERSION}" \
     release="1" \
     summary="Aerospike Kubernetes Operator" \
     description="The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes" \

@@ -6,6 +6,7 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
+# TODO: Version must be pulled from git tags
 VERSION ?= 2.0.0
 
 OS := $(shell uname -s)
@@ -107,7 +108,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 # docker-build: test ## Build docker image with the manager.
 docker-build: ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	docker build -t ${IMG} --build-arg VERSION=$(VERSION) .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
