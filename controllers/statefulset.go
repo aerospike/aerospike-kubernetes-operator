@@ -116,8 +116,6 @@ func (r *SingleClusterReconciler) createSTS(
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
 		r.aeroCluster.Name, rackState.Rack.ID,
 	)
-	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
-	ls := utils.MergeLabels(operatorDefinedLabels, userDefinedLabels)
 
 	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	envVarList := []corev1.EnvVar{
@@ -137,10 +135,9 @@ func (r *SingleClusterReconciler) createSTS(
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        namespacedName.Name,
-			Namespace:   namespacedName.Namespace,
-			Labels:      ls,
-			Annotations: r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations,
+			Name:      namespacedName.Name,
+			Namespace: namespacedName.Namespace,
+			Labels:    operatorDefinedLabels,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			PodManagementPolicy: appsv1.ParallelPodManagement,
@@ -149,13 +146,13 @@ func (r *SingleClusterReconciler) createSTS(
 			},
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: ls,
+				MatchLabels: operatorDefinedLabels,
 			},
 			ServiceName: r.aeroCluster.Name,
 			Template: corev1.PodTemplateSpec{
 
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: ls,
+					Labels: operatorDefinedLabels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: aeroClusterServiceAccountName,
@@ -207,7 +204,7 @@ func (r *SingleClusterReconciler) createSTS(
 		},
 	}
 
-	r.updateSTSPodSpec(st, ls, rackState)
+	r.updateSTSPodSpec(st, operatorDefinedLabels, rackState)
 
 	r.updateAerospikeContainer(st)
 
@@ -932,8 +929,12 @@ func (r *SingleClusterReconciler) updateSTSPodSpec(
 	st *appsv1.StatefulSet, labels map[string]string, rackState RackState,
 ) {
 	r.updateSTSSchedulingPolicy(st, labels, rackState)
+	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
+	mergedLabels := utils.MergeLabels(labels, userDefinedLabels)
 
 	st.Spec.Template.Spec.HostNetwork = r.aeroCluster.Spec.PodSpec.HostNetwork
+	st.Spec.Template.ObjectMeta.Labels = mergedLabels
+	st.Spec.Template.ObjectMeta.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
 
 	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
 

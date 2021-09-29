@@ -1416,7 +1416,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 }
 
 func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error {
-	for label, _ := range aerospikeObjectMeta.Labels {
+	for label := range aerospikeObjectMeta.Labels {
 		if label == AerospikeAppLabel || label == AerospikeRackIdLabel || label == AerospikeCustomResourceLabel {
 			return fmt.Errorf(
 				"label: %s is automatically defined by operator and shouldn't be specified by user",

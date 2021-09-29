@@ -172,7 +172,7 @@ func isNamespaceRackEnabled(
 	return false, nil
 }
 
-func getAnnotations(
+func getPodSpecAnnotations(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
 	annotations := make([]map[string]string, 0)
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -188,14 +188,14 @@ func getAnnotations(
 			// statefulset should exist
 			return nil, err
 		}
-		annotations = append(annotations, found.Annotations)
+		annotations = append(annotations, found.Spec.Template.ObjectMeta.Annotations)
 	}
 	return annotations, nil
 }
 
-func getStatefulSetLabels(
+func getPodSpecLabels(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
-	labels := make([]map[string]string, 0)
+	ls := make([]map[string]string, 0)
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
@@ -209,9 +209,9 @@ func getStatefulSetLabels(
 			// statefulset should exist
 			return nil, err
 		}
-		labels = append(labels, found.Labels)
+		ls = append(ls, found.Spec.Template.ObjectMeta.Labels)
 	}
-	return labels, nil
+	return ls, nil
 }
 
 func validateRackEnabledCluster(

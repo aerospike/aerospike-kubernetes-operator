@@ -7,6 +7,8 @@
 *.dylib
 bin
 testbin/*
+/manager
+/aerospike-kubernetes-opertor
 
 # Test deployment config
 test/config

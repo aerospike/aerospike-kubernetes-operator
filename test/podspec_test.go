@@ -55,7 +55,6 @@ var _ = Describe(
 					func() {
 						zones, err := getZones(k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-
 						// Deploy everything in single rack
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
@@ -67,9 +66,9 @@ var _ = Describe(
 							Racks: racks,
 						}
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							"annotation-test": "test"}
+							"annotation-test-1": "test-1"}
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{
-							"label-test": "test"}
+							"label-test-1": "test-1"}
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
@@ -86,18 +85,58 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
-				It("Should validate annotations and labels flow", func() {
-					By("Validating annotations")
-					actual, err := getAnnotations(k8sClient, ctx, clusterNamespacedName)
+				It("Should validate annotations and labels addition", func() {
+					By("Validating Annotations")
+					actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					valid := ValidateAttributes(actual, map[string]string{"annotation-test": "test"})
+					valid := ValidateAttributes(actual,
+						map[string]string{"annotation-test-1": "test-1"})
 					Expect(valid).To(
 						BeTrue(), "Unable to find annotations",
 					)
 					By("Validating Labels")
-					actual, err = getStatefulSetLabels(k8sClient, ctx, clusterNamespacedName)
+					actual, err = getPodSpecLabels(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					valid = ValidateAttributes(actual, map[string]string{"label-test": "test"})
+					valid = ValidateAttributes(actual,
+						map[string]string{"label-test-1": "test-1"})
+					Expect(valid).To(
+						BeTrue(), "Unable to find labels",
+					)
+				})
+
+				It("Should validate added annotations and labels flow", func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					zones, err := getZones(k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+					zone := zones[0]
+					if len(zones) > 1 {
+						for i := 0; i < len(zones); i++ {
+							if zones[i] != aeroCluster.Spec.RackConfig.Racks[0].Zone {
+								zone = zones[i]
+								break
+							}
+						}
+					}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations["annotation-test-2"] = "test-2"
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels["label-test-2"] = "test-2"
+					err = addRack(
+						k8sClient, ctx, clusterNamespacedName, asdbv1beta1.Rack{ID: 2, Zone: zone})
+					Expect(err).ToNot(HaveOccurred())
+					By("Validating Added Annotations")
+					actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					valid := ValidateAttributes(actual,
+						map[string]string{"annotation-test-1": "test-1", "annotation-test-2": "test-2"})
+					Expect(valid).To(
+						BeTrue(), "Unable to find annotations",
+					)
+					By("Validating Added Labels")
+					actual, err = getPodSpecLabels(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					valid = ValidateAttributes(actual,
+						map[string]string{"label-test-1": "test-1", "label-test-2": "test-2"})
 					Expect(valid).To(
 						BeTrue(), "Unable to find labels",
 					)
