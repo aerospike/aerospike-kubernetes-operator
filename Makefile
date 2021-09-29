@@ -1,6 +1,11 @@
 # # /bin/sh does not support source command needed in make test
 # SHELL := /bin/bash
 
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
+# Minimum Openshift platform version supported
+OPENSHIFT_VERSION=v4.6
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -173,12 +178,16 @@ rm -rf $$TMP_DIR ;\
 endef
 
 # Generate bundle manifests and metadata, then validate generated files.
+# For OpenShift bundles run
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
+	rm -rf bundle.Dockerfile bundle/
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --kustomize-dir config/manifests --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+
 	if [[ $(OS) = Darwin ]]; then \
 		sed -I '' "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 		sed -I '' "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
@@ -186,6 +195,17 @@ bundle: manifests kustomize
 		sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 		sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
 	fi
+
+	if [[ $(OS) = Darwin ]]; then \
+		sed -I '' '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
+	else \
+		sed -i '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
+	fi
+
+# Remove generated bundle
+.PHONY: bundle-clean
+bundle-clean:
+	rm -rf bundle bundle.Dockerfile
 
 # Build the bundle image.
 .PHONY: bundle-build
