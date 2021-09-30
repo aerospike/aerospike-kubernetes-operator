@@ -12,13 +12,13 @@ const (
 	MaxRackID     = 1000000
 	MinRackID     = 1
 
-	ServiceTLSPortName = "svc-tls-port"
+	ServiceTLSPortName = "tls-service"
 	ServicePortName    = "service"
 
-	HeartbeatTLSPortName = "hb-tls-port"
+	HeartbeatTLSPortName = "tls-heartbeat"
 	HeartbeatPortName    = "heartbeat"
 
-	FabricTLSPortName = "fb-tls-port"
+	FabricTLSPortName = "tls-fabric"
 	FabricPortName    = "fabric"
 
 	InfoPortName = "info"
@@ -58,6 +58,7 @@ const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
 	confKeyTLS       = "tls"
+	confKeyTLSName   = "tls-name"
 
 	// Network section keys.
 	confKeyNetwork          = "network"
@@ -106,13 +107,17 @@ func ParseDockerImageTag(tag string) (
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
-// IsTLS tells if cluster is tls enabled
-func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
+// IsServiceTLSEnabled tells if service is tls enabled.
+func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
-	if confInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
-		if networkConf, ok := confInterface.(map[string]interface{}); ok {
-			if _, ok := networkConf[confKeyTLS]; ok {
-				return true
+	if networkConfInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
+		if networkConf, ok := networkConfInterface.(map[string]interface{}); ok {
+			if serviceConfInterface, ok := networkConf[confKeyNetworkService]; ok {
+				if serviceConf, ok := serviceConfInterface.(map[string]interface{}); ok {
+					if _, ok := serviceConf[confKeyTLSName]; ok {
+						return true
+					}
+				}
 			}
 		}
 	}
@@ -121,7 +126,7 @@ func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 }
 
 // IsSecurityEnabled tells if security is enabled in cluster
-// TODO: can a invalid map come here
+// TODO: can an invalid map come here
 func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
 	return IsAttributeEnabled(
 		aerospikeConfigSpec, "security", "enable-security",

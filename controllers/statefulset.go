@@ -27,10 +27,7 @@ const (
 	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
 	// Need to modify this name if prefix is changed in yaml file
 	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
-)
 
-// The default cpu request for the aerospike-server container
-const (
 	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
 	// while deleting pvc
 	storagePathAnnotationKey = "storage-path"
@@ -672,7 +669,7 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	); svcPort != nil {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{
-				Name: "service",
+				Name: asdbv1beta1.ServicePortName,
 				Port: int32(*svcPort),
 			},
 		)
@@ -683,7 +680,7 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	); tlsPort != nil {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{
-				Name: "service-tls",
+				Name: asdbv1beta1.ServiceTLSPortName,
 				Port: int32(*tlsPort),
 			},
 		)
@@ -747,7 +744,7 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
 			initContainerVolumePathPrefix := "/workdir/block-volumes"
 
-			r.Log.V(1).Info("added volume device for volume", "volume", volume)
+			r.Log.V(1).Info("Added volume device for volume", "volume", volume)
 
 			addVolumeDeviceInContainer(
 				volume.Name, initContainerAttachments,
@@ -761,7 +758,7 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 		} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
 			initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
-			r.Log.V(1).Info("added volume mount for volume", "volume", volume)
+			r.Log.V(1).Info("Added volume mount for volume", "volume", volume)
 
 			addVolumeMountInContainer(
 				volume.Name, initContainerAttachments,
@@ -777,7 +774,7 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 			continue
 		}
 
-		r.Log.V(1).Info("added PVC for volume", "volume", volume)
+		r.Log.V(1).Info("Added PVC for volume", "volume", volume)
 
 		pvc := createPVCForVolumeAttachment(r.aeroCluster, volume)
 		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
@@ -793,7 +790,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		r.Log.V(1).Info(
-			"added volume mount in statefulSet pod containers for volume",
+			"Added volume mount in statefulSet pod containers for volume",
 			"volume", volume,
 		)
 
@@ -1049,6 +1046,8 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 	if resources != nil {
 		// These resources are for main aerospike container. Other sidecar can mention their own resources.
 		st.Spec.Template.Spec.Containers[0].Resources = *resources
+	} else {
+		st.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{}
 	}
 
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.

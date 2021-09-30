@@ -105,7 +105,7 @@ func getAerospikeConfig(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  1,
-			Image: "aerospike/aerospike-server-enterprise:5.6.0.7",
+			Image: "aerospike/aerospike-server-enterprise:" + latestServerVersion,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
@@ -198,6 +198,8 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 	It(
 		"TlsAuthenticateClientAny", func() {
 			networkConf := getNetworkTLSConfig()
+			networkConf["service"].(map[string]interface{})["tls-authenticate-client"] = "any"
+
 			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
@@ -232,14 +234,13 @@ func doTestTLSAuthenticateClientEmptyString(ctx goctx.Context) {
 		"TlsAuthenticateClientEmptyString", func() {
 			networkConf := getNetworkTLSConfig()
 			operatorClientCertSpec := getOperatorCert()
+			networkConf["service"].(map[string]interface{})["tls-authenticate-client"] = ""
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(err.Error(), "config schema error") {
-				Fail("Error: %v should get config schema error")
-			}
+			assertError(err, "config schema error")
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -249,7 +250,9 @@ func doTestTLSNameMissing(ctx goctx.Context) {
 	It(
 		"TLSNameMissing", func() {
 			networkConf := getNetworkTLSConfig()
-			networkConf["service"].(map[string]interface{})["tls-name"] = ""
+			delete(
+				networkConf["service"].(map[string]interface{}), "tls-name",
+			)
 
 			operatorClientCertSpec := getOperatorCert()
 
@@ -257,12 +260,8 @@ func doTestTLSNameMissing(ctx goctx.Context) {
 				networkConf, operatorClientCertSpec,
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(
-				err.Error(),
-				"you can't specify tls-authenticate-client for network.service without specifying tls-name",
-			) {
-				Fail("you can't specify tls-authenticate-client for network.service without specifying tls-name")
-			}
+			expectedError := "without specifying tls-name"
+			assertError(err, expectedError)
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -273,7 +272,7 @@ func doTestTLSMissing(ctx goctx.Context) {
 	It(
 		"TLSMissing", func() {
 			networkConf := getNetworkTLSConfig()
-			networkConf["tls"] = map[string]interface{}{}
+			delete(networkConf, "tls")
 
 			operatorClientCertSpec := getOperatorCert()
 
@@ -281,9 +280,7 @@ func doTestTLSMissing(ctx goctx.Context) {
 				networkConf, operatorClientCertSpec,
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(err.Error(), "is not configured") {
-				Fail("is not configured")
-			}
+			assertError(err, "is not configured")
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -295,11 +292,7 @@ func doTestOperatorClientCertSpecMissing(ctx goctx.Context) {
 			networkConf := getNetworkTLSConfig()
 			aeroCluster := getAerospikeConfig(networkConf, nil)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(
-				err.Error(), "operator client cert is not specified",
-			) {
-				Fail("operator client cert is not specified")
-			}
+			assertError(err, "operator client cert is not specified")
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -311,14 +304,14 @@ func doTestTLSAuthenticateClientRandomString(ctx goctx.Context) {
 		"TLSAuthenticateClientRandomString", func() {
 			networkConf := getNetworkTLSConfig()
 			operatorClientCertSpec := getOperatorCert()
+			networkConf["service"].(map[string]interface{})["tls-authenticate"+
+				"-client"] = "test"
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(err.Error(), "contains invalid value") {
-				Fail("operator client cert is not specified")
-			}
+			assertError(err, "contains invalid value")
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -331,6 +324,8 @@ func doTestTLSAuthenticateClientDomainList(ctx goctx.Context) {
 		"TlsAuthenticateClientDomainList", func() {
 			networkConf := getNetworkTLSConfig()
 			operatorClientCertSpec := getOperatorCert()
+			networkConf["service"].(map[string]interface{})["tls-authenticate"+
+				"-client"] = []string{"aerospike-a-0.tls-client-name"}
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
@@ -341,17 +336,19 @@ func doTestTLSAuthenticateClientDomainList(ctx goctx.Context) {
 			if err != nil {
 				Expect(err).ToNot(HaveOccurred())
 			}
+
 			Expect(
 				reflect.DeepEqual(
 					[]string{
-						"aerospike-a-0.test-runner",
 						"aerospike-a-0.tls-client-name",
+						"aerospike-a-0.test-runner",
 					},
 					tlsAuthenticateClient,
 				),
 			).To(
 				BeTrue(),
-				"TlsAuthenticateClientAny Validation Failed",
+				"TlsAuthenticateClientAny Validation Failed %v",
+				tlsAuthenticateClient,
 			)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -367,16 +364,14 @@ func doTestTlsClientNameMissing(ctx goctx.Context) {
 		"TlsClientNameMissing", func() {
 			networkConf := getNetworkTLSConfig()
 			operatorClientCertSpec := getOperatorCert()
+			networkConf["service"].(map[string]interface{})["tls-authenticate-client"] = []string{"aerospike-a-0.test-runner"}
+			operatorClientCertSpec.TLSClientName = ""
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-			if !strings.Contains(
-				err.Error(), "operator TLSClientName is not specified",
-			) {
-				Fail("operator client cert is not specified")
-			}
+			assertError(err, "operator TLSClientName is not specified")
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
@@ -388,6 +383,9 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 	It(
 		"TlsAuthenticateClientFalse", func() {
 			networkConf := getNetworkTLSConfig()
+			networkConf["service"].(map[string]interface{})["tls-authenticate"+
+				"-client"] = "false"
+
 			operatorClientCertSpec := getOperatorCert()
 
 			aeroCluster := getAerospikeConfig(
@@ -396,9 +394,8 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			tlsAuthenticateClient, err := getTlsAuthenticateClient(aeroCluster)
-			if err != nil {
-				Expect(err).ToNot(HaveOccurred())
-			}
+			Expect(err).ToNot(HaveOccurred())
+
 			Expect(
 				reflect.DeepEqual(
 					[]string{"false"}, tlsAuthenticateClient,
@@ -414,4 +411,22 @@ func doTestTLSAuthenticateClientFalse(ctx goctx.Context) {
 			Expect(err).ToNot(HaveOccurred())
 		},
 	)
+}
+
+func assertError(err error, expectedError string) {
+	if err == nil {
+		Fail(
+			fmt.Sprintf(
+				"Expected - %s, Actual - nil", expectedError,
+			),
+		)
+	}
+	if !strings.Contains(err.Error(), expectedError) {
+		Fail(
+			fmt.Sprintf(
+				"Expected - %s, Actual - %v", expectedError,
+				err.Error(),
+			),
+		)
+	}
 }

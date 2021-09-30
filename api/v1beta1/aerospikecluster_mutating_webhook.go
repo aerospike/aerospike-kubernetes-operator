@@ -326,7 +326,7 @@ func setDefaultNsConf(
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
 					asLog.Info(
-						"aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID",
+						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID",
 						"nsName", nsName, "rackEnabledNamespaces",
 						rackEnabledNsList,
 					)
@@ -490,18 +490,19 @@ func addOperatorClientNameIfNeeded(
 	configSpec *AerospikeConfigSpec,
 	clientCertSpec *AerospikeOperatorClientCertSpec,
 ) error {
+	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
+	if !ok {
+		if IsServiceTLSEnabled(configSpec) {
+			serviceConf["tls-authenticate-client"] = "any"
+		}
+		return nil
+	}
+
 	if clientCertSpec == nil || clientCertSpec.TLSClientName == "" {
 		aslog.Info(
 			"OperatorClientCertSpec or its TLSClientName is not" +
 				" configured. Skipping setting tls-authenticate-client.",
 		)
-		return nil
-	}
-	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
-	if !ok {
-		if IsTLS(configSpec) {
-			serviceConf["tls-authenticate-client"] = "any"
-		}
 		return nil
 	}
 

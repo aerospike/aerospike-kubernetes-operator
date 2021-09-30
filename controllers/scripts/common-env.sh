@@ -37,7 +37,7 @@ def getport(data, podname):
             for port in item['spec']['ports']:
                 if port['name'] == 'service':
                     infoport = port['nodePort']
-                if port['name'] == 'service-tls':
+                if port['name'] == 'tls-service':
                     tlsport = port['nodePort']
             return infoport, tlsport
 print(getport(data, podname))")"

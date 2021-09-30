@@ -691,7 +691,7 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 	}
 	for _, p := range podList.Items {
 		if !utils.IsPodOnDesiredImage(&p, r.aeroCluster) {
-			r.Log.Info("pod needs upgrade/downgrade", "podName", p.Name)
+			r.Log.Info("Pod needs upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}
 
@@ -709,7 +709,10 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 
 		// Check for Updated volumeSource
 		if r.isStorageVolumeSourceUpdated(volume, pod) {
-			r.Log.Info("volume added or volume source updated in rack storage - pod needs rolling restart")
+			r.Log.Info(
+				"Volume added or volume source updated in rack storage" +
+					" - pod needs rolling restart",
+			)
 			return true
 		}
 
@@ -731,7 +734,10 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 			r.isVolumeAttachmentAddedOrUpdated(
 				volume.Name, volume.InitContainers, pod.Spec.InitContainers,
 			) {
-			r.Log.Info("new volume or volume attachment added/updated in rack storage - pod needs rolling restart")
+			r.Log.Info(
+				"New volume or volume attachment added/updated in rack" +
+					" storage - pod needs rolling restart",
+			)
 			return true
 		}
 
@@ -740,7 +746,10 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	// Check for removed volumeAttachments
 	if r.isVolumeAttachmentRemoved(volumes, pod.Spec.Containers, false) ||
 		r.isVolumeAttachmentRemoved(volumes, pod.Spec.InitContainers, true) {
-		r.Log.Info("volume or volume attachment removed from rack storage - pod needs rolling restart")
+		r.Log.Info(
+			"Volume or volume attachment removed from rack storage" +
+				" - pod needs rolling restart",
+		)
 		return true
 	}
 
@@ -753,7 +762,10 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
 		// Volume not found in pod.volumes. This is newly added volume.
-		r.Log.Info("new volume added in rack storage - pod needs rolling restart")
+		r.Log.Info(
+			"New volume added in rack storage - pod needs rolling" +
+				" restart",
+		)
 		return true
 	}
 
@@ -769,21 +781,21 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(
 
 	if !reflect.DeepEqual(podVolume.Secret, volumeCopy.Source.Secret) {
 		r.Log.Info(
-			"volume source updated", "old volume.source ",
+			"Volume source updated", "old volume.source ",
 			podVolume.VolumeSource, "new volume.source", volume.Source,
 		)
 		return true
 	}
 	if !reflect.DeepEqual(podVolume.ConfigMap, volumeCopy.Source.ConfigMap) {
 		r.Log.Info(
-			"volume source updated", "old volume.source ",
+			"Volume source updated", "old volume.source ",
 			podVolume.VolumeSource, "new volume.source", volume.Source,
 		)
 		return true
 	}
 	if !reflect.DeepEqual(podVolume.EmptyDir, volumeCopy.Source.EmptyDir) {
 		r.Log.Info(
-			"volume source updated", "old volume.source ",
+			"Volume source updated", "old volume.source ",
 			podVolume.VolumeSource, "new volume.source", volume.Source,
 		)
 		return true
@@ -810,7 +822,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 			// Found, check for updated
 			if getOriginalPath(volumeDevice.DevicePath) != attachment.Path {
 				r.Log.Info(
-					"volume updated in rack storage", "old", volumeDevice,
+					"Volume updated in rack storage", "old", volumeDevice,
 					"new", attachment,
 				)
 				return true
@@ -832,7 +844,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 				) {
 
 				r.Log.Info(
-					"volume updated in rack storage", "old", volumeMount, "new",
+					"Volume updated in rack storage", "old", volumeMount, "new",
 					attachment,
 				)
 				return true
@@ -842,7 +854,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 
 		// Added volume
 		r.Log.Info(
-			"volume added in rack storage", "volume", volumeName,
+			"Volume added in rack storage", "volume", volumeName,
 			"containerName", container.Name,
 		)
 		return true
@@ -869,7 +881,8 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 				volumes, volumeDevice.Name, container.Name, isInitContainers,
 			) {
 				r.Log.Info(
-					"volume for container.volumeDevice removed from rack storage",
+					"Volume for container."+
+						"volumeDevice removed from rack storage",
 					"container.volumeDevice", volumeDevice.Name,
 					"containerName", container.Name,
 				)
@@ -887,7 +900,8 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 				volumes, volumeMount.Name, container.Name, isInitContainers,
 			) {
 				r.Log.Info(
-					"volume for container.volumeMount removed from rack storage",
+					"Volume for container."+
+						"volumeMount removed from rack storage",
 					"container.volumeMount", volumeMount.Name, "containerName",
 					container.Name,
 				)
@@ -906,7 +920,7 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorage(
 	if volume == nil {
 		// Volume may have been removed, we allow removal of all volumes (except pv type)
 		r.Log.Info(
-			"volume removed from rack storage", "volumeName",
+			"Volume removed from rack storage", "volumeName",
 			containerVolumeName,
 		)
 		return false

@@ -267,7 +267,7 @@ func deleteCluster(
 		time.Sleep(time.Second)
 	}
 
-	// Wait for all rmoved PVCs to be terminated.
+	// Wait for all removed PVCs to be terminated.
 	for {
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 

@@ -67,7 +67,7 @@ func newAsConn(
 			port = svc.Spec.Ports[0].NodePort
 		} else {
 			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "service-tls" {
+				if portInfo.Name == asdbv1beta1.ServiceTLSPortName {
 					port = portInfo.NodePort
 					break
 				}

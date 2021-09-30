@@ -38,7 +38,7 @@ import (
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
 var immutableNetworkParams = []string{
-	"tls-name", "tls-authenticate-client", "port", "access-port",
+	"tls-name", "port", "access-port",
 	"alternate-access-port", "tls-port", "tls-access-port",
 	"tls-alternate-access-port",
 }
@@ -51,7 +51,7 @@ var _ webhook.Validator = &AerospikeCluster{}
 func (c *AerospikeCluster) ValidateCreate() error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
-	aslog.Info("validate create", "aerospikecluster.Spec", c.Spec)
+	aslog.Info("Validate create", "aerospikecluster.Spec", c.Spec)
 
 	return c.validate(aslog)
 }
@@ -60,7 +60,7 @@ func (c *AerospikeCluster) ValidateCreate() error {
 func (c *AerospikeCluster) ValidateDelete() error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
-	aslog.Info("validate delete")
+	aslog.Info("Validate delete")
 
 	return nil
 }
@@ -285,8 +285,6 @@ func validateClientCertSpec(
 func (c *AerospikeCluster) validateRackUpdate(
 	aslog logr.Logger, old *AerospikeCluster,
 ) error {
-	// c.logger.Info("Validate rack update")
-
 	if reflect.DeepEqual(c.Spec.RackConfig, old.Spec.RackConfig) {
 		return nil
 	}
@@ -696,9 +694,9 @@ func validateNetworkConnection(
 ) error {
 	if connectionConfig, exists := networkConf[connectionType]; exists {
 		connectionConfigMap := connectionConfig.(map[string]interface{})
-		if tlsName, ok := connectionConfigMap["tls-name"]; ok {
+		if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
 			if _, exists := tlsNames[tlsName.(string)]; !exists {
-				return fmt.Errorf("tls-name %s is not configured", tlsName)
+				return fmt.Errorf("tls-name '%s' is not configured", tlsName)
 			}
 		} else {
 			for param := range connectionConfigMap {
@@ -909,7 +907,6 @@ func validateNamespaceConfig(
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -1416,7 +1413,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 }
 
 func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error {
-	for label, _ := range aerospikeObjectMeta.Labels {
+	for label := range aerospikeObjectMeta.Labels {
 		if label == AerospikeAppLabel || label == AerospikeRackIdLabel || label == AerospikeCustomResourceLabel {
 			return fmt.Errorf(
 				"label: %s is automatically defined by operator and shouldn't be specified by user",

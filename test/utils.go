@@ -348,6 +348,7 @@ type AerospikeConfSpec struct {
 
 func getOperatorCert() *asdbv1beta1.AerospikeOperatorClientCertSpec {
 	return &asdbv1beta1.AerospikeOperatorClientCertSpec{
+		TLSClientName: "aerospike-a-0.test-runner",
 		AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
 			SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
 				SecretName:         "aerospike-secret",
@@ -363,14 +364,17 @@ func getNetworkTLSConfig() map[string]interface{} {
 		"service": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
 			"tls-port": 4333,
+			"port":     3000,
 		},
 		"fabric": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
 			"tls-port": 3011,
+			"port":     3001,
 		},
 		"heartbeat": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
 			"tls-port": 3012,
+			"port":     3002,
 		},
 
 		"tls": []interface{}{

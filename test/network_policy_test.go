@@ -287,7 +287,7 @@ func getExpectedServicePortForPod(
 ) (int32, error) {
 	var port int32
 
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if networkType != asdbv1beta1.AerospikeNetworkTypePod && aeroCluster.Spec.PodSpec.MultiPodPerHost {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -296,7 +296,7 @@ func getExpectedServicePortForPod(
 			port = svc.Spec.Ports[0].NodePort
 		} else {
 			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == "tls" {
+				if portInfo.Name == asdbv1beta1.ServiceTLSPortName {
 					port = portInfo.NodePort
 					break
 				}
@@ -315,7 +315,8 @@ func getExpectedServicePortForPod(
 }
 
 // getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
-// Note: the IPs returned from here should match the IPs generated in the pod intialization script for the init container.
+// Note: the IPs returned from here should match the IPs generated in the pod
+// initialization script for the init container.
 func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 	string, string, string, error,
 ) {
