@@ -12,22 +12,15 @@ const (
 	MaxRackID     = 1000000
 	MinRackID     = 1
 
-	ServiceTLSPort     = 4333
-	ServiceTLSPortName = "svc-tls-port"
-	ServicePort        = 3000
+	ServiceTLSPortName = "tls-service"
 	ServicePortName    = "service"
 
-	HeartbeatTLSPort     = 3012
-	HeartbeatTLSPortName = "hb-tls-port"
-	HeartbeatPort        = 3002
+	HeartbeatTLSPortName = "tls-heartbeat"
 	HeartbeatPortName    = "heartbeat"
 
-	FabricTLSPort     = 3011
-	FabricTLSPortName = "fb-tls-port"
-	FabricPort        = 3001
+	FabricTLSPortName = "tls-fabric"
 	FabricPortName    = "fabric"
 
-	InfoPort     = 3003
 	InfoPortName = "info"
 )
 
@@ -65,12 +58,12 @@ const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
 	confKeyTLS       = "tls"
+	confKeyTLSName   = "tls-name"
 
 	// Network section keys.
 	confKeyNetwork          = "network"
 	confKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
-	confKeyNetworkFabric    = "fabric"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -114,13 +107,17 @@ func ParseDockerImageTag(tag string) (
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
-// IsTLS tells if cluster is tls enabled
-func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
+// IsServiceTLSEnabled tells if service is tls enabled.
+func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
-	if confInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
-		if networkConf, ok := confInterface.(map[string]interface{}); ok {
-			if _, ok := networkConf[confKeyTLS]; ok {
-				return true
+	if networkConfInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
+		if networkConf, ok := networkConfInterface.(map[string]interface{}); ok {
+			if serviceConfInterface, ok := networkConf[confKeyNetworkService]; ok {
+				if serviceConf, ok := serviceConfInterface.(map[string]interface{}); ok {
+					if _, ok := serviceConf[confKeyTLSName]; ok {
+						return true
+					}
+				}
 			}
 		}
 	}
@@ -129,7 +126,7 @@ func IsTLS(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 }
 
 // IsSecurityEnabled tells if security is enabled in cluster
-// TODO: can a invalid map come here
+// TODO: can an invalid map come here
 func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
 	return IsAttributeEnabled(
 		aerospikeConfigSpec, "security", "enable-security",
@@ -285,59 +282,50 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
 	return nil, fmt.Errorf("xdr not configured")
 }
 
-func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, int) {
+func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
+	return GetTLSNameAndPort(aeroConf, confKeyService)
+}
+
+func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
+	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
+}
+
+func GetTLSNameAndPort(
+	aeroConf *AerospikeConfigSpec, connectionType string,
+) (string, *int) {
 	if networkConfTmp, ok := aeroConf.Value[confKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
-		serviceConf := networkConf[confKeyService].(map[string]interface{})
+		serviceConf := networkConf[connectionType].(map[string]interface{})
 		if tlsName, ok := serviceConf["tls-name"]; ok {
 			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
-				return tlsName.(string), int(tlsPort.(float64))
+				intPort := int(tlsPort.(float64))
+				return tlsName.(string), &intPort
 			} else {
-				return tlsName.(string), ServiceTLSPort
+				return tlsName.(string), nil
 			}
 		}
 	}
-	return "", 0
+	return "", nil
 }
 
-func GetServicePort(aeroConf *AerospikeConfigSpec) int {
-	return GetPortFromConfig(
-		aeroConf, confKeyNetworkService, "port", ServicePort,
-	)
+func GetServicePort(aeroConf *AerospikeConfigSpec) *int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkService, "port")
 }
 
-func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) int {
-	return GetPortFromConfig(
-		aeroConf, confKeyNetworkHeartbeat, "port", HeartbeatPort,
-	)
-}
-
-func GetHeartbeatTLSPort(aeroConf *AerospikeConfigSpec) int {
-	return GetPortFromConfig(
-		aeroConf, confKeyNetworkHeartbeat, "tls-port", HeartbeatTLSPort,
-	)
-}
-
-func GetFabricPort(aeroConf *AerospikeConfigSpec) int {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port", FabricPort)
-}
-
-func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) int {
-	return GetPortFromConfig(
-		aeroConf, confKeyNetworkFabric, "tls-port", FabricTLSPort,
-	)
+func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
 }
 
 func GetPortFromConfig(
 	aeroConf *AerospikeConfigSpec, connectionType string, paramName string,
-	defaultValue int,
-) int {
+) *int {
 	if networkConf, ok := aeroConf.Value[confKeyNetwork]; ok {
 		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
 			if port, ok := connectionConfig.(map[string]interface{})[paramName]; ok {
-				return int(port.(float64))
+				intPort := int(port.(float64))
+				return &intPort
 			}
 		}
 	}
-	return defaultValue
+	return nil
 }

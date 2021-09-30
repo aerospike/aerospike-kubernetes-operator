@@ -326,7 +326,7 @@ func setDefaultNsConf(
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
 					asLog.Info(
-						"aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID",
+						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID",
 						"nsName", nsName, "rackEnabledNamespaces",
 						rackEnabledNsList,
 					)
@@ -411,23 +411,20 @@ func setDefaultNetworkConf(
 	// See if we can get better way to make template
 	serviceDefaults := map[string]interface{}{}
 	srvPort := GetServicePort(configSpec)
-	serviceDefaults["port"] = srvPort
-	// Here all access ports are explicitly set to hardcoded constant 65535. These values will
-	// be replaced by aerospike-init container with an appropriate port in accordance to
-	// MultiPodPerHost flag (NodePort of Service or Host Port of Pod).
-	// Alternatively, we can set all access ports to srvPort, but in this case if user changes srvPort in CR
-	// we will get a confusing error for the rack scope config. Rack scope config will have merged global network config
-	// (thus have all access ports set to service.port value) and got confusing error message that "non-default values
-	// can't be set". In order to avoid this confusing message we are going to use hardcoded constant 65535 as a placeholder.
-	serviceDefaults["access-port"] = 65535 // must be greater that or equal to 1024,
-	serviceDefaults["access-addresses"] = []string{"<access-address>"}
-	serviceDefaults["alternate-access-port"] = 65535 // must be greater that or equal to 1024,
-	serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
-	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" {
-		serviceDefaults["tls-port"] = tlsPort
-		serviceDefaults["tls-access-port"] = 65535 // must be greater that or equal to 1024,
+
+	if srvPort != nil {
+		serviceDefaults["port"] = *srvPort
+		serviceDefaults["access-port"] = *srvPort
+		serviceDefaults["access-addresses"] = []string{"<access-address>"}
+		serviceDefaults["alternate-access-port"] = *srvPort
+		serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
+	}
+
+	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
+		serviceDefaults["tls-port"] = *tlsPort
+		serviceDefaults["tls-access-port"] = *tlsPort
 		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
-		serviceDefaults["tls-alternate-access-port"] = 65535 // must be greater that or equal to 1024,
+		serviceDefaults["tls-alternate-access-port"] = *tlsPort
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
 	}
 
@@ -459,11 +456,6 @@ func setDefaultNetworkConf(
 
 	hbDefaults := map[string]interface{}{}
 	hbDefaults["mode"] = "mesh"
-	hbDefaults["port"] = GetHeartbeatPort(configSpec)
-	if _, ok := heartbeatConf["tls-name"]; ok {
-		hbDefaults["tls-port"] = GetHeartbeatTLSPort(configSpec)
-	}
-
 	if err := setDefaultsInConfigMap(
 		asLog, heartbeatConf, hbDefaults,
 	); err != nil {
@@ -482,33 +474,6 @@ func setDefaultNetworkConf(
 	if _, ok := networkConf["fabric"]; !ok {
 		networkConf["fabric"] = map[string]interface{}{}
 	}
-	fabricConf, ok := networkConf["fabric"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf(
-			"aerospikeConfig.network.fabric not a valid map %v",
-			networkConf["fabric"],
-		)
-	}
-
-	fabricDefaults := map[string]interface{}{}
-	fabricDefaults["port"] = GetFabricPort(configSpec)
-	if _, ok := fabricConf["tls-name"]; ok {
-		fabricDefaults["tls-port"] = GetFabricTLSPort(configSpec)
-	}
-
-	if err := setDefaultsInConfigMap(
-		asLog, fabricConf, fabricDefaults,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to set default aerospikeConfig.network.fabric config: %v",
-			err,
-		)
-	}
-
-	asLog.Info(
-		"Set default template values in aerospikeConfig.network.fabric",
-		"aerospikeConfig.network.fabric", fabricConf,
-	)
 
 	if err := addOperatorClientNameIfNeeded(
 		asLog, serviceConf, configSpec,
@@ -525,18 +490,19 @@ func addOperatorClientNameIfNeeded(
 	configSpec *AerospikeConfigSpec,
 	clientCertSpec *AerospikeOperatorClientCertSpec,
 ) error {
+	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
+	if !ok {
+		if IsServiceTLSEnabled(configSpec) {
+			serviceConf["tls-authenticate-client"] = "any"
+		}
+		return nil
+	}
+
 	if clientCertSpec == nil || clientCertSpec.TLSClientName == "" {
 		aslog.Info(
 			"OperatorClientCertSpec or its TLSClientName is not" +
 				" configured. Skipping setting tls-authenticate-client.",
 		)
-		return nil
-	}
-	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
-	if !ok {
-		if IsTLS(configSpec) {
-			serviceConf["tls-authenticate-client"] = "any"
-		}
 		return nil
 	}
 

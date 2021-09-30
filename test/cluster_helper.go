@@ -80,7 +80,8 @@ func scaleDownClusterTest(
 }
 
 func rollingRestartClusterTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -114,7 +115,8 @@ func rollingRestartClusterTest(
 }
 
 func validateAerospikeConfigServiceClusterUpdate(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, updatedKeys []string,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, updatedKeys []string,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -129,7 +131,9 @@ func validateAerospikeConfigServiceClusterUpdate(
 			Name: pod.HostExternalIP, Port: int(pod.ServicePort),
 			TLSName: pod.Aerospike.TLSName,
 		}
-		asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+		asinfo := info.NewAsInfo(
+			log, host, getClientPolicy(aeroCluster, k8sClient),
+		)
 		confs, err := getAsConfig(asinfo, "service")
 		if err != nil {
 			return err
@@ -263,7 +267,7 @@ func deleteCluster(
 		time.Sleep(time.Second)
 	}
 
-	// Wait for all rmoved PVCs to be terminated.
+	// Wait for all removed PVCs to be terminated.
 	for {
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 
@@ -519,26 +523,7 @@ func createAerospikeClusterPost460(
 					"security": map[string]interface{}{
 						"enable-security": true,
 					},
-					"network": map[string]interface{}{
-						"service": map[string]interface{}{
-							"tls-name":                "aerospike-a-0.test-runner",
-							"tls-authenticate-client": "any",
-						},
-						"heartbeat": map[string]interface{}{
-							"tls-name": "aerospike-a-0.test-runner",
-						},
-						"fabric": map[string]interface{}{
-							"tls-name": "aerospike-a-0.test-runner",
-						},
-						"tls": []map[string]interface{}{
-							{
-								"name":      "aerospike-a-0.test-runner",
-								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-								"key-file":  "/etc/aerospike/secret/svc_key.pem",
-								"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							},
-						},
-					},
+					"network": getNetworkTLSConfig(),
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
@@ -662,6 +647,7 @@ func createDummyAerospikeCluster(
 					"security": map[string]interface{}{
 						"enable-security": true,
 					},
+					"network": getNetworkConfig(),
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
@@ -764,26 +750,7 @@ func createBasicTLSCluster(
 					"security": map[string]interface{}{
 						"enable-security": true,
 					},
-					"network": map[string]interface{}{
-						"service": map[string]interface{}{
-							"tls-name":                "aerospike-a-0.test-runner",
-							"tls-authenticate-client": "any",
-						},
-						"heartbeat": map[string]interface{}{
-							"tls-name": "aerospike-a-0.test-runner",
-						},
-						"fabric": map[string]interface{}{
-							"tls-name": "aerospike-a-0.test-runner",
-						},
-						"tls": []map[string]interface{}{
-							{
-								"name":      "aerospike-a-0.test-runner",
-								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-								"key-file":  "/etc/aerospike/secret/svc_key.pem",
-								"ca-file":   "/etc/aerospike/secret/cacert.pem",
-							},
-						},
-					},
+					"network": getNetworkTLSConfig(),
 				},
 			},
 		},

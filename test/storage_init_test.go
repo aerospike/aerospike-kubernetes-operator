@@ -521,7 +521,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   "aerospike/aerospike-server-enterprise:5.0.0.4",
+			Image:   latestClusterImage,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},
@@ -552,6 +552,7 @@ func getStorageInitAerospikeCluster(
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"migrate-threads":  4,
 					},
+					"network":  getNetworkConfig(),
 					"security": map[string]interface{}{"enable-security": true},
 					"namespaces": []interface{}{
 						map[string]interface{}{

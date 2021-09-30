@@ -32,12 +32,12 @@ podname = '${MY_POD_NAME}';
 def getport(data, podname):
     for item in data['items']:
         if item['metadata']['name'] == podname:
-            infoport = ''
-            tlsport = ''
+            infoport = '0'
+            tlsport = '0'
             for port in item['spec']['ports']:
-                if port['name'] == 'info':
+                if port['name'] == 'service':
                     infoport = port['nodePort']
-                if port['name'] == 'tls':
+                if port['name'] == 'tls-service':
                     tlsport = port['nodePort']
             return infoport, tlsport
 print(getport(data, podname))")"
