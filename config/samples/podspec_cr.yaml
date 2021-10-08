@@ -7,7 +7,7 @@ metadata:
 spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:5.5.0.3
-  multiPodPerHost: true
+
   storage:
     filesystemVolumePolicy:
       cascadeDelete: true
@@ -43,8 +43,6 @@ spec:
         sidecars:
           - containerName: tomcat
             path: /para/tomcat2
-          - containerName: database
-            path: /para/database
       - name: aerospike-config-secret
         source:
           secret:
@@ -59,17 +57,15 @@ spec:
         requests:
           memory: 2Gi
           cpu: 200m
+        limits:
+          memory: 10Gi
+          cpu: 5000m
     sidecars:
       - name: tomcat
         image: tomcat:8.0
         ports:
           - containerPort: 7500
-        imagePullPolicy: Always
-      - name: database
-        image: mongo:4.4.6
-        ports:
-          - containerPort: 7501
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
 
   aerospikeAccessControl:
     users:
@@ -90,6 +86,14 @@ spec:
 
     security:
       enable-security: true
+
+    network:
+      service:
+        port: 3000
+      fabric:
+        port: 3001
+      heartbeat:
+        port: 3002
 
     namespaces:
       - name: test

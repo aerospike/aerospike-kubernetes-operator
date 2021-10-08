@@ -202,8 +202,8 @@ spec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
                   aerospikeContainer:
-                    description: 'AerospikeContainerSpec contains settings for aerospike-server
-                      container created '
+                    description: 'AerospikeContainerSpec configures the aerospike-server
+                      container created by the '
                     properties:
                       resources:
                         description: Define resources requests and limits for Aerospike
@@ -3720,6 +3720,9 @@ spec:
                                           to Aerosp
                                         properties:
                                           accessModes:
+                                            description: 'Name for creating PVC for
+                                              this volume, Name or path should be
+                                              given Name string '
                                             items:
                                               type: string
                                             type: array
@@ -4803,6 +4806,9 @@ spec:
                                           to Aerosp
                                         properties:
                                           accessModes:
+                                            description: 'Name for creating PVC for
+                                              this volume, Name or path should be
+                                              given Name string '
                                             items:
                                               type: string
                                             type: array
@@ -4932,11 +4938,12 @@ spec:
                     type: array
                 type: object
               seedsFinderServices:
-                description: SeedsFinderServices describes services which are used
-                  for seeding Aerospike node
+                description: 'SeedsFinderServices creates additional Kubernetes service
+                  that allow clients to '
                 properties:
                   loadBalancer:
-                    description: LoadBalancer configuration.
+                    description: LoadBalancer created to discover Aerospike Cluster
+                      nodes from outside of Kuberne
                     properties:
                       annotations:
                         additionalProperties:
@@ -5245,6 +5252,8 @@ spec:
                                 volume to claim and attach to Aerosp
                               properties:
                                 accessModes:
+                                  description: 'Name for creating PVC for this volume,
+                                    Name or path should be given Name string '
                                   items:
                                     type: string
                                   type: array
@@ -5555,8 +5564,8 @@ spec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
                   aerospikeContainer:
-                    description: 'AerospikeContainerSpec contains settings for aerospike-server
-                      container created '
+                    description: 'AerospikeContainerSpec configures the aerospike-server
+                      container created by the '
                     properties:
                       resources:
                         description: Define resources requests and limits for Aerospike
@@ -9178,6 +9187,9 @@ spec:
                                           to Aerosp
                                         properties:
                                           accessModes:
+                                            description: 'Name for creating PVC for
+                                              this volume, Name or path should be
+                                              given Name string '
                                             items:
                                               type: string
                                             type: array
@@ -10261,6 +10273,9 @@ spec:
                                           to Aerosp
                                         properties:
                                           accessModes:
+                                            description: 'Name for creating PVC for
+                                              this volume, Name or path should be
+                                              given Name string '
                                             items:
                                               type: string
                                             type: array
@@ -10419,7 +10434,8 @@ spec:
                   for seeding Aerospike node
                 properties:
                   loadBalancer:
-                    description: LoadBalancer configuration.
+                    description: LoadBalancer created to discover Aerospike Cluster
+                      nodes from outside of Kuberne
                     properties:
                       annotations:
                         additionalProperties:
@@ -10728,6 +10744,8 @@ spec:
                                 volume to claim and attach to Aerosp
                               properties:
                                 accessModes:
+                                  description: 'Name for creating PVC for this volume,
+                                    Name or path should be given Name string '
                                   items:
                                     type: string
                                   type: array

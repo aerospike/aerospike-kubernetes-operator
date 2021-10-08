@@ -67,6 +67,14 @@ spec:
     security:
       enable-security: true
 
+    network:
+      service:
+        port: 3000
+      fabric:
+        port: 3001
+      heartbeat:
+        port: 3002
+        
     xdr:
       dcs:
         - name: dc1

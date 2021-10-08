@@ -34,7 +34,7 @@ var (
 
 var secrets map[string][]byte
 
-const secretDir = "../config/secrets"
+const secretDir = "../config/samples/secrets"
 
 const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"

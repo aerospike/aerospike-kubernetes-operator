@@ -56,13 +56,14 @@ type AerospikeClusterSpec struct {
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
-	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
+	// SeedsFinderServices creates additional Kubernetes service that allow
+	// clients to discover Aerospike cluster nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 }
 
 type SeedsFinderServices struct {
-	// LoadBalancer configuration. Mostly this load balancer is only used for Aerospike Cluster
-	// discovery from outside of Kubernetes cluster.
+	// LoadBalancer created to discover Aerospike Cluster nodes from outside of
+	//Kubernetes cluster.
 	LoadBalancer *LoadBalancerSpec `json:"loadBalancer,omitempty"`
 }
 
@@ -173,9 +174,10 @@ type AerospikeObjectMeta struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// AerospikePodSpec contain configuration for created Aeropsike cluster pods.
+// AerospikePodSpec contain configuration for created Aerospike cluster pods.
 type AerospikePodSpec struct {
-	// AerospikeContainerSpec contains settings for aerospike-server container created by operator.
+	// AerospikeContainerSpec configures the aerospike-server container
+	// created by the operator.
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
 	// MetaData to add to pods.
 	AerospikeObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
@@ -202,7 +204,7 @@ type AerospikePodSpec struct {
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 
 	// HostNetwork enables host networking for the pod.
-	// To enable hostNetwork multiPodPerHost must be true.
+	// To enable hostNetwork multiPodPerHost must be false.
 	HostNetwork bool `json:"hostNetwork,omitempty"`
 
 	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy. If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
@@ -474,7 +476,6 @@ type PersistentVolumeSpec struct {
 
 	// Name for creating PVC for this volume, Name or path should be given
 	// Name string `json:"name"`
-
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"`
 
 	// A label query over volumes to consider for binding.

@@ -55,6 +55,13 @@ spec:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
       enable-security: true
+    network:
+      service:
+        port: 3000
+      fabric:
+        port: 3001
+      heartbeat:
+        port: 3002
     namespaces:
       - name: test
         memory-size: 3000000000
