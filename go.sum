@@ -62,10 +62,6 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/PuerkitoBio/purell v1.1.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
-github.com/aerospike/aerospike-management-lib v0.0.0-20210914135610-1cbec0d7bd44 h1:svSWS6a9QqMvr3YZFIzYTlTqSg0OBTa3XvIUcpj3634=
-github.com/aerospike/aerospike-management-lib v0.0.0-20210914135610-1cbec0d7bd44/go.mod h1:6VFocjvoP/RmzWEVv30B8RVfekn7QsaO0oTwpEZkzG8=
-github.com/aerospike/aerospike-management-lib v0.0.0-20210922142932-73db3a319dc6 h1:CWGe/051R698YW5v+94Is+xDK0NUicvtjjr0zcHXZQ4=
-github.com/aerospike/aerospike-management-lib v0.0.0-20210922142932-73db3a319dc6/go.mod h1:6VFocjvoP/RmzWEVv30B8RVfekn7QsaO0oTwpEZkzG8=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210930120711-46da14938ef7 h1:hZ7S+xigDTNE9XNV/t4DHTlaz9eh53/BMlOx5AhFboI=
 github.com/aerospike/aerospike-management-lib v0.0.0-20210930120711-46da14938ef7/go.mod h1:6VFocjvoP/RmzWEVv30B8RVfekn7QsaO0oTwpEZkzG8=
 github.com/agnivade/levenshtein v1.0.1/go.mod h1:CURSv5d9Uaml+FovSIICkLbAUZ9S4RqaHDIsdSBg7lM=
@@ -218,7 +214,6 @@ github.com/go-openapi/validate v0.18.0/go.mod h1:Uh4HdOzKt19xGIGm1qHf/ofbX1YQ4Y+
 github.com/go-openapi/validate v0.19.2/go.mod h1:1tRCw7m3jtI8eNWEEliiAqUIcBztB2KDnRCRMUi7GTA=
 github.com/go-openapi/validate v0.19.8/go.mod h1:8DJv2CVJQ6kGNpFW6eV9N3JviE1C85nY1c2z52x1Gk4=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
-github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 h1:p104kn46Q8WdvHunIJ9dAyjPVtrBPhSr3KT2yUst43I=
 github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0/go.mod h1:fyg7847qk6SyHyPtNmDHnmrv/HOrqktSC+C9fM+CJOE=
 github.com/gobuffalo/here v0.6.0/go.mod h1:wAG085dHOYqUpf+Ap+WOdrPTp5IYcDAs/x7PLa8Y5fM=
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
