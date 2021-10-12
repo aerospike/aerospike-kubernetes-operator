@@ -1,3 +1,4 @@
+//go:build !noac
 // +build !noac
 
 // Tests storage initialization works as expected.
