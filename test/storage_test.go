@@ -31,7 +31,7 @@ import (
 //         * Affinity can be updated — rolling restart
 //         * Sidecar/initcontainer can be added removed — rolling restart
 
-var _ = Describe("Using storage volumes", func() {
+var _ = Describe("StorageVolumes", func() {
 	ctx := goctx.Background()
 
 	clusterName := "storage"
@@ -90,6 +90,43 @@ var _ = Describe("Using storage volumes", func() {
 				Expect(err).Should(HaveOccurred())
 			})
 
+			It("Should allow setting labels and annotation in PVC", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				labels := map[string]string{
+					"pvc": "labels",
+				}
+				annotations := map[string]string{
+					"pvc": "annotations",
+				}
+				for i, volume := range aeroCluster.Spec.Storage.Volumes {
+					if volume.Source.PersistentVolume != nil {
+						aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Labels = labels
+						aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Annotations = annotations
+					}
+				}
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				pvcs, err := getAeroClusterPVCList(aeroCluster, k8sClient)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(len(pvcs)).ShouldNot(BeZero())
+
+				for _, pvc := range pvcs {
+					// Match annotations
+					annot, ok := pvc.Annotations["pvc"]
+					Expect(ok).To(BeTrue())
+					Expect(annot).To(Equal("annotations"))
+
+					// Match label
+					lab, ok := pvc.Labels["pvc"]
+					Expect(ok).To(BeTrue())
+					Expect(lab).To(Equal("labels"))
+				}
+				Expect(err).ShouldNot(HaveOccurred())
+
+				err = deleteCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ShouldNot(HaveOccurred())
+			})
 		})
 		Context("When using volume attachment", func() {
 
@@ -285,6 +322,16 @@ var _ = Describe("Using storage volumes", func() {
 				aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1beta1.VolumeSource{
 					EmptyDir: &v1.EmptyDirVolumeSource{},
 				}
+
+				err = k8sClient.Update(ctx, aeroCluster)
+				Expect(err).Should(HaveOccurred())
+			})
+			It("Should not allow updating PVC", func() {
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.
+					Labels = map[string]string{"pvc": "labels"}
 
 				err = k8sClient.Update(ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())

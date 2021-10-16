@@ -1148,12 +1148,10 @@ func createPVCForVolumeAttachment(
 
 	return corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      volume.Name,
-			Namespace: aeroCluster.Namespace,
-			// Use this path annotation while matching pvc with storage volume
-			Annotations: map[string]string{
-				storagePathAnnotationKey: volume.Name,
-			},
+			Name:        volume.Name,
+			Namespace:   aeroCluster.Namespace,
+			Annotations: pv.Annotations,
+			Labels:      pv.Labels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			VolumeMode:  &pv.VolumeMode,
