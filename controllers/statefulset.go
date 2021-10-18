@@ -30,7 +30,7 @@ const (
 
 	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
 	// while deleting pvc
-	storagePathAnnotationKey = "storage-path"
+	storageVolumeAnnotationKey = "storage-volume"
 
 	confDirName                = "confdir"
 	initConfDirName            = "initconfigs"
@@ -1146,14 +1146,18 @@ func createPVCForVolumeAttachment(
 		accessModes = append(accessModes, "ReadWriteOnce")
 	}
 
+	// Use this path annotation while matching pvc with storage volume
+	newAnnotations := map[string]string{storageVolumeAnnotationKey: volume.Name}
+	for k, v := range pv.Annotations {
+		newAnnotations[k] = v
+	}
+
 	return corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      volume.Name,
-			Namespace: aeroCluster.Namespace,
-			// Use this path annotation while matching pvc with storage volume
-			Annotations: map[string]string{
-				storagePathAnnotationKey: volume.Name,
-			},
+			Name:        volume.Name,
+			Namespace:   aeroCluster.Namespace,
+			Annotations: newAnnotations,
+			Labels:      pv.Labels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			VolumeMode:  &pv.VolumeMode,

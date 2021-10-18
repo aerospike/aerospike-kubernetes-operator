@@ -465,6 +465,8 @@ type MountOptions struct {
 // PersistentVolumeSpec describes a persistent volume to claim and attach to Aerospike pods.
 // +k8s:openapi-gen=true
 type PersistentVolumeSpec struct {
+	AerospikeObjectMeta `json:"metadata,omitempty"`
+
 	// StorageClass should be pre-created by user.
 	StorageClass string `json:"storageClass"`
 
