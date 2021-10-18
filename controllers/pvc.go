@@ -39,8 +39,20 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 		// Should we wait for delete?
 		// Can we do it async in scaleDown
 
+		// Check for path in pvc annotations. We put path annotation while creating statefulset
+		pvcStorageVolName, ok := pvc.Annotations[storageVolumeAnnotationKey]
+		if !ok {
+			err := fmt.Errorf("PVC can not be removed, " +
+				"it does not have storage-volume annotation")
+			r.Log.Error(
+				err, "Failed to remove PVC", "PVC", pvc.Name, "annotations",
+				pvc.Annotations,
+			)
+			continue
+		}
+
 		var cascadeDelete bool
-		v := getPVCVolumeConfig(storage, pvc.Name)
+		v := getPVCVolumeConfig(storage, pvcStorageVolName)
 		if v == nil {
 			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
 				cascadeDelete = storage.BlockVolumePolicy.CascadeDelete
@@ -48,10 +60,11 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
 			}
 			r.Log.Info(
-				"PVC name not found in configured storage volumes. "+
+				"PVC's volume not found in configured storage volumes. "+
 					"Use storage level cascadeDelete policy",
-				"PVC", pvc.Name, "cascadeDelete", cascadeDelete,
+				"PVC", pvc.Name, "volume", pvcStorageVolName, "cascadeDelete", cascadeDelete,
 			)
+
 		} else {
 			cascadeDelete = v.CascadeDelete
 		}
@@ -166,11 +179,11 @@ func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
 }
 
 func getPVCVolumeConfig(
-	storage *asdbv1beta1.AerospikeStorageSpec, pvcName string,
+	storage *asdbv1beta1.AerospikeStorageSpec, pvcStorageVolName string,
 ) *asdbv1beta1.VolumeSpec {
 	volumes := storage.Volumes
 	for _, v := range volumes {
-		if pvcName == v.Name {
+		if pvcStorageVolName == v.Name {
 			return &v
 		}
 	}
