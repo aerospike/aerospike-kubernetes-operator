@@ -57,9 +57,6 @@ func (c *AerospikeCluster) Default() admission.Response {
 }
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
-
-	asLog.Info("Set defaults for AerospikeCluster", "obj.Spec", c.Spec)
-
 	// Set network defaults
 	c.Spec.AerospikeNetworkPolicy.SetDefaults()
 

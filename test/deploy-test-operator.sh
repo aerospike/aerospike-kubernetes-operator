@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 ####################################
 # Should be run from repository root
@@ -8,7 +9,19 @@
 BUNDLE_IMG=$1
 
 # Create storage classes.
-kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
+case $(kubectl get nodes -o yaml) in
+  *"cloud.google.com"*)
+    echo "Instaling ssd storage class for GKE."
+    kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
+    ;;
+  *"eks.amazonaws.com"*)
+    echo "Instaling ssd storage class for EKS."
+    kubectl apply -f config/samples/storage/eks_ssd_storage_class.yaml
+    ;;
+  *)
+    echo "Couldn't determine cloud provider from node list. Thus couldn't install 'ssd' storage class. Either install it manually or most likely ssd tests will fail."
+    ;;
+esac
 
 if ! operator-sdk olm status; then
   operator-sdk olm install

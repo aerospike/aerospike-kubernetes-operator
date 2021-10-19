@@ -49,7 +49,7 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=80"
+CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=70"
 
 # # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 # ENVTEST_K8S_VERSION = 1.21
@@ -136,18 +136,15 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 test-deploy: manifests kustomize
 	cp -r config test
 	cd test/config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
-		sed -I '' "s/--zap-log-level=info/--zap-log-level=debug/g" test/config/manager/manager.yaml; \
-	else \
-		sed -i "s/value: aerospike/value: aerospike,test,test1,test2/g" test/config/manager/manager.yaml; \
-		sed -i "s/--zap-log-level=info/--zap-log-level=debug/g" test/config/manager/manager.yaml; \
-	fi
+	cp test/manager-patch-for-tests.yaml test/config/manager/manager-patch-for-tests.yaml
+	cd test/config/manager && $(KUSTOMIZE) edit add patch --path ./manager-patch-for-tests.yaml
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
 test-undeploy: kustomize
 	cp -r config test
+	cp test/manager-patch-for-tests.yaml test/config/manager/manager-patch-for-tests.yaml
+	cd test/config/manager && $(KUSTOMIZE) edit add patch --path ./manager-patch-for-tests.yaml
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
@@ -158,7 +155,7 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.2.0)
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.

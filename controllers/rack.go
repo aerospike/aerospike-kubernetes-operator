@@ -208,7 +208,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found.Name,
 	)
 
-	var err error
 	var res reconcileResult
 
 	r.Log.Info(
@@ -222,8 +221,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		if !res.isSuccess {
 			if res.err != nil {
 				r.Log.Error(
-					err, "Failed to scaleDown StatefulSet pods", "err",
-					"stsName", found.Name,
+					res.err, "Failed to scaleDown StatefulSet pods", "stsName", found.Name,
 				)
 			}
 			return res

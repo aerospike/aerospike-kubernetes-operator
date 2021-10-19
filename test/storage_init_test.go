@@ -16,9 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -570,31 +568,4 @@ func getStorageInitAerospikeCluster(
 			},
 		},
 	}
-}
-
-func cleanupPVC(k8sClient client.Client, ns string) error {
-	// t.Log("Cleanup old pvc")
-
-	// List the pvc for this aeroCluster's statefulset
-	pvcList := &corev1.PersistentVolumeClaimList{}
-	clLabels := map[string]string{"app": "aerospike-cluster"}
-	labelSelector := labels.SelectorFromSet(clLabels)
-	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
-
-	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
-		return err
-	}
-
-	for _, pvc := range pvcList.Items {
-		// t.Logf("Found pvc %s, deleting it", pvc.Name)
-
-		if utils.IsPVCTerminating(&pvc) {
-			continue
-		}
-
-		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
-			return fmt.Errorf("could not delete pvc %s: %v", pvc.Name, err)
-		}
-	}
-	return nil
 }

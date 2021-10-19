@@ -23,32 +23,34 @@ spec:
         control-plane: controller-manager
     spec:
       containers:
-        - command:
-            - /manager
-          args:
-            - --leader-elect
-            - --zap-log-level=info
-          image: controller:latest
-          name: manager
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: false
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8081
-            initialDelaySeconds: 15
-            periodSeconds: 20
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8081
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          env:
-            - name: WATCH_NAMESPACE
-              # for watching multiple namespaces by operator, give a list of namespaces (e.g. aerospike,test,test1,test2)
-              value: aerospike
+      - command:
+        - /manager
+        args:
+          # These arguments are changed in patch for tests: test/manager-patch-for-tests.yaml
+          # If you modify these args, please also sync args in that patch.
+        - --leader-elect
+        - --zap-log-level=info
+        image: controller:latest
+        name: manager
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        env:
+        - name: WATCH_NAMESPACE
+          # for watching multiple namespaces by operator, give a list of namespaces (e.g. aerospike,test,test1,test2)
+          value: aerospike
       serviceAccountName: controller-manager
 
       terminationGracePeriodSeconds: 10
