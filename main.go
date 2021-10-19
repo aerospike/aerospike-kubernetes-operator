@@ -69,22 +69,26 @@ func main() {
 	}
 
 	var webhookServer *webhook.Server
+
 	legacyOlmCertDir := "/apiserver.local.config/certificates"
 	// If legacy directory is present then OLM < 0.17 is used and webhook server should be configured as follows
 	if info, err := os.Stat(legacyOlmCertDir); err == nil && info.IsDir() {
+		setupLog.Info(
+			"legacy OLM < 0.17 directory is present - initializing webhook" +
+				" server ",
+		)
 		webhookServer = &webhook.Server{
-			Port:     9443,
 			CertDir:  "/apiserver.local.config/certificates",
 			CertName: "apiserver.crt",
 			KeyName:  "apiserver.key",
 		}
 	}
+
 	// Create a new Cmd to provide shared dependencies and start components
 	options := ctrl.Options{
 		NewClient:              newClient,
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "96242fdf.aerospike.com",

@@ -186,7 +186,7 @@ bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --kustomize-dir config/manifests --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/overlays/manifests/olm | operator-sdk generate bundle -q --kustomize-dir config/overlays/manifests/olm --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 
 	if [[ $(OS) = Darwin ]]; then \
