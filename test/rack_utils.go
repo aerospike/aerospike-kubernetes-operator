@@ -10,7 +10,6 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -90,9 +89,9 @@ func validateAerospikeConfigServiceUpdate(
 			// TODO:
 			// We may need to check for all keys in aerospikeConfig in rack
 			// but we know that we are changing for service only for now
-			host := &as.Host{
-				Name: pod.HostExternalIP, Port: int(pod.ServicePort),
-				TLSName: pod.Aerospike.TLSName,
+			host, err := createHost(pod)
+			if err != nil {
+				return err
 			}
 			asinfo := info.NewAsInfo(
 				log, host, getClientPolicy(aeroCluster, k8sClient),
@@ -149,9 +148,9 @@ func isNamespaceRackEnabled(
 	for _, p := range aeroCluster.Status.Pods {
 		pod = p
 	}
-	host := &as.Host{
-		Name: pod.HostExternalIP, Port: int(pod.ServicePort),
-		TLSName: pod.Aerospike.TLSName,
+	host, err := createHost(pod)
+	if err != nil {
+		return false, err
 	}
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 

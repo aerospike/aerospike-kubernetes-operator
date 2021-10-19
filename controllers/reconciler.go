@@ -176,7 +176,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error updating status: %v", err)
+		return fmt.Errorf("error updating status: %w", err)
 	}
 	r.aeroCluster = newAeroCluster
 

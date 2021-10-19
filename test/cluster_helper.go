@@ -9,7 +9,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -127,9 +126,9 @@ func validateAerospikeConfigServiceClusterUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host := &as.Host{
-			Name: pod.HostExternalIP, Port: int(pod.ServicePort),
-			TLSName: pod.Aerospike.TLSName,
+		host, err := createHost(pod)
+		if err != nil {
+			return err
 		}
 		asinfo := info.NewAsInfo(
 			log, host, getClientPolicy(aeroCluster, k8sClient),
@@ -261,7 +260,13 @@ func deleteCluster(
 		if err != nil {
 			return err
 		}
-		if existing == nil {
+		//Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
+		//tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
+		allClustersPods, err := getPodsList(k8sClient, ctx, clusterNamespacedName)
+		if err != nil {
+			return err
+		}
+		if existing == nil && len(allClustersPods.Items) == 0 {
 			break
 		}
 		time.Sleep(time.Second)

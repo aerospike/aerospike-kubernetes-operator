@@ -18,6 +18,11 @@ package test
 
 import (
 	goctx "context"
+	"flag"
+	"fmt"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"testing"
 	"time"
 
@@ -56,6 +61,8 @@ var (
 	scheme = k8Runtime.NewScheme()
 )
 
+var defaultNetworkType = flag.String("connect-through-network-type", "hostExternal", "Network type is used to determine an appropriate access type. Can be 'pod', 'hostInternal' or 'hostExternal'. AS client in the test will choose access type witch matches expected network type. See details in https://docs.aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings.html#network-policy")
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -67,6 +74,61 @@ func TestAPIs(t *testing.T) {
 	)
 }
 
+var _ = BeforeEach(func() {
+	By(fmt.Sprintf("Cleaning up all Aerospike clusters."))
+	deleteAllClusters(namespace)
+	deleteAllClusters(multiClusterNs1)
+	deleteAllClusters(multiClusterNs2)
+	err := cleanupPVC(k8sClient, namespace)
+	Expect(err).NotTo(HaveOccurred())
+	err = cleanupPVC(k8sClient, multiClusterNs1)
+	Expect(err).NotTo(HaveOccurred())
+	err = cleanupPVC(k8sClient, multiClusterNs2)
+	Expect(err).NotTo(HaveOccurred())
+})
+
+func deleteAllClusters(namespace string) {
+	ctx := goctx.TODO()
+	list := &asdbv1beta1.AerospikeClusterList{}
+	listOps := &client.ListOptions{Namespace: namespace}
+
+	err := k8sClient.List(ctx, list, listOps)
+	Expect(err).NotTo(HaveOccurred())
+
+	for _, cluster := range list.Items {
+		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", cluster.Namespace, cluster.Name))
+		err := deleteCluster(k8sClient, ctx, &cluster)
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func cleanupPVC(k8sClient client.Client, ns string) error {
+	// t.Log("Cleanup old pvc")
+
+	// List the pvc for this aeroCluster's statefulset
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	clLabels := map[string]string{"app": "aerospike-cluster"}
+	labelSelector := labels.SelectorFromSet(clLabels)
+	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
+
+	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
+		return err
+	}
+
+	for _, pvc := range pvcList.Items {
+		pkgLog.Info("Found pvc, deleting it", "pvcName", pvc.Name, "namespace", pvc.Namespace)
+
+		if utils.IsPVCTerminating(&pvc) {
+			continue
+		}
+
+		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
+			return fmt.Errorf("could not delete pvc %s: %w", pvc.Name, err)
+		}
+	}
+	return nil
+}
+
 // This is used when running tests on existing cluster
 // user has to install its own operator then run cleanup and then start this
 
@@ -75,6 +137,7 @@ var _ = BeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
+		pkgLog.Info(fmt.Sprintf("Client will connect throug '%s' network to Aerospike Clusters.", *defaultNetworkType))
 		t := true
 		testEnv = &envtest.Environment{
 			UseExistingCluster: &t,

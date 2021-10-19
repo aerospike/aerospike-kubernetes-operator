@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          args:
+            - --leader-elect
+            - --zap-log-level=debug
+          env:
+            - name: WATCH_NAMESPACE
+              value: aerospike,test,test1,test2

@@ -58,7 +58,8 @@ func newAsConn(
 
 	tlsName := getServiceTLSName(aeroCluster)
 
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1beta1.AerospikeNetworkTypePod {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return nil, err
@@ -90,14 +91,14 @@ func newAsConn(
 		}
 	}
 
-	host, err := getNodeIP(pod, k8sClient)
+	host, err := getEndpointIP(pod, k8sClient, networkType)
 
 	if err != nil {
 		return nil, err
 	}
 
 	asConn := &deployment.ASConn{
-		AerospikeHostName: *host,
+		AerospikeHostName: host,
 		AerospikePort:     int(port),
 		AerospikeTLSName:  tlsName,
 		Log:               logger,
@@ -106,31 +107,64 @@ func newAsConn(
 	return asConn, nil
 }
 
-func getNodeIP(pod *corev1.Pod, k8sClient client.Client) (*string, error) {
-	ip := pod.Status.HostIP
-
-	k8sNode := &corev1.Node{}
-	err := k8sClient.Get(
-		context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName,
-			pod.Name, err,
-		)
-	}
-
-	// TODO: when refactoring this to use this as main code, this might need to be the
-	// internal hostIP instead of the external IP. Tests run outside the k8s cluster so
-	// we should to use the external IP if present.
-
-	// If externalIP is present than give external ip
-	for _, add := range k8sNode.Status.Addresses {
-		if add.Type == corev1.NodeExternalIP && add.Address != "" {
-			ip = add.Address
+func getEndpointIP(pod *corev1.Pod, k8sClient client.Client, networkType asdbv1beta1.AerospikeNetworkType) (string, error) {
+	switch networkType {
+	case asdbv1beta1.AerospikeNetworkTypePod:
+		if pod.Status.PodIP == "" {
+			return "", fmt.Errorf("pod ip is not assigned yet for the pod %s", pod.Name)
 		}
+		return pod.Status.PodIP, nil
+	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
+		if pod.Status.HostIP == "" {
+			return "", fmt.Errorf("host ip is not assigned yet for the pod %s", pod.Name)
+		}
+		return pod.Status.HostIP, nil
+	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
+		k8sNode := &corev1.Node{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+		if err != nil {
+			return "", fmt.Errorf("failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName, pod.Name, err)
+		}
+
+		// TODO: when refactoring this to use this as main code, this might need to be the
+		// internal hostIP instead of the external IP. Tests run outside the k8s cluster so
+		// we should to use the external IP if present.
+
+		// If externalIP is present than give external ip
+		for _, add := range k8sNode.Status.Addresses {
+			if add.Type == corev1.NodeExternalIP && add.Address != "" {
+				return add.Address, nil
+			}
+		}
+		return "", fmt.Errorf("failed to find %s address in the node %s for pod %s: nodes addresses are %v",
+			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses)
 	}
-	return &ip, nil
+	return "", fmt.Errorf("anknown network type: %s", networkType)
+}
+
+func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
+	var host string
+	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
+	switch networkType {
+	case asdbv1beta1.AerospikeNetworkTypePod:
+		if pod.PodIP == "" {
+			return nil, fmt.Errorf("pod ip is not defined in pod status yet: %+v", pod)
+		}
+		return &as.Host{Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName}, nil
+	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
+		if pod.HostInternalIP == "" {
+			return nil, fmt.Errorf("internal host ip is not defined in pod status yet: %+v", pod)
+		}
+		host = pod.HostInternalIP
+	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
+		if pod.HostExternalIP == "" {
+			return nil, fmt.Errorf("external host ip is not defined in pod status yet: %+v", pod)
+		}
+		host = pod.HostExternalIP
+	default:
+		return nil, fmt.Errorf("unknown network type: %s", networkType)
+	}
+	return &as.Host{Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}, nil
 }
 
 func newHostConn(
