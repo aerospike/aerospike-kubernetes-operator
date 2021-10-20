@@ -34,9 +34,11 @@ kubectl create namespace test2
 namespaces="test test1 test2"
 operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
 
-for namespace in "test" "test1" "test2"
+for ns in "test" "test1" "test2"
 do
-  oc create secret generic aerospike-secret --from-file=../features.conf
+  kubectl get secret aerospike-secret -n default -o yaml \
+  | sed s/"namespace: default"/"namespace: $ns"/\
+  | kubectl apply -n $ns -f -
   done
 
 for namespace in $namespaces; do
