@@ -37,8 +37,8 @@ helm install operator ./aerospike-kubernetes-operator/ --set replicas=3
 | Name       | Description | Default   |
 | ---------- | ----------- | --------- |
 | `replicas` | Number of operator replicas | `2` |
-| `operatorImage.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator` |
-| `operatorImage.tag` | Operator image tag | `1.0.1` |
+| `operatorImage.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator-nightly` |
+| `operatorImage.tag` | Operator image tag | `2.0.0-candidate-master-42` |
 | `operatorImage.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Secrets containing credentials to pull Operator image from a private registry | `{}` (nil) |
 | `rbac.create` | Set this to `true` to let helm chart automatically create RBAC resources necessary for operator | `true` |
