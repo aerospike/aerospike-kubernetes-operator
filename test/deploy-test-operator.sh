@@ -23,7 +23,7 @@ case $(kubectl get nodes -o yaml) in
     ;;
 esac
 
-if ! operator-sdk olm status; || ! kubectl get pod -n openshift-operator-lifecycle-manager | grep olm-operator; then
+if ! operator-sdk olm status || ! kubectl get pod -n openshift-operator-lifecycle-manager | grep olm-operator; then
   operator-sdk olm install
 fi
 
