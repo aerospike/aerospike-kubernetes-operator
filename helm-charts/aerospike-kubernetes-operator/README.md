@@ -61,7 +61,7 @@ helm install operator ./aerospike-kubernetes-operator/ --set replicas=3
 | `podLabels` | Labels for the operator pods | `{}` (nil) |
 | `metricsService.labels` | Labels for the operator's metrics service | `{}` (nil) |
 | `metricsService.annotations` | Annotations for the operator's metrics service | `{}` (nil) |
-| `metricsService.port` | Operator's metrics service port | `443` |
+| `metricsService.port` | Operator's metrics service port | `8443` |
 | `metricsService.type` | Operator's metrics service type | `ClusterIP` |
 | `webhookService.labels` | Labels for the operator's webhook service | `{}` (nil) |
 | `webhookService.annotations` | Annotations for the operator's webhook service | `{}` (nil) |
