@@ -10,7 +10,7 @@ BUNDLE_IMG=$1
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
-  *"cloud.google.com"*)
+  *"attachable-volumes-gce-pd"*)
     echo "Installing ssd storage class for GKE."
     kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
     ;;
