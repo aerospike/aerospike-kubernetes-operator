@@ -36,7 +36,7 @@ operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiName
 
 for namespace in "test" "test1" "test2"
 do
-  oc create secret generic aerospike-secret --from-file=../../features.conf
+  oc create secret generic aerospike-secret --from-file=../features.conf
   done
 
 for namespace in $namespaces; do
