@@ -100,7 +100,7 @@ spec:
         imagePullPolicy: {{ .Values.kubeRBACProxy.image.pullPolicy | default "IfNotPresent" }}
         args:
         - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxyPort | default 8443 }}
-        - --upstream=http://127.0.0.1:{{ .Values.metricsPort | default 8081 }}/
+        - --upstream=http://127.0.0.1:{{ .Values.metricsPort | default 8080 }}/
         - --logtostderr=true
         - --v=10
         ports:
