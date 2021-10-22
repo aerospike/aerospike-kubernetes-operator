@@ -1,0 +1,19 @@
+{{- if .Values.certs.create }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aerospike-operator-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+spec:
+  dnsNames:
+  - aerospike-operator-webhook-service.aerospike.svc
+  - aerospike-operator-webhook-service.aerospike.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: aerospike-operator-selfsigned-issuer
+  secretName: {{ .Values.certs.webhookServerCertSecretName | default "webhook-server-cert" }}
+{{- end }}
