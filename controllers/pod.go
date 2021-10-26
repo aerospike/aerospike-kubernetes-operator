@@ -384,7 +384,16 @@ func (r *SingleClusterReconciler) cleanupPods(
 		// Clear references to this pod in the running cluster.
 		for _, np := range clusterPodList.Items {
 			if !utils.IsPodRunningAndReady(&np) {
-				r.Log.Info("Pod is not running and ready. Skip clearing from tipHostnames.", "pod", np.Name, "host to clear", podNames)
+				r.Log.Info(
+					"Pod is not running and ready. Skip clearing from tipHostnames.",
+					"pod", np.Name, "host to clear", podNames,
+				)
+				continue
+			}
+
+			if utils.ContainsString(podNames, np.Name) {
+				// Skip running info commands on pods which are being cleaned
+				// up.
 				continue
 			}
 
@@ -395,7 +404,10 @@ func (r *SingleClusterReconciler) cleanupPods(
 
 			// TODO: tip after scale-up and create
 			// All nodes from other rack
-			r.Log.Info("About to remove host from tipHostnames and reset alumni in pod...", "pod to remove", podName, "remove and reset on pod", np.Name)
+			r.Log.Info(
+				"About to remove host from tipHostnames and reset alumni in pod...",
+				"pod to remove", podName, "remove and reset on pod", np.Name,
+			)
 			_ = r.tipClearHostname(&np, podName)
 
 			_ = r.alumniReset(&np)
