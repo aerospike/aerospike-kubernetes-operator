@@ -54,3 +54,18 @@ echo "Removing test namespaces"
 kubectl delete namespace test1 || true
 kubectl delete namespace test2 || true
 kubectl delete namespace test || true
+
+# Delete storage classes.
+case $(kubectl get nodes -o yaml) in
+  *"attachable-volumes-gce-pd"*)
+    echo "Deleting ssd storage class for GKE."
+    kubectl delete -f config/samples/storage/gce_ssd_storage_class.yaml
+    ;;
+  *"eks.amazonaws.com"*)
+    echo "Deleting ssd storage class for EKS."
+    kubectl delete -f config/samples/storage/eks_ssd_storage_class.yaml
+    ;;
+  *)
+    echo "Couldn't determine cloud provider from node list. Thus couldn't Delete 'ssd' storage class."
+    ;;
+esac

@@ -23,23 +23,31 @@ case $(kubectl get nodes -o yaml) in
     ;;
 esac
 
-if [ ! operator-sdk olm status ] || [ ! kubectl get pod -n openshift-operator-lifecycle-manager | grep olm-operator ]; then
-  operator-sdk olm install
-fi
+IS_OPENSHIFT_CLUSTER=$(kubectl get all | grep -c openshift)
 
+if ! $IS_OPENSHIFT_CLUSTER; then
+  if ! operator-sdk olm status; then
+    operator-sdk olm install
+  fi
+fi
 kubectl create namespace test
 kubectl create namespace test1
 kubectl create namespace test2
 
+if $IS_OPENSHIFT_CLUSTER; then
+  oc adm policy add-scc-to-user anyuid system:serviceaccount:test:aerospike-operator-controller-manager
+  oc adm policy add-scc-to-user anyuid system:serviceaccount:test1:aerospike-operator-controller-manager
+  oc adm policy add-scc-to-user anyuid system:serviceaccount:test2:aerospike-operator-controller-manager
+
+  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test
+  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test1
+  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test2
+
+  fi
+
 namespaces="test test1 test2"
 operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
 
-for ns in "test" "test1" "test2"
-do
-  kubectl get secret aerospike-secret -n default -o yaml \
-  | sed s/"namespace: default"/"namespace: $ns"/\
-  | kubectl apply -n $ns -f -
-  done
 
 for namespace in $namespaces; do
 ATTEMPT=0
