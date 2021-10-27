@@ -12,7 +12,7 @@ require (
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/hashicorp/go-version v1.3.0
-	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.16.0
 	github.com/stretchr/testify v1.7.0
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect

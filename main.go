@@ -22,6 +22,7 @@ import (
 	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -67,15 +68,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	var webhookServer *webhook.Server
+
+	legacyOlmCertDir := "/apiserver.local.config/certificates"
+	// If legacy directory is present then OLM < 0.17 is used and webhook server should be configured as follows
+	if info, err := os.Stat(legacyOlmCertDir); err == nil && info.IsDir() {
+		setupLog.Info(
+			"legacy OLM < 0.17 directory is present - initializing webhook" +
+				" server ",
+		)
+		webhookServer = &webhook.Server{
+			CertDir:  "/apiserver.local.config/certificates",
+			CertName: "apiserver.crt",
+			KeyName:  "apiserver.key",
+		}
+	}
+
 	// Create a new Cmd to provide shared dependencies and start components
 	options := ctrl.Options{
 		NewClient:              newClient,
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "96242fdf.aerospike.com",
+		// if webhookServer is nil, which will be the case of OLM >= 0.17, the manager will create a server for you using Host, Port,
+		// and the default CertDir, KeyName, and CertName.
+		WebhookServer: webhookServer,
 	}
 
 	// Add support for multiple namespaces given in WATCH_NAMESPACE (e.g. ns1,ns2)
@@ -98,6 +117,7 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
 	kubeConfig := ctrl.GetConfigOrDie()
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
