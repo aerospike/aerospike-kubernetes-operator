@@ -25,33 +25,28 @@ esac
 
 IS_OPENSHIFT_CLUSTER=$(kubectl get all | grep -c openshift)
 
-if ! $IS_OPENSHIFT_CLUSTER; then
+if [ "$IS_OPENSHIFT_CLUSTER" != "1" ] ; then
   if ! operator-sdk olm status; then
     operator-sdk olm install
   fi
 fi
-kubectl create namespace test
-kubectl create namespace test1
-kubectl create namespace test2
-
-if $IS_OPENSHIFT_CLUSTER; then
-  oc adm policy add-scc-to-user anyuid system:serviceaccount:test:aerospike-operator-controller-manager
-  oc adm policy add-scc-to-user anyuid system:serviceaccount:test1:aerospike-operator-controller-manager
-  oc adm policy add-scc-to-user anyuid system:serviceaccount:test2:aerospike-operator-controller-manager
-
-  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test
-  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test1
-  oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n test2
-
-  fi
 
 namespaces="test test1 test2"
-operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
+for namespace in $namespaces; do
+  kubectl create namespace "$namespace"
+  if [ "$IS_OPENSHIFT_CLUSTER" == "1" ]; then
+    oc adm policy add-scc-to-user anyuid system:serviceaccount:"$namespace":aerospike-operator-controller-manager
 
+    # TODO: Find minimum privileges that should be granted
+    oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n $namespace
+  fi
+done
+
+operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
 
 for namespace in $namespaces; do
 ATTEMPT=0
-until [ $ATTEMPT -eq 10 ] || kubectl get csv -n $namespace | grep Succeeded; do
+until [ $ATTEMPT -eq 10 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
     sleep 2
     ((ATTEMPT+=1))
 done
