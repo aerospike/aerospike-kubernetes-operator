@@ -193,7 +193,7 @@ func (r *SingleClusterReconciler) createSTS(
 		},
 	}
 
-	r.updateSTSPodSpec(st, operatorDefinedLabels, rackState)
+	r.updateSTSPodSpec(st, rackState)
 
 	r.updateAerospikeContainer(st)
 
@@ -690,7 +690,10 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
 	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Can't find service for pod while trying to delete it. Skipping...", "service", serviceName)
+			r.Log.Info(
+				"Can't find service for pod while trying to delete it. Skipping...",
+				"service", serviceName,
+			)
 			return nil
 		}
 		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
@@ -812,7 +815,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 }
 
 func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
-	st *appsv1.StatefulSet, labels map[string]string, rackState RackState,
+	st *appsv1.StatefulSet, rackState RackState,
 ) {
 	affinity := &corev1.Affinity{}
 
@@ -830,12 +833,14 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
 		}
 
+		antiAffinityLabels := utils.LabelsForPodAntiAffinity(r.aeroCluster.Name)
+
 		r.Log.Info("Adding pod affinity rules for statefulSet pod")
 		antiAffinity := &corev1.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
 				{
 					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: labels,
+						MatchLabels: antiAffinityLabels,
 					},
 					TopologyKey: "kubernetes.io/hostname",
 				},
@@ -933,11 +938,15 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 
 // Called while creating new cluster and also during rolling restart.
 func (r *SingleClusterReconciler) updateSTSPodSpec(
-	st *appsv1.StatefulSet, labels map[string]string, rackState RackState,
+	st *appsv1.StatefulSet, rackState RackState,
 ) {
-	r.updateSTSSchedulingPolicy(st, labels, rackState)
+	defaultLabels := utils.LabelsForAerospikeClusterRack(
+		r.aeroCluster.Name, rackState.Rack.ID,
+	)
+
+	r.updateSTSSchedulingPolicy(st, rackState)
 	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
-	mergedLabels := utils.MergeLabels(labels, userDefinedLabels)
+	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
 
 	st.Spec.Template.Spec.HostNetwork = r.aeroCluster.Spec.PodSpec.HostNetwork
 	st.Spec.Template.ObjectMeta.Labels = mergedLabels
