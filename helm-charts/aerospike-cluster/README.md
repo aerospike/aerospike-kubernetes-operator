@@ -33,11 +33,13 @@ kubectl create secret generic aerospike-license --from-file=<path-to-features.co
 Install the chart,
 
 <!-- ```sh
-helm install aerospike aerospike/aerospike-cluster
+helm install aerospike aerospike/aerospike-cluster \
+    --set devMode=true
 ``` -->
 
 ```sh
-helm install aerospike ./aerospike-cluster/
+helm install aerospike ./aerospike-cluster \
+    --set devMode=true
 ```
 
 
