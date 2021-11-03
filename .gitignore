@@ -43,3 +43,4 @@ GTAGS
 # OLM Bundle
 bundle/
 bundle.Dockerfile
+.DS_Store

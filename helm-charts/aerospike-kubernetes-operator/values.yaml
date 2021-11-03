@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator-nightly
-  tag: 2.0.0-nightly-2021-11-01-76
+  tag: 2.0.0-candidate-master-42
   # pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
