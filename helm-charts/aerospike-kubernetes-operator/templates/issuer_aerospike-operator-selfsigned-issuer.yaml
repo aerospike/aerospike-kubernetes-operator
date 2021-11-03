@@ -1,0 +1,13 @@
+{{- if .Values.certs.create }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: aerospike-operator-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+spec:
+  selfSigned: {}
+{{- end }}

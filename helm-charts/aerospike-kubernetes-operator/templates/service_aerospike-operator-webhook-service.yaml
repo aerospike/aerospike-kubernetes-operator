@@ -1,19 +1,18 @@
-# Service for webhook
 apiVersion: v1
 kind: Service
 metadata:
-  name: aerospike-cluster-webhook
+  name: aerospike-operator-webhook-service
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
-    {{- with .Values.service.labels }}{{ toYaml . | nindent 4 }}{{ end }}
-  {{- with .Values.service.annotations }}
+    {{- with .Values.webhookService.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+  {{- with .Values.webhookService.annotations }}
   annotations: {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.service.type | default "ClusterIP" | quote }}
+  type: {{ .Values.webhookService.type | default "ClusterIP" | quote }}
   selector:
     # Specified by the deployment/pod
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -22,7 +21,7 @@ spec:
     {{- with .Values.podLabels }}{{ toYaml . | nindent 4 }}{{ end }}
     {{- with .Values.labels }}{{ toYaml . | nindent 4 }}{{ end }}
   ports:
-    - port: {{ .Values.service.port | default 443 }}
-      # Can be the name of port 8443 of the container
-      targetPort: {{ .Values.containerPort | default 8443 }}
----
+    - port: {{ .Values.webhookService.port | default 443 }}
+      # Can be the name of port 9443 of the container
+      targetPort: {{ .Values.webhookServicePort | default 9443 }}
+      protocol: TCP

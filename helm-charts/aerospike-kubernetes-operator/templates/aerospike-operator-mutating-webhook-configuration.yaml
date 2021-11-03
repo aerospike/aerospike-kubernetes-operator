@@ -1,0 +1,32 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: aerospike/aerospike-operator-serving-cert
+  name: aerospike-operator-mutating-webhook-configuration
+  labels:
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /mutate-asdb-aerospike-com-v1beta1-aerospikecluster
+  failurePolicy: Fail
+  name: maerospikecluster.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikeclusters
+  sideEffects: None
