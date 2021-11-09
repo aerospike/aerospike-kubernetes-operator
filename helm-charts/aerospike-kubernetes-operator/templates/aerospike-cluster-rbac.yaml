@@ -1,13 +1,4 @@
 {{- range $key, $ns := (split "," .Values.watchNamespaces) }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: "{{ $ns }}"
-  labels:
-    app: {{ template "aerospike-kubernetes-operator.fullname" $ }}
-    chart: {{ $.Chart.Name }}
-    release: {{ $.Release.Name }}
----
 
 # Service account used by the cluster pods to obtain pod metadata.
 apiVersion: v1
