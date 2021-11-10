@@ -21,8 +21,11 @@ git clone https://github.com/aerospike/aerospike-kubernetes-operator.git
 cd aerospike-kubernetes-operator/helm-charts
 ```
 
-### Deploy the Aerospike Kubernetes Operator
+### Deploy Cert-manager
+Operator uses admission webhooks, which needs certs. Thus, Make sure that cert-manager is deployed on your Kubernetes cluster using
+instructions [here](https://cert-manager.io/docs/installation/kubernetes/).
 
+### Deploy the Aerospike Kubernetes Operator
 <!-- ```sh
 helm install operator aerospike/aerospike-kubernetes-operator \
     --set replicas=3
@@ -49,7 +52,7 @@ helm install operator ./aerospike-kubernetes-operator/ --set replicas=3
 | `kubeRBACProxyPort` | Kube RBAC proxy listening port | `8443` |
 | `certs.create` | Set this to `true` to let helm chart automatically create certificates using `cert-manager` | `true` |
 | `certs.webhookServerCertSecretName` | Kubernetes secret name which contains webhook server certificates | `webhook-server-cert`|
-| `watchNamespaces` | Namespaces to watch. Operator will watch for `AerospikeCluster` custom resources in these namespaces | `default` |
+| `watchNamespaces` | Namespaces to watch. Operator will watch for `AerospikeCluster` custom resources in these namespaces. Every watchedNamespace should already be existing. For every watched namespace, operator creates A ServiceAccount, ClusterRole and ClusterRoleBinding in that namespace. | `default` |
 | `resources` | Resource requests and limits for the operator pods | `{}` (nil) |
 | `affinity` | Affinity rules for the operator deployment | `{}` (nil) |
 | `extraEnv` | Extra environment variables that will be passed into the operator pods | `{}` (nil) |
