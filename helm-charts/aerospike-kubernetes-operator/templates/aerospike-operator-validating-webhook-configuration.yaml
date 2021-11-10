@@ -2,7 +2,7 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
-    cert-manager.io/inject-ca-from: aerospike/aerospike-operator-serving-cert
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aerospike-operator-serving-cert
   name: aerospike-operator-validating-webhook-configuration
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
