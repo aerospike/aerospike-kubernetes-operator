@@ -971,7 +971,9 @@
                 "items": {
                   "type": "string",
                   "format": "hostname",
-                  "not": {"enum":["any","false"]}
+                  "not": {
+                    "enum": ["any", "false"]
+                  }
                 }
               }]
             },
