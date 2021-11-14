@@ -875,7 +875,11 @@
         "service": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["port"],
+          "anyOf": [{
+            "required": ["port"]
+          }, {
+            "required": ["tls-name", "tls-port"]
+          }],
           "properties": {
             "addresses": {
               "type": "array",
@@ -1014,7 +1018,11 @@
         "heartbeat": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode", "port"],
+          "anyOf": [{
+            "required": ["mode", "port"]
+          }, {
+            "required": ["mode", "tls-name", "tls-port"]
+          }],
           "properties": {
             "mode": {
               "type": "string",
@@ -1142,7 +1150,11 @@
         "fabric": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["port"],
+          "anyOf": [{
+            "required": ["port"]
+          }, {
+            "required": ["tls-name", "tls-port"]
+          }],
           "properties": {
             "addresses": {
               "type": "array",
