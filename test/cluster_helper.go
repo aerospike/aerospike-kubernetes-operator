@@ -3,6 +3,8 @@ package test
 import (
 	goctx "context"
 	"fmt"
+
+	"log"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -10,6 +12,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/go-version"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +29,24 @@ const (
 	latestServerVersion = "5.7.0.6"
 	invalidVersion      = "3.0.0.4"
 )
+
+var (
+	latestVersion *version.Version
+	prevVersion   *version.Version
+)
+
+func init() {
+	var err error
+	latestVersion, err = version.NewVersion(latestServerVersion)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	prevVersion, err = version.NewVersion(prevServerVersion)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+}
 
 var (
 	retryInterval      = time.Second * 5
