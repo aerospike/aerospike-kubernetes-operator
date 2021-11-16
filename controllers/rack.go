@@ -221,7 +221,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		if !res.isSuccess {
 			if res.err != nil {
 				r.Log.Error(
-					res.err, "Failed to scaleDown StatefulSet pods", "stsName", found.Name,
+					res.err, "Failed to scaleDown StatefulSet pods", "stsName",
+					found.Name,
 				)
 			}
 			return res
@@ -621,12 +622,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
-	ls := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
-	)
-
 	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(found, ls, rackState)
+	r.updateSTSPodSpec(found, rackState)
 
 	// This should be called before updating storage
 	initializeSTSStorage(r.aeroCluster, found, rackState)
