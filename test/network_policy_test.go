@@ -374,7 +374,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  networkTestPolicyClusterSize,
-			Image: "aerospike/aerospike-server-enterprise:5.0.0.4",
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,

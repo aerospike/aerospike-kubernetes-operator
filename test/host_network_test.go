@@ -20,12 +20,11 @@ var _ = Describe(
 		Context(
 			"HostNetwork", func() {
 				clusterName := "host-network-cluster"
-				image := latestClusterImage
 				clusterNamespacedName := getClusterNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := createAerospikeClusterPost460(
-					clusterNamespacedName, 2, image,
+					clusterNamespacedName, 2, latestImage,
 				)
 				aeroCluster.Spec.PodSpec.HostNetwork = true
 				aeroCluster.Spec.PodSpec.MultiPodPerHost = true

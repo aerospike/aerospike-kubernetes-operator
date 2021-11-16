@@ -102,7 +102,7 @@ var _ = Describe("RackLifeCycleOp", func() {
 			By("Upgrade/Downgrade the cluster")
 
 			// dont change image, it upgrade, check old version
-			err = upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, imageToUpgrade)
+			err = upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, prevImage)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)

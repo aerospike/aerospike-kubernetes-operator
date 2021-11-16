@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	latestClusterImage  = "aerospike/aerospike-server-enterprise:5.4.0.5"
-	imageToUpgrade      = "aerospike/aerospike-server-enterprise:5.5.0.3"
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	latestServerVersion = "5.6.0.7"
+	prevServerVersion = "5.6.0.7"
+	latestServerVersion = "5.7.0.6"
+	invalidVersion = "3.0.0.4"
 )
 
 var (
@@ -32,6 +32,9 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
+	prevImage = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	latestImage = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
+	invalidImage = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 )
 
 func scaleUpClusterTest(
@@ -576,7 +579,7 @@ func createDummyAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: fmt.Sprintf("%s:%s", baseImage, latestServerVersion),
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteFalse,
@@ -683,7 +686,7 @@ func createBasicTLSCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: latestClusterImage,
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteTrue,

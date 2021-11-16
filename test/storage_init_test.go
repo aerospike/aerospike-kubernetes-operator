@@ -520,7 +520,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   latestClusterImage,
+			Image:   latestImage,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},

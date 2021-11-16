@@ -246,7 +246,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					// dont change image, it upgrade, check old version
 					err = upgradeClusterTest(
-						k8sClient, ctx, clusterNamespacedName, imageToUpgrade,
+						k8sClient, ctx, clusterNamespacedName, prevImage,
 					)
 					Expect(err).ToNot(HaveOccurred())
 				},
@@ -459,7 +459,7 @@ func negativeDeployClusterValidationTest(
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
-					aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:3.0.0.4"
+					aeroCluster.Spec.Image = invalidImage
 					err = deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -788,7 +788,7 @@ func negativeDeployClusterValidationTest(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
 							aeroCluster := createAerospikeClusterPost460(
-								clusterNamespacedName, 1, latestClusterImage,
+								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
@@ -802,7 +802,7 @@ func negativeDeployClusterValidationTest(
 						"WhenTLSExist: should fail for no tls path in storage volume",
 						func() {
 							aeroCluster := createAerospikeClusterPost460(
-								clusterNamespacedName, 1, latestClusterImage,
+								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 								"tls": []interface{}{
@@ -868,7 +868,7 @@ func negativeUpdateClusterValidationTest(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:3.0.0.4"
+					aeroCluster.Spec.Image = invalidImage
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -1150,7 +1150,7 @@ func negativeUpdateClusterValidationTest(
 			BeforeEach(
 				func() {
 					aeroCluster := createAerospikeClusterPost460(
-						clusterNamespacedName, 2, latestClusterImage,
+						clusterNamespacedName, 2, latestImage,
 					)
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
