@@ -205,7 +205,6 @@ var _ = Describe(
 
 						By("Doing regular upgrade")
 
-
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
 							clusterNamespacedName, aerospikeConfigPre5,

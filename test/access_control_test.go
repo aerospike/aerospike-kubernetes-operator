@@ -41,7 +41,7 @@ func init() {
 
 var aerospikeConfigWithSecurity = &asdbv1beta1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
-		"security": map[string]interface{}{"enable-security": true},
+		"security": map[string]interface{}{},
 		"namespaces": []interface{}{
 			map[string]interface{}{
 				"name": "profileNs",
@@ -56,8 +56,7 @@ var aerospikeConfigWithSecurity = &asdbv1beta1.AerospikeConfigSpec{
 var aerospikeConfigWithSecurityWithQuota = &asdbv1beta1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
 		"security": map[string]interface{}{
-			"enable-security": true,
-			"enable-quotas":   true,
+			"enable-quotas": true,
 		},
 		"namespaces": []interface{}{
 			map[string]interface{}{

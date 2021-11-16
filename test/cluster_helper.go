@@ -22,9 +22,9 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion = "5.6.0.7"
+	prevServerVersion   = "5.6.0.7"
 	latestServerVersion = "5.7.0.6"
-	invalidVersion = "3.0.0.4"
+	invalidVersion      = "3.0.0.4"
 )
 
 var (
@@ -32,9 +32,9 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
-	prevImage = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
-	latestImage = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	invalidImage = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
+	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
+	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 )
 
 func scaleUpClusterTest(
@@ -528,10 +528,8 @@ func createAerospikeClusterPost460(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkTLSConfig(),
+					"security": map[string]interface{}{},
+					"network":  getNetworkTLSConfig(),
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
@@ -652,10 +650,8 @@ func createDummyAerospikeCluster(
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
 					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkConfig(),
+					"security": map[string]interface{}{},
+					"network":  getNetworkConfig(),
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
@@ -755,10 +751,8 @@ func createBasicTLSCluster(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkTLSConfig(),
+					"security": map[string]interface{}{},
+					"network":  getNetworkTLSConfig(),
 				},
 			},
 		},
