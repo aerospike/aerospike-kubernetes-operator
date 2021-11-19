@@ -19,12 +19,14 @@ package v1beta1
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"strings"
 
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -76,14 +78,17 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return err
 	}
 
-	// Jump version should not be allowed
-	newVersion := strings.Split(c.Spec.Image, ":")[1]
-	oldVersion := ""
-
-	if old.Spec.Image != "" {
-		oldVersion = strings.Split(old.Spec.Image, ":")[1]
+	outgoingVersion, err := GetImageVersion(old.Spec.Image)
+	if err != nil {
+		return err
 	}
-	if err := deployment.IsValidUpgrade(oldVersion, newVersion); err != nil {
+
+	incomingVersion, err := GetImageVersion(c.Spec.Image)
+	if err != nil {
+		return err
+	}
+
+	if err := deployment.IsValidUpgrade(outgoingVersion, incomingVersion); err != nil {
 		return fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
@@ -98,9 +103,8 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	// Validate AerospikeConfig update
-	if err := validateAerospikeConfigUpdate(
-		aslog, c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
-	); err != nil {
+	if err := validateAerospikeConfigUpdate(aslog, incomingVersion, outgoingVersion,
+		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig); err != nil {
 		return err
 	}
 
@@ -159,7 +163,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	configMap := c.Spec.AerospikeConfig
 
 	// Validate Image version
-	version, err := getImageVersion(c.Spec.Image)
+	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
 		return err
 	}
@@ -291,6 +295,14 @@ func (c *AerospikeCluster) validateRackUpdate(
 		return nil
 	}
 
+	outgoingVersion, err := GetImageVersion(old.Spec.Image)
+	if err != nil {
+		return err
+	}
+	incomingVersion, err := GetImageVersion(c.Spec.Image)
+	if err != nil {
+		return err
+	}
 	// Old racks can not be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
@@ -313,9 +325,8 @@ func (c *AerospikeCluster) validateRackUpdate(
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
-						aslog, &newRack.AerospikeConfig,
-						&oldRack.AerospikeConfig,
-					); err != nil {
+						aslog, outgoingVersion, incomingVersion,
+						&newRack.AerospikeConfig, &oldRack.AerospikeConfig); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
 							oldRack.ID, err,
@@ -387,7 +398,7 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		}
 	}
 
-	version, err := getImageVersion(c.Spec.Image)
+	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
 		return err
 	}
@@ -965,13 +976,25 @@ func validateLoadBalancerUpdate(
 	return nil
 }
 
-func validateAerospikeConfigUpdate(
-	aslog logr.Logger, newConfSpec, oldConfSpec *AerospikeConfigSpec,
-) error {
+func validateSecurityConfigUpdate(newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
+	nv, err := asconfig.CompareVersions(newVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+	ov, err := asconfig.CompareVersions(oldVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+	if nv >= 0 || ov >= 0 {
+		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec)
+	}
+	return validateEnableSecurityConfig(newSpec, oldSpec)
+
+}
+
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error  {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	aslog.Info("Validate AerospikeConfig update")
-
 	// Security can not be updated dynamically
 	// TODO: How to enable dynamic security update, need to pass policy for individual nodes.
 	// auth-enabled and auth-disabled node can co-exist
@@ -989,6 +1012,38 @@ func validateAerospikeConfigUpdate(
 			return fmt.Errorf("cannot update cluster security config enable-security was changed")
 		}
 	}
+	return nil
+}
+
+func validateSecurityContext(newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
+	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
+	if err != nil {
+		if !errors.Is(err,internalerrors.NotFoundError) {
+			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+		}
+	}
+	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
+	if err != nil {
+		if !errors.Is(err,internalerrors.NotFoundError) {
+			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+		}
+	}
+	if ivflag != ovflag {
+		return fmt.Errorf("cannot update cluster security config enable-security was changed")
+	}
+	return nil
+}
+
+func validateAerospikeConfigUpdate(
+	aslog logr.Logger, incomingVersion, outgoingVersion string, incomingSpec, outgoingSpec *AerospikeConfigSpec,
+) error {
+	aslog.Info("Validate AerospikeConfig update")
+	if err := validateSecurityConfigUpdate(incomingVersion, outgoingVersion, incomingSpec, outgoingSpec); err != nil {
+		return err
+	}
+
+	newConf := incomingSpec.Value
+	oldConf := outgoingSpec.Value
 
 	// TLS can not be updated dynamically
 	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
@@ -1008,7 +1063,7 @@ func validateAerospikeConfigUpdate(
 	}
 
 	if err := validateNsConfUpdate(
-		aslog, newConfSpec, oldConfSpec,
+		aslog, incomingSpec, outgoingSpec,
 	); err != nil {
 		return err
 	}
@@ -1242,7 +1297,7 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 
-func getImageVersion(imageStr string) (string, error) {
+func GetImageVersion(imageStr string) (string, error) {
 	_, _, version := ParseDockerImageTag(imageStr)
 
 	if version == "" || strings.ToLower(version) == "latest" {
