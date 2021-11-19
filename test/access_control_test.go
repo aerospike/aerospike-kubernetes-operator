@@ -1906,7 +1906,6 @@ var _ = Describe(
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
-								fmt.Printf("ERROR: %v\n", err)
 								if err == nil || !strings.Contains(
 									err.Error(),
 									"denied the request: security.enable-quotas is set to false but quota params are",

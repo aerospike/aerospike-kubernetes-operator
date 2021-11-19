@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.76.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.17 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.11 // indirect
-	github.com/aerospike/aerospike-management-lib v0.0.0-20210930120711-46da14938ef7
+	github.com/aerospike/aerospike-management-lib v0.0.0-20211124100005-a13f1803f868
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83
 	github.com/evanphx/json-patch v4.11.0+incompatible

@@ -325,7 +325,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
-						aslog, outgoingVersion, incomingVersion,
+						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -992,7 +992,7 @@ func validateSecurityConfigUpdate(newVersion, oldVersion string, newSpec, oldSpe
 
 }
 
-func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error  {
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 	// Security can not be updated dynamically
@@ -1018,14 +1018,14 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 func validateSecurityContext(newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
-		if !errors.Is(err,internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+		if !errors.Is(err, internalerrors.NotFoundError) {
+			return fmt.Errorf("validateEnableSecurityConfig got an error - oldVersion: %s: %w",oldVersion,  err)
 		}
 	}
 	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
 	if err != nil {
-		if !errors.Is(err,internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+		if !errors.Is(err, internalerrors.NotFoundError) {
+			return fmt.Errorf("validateEnableSecurityConfig got an error - newVersion: %w", err)
 		}
 	}
 	if ivflag != ovflag {

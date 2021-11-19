@@ -45,6 +45,39 @@ var aerospikeConfigPre5 = map[string]interface{}{
 			},
 		},
 	},
+	"security": map[string]interface{}{},
+	"namespaces": []interface{}{
+		map[string]interface{}{
+			"name":                   "test",
+			"enable-xdr":             true,
+			"memory-size":            3000000000,
+			"migrate-sleep":          0,
+			"xdr-remote-datacenters": "REMOTE_DC_1",
+			"storage-engine": map[string]interface{}{
+				"type":     "device",
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
+				"filesize": 2000955200,
+			},
+		},
+	},
+}
+
+var aerospikeConfigEnableSecurityPre5 = map[string]interface{}{
+	"service": map[string]interface{}{
+		"feature-key-file": "/etc/aerospike/secret/features.conf",
+		"migrate-threads":  4,
+	},
+	"network": getNetworkConfig(),
+	"xdr": map[string]interface{}{
+		"enable-xdr":                true,
+		"xdr-digestlog-path":        "/opt/aerospike/xdr/digestlog 5G",
+		"xdr-compression-threshold": 1000,
+		"datacenters": []interface{}{
+			map[string]interface{}{
+				"name": "REMOTE_DC_1",
+			},
+		},
+	},
 	"security": map[string]interface{}{"enable-security": true},
 	"namespaces": []interface{}{
 		map[string]interface{}{
@@ -79,7 +112,7 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 			},
 		},
 	},
-	"security": map[string]interface{}{"enable-security": true},
+	"security": map[string]interface{}{},
 	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name":                   "test",
@@ -116,7 +149,7 @@ var aerospikeConfigPost5 = map[string]interface{}{
 			},
 		},
 	},
-	"security": map[string]interface{}{"enable-security": true},
+	"security": map[string]interface{}{},
 	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name":          "test",
@@ -238,7 +271,7 @@ var _ = Describe(
 					"Try ValidUpgrade", func() {
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
-							clusterNamespacedName, aerospikeConfigPre5,
+							clusterNamespacedName, aerospikeConfigEnableSecurityPre5,
 							prevImage,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(
@@ -295,7 +328,7 @@ var _ = Describe(
 					"Try ValidDowngrade", func() {
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
-							clusterNamespacedName, aerospikeConfigPre5,
+							clusterNamespacedName, aerospikeConfigEnableSecurityPre5,
 							prevImage,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(

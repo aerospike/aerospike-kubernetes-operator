@@ -54,7 +54,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	clusterName := "warm-restart-cluster"
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
-	aeroCluster := createAerospikeClusterPost460(
+	aeroCluster := createAerospikeClusterPost560(
 		clusterNamespacedName, 2, image,
 	)
 	// Add a volume of type empty dir to figure if pod restarted.

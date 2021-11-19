@@ -136,7 +136,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.Image = prevImage
+						err = UpdateClusterImage(aeroCluster, prevImage)
+						Expect(err).ToNot(HaveOccurred())
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -145,8 +146,8 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.Image = latestImage
+						err = UpdateClusterImage(aeroCluster, latestImage)
+						Expect(err).ToNot(HaveOccurred())
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 

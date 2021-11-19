@@ -448,7 +448,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 
 					"network": networkConf,
 
-					"security": map[string]interface{}{"enable-security": true},
+					"security": map[string]interface{}{},
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",

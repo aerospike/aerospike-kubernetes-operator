@@ -147,7 +147,10 @@ func IsSecurityEnabled(version string, aerospikeConfig *AerospikeConfigSpec) (bo
 		if errors.Is(err, internalerrors.NotFoundError) {
 			return false, nil
 		}
-		return false, nil
+		if errors.Is(err, internalerrors.InvalidOrEmptyError) && retval >= 0 {
+			return true, nil
+		}
+		return false, err
 	}
 	return true, nil
 }
@@ -185,8 +188,7 @@ func GetConfigContext(
 			return validConfigMap, nil
 		}
 		return nil, fmt.Errorf(
-			"invalid aerospike.%s conf. Not a valid map", context,
-		)
+			"invalid aerospike.%s conf. %w", context, internalerrors.InvalidOrEmptyError)
 
 	}
 	return nil, fmt.Errorf("context %s was %w", context, internalerrors.NotFoundError)
@@ -194,8 +196,8 @@ func GetConfigContext(
 
 func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
 	if enabled, ok := configMap[key]; ok {
-		if _, ok := enabled.(bool); ok {
-			return enabled.(bool), nil
+		if value, ok := enabled.(bool); ok {
+			return value, nil
 		}
 		return false, fmt.Errorf("%s: not valid", key)
 	}
