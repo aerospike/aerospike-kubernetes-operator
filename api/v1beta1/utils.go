@@ -1,13 +1,13 @@
 package v1beta1
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/pkg/errors"
 )
 
 const (
