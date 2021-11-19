@@ -93,7 +93,8 @@ func GetDesiredImage(
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
 	return map[string]string{
-		asdbv1beta1.AerospikeAppLabel: "aerospike-cluster", asdbv1beta1.AerospikeCustomResourceLabel: clName,
+		asdbv1beta1.AerospikeAppLabel:            "aerospike-cluster",
+		asdbv1beta1.AerospikeCustomResourceLabel: clName,
 	}
 }
 
@@ -103,6 +104,13 @@ func LabelsForAerospikeClusterRack(
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	labels[asdbv1beta1.AerospikeRackIdLabel] = strconv.Itoa(rackID)
+	return labels
+}
+
+// LabelsForPodAntiAffinity returns the labels to use for setting pod
+// anti-affinity.
+func LabelsForPodAntiAffinity(clName string) map[string]string {
+	labels := LabelsForAerospikeCluster(clName)
 	return labels
 }
 
@@ -119,7 +127,7 @@ func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string
 	return mergedMap
 }
 
-// GetHash return ripmd160 hash for given string
+// GetHash return ripemd160 hash for given string
 func GetHash(str string) (string, error) {
 	var digest []byte
 	hash := ripemd160.New()
