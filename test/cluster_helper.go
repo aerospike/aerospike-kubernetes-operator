@@ -262,7 +262,9 @@ func deleteCluster(
 		}
 		//Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
 		//tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
-		allClustersPods, err := getPodsList(k8sClient, ctx, clusterNamespacedName)
+		allClustersPods, err := getPodsList(
+			k8sClient, ctx, clusterNamespacedName,
+		)
 		if err != nil {
 			return err
 		}
@@ -397,6 +399,7 @@ func validateResource(
 
 	for _, p := range podList.Items {
 		for _, cnt := range p.Spec.Containers {
+			// TODO: ignore injected containers
 			stMem := cnt.Resources.Requests.Memory()
 			if !mem.Equal(*stMem) {
 				return fmt.Errorf(

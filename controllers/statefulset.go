@@ -30,7 +30,8 @@ const (
 
 	// This storage path annotation is added in pvc to make reverse association with storage.volume.path
 	// while deleting pvc
-	storageVolumeAnnotationKey = "storage-volume"
+	storageVolumeAnnotationKey       = "storage-volume"
+	storageVolumeLegacyAnnotationKey = "storage-path"
 
 	confDirName                = "confdir"
 	initConfDirName            = "initconfigs"
@@ -690,7 +691,10 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
 	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Can't find service for pod while trying to delete it. Skipping...", "service", serviceName)
+			r.Log.Info(
+				"Can't find service for pod while trying to delete it. Skipping...",
+				"service", serviceName,
+			)
 			return nil
 		}
 		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
@@ -773,11 +777,26 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 			continue
 		}
 
-		r.Log.V(1).Info("Added PVC for volume", "volume", volume)
-
 		pvc := createPVCForVolumeAttachment(r.aeroCluster, volume)
-		st.Spec.VolumeClaimTemplates = append(st.Spec.VolumeClaimTemplates, pvc)
+
+		if !ContainsElement(st.Spec.VolumeClaimTemplates, pvc) {
+			st.Spec.VolumeClaimTemplates = append(
+				st.Spec.VolumeClaimTemplates, pvc,
+			)
+			r.Log.V(1).Info("Added PVC for volume", "volume", volume)
+		}
 	}
+}
+
+func ContainsElement(
+	claims []corev1.PersistentVolumeClaim, query corev1.PersistentVolumeClaim,
+) bool {
+	for _, e := range claims {
+		if e.Name == query.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SingleClusterReconciler) updateSTSNonPVStorage(
@@ -1104,8 +1123,8 @@ func getDefaultAerospikeContainerVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
-func initializeSTSStorage(
-	aeroCluster *asdbv1beta1.AerospikeCluster, st *appsv1.StatefulSet,
+func (r *SingleClusterReconciler) initializeSTSStorage(
+	st *appsv1.StatefulSet,
 	rackState RackState,
 ) {
 	// Initialize sts storage
@@ -1129,10 +1148,8 @@ func initializeSTSStorage(
 		st.Spec.Template.Spec.Containers[i].VolumeDevices = []corev1.VolumeDevice{}
 	}
 
-	st.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{}
-
 	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(
-		aeroCluster, rackState,
+		r.aeroCluster, rackState,
 	)
 }
 

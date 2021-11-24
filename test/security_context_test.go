@@ -73,6 +73,7 @@ func validateSecurityContext(aeroCluster *asdbv1beta1.AerospikeCluster) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(pods.Items).ToNot(BeEmpty())
 	for _, pod := range pods.Items {
+		// TODO: get pod.Spec container by name.
 		Expect(pod.Spec.Containers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext))
 	}
 }

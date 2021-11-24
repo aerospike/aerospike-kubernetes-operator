@@ -71,4 +71,3 @@ spec:
             - /opt/aerospike/data/test.dat
           filesize: 2000000000
           data-in-memory: true
-

@@ -8123,8 +8123,14 @@ spec:
                       description: Image is the Aerospike image this pod is running.
                       type: string
                     initializedVolumePaths:
-                      description: InitializedVolumePaths is the list of device path
-                        that have already be
+                      description: InitializedVolumePaths is deprecated version of
+                        InitializedVolumes.
+                      items:
+                        type: string
+                      type: array
+                    initializedVolumes:
+                      description: 'InitializedVolumes is the list of volume names
+                        that have already been '
                       items:
                         type: string
                       type: array
@@ -8136,7 +8142,7 @@ spec:
                       description: PodIP in the K8s network.
                       type: string
                     podPort:
-                      description: PodPort is the port K8s intenral Aerospike clients
+                      description: PodPort is the port K8s internal Aerospike clients
                         can connect to.
                       type: integer
                     podSpecHash:
@@ -8151,7 +8157,6 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
-                  - initializedVolumePaths
                   - networkPolicyHash
                   - podIP
                   - podPort
