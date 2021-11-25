@@ -15,10 +15,10 @@ def executeCommand(command):
         raise Exception('Error executing command')
 
 
-def getRack(data, podname):
+def getRack(data, podName):
     print('Checking for rack in rackConfig')
-    # Assuming podname format stsname-rackid-index
-    rackID = podname.split("-")[-2]
+    # Assuming podName format stsName-rackID-index
+    rackID = podName.split("-")[-2]
     if 'rackConfig' in data and 'racks' in data['rackConfig']:
         racks = data['rackConfig']['racks']
         for rack in racks:
@@ -26,7 +26,7 @@ def getRack(data, podname):
                 return rack
 
 
-podname = sys.argv[1]
+podName = sys.argv[1]
 data = json.load(sys.stdin)
 
 if 'status' in data:
@@ -39,10 +39,10 @@ if 'spec' in data:
 else:
     spec = {}
 
-rack = getRack(spec, podname)
+rack = getRack(spec, podName)
 if rack is None:
     print("spec: ", spec)
-    raise Exception('Rack not found for pod ' + podname + ' in above spec')
+    raise Exception('Rack not found for pod ' + podName + ' in above spec')
 
 if 'storage' in rack and 'volumes' in rack['storage'] and len(rack['storage']['volumes']) > 0:
     volumes = rack['storage']['volumes']
@@ -52,8 +52,11 @@ else:
     else:
         volumes = []
 
-if 'pods' in status and podname in status['pods'] and 'initializedVolumePaths' in status['pods'][podname]:
-    alreadyInitialized = status['pods'][podname]['initializedVolumePaths']
+if 'pods' in status and podName in status['pods'] and 'initializedVolumes' in status['pods'][podName]:
+    alreadyInitialized = status['pods'][podName]['initializedVolumes']
+elif 'pods' in status and podName in status['pods'] and 'initializedVolumePaths' in status['pods'][podName]:
+    # Read legacy property.
+    alreadyInitialized = status['pods'][podName]['initializedVolumePaths']
 else:
     alreadyInitialized = []
 
@@ -145,13 +148,13 @@ if 'MY_POD_TLS_ENABLED' in os.environ and "true" == os.environ['MY_POD_TLS_ENABL
     podPort = os.environ['POD_TLSPORT']
     servicePort = os.environ['MAPPED_TLSPORT']
 
-# Get AerospikeConfingHash and NetworkPolicyHash, all assumed to be in current working directory
+# Get AerospikeConfigHash and NetworkPolicyHash, all assumed to be in current working directory
 confHashFile = 'aerospikeConfHash'
 networkPolicyHashFile = 'networkPolicyHash'
 podSpecHashFile = 'podSpecHash'
 
 confHash = readFile(confHashFile)
-newtworkPolicyHash = readFile(networkPolicyHashFile)
+networkPolicyHash = readFile(networkPolicyHashFile)
 podSpecHash = readFile(podSpecHashFile)
 
 value = {
@@ -166,9 +169,10 @@ value = {
         'nodeID': os.environ.get('NODE_ID', ''),
         'tlsName': os.environ.get('MY_POD_TLS_NAME', '')
     },
-    'initializedVolumePaths': initialized,
+    'initializedVolumes': initialized,
+    'initializedVolumePaths': None,
     'aerospikeConfigHash': confHash,
-    'networkPolicyHash': newtworkPolicyHash,
+    'networkPolicyHash': networkPolicyHash,
     'podSpecHash': podSpecHash,
 }
 
@@ -186,7 +190,7 @@ value['aerospike']['rackID'] = rack['id']
 
 # Create the patch payload for updating pod status.
 pathPayload = [{'op': 'replace', 'path': '/status/pods/' +
-                podname, 'value': value}]
+                podName, 'value': value}]
 
 with open('/tmp/patch.json', 'w') as outfile:
     json.dump(pathPayload, outfile)

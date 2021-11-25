@@ -42,8 +42,14 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 		// Check for path in pvc annotations. We put path annotation while creating statefulset
 		pvcStorageVolName, ok := pvc.Annotations[storageVolumeAnnotationKey]
 		if !ok {
-			err := fmt.Errorf("PVC can not be removed, " +
-				"it does not have storage-volume annotation")
+			// Try legacy annotation name.
+			pvcStorageVolName, ok = pvc.Annotations[storageVolumeLegacyAnnotationKey]
+		}
+		if !ok {
+			err := fmt.Errorf(
+				"PVC can not be removed, " +
+					"it does not have storage-volume annotation",
+			)
 			r.Log.Error(
 				err, "Failed to remove PVC", "PVC", pvc.Name, "annotations",
 				pvc.Annotations,
@@ -62,7 +68,8 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 			r.Log.Info(
 				"PVC's volume not found in configured storage volumes. "+
 					"Use storage level cascadeDelete policy",
-				"PVC", pvc.Name, "volume", pvcStorageVolName, "cascadeDelete", cascadeDelete,
+				"PVC", pvc.Name, "volume", pvcStorageVolName, "cascadeDelete",
+				cascadeDelete,
 			)
 
 		} else {
