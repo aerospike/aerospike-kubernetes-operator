@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -68,20 +67,8 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				image := fmt.Sprintf(
 					"aerospike/aerospike-server-enterprise:%s", v,
 				)
-				version, err := asdbv1beta1.GetImageVersion(image)
+				aeroCluster, err := getAeroClusterConfig(clusterNamespacedName, image)
 				Expect(err).ToNot(HaveOccurred())
-				cmpVal, err := asconfig.CompareVersions(version, "5.7.0")
-				Expect(err).ToNot(HaveOccurred())
-				var aeroCluster *asdbv1beta1.AerospikeCluster
-				if cmpVal > 0 {
-					aeroCluster = createAerospikeClusterPost560(
-						clusterNamespacedName, 2, image,
-					)
-				} else {
-					aeroCluster = createAerospikeClusterPost460(
-						clusterNamespacedName, 2, image,
-					)
-				}
 
 				err = deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())

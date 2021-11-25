@@ -5,6 +5,7 @@ import (
 	goctx "context"
 	"encoding/json"
 	"fmt"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"io"
 	"io/ioutil"
 	"path/filepath"
@@ -470,4 +471,24 @@ func ValidateAttributes(
 		}
 	}
 	return false
+}
+
+func getAeroClusterConfig(namespace types.NamespacedName, image string) (*asdbv1beta1.AerospikeCluster, error) {
+	version, err := asdbv1beta1.GetImageVersion(image)
+	if err != nil {
+		return nil, err
+	}
+	cmpVal, err := asconfig.CompareVersions(version, "5.7.0")
+	if err != nil {
+		return nil, err
+	}
+	if cmpVal >= 0 {
+		return createAerospikeClusterPost560(
+			namespace, 2, image,
+		), nil
+	} else {
+		return createAerospikeClusterPost460(
+			namespace, 2, image,
+		), nil
+	}
 }

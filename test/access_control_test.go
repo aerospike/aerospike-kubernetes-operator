@@ -110,9 +110,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -159,9 +159,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -217,9 +217,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -275,9 +275,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -330,9 +330,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -397,9 +397,9 @@ var _ = Describe(
 							}
 
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
-
-								AerospikeConfig: aerospikeConfigWithSecurity,
+								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -468,9 +468,9 @@ var _ = Describe(
 							}
 
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
-
-								AerospikeConfig: aerospikeConfigWithSecurity,
+								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -541,9 +541,9 @@ var _ = Describe(
 							}
 
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
-
-								AerospikeConfig: aerospikeConfigWithSecurity,
+								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -612,9 +612,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -675,9 +675,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -741,9 +741,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -804,9 +804,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -877,9 +877,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -944,9 +944,9 @@ var _ = Describe(
 							}
 
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
-
-								AerospikeConfig: aerospikeConfigWithSecurity,
+								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1004,9 +1004,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1060,9 +1060,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1117,9 +1117,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1178,9 +1178,9 @@ var _ = Describe(
 						}
 
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
-
-							AerospikeConfig: aerospikeConfigWithSecurity,
+							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1416,9 +1416,9 @@ var _ = Describe(
 								}
 
 								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
-
-									AerospikeConfig: aerospikeConfigWithSecurityWithQuota,
+									AerospikeConfig:        aerospikeConfigWithSecurityWithQuota,
 								}
 
 								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1467,9 +1467,9 @@ var _ = Describe(
 									},
 								}
 								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
-
-									AerospikeConfig: aerospikeConfigWithSecurity,
+									AerospikeConfig:        aerospikeConfigWithSecurity,
 								}
 
 								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)

@@ -106,7 +106,7 @@ func getAerospikeConfig(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  1,
-			Image: "aerospike/aerospike-server-enterprise:" + latestServerVersion,
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
@@ -174,7 +174,7 @@ func getAerospikeConfig(
 						"migrate-threads":  1,
 					},
 					"network":  networkConf,
-					"security": map[string]interface{}{"enable-security": true},
+					"security": map[string]interface{}{},
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",

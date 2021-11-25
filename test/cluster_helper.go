@@ -28,6 +28,7 @@ const (
 	prevServerVersion   = "5.6.0.7"
 	latestServerVersion = "5.7.0.8"
 	invalidVersion      = "3.0.0.4"
+	pre5Version         = "4.9.0.33"
 )
 
 var (
@@ -38,6 +39,7 @@ var (
 	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
+	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
 )
 
 func scaleUpClusterTest(
@@ -183,11 +185,11 @@ func upgradeClusterTest(
 	if err != nil {
 		return err
 	}
-
 	// Change config
-	aeroCluster.Spec.Image = image
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
+	if err := UpdateClusterImage(aeroCluster, image); err != nil {
+		return err
+	}
+	if err = k8sClient.Update(ctx, aeroCluster); err != nil {
 		return err
 	}
 
@@ -831,10 +833,10 @@ func UpdateClusterImage(aerocluster *asdbv1beta1.AerospikeCluster, image string)
 		aerocluster.Spec.Image = image
 		if enableSecurityFlag {
 			securityConfigMap := aerocluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})
-			securityConfigMap["enable-security"] = "true"
+			securityConfigMap["enable-security"] = true
 			return nil
 		}
-		aerocluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{"enable-security": "false"}
+		aerocluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{"enable-security": false}
 	}
 	return nil
 }

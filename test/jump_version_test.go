@@ -45,39 +45,6 @@ var aerospikeConfigPre5 = map[string]interface{}{
 			},
 		},
 	},
-	"security": map[string]interface{}{},
-	"namespaces": []interface{}{
-		map[string]interface{}{
-			"name":                   "test",
-			"enable-xdr":             true,
-			"memory-size":            3000000000,
-			"migrate-sleep":          0,
-			"xdr-remote-datacenters": "REMOTE_DC_1",
-			"storage-engine": map[string]interface{}{
-				"type":     "device",
-				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
-				"filesize": 2000955200,
-			},
-		},
-	},
-}
-
-var aerospikeConfigEnableSecurityPre5 = map[string]interface{}{
-	"service": map[string]interface{}{
-		"feature-key-file": "/etc/aerospike/secret/features.conf",
-		"migrate-threads":  4,
-	},
-	"network": getNetworkConfig(),
-	"xdr": map[string]interface{}{
-		"enable-xdr":                true,
-		"xdr-digestlog-path":        "/opt/aerospike/xdr/digestlog 5G",
-		"xdr-compression-threshold": 1000,
-		"datacenters": []interface{}{
-			map[string]interface{}{
-				"name": "REMOTE_DC_1",
-			},
-		},
-	},
 	"security": map[string]interface{}{"enable-security": true},
 	"namespaces": []interface{}{
 		map[string]interface{}{
@@ -112,7 +79,7 @@ var aerospikeConfigCrashingPre5 = map[string]interface{}{
 			},
 		},
 	},
-	"security": map[string]interface{}{},
+	"security": map[string]interface{}{"enable-security": true},
 	"namespaces": []interface{}{
 		map[string]interface{}{
 			"name":                   "test",
@@ -193,7 +160,7 @@ var _ = Describe(
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
 							clusterNamespacedName, aerospikeConfigCrashingPre5,
-							latestImage,
+							pre5Image,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(
 							k8sClient, aeroCluster, ctx, 100*time.Millisecond,
@@ -207,7 +174,7 @@ var _ = Describe(
 						// Cluster should recover once correct config is provided.
 						aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(
 							clusterNamespacedName, aerospikeConfigPre5,
-							latestImage,
+							pre5Image,
 						)
 						err = aerospikeClusterCreateUpdateWithTO(
 							k8sClient, aeroCluster, ctx,
@@ -221,14 +188,14 @@ var _ = Describe(
 						)
 
 						err = waitForVersion(
-							logger, ctx, aeroCluster, latestImage,
+							logger, ctx, aeroCluster, pre5Image,
 							jumpTestWaitForVersionInterval,
 							jumpTestWaitForVersionTO,
 						)
 						Expect(err).ToNot(
 							HaveOccurred(),
 							"Cluster should have been on %s - but is not: %v",
-							latestImage, err,
+							pre5Image, err,
 						)
 					},
 				)
@@ -241,7 +208,7 @@ var _ = Describe(
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
 							clusterNamespacedName, aerospikeConfigPre5,
-							latestImage,
+							pre5Image,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(
 							k8sClient, aeroCluster, ctx,
@@ -255,14 +222,14 @@ var _ = Describe(
 						)
 
 						err = waitForVersion(
-							logger, ctx, aeroCluster, latestImage,
+							logger, ctx, aeroCluster, pre5Image,
 							jumpTestWaitForVersionInterval,
 							jumpTestWaitForVersionTO,
 						)
 						Expect(err).ToNot(
 							HaveOccurred(),
 							"Cluster should have been on %s - but is not: %v",
-							latestImage, err,
+							pre5Image, err,
 						)
 					},
 				)
@@ -271,8 +238,8 @@ var _ = Describe(
 					"Try ValidUpgrade", func() {
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
-							clusterNamespacedName, aerospikeConfigEnableSecurityPre5,
-							prevImage,
+							clusterNamespacedName, aerospikeConfigPre5,
+							pre5Image,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(
 							k8sClient, aeroCluster, ctx,
@@ -286,14 +253,14 @@ var _ = Describe(
 						)
 
 						err = waitForVersion(
-							logger, ctx, aeroCluster, prevImage,
+							logger, ctx, aeroCluster, pre5Image,
 							jumpTestWaitForVersionInterval,
 							jumpTestWaitForVersionTO,
 						)
 						Expect(err).ToNot(
 							HaveOccurred(),
 							"Cluster should have been on %s - but is not: %v",
-							prevImage, err,
+							pre5Image, err,
 						)
 
 						aeroCluster = getAerospikeClusterSpecWithAerospikeConfig(
@@ -328,8 +295,8 @@ var _ = Describe(
 					"Try ValidDowngrade", func() {
 						// Save cluster variable as well for cleanup.
 						aeroCluster := getAerospikeClusterSpecWithAerospikeConfig(
-							clusterNamespacedName, aerospikeConfigEnableSecurityPre5,
-							prevImage,
+							clusterNamespacedName, aerospikeConfigPre5,
+							pre5Image,
 						)
 						err := aerospikeClusterCreateUpdateWithTO(
 							k8sClient, aeroCluster, ctx,
@@ -343,14 +310,14 @@ var _ = Describe(
 						)
 
 						err = waitForVersion(
-							logger, ctx, aeroCluster, prevImage,
+							logger, ctx, aeroCluster, pre5Image,
 							jumpTestWaitForVersionInterval,
 							jumpTestWaitForVersionTO,
 						)
 						Expect(err).ToNot(
 							HaveOccurred(),
 							"Cluster should have been on %s - but is not: %v",
-							prevImage, err,
+							pre5Image, err,
 						)
 					},
 				)

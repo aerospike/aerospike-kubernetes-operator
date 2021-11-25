@@ -1019,13 +1019,13 @@ func validateSecurityContext(newVersion, oldVersion string, newSpec, oldSpec *Ae
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error - oldVersion: %s: %w",oldVersion,  err)
+			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
 		}
 	}
 	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error - newVersion: %w", err)
+			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
 		}
 	}
 	if ivflag != ovflag {

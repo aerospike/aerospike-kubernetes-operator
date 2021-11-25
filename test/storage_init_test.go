@@ -290,7 +290,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						err = UpdateClusterImage(aeroCluster, "aerospike/aerospike-server-enterprise:5.0.0.11")
+						err = UpdateClusterImage(aeroCluster, prevImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
