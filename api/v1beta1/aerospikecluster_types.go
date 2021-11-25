@@ -687,7 +687,8 @@ type AerospikeInstanceSummary struct {
 	TLSAlternateAccessEndpoints []string `json:"tlsAlternateAccessEndpoints,omitempty"`
 }
 
-// AerospikePodStatus contains the Aerospike specific status of the Aerospike serverpods.
+// AerospikePodStatus contains the Aerospike specific status of the Aerospike
+// server pods.
 // +k8s:openapi-gen=true
 type AerospikePodStatus struct {
 	// Image is the Aerospike image this pod is running.
@@ -698,7 +699,7 @@ type AerospikePodStatus struct {
 	HostInternalIP string `json:"hostInternalIP,omitempty"`
 	// HostExternalIP of the K8s host this pod is scheduled on.
 	HostExternalIP string `json:"hostExternalIP,omitempty"`
-	// PodPort is the port K8s intenral Aerospike clients can connect to.
+	// PodPort is the port K8s internal Aerospike clients can connect to.
 	PodPort int `json:"podPort"`
 	// ServicePort is the port Aerospike clients outside K8s can connect to.
 	ServicePort int32 `json:"servicePort"`
@@ -706,8 +707,12 @@ type AerospikePodStatus struct {
 	// Aerospike server instance summary for this pod.
 	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`
 
-	// InitializedVolumePaths is the list of device path that have already been initialized for main container/initContianer.
-	InitializedVolumePaths []string `json:"initializedVolumePaths"`
+	// InitializedVolumes is the list of volume names that have already been
+	// initialized.
+	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
+
+	// InitializedVolumePaths is deprecated version of InitializedVolumes.
+	InitializedVolumePaths []string `json:"initializedVolumePaths,omitempty"`
 
 	// AerospikeConfigHash is ripemd160 hash of aerospikeConfig used by this pod
 	AerospikeConfigHash string `json:"aerospikeConfigHash"`
