@@ -40,7 +40,7 @@ var _ = Describe(
 
 func WarmRestart(ctx goCtx.Context) {
 	image := fmt.Sprintf(
-		"ashishshinde54/aerospike-server-enterprise:%s", "5.5.0.13",
+		"aerospike/aerospike-server-enterprise:%s", "tinibackport-5.7.0.8",
 	)
 	rollCluster(ctx, image, true)
 }
@@ -80,7 +80,9 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	err = createMarkerFile(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
+	err = rollingRestartClusterTest(
+		logger, k8sClient, ctx, clusterNamespacedName,
+	)
 	Expect(err).ToNot(HaveOccurred())
 
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)

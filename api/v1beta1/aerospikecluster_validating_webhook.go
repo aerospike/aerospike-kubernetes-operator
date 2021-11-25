@@ -88,7 +88,9 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return err
 	}
 
-	if err := deployment.IsValidUpgrade(outgoingVersion, incomingVersion); err != nil {
+	if err := deployment.IsValidUpgrade(
+		outgoingVersion, incomingVersion,
+	); err != nil {
 		return fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
@@ -103,8 +105,10 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	// Validate AerospikeConfig update
-	if err := validateAerospikeConfigUpdate(aslog, incomingVersion, outgoingVersion,
-		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig); err != nil {
+	if err := validateAerospikeConfigUpdate(
+		aslog, incomingVersion, outgoingVersion,
+		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+	); err != nil {
 		return err
 	}
 
@@ -326,7 +330,8 @@ func (c *AerospikeCluster) validateRackUpdate(
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
-						&newRack.AerospikeConfig, &oldRack.AerospikeConfig); err != nil {
+						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
 							oldRack.ID, err,
@@ -976,7 +981,9 @@ func validateLoadBalancerUpdate(
 	return nil
 }
 
-func validateSecurityConfigUpdate(newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
+func validateSecurityConfigUpdate(
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec,
+) error {
 	nv, err := asconfig.CompareVersions(newVersion, "5.7.0")
 	if err != nil {
 		return err
@@ -1015,17 +1022,24 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 	return nil
 }
 
-func validateSecurityContext(newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
+func validateSecurityContext(
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec,
+) error {
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+			return fmt.Errorf(
+				"validateEnableSecurityConfig got an error - oldVersion: %s: %w",
+				oldVersion, err,
+			)
 		}
 	}
 	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.NotFoundError) {
-			return fmt.Errorf("validateEnableSecurityConfig got an error: %w", err)
+			return fmt.Errorf(
+				"validateEnableSecurityConfig got an error: %w", err,
+			)
 		}
 	}
 	if ivflag != ovflag {
@@ -1035,10 +1049,13 @@ func validateSecurityContext(newVersion, oldVersion string, newSpec, oldSpec *Ae
 }
 
 func validateAerospikeConfigUpdate(
-	aslog logr.Logger, incomingVersion, outgoingVersion string, incomingSpec, outgoingSpec *AerospikeConfigSpec,
+	aslog logr.Logger, incomingVersion, outgoingVersion string,
+	incomingSpec, outgoingSpec *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
-	if err := validateSecurityConfigUpdate(incomingVersion, outgoingVersion, incomingSpec, outgoingSpec); err != nil {
+	if err := validateSecurityConfigUpdate(
+		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
+	); err != nil {
 		return err
 	}
 
