@@ -6,7 +6,6 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"log"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
-	"github.com/hashicorp/go-version"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -26,18 +24,6 @@ import (
 const (
 	testClusterSize = 2
 )
-
-var (
-	ver *version.Version
-)
-
-func init() {
-	var err error
-	ver, err = version.NewVersion(latestServerVersion)
-	if err != nil {
-		log.Fatalln(err)
-	}
-}
 
 var aerospikeConfigWithSecurity = &asdbv1beta1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
@@ -1271,7 +1257,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1280,7 +1266,10 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(false)
+								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
@@ -1353,7 +1342,7 @@ var _ = Describe(
 										},
 									},
 								}
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1362,7 +1351,9 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1509,7 +1500,7 @@ var _ = Describe(
 								clusterNamespacedName := getClusterNamespacedName(
 									clusterName, namespace,
 								)
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1518,7 +1509,9 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(false)
+								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
@@ -1565,7 +1558,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1574,7 +1567,9 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1658,7 +1653,7 @@ var _ = Describe(
 										},
 									},
 								}
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1668,7 +1663,9 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1715,7 +1712,7 @@ var _ = Describe(
 										},
 									},
 								}
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1724,7 +1721,9 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1736,7 +1735,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("SecurityUpdateReject")
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1745,7 +1744,9 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(false)
+								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, nil,
 									aerospikeConfigSpec,
@@ -1813,7 +1814,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1822,8 +1823,12 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
-								aerospikeConfigSpec.setEnableQuotas(true)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+								if err := aerospikeConfigSpec.setEnableQuotas(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1887,7 +1892,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(ver)
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
 										fmt.Sprintf(
@@ -1896,8 +1901,12 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
-								aerospikeConfigSpec.setEnableQuotas(false)
+								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+								if err := aerospikeConfigSpec.setEnableQuotas(false); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,

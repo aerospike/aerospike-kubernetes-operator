@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/hashicorp/go-version"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -339,12 +338,11 @@ func Copy(dst interface{}, src interface{}) error {
 }
 
 type AerospikeConfSpec struct {
-	version     *version.Version
-	constraints *version.Constraints
-	network     map[string]interface{}
-	service     map[string]interface{}
-	security    map[string]interface{}
-	namespaces  []interface{}
+	version    string
+	network    map[string]interface{}
+	service    map[string]interface{}
+	security   map[string]interface{}
+	namespaces []interface{}
 }
 
 func getOperatorCert() *asdbv1beta1.AerospikeOperatorClientCertSpec {
@@ -402,7 +400,12 @@ func getNetworkConfig() map[string]interface{} {
 		},
 	}
 }
-func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
+func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
+
+	ver, err := asdbv1beta1.GetImageVersion(image)
+	if err != nil {
+		return nil, err
+	}
 	service := map[string]interface{}{
 		"feature-key-file": "/etc/aerospike/secret/features.conf",
 	}
@@ -418,44 +421,60 @@ func NewAerospikeConfSpec(v *version.Version) (*AerospikeConfSpec, error) {
 		},
 	}
 
-	security := map[string]interface{}{}
-
-	constraints, err := version.NewConstraint(">= 5.6")
-	if err != nil {
-		return nil, err
-	}
-
 	return &AerospikeConfSpec{
-		version:     v,
-		constraints: &constraints,
-		service:     service,
-		network:     network,
-		namespaces:  namespaces,
-		security:    security,
+		version:    ver,
+		service:    service,
+		network:    network,
+		namespaces: namespaces,
+		security:   nil,
 	}, nil
 }
 
 func (acs *AerospikeConfSpec) getVersion() string {
-	return acs.version.String()
+	return acs.version
 }
 
-func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) {
+func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) error {
+	cmpVal, err := asconfig.CompareVersions(acs.version, "5.7.0")
+	if err != nil {
+		return err
+	}
+	if cmpVal >= 0 {
+		if enableSecurity {
+			security := map[string]interface{}{}
+			acs.security = security
+		}
+		return nil
+	}
+	acs.security = map[string]interface{}{}
 	acs.security["enable-security"] = enableSecurity
+	return nil
 }
 
-func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) {
-	if acs.constraints.Check(acs.version) {
+func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) error {
+	cmpVal, err := asconfig.CompareVersions(acs.version, "5.6.0")
+	if err != nil {
+		return err
+	}
+	if cmpVal >= 0 {
+		if acs.security == nil {
+			acs.security = map[string]interface{}{}
+		}
 		acs.security["enable-quotas"] = enableQuotas
 	}
+	return nil
 }
 
 func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
-	return map[string]interface{}{
+	spec := map[string]interface{}{
 		"service":    acs.service,
-		"security":   acs.security,
 		"network":    acs.network,
 		"namespaces": acs.namespaces,
 	}
+	if acs.security != nil {
+		spec["security"] = acs.security
+	}
+	return spec
 }
 
 func ValidateAttributes(
