@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 5.5.0.9
+  tag: 5.7.0.8
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containining credentials can be added
@@ -33,7 +33,8 @@ aerospikeAccessControl: {}
   #     whitelist: []
 
 ## Aerospike Configuration
-aerospikeConfig: {}
+aerospikeConfig:
+  security: {}
   # service:
   #   feature-key-file: /etc/aerospike/secrets/features.conf
 
