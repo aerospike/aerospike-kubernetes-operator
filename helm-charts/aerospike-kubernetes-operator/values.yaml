@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator-nightly
-  tag: 2.0.0-candidate-master-55
+  tag: 2.0.0-rc2
   # pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -30,7 +30,7 @@ certs:
   webhookServerCertSecretName: "webhook-server-cert"
 
 ##  Operator configurations
-# watchNamespaces: "default"
+watchNamespaces: "default"
 
 ## Resources - limits / requests
 resources: {}
