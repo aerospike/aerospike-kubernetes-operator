@@ -12,7 +12,7 @@ spec:
   size: {{ .Values.replicas | default 3 }}
 
   # Aerospike server docker image
-  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "5.5.0.7" }}
+  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "5.7.0.8" }}
 
   # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}
@@ -28,9 +28,6 @@ spec:
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secrets/features.conf
-
-    security:
-      enable-security: false
 
     network:
       service:

@@ -34,7 +34,6 @@ aerospikeAccessControl: {}
 
 ## Aerospike Configuration
 aerospikeConfig:
-  security: {}
   # service:
   #   feature-key-file: /etc/aerospike/secrets/features.conf
 
