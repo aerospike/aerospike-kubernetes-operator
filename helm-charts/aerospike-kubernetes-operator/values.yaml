@@ -3,7 +3,7 @@ replicas: 2
 
 ## Operator image
 operatorImage:
-  repository: aerospike/aerospike-kubernetes-operator-nightly
+  repository: aerospike/aerospike-kubernetes-operator
   tag: 2.0.0-rc2
   # pullPolicy: IfNotPresent
 
