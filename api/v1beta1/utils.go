@@ -1,9 +1,13 @@
 package v1beta1
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 const (
@@ -127,10 +131,28 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(aerospikeConfigSpec *AerospikeConfigSpec) (bool, error) {
-	return IsAttributeEnabled(
-		aerospikeConfigSpec, "security", "enable-security",
-	)
+func IsSecurityEnabled(version string, aerospikeConfig *AerospikeConfigSpec) (bool, error) {
+
+	retval, err := asconfig.CompareVersions(version, "5.7.0")
+	if err != nil {
+		return false, err
+	}
+	if retval == -1 {
+		return IsAttributeEnabled(
+			aerospikeConfig, "security", "enable-security",
+		)
+	}
+
+	if _, err := GetConfigContext(aerospikeConfig, "security"); err != nil {
+		if errors.Is(err, internalerrors.NotFoundError) {
+			return false, nil
+		}
+		if errors.Is(err, internalerrors.InvalidOrEmptyError) && retval >= 0 {
+			return true, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func IsAttributeEnabled(
@@ -140,11 +162,11 @@ func IsAttributeEnabled(
 	if len(aerospikeConfig) == 0 {
 		return false, fmt.Errorf("missing aerospike configuration in cluster state")
 	}
-	securityConfMap, err := GetConfigContext(aerospikeConfigSpec, context)
+	confMap, err := GetConfigContext(aerospikeConfigSpec, context)
 	if err != nil {
 		return false, err
 	}
-	enabled, err := GetBoolConfig(securityConfMap, key)
+	enabled, err := GetBoolConfig(confMap, key)
 	if err != nil {
 		return false, fmt.Errorf(
 			"invalid aerospike.%s conf. %s", context, err.Error(),
@@ -166,17 +188,16 @@ func GetConfigContext(
 			return validConfigMap, nil
 		}
 		return nil, fmt.Errorf(
-			"invalid aerospike.%s conf. Not a valid map", context,
-		)
+			"invalid aerospike.%s conf. %w", context, internalerrors.InvalidOrEmptyError)
 
 	}
-	return nil, fmt.Errorf("no such context: %v", context)
+	return nil, fmt.Errorf("context %s was %w", context, internalerrors.NotFoundError)
 }
 
 func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
 	if enabled, ok := configMap[key]; ok {
-		if _, ok := enabled.(bool); ok {
-			return enabled.(bool), nil
+		if value, ok := enabled.(bool); ok {
+			return value, nil
 		}
 		return false, fmt.Errorf("%s: not valid", key)
 	}

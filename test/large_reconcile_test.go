@@ -136,8 +136,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						tempImage := imageToUpgrade
-						aeroCluster.Spec.Image = imageToUpgrade
+						err = UpdateClusterImage(aeroCluster, prevImage)
+						Expect(err).ToNot(HaveOccurred())
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -146,15 +146,15 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.Image = latestClusterImage
+						err = UpdateClusterImage(aeroCluster, latestImage)
+						Expect(err).ToNot(HaveOccurred())
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Only 1 pod need upgrade
 						err = waitForClusterUpgrade(
 							k8sClient, aeroCluster, int(aeroCluster.Spec.Size),
-							tempImage, retryInterval, getTimeout(4),
+							prevImage, retryInterval, getTimeout(4),
 						)
 						Expect(err).ToNot(HaveOccurred())
 

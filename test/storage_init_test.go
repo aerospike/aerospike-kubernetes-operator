@@ -290,7 +290,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:5.0.0.11"
+						err = UpdateClusterImage(aeroCluster, prevImage)
+						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
 						)
@@ -520,7 +521,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   latestClusterImage,
+			Image:   latestImage,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},
@@ -552,7 +553,7 @@ func getStorageInitAerospikeCluster(
 						"migrate-threads":  4,
 					},
 					"network":  getNetworkConfig(),
-					"security": map[string]interface{}{"enable-security": true},
+					"security": map[string]interface{}{},
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",

@@ -2,17 +2,20 @@ package test
 
 import (
 	goctx "context"
+	"errors"
 	"fmt"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -21,10 +24,11 @@ import (
 )
 
 const (
-	latestClusterImage  = "aerospike/aerospike-server-enterprise:5.4.0.5"
-	imageToUpgrade      = "aerospike/aerospike-server-enterprise:5.5.0.3"
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	latestServerVersion = "5.6.0.7"
+	prevServerVersion   = "5.6.0.7"
+	latestServerVersion = "5.7.0.8"
+	invalidVersion      = "3.0.0.4"
+	pre5Version         = "4.9.0.33"
 )
 
 var (
@@ -32,6 +36,10 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
+	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
+	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
+	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
 )
 
 func scaleUpClusterTest(
@@ -177,11 +185,11 @@ func upgradeClusterTest(
 	if err != nil {
 		return err
 	}
-
 	// Change config
-	aeroCluster.Spec.Image = image
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
+	if err := UpdateClusterImage(aeroCluster, image); err != nil {
+		return err
+	}
+	if err = k8sClient.Update(ctx, aeroCluster); err != nil {
 		return err
 	}
 
@@ -210,7 +218,7 @@ func getClusterIfExists(
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return nil, nil
 		}
 
@@ -550,6 +558,120 @@ func createAerospikeClusterPost460(
 	return aeroCluster
 }
 
+// feature-key file needed
+func createAerospikeClusterPost560(
+	clusterNamespacedName types.NamespacedName, size int32, image string,
+) *asdbv1beta1.AerospikeCluster {
+	// create Aerospike custom resource
+
+	aeroCluster := &asdbv1beta1.AerospikeCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
+		},
+		Spec: asdbv1beta1.AerospikeClusterSpec{
+			Size:  size,
+			Image: image,
+			Storage: asdbv1beta1.AerospikeStorageSpec{
+				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
+				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
+				Volumes: []asdbv1beta1.VolumeSpec{
+					{
+						Name: "ns",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeBlock,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/test/dev/xvdf",
+						},
+					},
+					{
+						Name: "workdir",
+						Source: asdbv1beta1.VolumeSource{
+							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike",
+						},
+					},
+					{
+						Name: aerospikeConfigSecret,
+						Source: asdbv1beta1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: tlsSecretName,
+							},
+						},
+						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret",
+						},
+					},
+				},
+			},
+			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
+				Users: []asdbv1beta1.AerospikeUserSpec{
+					{
+						Name:       "admin",
+						SecretName: authSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+						},
+					},
+				},
+			},
+
+			PodSpec: asdbv1beta1.AerospikePodSpec{
+				MultiPodPerHost: true,
+			},
+			OperatorClientCertSpec: &asdbv1beta1.AerospikeOperatorClientCertSpec{
+				AerospikeOperatorCertSource: asdbv1beta1.AerospikeOperatorCertSource{
+					SecretCertSource: &asdbv1beta1.AerospikeSecretCertSource{
+						SecretName:         tlsSecretName,
+						CaCertsFilename:    "cacert.pem",
+						ClientCertFilename: "svc_cluster_chain.pem",
+						ClientKeyFilename:  "svc_key.pem",
+					},
+				},
+			},
+			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+
+					"service": map[string]interface{}{
+						"feature-key-file": "/etc/aerospike/secret/features.conf",
+					},
+					"security": map[string]interface{}{},
+					"network":  getNetworkTLSConfig(),
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "test",
+							"memory-size":        1000955200,
+							"replication-factor": 2,
+							"storage-engine": map[string]interface{}{
+								"type":    "device",
+								"devices": []interface{}{"/test/dev/xvdf"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return aeroCluster
+}
+
 func createDummyRackAwareAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
@@ -579,7 +701,7 @@ func createDummyAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: fmt.Sprintf("%s:%s", baseImage, latestServerVersion),
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteFalse,
@@ -652,10 +774,8 @@ func createDummyAerospikeCluster(
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
 					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkConfig(),
+					"security": map[string]interface{}{},
+					"network":  getNetworkConfig(),
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
@@ -674,6 +794,56 @@ func createDummyAerospikeCluster(
 	return aeroCluster
 }
 
+func UpdateClusterImage(aerocluster *asdbv1beta1.AerospikeCluster, image string) error {
+	outgoingVersion, err := asdbv1beta1.GetImageVersion(aerocluster.Spec.Image)
+	if err != nil {
+		return err
+	}
+
+	incomingVersion, err := asdbv1beta1.GetImageVersion(image)
+	if err != nil {
+		return err
+	}
+	ov, err := asconfig.CompareVersions(outgoingVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+	nv, err := asconfig.CompareVersions(incomingVersion, "5.7.0")
+
+	switch {
+	case nv >= 0 && ov >= 0:
+		fallthrough
+	case nv < 0 && ov < 0:
+		aerocluster.Spec.Image = image
+		return nil
+	case nv >= 0 && ov < 0:
+		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(outgoingVersion, aerocluster.Spec.AerospikeConfig)
+		if err != nil && !errors.Is(err, internalerrors.NotFoundError) {
+			return err
+		}
+		aerocluster.Spec.Image = image
+		if enableSecurityFlag {
+			securityConfigMap := aerocluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})
+			delete(securityConfigMap, "enable-security")
+			return nil
+		}
+		delete(aerocluster.Spec.AerospikeConfig.Value, "security")
+	default:
+		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(outgoingVersion, aerocluster.Spec.AerospikeConfig)
+		if err != nil {
+			return err
+		}
+		aerocluster.Spec.Image = image
+		if enableSecurityFlag {
+			securityConfigMap := aerocluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})
+			securityConfigMap["enable-security"] = true
+			return nil
+		}
+		aerocluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{"enable-security": false}
+	}
+	return nil
+}
+
 // feature-key file needed
 func createBasicTLSCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
@@ -686,7 +856,7 @@ func createBasicTLSCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
-			Image: latestClusterImage,
+			Image: latestImage,
 			Storage: asdbv1beta1.AerospikeStorageSpec{
 				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDeleteTrue,
@@ -755,10 +925,8 @@ func createBasicTLSCluster(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkTLSConfig(),
+					"security": map[string]interface{}{},
+					"network":  getNetworkTLSConfig(),
 				},
 			},
 		},
