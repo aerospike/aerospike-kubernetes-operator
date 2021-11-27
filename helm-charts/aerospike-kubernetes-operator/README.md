@@ -27,7 +27,7 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 ### Deploy the Aerospike Kubernetes Operator
 
 ```sh
-helm install aeropsike-kubernetes-operator aerospike-kubernetes-operator --set replicas=3
+helm install aeropsike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
 ```
 
 ## Configurations
