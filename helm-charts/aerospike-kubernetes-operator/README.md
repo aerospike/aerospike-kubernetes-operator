@@ -25,13 +25,9 @@ cd aerospike-kubernetes-operator/helm-charts
 Operator uses admission webhooks, which needs TLS certificates. These are issued by [cert-manager](https://cert-manager.io/docs/). Install cert-manager on your Kubernetes cluster using instructions [here](https://cert-manager.io/docs/installation/kubernetes/) before installing the operator.
 
 ### Deploy the Aerospike Kubernetes Operator
-<!-- ```sh
-helm install operator aerospike/aerospike-kubernetes-operator \
-    --set replicas=3
-``` -->
 
 ```sh
-helm install operator ./aerospike-kubernetes-operator/ --set replicas=3
+helm install aeropsike-kubernetes-operator aerospike-kubernetes-operator --set replicas=3
 ```
 
 ## Configurations
