@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.6.0.7
+  image: aerospike/aerospike-server-enterprise:5.7.0.8
   rackConfig:
     namespaces:
       - test
@@ -33,12 +33,12 @@ spec:
             size: 1Gi
       - name: ns
         aerospike:
-          path: /opt/aerospike/data
+          path: /test/dev/xvdf
         source:
           persistentVolume:
             storageClass: ssd
-            volumeMode: Filesystem
-            size: 3Gi
+            volumeMode: Block
+            size: 5Gi
       - name: aerospike-config-secret
         source:
           secret:
@@ -60,8 +60,7 @@ spec:
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-    security:
-      enable-security: true
+    security: {}
 
     network:
       service:
@@ -74,13 +73,11 @@ spec:
     namespaces:
       - name: test
         memory-size: 3000000000
-        replication-factor: 1
+        replication-factor: 2
         storage-engine:
           type: device
-          files:
-            - /opt/aerospike/data/test.dat
-          filesize: 2000000000
-          data-in-memory: true
+          devices:
+            - /test/dev/xvdf
       - name: testMem
         memory-size: 3000000000
         replication-factor: 1

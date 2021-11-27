@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.6.0.7
+  image: aerospike/aerospike-server-enterprise:5.7.0.8
 
   podSpec:
     multiPodPerHost: true
@@ -45,8 +45,7 @@ spec:
         clustering: debug
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-    security:
-      enable-security: true
+    security: {}
     network:
       service:
         port: 3000
