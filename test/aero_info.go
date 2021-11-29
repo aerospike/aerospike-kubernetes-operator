@@ -250,7 +250,6 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 
 func determineByProviderId(node *corev1.Node) CloudProvider {
 	if strings.Contains(node.Spec.ProviderID, "gce") {
-		fmt.Printf("DEBUG: PROVIDER DETECTED")
 		return CloudProviderGCP
 	}
 	// TODO add cloud provider detection for AWS
