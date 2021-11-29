@@ -8,16 +8,13 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 5.5.0.9
+  tag: 5.7.0.8
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containining credentials can be added
 ## imagePullSecrets:
 ##   - secret_with_credentials_to_custom_registry
 imagePullSecrets: {}
-
-## Multi pod per host
-multiPodPerHost: true
 
 ## Aerospike access control configuration
 aerospikeAccessControl: {}
@@ -36,9 +33,20 @@ aerospikeAccessControl: {}
   #     whitelist: []
 
 ## Aerospike Configuration
-aerospikeConfig: {}
+aerospikeConfig:
   # service:
   #   feature-key-file: /etc/aerospike/secrets/features.conf
+
+  # security:
+  #   enable-security: false
+
+  # network:
+  #   service:
+  #     port: 3000
+  #   fabric:
+  #     port: 3001
+  #   heartbeat:
+  #     port: 3002
 
   # namespaces:
   #   - name: test
@@ -67,6 +75,8 @@ aerospikeNetworkPolicy: {}
 
 ## Pod spec
 podSpec: {}
+  # Multi pod per host
+  # multiPodPerHost: true
   # sidecars:
   #   - name: aerospike-prometheus-exporter
   #     image: "aerospike/aerospike-prometheus-exporter:1.1.6"
@@ -79,17 +89,24 @@ rackConfig: {}
 
 ## Storage configuration
 storage: {}
-  # volumes: []
+  # volumes:
+  # - name: aerospike-config-secret
+  #   source:
+  #     secret:
+  #       secretName: aerospike-license
+  #   aerospike:
+  #     path: /etc/aerospike/secrets
 
 ## Validation policy
 validationPolicy: {}
   # skipWorkDirValidate: true
+  # skipXdrDlogFileValidate: true
 
-## Resource requests and limits
-resources: {}
-  # requests:
-  #   memory: 1Gi
-  #   cpu: 100m
+## seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
+seedsFinderServices: {}
 
-## Deploy Aerospike cluster in dev mode
+## operatorClientCert defines certificates to connect to Aerospike
+operatorClientCert: {}
+
+## Dev Mode
 devMode: false

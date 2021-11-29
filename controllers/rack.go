@@ -221,7 +221,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		if !res.isSuccess {
 			if res.err != nil {
 				r.Log.Error(
-					res.err, "Failed to scaleDown StatefulSet pods", "stsName", found.Name,
+					res.err, "Failed to scaleDown StatefulSet pods", "stsName",
+					found.Name,
 				)
 			}
 			return res
@@ -415,7 +416,8 @@ func (r *SingleClusterReconciler) updateContainersImage(containers []corev1.Cont
 			r.aeroCluster, container.Name,
 		)
 		if err != nil {
-			// Maybe a deleted sidecar.
+			// Maybe a deleted container or an auto-injected container like
+			// Istio.
 			continue
 		}
 
@@ -439,6 +441,7 @@ func (r *SingleClusterReconciler) needsToUpdateContainers(
 			r.aeroCluster, container.Name,
 		)
 		if err != nil {
+			// Delete or auto-injected container that is safe to delete.
 			continue
 		}
 
@@ -621,15 +624,11 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
-	ls := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
-	)
-
 	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(found, ls, rackState)
+	r.updateSTSPodSpec(found, rackState)
 
 	// This should be called before updating storage
-	initializeSTSStorage(r.aeroCluster, found, rackState)
+	r.initializeSTSStorage(found, rackState)
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(found, rackState)
@@ -742,8 +741,30 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	}
 
 	// Check for removed volumeAttachments
-	if r.isVolumeAttachmentRemoved(volumes, pod.Spec.Containers, false) ||
-		r.isVolumeAttachmentRemoved(volumes, pod.Spec.InitContainers, true) {
+	allConfiguredInitContainers := []string{
+		asdbv1beta1.
+			AerospikeServerInitContainerName,
+	}
+	allConfiguredContainers := []string{asdbv1beta1.AerospikeServerContainerName}
+
+	for _, c := range r.aeroCluster.Spec.PodSpec.Sidecars {
+		allConfiguredContainers = append(allConfiguredContainers, c.Name)
+	}
+
+	for _, c := range r.aeroCluster.Spec.PodSpec.InitContainers {
+		allConfiguredInitContainers = append(
+			allConfiguredInitContainers, c.Name,
+		)
+	}
+
+	if r.isVolumeAttachmentRemoved(
+		volumes, allConfiguredContainers,
+		pod.Spec.Containers, false,
+	) ||
+		r.isVolumeAttachmentRemoved(
+			volumes, allConfiguredInitContainers,
+			pod.Spec.InitContainers, true,
+		) {
 		r.Log.Info(
 			"Volume or volume attachment removed from rack storage" +
 				" - pod needs rolling restart",
@@ -862,14 +883,21 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 }
 
 func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
-	volumes []asdbv1beta1.VolumeSpec, podContainers []corev1.Container,
-	isInitContainers bool,
+	volumes []asdbv1beta1.VolumeSpec, configuredContainers []string,
+	podContainers []corev1.Container, isInitContainers bool,
 ) bool {
+	// TODO: Deal with injected volumes later.
 	for _, container := range podContainers {
 		if isInitContainers && container.Name == asdbv1beta1.AerospikeServerInitContainerName {
 			// InitContainer has all the volumes mounted, there is no specific entry in storage for initContainer
 			continue
 		}
+
+		// Skip injected containers.
+		if !utils.ContainsString(configuredContainers, container.Name) {
+			continue
+		}
+
 		for _, volumeDevice := range container.VolumeDevices {
 			if volumeDevice.Name == confDirName ||
 				volumeDevice.Name == initConfDirName {

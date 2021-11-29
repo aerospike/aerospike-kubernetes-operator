@@ -7,10 +7,9 @@ import (
 
 	goctx "context"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -20,12 +19,11 @@ var _ = Describe(
 		Context(
 			"HostNetwork", func() {
 				clusterName := "host-network-cluster"
-				image := latestClusterImage
 				clusterNamespacedName := getClusterNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := createAerospikeClusterPost460(
-					clusterNamespacedName, 2, image,
+				aeroCluster := createAerospikeClusterPost560(
+					clusterNamespacedName, 2, latestImage,
 				)
 				aeroCluster.Spec.PodSpec.HostNetwork = true
 				aeroCluster.Spec.PodSpec.MultiPodPerHost = true

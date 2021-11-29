@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.5.0.3
+  image: aerospike/aerospike-server-enterprise:5.7.0.8
 
   storage:
     filesystemVolumePolicy:
@@ -84,8 +84,7 @@ spec:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
 
-    security:
-      enable-security: true
+    security: {}
 
     network:
       service:

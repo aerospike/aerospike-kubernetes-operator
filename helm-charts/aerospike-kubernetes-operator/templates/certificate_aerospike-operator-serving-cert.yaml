@@ -10,8 +10,8 @@ metadata:
     release: {{ .Release.Name }}
 spec:
   dnsNames:
-  - aerospike-operator-webhook-service.aerospike.svc
-  - aerospike-operator-webhook-service.aerospike.svc.cluster.local
+  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc
+  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: aerospike-operator-selfsigned-issuer

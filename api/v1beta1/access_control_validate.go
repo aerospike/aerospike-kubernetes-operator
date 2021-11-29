@@ -75,15 +75,19 @@ var Privileges = map[string][]PrivilegeScope{
 //    follows rules defined https://www.aerospike.com/docs/guide/limitations.html
 //    follows rules found through server code inspection for e.g. predefined roles
 //    meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
-func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (
+func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	bool, error,
 ) {
-	enabled, err := IsSecurityEnabled(aerospikeCluster.AerospikeConfig)
+	version, err := GetImageVersion(aerospikeClusterSpec.Image)
+	if err != nil {
+		return false, err
+	}
+	enabled, err := IsSecurityEnabled(version, aerospikeClusterSpec.AerospikeConfig)
 	if err != nil {
 		return false, err
 	}
 
-	if !enabled && aerospikeCluster.AerospikeAccessControl != nil {
+	if !enabled && aerospikeClusterSpec.AerospikeAccessControl != nil {
 		// Security is disabled however access control is specified.
 		return false, fmt.Errorf("security is disabled but access control is specified")
 	}
@@ -92,24 +96,24 @@ func IsAerospikeAccessControlValid(aerospikeCluster *AerospikeClusterSpec) (
 		return true, nil
 	}
 
-	if aerospikeCluster.AerospikeAccessControl == nil {
+	if aerospikeClusterSpec.AerospikeAccessControl == nil {
 		return false, fmt.Errorf("security is enabled but access control is missing")
 	}
 
 	// Validate roles.
 	_, err = isRoleSpecValid(
-		aerospikeCluster.AerospikeAccessControl.Roles,
-		*aerospikeCluster.AerospikeConfig,
+		aerospikeClusterSpec.AerospikeAccessControl.Roles,
+		*aerospikeClusterSpec.AerospikeConfig,
 	)
 	if err != nil {
 		return false, err
 	}
 
-	roleMap := GetRolesFromSpec(aerospikeCluster)
+	roleMap := GetRolesFromSpec(aerospikeClusterSpec)
 
 	// Validate users.
 	_, err = isUserSpecValid(
-		aerospikeCluster.AerospikeAccessControl.Users, roleMap,
+		aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
 	)
 
 	if err != nil {

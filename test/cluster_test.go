@@ -51,7 +51,7 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21",
+		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21",
 		"4.9.0.11",
 	}
 
@@ -67,11 +67,10 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				image := fmt.Sprintf(
 					"aerospike/aerospike-server-enterprise:%s", v,
 				)
-				aeroCluster := createAerospikeClusterPost460(
-					clusterNamespacedName, 2, image,
-				)
+				aeroCluster, err := getAeroClusterConfig(clusterNamespacedName, image)
+				Expect(err).ToNot(HaveOccurred())
 
-				err := deployCluster(k8sClient, ctx, aeroCluster)
+				err = deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -246,7 +245,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					// dont change image, it upgrade, check old version
 					err = upgradeClusterTest(
-						k8sClient, ctx, clusterNamespacedName, imageToUpgrade,
+						k8sClient, ctx, clusterNamespacedName, prevImage,
 					)
 					Expect(err).ToNot(HaveOccurred())
 				},
@@ -459,7 +458,7 @@ func negativeDeployClusterValidationTest(
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
-					aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:3.0.0.4"
+					aeroCluster.Spec.Image = invalidImage
 					err = deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -787,8 +786,8 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost460(
-								clusterNamespacedName, 1, latestClusterImage,
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
@@ -801,8 +800,8 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for no tls path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost460(
-								clusterNamespacedName, 1, latestClusterImage,
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
 								"tls": []interface{}{
@@ -868,7 +867,7 @@ func negativeUpdateClusterValidationTest(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.Image = "aerospike/aerospike-server-enterprise:3.0.0.4"
+					aeroCluster.Spec.Image = invalidImage
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -1149,8 +1148,8 @@ func negativeUpdateClusterValidationTest(
 		"InvalidAerospikeConfigSecret", func() {
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost460(
-						clusterNamespacedName, 2, latestClusterImage,
+					aeroCluster := createAerospikeClusterPost560(
+						clusterNamespacedName, 2, latestImage,
 					)
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)

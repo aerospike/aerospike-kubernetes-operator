@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -16,11 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
 )
 
 // SingleClusterReconciler reconciles a single AerospikeCluster
@@ -56,7 +57,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Handle previously failed cluster
-	if err := r.handlePreviouslyFailedCluster(); err != nil {
+	if err := r.checkPreviouslyFailedCluster(); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -105,7 +106,11 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 func (r *SingleClusterReconciler) reconcileAccessControl() error {
 
-	enabled, err := asdbv1beta1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig)
+	version, err := asdbv1beta1.GetImageVersion(r.aeroCluster.Spec.Image)
+	if err != nil {
+		return err
+	}
+	enabled, err := asdbv1beta1.IsSecurityEnabled(version, r.aeroCluster.Spec.AerospikeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}
@@ -466,22 +471,22 @@ func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) handlePreviouslyFailedCluster() error {
-
-	r.Log.Info("Handle previously failed cluster")
-
+func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 	isNew, err := r.isNewCluster()
 	if err != nil {
 		return fmt.Errorf("error determining if cluster is new: %v", err)
 	}
 
 	if isNew {
-		r.Log.V(1).Info("It's new cluster, create empty status object")
+		r.Log.V(1).Info("It's a new cluster, create empty status object")
 		if err := r.createStatus(); err != nil {
 			return err
 		}
 	} else {
-		r.Log.V(1).Info("It's not a new cluster, check if it is failed and needs recovery")
+		r.Log.V(1).Info(
+			"It's not a new cluster, " +
+				"checking if it is failed and needs recovery",
+		)
 		hasFailed, err := r.hasClusterFailed()
 		if err != nil {
 			return fmt.Errorf(
