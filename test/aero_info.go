@@ -234,6 +234,10 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 			}
 			labelKeys[labelKey] = struct{}{}
 		}
+		provider := determineByProviderId(&node)
+		if provider != CloudProviderUnknown {
+			return provider, nil
+		}
 	}
 	var labelKeysSlice []string
 	for labelKey := range labelKeys {
@@ -242,6 +246,15 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 	return CloudProviderUnknown, fmt.Errorf(
 		"can't determin cloud platform by node's labels: %v", labelKeysSlice,
 	)
+}
+
+func determineByProviderId(node *corev1.Node) CloudProvider {
+	if strings.Contains(node.Spec.ProviderID, "gce") {
+		fmt.Printf("DEBUG: PROVIDER DETECTED")
+		return CloudProviderGCP
+	}
+	// TODO add cloud provider detection for AWS
+	return CloudProviderUnknown
 }
 
 func newAllHostConn(
