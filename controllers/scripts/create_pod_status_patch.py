@@ -170,7 +170,7 @@ value = {
         'tlsName': os.environ.get('MY_POD_TLS_NAME', '')
     },
     'initializedVolumes': initialized,
-    'initializedVolumePaths': None,
+    'initializedVolumePaths': [],
     'aerospikeConfigHash': confHash,
     'networkPolicyHash': networkPolicyHash,
     'podSpecHash': podSpecHash,
