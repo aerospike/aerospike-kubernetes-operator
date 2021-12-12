@@ -14,7 +14,7 @@ case $(kubectl get nodes -o yaml) in
     echo "Installing ssd storage class for GKE."
     kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
     ;;
-  *"eks.amazonaws.com"*)
+  *"attachable-volumes-aws-ebs"*)
     echo "Installing ssd storage class for EKS."
     kubectl apply -f config/samples/storage/eks_ssd_storage_class.yaml
     ;;
