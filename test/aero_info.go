@@ -251,8 +251,10 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 func determineByProviderId(node *corev1.Node) CloudProvider {
 	if strings.Contains(node.Spec.ProviderID, "gce") {
 		return CloudProviderGCP
+	} else if strings.Contains(node.Spec.ProviderID, "aws") {
+		return CloudProviderAWS
 	}
-	// TODO add cloud provider detection for AWS
+	// TODO add cloud provider detection for Azure
 	return CloudProviderUnknown
 }
 
