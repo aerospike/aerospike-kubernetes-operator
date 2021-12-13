@@ -474,6 +474,17 @@ func (r *SingleClusterReconciler) upgradeRack(
 	initContainersUpdated := r.updateContainersImage(found.Spec.Template.Spec.InitContainers)
 
 	if containersUpdated || initContainersUpdated {
+		// Can we optimize this? Update stateful set only if there is any update for it.
+		r.updateSTSPodSpec(found, rackState)
+
+		// This should be called before updating storage
+		r.initializeSTSStorage(found, rackState)
+
+		// TODO: Add validation. device, file, both should not exist in same storage class
+		r.updateSTSStorage(found, rackState)
+
+		r.updateAerospikeContainer(found)
+
 		err = r.Client.Update(context.TODO(), found, updateOption)
 		if err != nil {
 			return found, reconcileError(
