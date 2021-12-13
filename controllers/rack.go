@@ -458,43 +458,44 @@ func (r *SingleClusterReconciler) needsToUpdateContainers(
 }
 
 func (r *SingleClusterReconciler) upgradeRack(
-	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
+	statefulSet *appsv1.StatefulSet, rackState RackState,
+	ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
+	// Update STS definition. The operation is idempotent, so it's ok to call
+	// it without checking for a change in the spec.
+	r.updateSTS(statefulSet, rackState)
 
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
-		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return statefulSet, reconcileError(
+			fmt.Errorf(
+				"failed to list pods: %v", err,
+			),
+		)
 	}
+
 	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
 	// Update will happen only when a pod is deleted.
 	// So first update image and then delete a pod. Pod will come up with new image.
 	// Repeat the above process.
-	containersUpdated := r.updateContainersImage(found.Spec.Template.Spec.Containers)
-	initContainersUpdated := r.updateContainersImage(found.Spec.Template.Spec.InitContainers)
+	containersUpdated := r.updateContainersImage(statefulSet.Spec.Template.Spec.Containers)
+	initContainersUpdated := r.updateContainersImage(statefulSet.Spec.Template.Spec.InitContainers)
 
 	if containersUpdated || initContainersUpdated {
-		// Can we optimize this? Update stateful set only if there is any update for it.
-		r.updateSTSPodSpec(found, rackState)
-
-		// This should be called before updating storage
-		r.initializeSTSStorage(found, rackState)
-
-		// TODO: Add validation. device, file, both should not exist in same storage class
-		r.updateSTSStorage(found, rackState)
-
-		r.updateAerospikeContainer(found)
-
-		err = r.Client.Update(context.TODO(), found, updateOption)
+		err = r.Client.Update(context.TODO(), statefulSet, updateOption)
 		if err != nil {
-			return found, reconcileError(
+			return statefulSet, reconcileError(
 				fmt.Errorf(
-					"failed to update image for StatefulSet %s: %v", found.Name,
+					"failed to update image for StatefulSet %s: %v",
+					statefulSet.Name,
 					err,
 				),
 			)
 		}
-		r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
+		r.Log.V(1).Info(
+			"Updated StatefulSet in K8s.", "statefulSet", *statefulSet,
+		)
 	}
 
 	for _, p := range podList {
@@ -514,17 +515,17 @@ func (r *SingleClusterReconciler) upgradeRack(
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
 		res := r.deletePodAndEnsureImageUpdated(rackState, p, ignorablePods)
 		if !res.isSuccess {
-			return found, res
+			return statefulSet, res
 		}
 		// Handle the next pod in subsequent Reconcile.
-		return found, reconcileRequeueAfter(0)
+		return statefulSet, reconcileRequeueAfter(0)
 	}
 	// return a fresh copy
-	found, err = r.getSTS(rackState)
+	statefulSet, err = r.getSTS(rackState)
 	if err != nil {
-		return found, reconcileError(err)
+		return statefulSet, reconcileError(err)
 	}
-	return found, reconcileSuccess()
+	return statefulSet, reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) scaleDownRack(
@@ -635,16 +636,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
-	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(found, rackState)
-
-	// This should be called before updating storage
-	r.initializeSTSStorage(found, rackState)
-
-	// TODO: Add validation. device, file, both should not exist in same storage class
-	r.updateSTSStorage(found, rackState)
-
-	r.updateAerospikeContainer(found)
+	r.updateSTS(found, rackState)
 
 	r.Log.Info("Updating statefulset spec")
 
@@ -687,6 +679,21 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(err)
 	}
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) updateSTS(
+	statefulSet *appsv1.StatefulSet, rackState RackState,
+) {
+	// Can we optimize this? Update stateful set only if there is any update for it.
+	r.updateSTSPodSpec(statefulSet, rackState)
+
+	// This should be called before updating storage
+	r.initializeSTSStorage(statefulSet, rackState)
+
+	// TODO: Add validation. device, file, both should not exist in same storage class
+	r.updateSTSStorage(statefulSet, rackState)
+
+	r.updateAerospikeContainer(statefulSet)
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
