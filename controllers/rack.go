@@ -643,37 +643,6 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	return found, reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) updateSTS(
-	statefulSet *appsv1.StatefulSet, rackState RackState,
-) error {
-	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(statefulSet, rackState)
-
-	// This should be called before updating storage
-	r.initializeSTSStorage(statefulSet, rackState)
-
-	// TODO: Add validation. device, file, both should not exist in same storage class
-	r.updateSTSStorage(statefulSet, rackState)
-
-	r.updateAerospikeContainer(statefulSet)
-
-	// Save the updated stateful set.
-	err := r.Client.Update(context.TODO(), statefulSet, updateOption)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to update StatefulSet %s: %v",
-			statefulSet.Name,
-			err,
-		)
-
-	}
-
-	r.Log.V(1).Info(
-		"Saved StatefulSet", "statefulSet", *statefulSet,
-	)
-	return nil
-}
-
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 	bool, error,
 ) {

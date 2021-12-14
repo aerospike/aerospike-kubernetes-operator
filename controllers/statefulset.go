@@ -194,9 +194,9 @@ func (r *SingleClusterReconciler) createSTS(
 		},
 	}
 
-	r.updateSTSPodSpec(st, rackState)
+	r.updateSTSFromPodSpec(st, rackState)
 
-	r.updateAerospikeContainer(st)
+	r.updateAerospikeContainerResources(st)
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(st, rackState)
@@ -736,6 +736,45 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 	}
 }
 
+// updateSTS updates the stateful set to match the spec. It is idempotent.
+func (r *SingleClusterReconciler) updateSTS(
+	statefulSet *appsv1.StatefulSet, rackState RackState,
+) error {
+	// Update settings from pod spec.
+	r.updateSTSFromPodSpec(statefulSet, rackState)
+
+	// Update the images for all containers from the spec.
+	// Our Pod Spec does not contain image for the Aerospike Server
+	// Container.
+	r.updateContainerImages(statefulSet)
+
+	// This should be called before updating storage
+	r.initializeSTSStorage(statefulSet, rackState)
+
+	// TODO: Add validation. device, file, both should not exist in same storage class
+	r.updateSTSStorage(statefulSet, rackState)
+
+	r.updateAerospikeContainerResources(statefulSet)
+
+	// Save the updated stateful set.
+	// Can we optimize this? Update stateful set only if there is any change
+	// in it.
+	err := r.Client.Update(context.TODO(), statefulSet, updateOption)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to update StatefulSet %s: %v",
+			statefulSet.Name,
+			err,
+		)
+
+	}
+
+	r.Log.V(1).Info(
+		"Saved StatefulSet", "statefulSet", *statefulSet,
+	)
+	return nil
+}
+
 func (r *SingleClusterReconciler) updateSTSPVStorage(
 	st *appsv1.StatefulSet, rackState RackState,
 ) {
@@ -953,7 +992,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 }
 
 // Called while creating new cluster and also during rolling restart.
-func (r *SingleClusterReconciler) updateSTSPodSpec(
+func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st *appsv1.StatefulSet, rackState RackState,
 ) {
 	defaultLabels := utils.LabelsForAerospikeClusterRack(
@@ -1069,7 +1108,37 @@ func (r *SingleClusterReconciler) getClusterSTSList() (
 	return statefulSetList, nil
 }
 
-func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSet) {
+// updateContainerImages updates all container images to match the Aerospike
+// Cluster Spec.
+func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.StatefulSet) {
+	updateImage := func(containers []corev1.Container) {
+		for i, container := range containers {
+			desiredImage, err := utils.GetDesiredImage(
+				r.aeroCluster, container.Name,
+			)
+			if err != nil {
+				// Maybe a deleted container or an auto-injected container like
+				// Istio.
+				continue
+			}
+
+			if !utils.IsImageEqual(container.Image, desiredImage) {
+				r.Log.Info(
+					"Updating image in statefulset spec", "container",
+					container.Name, "desiredImage", desiredImage,
+					"currentImage",
+					container.Image,
+				)
+				containers[i].Image = desiredImage
+			}
+		}
+	}
+
+	updateImage(statefulset.Spec.Template.Spec.Containers)
+	updateImage(statefulset.Spec.Template.Spec.InitContainers)
+}
+
+func (r *SingleClusterReconciler) updateAerospikeContainerResources(st *appsv1.StatefulSet) {
 	resources := r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources
 	if resources != nil {
 		// These resources are for main aerospike container. Other sidecar can mention their own resources.
