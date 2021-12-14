@@ -38,6 +38,8 @@ type AerospikeClusterSpec struct {
 	Size int32 `json:"size"`
 	// Aerospike server image
 	Image string `json:"image"`
+	// Aerospike init image
+	InitImage string `json:"initImage,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
@@ -59,6 +61,13 @@ type AerospikeClusterSpec struct {
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+}
+
+// SetDefaults applies default to unspecified fields on the network policy.
+func (c *AerospikeClusterSpec) SetDefaults() {
+	if c.InitImage == "" {
+		c.InitImage = AerospikeServerInitContainerImage
+	}
 }
 
 type SeedsFinderServices struct {

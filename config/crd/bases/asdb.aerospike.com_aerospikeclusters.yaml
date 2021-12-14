@@ -164,6 +164,9 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              initImage:
+                description: Aerospike init image
+                type: string
               operatorClientCert:
                 description: Certificates to connect to Aerospike.
                 properties:
