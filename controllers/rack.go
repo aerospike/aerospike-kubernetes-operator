@@ -408,31 +408,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	return found, reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) updateContainersImage(containers []corev1.Container) bool {
-	updated := false
-
-	for i, container := range containers {
-		desiredImage, err := utils.GetDesiredImage(
-			r.aeroCluster, container.Name,
-		)
-		if err != nil {
-			// Maybe a deleted container or an auto-injected container like
-			// Istio.
-			continue
-		}
-
-		if !utils.IsImageEqual(container.Image, desiredImage) {
-			r.Log.Info(
-				"Updating image in statefulset spec", "container",
-				container.Name, "desiredImage", desiredImage, "currentImage",
-				container.Image,
-			)
-			containers[i].Image = desiredImage
-			updated = true
-		}
-	}
-	return updated
-}
 func (r *SingleClusterReconciler) needsToUpdateContainers(
 	containers []corev1.Container, podName string,
 ) bool {
@@ -458,32 +433,32 @@ func (r *SingleClusterReconciler) needsToUpdateContainers(
 }
 
 func (r *SingleClusterReconciler) upgradeRack(
-	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
+	statefulSet *appsv1.StatefulSet, rackState RackState,
+	ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
-
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
-		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return statefulSet, reconcileError(
+			fmt.Errorf(
+				"failed to list pods: %v", err,
+			),
+		)
 	}
+
+	// Update STS definition. The operation is idempotent, so it's ok to call
+	// it without checking for a change in the spec.
+	//
 	// Update strategy for statefulSet is OnDelete, so client.Update will not start update.
 	// Update will happen only when a pod is deleted.
-	// So first update image and then delete a pod. Pod will come up with new image.
+	// So first update image in STS and then delete a pod.
+	// Pod will come up with new image.
 	// Repeat the above process.
-	containersUpdated := r.updateContainersImage(found.Spec.Template.Spec.Containers)
-	initContainersUpdated := r.updateContainersImage(found.Spec.Template.Spec.InitContainers)
-
-	if containersUpdated || initContainersUpdated {
-		err = r.Client.Update(context.TODO(), found, updateOption)
-		if err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to update image for StatefulSet %s: %v", found.Name,
-					err,
-				),
-			)
-		}
-		r.Log.V(1).Info("Updated StatefulSet in K8s.", "statefulSet", *found)
+	err = r.updateSTS(statefulSet, rackState)
+	if err != nil {
+		return statefulSet, reconcileError(
+			fmt.Errorf("upgrade rack : %v", err),
+		)
 	}
 
 	for _, p := range podList {
@@ -503,17 +478,17 @@ func (r *SingleClusterReconciler) upgradeRack(
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
 		res := r.deletePodAndEnsureImageUpdated(rackState, p, ignorablePods)
 		if !res.isSuccess {
-			return found, res
+			return statefulSet, res
 		}
 		// Handle the next pod in subsequent Reconcile.
-		return found, reconcileRequeueAfter(0)
+		return statefulSet, reconcileRequeueAfter(0)
 	}
 	// return a fresh copy
-	found, err = r.getSTS(rackState)
+	statefulSet, err = r.getSTS(rackState)
 	if err != nil {
-		return found, reconcileError(err)
+		return statefulSet, reconcileError(err)
 	}
-	return found, reconcileSuccess()
+	return statefulSet, reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) scaleDownRack(
@@ -624,27 +599,17 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
 	}
 
-	// Can we optimize this? Update stateful set only if there is any update for it.
-	r.updateSTSPodSpec(found, rackState)
-
-	// This should be called before updating storage
-	r.initializeSTSStorage(found, rackState)
-
-	// TODO: Add validation. device, file, both should not exist in same storage class
-	r.updateSTSStorage(found, rackState)
-
-	r.updateAerospikeContainer(found)
-
-	r.Log.Info("Updating statefulset spec")
-
-	if err := r.Client.Update(context.TODO(), found, updateOption); err != nil {
+	err = r.updateSTS(found, rackState)
+	if err != nil {
 		return found, reconcileError(
-			fmt.Errorf(
-				"failed to update StatefulSet %s: %v", found.Name, err,
-			),
+			fmt.Errorf("rolling restart failed: %v", err),
 		)
 	}
-	r.Log.Info("Statefulset spec updated. Doing rolling restart with new config")
+
+	r.Log.Info(
+		"Statefulset spec updated - doing rolling restart with new" +
+			" config",
+	)
 
 	for _, pod := range podList {
 		// Check if this pod needs restart

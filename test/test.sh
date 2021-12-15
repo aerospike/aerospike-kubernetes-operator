@@ -12,8 +12,8 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-go get github.com/onsi/ginkgo/ginkgo
-go get github.com/onsi/gomega/...
+go get -d github.com/onsi/ginkgo/ginkgo
+go get -d github.com/onsi/gomega/...
 
 # Cleanup
 echo "---------------------------------------"
@@ -25,7 +25,8 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh $1
+"$DIR"/deploy-test-operator.sh "$1"
+
 
 # Run tests
 echo "---------------------"
