@@ -253,7 +253,7 @@ func isClusterStateValid(
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
 	}
-	if !reflect.DeepEqual(statusToSpec, &aeroCluster.Spec) {
+	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
 		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
