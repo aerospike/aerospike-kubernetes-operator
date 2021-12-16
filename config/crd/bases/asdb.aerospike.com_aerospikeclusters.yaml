@@ -8127,6 +8127,7 @@ spec:
                         InitializedVolumes.
                       items:
                         type: string
+                      nullable: true
                       type: array
                     initializedVolumes:
                       description: 'InitializedVolumes is the list of volume names
