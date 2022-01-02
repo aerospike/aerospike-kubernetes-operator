@@ -6,10 +6,12 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -194,6 +196,21 @@ func getPodList(
 	return podList, nil
 }
 
+func getSTSList(
+	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+) (*appsv1.StatefulSetList, error) {
+	stsList := &appsv1.StatefulSetList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	listOps := &client.ListOptions{
+		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
+
+	if err := k8sClient.List(context.TODO(), stsList, listOps); err != nil {
+		return nil, err
+	}
+	return stsList, nil
+}
+
 func getNodeList(k8sClient client.Client) (*corev1.NodeList, error) {
 	nodeList := &corev1.NodeList{}
 	if err := k8sClient.List(context.TODO(), nodeList); err != nil {
@@ -216,6 +233,17 @@ func getZones(k8sClient client.Client) ([]string, error) {
 		zones = append(zones, zone)
 	}
 	return zones, nil
+}
+
+func getRegion(k8sClient client.Client) (string, error) {
+	nodes, err := getNodeList(k8sClient)
+	if err != nil {
+		return "", err
+	}
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("node list empty: %v", nodes.Items)
+	}
+	return nodes.Items[0].Labels["failure-domain.beta.kubernetes.io/region"], nil
 }
 
 func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {

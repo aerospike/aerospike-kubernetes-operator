@@ -99,7 +99,7 @@ func rollingRestartClusterTest(
 	if _, ok := aeroCluster.Spec.AerospikeConfig.Value["service"]; !ok {
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
 	}
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
@@ -794,7 +794,9 @@ func createDummyAerospikeCluster(
 	return aeroCluster
 }
 
-func UpdateClusterImage(aerocluster *asdbv1beta1.AerospikeCluster, image string) error {
+func UpdateClusterImage(
+	aerocluster *asdbv1beta1.AerospikeCluster, image string,
+) error {
 	outgoingVersion, err := asdbv1beta1.GetImageVersion(aerocluster.Spec.Image)
 	if err != nil {
 		return err
@@ -817,7 +819,9 @@ func UpdateClusterImage(aerocluster *asdbv1beta1.AerospikeCluster, image string)
 		aerocluster.Spec.Image = image
 		return nil
 	case nv >= 0 && ov < 0:
-		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(outgoingVersion, aerocluster.Spec.AerospikeConfig)
+		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(
+			outgoingVersion, aerocluster.Spec.AerospikeConfig,
+		)
 		if err != nil && !errors.Is(err, internalerrors.NotFoundError) {
 			return err
 		}
@@ -829,7 +833,9 @@ func UpdateClusterImage(aerocluster *asdbv1beta1.AerospikeCluster, image string)
 		}
 		delete(aerocluster.Spec.AerospikeConfig.Value, "security")
 	default:
-		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(outgoingVersion, aerocluster.Spec.AerospikeConfig)
+		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(
+			outgoingVersion, aerocluster.Spec.AerospikeConfig,
+		)
 		if err != nil {
 			return err
 		}

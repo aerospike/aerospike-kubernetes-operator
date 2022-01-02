@@ -2,6 +2,9 @@ package test
 
 import (
 	goctx "context"
+	"fmt"
+	"reflect"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -108,6 +111,8 @@ var _ = Describe(
 					aeroCluster, err := getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
+					Expect(err).ToNot(HaveOccurred())
+
 					zones, err := getZones(k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 					zone := zones[0]
@@ -312,6 +317,85 @@ var _ = Describe(
 					},
 				)
 
+				It("Should be able to update container image and other fields together", func() {
+
+					By("Adding the container")
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.Sidecars = append(
+						aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
+					)
+
+					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Updating container image and affinity together")
+
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Update image
+					newImage := "nginx:1.21.4"
+					aeroCluster.Spec.PodSpec.Sidecars[0].Image = newImage
+
+					// Update affinity
+					region, err := getRegion(k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					desiredAffinity := corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "topology.kubernetes.io/region",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{region},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+					aeroCluster.Spec.PodSpec.Affinity = &desiredAffinity
+
+					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					// validate
+					stsList, err := getSTSList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(stsList.Items)).ToNot(BeZero())
+
+					var meFound bool
+					for _, sts := range stsList.Items {
+						actualNodeAffinity := sts.Spec.Template.Spec.Affinity.NodeAffinity
+						for _, ns := range actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+							for _, me := range ns.MatchExpressions {
+								if me.Key == "topology.kubernetes.io/region" {
+									isEqual := reflect.DeepEqual(me, desiredAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0])
+									msg := fmt.Sprintf("node affinity actual: %v, desired: %v", actualNodeAffinity, desiredAffinity.NodeAffinity)
+									Expect(isEqual).To(BeTrue(), msg)
+
+									meFound = true
+								}
+							}
+						}
+
+						msg := fmt.Sprintf("node affinity actual: %v, desired: %v", actualNodeAffinity, desiredAffinity.NodeAffinity)
+						Expect(meFound).To(BeTrue(), msg)
+
+						// 1st is aerospike-server image, 2nd is 1st sidecare
+						Expect(sts.Spec.Template.Spec.Containers[1].Image).To(Equal(newImage))
+					}
+				})
 			})
 		Context(
 			"When doing invalid operation", func() {

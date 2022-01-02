@@ -712,6 +712,8 @@ type AerospikePodStatus struct {
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
+	// +optional
+	// +nullable
 	InitializedVolumePaths []string `json:"initializedVolumePaths,omitempty"`
 
 	// AerospikeConfigHash is ripemd160 hash of aerospikeConfig used by this pod

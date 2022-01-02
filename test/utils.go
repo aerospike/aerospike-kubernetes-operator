@@ -492,7 +492,9 @@ func ValidateAttributes(
 	return false
 }
 
-func getAeroClusterConfig(namespace types.NamespacedName, image string) (*asdbv1beta1.AerospikeCluster, error) {
+func getAeroClusterConfig(
+	namespace types.NamespacedName, image string,
+) (*asdbv1beta1.AerospikeCluster, error) {
 	version, err := asdbv1beta1.GetImageVersion(image)
 	if err != nil {
 		return nil, err

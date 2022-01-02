@@ -3,14 +3,17 @@ kind: AerospikeCluster
 metadata:
   name: aerocluster
   namespace: aerospike
+
 spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:5.7.0.8
   podSpec:
     multiPodPerHost: true
+
   validationPolicy:
     skipWorkDirValidate: true
     skipXdrDlogFileValidate: true
+
   storage:
     volumes:
       - name: aerospike-config-secret
@@ -19,10 +22,10 @@ spec:
             secretName: aerospike-secret
         aerospike:
           path: /etc/aerospike/secret
+          
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-    security: {}
     network:
       service:
         port: 3000

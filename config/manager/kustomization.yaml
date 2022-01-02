@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: docker.io/aerospike/aerospike-kubernetes-operator
-  newTag: 2.0.0-rc2
+  newTag: 2.0.0
