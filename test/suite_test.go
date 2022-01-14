@@ -121,6 +121,14 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		if utils.IsPVCTerminating(&pvc) {
 			continue
 		}
+		
+		if utils.ContainsString(pvc.Finalizers, "kubernetes.io/pvc-protection") {
+			pvc.Finalizers = utils.RemoveString(pvc.Finalizers, "kubernetes.io/pvc-protection")
+			if err := k8sClient.Update(goctx.TODO(), &pvc); err != nil {
+				return fmt.Errorf("could not remove %s finalizer from following pvc: %a: %w",
+					"kubernetes.io/pvc-protection", pvc.Name, err)
+			}
+		}
 
 		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
 			return fmt.Errorf("could not delete pvc %s: %w", pvc.Name, err)
