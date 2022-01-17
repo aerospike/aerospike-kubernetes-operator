@@ -119,17 +119,15 @@ var _ = Describe(
 )
 
 func createLoadBalancer() *asdbv1beta1.LoadBalancerSpec {
-	cloudProvider, err := getCloudProvider(k8sClient)
-	Expect(err).ToNot(HaveOccurred())
 	lb, validCloud := loadBalancersPerCloud[cloudProvider]
 	Expect(validCloud).To(
 		BeTrue(), fmt.Sprintf(
-			"Can't find LoadBalancer specification for cloud provider \"%s\"",
+			"Can't find LoadBalancer specification for cloud provider \"%d\"",
 			cloudProvider,
 		),
 	)
 	result := &asdbv1beta1.LoadBalancerSpec{}
-	err = lib.DeepCopy(result, lb)
+	err := lib.DeepCopy(result, lb)
 	Expect(err).ToNot(HaveOccurred())
 	return result
 }
