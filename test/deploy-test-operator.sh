@@ -23,10 +23,12 @@ case $(kubectl get nodes -o yaml) in
     ;;
 esac
 
-kubectl get namespace | grep -o -a -m 1 -h openshift > /dev/null
-IS_OPENSHIFT_CLUSTER=$?
+IS_OPENSHIFT_CLUSTER=0
+if kubectl get namespace | grep -o -a -m 1 -h openshift > /dev/null; then
+  IS_OPENSHIFT_CLUSTER=1
+fi
 
-if [ $IS_OPENSHIFT_CLUSTER == 1 ] ; then
+if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   if ! operator-sdk olm status; then
     operator-sdk olm install
   fi
@@ -35,7 +37,7 @@ fi
 namespaces="test test1 test2"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace"
-  if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
+  if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then
     echo "Adding security constraints"
     oc adm policy add-scc-to-user anyuid system:serviceaccount:"$namespace":aerospike-operator-controller-manager
     # TODO: Find minimum privileges that should be granted
