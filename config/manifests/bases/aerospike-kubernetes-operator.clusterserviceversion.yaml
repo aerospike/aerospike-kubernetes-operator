@@ -14,6 +14,7 @@ metadata:
   name: aerospike-kubernetes-operator.v0.0.0
   namespace: placeholder
 spec:
+  minKubeVersion: 1.16.0
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
