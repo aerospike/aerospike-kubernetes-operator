@@ -35,14 +35,19 @@ type AerospikeClusterSpec struct {
 	// Adds custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 
 	// Aerospike cluster size
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
 	Size int32 `json:"size"`
 	// Aerospike server image
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
-	// Storage specify persistent storage to use for the Aerospike pods.
+	// Storage specify persistent storage to use for the Aerospike pods
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
-	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
+	// Has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Access Control"
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
-	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
+	// Sets config in aerospike.conf file. Other configs are taken as default
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
@@ -54,7 +59,8 @@ type AerospikeClusterSpec struct {
 	// Certificates to connect to Aerospike.
 	// +optional
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
-	// Additional configuration for create Aerospike pods.
+	// Specify additional configuration for the Aerospike pods
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
@@ -730,6 +736,7 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
+//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1, ''},{Pod,v1,''},{StatefulSet,v1,''}}
 type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
