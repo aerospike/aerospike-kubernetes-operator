@@ -554,6 +554,7 @@ type AerospikeStorageSpec struct {
 // AerospikeClusterStatusSpec captures the current status of the cluster.
 type AerospikeClusterStatusSpec struct {
 	// Aerospike cluster size
+	//+operator-sdk:csv:customresourcedefinitions:type=status,displayName="Cluster Size"
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
