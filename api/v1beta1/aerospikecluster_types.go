@@ -737,7 +737,7 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
-//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1, ''},{Pod,v1,''},{StatefulSet,v1,''}}
+//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
 type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
