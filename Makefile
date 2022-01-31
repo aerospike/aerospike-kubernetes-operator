@@ -1,5 +1,5 @@
 # # /bin/sh does not support source command needed in make test
-# SHELL := /bin/bash
+#SHELL := /bin/bash
 
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
@@ -185,20 +185,15 @@ bundle: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/overlays/manifests/olm | operator-sdk generate bundle -q --kustomize-dir config/overlays/manifests/olm --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+	sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
+	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
 
-	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-		sed -I '' "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	else \
-		sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-		sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	fi
-
-	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
-	else \
-		sed -i '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
-	fi
 
 # Remove generated bundle
 .PHONY: bundle-clean
