@@ -68,7 +68,7 @@ spec:
      -   Configure persistent storage and resource allocation
      -   Standardize and validate configurations
      -   Cluster security management
-  displayName: Aerospike Kubernetes operator
+  displayName: Aerospike Kubernetes Operator
   icon:
   - base64data: PHN2ZyB3aWR0aD0iMjUwMCIgaGVpZ2h0PSIyNTAwIiB2aWV3Qm94PSIwIDAgMjU2IDI1NiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCI+PHBhdGggZD0iTTAgMGgyNTZ2MjU2SDBWMHoiIGZpbGw9IiNCMDI1MkEiLz48cGF0aCBkPSJNMTU2LjI5MyA5NS42MDVsLTczLjE2OSAzMi41OTQgNzMuMTcgMzIuODFWOTUuNjA1em0tOTIuMDMyIDM5Ljk3OWwtMTcuMDQ5LTcuMyAxNy4wNDktNy44ODIgMTQ0LjUyNy02NS4zNzZ2MTcuNDAzbC0zNy45MzIgMTYuODI0djc4LjExN2wzNy45MzIgMTd2MTYuNjA0TDY0LjI2IDEzNS41ODR6IiBmaWxsPSIjRkZGIi8+PC9zdmc+
     mediatype: image/svg+xml
@@ -89,7 +89,7 @@ spec:
   - Aerospike
   links:
   - name: Documentation
-    url: https://docs.aerospike.com/docs/cloud/kubernetes/operator/index.html
+    url: https://docs.aerospike.com/cloud/index
   - name: Aerospike
     url: https://aerospike.com
   maintainers:
