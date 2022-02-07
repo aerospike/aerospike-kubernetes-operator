@@ -11,7 +11,6 @@ require (
 	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-logr/logr v0.4.0
-	github.com/hashicorp/go-version v1.3.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/stretchr/testify v1.7.0
