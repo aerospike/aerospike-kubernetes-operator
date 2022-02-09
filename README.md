@@ -10,7 +10,7 @@ are performed by updating an Aerospike cluster Custom Resource (CR).
 
 ## Documentation
 
-For full documentation please visit the **[official documentation](https://www.aerospike.com/docs/cloud/index.html).**
+For full documentation please visit the **[official documentation](https://docs.aerospike.com).**
 
 ## What features does it provide?
 
