@@ -42,19 +42,25 @@ func AerospikeAdminCredentials(
 		if err != nil {
 			return "", "", err
 		}
-		enabled, err = asdbv1beta1.IsSecurityEnabled(incomingVersion, desiredState.AerospikeConfig)
+		enabled, err = asdbv1beta1.IsSecurityEnabled(
+			incomingVersion, desiredState.AerospikeConfig,
+		)
 		if err != nil {
 			return "", "", err
 		}
 	} else {
-		enabled, err = asdbv1beta1.IsSecurityEnabled(outgoingVersion, currentState.AerospikeConfig)
+		enabled, err = asdbv1beta1.IsSecurityEnabled(
+			outgoingVersion, currentState.AerospikeConfig,
+		)
 		if err != nil {
 			incomingVersion, err := asdbv1beta1.GetImageVersion(desiredState.Image)
 			if err != nil {
 				return "", "", err
 			}
 			// Its possible this is a new cluster and current state is empty.
-			enabled, err = asdbv1beta1.IsSecurityEnabled(incomingVersion, desiredState.AerospikeConfig)
+			enabled, err = asdbv1beta1.IsSecurityEnabled(
+				incomingVersion, desiredState.AerospikeConfig,
+			)
 
 			if err != nil {
 				return "", "", err
@@ -93,21 +99,28 @@ func AerospikeAdminCredentials(
 
 // ReconcileAccessControl reconciles access control to ensure current state moves to the desired state.
 func ReconcileAccessControl(
-	desired *asdbv1beta1.AerospikeClusterSpec, client *as.Client,
+	desired *asdbv1beta1.AerospikeClusterSpec,
+	currentState *asdbv1beta1.AerospikeClusterSpec, client *as.Client,
 	passwordProvider AerospikeUserPasswordProvider, logger Logger,
 ) error {
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
 	adminPolicy := GetAdminPolicy(desired)
 
 	desiredRoles := asdbv1beta1.GetRolesFromSpec(desired)
-	err := reconcileRoles(desiredRoles, client, adminPolicy, logger)
+	currentRoles := asdbv1beta1.GetRolesFromSpec(currentState)
+	err := reconcileRoles(
+		desiredRoles, currentRoles, client, adminPolicy,
+		logger,
+	)
 	if err != nil {
 		return err
 	}
 
 	desiredUsers := asdbv1beta1.GetUsersFromSpec(desired)
+	currentUsers := asdbv1beta1.GetUsersFromSpec(currentState)
 	err = reconcileUsers(
-		desiredUsers, passwordProvider, client, adminPolicy, logger,
+		desiredUsers, currentUsers, passwordProvider, client, adminPolicy,
+		logger,
 	)
 	return err
 }
@@ -124,20 +137,15 @@ func GetAdminPolicy(clusterSpec *asdbv1beta1.AerospikeClusterSpec) as.AdminPolic
 
 // reconcileRoles reconciles roles to take them from current to desired.
 func reconcileRoles(
-	desired map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client,
+	desired map[string]asdbv1beta1.AerospikeRoleSpec,
+	current map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client,
 	adminPolicy as.AdminPolicy, logger Logger,
 ) error {
 	var err error
 
-	// Get list of existing roles from the cluster.
-	asRoles, err := client.QueryRoles(&adminPolicy)
-	if err != nil {
-		return fmt.Errorf("error querying roles: %v", err)
-	}
-
 	var currentRoleNames []string // List roles in the cluster.
-	for _, role := range asRoles {
-		currentRoleNames = append(currentRoleNames, role.Name)
+	for roleName := range current {
+		currentRoleNames = append(currentRoleNames, roleName)
 	}
 
 	var requiredRoleNames []string
@@ -188,22 +196,17 @@ func reconcileRoles(
 // reconcileUsers reconciles users to take them from current to desired.
 func reconcileUsers(
 	desired map[string]asdbv1beta1.AerospikeUserSpec,
+	current map[string]asdbv1beta1.AerospikeUserSpec,
 	passwordProvider AerospikeUserPasswordProvider, client *as.Client,
 	adminPolicy as.AdminPolicy, logger Logger,
 ) error {
 	var err error
 
-	// Get list of existing users from the cluster.
-	asUsers, err := client.QueryUsers(&adminPolicy)
-	if err != nil {
-		return fmt.Errorf("error querying users: %v", err)
-	}
-
 	var currentUserNames []string
 
 	// List users in the cluster.
-	for _, user := range asUsers {
-		currentUserNames = append(currentUserNames, user.User)
+	for userName := range current {
+		currentUserNames = append(currentUserNames, userName)
 	}
 
 	var requiredUserNames []string
