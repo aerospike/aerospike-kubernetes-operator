@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 
@@ -141,7 +141,7 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 // user has to install its own operator then run cleanup and then start this
 
 var _ = BeforeSuite(
-	func(done Done) {
+	func() {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
@@ -205,9 +205,7 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 		cloudProvider, err = getCloudProvider(ctx, k8sClient)
 		Expect(err).ToNot(HaveOccurred())
-		close(done)
-	}, 120,
-)
+	})
 
 var _ = AfterSuite(
 	func() {
