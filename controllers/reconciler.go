@@ -110,7 +110,9 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 	if err != nil {
 		return err
 	}
-	enabled, err := asdbv1beta1.IsSecurityEnabled(version, r.aeroCluster.Spec.AerospikeConfig)
+	enabled, err := asdbv1beta1.IsSecurityEnabled(
+		version, r.aeroCluster.Spec.AerospikeConfig,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}
@@ -146,7 +148,19 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 
 	pp := r.getPasswordProvider()
 
-	err = ReconcileAccessControl(&r.aeroCluster.Spec, aeroClient, pp, r.Log)
+	statusAsSpec, err := asdbv1beta1.CopyStatusToSpec(
+		r.aeroCluster.Status.
+			AerospikeClusterStatusSpec,
+	)
+	if err != nil {
+		r.Log.Error(err, "Failed to copy spec in status", "err", err)
+		return err
+	}
+
+	err = ReconcileAccessControl(
+		&r.aeroCluster.Spec, statusAsSpec,
+		aeroClient, pp, r.Log,
+	)
 	return err
 }
 
