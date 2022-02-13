@@ -1,6 +1,6 @@
 module github.com/aerospike/aerospike-kubernetes-operator
 
-go 1.16
+go 1.17
 
 require (
 	cloud.google.com/go v0.76.0 // indirect
