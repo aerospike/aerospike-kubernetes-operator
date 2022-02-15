@@ -61,13 +61,13 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
-	confKeyTLS       = "tls"
 	confKeyTLSName   = "tls-name"
 
 	// Network section keys.
 	confKeyNetwork          = "network"
 	confKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
+	confKeyNetworkFabric    = "fabric"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -311,6 +311,10 @@ func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
 }
 
+func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
+	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
+}
+
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
 ) (string, *int) {
@@ -335,6 +339,10 @@ func GetServicePort(aeroConf *AerospikeConfigSpec) *int {
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
+}
+
+func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
 }
 
 func GetPortFromConfig(

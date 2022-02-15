@@ -119,10 +119,18 @@ done
 {{- if .HostNetwork}}
 # 8 spaces, fixed in config writer file config manager lib
 # TODO: The search pattern is not robust. Add a better marker in management lib.
+{{- if ne .HeartBeatPort  0}}
 sed -i -e "/heartbeat {/a \\        address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if ne .HeartBeatTlsPort 0}}
 sed -i -e "/heartbeat {/a \\        tls-address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if ne .FabricPort 0}}
 sed -i -e "/fabric {/a \\        address ${MY_POD_IP}" ${CFG}
+{{- end}}
+{{- if ne .FabricTlsPort 0}}
 sed -i -e "/fabric {/a \\        tls-address ${MY_POD_IP}" ${CFG}
+{{- end}}
 {{- end}}
 
 echo "---------------------------------"

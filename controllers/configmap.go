@@ -41,6 +41,8 @@ type initializeTemplateInput struct {
 	PodTLSPort       int32
 	HeartBeatPort    int32
 	HeartBeatTlsPort int32
+	FabricPort       int32
+	FabricTlsPort    int32
 	HostNetwork      bool
 }
 
@@ -202,38 +204,35 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		)
 	}
 
-	_, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
-		r.aeroCluster.
-			Spec.
-			AerospikeConfig,
-	)
+	asConfig := r.aeroCluster.Spec.AerospikeConfig
 	var serviceTlsPortParam int32
-	if serviceTlsPort != nil {
+	if _, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTlsPort != nil {
 		serviceTlsPortParam = int32(*serviceTlsPort)
 	}
 
-	servicePort := asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
 	var servicePortParam int32
-	if servicePort != nil {
+	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
 		servicePortParam = int32(*servicePort)
 	}
 
-	_, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(
-		r.aeroCluster.Spec.
-			AerospikeConfig,
-	)
 	var hbTlsPortParam int32
-	if hbTlsPort != nil {
+	if _, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTlsPort != nil {
 		hbTlsPortParam = int32(*hbTlsPort)
 	}
 
-	hbPort := asdbv1beta1.GetHeartbeatPort(
-		r.aeroCluster.Spec.
-			AerospikeConfig,
-	)
 	var hbPortParam int32
-	if hbPort != nil {
+	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
 		hbPortParam = int32(*hbPort)
+	}
+
+	var fabricTlsPortParam int32
+	if _, fabricTlsPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTlsPort != nil {
+		fabricTlsPortParam = int32(*fabricTlsPort)
+	}
+
+	var fabricPortParam int32
+	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
+		fabricPortParam = int32(*fabricPort)
 	}
 
 	initializeTemplateInput := initializeTemplateInput{
@@ -244,6 +243,8 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		PodTLSPort:       serviceTlsPortParam,
 		HeartBeatPort:    hbPortParam,
 		HeartBeatTlsPort: hbTlsPortParam,
+		FabricPort:       fabricPortParam,
+		FabricTlsPort:    fabricTlsPortParam,
 		HostNetwork:      r.aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
