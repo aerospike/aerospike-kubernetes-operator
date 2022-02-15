@@ -10,7 +10,7 @@ are performed by updating an Aerospike cluster Custom Resource (CR).
 
 ## Documentation
 
-For full documentation please visit the **[official documentation](https://www.aerospike.com/docs/cloud/index.html).**
+For full documentation please visit the **[official documentation](https://docs.aerospike.com).**
 
 ## What features does it provide?
 
@@ -261,13 +261,6 @@ uniqueness of these Pods (e.g. as unique addressable identities).
 
 A layered approach is taken to orchestration which allows the Operator to manage Aerospike Cluster tasks outside the
 Aerospike deployment.
-
-## Get started
-
-* [System Requirements](https://www.aerospike.com/docs/cloud/System-Requirements.html)
-* [Install the Operator on Kubernetes](https://www.aerospike.com/docs/cloud/Install-the-Operator-on-Kubernetes.html)
-* [Create an Aerospike cluster](https://www.aerospike.com/docs/cloud/Create-Aerospike-cluster.html)
-* [Limitations](https://www.aerospike.com/docs/cloud/Limitations.html)
 
 ## See also
 
