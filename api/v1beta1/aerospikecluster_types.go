@@ -38,6 +38,8 @@ type AerospikeClusterSpec struct {
 	Size int32 `json:"size"`
 	// Aerospike server image
 	Image string `json:"image"`
+	// Roll Out percentage
+	RollOutPercentage int32 `json:"rollOutPercentage,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.

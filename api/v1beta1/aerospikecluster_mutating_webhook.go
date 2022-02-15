@@ -102,6 +102,10 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		c.Spec.ValidationPolicy = &validationPolicy
 	}
 
+	if c.Spec.RollOutPercentage == 0 {
+		c.Spec.RollOutPercentage = 100
+	}
+
 	return nil
 }
 

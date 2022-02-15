@@ -167,6 +167,10 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
+	if !validRolloutPercentage(c.Spec.RollOutPercentage) {
+		return fmt.Errorf("rollout percentage is out of range")
+	}
+
 	configMap := c.Spec.AerospikeConfig
 
 	// Validate Image version
@@ -1315,6 +1319,9 @@ func validateRequiredFileStorageForFeatureConf(
 		}
 	}
 	return nil
+}
+func validRolloutPercentage(percentage int32) bool {
+	return 0 >= percentage && percentage <= 100
 }
 
 func GetImageVersion(imageStr string) (string, error) {

@@ -307,7 +307,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	bool, error,
 ) {
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(rackState.Rack.ID)
 	if err != nil {
 		return false, fmt.Errorf("failed to list pods: %v", err)
 	}
@@ -437,7 +437,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(rackState.Rack.ID)
 	if err != nil {
 		return statefulSet, reconcileError(
 			fmt.Errorf(
@@ -591,7 +591,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
 
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(rackState.Rack.ID)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
@@ -960,9 +960,7 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int) (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
-	[]corev1.Pod, error,
-) {
+func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) ([]corev1.Pod, error) {
 	podList, err := r.getRackPodList(rackID)
 	if err != nil {
 		return nil, err
@@ -979,6 +977,14 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 		sortedList[(len(podList.Items)-1)-indexInt] = p
 	}
 	return sortedList, nil
+}
+
+func (r *SingleClusterReconciler) getTargetPodList(rackID int) ([]corev1.Pod, error) {
+	podList, err := r.getOrderedRackPodList(rackID)
+	if err != nil {
+		return nil, err
+	}
+	return podList[:r.getRollOutPods(len(podList))-1], nil
 }
 
 func (r *SingleClusterReconciler) getCurrentRackList() (
