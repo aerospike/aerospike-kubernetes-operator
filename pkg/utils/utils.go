@@ -175,3 +175,7 @@ func RemoveString(slice []string, s string) (result []string) {
 	}
 	return
 }
+
+func GetRollOutPodsListSize(rollOutPercentage, rackSize int) int {
+	return int((float64(rollOutPercentage) / 100.0) * float64(rackSize))
+}

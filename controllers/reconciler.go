@@ -516,5 +516,5 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 }
 
 func (r *SingleClusterReconciler) getRollOutPods(rackSize int) int {
-	return int((float64(r.aeroCluster.Spec.RollOutPercentage) / 100.0) * float64(rackSize))
+	return utils.GetRollOutPodsListSize(int(r.aeroCluster.Spec.RollOutPercentage), rackSize)
 }

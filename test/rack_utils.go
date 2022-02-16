@@ -3,6 +3,7 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"reflect"
 	"strconv"
 	"strings"
@@ -468,4 +469,14 @@ func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
 		racks = append(racks, asdbv1beta1.Rack{ID: rID})
 	}
 	return racks
+}
+
+func getUpdateEffectedPods(aeroCluster *asdbv1beta1.AerospikeCluster) (int, error) {
+	effectedPods := 0
+
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	for _, rackState := range rackStateList {
+		effectedPods += utils.GetRollOutPodsListSize(int(aeroCluster.Spec.RollOutPercentage), rackState.Size)
+	}
+	return effectedPods, nil
 }

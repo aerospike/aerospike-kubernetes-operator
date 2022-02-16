@@ -553,6 +553,8 @@ type AerospikeClusterStatusSpec struct {
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
+	// Roll Out percentage
+	RollOutPercentage int32 `json:"rollOutPercentage,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -762,6 +764,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	status.Size = spec.Size
 	status.Image = spec.Image
+	status.RollOutPercentage = spec.RollOutPercentage
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
@@ -854,6 +857,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	spec.Size = status.Size
 	spec.Image = status.Image
+	spec.RollOutPercentage = status.RollOutPercentage
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}

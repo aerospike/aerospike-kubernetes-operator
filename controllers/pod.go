@@ -106,7 +106,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
-
 	return restartType, nil
 }
 

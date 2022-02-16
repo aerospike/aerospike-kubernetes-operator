@@ -17,27 +17,27 @@ var _ = Describe(
 
 		ctx := goctx.TODO()
 
-		// Cluster lifecycle related
-		Context(
-			"DeployClusterPost490", func() {
-				DeployClusterForAllImagesPost490(ctx)
-			},
-		)
-		Context(
-			"DeployClusterDiffStorageMultiPodPerHost", func() {
-				DeployClusterForDiffStorageTest(ctx, 2, true)
-			},
-		)
-		Context(
-			"DeployClusterDiffStorageSinglePodPerHost", func() {
-				DeployClusterForDiffStorageTest(ctx, 2, false)
-			},
-		)
-		Context(
-			"CommonNegativeClusterValidationTest", func() {
-				NegativeClusterValidationTest(ctx)
-			},
-		)
+		//// Cluster lifecycle related
+		//Context(
+		//	"DeployClusterPost490", func() {
+		//		DeployClusterForAllImagesPost490(ctx)
+		//	},
+		//)
+		//Context(
+		//	"DeployClusterDiffStorageMultiPodPerHost", func() {
+		//		DeployClusterForDiffStorageTest(ctx, 2, true)
+		//	},
+		//)
+		//Context(
+		//	"DeployClusterDiffStorageSinglePodPerHost", func() {
+		//		DeployClusterForDiffStorageTest(ctx, 2, false)
+		//	},
+		//)
+		//Context(
+		//	"CommonNegativeClusterValidationTest", func() {
+		//		NegativeClusterValidationTest(ctx)
+		//	},
+		//)
 		Context(
 			"UpdateCluster", func() {
 				UpdateClusterTest(ctx)
@@ -240,6 +240,16 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("CanaryRollingRestart 50%")
+					err = rollingRestartClusterCanaryDeploymentTest(
+						logger, k8sClient, ctx, clusterNamespacedName, 50)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("CanaryRollingRestart 100%")
+					err = rollingRestartClusterCanaryDeploymentTest(
+						logger, k8sClient, ctx, clusterNamespacedName, 100)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Upgrade/Downgrade")
 
 					// TODO: How to check if it is checking cluster stability before killing node
@@ -247,6 +257,16 @@ func UpdateClusterTest(ctx goctx.Context) {
 					err = upgradeClusterTest(
 						k8sClient, ctx, clusterNamespacedName, prevImage,
 					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Canary Upgrade 50%")
+					err = canaryClusterUpgradeTest(
+						k8sClient, ctx, clusterNamespacedName, latestImage, 50)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Canary Upgrade 100%")
+					err = canaryClusterUpgradeTest(
+						k8sClient, ctx, clusterNamespacedName, latestImage, 100)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)

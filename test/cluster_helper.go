@@ -87,9 +87,7 @@ func scaleDownClusterTest(
 }
 
 func rollingRestartClusterTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
-) error {
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -119,6 +117,40 @@ func rollingRestartClusterTest(
 	return validateAerospikeConfigServiceClusterUpdate(
 		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
 	)
+}
+
+func rollingRestartClusterCanaryDeploymentTest(
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, rolloutPercentage int32) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RollOutPercentage = rolloutPercentage
+	// Change config
+	if _, ok := aeroCluster.Spec.AerospikeConfig.Value["service"]; !ok {
+		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
+	}
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	if err != nil {
+		return err
+	}
+	return validateAerospikeConfigServiceClusterCanaryUpdate(
+		logger, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"})
+
 }
 
 func validateAerospikeConfigServiceClusterUpdate(
@@ -177,10 +209,113 @@ func validateAerospikeConfigServiceClusterUpdate(
 	return nil
 }
 
+func validateAerospikeConfigServiceClusterCanaryUpdate(
+	log logr.Logger,
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	updatedKeys []string) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	totalUpdateEffectedPods, err := getUpdateEffectedPods(aeroCluster)
+	if err != nil {
+		return err
+	}
+	updatedPodsCounter := 0
+LOOP:
+	for _, pod := range aeroCluster.Status.Pods {
+		hostConn, err := createHost(pod)
+		if err != nil {
+			return err
+		}
+		asinfo := info.NewAsInfo(
+			log, hostConn, getClientPolicy(aeroCluster, k8sClient),
+		)
+		asConfig, err := getAsConfig(asinfo, "service")
+		if err != nil {
+			return err
+		}
+		asServiceConfig := asConfig["service"].(lib.Stats)
+
+		inputServiceConfig := aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})
+		for _, updateKey := range updatedKeys {
+			inputServiceValue, ok := inputServiceConfig[updateKey]
+			if !ok {
+				continue LOOP
+			}
+			asServiceValue := asServiceConfig.Get(updateKey)
+			if asServiceValue == nil {
+				continue LOOP
+			}
+			if fmt.Sprint(inputServiceValue) != fmt.Sprint(asServiceValue) {
+				continue LOOP
+			}
+		}
+		updatedPodsCounter += 1
+	}
+	if updatedPodsCounter != totalUpdateEffectedPods {
+		return fmt.Errorf("canary rolling update failure totalEffectedPods: %d found: %d",
+			totalUpdateEffectedPods, updatedPodsCounter)
+	}
+	return nil
+}
+
+func validateCanaryClusterUgrade(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, image string) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+	totalUpdateEffectedPods, err := getUpdateEffectedPods(aeroCluster)
+	if err != nil {
+		return err
+	}
+	updatedPodsCounter := 0
+
+	for _, pod := range aeroCluster.Status.Pods {
+		if pod.Image == image {
+			updatedPodsCounter += 1
+		}
+	}
+	if updatedPodsCounter != totalUpdateEffectedPods {
+		return fmt.Errorf("canary cluster upgrade failure totalEffectedPods: %d found: %d",
+			totalUpdateEffectedPods, updatedPodsCounter)
+	}
+	return nil
+}
+
+func canaryClusterUpgradeTest(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, image string, rollOutPercentage int32) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+	aeroCluster.Spec.RollOutPercentage = rollOutPercentage
+	// Change config
+	if err := UpdateClusterImage(aeroCluster, image); err != nil {
+		return err
+	}
+	if err = k8sClient.Update(ctx, aeroCluster); err != nil {
+		return err
+	}
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+	if err != nil {
+		return err
+	}
+	return validateCanaryClusterUgrade(k8sClient, ctx, clusterNamespacedName, latestImage)
+}
+
 func upgradeClusterTest(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, image string,
-) error {
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, image string) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err

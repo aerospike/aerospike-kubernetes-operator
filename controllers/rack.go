@@ -984,7 +984,11 @@ func (r *SingleClusterReconciler) getTargetPodList(rackID int) ([]corev1.Pod, er
 	if err != nil {
 		return nil, err
 	}
-	return podList[:r.getRollOutPods(len(podList))-1], nil
+	if len(podList) <= 1 {
+		return podList, nil
+	}
+	tmp := podList[:r.getRollOutPods(len(podList))]
+	return tmp, nil
 }
 
 func (r *SingleClusterReconciler) getCurrentRackList() (

@@ -1321,7 +1321,7 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 func validRolloutPercentage(percentage int32) bool {
-	return 0 >= percentage && percentage <= 100
+	return 0 <= percentage && percentage <= 100
 }
 
 func GetImageVersion(imageStr string) (string, error) {
