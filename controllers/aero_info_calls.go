@@ -68,6 +68,12 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		)
 	}
 
+	// Cluster SC namespaces might have unavailable or dead partition
+	if err := r.validateClusterState(); err != nil {
+		// TODO: should it be err or requeue
+		return reconcileError(err)
+	}
+
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {

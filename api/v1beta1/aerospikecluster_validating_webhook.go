@@ -1149,17 +1149,12 @@ func validateNsConfUpdate(
 						oldSingleConf, singleConf,
 					)
 				}
-				if isValueUpdated(oldSingleConf, singleConf, "tls-name") {
-					return fmt.Errorf(
-						"tls-name cannot be update. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
+				// strong-consistency update not allowed
 				if isValueUpdated(
-					oldSingleConf, singleConf, "tls-authenticate-client",
+					oldSingleConf, singleConf, "strong-consistency",
 				) {
 					return fmt.Errorf(
-						"tls-authenticate-client cannot be update. old nsconf %v, new nsconf %v",
+						"strong-consistency cannot be update. old nsconf %v, new nsconf %v",
 						oldSingleConf, singleConf,
 					)
 				}

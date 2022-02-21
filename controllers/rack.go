@@ -538,6 +538,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// Update new object with new size
 		newSize := *found.Spec.Replicas - 1
 		found.Spec.Replicas = &newSize
+
+		r.Log.Info("Setting AerospikeCluster statefulset size", "size", newSize)
+
 		if err := r.Client.Update(
 			context.TODO(), found, updateOption,
 		); err != nil {
@@ -547,6 +550,27 @@ func (r *SingleClusterReconciler) scaleDownRack(
 					newSize, err,
 				),
 			)
+		}
+
+		// TODO: Do we need to check for unavailable/dead partition and reset cluster size?
+		if err := r.validateClusterState(); err != nil {
+			// reset cluster size
+			newSize := *found.Spec.Replicas + 1
+			found.Spec.Replicas = &newSize
+
+			r.Log.Error(err, "Cluster validation failed, re-setting AerospikeCluster statefulset size", "size", newSize)
+
+			if err := r.Client.Update(
+				context.TODO(), found, updateOption,
+			); err != nil {
+				return found, reconcileError(
+					fmt.Errorf(
+						"failed to update pod size %d StatefulSet pods: %v",
+						newSize, err,
+					),
+				)
+			}
+			return found, reconcileRequeueAfter(0)
 		}
 
 		// Wait for pods to get terminated
@@ -569,9 +593,18 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 		found = nFound
 
+		// TODO: wait for migration before setting roster
+
+		// Setup roster
+		if err := r.getAndSetRoster(); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return found, reconcileRequeueAfter(0)
+		}
+
+		// Cleanup pod related objects like pvc, service
 		err = r.cleanupPods([]string{podName}, rackState)
 		if err != nil {
-			return nFound, reconcileError(
+			return found, reconcileError(
 				fmt.Errorf(
 					"failed to cleanup pod %s: %v", podName, err,
 				),
