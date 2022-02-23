@@ -15,7 +15,6 @@ import (
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +34,7 @@ type FromSecretPasswordProvider struct {
 func (pp FromSecretPasswordProvider) Get(
 	_ string, userSpec *asdbv1beta1.AerospikeUserSpec,
 ) (string, error) {
-	secret := &corev1.Secret{}
+	secret := &v1.Secret{}
 	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
 	err := (*pp.k8sClient).Get(

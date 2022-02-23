@@ -118,7 +118,7 @@ func rollingRestartClusterTest(
 
 	// Verify that the change has been applied on the cluster.
 	return validateAerospikeConfigServiceClusterUpdate(
-		log, k8sClient, ctx, aeroCluster, clusterNamespacedName, []string{"proto-fd-max"},
+		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
 	)
 }
 
@@ -177,8 +177,12 @@ func rollingRestartClusterByAddingNamespaceDynamicallyTest(
 
 func validateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1beta1.AerospikeCluster, clusterNamespacedName types.NamespacedName, updatedKeys []string,
+	clusterNamespacedName types.NamespacedName, updatedKeys []string,
 ) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
 
 	for _, pod := range aeroCluster.Status.Pods {
 		// TODO:
