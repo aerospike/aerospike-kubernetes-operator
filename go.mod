@@ -14,6 +14,7 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/onsi/ginkgo/v2 v2.1.2
 	github.com/onsi/gomega v1.18.1
+	github.com/prometheus/client_golang v1.11.0 // indirect
 	github.com/stretchr/testify v1.7.0
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
