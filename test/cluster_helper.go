@@ -390,58 +390,6 @@ func getClusterPodList(
 	return podList, nil
 }
 
-func validateResource(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1beta1.AerospikeCluster,
-) error {
-	if aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources == nil {
-		return fmt.Errorf("resources can not be nil for validation")
-	}
-	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	mem := aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources.Requests.Memory()
-	cpu := aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources.Requests.Cpu()
-
-	for _, p := range podList.Items {
-		for _, cnt := range p.Spec.Containers {
-			// TODO: ignore injected containers
-			stMem := cnt.Resources.Requests.Memory()
-			if !mem.Equal(*stMem) {
-				return fmt.Errorf(
-					"resource memory not matching. want %v, got %v",
-					mem.String(), stMem.String(),
-				)
-			}
-			limitMem := cnt.Resources.Limits.Memory()
-			if !mem.Equal(*limitMem) {
-				return fmt.Errorf(
-					"limit memory not matching. want %v, got %v", mem.String(),
-					limitMem.String(),
-				)
-			}
-
-			stCPU := cnt.Resources.Requests.Cpu()
-			if !cpu.Equal(*stCPU) {
-				return fmt.Errorf(
-					"resource cpu not matching. want %v, got %v", cpu.String(),
-					stCPU.String(),
-				)
-			}
-			limitCPU := cnt.Resources.Limits.Cpu()
-			if !cpu.Equal(*limitCPU) {
-				return fmt.Errorf(
-					"resource cpu not matching. want %v, got %v", cpu.String(),
-					limitCPU.String(),
-				)
-			}
-		}
-	}
-	return nil
-}
-
 // feature-key file needed
 func createAerospikeClusterPost460(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
