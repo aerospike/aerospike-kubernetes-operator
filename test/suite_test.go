@@ -27,7 +27,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 
@@ -67,13 +66,7 @@ var defaultNetworkType = flag.String("connect-through-network-type", "hostExtern
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(
-		t,
-		"Controller Suite",
-		[]Reporter{junitReporter},
-	)
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeEach(func() {
@@ -213,7 +206,6 @@ var _ = AfterSuite(
 		_ = cleanupPVC(k8sClient, namespace)
 		_ = cleanupPVC(k8sClient, multiClusterNs1)
 		_ = cleanupPVC(k8sClient, multiClusterNs2)
-
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
 		err := testEnv.Stop()
