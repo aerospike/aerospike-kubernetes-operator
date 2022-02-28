@@ -64,7 +64,7 @@ pipeline {
                     steps {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-                            sh "./test/test.sh ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
+                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
                         }
                     }
                 }
