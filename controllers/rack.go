@@ -8,16 +8,13 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	lib "github.com/aerospike/aerospike-management-lib"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-
+	lib "github.com/aerospike/aerospike-management-lib"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {

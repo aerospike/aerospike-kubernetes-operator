@@ -17,27 +17,27 @@ var _ = Describe(
 
 		ctx := goctx.TODO()
 
-		//// Cluster lifecycle related
-		//Context(
-		//	"DeployClusterPost490", func() {
-		//		DeployClusterForAllImagesPost490(ctx)
-		//	},
-		//)
-		//Context(
-		//	"DeployClusterDiffStorageMultiPodPerHost", func() {
-		//		DeployClusterForDiffStorageTest(ctx, 2, true)
-		//	},
-		//)
-		//Context(
-		//	"DeployClusterDiffStorageSinglePodPerHost", func() {
-		//		DeployClusterForDiffStorageTest(ctx, 2, false)
-		//	},
-		//)
-		//Context(
-		//	"CommonNegativeClusterValidationTest", func() {
-		//		NegativeClusterValidationTest(ctx)
-		//	},
-		//)
+		// Cluster lifecycle related
+		Context(
+			"DeployClusterPost490", func() {
+				DeployClusterForAllImagesPost490(ctx)
+			},
+		)
+		Context(
+			"DeployClusterDiffStorageMultiPodPerHost", func() {
+				DeployClusterForDiffStorageTest(ctx, 2, true)
+			},
+		)
+		Context(
+			"DeployClusterDiffStorageSinglePodPerHost", func() {
+				DeployClusterForDiffStorageTest(ctx, 2, false)
+			},
+		)
+		Context(
+			"CommonNegativeClusterValidationTest", func() {
+				NegativeClusterValidationTest(ctx)
+			},
+		)
 		Context(
 			"UpdateCluster", func() {
 				UpdateClusterTest(ctx)

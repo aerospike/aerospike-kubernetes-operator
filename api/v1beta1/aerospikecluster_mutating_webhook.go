@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"reflect"
 
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
 	"github.com/go-logr/logr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}

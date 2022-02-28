@@ -13,13 +13,12 @@ import (
 	. "github.com/onsi/gomega"
 	"strings"
 
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 const storageInitTestClusterSize = 2

@@ -3,12 +3,12 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"reflect"
 	"strconv"
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"

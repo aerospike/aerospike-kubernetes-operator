@@ -3,10 +3,10 @@ package jsonpatch
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
 	patchApply "github.com/evanphx/json-patch"
+	"github.com/stretchr/testify/assert"
 )
 
 var hyperComplexBase = `

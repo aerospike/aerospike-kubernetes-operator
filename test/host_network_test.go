@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	goctx "context"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

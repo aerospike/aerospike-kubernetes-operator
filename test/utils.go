@@ -5,7 +5,6 @@ import (
 	goctx "context"
 	"encoding/json"
 	"fmt"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"io"
 	"io/ioutil"
 	"path/filepath"
@@ -15,15 +14,15 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
