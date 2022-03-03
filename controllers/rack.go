@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	oldSz := *found.Spec.Replicas
 	found.Spec.Replicas = &desiredSize
 
-	r.Log.Info("Scaling up pods", "currentSz", oldSz, "desiredSz", desiredSize)
+	r.Log.Info("Scaling up AerospikeCluster statefulset", "sts", found.Name, "currentSz", oldSz, "desiredSz", desiredSize)
 
 	// No need for this? But if image is bad then new pod will also come up
 	//with bad node.
@@ -498,7 +498,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	desiredSize := int32(rackState.Size)
 
 	r.Log.Info(
-		"ScaleDown AerospikeCluster statefulset", "desiredSz", desiredSize,
+		"ScaleDown AerospikeCluster statefulset", "sts", found.Name, "desiredSz", desiredSize,
 		"currentSz", *found.Spec.Replicas,
 	)
 
@@ -518,6 +518,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	var pod *corev1.Pod
 
+	aerospikePolicy := r.getClientPolicy()
+
 	if *found.Spec.Replicas > desiredSize {
 
 		// maintain list of removed pods. It will be used for alumni-reset and tip-clear
@@ -533,6 +535,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				// The pod is running and is unsafe to terminate.
 				return found, res
 			}
+		}
+
+		// Setup roster after migration
+		if err := r.getAndSetRoster(aerospikePolicy); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return found, reconcileRequeueAfter(0)
 		}
 
 		// Update new object with new size
@@ -552,8 +560,17 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			)
 		}
 
+		// Wait for pods to get terminated
+		if err := r.waitForSTSToBeReady(found); err != nil {
+			return found, reconcileError(
+				fmt.Errorf(
+					"failed to wait for statefulset to be ready: %v", err,
+				),
+			)
+		}
+
 		// TODO: Do we need to check for unavailable/dead partition and reset cluster size?
-		if err := r.validateClusterState(); err != nil {
+		if err := r.validateClusterState(aerospikePolicy); err != nil {
 			// reset cluster size
 			newSize := *found.Spec.Replicas + 1
 			found.Spec.Replicas = &newSize
@@ -573,15 +590,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			return found, reconcileRequeueAfter(0)
 		}
 
-		// Wait for pods to get terminated
-		if err := r.waitForSTSToBeReady(found); err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to wait for statefulset to be ready: %v", err,
-				),
-			)
-		}
-
 		// Fetch new object
 		nFound, err := r.getSTS(rackState)
 		if err != nil {
@@ -592,14 +600,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			)
 		}
 		found = nFound
-
-		// TODO: wait for migration before setting roster
-
-		// Setup roster
-		if err := r.getAndSetRoster(); err != nil {
-			r.Log.Error(err, "Failed to set roster for cluster")
-			return found, reconcileRequeueAfter(0)
-		}
 
 		// Cleanup pod related objects like pvc, service
 		err = r.cleanupPods([]string{podName}, rackState)
@@ -621,7 +621,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
 
-	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
+	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config", "sts", found.Name)
 
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)

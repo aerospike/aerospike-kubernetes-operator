@@ -651,7 +651,7 @@ func getFQDNForPod(
 //
 // E.g. addressName are access, alternate-access
 func GetEndpointsFromInfo(
-	addressName string, endpointsMap map[string]interface{},
+	addressName string, endpointsMap map[string]string,
 ) []string {
 	var endpoints []string
 

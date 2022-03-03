@@ -68,11 +68,12 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		)
 	}
 
-	// Cluster SC namespaces might have unavailable or dead partition
-	if err := r.validateClusterState(); err != nil {
-		// TODO: should it be err or requeue
-		return reconcileError(err)
-	}
+	// TODO: Do we need to check unavailable partition here
+	// // Cluster SC namespaces might have unavailable or dead partition
+	// if err := r.validateClusterState(r.getClientPolicy()); err != nil {
+	// 	// TODO: should it be err or requeue
+	// 	return reconcileError(err)
+	// }
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
@@ -125,6 +126,46 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn,
 	); err != nil {
 		return reconcileError(err)
+	}
+	return reconcileSuccess()
+}
+
+// TODO: Check only for migration
+func (r *SingleClusterReconciler) waitForMigration(ignorablePods []corev1.Pod) reconcileResult {
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	const maxRetry = 6
+	const retryInterval = time.Second * 10
+
+	var isStable bool
+	// Wait for migration to finish. Wait for some time...
+	for idx := 1; idx <= maxRetry; idx++ {
+		r.Log.V(1).Info("Waiting for migrations to be zero")
+		time.Sleep(retryInterval)
+
+		// This should fail if coldstart is going on.
+		// Info command in coldstarting node should give error, is it? confirm.
+
+		isStable, err = deployment.IsClusterAndStable(
+			r.Log, r.getClientPolicy(), allHostConns,
+		)
+		if err != nil {
+			return reconcileError(err)
+		}
+		if isStable {
+			break
+		}
+	}
+	if !isStable {
+		return reconcileRequeueAfter(60)
 	}
 	return reconcileSuccess()
 }
@@ -280,10 +321,8 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 
 // ParseInfoIntoMap parses info string into a map.
 // TODO adapted from management lib. Should be made public there.
-func ParseInfoIntoMap(
-	str string, del string, sep string,
-) (map[string]interface{}, error) {
-	m := make(map[string]interface{})
+func ParseInfoIntoMap(str string, del string, sep string) (map[string]string, error) {
+	m := map[string]string{}
 	if str == "" {
 		return m, nil
 	}

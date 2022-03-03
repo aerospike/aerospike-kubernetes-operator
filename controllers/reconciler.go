@@ -95,245 +95,27 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	if r.aeroCluster.Spec.Size < r.aeroCluster.Status.Size {
+		// TODO: wait for migration before setting roster (only in scale down)
+		if res := r.waitForMigration(nil); !res.isSuccess {
+			// The pod is running and is unsafe to terminate.
+			return res.result, res.err
+		}
+	}
+
+	// Setup roster
+	if err := r.getAndSetRoster(r.getClientPolicyFromSpec()); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster")
+		return reconcile.Result{}, err
+	}
+
 	// Update the AerospikeCluster status.
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
 		return reconcile.Result{}, err
 	}
 
-	// Setup roster
-	// TODO: wait for migration before setting roster (only in scale down)
-	if err := r.getAndSetRoster(); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster")
-		return reconcile.Result{}, err
-	}
-
 	return reconcile.Result{}, nil
-}
-
-func (r *SingleClusterReconciler) getAndSetRoster() error {
-	scNsList := r.getSCNamespaces()
-	r.Log.Info("Strong-consistency namespaces list", "namespaces", scNsList)
-
-	hostConns, err := r.newAllHostConn()
-	if err != nil {
-		return err
-	}
-
-	for _, scNs := range scNsList {
-		if err := r.validateClusterNsState(hostConns, scNs); err != nil {
-			return fmt.Errorf("cluster namespace state not good, can not set roster: %v", err)
-		}
-
-		// Setting roster is skipped if roster already set
-		rosterNodes, err := r.getRosterNodesForNs(hostConns, scNs)
-		if err != nil {
-			return err
-		}
-
-		if !isObservedNodesValid(rosterNodes) {
-			return fmt.Errorf("roster observed_nodes not same for all the nodes: %v", rosterNodes)
-		}
-
-		err = r.setRosterForNs(hostConns, scNs, rosterNodes)
-		if err != nil {
-			return err
-		}
-
-		err = r.runRecluster(hostConns)
-		if err != nil {
-			return err
-		}
-
-		// TODO: validate cluster size with ns_cluster_sz
-	}
-	return nil
-}
-
-func (r *SingleClusterReconciler) getSCNamespaces() []string {
-	var scNsList []string
-
-	nsConfInterfaceList := r.aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-	for _, nsConfInterface := range nsConfInterfaceList {
-		nsConf := nsConfInterface.(map[string]interface{})
-		sc, ok := nsConf["strong-consistency"]
-		if ok && sc.(bool) {
-			scNsList = append(scNsList, nsConf["name"].(string))
-		}
-	}
-	return scNsList
-}
-
-func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.HostConn, ns string) (map[string]map[string]interface{}, error) {
-	r.Log.Info("Getting roster", "namespace", ns)
-
-	rosterNodes := map[string]map[string]interface{}{}
-
-	for _, hostConn := range hostConns {
-		cmd := fmt.Sprintf("roster:namespace=%s", ns)
-		res, err := hostConn.ASConn.RunInfo(r.getClientPolicy(), cmd)
-		if err != nil {
-			return nil, err
-		}
-
-		cmdOutput := res[cmd]
-
-		r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
-
-		kvmap, err := ParseInfoIntoMap(cmdOutput, ":", "=")
-		if err != nil {
-			return nil, err
-		}
-
-		rosterNodes[hostConn.String()] = kvmap
-	}
-
-	r.Log.V(1).Info("roster nodes in cluster", "roster_nodes", rosterNodes)
-
-	// // Check if all nodes have same observed nodes list
-	// var tempObNode string
-	// for _, obNode := range observedNodes {
-	// 	if tempObNode == "" {
-	// 		tempObNode = obNode
-	// 	}
-	// 	if tempObNode != obNode {
-	// 		return "", fmt.Errorf("observed_nodes not same for all the nodes: %v", observedNodes)
-	// 	}
-	// }
-
-	// // TODO: What if some nodes don't have a namespace. observed_nodes will be less than size in that case.
-	// // // Check if observed nodes list has all the cluster nodes
-	// // obNodesList := strings.Split(tempObNode, ",")
-	// // if len(obNodesList) != int(r.aeroCluster.Spec.Size) {
-	// // 	return "", fmt.Errorf("observed_nodes list does not have all the cluster nodes, observed_nodes: %v, cluster_size: %v", observedNodes, r.aeroCluster.Spec.Size)
-	// // }
-
-	// return tempObNode, nil
-	return rosterNodes, nil
-}
-
-func isObservedNodesValid(rosterNodes map[string]map[string]interface{}) bool {
-	var tempObNodes string
-
-	for _, rosterNodesMap := range rosterNodes {
-		observedNodes := rosterNodesMap["observed_nodes"]
-		// Check if all nodes have same observed nodes list
-		if tempObNodes == "" {
-			tempObNodes = observedNodes.(string)
-			continue
-		}
-		if tempObNodes != observedNodes.(string) {
-			return false
-			// return "", fmt.Errorf("observed_nodes not same for all the nodes: %v", observedNodes)
-		}
-	}
-	return true
-}
-
-func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostConn, ns string, rosterNodes map[string]map[string]interface{}) error {
-	r.Log.Info("Setting roster", "namespace", ns, "roster", rosterNodes)
-
-	for _, hostConn := range hostConns {
-
-		observedNodes := rosterNodes[hostConn.String()]["observed_nodes"]
-		currentRoster := rosterNodes[hostConn.String()]["roster"]
-
-		if observedNodes.(string) == currentRoster.(string) {
-			// roster already set
-			continue
-		}
-
-		cmd := fmt.Sprintf("roster-set:namespace=%s;nodes=%s", ns, observedNodes.(string))
-		res, err := hostConn.ASConn.RunInfo(r.getClientPolicy(), cmd)
-		if err != nil {
-			return err
-		}
-
-		cmdOutput := res[cmd]
-
-		r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
-
-		if strings.ToLower(cmdOutput) != "ok" {
-			return fmt.Errorf("failed to set roster for namespace %s, %v", ns, cmdOutput)
-		}
-	}
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) runRecluster(hostConns []*deployment.HostConn) error {
-	r.Log.Info("Run recluster")
-
-	for _, hostConn := range hostConns {
-		cmd := "recluster:"
-		res, err := hostConn.ASConn.RunInfo(r.getClientPolicy(), cmd)
-		if err != nil {
-			return err
-		}
-
-		cmdOutput := res[cmd]
-
-		r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
-
-		if strings.ToLower(cmdOutput) != "ok" && strings.ToLower(cmdOutput) != "ignored-by-non-principal" {
-			return fmt.Errorf("failed to run `%s` for cluster, %v", cmd, cmdOutput)
-		}
-	}
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) validateClusterState() error {
-	scNsList := r.getSCNamespaces()
-
-	hostConns, err := r.newAllHostConn()
-	if err != nil {
-		return err
-	}
-
-	for _, ns := range scNsList {
-		if r.validateClusterNsState(hostConns, ns); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment.HostConn, ns string) error {
-	r.Log.Info("Validate Cluster namespace State. Looking for unavailable or dead partitions", "namespaces", ns)
-
-	for _, hostConn := range hostConns {
-		cmd := fmt.Sprintf("namespace/%s", ns)
-		res, err := hostConn.ASConn.RunInfo(r.getClientPolicy(), cmd)
-		if err != nil {
-			return err
-		}
-
-		cmdOutput := res[cmd]
-
-		r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd)
-
-		kvmap, err := ParseInfoIntoMap(cmdOutput, ";", "=")
-		if err != nil {
-			return err
-		}
-
-		// https://docs.aerospike.com/reference/metrics#unavailable_partitions
-		// This is the number of partitions that are unavailable when roster nodes are missing.
-		// Will turn into dead_partitions if still unavailable when all roster nodes are present.
-		// Some partitions would typically be unavailable under some cluster split situations or
-		// when removing more than replication-factor number of nodes from a strong-consistency enabled namespace
-		if kvmap["unavailable_partitions"].(string) != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero unavailable_partitions %v", ns, kvmap["unavailable_partitions"])
-		}
-
-		// https://docs.aerospike.com/reference/metrics#dead_partitions
-		if kvmap["dead_partitions"].(string) != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero dead_partitions %v", ns, kvmap["dead_partitions"])
-		}
-	}
-	return nil
 }
 
 func (r *SingleClusterReconciler) reconcileAccessControl() error {
