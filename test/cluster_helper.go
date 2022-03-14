@@ -814,6 +814,14 @@ func getSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 						"devices": []interface{}{"/test/dev/xvdf"},
 					},
 				},
+				map[string]interface{}{
+					"name":               "bar",
+					"memory-size":        1000955200,
+					"replication-factor": 2,
+					"storage-engine": map[string]interface{}{
+						"type": "memory",
+					},
+				},
 			},
 		},
 	}

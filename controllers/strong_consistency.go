@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
@@ -47,6 +49,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(aerospikePolicy *as.ClientPoli
 	return nil
 }
 
+// TODO: take sc namespaces from rack
 func (r *SingleClusterReconciler) getSCNamespaces() []string {
 	var scNsList []string
 
@@ -77,18 +80,8 @@ func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.Ho
 
 	r.Log.V(1).Info("roster nodes in cluster", "roster_nodes", rosterNodes)
 
-	// // Check if all nodes have same observed nodes list
-	// var tempObNode string
-	// for _, obNode := range observedNodes {
-	// 	if tempObNode == "" {
-	// 		tempObNode = obNode
-	// 	}
-	// 	if tempObNode != obNode {
-	// 		return "", fmt.Errorf("observed_nodes not same for all the nodes: %v", observedNodes)
-	// 	}
-	// }
-
 	// // TODO: What if some nodes don't have a namespace. observed_nodes will be less than size in that case.
+	// // There can be blacklisted nodes also
 	// // // Check if observed nodes list has all the cluster nodes
 	// // obNodesList := strings.Split(tempObNode, ",")
 	// // if len(obNodesList) != int(r.aeroCluster.Spec.Size) {
@@ -111,7 +104,6 @@ func isObservedNodesValid(rosterNodes map[string]map[string]string) bool {
 		}
 		if tempObNodes != observedNodes {
 			return false
-			// return "", fmt.Errorf("observed_nodes not same for all the nodes: %v", observedNodes)
 		}
 	}
 	return true
@@ -123,14 +115,29 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 	for _, hostConn := range hostConns {
 
 		observedNodes := rosterNodes[hostConn.String()]["observed_nodes"]
+
+		// Remove blacklisted node from observed_nodes
+		observedNodesList := strings.Split(observedNodes, ",")
+		var newObservedNodesList []string
+
+		for _, obn := range observedNodesList {
+			// nodeRoster := nodeID + "@" + fmt.Sprint(rackID)
+			obnNodeID := strings.Split(obn, "@")[0]
+			if !v1beta1.ContainsString(r.aeroCluster.Spec.RosterBlacklist, obnNodeID) {
+				newObservedNodesList = append(newObservedNodesList, obn)
+			}
+		}
+
+		newObservedNodes := strings.Join(newObservedNodesList, ",")
+
 		currentRoster := rosterNodes[hostConn.String()]["roster"]
 
-		if observedNodes == currentRoster {
+		if newObservedNodes == currentRoster {
 			r.Log.Info("Roster already set for the node. Skipping", "node", hostConn.String())
 			continue
 		}
 
-		if err := r.setRoster(hostConn, aerospikePolicy, ns, observedNodes); err != nil {
+		if err := r.setRoster(hostConn, aerospikePolicy, ns, newObservedNodes); err != nil {
 			return err
 		}
 	}
@@ -159,7 +166,7 @@ func (r *SingleClusterReconciler) validateClusterState(aerospikePolicy *as.Clien
 	}
 
 	for _, ns := range scNsList {
-		if r.validateClusterNsState(hostConns, aerospikePolicy, ns); err != nil {
+		if err := r.validateClusterNsState(hostConns, aerospikePolicy, ns); err != nil {
 			return err
 		}
 	}
@@ -257,4 +264,81 @@ func (r *SingleClusterReconciler) getRoster(hostConn *deployment.HostConn, aeros
 	r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
 
 	return ParseInfoIntoMap(cmdOutput, ":", "=")
+}
+
+func (r *SingleClusterReconciler) isNodeInRoster(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
+	nodeID, err := r.getNodeID(policy, hostConn)
+	if err != nil {
+		return false, err
+	}
+
+	rosterNodesMap, err := r.getRoster(hostConn, policy, ns)
+	if err != nil {
+		return false, err
+	}
+	r.Log.Info("Check if node is in roster or not", "node", hostConn.String(), "roster", rosterNodesMap)
+
+	rosterStr := rosterNodesMap["roster"]
+	rosterList := strings.Split(rosterStr, ",")
+
+	for _, roster := range rosterList {
+		rosterNodeID := strings.Split(roster, "@")[0]
+		if nodeID == rosterNodeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *SingleClusterReconciler) isNamespaceSCEnabled(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
+
+	cmd := fmt.Sprintf("get-config:context=namespace;id=%s", ns)
+
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
+	if err != nil {
+		return false, err
+	}
+
+	r.Log.Info("Check if namespace is SC namespace", "ns", ns, "nsstat", res)
+
+	configs, err := ParseInfoIntoMap(res[cmd], ";", "=")
+	if err != nil {
+		return false, err
+	}
+	scstr, ok := configs["strong-consistency"]
+	if !ok {
+		return false, fmt.Errorf("strong-consistency config not found, config %v", res)
+	}
+	scbool, err := strconv.ParseBool(scstr)
+	if err != nil {
+		return false, err
+	}
+
+	return scbool, nil
+}
+
+func (r *SingleClusterReconciler) getNodeID(policy *as.ClientPolicy, hostConn *deployment.HostConn) (string, error) {
+	cmd := "node"
+
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
+	if err != nil {
+		return "", err
+	}
+
+	r.Log.Info("Get nodeID for host", "host", hostConn.String(), "cmd", cmd, "res", res)
+
+	return res[cmd], nil
+}
+
+func (r *SingleClusterReconciler) getNamespaces(policy *as.ClientPolicy, hostConn *deployment.HostConn) ([]string, error) {
+	cmd := "namespaces"
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res[cmd]) > 0 {
+		return strings.Split(res[cmd], ";"), nil
+	}
+	return nil, nil
 }

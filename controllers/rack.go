@@ -575,7 +575,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			newSize := *found.Spec.Replicas + 1
 			found.Spec.Replicas = &newSize
 
-			r.Log.Error(err, "Cluster validation failed, re-setting AerospikeCluster statefulset size", "size", newSize)
+			r.Log.Error(err, "Cluster validation failed, re-setting AerospikeCluster statefulset to previous size", "size", newSize)
 
 			if err := r.Client.Update(
 				context.TODO(), found, updateOption,

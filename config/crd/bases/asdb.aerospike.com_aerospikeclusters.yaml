@@ -4897,6 +4897,12 @@ spec:
                     nullable: true
                     type: array
                 type: object
+              rosterBlacklist:
+                description: RosterBlacklist is a list of blacklisted nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
                   that allow c
@@ -10366,6 +10372,12 @@ spec:
                       resources required.
                     type: object
                 type: object
+              rosterBlacklist:
+                description: RosterBlacklist is a list of blacklisted nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aero

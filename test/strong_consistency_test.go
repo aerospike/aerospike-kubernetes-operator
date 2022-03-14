@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -28,6 +29,7 @@ var _ = Describe("SCMode", func() {
 		// Currently status updated before roster. Thus, success would mean setting roster
 		// Also, when D/U p are fixed, it should succeed
 
+		// Should we allow replication factor 1 in general or in SC mode
 		// Rack aware setup
 		ctx := goctx.TODO()
 
@@ -60,7 +62,16 @@ var _ = Describe("SCMode", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.Size += 3
+			aeroCluster.Spec.Size += 2
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRoster(k8sClient, ctx, clusterNamespacedName, aeroNamespace)
+
+			By("Set roster blacklist")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			aeroCluster.Spec.RosterBlacklist = []string{"2A1"}
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -81,7 +92,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.Size -= 2
+			aeroCluster.Spec.Size -= 1
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -113,17 +124,41 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 	rosterStr := rosterNodesMap["roster"]
 	rosterList := strings.Split(rosterStr, ",")
-	if len(rosterList) != len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. roster %v, pods %v", rosterNodesMap, aeroCluster.Status.Pods)
+
+	// Check2 roster+blacklist >= len(pods)
+	if len(rosterList)+len(aeroCluster.Spec.RosterBlacklist) < len(aeroCluster.Status.Pods) {
+		err := fmt.Errorf("roster len not matching pods list. roster %v, blacklist %v, pods %v", rosterList, aeroCluster.Spec.RosterBlacklist, aeroCluster.Status.Pods)
 		Expect(err).ToNot(HaveOccurred())
 	}
 
+	for _, roster := range rosterList {
+		nodeID := strings.Split(roster, "@")[0]
+
+		// Check1 roster should not have blacklisted pod
+		contains := v1beta1.ContainsString(aeroCluster.Spec.RosterBlacklist, nodeID)
+		Expect(contains).To(BeFalse(), "roster should not have blacklisted node", "roster", roster, "blacklist", aeroCluster.Spec.RosterBlacklist)
+
+		// Check4 Scaledown: all the roster should be in pod list
+		var found bool
+		for _, pod := range aeroCluster.Status.Pods {
+			if strings.EqualFold(nodeID, pod.Aerospike.NodeID) {
+				found = true
+				break
+			}
+		}
+		Expect(found).To(BeTrue(), "roster should be in pod list", "roster", roster, "podlist", aeroCluster.Status.Pods)
+
+	}
+
+	// Check3 Scaleup: pod should be in roster or in blacklist
 	for _, pod := range aeroCluster.Status.Pods {
 		nodeID := pod.Aerospike.NodeID
 		rackID := pod.Aerospike.RackID
 		nodeRoster := nodeID + "@" + fmt.Sprint(rackID)
-		if !strings.Contains(strings.ToLower(rosterStr), strings.ToLower(nodeRoster)) {
-			err := fmt.Errorf("roster not matching pod list. roster %v, missing pod %v", rosterNodesMap, nodeRoster)
+
+		if !v1beta1.ContainsString(aeroCluster.Spec.RosterBlacklist, nodeID) &&
+			!v1beta1.ContainsString(rosterList, nodeRoster) {
+			err := fmt.Errorf("pod not found in roster or blacklist. roster %v, blacklist %v, missing pod %v", rosterList, aeroCluster.Spec.RosterBlacklist, nodeRoster)
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}
@@ -138,8 +173,5 @@ func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, 
 
 	cmdOutput := res[cmd]
 
-	// r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
-
 	return aerospikecluster.ParseInfoIntoMap(cmdOutput, ":", "=")
-
 }

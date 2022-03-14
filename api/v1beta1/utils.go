@@ -33,7 +33,7 @@ const baseVersion = "4.9.0.3"
 // ContainsString check whether list contains given string
 func ContainsString(list []string, ele string) bool {
 	for _, listEle := range list {
-		if ele == listEle {
+		if strings.EqualFold(ele, listEle) {
 			return true
 		}
 	}

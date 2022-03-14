@@ -59,6 +59,8 @@ type AerospikeClusterSpec struct {
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterBlacklist is a list of blacklisted nodeIDs from roster in a strong-consistency setup
+	RosterBlacklist []string `json:"rosterBlacklist,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -589,6 +591,8 @@ type AerospikeClusterStatusSpec struct {
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterBlacklist is a list of blacklisted nodeIDs from roster in a strong-consistency setup
+	RosterBlacklist []string `json:"rosterBlacklist,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -840,6 +844,17 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	}
 	status.SeedsFinderServices = seedsFinderServices
 
+	// RosterBlacklist
+	if len(spec.RosterBlacklist) != 0 {
+		rosterBlacklist := []string{}
+		if err := lib.DeepCopy(
+			&rosterBlacklist, &spec.RosterBlacklist,
+		); err != nil {
+			return nil, err
+		}
+		status.RosterBlacklist = rosterBlacklist
+	}
+
 	return &status, nil
 }
 
@@ -931,6 +946,17 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		return nil, err
 	}
 	spec.SeedsFinderServices = seedsFinderServices
+
+	// RosterBlacklist
+	if len(status.RosterBlacklist) != 0 {
+		rosterBlacklist := []string{}
+		if err := lib.DeepCopy(
+			&rosterBlacklist, &status.RosterBlacklist,
+		); err != nil {
+			return nil, err
+		}
+		spec.RosterBlacklist = rosterBlacklist
+	}
 
 	return &spec, nil
 }
