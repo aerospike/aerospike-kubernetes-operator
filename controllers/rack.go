@@ -569,7 +569,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			)
 		}
 
-		// TODO: Do we need to check for unavailable/dead partition and reset cluster size?
 		if err := r.validateClusterState(aerospikePolicy); err != nil {
 			// reset cluster size
 			newSize := *found.Spec.Replicas + 1

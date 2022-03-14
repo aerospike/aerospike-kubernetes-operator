@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -10,36 +11,42 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
-func (r *SingleClusterReconciler) getAndSetRoster(aerospikePolicy *as.ClientPolicy) error {
-	scNsList := r.getSCNamespaces()
-	r.Log.Info("Strong-consistency namespaces list", "namespaces", scNsList)
+func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy) error {
 
 	hostConns, err := r.newAllHostConn()
 	if err != nil {
 		return err
 	}
 
+	scNsList, err := r.getSCNamespaces(hostConns, policy)
+	if err != nil {
+		return err
+	}
+
+	r.Log.Info("Strong-consistency namespaces list", "namespaces", scNsList)
+
 	for _, scNs := range scNsList {
-		if err := r.validateClusterNsState(hostConns, aerospikePolicy, scNs); err != nil {
+		if err := r.validateClusterNsState(hostConns, policy, scNs); err != nil {
 			return fmt.Errorf("cluster namespace state not good, can not set roster: %v", err)
 		}
 
 		// Setting roster is skipped if roster already set
-		rosterNodes, err := r.getRosterNodesForNs(hostConns, aerospikePolicy, scNs)
+		rosterNodes, err := r.getRosterNodesForNs(hostConns, policy, scNs)
 		if err != nil {
 			return err
 		}
 
+		// TODO: can sc namespaces be different in every rack..? in that case, observed_node will not be same for all
 		if !isObservedNodesValid(rosterNodes) {
 			return fmt.Errorf("roster observed_nodes not same for all the nodes: %v", rosterNodes)
 		}
 
-		err = r.setRosterForNs(hostConns, aerospikePolicy, scNs, rosterNodes)
+		err = r.setRosterForNs(hostConns, policy, scNs, rosterNodes)
 		if err != nil {
 			return err
 		}
 
-		err = r.runRecluster(hostConns, aerospikePolicy)
+		err = r.runRecluster(hostConns, policy)
 		if err != nil {
 			return err
 		}
@@ -49,28 +56,43 @@ func (r *SingleClusterReconciler) getAndSetRoster(aerospikePolicy *as.ClientPoli
 	return nil
 }
 
-// TODO: take sc namespaces from rack
-func (r *SingleClusterReconciler) getSCNamespaces() []string {
+func (r *SingleClusterReconciler) getSCNamespaces(hostConns []*deployment.HostConn, policy *as.ClientPolicy) ([]string, error) {
 	var scNsList []string
 
-	nsConfInterfaceList := r.aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-	for _, nsConfInterface := range nsConfInterfaceList {
-		nsConf := nsConfInterface.(map[string]interface{})
-		sc, ok := nsConf["strong-consistency"]
-		if ok && sc.(bool) {
-			scNsList = append(scNsList, nsConf["name"].(string))
+	for _, hostConn := range hostConns {
+		namespaces, err := r.getNamespaces(policy, hostConn)
+		if err != nil {
+			return nil, err
+		}
+
+		var nsList []string
+		for _, ns := range namespaces {
+			isSC, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
+			if err != nil {
+				return nil, err
+			}
+			if isSC {
+				nsList = append(nsList, ns)
+			}
+		}
+
+		if len(scNsList) == 0 {
+			scNsList = nsList
+		}
+		if !reflect.DeepEqual(scNsList, nsList) {
+			return nil, fmt.Errorf("SC namespaces list can not be different for nodes. node1 %v, node2 %v", scNsList, nsList)
 		}
 	}
-	return scNsList
+	return scNsList, nil
 }
 
-func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.HostConn, aerospikePolicy *as.ClientPolicy, ns string) (map[string]map[string]string, error) {
+func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.HostConn, policy *as.ClientPolicy, ns string) (map[string]map[string]string, error) {
 	r.Log.Info("Getting roster", "namespace", ns)
 
 	rosterNodes := map[string]map[string]string{}
 
 	for _, hostConn := range hostConns {
-		kvmap, err := r.getRoster(hostConn, aerospikePolicy, ns)
+		kvmap, err := r.getRoster(hostConn, policy, ns)
 		if err != nil {
 			return nil, err
 		}
@@ -109,7 +131,7 @@ func isObservedNodesValid(rosterNodes map[string]map[string]string) bool {
 	return true
 }
 
-func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostConn, aerospikePolicy *as.ClientPolicy, ns string, rosterNodes map[string]map[string]string) error {
+func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostConn, policy *as.ClientPolicy, ns string, rosterNodes map[string]map[string]string) error {
 	r.Log.Info("Setting roster", "namespace", ns, "roster", rosterNodes)
 
 	for _, hostConn := range hostConns {
@@ -137,7 +159,7 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 			continue
 		}
 
-		if err := r.setRoster(hostConn, aerospikePolicy, ns, newObservedNodes); err != nil {
+		if err := r.setRoster(hostConn, policy, ns, newObservedNodes); err != nil {
 			return err
 		}
 	}
@@ -145,11 +167,11 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 	return nil
 }
 
-func (r *SingleClusterReconciler) runRecluster(hostConns []*deployment.HostConn, aerospikePolicy *as.ClientPolicy) error {
+func (r *SingleClusterReconciler) runRecluster(hostConns []*deployment.HostConn, policy *as.ClientPolicy) error {
 	r.Log.Info("Run recluster")
 
 	for _, hostConn := range hostConns {
-		if err := r.recluster(hostConn, aerospikePolicy); err != nil {
+		if err := r.recluster(hostConn, policy); err != nil {
 			return err
 		}
 	}
@@ -157,16 +179,20 @@ func (r *SingleClusterReconciler) runRecluster(hostConns []*deployment.HostConn,
 	return nil
 }
 
-func (r *SingleClusterReconciler) validateClusterState(aerospikePolicy *as.ClientPolicy) error {
-	scNsList := r.getSCNamespaces()
+func (r *SingleClusterReconciler) validateClusterState(policy *as.ClientPolicy) error {
 
 	hostConns, err := r.newAllHostConn()
 	if err != nil {
 		return err
 	}
 
+	scNsList, err := r.getSCNamespaces(hostConns, policy)
+	if err != nil {
+		return err
+	}
+
 	for _, ns := range scNsList {
-		if err := r.validateClusterNsState(hostConns, aerospikePolicy, ns); err != nil {
+		if err := r.validateClusterNsState(hostConns, policy, ns); err != nil {
 			return err
 		}
 	}
@@ -174,12 +200,12 @@ func (r *SingleClusterReconciler) validateClusterState(aerospikePolicy *as.Clien
 	return nil
 }
 
-func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment.HostConn, aerospikePolicy *as.ClientPolicy, ns string) error {
+func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment.HostConn, policy *as.ClientPolicy, ns string) error {
 	r.Log.Info("Validate Cluster namespace State. Looking for unavailable or dead partitions", "namespaces", ns)
 
 	for _, hostConn := range hostConns {
 
-		kvmap, err := r.namespaceStats(hostConn, aerospikePolicy, ns)
+		kvmap, err := r.namespaceStats(hostConn, policy, ns)
 		if err != nil {
 			return err
 		}
@@ -203,9 +229,9 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 
 // Info calls
 
-func (r *SingleClusterReconciler) recluster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy) error {
+func (r *SingleClusterReconciler) recluster(hostConn *deployment.HostConn, policy *as.ClientPolicy) error {
 	cmd := "recluster:"
-	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
 	if err != nil {
 		return err
 	}
@@ -220,9 +246,9 @@ func (r *SingleClusterReconciler) recluster(hostConn *deployment.HostConn, aeros
 	return nil
 }
 
-func (r *SingleClusterReconciler) namespaceStats(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, namespace string) (map[string]string, error) {
+func (r *SingleClusterReconciler) namespaceStats(hostConn *deployment.HostConn, policy *as.ClientPolicy, namespace string) (map[string]string, error) {
 	cmd := fmt.Sprintf("namespace/%s", namespace)
-	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +260,9 @@ func (r *SingleClusterReconciler) namespaceStats(hostConn *deployment.HostConn, 
 	return ParseInfoIntoMap(cmdOutput, ";", "=")
 }
 
-func (r *SingleClusterReconciler) setRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, namespace, observedNodes string) error {
+func (r *SingleClusterReconciler) setRoster(hostConn *deployment.HostConn, policy *as.ClientPolicy, namespace, observedNodes string) error {
 	cmd := fmt.Sprintf("roster-set:namespace=%s;nodes=%s", namespace, observedNodes)
-	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
 	if err != nil {
 		return err
 	}
@@ -252,9 +278,9 @@ func (r *SingleClusterReconciler) setRoster(hostConn *deployment.HostConn, aeros
 	return nil
 }
 
-func (r *SingleClusterReconciler) getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, namespace string) (map[string]string, error) {
+func (r *SingleClusterReconciler) getRoster(hostConn *deployment.HostConn, policy *as.ClientPolicy, namespace string) (map[string]string, error) {
 	cmd := fmt.Sprintf("roster:namespace=%s", namespace)
-	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
 	if err != nil {
 		return nil, err
 	}
