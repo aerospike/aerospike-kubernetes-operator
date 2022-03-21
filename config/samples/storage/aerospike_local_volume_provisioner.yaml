@@ -12,8 +12,7 @@ data:
        hostDir: /mnt/disks
        mountDir:  /mnt/disks
        blockCleanerCommand:
-         - "/scripts/shred.sh"
-         - "2"
+         - "/scripts/blkdiscard.sh"
        volumeMode: Block
 ---
 apiVersion: apps/v1
