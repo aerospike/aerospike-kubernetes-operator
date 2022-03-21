@@ -191,9 +191,35 @@ func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
+	// Note: this storage will be used by dynamically added namespace after deployment of cluster
+	dynamicNsPath := "/test/dev/dynamicns"
+	dynamicNsVolume := asdbv1beta1.VolumeSpec{
+		Name: "dynamicns",
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: dynamicNsPath,
+		},
+	}
+	dynamicNs := map[string]interface{}{
+		"name":               "dynamicns",
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{dynamicNsPath},
+		},
+	}
+
 	BeforeEach(
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, dynamicNsVolume)
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -237,6 +263,20 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					err = rollingRestartClusterTest(
 						logger, k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Updating NamespaceStorage")
+
+					err = rollingRestartClusterByUpdatingNamespaceStorageTest(
+						logger, k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Adding Namespace Dynamically")
+
+					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
+						logger, k8sClient, ctx, dynamicNs, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -328,51 +368,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 						"AerospikeConfig", func() {
 							Context(
 								"Namespace", func() {
-									It(
-										"UpdateNamespaceList: should fail for updating namespace list. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-											nsList = append(
-												nsList, map[string]interface{}{
-													"name":        "bar",
-													"memory-size": 2000955200,
-													"storage-engine": map[string]interface{}{
-														"type":    "device",
-														"devices": []interface{}{"/test/dev/xvdf"},
-													},
-												},
-											)
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-
-										},
-									)
-									It(
-										"UpdateStorageEngine: should fail for updating namespace storage-engine. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
-									)
 									It(
 										"UpdateReplicationFactor: should fail for updating namespace replication-factor. Cannot be updated",
 										func() {

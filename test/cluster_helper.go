@@ -99,6 +99,7 @@ func rollingRestartClusterTest(
 	if _, ok := aeroCluster.Spec.AerospikeConfig.Value["service"]; !ok {
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
 	}
+
 	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
 
 	err = k8sClient.Update(ctx, aeroCluster)
@@ -119,6 +120,59 @@ func rollingRestartClusterTest(
 	return validateAerospikeConfigServiceClusterUpdate(
 		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
 	)
+}
+
+func rollingRestartClusterByUpdatingNamespaceStorageTest(
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Change namespace storage-engine
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["data-in-memory"] = true
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
+}
+
+func rollingRestartClusterByAddingNamespaceDynamicallyTest(
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, dynamicNs map[string]interface{},
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Change namespace list
+	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList = append(nsList, dynamicNs)
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
 }
 
 func validateAerospikeConfigServiceClusterUpdate(
