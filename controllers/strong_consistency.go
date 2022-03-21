@@ -11,6 +11,14 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
+var (
+	rosterKeyObservedNodes     = "observed_nodes"
+	rosterKeyRosterNodes       = "roster"
+	nsKeyUnavailablePartitions = "unavailable_partitions"
+	nsKeyDeadPartitions        = "dead_partitions"
+	nsKeyStrongConsistency     = "strong-consistency"
+)
+
 func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy) error {
 
 	hostConns, err := r.newAllHostConn()
@@ -18,6 +26,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy) error
 		return err
 	}
 
+	// TODO: Should we allow diff sc nodes on different nodes. What if a sc ns is added dynamically?
 	scNsList, err := r.getSCNamespaces(hostConns, policy)
 	if err != nil {
 		return err
@@ -102,14 +111,6 @@ func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.Ho
 
 	r.Log.V(1).Info("roster nodes in cluster", "roster_nodes", rosterNodes)
 
-	// // TODO: What if some nodes don't have a namespace. observed_nodes will be less than size in that case.
-	// // There can be blacklisted nodes also
-	// // // Check if observed nodes list has all the cluster nodes
-	// // obNodesList := strings.Split(tempObNode, ",")
-	// // if len(obNodesList) != int(r.aeroCluster.Spec.Size) {
-	// // 	return "", fmt.Errorf("observed_nodes list does not have all the cluster nodes, observed_nodes: %v, cluster_size: %v", observedNodes, r.aeroCluster.Spec.Size)
-	// // }
-
 	// return tempObNode, nil
 	return rosterNodes, nil
 }
@@ -118,7 +119,7 @@ func isObservedNodesValid(rosterNodes map[string]map[string]string) bool {
 	var tempObNodes string
 
 	for _, rosterNodesMap := range rosterNodes {
-		observedNodes := rosterNodesMap["observed_nodes"]
+		observedNodes := rosterNodesMap[rosterKeyObservedNodes]
 		// Check if all nodes have same observed nodes list
 		if tempObNodes == "" {
 			tempObNodes = observedNodes
@@ -136,7 +137,7 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 
 	for _, hostConn := range hostConns {
 
-		observedNodes := rosterNodes[hostConn.String()]["observed_nodes"]
+		observedNodes := rosterNodes[hostConn.String()][rosterKeyObservedNodes]
 
 		// Remove blacklisted node from observed_nodes
 		observedNodesList := strings.Split(observedNodes, ",")
@@ -152,7 +153,7 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 
 		newObservedNodes := strings.Join(newObservedNodesList, ",")
 
-		currentRoster := rosterNodes[hostConn.String()]["roster"]
+		currentRoster := rosterNodes[hostConn.String()][rosterKeyRosterNodes]
 
 		if newObservedNodes == currentRoster {
 			r.Log.Info("Roster already set for the node. Skipping", "node", hostConn.String())
@@ -205,7 +206,7 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 
 	for _, hostConn := range hostConns {
 
-		kvmap, err := r.namespaceStats(hostConn, policy, ns)
+		kvmap, err := r.getNamespaceStats(hostConn, policy, ns)
 		if err != nil {
 			return err
 		}
@@ -215,16 +216,67 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 		// Will turn into dead_partitions if still unavailable when all roster nodes are present.
 		// Some partitions would typically be unavailable under some cluster split situations or
 		// when removing more than replication-factor number of nodes from a strong-consistency enabled namespace
-		if kvmap["unavailable_partitions"] != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero unavailable_partitions %v", ns, kvmap["unavailable_partitions"])
+		if kvmap[nsKeyUnavailablePartitions] != "0" {
+			return fmt.Errorf("cluster namespace %s has non-zero unavailable_partitions %v", ns, kvmap[nsKeyUnavailablePartitions])
 		}
 
 		// https://docs.aerospike.com/reference/metrics#dead_partitions
-		if kvmap["dead_partitions"] != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero dead_partitions %v", ns, kvmap["dead_partitions"])
+		if kvmap[nsKeyDeadPartitions] != "0" {
+			return fmt.Errorf("cluster namespace %s has non-zero dead_partitions %v", ns, kvmap[nsKeyDeadPartitions])
 		}
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) isNodeInRoster(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
+	nodeID, err := r.getNodeID(policy, hostConn)
+	if err != nil {
+		return false, err
+	}
+
+	rosterNodesMap, err := r.getRoster(hostConn, policy, ns)
+	if err != nil {
+		return false, err
+	}
+	r.Log.Info("Check if node is in roster or not", "node", hostConn.String(), "roster", rosterNodesMap)
+
+	rosterStr := rosterNodesMap[rosterKeyRosterNodes]
+	rosterList := strings.Split(rosterStr, ",")
+
+	for _, roster := range rosterList {
+		rosterNodeID := strings.Split(roster, "@")[0]
+		if nodeID == rosterNodeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *SingleClusterReconciler) isNamespaceSCEnabled(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
+
+	cmd := fmt.Sprintf("get-config:context=namespace;id=%s", ns)
+
+	res, err := hostConn.ASConn.RunInfo(policy, cmd)
+	if err != nil {
+		return false, err
+	}
+
+	r.Log.Info("Check if namespace is SC namespace", "ns", ns, "nsstat", res)
+
+	configs, err := ParseInfoIntoMap(res[cmd], ";", "=")
+	if err != nil {
+		return false, err
+	}
+	scstr, ok := configs[nsKeyStrongConsistency]
+	if !ok {
+		return false, fmt.Errorf("strong-consistency config not found, config %v", res)
+	}
+	scbool, err := strconv.ParseBool(scstr)
+	if err != nil {
+		return false, err
+	}
+
+	return scbool, nil
 }
 
 // Info calls
@@ -246,7 +298,7 @@ func (r *SingleClusterReconciler) recluster(hostConn *deployment.HostConn, polic
 	return nil
 }
 
-func (r *SingleClusterReconciler) namespaceStats(hostConn *deployment.HostConn, policy *as.ClientPolicy, namespace string) (map[string]string, error) {
+func (r *SingleClusterReconciler) getNamespaceStats(hostConn *deployment.HostConn, policy *as.ClientPolicy, namespace string) (map[string]string, error) {
 	cmd := fmt.Sprintf("namespace/%s", namespace)
 	res, err := hostConn.ASConn.RunInfo(policy, cmd)
 	if err != nil {
@@ -290,57 +342,6 @@ func (r *SingleClusterReconciler) getRoster(hostConn *deployment.HostConn, polic
 	r.Log.V(1).Info("Run info command", "host", hostConn.String(), "cmd", cmd, "output", cmdOutput)
 
 	return ParseInfoIntoMap(cmdOutput, ":", "=")
-}
-
-func (r *SingleClusterReconciler) isNodeInRoster(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
-	nodeID, err := r.getNodeID(policy, hostConn)
-	if err != nil {
-		return false, err
-	}
-
-	rosterNodesMap, err := r.getRoster(hostConn, policy, ns)
-	if err != nil {
-		return false, err
-	}
-	r.Log.Info("Check if node is in roster or not", "node", hostConn.String(), "roster", rosterNodesMap)
-
-	rosterStr := rosterNodesMap["roster"]
-	rosterList := strings.Split(rosterStr, ",")
-
-	for _, roster := range rosterList {
-		rosterNodeID := strings.Split(roster, "@")[0]
-		if nodeID == rosterNodeID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (r *SingleClusterReconciler) isNamespaceSCEnabled(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
-
-	cmd := fmt.Sprintf("get-config:context=namespace;id=%s", ns)
-
-	res, err := hostConn.ASConn.RunInfo(policy, cmd)
-	if err != nil {
-		return false, err
-	}
-
-	r.Log.Info("Check if namespace is SC namespace", "ns", ns, "nsstat", res)
-
-	configs, err := ParseInfoIntoMap(res[cmd], ";", "=")
-	if err != nil {
-		return false, err
-	}
-	scstr, ok := configs["strong-consistency"]
-	if !ok {
-		return false, fmt.Errorf("strong-consistency config not found, config %v", res)
-	}
-	scbool, err := strconv.ParseBool(scstr)
-	if err != nil {
-		return false, err
-	}
-
-	return scbool, nil
 }
 
 func (r *SingleClusterReconciler) getNodeID(policy *as.ClientPolicy, hostConn *deployment.HostConn) (string, error) {

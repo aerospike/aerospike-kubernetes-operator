@@ -134,6 +134,7 @@ func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolic
 	const retryInterval = time.Second * 10
 
 	var isStable bool
+	var err error
 	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
 		r.Log.V(1).Info("Waiting for migrations to be zero")
@@ -142,13 +143,14 @@ func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolic
 		// This should fail if coldstart is going on.
 		// Info command in coldstarting node should give error, is it? confirm.
 
-		isStable, err := deployment.IsClusterAndStable(
+		isStable, err = deployment.IsClusterAndStable(
 			r.Log, r.getClientPolicy(), allHostConns,
 		)
 		if err != nil {
 			return reconcileError(err)
 		}
 		if isStable {
+			r.Log.V(1).Info("Cluster is now stable")
 			break
 		}
 	}
