@@ -39,7 +39,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						zones, err := getZones(k8sClient)
+						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 
 						zone1 := zones[0]

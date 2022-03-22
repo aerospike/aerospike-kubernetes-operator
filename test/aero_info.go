@@ -220,9 +220,9 @@ func getNodeList(ctx goctx.Context, k8sClient client.Client) (*corev1.NodeList, 
 	return nodeList, nil
 }
 
-func getZones(k8sClient client.Client) ([]string, error) {
+func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
-	nodes, err := getNodeList(goctx.TODO(), k8sClient)
+	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return nil, err
 	}
@@ -236,8 +236,8 @@ func getZones(k8sClient client.Client) ([]string, error) {
 	return zones, nil
 }
 
-func getRegion(k8sClient client.Client) (string, error) {
-	nodes, err := getNodeList(goctx.TODO(), k8sClient)
+func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
+	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return "", err
 	}

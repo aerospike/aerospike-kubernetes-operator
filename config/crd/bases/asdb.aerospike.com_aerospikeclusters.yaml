@@ -5364,7 +5364,6 @@ spec:
             properties:
               aerospikeAccessControl:
                 description: AerospikeAccessControl has the Aerospike roles and users
-                  definitions.
                 properties:
                   adminPolicy:
                     description: AerospikeClientAdminPolicy specify the aerospike

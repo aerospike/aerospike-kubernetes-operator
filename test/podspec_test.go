@@ -56,7 +56,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						zones, err := getZones(k8sClient)
+						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 						// Deploy everything in single rack
 						aeroCluster := createDummyAerospikeCluster(
@@ -113,7 +113,7 @@ var _ = Describe(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					zones, err := getZones(k8sClient)
+					zones, err := getZones(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 					zone := zones[0]
 					if len(zones) > 1 {
@@ -344,7 +344,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.Sidecars[0].Image = newImage
 
 					// Update affinity
-					region, err := getRegion(k8sClient)
+					region, err := getRegion(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
 					desiredAffinity := corev1.Affinity{
