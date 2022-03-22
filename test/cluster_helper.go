@@ -275,10 +275,7 @@ func validateAerospikeConfigServiceClusterCanaryUpdate(
 		return err
 	}
 
-	totalUpdateEffectedPods, err := getUpdateEffectedPods(aeroCluster)
-	if err != nil {
-		return err
-	}
+	totalUpdateEffectedPods := utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size)
 	updatedPodsCounter := 0
 LOOP:
 	for _, pod := range aeroCluster.Status.Pods {
@@ -325,10 +322,7 @@ func validateCanaryClusterUgrade(
 	if err != nil {
 		return err
 	}
-	totalUpdateEffectedPods, err := getUpdateEffectedPods(aeroCluster)
-	if err != nil {
-		return err
-	}
+	totalUpdateEffectedPods := utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size)
 	updatedPodsCounter := 0
 
 	for _, pod := range aeroCluster.Status.Pods {

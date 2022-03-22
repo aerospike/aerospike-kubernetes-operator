@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
@@ -469,14 +468,4 @@ func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
 		racks = append(racks, asdbv1beta1.Rack{ID: rID})
 	}
 	return racks
-}
-
-func getUpdateEffectedPods(aeroCluster *asdbv1beta1.AerospikeCluster) (int, error) {
-	effectedPods := 0
-
-	rackStateList := getConfiguredRackStateList(aeroCluster)
-	for _, rackState := range rackStateList {
-		effectedPods += utils.GetRollOutPodsListSize(int(aeroCluster.Spec.RollOutPercentage), rackState.Size)
-	}
-	return effectedPods, nil
 }

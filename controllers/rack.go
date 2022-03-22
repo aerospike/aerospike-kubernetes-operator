@@ -304,7 +304,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	bool, error,
 ) {
-	podList, err := r.getTargetPodList(rackState.Rack.ID)
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return false, fmt.Errorf("failed to list pods: %v", err)
 	}
@@ -434,7 +434,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getTargetPodList(rackState.Rack.ID)
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return statefulSet, reconcileError(
 			fmt.Errorf(
@@ -588,7 +588,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
 
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getTargetPodList(rackState.Rack.ID)
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
@@ -976,18 +976,6 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) ([]corev1.Po
 	return sortedList, nil
 }
 
-func (r *SingleClusterReconciler) getTargetPodList(rackID int) ([]corev1.Pod, error) {
-	podList, err := r.getOrderedRackPodList(rackID)
-	if err != nil {
-		return nil, err
-	}
-	if len(podList) <= 1 {
-		return podList, nil
-	}
-	tmp := podList[:r.getRollOutPods(len(podList))]
-	return tmp, nil
-}
-
 func (r *SingleClusterReconciler) getCurrentRackList() (
 	[]asdbv1beta1.Rack, error,
 ) {
@@ -1059,8 +1047,8 @@ func splitRacks(nodes, racks int) []int {
 
 func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
 	topology := splitRacks(
-		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
-	)
+		utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size),
+		len(aeroCluster.Spec.RackConfig.Racks))
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
 		if topology[idx] == 0 {

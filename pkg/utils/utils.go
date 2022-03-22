@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -176,6 +177,6 @@ func RemoveString(slice []string, s string) (result []string) {
 	return
 }
 
-func GetRollOutPodsListSize(rollOutPercentage, rackSize int) int {
-	return int((float64(rollOutPercentage) / 100.0) * float64(rackSize))
+func GetRollOutPodsListSize(rollOutPercentage, clusterSize int32) int {
+	return int(math.Floor(float64(rollOutPercentage)/100.0) * float64(clusterSize))
 }
