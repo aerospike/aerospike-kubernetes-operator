@@ -35,7 +35,7 @@ spec:
             description: AerospikeClusterSpec defines the desired state of AerospikeCluster
             properties:
               aerospikeAccessControl:
-                description: Has the Aerospike roles and users definitions.
+                description: AerospikeAccessControl has the Aerospike roles and users
                 properties:
                   adminPolicy:
                     description: AerospikeClientAdminPolicy specify the aerospike
