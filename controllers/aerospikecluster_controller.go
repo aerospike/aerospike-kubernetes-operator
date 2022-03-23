@@ -71,8 +71,9 @@ type AerospikeClusterReconciler struct {
 
 // RackState contains the rack configuration and rack size.
 type RackState struct {
-	Rack asdbv1beta1.Rack
-	Size int
+	Rack                   asdbv1beta1.Rack
+	Size                   int
+	UpdateEffectedRackSize int
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete

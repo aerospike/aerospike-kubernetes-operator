@@ -304,7 +304,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	bool, error,
 ) {
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(&rackState)
 	if err != nil {
 		return false, fmt.Errorf("failed to list pods: %v", err)
 	}
@@ -434,7 +434,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	ignorablePods []corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(&rackState)
 	if err != nil {
 		return statefulSet, reconcileError(
 			fmt.Errorf(
@@ -588,7 +588,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
 
 	// List the pods for this aeroCluster's statefulset
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	podList, err := r.getTargetPodList(&rackState)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
@@ -976,6 +976,18 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) ([]corev1.Po
 	return sortedList, nil
 }
 
+func (r *SingleClusterReconciler) getTargetPodList(rackState *RackState) ([]corev1.Pod, error) {
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(podList) <= 1 {
+		return podList, nil
+	}
+	tmp := podList[:rackState.UpdateEffectedRackSize]
+	return tmp, nil
+}
+
 func (r *SingleClusterReconciler) getCurrentRackList() (
 	[]asdbv1beta1.Rack, error,
 ) {
@@ -1046,9 +1058,13 @@ func splitRacks(nodes, racks int) []int {
 }
 
 func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
+	rollOutClusterSize := utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size)
+	fmt.Printf("TEST: rollOutClusterSize %d\n", rollOutClusterSize)
 	topology := splitRacks(
-		utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size),
+		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
+	updateEffectedTopology := splitRacks(rollOutClusterSize,
 		len(aeroCluster.Spec.RackConfig.Racks))
+
 	var rackStateList []RackState
 	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
 		if topology[idx] == 0 {
@@ -1057,14 +1073,16 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 		}
 		rackStateList = append(
 			rackStateList, RackState{
-				Rack: rack,
-				Size: topology[idx],
+				Rack:                   rack,
+				Size:                   topology[idx],
+				UpdateEffectedRackSize: updateEffectedTopology[idx],
 			},
 		)
 	}
 	return rackStateList
 }
 
+//TODO David add function here
 // TODO: These func are available in client-go@v1.5.2, for now creating our own
 func setDefaultsSecretVolumeSource(obj *corev1.SecretVolumeSource) {
 	if obj.DefaultMode == nil {
