@@ -358,7 +358,10 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
 	// This is not necessary since scale-up would clean dangling pod status. However, done here for general
 	// cleanliness.
-	rackStateList := getConfiguredRackStateList(r.aeroCluster)
+	rackStateList, err := r.getConfiguredRackStateList()
+	if err != nil {
+		return err
+	}
 	for _, state := range rackStateList {
 		pods, err := r.getRackPodList(state.Rack.ID)
 		if err != nil {
@@ -513,4 +516,34 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 		}
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) getConfiguredRackStateList() ([]RackState, error) {
+	clusterPodList, err := r.getClusterPodList()
+	if err != nil {
+		return nil, err
+	}
+	rollOutClusterSize := utils.GetRollOutPodsListSize(r.aeroCluster.Spec.RollOutPercentage, int32(len(clusterPodList.Items)))
+	fmt.Printf("TEST: rollOutClusterSize %d\n", rollOutClusterSize)
+	topology := splitRacks(
+		int(r.aeroCluster.Spec.Size), len(r.aeroCluster.Spec.RackConfig.Racks))
+	updateEffectedTopology := splitRacks(rollOutClusterSize,
+		len(r.aeroCluster.Spec.RackConfig.Racks))
+	fmt.Printf("TEST: topology %v\n", topology)
+	fmt.Printf("TEST: updateEffectedTopology: %v\n", updateEffectedTopology)
+	var rackStateList []RackState
+	for idx, rack := range r.aeroCluster.Spec.RackConfig.Racks {
+		if topology[idx] == 0 {
+			// Skip the rack, if it's size is 0
+			continue
+		}
+		rackStateList = append(
+			rackStateList, RackState{
+				Rack:                   rack,
+				Size:                   topology[idx],
+				UpdateEffectedRackSize: updateEffectedTopology[idx],
+			},
+		)
+	}
+	return rackStateList, nil
 }

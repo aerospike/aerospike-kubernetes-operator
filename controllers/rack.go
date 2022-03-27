@@ -25,7 +25,10 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	var scaledDownRackList []RackState
 	var res reconcileResult
 
-	rackStateList := getConfiguredRackStateList(r.aeroCluster)
+	rackStateList, err := r.getConfiguredRackStateList()
+	if err != nil {
+		return reconcileError(err)
+	}
 	racksToDelete, err := r.getRacksToDelete(rackStateList)
 	if err != nil {
 		return reconcileError(err)
@@ -978,12 +981,14 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) ([]corev1.Po
 
 func (r *SingleClusterReconciler) getTargetPodList(rackState *RackState) ([]corev1.Pod, error) {
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	fmt.Printf("TEST: podlist: %v\n", len(podList))
 	if err != nil {
 		return nil, err
 	}
 	if len(podList) <= 1 {
 		return podList, nil
 	}
+	fmt.Printf("TEST: UpdateEffectedRackSize: %v\n", rackState.UpdateEffectedRackSize)
 	tmp := podList[:rackState.UpdateEffectedRackSize]
 	return tmp, nil
 }
@@ -1057,32 +1062,6 @@ func splitRacks(nodes, racks int) []int {
 	return topology
 }
 
-func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
-	rollOutClusterSize := utils.GetRollOutPodsListSize(aeroCluster.Spec.RollOutPercentage, aeroCluster.Spec.Size)
-	fmt.Printf("TEST: rollOutClusterSize %d\n", rollOutClusterSize)
-	topology := splitRacks(
-		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
-	updateEffectedTopology := splitRacks(rollOutClusterSize,
-		len(aeroCluster.Spec.RackConfig.Racks))
-
-	var rackStateList []RackState
-	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
-		if topology[idx] == 0 {
-			// Skip the rack, if it's size is 0
-			continue
-		}
-		rackStateList = append(
-			rackStateList, RackState{
-				Rack:                   rack,
-				Size:                   topology[idx],
-				UpdateEffectedRackSize: updateEffectedTopology[idx],
-			},
-		)
-	}
-	return rackStateList
-}
-
-//TODO David add function here
 // TODO: These func are available in client-go@v1.5.2, for now creating our own
 func setDefaultsSecretVolumeSource(obj *corev1.SecretVolumeSource) {
 	if obj.DefaultMode == nil {

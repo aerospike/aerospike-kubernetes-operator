@@ -286,7 +286,10 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	}
 
 	podNames := make([]string, 0)
-	rackStateList := getConfiguredRackStateList(r.aeroCluster)
+	rackStateList, err := r.getConfiguredRackStateList()
+	if err != nil {
+		return nil, err
+	}
 
 	// Use all pods running or to be launched for each rack.
 	for _, rackState := range rackStateList {
