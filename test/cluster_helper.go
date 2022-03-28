@@ -134,7 +134,7 @@ func rollingRestartClusterCanaryDeploymentTest(
 	if _, ok := aeroCluster.Spec.AerospikeConfig.Value["service"]; !ok {
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
 	}
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {

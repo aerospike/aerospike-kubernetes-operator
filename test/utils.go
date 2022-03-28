@@ -17,6 +17,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -271,10 +272,6 @@ func isClusterStateValid(
 			break
 		}
 
-		pkgLog.Info(
-			"Cluster pod's image %s not same as spec %s", pod.Image,
-			aeroCluster.Spec.Image,
-		)
 	}
 	return true
 }
@@ -510,5 +507,33 @@ func getAeroClusterConfig(
 		return createAerospikeClusterPost460(
 			namespace, 2, image,
 		), nil
+	}
+}
+
+func getDynamicClusterNamespace() map[string]interface{} {
+	return map[string]interface{}{
+		"name":               "dynamicns",
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{"/test/dev/dynamicns"},
+		},
+	}
+}
+
+func getDynamicNameSpaceVolume() *asdbv1beta1.VolumeSpec {
+	return &asdbv1beta1.VolumeSpec{
+		Name: "dynamicns",
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: "/test/dev/dynamicns",
+		},
 	}
 }

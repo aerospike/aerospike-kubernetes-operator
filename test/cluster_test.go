@@ -18,26 +18,26 @@ var _ = Describe(
 		ctx := goctx.TODO()
 
 		// Cluster lifecycle related
-		//Context(
-		//	"DeployClusterPost490", func() {
-		//		DeployClusterForAllImagesPost490(ctx)
-		//	},
-		//)
-		//Context(
-		//	"DeployClusterDiffStorageMultiPodPerHost", func() {
-		//		DeployClusterForDiffStorageTest(ctx, 2, true)
-		//	},
-		//)
-		//Context(
-		//	"DeployClusterDiffStorageSinglePodPerHost", func() {
-		//		DeployClusterForDiffStorageTest(ctx, 2, false)
-		//	},
-		//)
-		//Context(
-		//	"CommonNegativeClusterValidationTest", func() {
-		//		NegativeClusterValidationTest(ctx)
-		//	},
-		//)
+		Context(
+			"DeployClusterPost490", func() {
+				DeployClusterForAllImagesPost490(ctx)
+			},
+		)
+		Context(
+			"DeployClusterDiffStorageMultiPodPerHost", func() {
+				DeployClusterForDiffStorageTest(ctx, 2, true)
+			},
+		)
+		Context(
+			"DeployClusterDiffStorageSinglePodPerHost", func() {
+				DeployClusterForDiffStorageTest(ctx, 2, false)
+			},
+		)
+		Context(
+			"CommonNegativeClusterValidationTest", func() {
+				NegativeClusterValidationTest(ctx)
+			},
+		)
 		Context(
 			"UpdateCluster", func() {
 				UpdateClusterTest(ctx)
@@ -192,35 +192,13 @@ func UpdateClusterTest(ctx goctx.Context) {
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
 	// Note: this storage will be used by dynamically added namespace after deployment of cluster
-	dynamicNsPath := "/test/dev/dynamicns"
-	dynamicNsVolume := asdbv1beta1.VolumeSpec{
-		Name: "dynamicns",
-		Source: asdbv1beta1.VolumeSource{
-			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-				Size:         resource.MustParse("1Gi"),
-				StorageClass: storageClass,
-				VolumeMode:   v1.PersistentVolumeBlock,
-			},
-		},
-		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-			Path: dynamicNsPath,
-		},
-	}
-	dynamicNs := map[string]interface{}{
-		"name":               "dynamicns",
-		"memory-size":        1000955200,
-		"replication-factor": 2,
-		"storage-engine": map[string]interface{}{
-			"type":    "device",
-			"devices": []interface{}{dynamicNsPath},
-		},
-	}
+	dynamicNsVolume := getDynamicNameSpaceVolume()
+	dynamicNs := getDynamicClusterNamespace()
 
 	BeforeEach(
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, dynamicNsVolume)
-
+			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, *dynamicNsVolume)
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		},
@@ -342,7 +320,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 								k8sClient, ctx, clusterNamespacedName,
 							)
 							Expect(err).ToNot(HaveOccurred())
-
 							newVolumeSpec := []asdbv1beta1.VolumeSpec{
 								{
 									Name: "ns",
@@ -372,7 +349,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 								},
 							}
 							aeroCluster.Spec.Storage.Volumes = newVolumeSpec
-
 							err = k8sClient.Update(ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 						},
