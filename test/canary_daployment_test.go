@@ -77,7 +77,7 @@ var _ = Describe("CanaryDeployment", func() {
 
 				// Will be used in Update also
 				aeroCluster := createDummyAerospikeCluster(
-					clusterNamespacedName, 5,
+					clusterNamespacedName, 3,
 				)
 				// This needs to be changed based on setup. update zone, region, nodeName according to setup
 				racks := []asdbv1beta1.Rack{
