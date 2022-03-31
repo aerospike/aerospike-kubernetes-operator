@@ -10,11 +10,11 @@ BUNDLE_IMG=$1
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
-  *"cloud.google.com"*)
+  *"attachable-volumes-gce-pd"*)
     echo "Installing ssd storage class for GKE."
     kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
     ;;
-  *"eks.amazonaws.com"*)
+  *"attachable-volumes-aws-ebs"*)
     echo "Installing ssd storage class for EKS."
     kubectl apply -f config/samples/storage/eks_ssd_storage_class.yaml
     ;;
@@ -23,20 +23,33 @@ case $(kubectl get nodes -o yaml) in
     ;;
 esac
 
-if ! operator-sdk olm status; then
-  operator-sdk olm install
+IS_OPENSHIFT_CLUSTER=0
+if kubectl get namespace | grep -o -a -m 1 -h openshift > /dev/null; then
+  IS_OPENSHIFT_CLUSTER=1
 fi
 
-kubectl create namespace test
-kubectl create namespace test1
-kubectl create namespace test2
+if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
+  if ! operator-sdk olm status; then
+    operator-sdk olm install
+  fi
+fi
 
 namespaces="test test1 test2"
+for namespace in $namespaces; do
+  kubectl create namespace "$namespace"
+  if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then
+    echo "Adding security constraints"
+    oc adm policy add-scc-to-user anyuid system:serviceaccount:"$namespace":aerospike-operator-controller-manager
+    # TODO: Find minimum privileges that should be granted
+    oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n $namespace
+  fi
+done
+
 operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
 
 for namespace in $namespaces; do
 ATTEMPT=0
-until [ $ATTEMPT -eq 10 ] || kubectl get csv -n $namespace | grep Succeeded; do
+until [ $ATTEMPT -eq 10 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
     sleep 2
     ((ATTEMPT+=1))
 done

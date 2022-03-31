@@ -20,19 +20,20 @@ import (
 	goctx "context"
 	"flag"
 	"fmt"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"testing"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -55,6 +56,8 @@ var k8sClient client.Client
 
 var k8sClientset *kubernetes.Clientset
 
+var cloudProvider CloudProvider
+
 var (
 	scheme = k8Runtime.NewScheme()
 )
@@ -63,13 +66,7 @@ var defaultNetworkType = flag.String("connect-through-network-type", "hostExtern
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
-	RunSpecsWithDefaultAndCustomReporters(
-		t,
-		"Controller Suite",
-		[]Reporter{junitReporter},
-	)
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeEach(func() {
@@ -119,7 +116,13 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		if utils.IsPVCTerminating(&pvc) {
 			continue
 		}
-
+		//if utils.ContainsString(pvc.Finalizers, "kubernetes.io/pvc-protection") {
+		//	pvc.Finalizers = utils.RemoveString(pvc.Finalizers, "kubernetes.io/pvc-protection")
+		//	if err := k8sClient.Patch(goctx.TODO(), &pvc, client.Merge); err != nil {
+		//		return fmt.Errorf("could not patch %s finalizer from following pvc: %s: %w",
+		//			"kubernetes.io/pvc-protection", pvc.Name, err)
+		//	}
+		//}
 		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
 			return fmt.Errorf("could not delete pvc %s: %w", pvc.Name, err)
 		}
@@ -131,7 +134,7 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 // user has to install its own operator then run cleanup and then start this
 
 var _ = BeforeSuite(
-	func(done Done) {
+	func() {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
@@ -191,13 +194,11 @@ var _ = BeforeSuite(
 		// ClusterRoleBinding: aerospike-cluster
 
 		// Need to create storageclass if not created already
-
 		err = setupByUser(k8sClient, ctx)
 		Expect(err).ToNot(HaveOccurred())
-
-		close(done)
-	}, 120,
-)
+		cloudProvider, err = getCloudProvider(ctx, k8sClient)
+		Expect(err).ToNot(HaveOccurred())
+	})
 
 var _ = AfterSuite(
 	func() {
@@ -205,7 +206,6 @@ var _ = AfterSuite(
 		_ = cleanupPVC(k8sClient, namespace)
 		_ = cleanupPVC(k8sClient, multiClusterNs1)
 		_ = cleanupPVC(k8sClient, multiClusterNs2)
-
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
 		err := testEnv.Stop()

@@ -2,9 +2,13 @@ package test
 
 import (
 	goctx "context"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	. "github.com/onsi/ginkgo"
+	"fmt"
+	"reflect"
+
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,56 +34,33 @@ var _ = Describe(
 				It(
 					"Try ClusterWithResourceLifecycle", func() {
 
-						By("DeployClusterWithResource")
-
-						// It should be greater than given in cluster namespace
-						mem := resource.MustParse("2Gi")
-						cpu := resource.MustParse("200m")
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    cpu,
-								corev1.ResourceMemory: mem,
-							},
-							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    cpu,
-								corev1.ResourceMemory: mem,
-							},
-						}
-
+						By("DeployClusterWithoutResource")
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = validateResource(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						res := &corev1.ResourceRequirements{}
 
-						By("UpdateClusterWithResource")
+						By("UpdateClusterResourceLimitMemory")
+						res.Limits = corev1.ResourceList{}
+						res.Limits[corev1.ResourceMemory] = resource.MustParse("2Gi")
+						updateResource(k8sClient, ctx, clusterNamespacedName, res)
 
-						aeroCluster = &asdbv1beta1.AerospikeCluster{}
-						err = k8sClient.Get(
-							goctx.TODO(), types.NamespacedName{
-								Name: clusterName, Namespace: namespace,
-							}, aeroCluster,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						By("UpdateClusterResourceLimitCpu")
 
-						// It should be greater than given in cluster namespace
-						mem = resource.MustParse("1Gi")
-						cpu = resource.MustParse("250m")
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = &corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    cpu,
-								corev1.ResourceMemory: mem,
-							},
-							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    cpu,
-								corev1.ResourceMemory: mem,
-							},
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						res.Limits[corev1.ResourceCPU] = resource.MustParse("300m")
+						updateResource(k8sClient, ctx, clusterNamespacedName, res)
 
-						err = validateResource(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						By("UpdateClusterResourceRequestMemory")
+						res.Requests = corev1.ResourceList{}
+						res.Requests[corev1.ResourceMemory] = resource.MustParse("1Gi")
+						updateResource(k8sClient, ctx, clusterNamespacedName, res)
+
+						By("UpdateClusterResourceRequestCpu")
+						res.Requests[corev1.ResourceCPU] = resource.MustParse("200m")
+						updateResource(k8sClient, ctx, clusterNamespacedName, res)
+
+						By("RemoveResource")
+						updateResource(k8sClient, ctx, clusterNamespacedName, nil)
 
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					},
