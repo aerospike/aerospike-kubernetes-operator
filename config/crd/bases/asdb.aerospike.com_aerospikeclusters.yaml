@@ -36,7 +36,6 @@ spec:
             properties:
               aerospikeAccessControl:
                 description: AerospikeAccessControl has the Aerospike roles and users
-                  definitions.
                 properties:
                   adminPolicy:
                     description: AerospikeClientAdminPolicy specify the aerospike
@@ -121,7 +120,8 @@ spec:
                 - users
                 type: object
               aerospikeConfig:
-                description: AerospikeConfig sets config in aerospike.conf file.
+                description: Sets config in aerospike.conf file. Other configs are
+                  taken as default
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               aerospikeNetworkPolicy:
@@ -199,7 +199,7 @@ spec:
                     type: string
                 type: object
               podSpec:
-                description: Additional configuration for create Aerospike pods.
+                description: Specify additional configuration for the Aerospike pods
                 properties:
                   aerospikeContainer:
                     description: AerospikeContainerSpec configures the aerospike-server
@@ -4940,7 +4940,7 @@ spec:
                 type: integer
               storage:
                 description: Storage specify persistent storage to use for the Aerospike
-                  pods.
+                  pods
                 properties:
                   blockVolumePolicy:
                     description: BlockVolumePolicy contains default policies for block
@@ -5364,7 +5364,6 @@ spec:
             properties:
               aerospikeAccessControl:
                 description: AerospikeAccessControl has the Aerospike roles and users
-                  definitions.
                 properties:
                   adminPolicy:
                     description: AerospikeClientAdminPolicy specify the aerospike

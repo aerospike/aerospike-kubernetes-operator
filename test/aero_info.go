@@ -5,6 +5,7 @@ package test
 // TODO refactor the code in aero_helper.go anc controller_helper.go so that it can be used here.
 import (
 	"context"
+	goctx "context"
 	"fmt"
 	"strings"
 	"time"
@@ -26,12 +27,12 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v5"
 )
 
-type CloudProvider string
+type CloudProvider int
 
 const (
-	CloudProviderUnknown CloudProvider = "Unknown"
-	CloudProviderAWS                   = "AWS"
-	CloudProviderGCP                   = "GCP"
+	CloudProviderUnknown CloudProvider = iota
+	CloudProviderAWS
+	CloudProviderGCP
 )
 
 func getServiceForPod(
@@ -123,7 +124,7 @@ func getEndpointIP(pod *corev1.Pod, k8sClient client.Client, networkType asdbv1b
 		return pod.Status.HostIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
-		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+		err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
 		if err != nil {
 			return "", fmt.Errorf("failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName, pod.Name, err)
 		}
@@ -211,17 +212,17 @@ func getSTSList(
 	return stsList, nil
 }
 
-func getNodeList(k8sClient client.Client) (*corev1.NodeList, error) {
+func getNodeList(ctx goctx.Context, k8sClient client.Client) (*corev1.NodeList, error) {
 	nodeList := &corev1.NodeList{}
-	if err := k8sClient.List(context.TODO(), nodeList); err != nil {
+	if err := k8sClient.List(ctx, nodeList); err != nil {
 		return nil, err
 	}
 	return nodeList, nil
 }
 
-func getZones(k8sClient client.Client) ([]string, error) {
+func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
-	nodes, err := getNodeList(k8sClient)
+	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +236,8 @@ func getZones(k8sClient client.Client) ([]string, error) {
 	return zones, nil
 }
 
-func getRegion(k8sClient client.Client) (string, error) {
-	nodes, err := getNodeList(k8sClient)
+func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
+	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return "", err
 	}
@@ -246,9 +247,9 @@ func getRegion(k8sClient client.Client) (string, error) {
 	return nodes.Items[0].Labels["failure-domain.beta.kubernetes.io/region"], nil
 }
 
-func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
+func getCloudProvider(ctx goctx.Context, k8sClient client.Client) (CloudProvider, error) {
 	labelKeys := map[string]struct{}{}
-	nodes, err := getNodeList(k8sClient)
+	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return CloudProviderUnknown, err
 	}
@@ -262,6 +263,10 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 			}
 			labelKeys[labelKey] = struct{}{}
 		}
+		provider := determineByProviderId(&node)
+		if provider != CloudProviderUnknown {
+			return provider, nil
+		}
 	}
 	var labelKeysSlice []string
 	for labelKey := range labelKeys {
@@ -270,6 +275,16 @@ func getCloudProvider(k8sClient client.Client) (CloudProvider, error) {
 	return CloudProviderUnknown, fmt.Errorf(
 		"can't determin cloud platform by node's labels: %v", labelKeysSlice,
 	)
+}
+
+func determineByProviderId(node *corev1.Node) CloudProvider {
+	if strings.Contains(node.Spec.ProviderID, "gce") {
+		return CloudProviderGCP
+	} else if strings.Contains(node.Spec.ProviderID, "aws") {
+		return CloudProviderAWS
+	}
+	// TODO add cloud provider detection for Azure
+	return CloudProviderUnknown
 }
 
 func newAllHostConn(

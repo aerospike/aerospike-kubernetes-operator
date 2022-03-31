@@ -5,7 +5,7 @@ import (
 	"fmt"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -119,17 +119,15 @@ var _ = Describe(
 )
 
 func createLoadBalancer() *asdbv1beta1.LoadBalancerSpec {
-	cloudProvider, err := getCloudProvider(k8sClient)
-	Expect(err).ToNot(HaveOccurred())
 	lb, validCloud := loadBalancersPerCloud[cloudProvider]
 	Expect(validCloud).To(
 		BeTrue(), fmt.Sprintf(
-			"Can't find LoadBalancer specification for cloud provider \"%s\"",
+			"Can't find LoadBalancer specification for cloud provider \"%d\"",
 			cloudProvider,
 		),
 	)
 	result := &asdbv1beta1.LoadBalancerSpec{}
-	err = lib.DeepCopy(result, lb)
+	err := lib.DeepCopy(result, lb)
 	Expect(err).ToNot(HaveOccurred())
 	return result
 }
