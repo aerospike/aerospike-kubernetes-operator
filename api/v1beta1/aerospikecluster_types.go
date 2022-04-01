@@ -502,6 +502,9 @@ type VolumeSource struct {
 
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
+
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty" protobuf:"bytes,1,opt,name=hostPath"`
 }
 
 type VolumeSpec struct {

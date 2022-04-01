@@ -1276,6 +1276,7 @@ func createVolumeForVolumeAttachment(volume asdbv1beta1.VolumeSpec) corev1.Volum
 			ConfigMap: volume.Source.ConfigMap,
 			Secret:    volume.Source.Secret,
 			EmptyDir:  volume.Source.EmptyDir,
+			HostPath:  volume.Source.HostPath,
 		},
 	}
 }

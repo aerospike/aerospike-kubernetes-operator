@@ -143,21 +143,28 @@ func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
 
 		if volume.Aerospike != nil {
 			// TODO: Do we need to check for other type of sources
-			if volume.Source.PersistentVolume == nil {
-				continue
-			}
-			if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-				blockStorageDeviceList = append(
-					blockStorageDeviceList, volume.Aerospike.Path,
-				)
-			} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-				fileStorageList = append(fileStorageList, volume.Aerospike.Path)
+			if volume.Source.PersistentVolume != nil {
+				if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+					blockStorageDeviceList = append(
+						blockStorageDeviceList, volume.Aerospike.Path,
+					)
+				} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+					fileStorageList = append(fileStorageList, volume.Aerospike.Path)
+				} else {
+					return nil, nil, fmt.Errorf(
+						"invalid volumemode %s, valid volumemods %s, %s",
+						volume.Source.PersistentVolume.VolumeMode,
+						v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
+					)
+				}
+			} else if volume.Source.HostPath != nil {
+				if *volume.Source.HostPath.Type == v1.HostPathBlockDev {
+					blockStorageDeviceList = append(
+						blockStorageDeviceList, volume.Aerospike.Path,
+					)
+				}
 			} else {
-				return nil, nil, fmt.Errorf(
-					"invalid volumemode %s, valid volumemods %s, %s",
-					volume.Source.PersistentVolume.VolumeMode,
-					v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
-				)
+				continue
 			}
 		}
 	}
@@ -434,6 +441,13 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 			}
 		}
 
+		if sourceFound {
+			return fmt.Errorf("can not specify more than 1 source")
+		}
+		sourceFound = true
+	}
+
+	if source.HostPath != nil {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		}
