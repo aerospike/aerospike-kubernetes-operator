@@ -7,11 +7,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe(
@@ -157,3 +156,42 @@ var _ = Describe(
 		)
 	},
 )
+
+func updateResource(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, res *corev1.ResourceRequirements) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	Expect(err).ToNot(HaveOccurred())
+
+	aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = res
+
+	err = updateCluster(k8sClient, ctx, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = validateClusterResource(k8sClient, ctx, clusterNamespacedName, res)
+	Expect(err).ToNot(HaveOccurred())
+}
+
+func validateClusterResource(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, res *corev1.ResourceRequirements) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	stsList, err := getSTSList(aeroCluster, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	// Res can not be null in sts spec
+	if res == nil {
+		res = &corev1.ResourceRequirements{}
+	}
+	for _, sts := range stsList.Items {
+		// aerospike container is 1st container
+		cnt := sts.Spec.Template.Spec.Containers[0]
+
+		if !reflect.DeepEqual(&cnt.Resources, res) {
+			return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)
+		}
+	}
+	return nil
+}

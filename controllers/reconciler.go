@@ -9,6 +9,7 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/status"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -39,6 +40,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
 	)
+	status.ReconciliationManager.SetStatus(status.Running)
 	// Check DeletionTimestamp to see if cluster is being deleted
 	if !r.aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
@@ -100,7 +102,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
 		return reconcile.Result{}, err
 	}
-
+	status.ReconciliationManager.SetStatus(status.Succeeded)
 	return reconcile.Result{}, nil
 }
 

@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/status"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -251,7 +252,24 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	if err := c.validatePodSpec(aslog); err != nil {
 		return err
 	}
+	// Validate Rollout Percentage
+	if err := c.validateRollOutPercentage(aslog); err != nil {
+		return err
+	}
+	return nil
+}
 
+func (c *AerospikeCluster) validateRollOutPercentage(asLog logr.Logger) error {
+	reconciliationStatus := status.ReconciliationManager.GetStatus()
+	if reconciliationStatus == status.Running {
+		if c.Spec.RollOutPercentage < 100 {
+			return fmt.Errorf("unable to apply partial deploymant during reconciliation")
+		}
+		return nil
+	}
+	if c.Spec.RollOutPercentage < c.Status.RollOutPercentage {
+		return fmt.Errorf("unable to decrease roll out percentage")
+	}
 	return nil
 }
 
