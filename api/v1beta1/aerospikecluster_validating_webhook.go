@@ -267,7 +267,7 @@ func (c *AerospikeCluster) validateRollOutPercentage(asLog logr.Logger) error {
 		}
 		return nil
 	}
-	if c.Spec.RollOutPercentage < c.Status.RollOutPercentage {
+	if c.Spec.RollOutPercentage < c.Status.RollOutPercentage && c.Status.RollOutPercentage < 100 {
 		return fmt.Errorf("unable to decrease roll out percentage")
 	}
 	return nil
