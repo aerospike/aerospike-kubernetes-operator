@@ -59,8 +59,8 @@ type AerospikeClusterSpec struct {
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
-	// RosterBlacklist is a list of blacklisted nodeIDs from roster in a strong-consistency setup
-	RosterBlacklist []string `json:"rosterBlacklist,omitempty"`
+	// RosterBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterBlockList []string `json:"rosterBlockList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -591,8 +591,8 @@ type AerospikeClusterStatusSpec struct {
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
-	// RosterBlacklist is a list of blacklisted nodeIDs from roster in a strong-consistency setup
-	RosterBlacklist []string `json:"rosterBlacklist,omitempty"`
+	// RosterBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterBlockList []string `json:"rosterBlockList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -844,15 +844,15 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	}
 	status.SeedsFinderServices = seedsFinderServices
 
-	// RosterBlacklist
-	if len(spec.RosterBlacklist) != 0 {
-		rosterBlacklist := []string{}
+	// RosterBlockList
+	if len(spec.RosterBlockList) != 0 {
+		rosterBlockList := []string{}
 		if err := lib.DeepCopy(
-			&rosterBlacklist, &spec.RosterBlacklist,
+			&rosterBlockList, &spec.RosterBlockList,
 		); err != nil {
 			return nil, err
 		}
-		status.RosterBlacklist = rosterBlacklist
+		status.RosterBlockList = rosterBlockList
 	}
 
 	return &status, nil
@@ -947,15 +947,15 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 	}
 	spec.SeedsFinderServices = seedsFinderServices
 
-	// RosterBlacklist
-	if len(status.RosterBlacklist) != 0 {
-		rosterBlacklist := []string{}
+	// RosterBlockList
+	if len(status.RosterBlockList) != 0 {
+		rosterBlockList := []string{}
 		if err := lib.DeepCopy(
-			&rosterBlacklist, &status.RosterBlacklist,
+			&rosterBlockList, &status.RosterBlockList,
 		); err != nil {
 			return nil, err
 		}
-		spec.RosterBlacklist = rosterBlacklist
+		spec.RosterBlockList = rosterBlockList
 	}
 
 	return &spec, nil

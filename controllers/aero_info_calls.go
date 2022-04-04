@@ -32,9 +32,9 @@ import (
 func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 	pod *corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
-	// Skip SC namespace in blacklisted node
-	// If node not blacklisted then normal flow
-	// If node blacklisted then skip SC namespaces
+	// Skip SC namespace in blocked node
+	// If node not blocked then normal flow
+	// If node blocked then skip SC namespaces
 	// Find non SC namespace, if not found then go out. No need for quiesce
 	r.Log.Info("Do quiesce for node", "node", pod.Name)
 
@@ -78,7 +78,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		r.Log.Info("Node is not in roster for namespace. Skip quiesce", "node", pod.Name, "namespace", ns)
 	}
 
-	r.Log.Info("Quiesce not needed in node. Node is blacklisted or does not have any non-sc namespace", "node", pod.Name)
+	r.Log.Info("Quiesce not needed in node. Node is blocked or does not have any non-sc namespace", "node", pod.Name)
 
 	return reconcileSuccess()
 }

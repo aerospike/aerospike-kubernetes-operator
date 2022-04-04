@@ -27,6 +27,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy) error
 	}
 
 	// TODO: Should we allow diff sc nodes on different nodes. What if a sc ns is added dynamically?
+	// dynamic sc ns can be allowed but roster should be set only after all the nodes have sc ns
 	scNsList, err := r.getSCNamespaces(hostConns, policy)
 	if err != nil {
 		return err
@@ -139,14 +140,14 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 
 		observedNodes := rosterNodes[hostConn.String()][rosterKeyObservedNodes]
 
-		// Remove blacklisted node from observed_nodes
+		// Remove blocked node from observed_nodes
 		observedNodesList := strings.Split(observedNodes, ",")
 		var newObservedNodesList []string
 
 		for _, obn := range observedNodesList {
 			// nodeRoster := nodeID + "@" + fmt.Sprint(rackID)
 			obnNodeID := strings.Split(obn, "@")[0]
-			if !v1beta1.ContainsString(r.aeroCluster.Spec.RosterBlacklist, obnNodeID) {
+			if !v1beta1.ContainsString(r.aeroCluster.Spec.RosterBlockList, obnNodeID) {
 				newObservedNodesList = append(newObservedNodesList, obn)
 			}
 		}

@@ -73,7 +73,7 @@ var _ = Describe("SCMode", func() {
 			deleteCluster(k8sClient, ctx, aeroCluster)
 		})
 
-		It("Should test sc cluster blacklisted node in single namespace cluster", func() {
+		It("Should test sc cluster blocked node in single namespace cluster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig1Ns()
@@ -135,10 +135,10 @@ func validateLifecycleOperationInSCCluster(
 
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
-	By("Set roster blacklist")
+	By("Set roster blockList")
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
-	aeroCluster.Spec.RosterBlacklist = []string{"1A0", "2A5", "2A1"}
+	aeroCluster.Spec.RosterBlockList = []string{"1A0", "2A7"}
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -179,18 +179,18 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	rosterStr := rosterNodesMap["roster"]
 	rosterList := strings.Split(rosterStr, ",")
 
-	// Check2 roster+blacklist >= len(pods)
-	if len(rosterList)+len(aeroCluster.Spec.RosterBlacklist) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. roster %v, blacklist %v, pods %v", rosterList, aeroCluster.Spec.RosterBlacklist, aeroCluster.Status.Pods)
+	// Check2 roster+blockList >= len(pods)
+	if len(rosterList)+len(aeroCluster.Spec.RosterBlockList) < len(aeroCluster.Status.Pods) {
+		err := fmt.Errorf("roster len not matching pods list. roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterBlockList, aeroCluster.Status.Pods)
 		Expect(err).ToNot(HaveOccurred())
 	}
 
 	for _, rosterNode := range rosterList {
 		nodeID := strings.Split(rosterNode, "@")[0]
 
-		// Check1 roster should not have blacklisted pod
-		contains := v1beta1.ContainsString(aeroCluster.Spec.RosterBlacklist, nodeID)
-		Expect(contains).To(BeFalse(), "roster should not have blacklisted node", "roster", rosterNode, "blacklist", aeroCluster.Spec.RosterBlacklist)
+		// Check1 roster should not have blocked pod
+		contains := v1beta1.ContainsString(aeroCluster.Spec.RosterBlockList, nodeID)
+		Expect(contains).To(BeFalse(), "roster should not have blocked node", "roster", rosterNode, "blockList", aeroCluster.Spec.RosterBlockList)
 
 		// Check4 Scaledown: all the roster should be in pod list
 		var found bool
@@ -205,7 +205,7 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 	}
 
-	// Check3 Scaleup: pod should be in roster or in blacklist
+	// Check3 Scaleup: pod should be in roster or in blockList
 	for _, pod := range aeroCluster.Status.Pods {
 		nodeID := strings.TrimLeft(pod.Aerospike.NodeID, "0")
 		rackID := pod.Aerospike.RackID
@@ -214,9 +214,9 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
 		}
 
-		if !v1beta1.ContainsString(aeroCluster.Spec.RosterBlacklist, nodeID) &&
+		if !v1beta1.ContainsString(aeroCluster.Spec.RosterBlockList, nodeID) &&
 			!v1beta1.ContainsString(rosterList, nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blacklist. roster %v, blacklist %v, missing pod %v", rosterList, aeroCluster.Spec.RosterBlacklist, nodeRoster)
+			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod %v", rosterList, aeroCluster.Spec.RosterBlockList, nodeRoster)
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}

@@ -4897,9 +4897,9 @@ spec:
                     nullable: true
                     type: array
                 type: object
-              rosterBlacklist:
-                description: RosterBlacklist is a list of blacklisted nodeIDs from
-                  roster in a stro
+              rosterBlockList:
+                description: RosterBlockList is a list of blocked nodeIDs from roster
+                  in a strong-c
                 items:
                   type: string
                 type: array
@@ -10372,9 +10372,9 @@ spec:
                       resources required.
                     type: object
                 type: object
-              rosterBlacklist:
-                description: RosterBlacklist is a list of blacklisted nodeIDs from
-                  roster in a stro
+              rosterBlockList:
+                description: RosterBlockList is a list of blocked nodeIDs from roster
+                  in a strong-c
                 items:
                   type: string
                 type: array
