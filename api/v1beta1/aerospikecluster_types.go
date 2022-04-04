@@ -45,7 +45,7 @@ type AerospikeClusterSpec struct {
 	// Storage specify persistent storage to use for the Aerospike pods
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
-	// Has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
+	// AerospikeAccessControl has the Aerospike roles and users. Required if aerospike cluster security is enabled.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Access Control"
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// Sets config in aerospike.conf file. Other configs are taken as default
