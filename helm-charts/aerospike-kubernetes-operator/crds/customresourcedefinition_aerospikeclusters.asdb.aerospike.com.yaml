@@ -3669,6 +3669,21 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: Represents a host path mapped
+                                          into a pod.
+                                        properties:
+                                          path:
+                                            description: Path of the directory on
+                                              the host.
+                                            type: string
+                                          type:
+                                            description: 'Type for HostPath Volume
+                                              Defaults to "" More info: https://kubernetes.'
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -4746,6 +4761,21 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: Represents a host path mapped
+                                          into a pod.
+                                        properties:
+                                          path:
+                                            description: Path of the directory on
+                                              the host.
+                                            type: string
+                                          type:
+                                            description: 'Type for HostPath Volume
+                                              Defaults to "" More info: https://kubernetes.'
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -5202,6 +5232,19 @@ spec:
                                     for this EmptyDir volume.
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: Represents a host path mapped into a pod.
+                              properties:
+                                path:
+                                  description: Path of the directory on the host.
+                                  type: string
+                                type:
+                                  description: 'Type for HostPath Volume Defaults
+                                    to "" More info: https://kubernetes.'
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
@@ -9113,6 +9156,21 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: Represents a host path mapped
+                                          into a pod.
+                                        properties:
+                                          path:
+                                            description: Path of the directory on
+                                              the host.
+                                            type: string
+                                          type:
+                                            description: 'Type for HostPath Volume
+                                              Defaults to "" More info: https://kubernetes.'
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -10190,6 +10248,21 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: Represents a host path mapped
+                                          into a pod.
+                                        properties:
+                                          path:
+                                            description: Path of the directory on
+                                              the host.
+                                            type: string
+                                          type:
+                                            description: 'Type for HostPath Volume
+                                              Defaults to "" More info: https://kubernetes.'
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -10671,6 +10744,19 @@ spec:
                                     for this EmptyDir volume.
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: Represents a host path mapped into a pod.
+                              properties:
+                                path:
+                                  description: Path of the directory on the host.
+                                  type: string
+                                type:
+                                  description: 'Type for HostPath Volume Defaults
+                                    to "" More info: https://kubernetes.'
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
