@@ -21,7 +21,8 @@ var _ = Describe("CanaryDeployment", func() {
 			func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, *dynamicNsVolume)
-
+				aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+				aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			},
