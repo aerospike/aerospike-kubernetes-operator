@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	"k8s.io/client-go/rest"
 	// +kubebuilder:scaffold:imports
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +42,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
+var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 var ctx context.Context
@@ -69,7 +71,9 @@ var _ = BeforeSuite(
 			},
 		}
 
-		cfg, err := testEnv.Start()
+		var err error
+		// cfg is defined in this file globally.
+		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
