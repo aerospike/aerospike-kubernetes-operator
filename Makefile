@@ -181,11 +181,9 @@ endef
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
 # CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
-.PHONY: bundle-operatorhub
-bundle-operatorhub: manifests kustomize
-ifeq ($(origin DISTRIBUTION), undefined)
-		DISTRIBUTION=operatorhub
-endif
+.PHONY: bundle
+bundle: DISTRIBUTION ?= operatorhub
+bundle: manifests kustomize
 
 	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
 	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
@@ -214,8 +212,9 @@ endif
       sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
       fi; \
 
+
 bundle-ocp: DISTRIBUTION ?= ocp
-bundle-ocp: bundle-operatorhub
+bundle-ocp: bundle
 
 .PHONY: bundle-rhmp
 bundle-rhmp: DISTRIBUTION ?= rhmp
