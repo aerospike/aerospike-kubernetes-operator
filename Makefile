@@ -1,10 +1,13 @@
 # # /bin/sh does not support source command needed in make test
 #SHELL := /bin/bash
 
-ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-
+ROOT_DIR=$(shell git rev-parse --show-toplevel)
+PACKAGE_NAME=$(shell basename $(shell git rev-parse --show-toplevel))
 # Openshift platform supported version
 OPENSHIFT_VERSION="v4.6-v4.9"
+OVERLAYS_DIR=$(ROOT_DIR)/config/overlays
+
+
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
@@ -153,9 +156,9 @@ CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1)
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
+KUSTOMIZE = $(GOBIN)/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.2.0)
+	go install sigs.k8s.io/kustomize/kustomize/v4@v4.5.4
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
@@ -178,22 +181,74 @@ endef
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
 # CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
-.PHONY: bundle
-bundle: manifests kustomize
-	rm -rf bundle.Dockerfile bundle/
-	operator-sdk generate kustomize manifests -q
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/overlays/manifests/olm | operator-sdk generate bundle -q --kustomize-dir config/overlays/manifests/olm --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
-	operator-sdk bundle validate ./bundle
-	sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
-	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
-	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
-	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
-	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
-	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
+.PHONY: bundle-operatorhub
+bundle-operatorhub: manifests kustomize
+ifeq ($(origin DISTRIBUTION), undefined)
+		DISTRIBUTION=operatorhub
+endif
 
+	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
+	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
+	$(eval KUSTOMIZE_DIR:= $(OVERLAYS_DIR)/base)
+
+	if [ -f $(ROOT_DIR)/bundle.Dockerfile ]; then \
+        rm -f $(ROOT_DIR)/bundle.Dockerfile; \
+      fi; \
+    if [ -d $(BUNDLE_DIR) ]; then \
+      rm -r $(BUNDLE_DIR); \
+      fi; \
+	operator-sdk generate kustomize manifests -q
+	cd $(ROOT_DIR)/config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation containerImage:$(IMG) createdAt:$(DATE)
+	cd "${ROOT_DIR}" && "${KUSTOMIZE}" build "${KUSTOMIZE_DIR}" | \
+    operator-sdk generate bundle --overwrite --version $(VERSION) --output-dir $(BUNDLE_DIR) $(BUNDLE_METADATA_OPTS); \
+
+	if [ $(DISTRIBUTION) == operatorhub ]; then \
+        operator-sdk bundle validate $(BUNDLE_DIR) --select-optional name=$(DISTRIBUTION); \
+    else \
+      sed -i "/^annotations.*/a \  com.redhat.openshift.versions: $(OPENSHIFT_VERSION)" $(ANNOTATIONS_FILE_PATH); \
+      sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" $(ANNOTATIONS_FILE_PATH); \
+      sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions=$(OPENSHIFT_VERSION)" $(ROOT_DIR)/bundle.Dockerfile; \
+      sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
+      sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
+      sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
+      fi; \
+
+bundle-ocp: DISTRIBUTION ?= ocp
+bundle-ocp: bundle-operatorhub
+
+.PHONY: bundle-rhmp
+bundle-rhmp: DISTRIBUTION ?= rhmp
+bundle-rhmp: manifests kustomize
+	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
+	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
+	$(eval KUSTOMIZE_DIR:= $(OVERLAYS_DIR)/$(DISTRIBUTION))
+	$(eval BUNDLE_METADATA_OPTS:= $(BUNDLE_METADATA_OPTS) --use-image-digests)
+
+	if [ -f $(ROOT_DIR)/bundle.Dockerfile ]; then \
+        rm -f $(ROOT_DIR)/bundle.Dockerfile; \
+      fi; \
+    if [ -d $(BUNDLE_DIR) ]; then \
+      rm -r $(BUNDLE_DIR); \
+      fi; \
+
+	operator-sdk generate kustomize manifests -q
+	cd $(ROOT_DIR)/config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation containerImage:$(IMG) createdAt:$(DATE)
+	cd "${ROOT_DIR}" && "${KUSTOMIZE}" build "${KUSTOMIZE_DIR}" | \
+    operator-sdk generate bundle --overwrite --version $(VERSION) --output-dir $(BUNDLE_DIR) $(BUNDLE_METADATA_OPTS); \
+    mv $(BUNDLE_DIR)/manifests/$(PACKAGE_NAME).clusterserviceversion.yaml \
+    $(BUNDLE_DIR)/manifests/$(PACKAGE_NAME)-$(DISTRIBUTION).clusterserviceversion.yaml; \
+    sed -i "s/$(PACKAGE_NAME)/$(PACKAGE_NAME)-$(DISTRIBUTION)/" \
+    $(ANNOTATIONS_FILE_PATH) $(ROOT_DIR)/bundle.Dockerfile; \
+    sed -i "/^annotations.*/a \  com.redhat.openshift.versions: $(OPENSHIFT_VERSION)" $(ANNOTATIONS_FILE_PATH); \
+    sed -i "/^annotations.*/a \  marketplace.openshift.io/remote-workflow: https://marketplace.redhat.com/en-us/operators/aerospike-kubernetes-operator-rhmp/pricing?utm_source=openshift_console" $(ANNOTATIONS_FILE_PATH); \
+    sed -i "/^annotations.*/a \  marketplace.openshift.io/support-workflow: https://marketplace.redhat.com/en-us/operators/aerospike-kubernetes-operator-rhmp/support?utm_source=openshift_console" $(ANNOTATIONS_FILE_PATH); \
+    sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions=$(OPENSHIFT_VERSION)" "$(ROOT_DIR)"/bundle.Dockerfile; \
+    sed -i "/^FROM.*/a LABEL marketplace.openshift.io/remote-workflow: https://marketplace.redhat.com/en-us/operators/aerospike-kubernetes-operator-rhmp/pricing?utm_source=openshift_console" $(ROOT_DIR)/bundle.Dockerfile; \
+    sed -i "/^FROM.*/a LABEL marketplace.openshift.io/support-workflow: https://marketplace.redhat.com/en-us/operators/aerospike-kubernetes-operator-rhmp/support?utm_source=openshift_console" $(ROOT_DIR)/bundle.Dockerfile; \
+    sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
+    operator-sdk bundle validate "$(BUNDLE_DIR)"
 
 # Remove generated bundle
 .PHONY: bundle-clean

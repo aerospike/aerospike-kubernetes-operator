@@ -1,3 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
 # Adds namespace to all resources.
 namespace: aerospike
 
@@ -12,7 +15,7 @@ namePrefix: aerospike-operator-
 #commonLabels:
 #  someName: someValue
 
-bases:
+resources:
   - ../crd
   - ../rbac
   - ../manager
