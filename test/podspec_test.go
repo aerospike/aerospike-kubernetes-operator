@@ -39,10 +39,17 @@ var _ = Describe(
 			},
 		}
 
+		volumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "workdir",
+				MountPath: "/workdir",
+			},
+		}
 		initCont1 := corev1.Container{
 			Name:    "init-myservice",
 			Image:   "busybox:1.28",
 			Command: []string{"sh", "-c", "echo The app is running; sleep 2"},
+			VolumeMounts: volumeMounts,
 		}
 
 		// initCont2 := corev1.Container{
@@ -220,8 +227,25 @@ var _ = Describe(
 							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
 						)
 
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
+							{
+								ContainerName: "init-myservice",
+								Path:          "/workdir",
+							},
+						}
+
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						// validate
+						stsList, err := getSTSList(aeroCluster, k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(len(stsList.Items)).ToNot(BeZero())
+
+						for _, sts := range stsList.Items {
+							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
+							Expect(stsInitMountPath).To(Equal("/workdir"))
+						}
 
 						// By("Adding the container2")
 
