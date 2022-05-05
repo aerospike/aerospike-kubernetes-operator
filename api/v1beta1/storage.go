@@ -300,7 +300,7 @@ func validateAttachment(
 	attachmentContainers := map[string]int{}
 
 	for _, attachment := range volumeAttachments {
-		if attachment.ContainerName == AerospikeServerInitContainerImage {
+		if attachment.ContainerName == AerospikeServerInitContainerName {
 			return fmt.Errorf(
 				"cannot attach volumes to: %s",
 				AerospikeServerInitContainerName,
