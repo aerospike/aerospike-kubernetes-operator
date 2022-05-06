@@ -84,8 +84,9 @@ podSpec: {}
   #     - containerPort: 9145
   #       name: exporter
 
-## Default Aerospike's init container
-defaultInitContainerImageWithTag: /aerospike/aerospike-kubernetes-init:0.0.15
+## Reserved Aerospike's init container
+AerospikeReservedInitContainerSpec:
+  reservedContainerImageWithTag: edge.fkinternal.com/docker-external/aerospike/aerospike-kubernetes-init:0.0.15
 
 ## Rack configuration
 rackConfig: {}
