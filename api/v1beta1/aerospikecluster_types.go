@@ -65,8 +65,8 @@ type AerospikeClusterSpec struct {
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
-	// AerospikeDefaultInitContainerSpec contains configuration for custom aerospike-init sources
-	AerospikeDefaultInitContainerSpec AerospikeDefaultInitContainerSpec `json:"aerospikeDefaultInitContainerSpec,omitempty"`
+	// AerospikeReservedInitContainerSpec contains configuration for custom aerospike-init sources
+	AerospikeReservedInitContainerSpec AerospikeReservedInitContainerSpec `json:"aerospikeReservedInitContainerSpec,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -182,9 +182,9 @@ type AerospikeObjectMeta struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// AerospikeDefaultInitContainerSpec contains configuration for custom aerospike-init sources
-type AerospikeDefaultInitContainerSpec struct {
-	DefaultInitContainerImageWithTag string `json:"defaultInitContainerImageWithTag,omitempty"`
+// AerospikeReservedInitContainerSpec contains configuration for custom aerospike-init sources
+type AerospikeReservedInitContainerSpec struct {
+	ReservedInitContainerImageWithTag string `json:"reservedInitContainerImageWithTag,omitempty"`
 }
 
 // AerospikePodSpec contain configuration for created Aerospike cluster pods.
