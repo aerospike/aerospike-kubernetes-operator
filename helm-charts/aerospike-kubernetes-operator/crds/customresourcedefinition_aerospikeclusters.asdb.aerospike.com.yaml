@@ -2727,6 +2727,7 @@ spec:
                   reservedInitContainerImageWithTag:
                     description: aerospike-kubernetes-init container image path with tag
                     type: string
+                type: object
               rackConfig:
                 description: RackConfig Configures the operator to deploy rack aware
                   Aerospike clus
