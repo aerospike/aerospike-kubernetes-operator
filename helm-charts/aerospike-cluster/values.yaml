@@ -85,7 +85,7 @@ podSpec: {}
   #       name: exporter
 
 ## Reserved Aerospike's init container
-AerospikeReservedInitContainerSpec:
+aerospikeReservedInitContainerSpec:
   reservedContainerImageWithTag: edge.fkinternal.com/docker-external/aerospike/aerospike-kubernetes-init:0.0.15
 
 ## Rack configuration

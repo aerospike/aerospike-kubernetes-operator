@@ -2721,7 +2721,7 @@ spec:
                       type: object
                     type: array
                 type: object
-              AerospikeReservedInitContainerSpec:
+              aerospikeReservedInitContainerSpec:
                 description: Aerospike Reserved init container spec
                 properties:
                   reservedContainerImageWithTag:
