@@ -601,6 +601,8 @@ type AerospikeClusterStatusSpec struct {
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCertSpec,omitempty"`
 	// Additional configuration for create Aerospike pods.
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
+	// AerospikeReservedInitContainerSpec contains configuration for custom aerospike-init sources
+	AerospikeReservedInitContainerSpec AerospikeReservedInitContainerSpec `json:"aerospikeReservedInitContainerSpec,omitempty"`
 	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 }

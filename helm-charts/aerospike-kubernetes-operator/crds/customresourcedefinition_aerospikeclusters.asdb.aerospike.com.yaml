@@ -2724,7 +2724,7 @@ spec:
               aerospikeReservedInitContainerSpec:
                 description: Aerospike Reserved init container spec
                 properties:
-                  reservedContainerImageWithTag:
+                  reservedInitContainerImageWithTag:
                     description: aerospike-kubernetes-init container image path with tag
                     type: string
               rackConfig:

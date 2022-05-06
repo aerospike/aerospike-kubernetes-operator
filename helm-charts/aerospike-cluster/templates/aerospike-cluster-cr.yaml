@@ -61,7 +61,7 @@ spec:
   {{- end }}
 
   aerospikeReservedInitContainerSpec:
-    reservedContainerImageWithTag: {{ .Values.aerospikeReservedInitContainerSpec.reservedContainerImageWithTag | default "aerospike/aerospike-kubernetes-init:0.0.15" }}
+    reservedInitContainerImageWithTag: {{ .Values.aerospikeReservedInitContainerSpec.reservedInitContainerImageWithTag | default "aerospike/aerospike-kubernetes-init:0.0.15" }}
 
   # Rack configuration
   {{- with .Values.rackConfig }}
