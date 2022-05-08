@@ -156,6 +156,8 @@ func (r *SingleClusterReconciler) createSTS(
 							// Change to PullAlways for image testing.
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
+							// Using same security context of main container on the reserved init container
+							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 							Env: append(
 								envVarList, []corev1.EnvVar{
 									{
