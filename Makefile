@@ -6,8 +6,7 @@ PACKAGE_NAME=$(shell basename $(shell git rev-parse --show-toplevel))
 # Openshift platform supported version
 OPENSHIFT_VERSION="v4.6-v4.9"
 OVERLAYS_DIR=$(ROOT_DIR)/config/overlays
-
-
+DISTRIBUTION=operatorhub
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
@@ -182,9 +181,24 @@ endef
 # For OpenShift bundles run
 # CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
 .PHONY: bundle
-bundle: DISTRIBUTION ?= operatorhub
 bundle: manifests kustomize
+	rm -rf bundle.Dockerfile bundle/
+	operator-sdk generate kustomize manifests -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build config/overlays/base | operator-sdk generate bundle -q --kustomize-dir config/overlays/base --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	operator-sdk bundle validate ./bundle
+	sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
+	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
 
+
+.PHONY: bundle-operatorhub
+bundle-operatorhub: manifests kustomize
 	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
 	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
 	$(eval KUSTOMIZE_DIR:= $(OVERLAYS_DIR)/base)
@@ -213,11 +227,12 @@ bundle: manifests kustomize
       fi; \
 
 
-bundle-ocp: DISTRIBUTION ?= ocp
-bundle-ocp: bundle
+.PHONY: bundle-ocp
+bundle-ocp: DISTRIBUTION=ocp
+bundle-ocp: bundle-operatorhub
 
 .PHONY: bundle-rhmp
-bundle-rhmp: DISTRIBUTION ?= rhmp
+bundle-rhmp: DISTRIBUTION=rhmp
 bundle-rhmp: manifests kustomize
 	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
 	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
