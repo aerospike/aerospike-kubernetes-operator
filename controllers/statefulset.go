@@ -1151,6 +1151,9 @@ func (r *SingleClusterReconciler) updateAerospikeContainerResources(st *appsv1.S
 
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
 	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
+
+	// Adding security context for the reserved init container same as main container
+	st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
