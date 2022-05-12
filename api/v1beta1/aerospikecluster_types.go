@@ -569,6 +569,7 @@ type AerospikeClusterStatusSpec struct {
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
+	// Deprecated: MultiPodPerHost is now part of podSpec
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
@@ -580,6 +581,7 @@ type AerospikeClusterStatusSpec struct {
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
+	// Deprecated: Resources field is now part of containerSpec
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
