@@ -60,6 +60,9 @@ spec:
     multiPodPerHost: true
   {{- end }}
 
+  aerospikeReservedInitContainerSpec:
+    reservedInitContainerImageWithTag: {{ .Values.aerospikeReservedInitContainerSpec.reservedInitContainerImageWithTag | default "aerospike/aerospike-kubernetes-init:0.0.15" }}
+
   # Rack configuration
   {{- with .Values.rackConfig }}
   rackConfig: {{- toYaml . | nindent 4 }}

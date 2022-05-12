@@ -2721,6 +2721,13 @@ spec:
                       type: object
                     type: array
                 type: object
+              aerospikeReservedInitContainerSpec:
+                description: Aerospike Reserved init container spec
+                properties:
+                  reservedInitContainerImageWithTag:
+                    description: aerospike-kubernetes-init container image path with tag
+                    type: string
+                type: object
               rackConfig:
                 description: RackConfig Configures the operator to deploy rack aware
                   Aerospike clus
@@ -8164,6 +8171,14 @@ spec:
                   type: object
                 description: Pods has Aerospike specific status of the pods.
                 type: object
+              aerospikeReservedInitContainerSpec:
+                description: Aerospike Reserved init container spec
+                properties:
+                  reservedInitContainerImageWithTag:
+                    description: aerospike-kubernetes-init container image path with tag
+                    type: string
+                type: object
+                nullable: true
               rackConfig:
                 description: RackConfig Configures the operator to deploy rack aware
                   Aerospike clus
