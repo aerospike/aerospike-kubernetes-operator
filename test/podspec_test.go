@@ -39,17 +39,10 @@ var _ = Describe(
 			},
 		}
 
-		volumeMounts := []corev1.VolumeMount{
-			{
-				Name:      "workdir",
-				MountPath: "/workdir",
-			},
-		}
 		initCont1 := corev1.Container{
 			Name:    "init-myservice",
 			Image:   "busybox:1.28",
 			Command: []string{"sh", "-c", "echo The app is running; sleep 2"},
-			VolumeMounts: volumeMounts,
 		}
 
 		// initCont2 := corev1.Container{
@@ -279,6 +272,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
 
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
