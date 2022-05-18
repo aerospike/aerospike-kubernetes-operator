@@ -125,12 +125,12 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
 	if pod.Status.ContainerStatuses == nil {
-		return reconcileError(
-			fmt.Errorf(
-				"pod %s containerStatus is nil, pod may be in unscheduled state",
+		r.Log.Error(fmt.Errorf("pod %s containerStatus is nil" ,
 				pod.Name,
 			),
+			"pod may be in unscheduled state",
 		)
+		return reconcileRequeueAfter(1)
 	}
 
 	r.Log.Info("Rolling restart pod", "podName", pod.Name)
@@ -146,7 +146,7 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 			pFound,
 		)
 		if err != nil {
-			r.Log.Error(err, "Failed to get pod, try retry after 5 sec")
+			r.Log.Error(err, "Failed to get pod, retry after 5 sec")
 			time.Sleep(time.Second * 5)
 			pFound = nil
 			continue
@@ -157,11 +157,10 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 		}
 
 		if utils.IsPodCrashed(pFound) {
-			r.Log.Error(err, "Pod has crashed", "podName", pFound.Name)
+			r.Log.Error(fmt.Errorf("Pod has crashed"), "podName", pFound.Name)
 			break
 		}
 
-		r.Log.Error(err, "Pod containerStatus is not ready, try after 5 sec")
 		time.Sleep(time.Second * 5)
 	}
 
