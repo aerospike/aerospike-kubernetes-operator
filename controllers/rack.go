@@ -551,11 +551,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 		// Wait for pods to get terminated
 		if err := r.waitForSTSToBeReady(found); err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to wait for statefulset to be ready: %v", err,
-				),
-			)
+			r.Log.Error(err, "failed to wait for statefulset to be ready")
+			return found, reconcileRequeueAfter(1)
 		}
 
 		// Fetch new object
