@@ -157,7 +157,7 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 		}
 
 		if utils.IsPodCrashed(pFound) {
-			r.Log.Error(fmt.Errorf("Pod has crashed"), "podName", pFound.Name)
+			r.Log.Error(fmt.Errorf("pod has crashed"), "Failed to do rolling restart", "podName", pFound.Name)
 			break
 		}
 
