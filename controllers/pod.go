@@ -128,7 +128,7 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 		r.Log.Error(fmt.Errorf("pod %s containerStatus is nil" ,
 				pod.Name,
 			),
-			"pod may be in unscheduled state",
+			"Pod may be in unscheduled state",
 		)
 		return reconcileRequeueAfter(1)
 	}
