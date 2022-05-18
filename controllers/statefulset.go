@@ -1313,14 +1313,22 @@ func addVolumeMountInContainer(
 	volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment,
 	containers []corev1.Container, pathPrefix string,
 ) {
+	var volumeMount corev1.VolumeMount
 	for _, volumeAttachment := range volumeAttachments {
 		for i := range containers {
 			container := &containers[i]
 
 			if container.Name == volumeAttachment.ContainerName {
-				volumeMount := corev1.VolumeMount{
-					Name:      volumeName,
-					MountPath: pathPrefix + volumeAttachment.Path,
+				if container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+					volumeMount = corev1.VolumeMount{
+						Name:      volumeName,
+						MountPath: pathPrefix + volumeAttachment.Path,
+					}
+				} else {
+					volumeMount = corev1.VolumeMount{
+						Name:      volumeName,
+						MountPath: volumeAttachment.Path,
+					}
 				}
 				container.VolumeMounts = append(
 					container.VolumeMounts, volumeMount,
@@ -1335,14 +1343,23 @@ func addVolumeDeviceInContainer(
 	volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment,
 	containers []corev1.Container, pathPrefix string,
 ) {
+	var volumeDevice corev1.VolumeDevice
 	for _, volumeAttachment := range volumeAttachments {
 		for i := range containers {
 			container := &containers[i]
 
 			if container.Name == volumeAttachment.ContainerName {
-				volumeDevice := corev1.VolumeDevice{
-					Name:       volumeName,
-					DevicePath: pathPrefix + volumeAttachment.Path,
+				if container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+					volumeDevice = corev1.VolumeDevice{
+						Name:       volumeName,
+						DevicePath: pathPrefix + volumeAttachment.Path,
+					}
+				} else {
+					volumeDevice = corev1.VolumeDevice{
+						Name:       volumeName,
+						DevicePath: volumeAttachment.Path,
+					}
+
 				}
 				container.VolumeDevices = append(
 					container.VolumeDevices, volumeDevice,
