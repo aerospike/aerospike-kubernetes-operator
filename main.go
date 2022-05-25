@@ -136,6 +136,7 @@ func main() {
 		KubeConfig: kubeConfig,
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
 		Scheme:     mgr.GetScheme(),
+		Recorder:   mgr.GetEventRecorderFor("aerospikeCluster-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(
 			err, "unable to create controller", "controller",

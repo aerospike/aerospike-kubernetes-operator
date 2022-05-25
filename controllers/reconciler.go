@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -32,6 +33,7 @@ type SingleClusterReconciler struct {
 	KubeConfig *rest.Config
 	Log        logr.Logger
 	Scheme     *k8sRuntime.Scheme
+	Recorder record.EventRecorder
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
@@ -161,6 +163,10 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 		&r.aeroCluster.Spec, statusAsSpec,
 		aeroClient, pp, r.Log,
 	)
+	if err == nil {
+		r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+			fmt.Sprintf("Successfully updated access control list %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
+	}
 	return err
 }
 
@@ -200,6 +206,8 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
+	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+		fmt.Sprintf("Successfully updated status %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 	return nil
 }
 

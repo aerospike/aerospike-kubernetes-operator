@@ -11,6 +11,7 @@ import (
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,6 +68,7 @@ type AerospikeClusterReconciler struct {
 	KubeConfig *rest.Config
 	Log        logr.Logger
 	Scheme     *k8sRuntime.Scheme
+	Recorder   record.EventRecorder
 }
 
 // RackState contains the rack configuration and rack size.
@@ -115,6 +117,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 		KubeConfig:  r.KubeConfig,
 		Log:         log,
 		Scheme:      r.Scheme,
+		Recorder:    r.Recorder,
 	}
 
 	return cr.Reconcile()
