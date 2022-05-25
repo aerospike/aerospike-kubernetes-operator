@@ -909,6 +909,16 @@ spec:
                   hostNetwork:
                     description: HostNetwork enables host networking for the pod.
                     type: boolean
+                  imagePullSecrets:
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.'
+                          type: string
+                      type: object
+                    type: array
                   initContainers:
                     description: InitContainers to add to the pods.
                     items:
@@ -6242,6 +6252,16 @@ spec:
                   hostNetwork:
                     description: HostNetwork enables host networking for the pod.
                     type: boolean
+                  imagePullSecrets:
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.'
+                          type: string
+                      type: object
+                    type: array
                   initContainers:
                     description: InitContainers to add to the pods.
                     items:

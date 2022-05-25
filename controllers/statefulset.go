@@ -145,6 +145,7 @@ func (r *SingleClusterReconciler) createSTS(
 					Labels: operatorDefinedLabels,
 				},
 				Spec: corev1.PodSpec{
+					ImagePullSecrets:   r.aeroCluster.Spec.PodSpec.ImagePullSecrets,
 					ServiceAccountName: aeroClusterServiceAccountName,
 					HostNetwork:        r.aeroCluster.Spec.PodSpec.HostNetwork,
 					DNSPolicy:          r.aeroCluster.Spec.PodSpec.DNSPolicy,

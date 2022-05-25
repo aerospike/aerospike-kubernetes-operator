@@ -218,6 +218,8 @@ type AerospikePodSpec struct {
 
 	// Effective value of the DNSPolicy
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
+
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type AerospikeContainerSpec struct {
