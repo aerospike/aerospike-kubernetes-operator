@@ -225,6 +225,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 					found.Name,
 				)
 			}
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
+				fmt.Sprintf("Failed to scaleDown StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 			return res
 		}
 	}
@@ -262,6 +264,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 					found.Name,
 				)
 			}
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
+				fmt.Sprintf("Failed to update StatefulSet image %s/%s", found.Namespace, found.Name))
 			return res
 		}
 	} else {
@@ -278,6 +282,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 						found.Name,
 					)
 				}
+				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
+					fmt.Sprintf("Failed to do rolling restart %s/%s", found.Namespace, found.Name))
 				return res
 			}
 		}
@@ -291,6 +297,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 				res.err, "Failed to scaleUp StatefulSet pods", "stsName",
 				found.Name,
 			)
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
+				fmt.Sprintf("Failed to scaleUp StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 			return res
 		}
 	}
@@ -405,8 +413,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
-        r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
-                fmt.Sprintf("Scaled up successfully %s/%s", found.Namespace, found.Name))
+        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
+                fmt.Sprintf("Scaled up successfully %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 	return found, reconcileSuccess()
 }
 
@@ -490,7 +498,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	if err != nil {
 		return statefulSet, reconcileError(err)
 	}
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
                 fmt.Sprintf("Successfully upgraded statefulSet %s/%s", statefulSet.Namespace, statefulSet.Name))
 	return statefulSet, reconcileSuccess()
 }
@@ -583,10 +591,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		r.Log.Info("Pod Removed", "podName", podName)
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Deleted",
+			fmt.Sprintf("Deleted pod successfully %s, desired size: %d, current size: %d", pod.Name, desiredSize, *found.Spec.Replicas))
 	}
 
-        r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
-                fmt.Sprintf("Scaled down successfully %s/%s", found.Namespace, found.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
+		fmt.Sprintf("Scaled down successfully %s/%s, desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 	return found, reconcileRequeueAfter(0)
 }
 
@@ -637,6 +647,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			return found, res
 		}
 
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
+			fmt.Sprintf("Successfully restarted statefulSet node with new config %s", pod.Name))
 		// Handle next pod in subsequent Reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
@@ -647,7 +659,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(err)
 	}
 
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
                 fmt.Sprintf("Successfully restarted statefulSet nodes with new config %s/%s", found.Namespace, found.Name))
 
 	return found, reconcileSuccess()

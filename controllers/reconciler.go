@@ -46,6 +46,8 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
 		// The cluster is being deleted
 		if err := r.handleClusterDeletion(finalizerName); err != nil {
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Deleting",
+				fmt.Sprintf("Unable to handle cluster deletion operations %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 			return reconcile.Result{}, err
 		}
 		// Stop reconciliation as the cluster is being deleted
@@ -55,6 +57,8 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// The cluster is not being deleted, add finalizer in not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Unable to add finalizer %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
@@ -65,11 +69,15 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Failed to reconcile racks for cluster %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return res.result, res.err
 	}
 
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Creating",
+			fmt.Sprintf("Failed to create STS load balancer services %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
@@ -81,6 +89,8 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			"failed to get hostConn for aerospike cluster nodes: %v", err,
 		)
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Failed to get hostConn for aerospike cluster nodes %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, e
 	}
 	if err := deployment.InfoQuiesceUndo(
@@ -88,18 +98,24 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.getClientPolicy(), allHostConns,
 	); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Failed to check for Quiesced nodes %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
 	// Setup access control.
 	if err := r.reconcileAccessControl(); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Failed to setup access control %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
 	// Update the AerospikeCluster status.
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Updating",
+			fmt.Sprintf("Failed to update AerospikeCluster status %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
@@ -164,7 +180,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 		aeroClient, pp, r.Log,
 	)
 	if err == nil {
-		r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
 			fmt.Sprintf("Successfully updated access control list %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 	}
 	return err
@@ -206,7 +222,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
 		fmt.Sprintf("Successfully updated status %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 	return nil
 }
