@@ -4,7 +4,7 @@
 ROOT_DIR=$(shell git rev-parse --show-toplevel)
 PACKAGE_NAME=$(shell basename $(shell git rev-parse --show-toplevel))
 # Openshift platform supported version
-OPENSHIFT_VERSION="v4.6-v4.9"
+OPENSHIFT_VERSION="v4.6"
 OVERLAYS_DIR=$(ROOT_DIR)/config/overlays
 DISTRIBUTION=operatorhub
 
