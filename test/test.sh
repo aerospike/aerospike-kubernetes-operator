@@ -37,6 +37,11 @@ echo "| Deploying the operator.... |"
 echo "------------------------------"
 "$DIR"/deploy-test-operator.sh "$CONTAINER"
 
+# Deploy LDAP
+echo "------------------------------"
+echo "| Deploying OpenLDAP....     |"
+echo "------------------------------"
+"$DIR"/deploy-openldap.sh
 
 # Run tests
 echo "---------------------"
