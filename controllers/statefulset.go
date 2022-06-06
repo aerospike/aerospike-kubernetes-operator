@@ -279,7 +279,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) er
 				)
 			}
 			if err := utils.CheckPodFailed(pod); err != nil {
-				return fmt.Errorf("StatefulSet pod %s failed: %v", podName, err)
+				return fmt.Errorf("statefulSet pod %s failed: %v", podName, err)
 			}
 			if utils.IsPodRunningAndReady(pod) {
 				isReady = true
@@ -291,7 +291,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) er
 		}
 		if !isReady {
 			statusErr := fmt.Errorf(
-				"StatefulSet pod is not ready. Status: %v",
+				"statefulSet pod is not ready. Status: %v",
 				pod.Status.Conditions,
 			)
 			r.Log.Error(statusErr, "Statefulset Not ready")
