@@ -220,8 +220,25 @@ var _ = Describe(
 							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
 						)
 
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
+							{
+								ContainerName: "init-myservice",
+								Path:          "/workdir",
+							},
+						}
+
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						// validate
+						stsList, err := getSTSList(aeroCluster, k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(len(stsList.Items)).ToNot(BeZero())
+
+						for _, sts := range stsList.Items {
+							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
+							Expect(stsInitMountPath).To(Equal("/workdir"))
+						}
 
 						// By("Adding the container2")
 
@@ -255,6 +272,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
 
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
