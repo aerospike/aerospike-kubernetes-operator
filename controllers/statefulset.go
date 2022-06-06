@@ -158,6 +158,7 @@ func (r *SingleClusterReconciler) createSTS(
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							// Using same security context of main container on the reserved init container
 							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
+							// Resources to be updated later with main container
 							Env: append(
 								envVarList, []corev1.EnvVar{
 									{
@@ -1154,6 +1155,13 @@ func (r *SingleClusterReconciler) updateAerospikeContainerResources(st *appsv1.S
 
 	// Adding security context for the reserved init container same as main container
 	st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
+
+	initResources := r.aeroCluster.Spec.AerospikeReservedInitContainerSpec.Resources
+	if initResources != nil {
+		st.Spec.Template.Spec.InitContainers[0].Resources = *resources
+	} else {
+		st.Spec.Template.Spec.InitContainers[0].Resources = corev1.ResourceRequirements{}
+	}
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {

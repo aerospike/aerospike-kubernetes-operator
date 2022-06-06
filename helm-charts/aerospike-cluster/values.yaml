@@ -87,6 +87,7 @@ podSpec: {}
 ## Reserved Aerospike's init container
 aerospikeReservedInitContainerSpec:
   reservedInitContainerImageWithTag: aerospike/aerospike-kubernetes-init:0.0.15
+  resources: {}
 
 ## Rack configuration
 rackConfig: {}
