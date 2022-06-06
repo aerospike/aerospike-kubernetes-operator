@@ -107,6 +107,7 @@ spec:
         - containerPort: {{ .Values.kubeRBACProxyPort | default 8443 }}
           name: https
           protocol: TCP
+        resources: {{ .Values.kubeRBACProxy.resources | default "{}" }}
       volumes:
       # TODO: Make adding volumes configurable.
       - name: cert
