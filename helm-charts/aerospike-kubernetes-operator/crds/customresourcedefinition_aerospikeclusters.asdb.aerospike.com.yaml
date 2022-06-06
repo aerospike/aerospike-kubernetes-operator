@@ -2727,6 +2727,30 @@ spec:
                   reservedInitContainerImageWithTag:
                     description: aerospike-kubernetes-init container image path with tag
                     type: string
+                  resources:
+                    description: Compute Resources required by this container.
+                    properties:
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: Limits describes the maximum amount of
+                          compute resources allowed.
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: Requests describes the minimum amount of
+                          compute resources required.
+                        type: object
+                    type: object
                 type: object
               rackConfig:
                 description: RackConfig Configures the operator to deploy rack aware
@@ -8177,6 +8201,30 @@ spec:
                   reservedInitContainerImageWithTag:
                     description: aerospike-kubernetes-init container image path with tag
                     type: string
+                  resources:
+                    description: Compute Resources required by this container.
+                    properties:
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: Limits describes the maximum amount of
+                          compute resources allowed.
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: Requests describes the minimum amount of
+                          compute resources required.
+                        type: object
+                    type: object
                 type: object
                 nullable: true
               rackConfig:
