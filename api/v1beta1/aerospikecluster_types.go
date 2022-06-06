@@ -184,7 +184,8 @@ type AerospikeObjectMeta struct {
 
 // AerospikeReservedInitContainerSpec contains configuration for custom aerospike-init sources
 type AerospikeReservedInitContainerSpec struct {
-	ReservedInitContainerImageWithTag string `json:"reservedInitContainerImageWithTag,omitempty"`
+	ReservedInitContainerImageWithTag string                       `json:"reservedInitContainerImageWithTag,omitempty"`
+	Resources                         *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // AerospikePodSpec contain configuration for created Aerospike cluster pods.
