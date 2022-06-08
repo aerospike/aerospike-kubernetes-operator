@@ -3,9 +3,9 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.17
 
 require (
-	github.com/aerospike/aerospike-management-lib v0.0.0-20220330070801-bc4c4467c476
+	github.com/aerospike/aerospike-management-lib v0.0.0-20220606114921-6f16a978b15a
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
-	github.com/ashishshinde/aerospike-client-go/v5 v5.0.0-20210915134909-922798c88e83
+	github.com/ashishshinde/aerospike-client-go/v6 v6.0.1-0.20220606044039-77304169d3a4
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/onsi/ginkgo/v2 v2.1.3
@@ -95,5 +95,3 @@ require (
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
 
 replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
-
-//replace github.com/ashishshinde/aerospike-client-go => /home/ashish/go/src/github.com/ashishshinde/aerospike-client-go
