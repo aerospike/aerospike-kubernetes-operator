@@ -36,7 +36,7 @@ fi
 
 namespaces="test test1 test2"
 for namespace in $namespaces; do
-  kubectl create namespace "$namespace"
+  kubectl create namespace "$namespace" || true
   if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then
     echo "Adding security constraints"
     oc adm policy add-scc-to-user anyuid system:serviceaccount:"$namespace":aerospike-operator-controller-manager
