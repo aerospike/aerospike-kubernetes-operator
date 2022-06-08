@@ -3415,6 +3415,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -3423,6 +3429,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -3446,6 +3458,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -3454,6 +3472,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             volumes:
@@ -3509,6 +3533,12 @@ spec:
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
+                                    type: string
+                                  effectiveWipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -3803,6 +3833,12 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -4492,6 +4528,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -4500,6 +4542,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -4523,6 +4571,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -4531,6 +4585,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             volumes:
@@ -4586,6 +4646,12 @@ spec:
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
+                                    type: string
+                                  effectiveWipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -4880,6 +4946,12 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -4963,6 +5035,12 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -4971,6 +5049,12 @@ spec:
                         - dd
                         - blkdiscard
                         - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
                         type: string
                     type: object
                   filesystemVolumePolicy:
@@ -4994,6 +5078,12 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -5002,6 +5092,12 @@ spec:
                         - dd
                         - blkdiscard
                         - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
                         type: string
                     type: object
                   volumes:
@@ -5054,6 +5150,12 @@ spec:
                           - dd
                           - blkdiscard
                           - deleteFiles
+                          type: string
+                        effectiveWipeMethod:
+                          description: TODO David add comment
+                          enum:
+                          - dd
+                          - blkdiscard
                           type: string
                         initContainers:
                           description: InitContainers are additional init containers
@@ -5329,6 +5431,12 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: TODO David add comment
+                          enum:
+                          - dd
+                          - blkdiscard
+                          type: string
                       required:
                       - name
                       type: object
@@ -8859,6 +8967,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -8867,6 +8981,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -8890,6 +9010,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -8898,6 +9024,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             volumes:
@@ -8953,6 +9085,12 @@ spec:
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
+                                    type: string
+                                  effectiveWipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -9247,6 +9385,12 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -9936,6 +10080,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -9944,6 +10094,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -9967,6 +10123,12 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -9975,6 +10137,12 @@ spec:
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: TODO David add comment
+                                  enum:
+                                  - dd
+                                  - blkdiscard
                                   type: string
                               type: object
                             volumes:
@@ -10030,6 +10198,12 @@ spec:
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
+                                    type: string
+                                  effectiveWipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -10324,6 +10498,12 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: TODO David add comment
+                                    enum:
+                                    - dd
+                                    - blkdiscard
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -10432,6 +10612,12 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -10440,6 +10626,12 @@ spec:
                         - dd
                         - blkdiscard
                         - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
                         type: string
                     type: object
                   filesystemVolumePolicy:
@@ -10463,6 +10655,12 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -10471,6 +10669,12 @@ spec:
                         - dd
                         - blkdiscard
                         - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: TODO David add comment
+                        enum:
+                        - dd
+                        - blkdiscard
                         type: string
                     type: object
                   volumes:
@@ -10523,6 +10727,12 @@ spec:
                           - dd
                           - blkdiscard
                           - deleteFiles
+                          type: string
+                        effectiveWipeMethod:
+                          description: TODO David add comment
+                          enum:
+                          - dd
+                          - blkdiscard
                           type: string
                         initContainers:
                           description: InitContainers are additional init containers
@@ -10798,6 +11008,12 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: TODO David add comment
+                          enum:
+                          - dd
+                          - blkdiscard
+                          type: string
                       required:
                       - name
                       type: object

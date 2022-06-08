@@ -80,15 +80,16 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 func (s *AerospikeStorageSpec) SetDefaults() {
 	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
 	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
+	defaultBlockWipeMethod := AerospikeVolumeWipeMethodDD
 	// Set storage level defaults.
 	s.FileSystemVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
-			InitMethod: defaultFilesystemInitMethod, CascadeDelete: false,
+			InitMethod: defaultFilesystemInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
 	s.BlockVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
-			InitMethod: defaultBlockInitMethod, CascadeDelete: false,
+			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
 

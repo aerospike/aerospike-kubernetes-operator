@@ -390,16 +390,36 @@ const (
 	AerospikeVolumeInitMethodDeleteFiles AerospikeVolumeInitMethod = "deleteFiles"
 )
 
+// AerospikeVolumeWipeMethod specifies how block volumes should be initialized.
+// +kubebuilder:validation:Enum=dd;blkdiscard
+// +k8s:openapi-gen=true
+type AerospikeVolumeWipeMethod string
+
+const (
+	// AerospikeVolumeWipeMethodDD specifies the block volume should be zeroed using dd command.
+	AerospikeVolumeWipeMethodDD AerospikeVolumeWipeMethod = "dd"
+
+	// AerospikeVolumeWipeMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
+	AerospikeVolumeWipeMethodBlkdiscard AerospikeVolumeWipeMethod = "blkdiscard"
+)
+
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
+
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
 	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
+
+	// TODO David add comment
+	InputWipeMethod *AerospikeVolumeWipeMethod `json:"wipeMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
 	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
+
+	// TODO David add comment
+	WipeMethod AerospikeVolumeWipeMethod `json:"effectiveWipeMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
@@ -411,6 +431,12 @@ func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *Aerospi
 		p.InitMethod = defaultPolicy.InitMethod
 	} else {
 		p.InitMethod = *p.InputInitMethod
+	}
+
+	if p.InputWipeMethod == nil {
+		p.WipeMethod = defaultPolicy.WipeMethod
+	} else {
+		p.WipeMethod = *p.InputWipeMethod
 	}
 
 	if p.InputCascadeDelete == nil {

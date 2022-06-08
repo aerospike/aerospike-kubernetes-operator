@@ -73,7 +73,7 @@ else
     echo "Pod restarted"
 fi
 
-echo $AERO_CLUSTER_JSON | python3 create_pod_status_patch.py $MY_POD_NAME
+python3 create_pod_status_patch.py --pod-name $MY_POD_NAME --config $AERO_CLUSTER_JSON
 
 if [ $? -ne 0 ]
 then
