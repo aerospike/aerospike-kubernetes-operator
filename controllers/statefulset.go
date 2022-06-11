@@ -851,10 +851,15 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 			"volume", volume,
 		)
 
+		initContainerVolumePathPrefix := ""
+		if volume.Source.HostPath != nil {
+			initContainerVolumePathPrefix = "/workdir/filesystem-volumes"
+		}
+
 		// Add volumeMount in statefulSet pod containers for volume
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
-			st.Spec.Template.Spec.InitContainers, "",
+			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,
@@ -1276,6 +1281,7 @@ func createVolumeForVolumeAttachment(volume asdbv1beta1.VolumeSpec) corev1.Volum
 			ConfigMap: volume.Source.ConfigMap,
 			Secret:    volume.Source.Secret,
 			EmptyDir:  volume.Source.EmptyDir,
+			HostPath:  volume.Source.HostPath,
 		},
 	}
 }

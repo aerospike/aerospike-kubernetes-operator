@@ -506,6 +506,11 @@ type VolumeSource struct {
 	// +optional
 	ConfigMap *corev1.ConfigMapVolumeSource `json:"configMap,omitempty" protobuf:"bytes,19,opt,name=configMap"`
 
+	// HostPath represents a hostPath that should populate this volume.
+	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty" protobuf:"bytes,20,opt,name=hostPath"`
+
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
 }

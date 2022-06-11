@@ -143,10 +143,12 @@ func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
 
 		if volume.Aerospike != nil {
 			// TODO: Do we need to check for other type of sources
-			if volume.Source.PersistentVolume == nil {
+			if volume.Source.Secret != nil || volume.Source.ConfigMap != nil {
 				continue
 			}
-			if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+			if volume.Source.PersistentVolume == nil {
+				fileStorageList = append(fileStorageList, volume.Aerospike.Path)
+			} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
 				blockStorageDeviceList = append(
 					blockStorageDeviceList, volume.Aerospike.Path,
 				)
@@ -380,15 +382,21 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 	if source.EmptyDir != nil {
 		sourceFound = true
 	}
+	if source.HostPath != nil {
+		if sourceFound {
+			return fmt.Errorf("can not specify more than 1 volume source: %+v", volume)
+		}
+		sourceFound = true
+	}
 	if source.Secret != nil {
 		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
+			return fmt.Errorf("can not specify more than 1 volume source: %+v", volume)
 		}
 		sourceFound = true
 	}
 	if source.ConfigMap != nil {
 		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
+			return fmt.Errorf("can not specify more than 1 volume source: %+v", volume)
 		}
 		sourceFound = true
 	}
@@ -405,7 +413,7 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
 			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
 				return fmt.Errorf(
-					"invalid init method %v for filesystem volume: %v2",
+					"invalid init method %v for filesystem volume: %v",
 					volume.InitMethod, volume,
 				)
 			}
@@ -435,7 +443,7 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 		}
 
 		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
+			return fmt.Errorf("can not specify more than 1 volume source: %+v", volume)
 		}
 		sourceFound = true
 	}

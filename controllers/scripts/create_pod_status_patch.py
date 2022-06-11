@@ -64,13 +64,17 @@ else:
 # should automatically noop in that case.
 initialized = []
 for volume in volumes:
-    if 'persistentVolume' not in volume['source']:
+    if 'persistentVolume' not in volume['source'] and 'hostPath' not in volume['source']:
+        print('volume ' + volume['name'] + ' does not need to be initialized')
         continue
 
     # volume path is always absolute.
     volumePath = '/' + volume['name']
 
-    volumeMode = volume['source']['persistentVolume']['volumeMode']
+    if 'persistentVolume' in volume['source']:
+        volumeMode = volume['source']['persistentVolume']['volumeMode']
+    else:
+        volumeMode = 'Filesystem'
 
     if volumeMode == 'Block':
         localVolumePath = blockMountPoint + volumePath
@@ -99,10 +103,10 @@ for volume in volumes:
             if volume['effectiveInitMethod'] == 'deleteFiles':
                 executeCommand(
                     'find ' + localVolumePath + ' -type f -delete')
-        print('device ' + volume['name'] + ' initialized')
+        print('volume ' + volume['name'] + ' initialized')
 
     else:
-        print('device ' + volume['name'] + ' already initialized')
+        print('volume ' + volume['name'] + ' already initialized')
 
     initialized.append(volume['name'])
 
