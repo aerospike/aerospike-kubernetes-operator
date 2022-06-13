@@ -3,8 +3,9 @@ import os
 import sys
 import json
 import argparse
-import subprocess
 import ipaddress
+import subprocess
+from pprint import pprint as pp
 
 # Constants
 FILE_SYSTEM_MOUNT_POINT = '/workdir/filesystem-volumes'
@@ -57,7 +58,7 @@ def wipe_volumes(pod_name, config):
 def get_rack(config, pod_name):
     print('Checking for rack in rackConfig')
     # Assuming podName format stsName-rackID-index
-    rack_id = int(pod_name.split("-")[1])
+    rack_id = int(pod_name.split("-")[-2])
     try:
         racks = config["spec"]["rackConfig"]["racks"]
         for rack in racks:
@@ -140,7 +141,10 @@ def init_volumes(pod_name, config):
                 volume_path = os.path.join(FILE_SYSTEM_MOUNT_POINT, volume_name)
                 if effective_init_method == "deleteFiles":
                     print(f"TEST: start - pod-name: {pod_name} volume-init-method: {effective_init_method} volume-name: {volume_name}")
-                    p = subprocess.Popen(f"'find {volume_path} -type f -delete").wait()
+                    try:
+                        p = subprocess.Popen(f"'find {volume_path} -type f -delete").wait()
+                    except FileNotFoundError:
+                        pass
                     print(f"TEST: end - pod-name: {pod_name} volume-init-method: {effective_init_method} volume-name: {volume_name}")
             print(f"pod-name: {pod_name} volume: {volume_name} "
                   f"volume-mode: {volume_mode}  init-method: {effective_init_method} initialized")
@@ -177,9 +181,9 @@ def get_endpoints(address_type):
         host = ipaddress.ip_address(os.environ[f"global_{addr_type}_address"])
         port = os.environ[f"global_{addr_type}_port"]
         if type(host) == ipaddress.IPv4Address:
-            return f"{host}:{port}"
+            return [f"{host}:{port}"]
         elif type(host) == ipaddress.IPv6Address:
-            return f"[{host}]:{port}"
+            return [f"[{host}]:{port}"]
         else:
             raise ValueError("Invalid ipaddress")
     except (ValueError, KeyError):
@@ -217,12 +221,10 @@ def main():
             if (next_major_ver < BASE_WIPE_VERSION and prev_major_ver < BASE_WIPE_VERSION) or \
                     (next_major_ver >= BASE_WIPE_VERSION and prev_major_ver >= BASE_WIPE_VERSION):
                 raise ValueError(f"pod-name: {args.pod_name} - volumes should not be wiped")
-            print("Here222")
             volumes = wipe_volumes(pod_name=args.pod_name, config=config)
         except ValueError as e:
             if str(e) != f"pod-name: {args.pod_name} - volumes should not be wiped":
                 raise e
-            print("HERE 1111")
             volumes = init_volumes(pod_name=args.pod_name, config=config)
 
     except Exception as e:
@@ -243,13 +245,20 @@ def main():
             'networkPolicyHash': network_policy_hash,
             'podSpecHash': pod_spec_hash,
         })
+
         for pod_addr_name, conf_addr_name in ADDRESS_TYPE_NAME.items():
-            metadata['aerospike'][conf_addr_name] = get_endpoints(pod_addr_name)
-        metadata['aerospike']['rackID'] = get_rack(config=config, pod_name=args.pod_name)["id"]
+            metadata["aerospike"][conf_addr_name] = get_endpoints(address_type=pod_addr_name)
+        metadata["aerospike"]["rackID"] = get_rack(config=config, pod_name=args.pod_name)["id"]
 
         payload = [{"op": "replace", "path": f"/status/pods/{args.pod_name}", "value": metadata}]
+        print("######################################################################################################")
+        pp(payload)
+        print("######################################################################################################")
         with open("/tmp/patch.json", mode="w") as f:
             json.dump(payload, f)
-    sys.exit(0)
+            f.flush()
+        sys.exit(0)
 
-main()
+
+if __name__ == '__main__':
+    main()
