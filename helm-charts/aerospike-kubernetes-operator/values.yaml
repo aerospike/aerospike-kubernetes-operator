@@ -3,8 +3,8 @@ replicas: 2
 
 ## Operator image
 operatorImage:
-  repository: gcr.io/high-codex-314318/aerospike-kubernetes-operator
-  tag: 2.0.0-dev3
+  repository: aerospike/aerospike-kubernetes-operator
+  tag: 2.0.0
   # pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -30,7 +30,7 @@ certs:
   webhookServerCertSecretName: "webhook-server-cert"
 
 ##  Operator configurations
-watchNamespaces: "dev-aero"
+watchNamespaces: "default"
 
 ## Resources - limits / requests
 resources: {}
