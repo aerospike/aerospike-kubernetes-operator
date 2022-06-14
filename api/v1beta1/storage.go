@@ -162,6 +162,8 @@ func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
 					blockStorageDeviceList = append(
 						blockStorageDeviceList, volume.Aerospike.Path,
 					)
+				} else if (*volume.Source.HostPath.Type == v1.HostPathDirectory) || (*volume.Source.HostPath.Type == v1.HostPathDirectoryOrCreate) {
+					fileStorageList = append(fileStorageList, volume.Aerospike.Path)
 				}
 			} else {
 				continue
