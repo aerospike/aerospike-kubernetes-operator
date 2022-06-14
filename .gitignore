@@ -28,6 +28,7 @@ test/junit.xml
 .idea
 *.swp
 *.swo
+.vscode
 
 # Aerospike feature conf file
 features.conf
