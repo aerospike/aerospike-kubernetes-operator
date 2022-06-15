@@ -18,116 +18,45 @@ ADDRESS_TYPE_NAME = {
 }
 
 
-def init_volumes(pod_name, config):
-    initialized_volumes = get_initialized_volumes(pod_name=pod_name, config=config)
-    print(f"TEST: initialized volumes: {initialized_volumes}")
-    volumes = []
-    for volume in get_volumes(pod_name=pod_name, config=config):
-        try:
-            volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
-        except KeyError:
-            print(f"pod-name: {pod_name} volume not found skipping..")
-            continue
+def process_volumes(pod_name, find, dd, blkdiskard, volumes, effective_method_key):
 
-        if volume_mode != 'Block' and volume_mode != 'Filesystem':
-            continue
+    result = []
 
+    for volume in filter((lambda x: True if "persistentVolume" in x["source"] else False), volumes):
+        volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
         volume_name = volume["name"]
-        effective_init_method = volume['effectiveInitMethod']
-        if volume_name not in initialized_volumes:
-            if volume_mode == 'Block':
-                volume_path = os.path.join(BLOCK_MOUNT_POINT, volume_name)
-                print(f"TEST: volumePath: {volume_path}")
-                if not os.path.exists(volume_path):
-                    raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} not found")
-                if effective_init_method == "dd":
-                    print(f"TEST: start - pod-name: {pod_name} volume-init-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-                    cmd = f'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q ' \
-                          f'"No space left on device" /tmp/init-stderr'
-                    execute(cmd)
-                    print(f"TEST: end - pod-name: {pod_name} volume-init-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-                elif effective_init_method == "blkdiscard":
-                    print(f"TEST: start - pod-name: {pod_name} volume-init-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-                    cmd = f"blkdiscard {volume_path}"
-                    execute(cmd)
-                    print(f"TEST: end - pod-name: {pod_name} volume-wipe-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-            elif volume_mode == 'Filesystem':
-                volume_path = os.path.join(FILE_SYSTEM_MOUNT_POINT, volume_name)
-                if not os.path.exists(volume_path):
-                    raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} not found")
-                if effective_init_method == "deleteFiles":
-                    print(f"TEST: volumePath: {volume_path}")
-                    print(f"TEST: start - pod-name: {pod_name} volume-init-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-                    cmd = f"find {volume_path} -type f -delete"
-                    execute(cmd)
-                    print(f"TEST: end - pod-name: {pod_name} volume-init-method: {effective_init_method} "
-                          f"volume-name: {volume_name}")
-
-            print(f"pod-name: {pod_name} volume: {volume_name} "
-                  f"volume-mode: {volume_mode}  init-method: {effective_init_method} initialized")
-        else:
-            print(f"pod-name: {pod_name} volume: {volume_name} already initialized")
-        volumes.append(volume_name)
-    return volumes
-
-
-def wipe_volumes(pod_name, config):
-
-    volumes = []
-
-    for volume in get_volumes(pod_name=pod_name, config=config):
-        try:
-            volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
-        except KeyError:
-            print(f"pod-name: {pod_name} volume not found skipping..")
-            continue
-
-        volume_name = volume["name"]
-        effective_wipe_method = volume['effectiveWipeMethod']
+        effective_method = volume[effective_method_key]
 
         if volume_mode == "Block":
             volume_path = os.path.join(BLOCK_MOUNT_POINT, volume_name)
             if not os.path.exists(volume_path):
                 raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} not found")
-            if effective_wipe_method == "dd":
-                print(f"TEST: start - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+            if effective_method == "dd":
+                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
-                cmd = f'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q ' \
-                      f'"No space left on device" /tmp/init-stderr'
-                execute(cmd)
-                print(f"TEST: end - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+                execute(dd.format(volume_path=volume_path))
+                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
-            elif effective_wipe_method == "blkdiscard":
-                print(f"TEST: start - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+            elif effective_method == "blkdiscard":
+                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
-                cmd = f"blkdiscard -z {volume_path}"
-                execute(cmd)
-                print(f"TEST: end - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+                execute(blkdiskard.format(volume_path=volume_path))
+                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
-            else:
-                print(f"TEST: Error - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
-                      f"volume-name: {volume_name}")
-                raise ValueError(f"pod-name: {pod_name} invalid effective-wipe-method: {effective_wipe_method}")
         elif volume_mode == "Filesystem":
             volume_path = os.path.join(FILE_SYSTEM_MOUNT_POINT, volume_name)
-            if effective_wipe_method == "deleteFiles":
-                print(f"TEST: start - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+            if effective_method == "deleteFiles":
+                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
-                cmd = f"find {volume_path} -type f -delete"
-                execute(cmd)
-                print(f"TEST: end - pod-name: {pod_name} volume-wipe-method: {effective_wipe_method} "
+                execute(find.format(volume_path=volume_path))
+                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
         else:
             raise ValueError(f"pod-name: {pod_name} invalid volume-mode: {volume_mode}")
 
-        print(f"pod-name: {pod_name} wiped volume: {volume_name}")
-        volumes.append(volume_name)
-    return volumes
+        print(f"pod-name: {pod_name} added volume: {volume_name}")
+        result.append(volume_name)
+    return result
 
 
 def get_rack(config, pod_name):
@@ -239,9 +168,34 @@ def execute(cmd):
         raise OSError(f"command: {cmd} - execution failed")
 
 
+def update_status(pod_name, metadata, volumes):
+    with open("aerospikeConfHash", mode="r") as f:
+        conf_hash = f.read()
+    with open("networkPolicyHash", mode="r") as f:
+        network_policy_hash = f.read()
+    with open("podSpecHash", mode="r") as f:
+        pod_spec_hash = f.read()
+
+    metadata.update({
+        'initializedVolumes': volumes,
+        'aerospikeConfigHash': conf_hash,
+        'networkPolicyHash': network_policy_hash,
+        'podSpecHash': pod_spec_hash,
+    })
+    for pod_addr_name, conf_addr_name in ADDRESS_TYPE_NAME.items():
+        metadata["aerospike"][conf_addr_name] = get_endpoints(address_type=pod_addr_name)
+
+    payload = [{"op": "replace", "path": f"/status/pods/{pod_name}", "value": metadata}]
+    print(40 * "#" + " payload " + 40 * "#")
+    pp(payload)
+    print(89 * "#")
+    with open("/tmp/patch.json", mode="w") as f:
+        json.dump(payload, f)
+        f.flush()
+
+
 def main():
     try:
-        dd = ""
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
         parser.add_argument("--config", type=str, required=True, dest="config")
@@ -249,63 +203,46 @@ def main():
         args = parser.parse_args()
         config = json.loads(args.config)
         metadata = get_node_metadata()
+        dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
+             '/tmp/init-stderr'
+        find = "find {volume_path} -type f -delete"
+        blkdiskard_init = "blkdiscard {volume_path}"
+        blkdiskard_wipe = "blkdiscard -z {volume_path}"
+        next_major_ver = get_image_version(image=config["spec"]["image"])[0]
         try:
-            next_major_ver = get_image_version(image=config["spec"]["image"])[0]
-            print("No previous image")
-        except ValueError:
-            raise ValueError(f"pod-name: {args.pod_name} unable to get spec.image version")
-        try:
-            try:
-                image = config["status"]["image"]
-            except KeyError:
-                image = ""
-            if not image:
-                raise ValueError(f"pod-name: {args.pod_name} - volumes should not be wiped")
+            image = config["status"]["image"]
+        except KeyError:
+            image = ""
+        print("Checking if volumes should be wiped")
+        if image:
             prev_major_ver = get_image_version(image=image)[0]
-            print("TEST: Checking if volumes should be wiped")
-            print(f"TEST: next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
-            if (next_major_ver < BASE_WIPE_VERSION and prev_major_ver < BASE_WIPE_VERSION) or \
-                    (next_major_ver >= BASE_WIPE_VERSION and prev_major_ver >= BASE_WIPE_VERSION):
-                print("TEST: volumes should not be wiped")
-                raise ValueError(f"pod-name: {args.pod_name} - volumes should not be wiped")
-            print("TEST: wiping the volumes")
-            volumes = wipe_volumes(pod_name=args.pod_name, config=config)
-        except ValueError as e:
-            if str(e) != f"pod-name: {args.pod_name} - volumes should not be wiped":
-                print(f"TEST: ERROR!: {e}")
-                raise e
-            print("TEST: initializing the volumes")
-
-            volumes = init_volumes(pod_name=args.pod_name, config=config)
+            print(f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
+            if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
+                (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
+                print("volumes should be wiped")
+                volumes = process_volumes(pod_name=args.pod_name,
+                                          dd=dd, find=find,
+                                          blkdiskard=blkdiskard_wipe,
+                                          effective_method_key="effectiveWipeMethod",
+                                          volumes=get_volumes(pod_name=args.pod_name, config=config))
+                update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
+                return
+        print("volumes should not be wiped")
+        init_volumes = get_initialized_volumes(pod_name=args.pod_name, config=config)
+        volumes = process_volumes(
+            pod_name=args.pod_name,
+            dd=dd,
+            blkdiskard=blkdiskard_init,
+            find=find,
+            effective_method_key="effectiveInitMethod",
+            volumes=filter(lambda x: True if x["name"] not in init_volumes else False, get_volumes(
+                pod_name=args.pod_name, config=config)))
+        volumes.extend(init_volumes)
+        update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
     except Exception as e:
         print(e)
         sys.exit(1)
     else:
-        with open("aerospikeConfHash", mode="r") as f:
-            conf_hash = f.read()
-        with open("networkPolicyHash", mode="r") as f:
-            network_policy_hash = f.read()
-        with open("podSpecHash", mode="r") as f:
-            pod_spec_hash = f.read()
-
-        metadata.update({
-            'initializedVolumes': volumes,
-            'aerospikeConfigHash': conf_hash,
-            'networkPolicyHash': network_policy_hash,
-            'podSpecHash': pod_spec_hash,
-        })
-
-        for pod_addr_name, conf_addr_name in ADDRESS_TYPE_NAME.items():
-            metadata["aerospike"][conf_addr_name] = get_endpoints(address_type=pod_addr_name)
-        metadata["aerospike"]["rackID"] = get_rack(config=config, pod_name=args.pod_name)["id"]
-
-        payload = [{"op": "replace", "path": f"/status/pods/{args.pod_name}", "value": metadata}]
-        print(40 * "#" + " payload " + 40 * "#")
-        pp(payload)
-        print(89 * "#")
-        with open("/tmp/patch.json", mode="w") as f:
-            json.dump(payload, f)
-            f.flush()
         sys.exit(0)
 
 

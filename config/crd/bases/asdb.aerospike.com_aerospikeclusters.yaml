@@ -3420,6 +3420,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -3435,6 +3436,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -3463,6 +3465,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -3478,6 +3481,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             volumes:
@@ -3539,6 +3543,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -3838,6 +3843,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                 required:
                                 - name
@@ -4533,6 +4539,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -4548,6 +4555,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -4576,6 +4584,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -4591,6 +4600,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             volumes:
@@ -4652,6 +4662,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -4951,6 +4962,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                 required:
                                 - name
@@ -5040,6 +5052,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
@@ -5055,6 +5068,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                     type: object
                   filesystemVolumePolicy:
@@ -5083,6 +5097,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
@@ -5098,6 +5113,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                     type: object
                   volumes:
@@ -5156,6 +5172,7 @@ spec:
                           enum:
                           - dd
                           - blkdiscard
+                          - deleteFiles
                           type: string
                         initContainers:
                           description: InitContainers are additional init containers
@@ -5436,6 +5453,7 @@ spec:
                           enum:
                           - dd
                           - blkdiscard
+                          - deleteFiles
                           type: string
                       required:
                       - name
@@ -8972,6 +8990,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -8987,6 +9006,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -9015,6 +9035,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -9030,6 +9051,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             volumes:
@@ -9091,6 +9113,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -9390,6 +9413,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                 required:
                                 - name
@@ -10085,6 +10109,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -10100,6 +10125,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             filesystemVolumePolicy:
@@ -10128,6 +10154,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
@@ -10143,6 +10170,7 @@ spec:
                                   enum:
                                   - dd
                                   - blkdiscard
+                                  - deleteFiles
                                   type: string
                               type: object
                             volumes:
@@ -10204,6 +10232,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                   initContainers:
                                     description: InitContainers are additional init
@@ -10503,6 +10532,7 @@ spec:
                                     enum:
                                     - dd
                                     - blkdiscard
+                                    - deleteFiles
                                     type: string
                                 required:
                                 - name
@@ -10617,6 +10647,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
@@ -10632,6 +10663,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                     type: object
                   filesystemVolumePolicy:
@@ -10660,6 +10692,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
@@ -10675,6 +10708,7 @@ spec:
                         enum:
                         - dd
                         - blkdiscard
+                        - deleteFiles
                         type: string
                     type: object
                   volumes:
@@ -10733,6 +10767,7 @@ spec:
                           enum:
                           - dd
                           - blkdiscard
+                          - deleteFiles
                           type: string
                         initContainers:
                           description: InitContainers are additional init containers
@@ -11013,6 +11048,7 @@ spec:
                           enum:
                           - dd
                           - blkdiscard
+                          - deleteFiles
                           type: string
                       required:
                       - name

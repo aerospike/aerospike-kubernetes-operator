@@ -81,10 +81,9 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName     string = "aerospike-server"
-	AerospikeServerInitContainerName string = "aerospike-init"
-	//TODO David remove after testing
-	AerospikeServerInitContainerImage string = "davi17g/init-container:1.4"
+	AerospikeServerContainerName      string = "aerospike-server"
+	AerospikeServerInitContainerName  string = "aerospike-init"
+	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.15"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
