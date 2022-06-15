@@ -64,17 +64,21 @@ else:
 # should automatically noop in that case.
 initialized = []
 for volume in volumes:
-    if 'persistentVolume' not in volume['source']:
+    if 'persistentVolume' not in volume['source'] and 'hostPath' not in volume['source']:
         continue
 
     # volume path is always absolute.
     volumePath = '/' + volume['name']
 
-    volumeMode = volume['source']['persistentVolume']['volumeMode']
+    volumeMode = 'Filesystem'
+    if 'persistentVolume' in volume['source']:
+        volumeMode = volume['source']['persistentVolume']['volumeMode']
+    elif 'hostPath' in volume['source']:
+        volumeMode = volume['source']['hostPath']['type']
 
-    if volumeMode == 'Block':
+    if volumeMode == 'Block' or volumeMode == 'BlockDevice':
         localVolumePath = blockMountPoint + volumePath
-    elif volumeMode == 'Filesystem':
+    elif volumeMode == 'Filesystem' or volumeMode == 'Directory' or volumeMode == 'DirectoryOrCreate':
         localVolumePath = fileSystemMountPoint + volumePath
     else:
         continue
@@ -85,7 +89,7 @@ for volume in volumes:
         if not os.path.exists(localVolumePath):
             raise Exception('Volume ' + volume['name'] + ' not attached to path ' + localVolumePath)
 
-        if volumeMode == 'Block':
+        if volumeMode == 'Block' or volumeMode == 'BlockDevice':
             localVolumePath = blockMountPoint + volumePath
             if volume['effectiveInitMethod'] == 'dd':
                 # If device size and block size are not exact multiples or there os overhead on the device we will get "no space left on device". Ignore that error.
@@ -93,7 +97,7 @@ for volume in volumes:
                                localVolumePath + ' bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" /tmp/init-stderr')
             elif volume['effectiveInitMethod'] == 'blkdiscard':
                 executeCommand('blkdiscard ' + localVolumePath)
-        elif volumeMode == 'Filesystem':
+        elif volumeMode == 'Filesystem' or volumeMode == 'Directory' or volumeMode == 'DirectoryOrCreate':
             # volume path is always absolute.
             localVolumePath = fileSystemMountPoint + volumePath
             if volume['effectiveInitMethod'] == 'deleteFiles':

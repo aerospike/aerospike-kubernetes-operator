@@ -93,12 +93,20 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 	)
 
 	for i := range s.Volumes {
-		if s.Volumes[i].Source.PersistentVolume == nil {
+		if s.Volumes[i].Source.PersistentVolume != nil {
+			if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+				s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
+			} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+				s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
+			}
+		} else if s.Volumes[i].Source.HostPath != nil {
+			if *s.Volumes[i].Source.HostPath.Type == v1.HostPathBlockDev {
+				s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
+			} else if *s.Volumes[i].Source.HostPath.Type == v1.HostPathDirectory || *s.Volumes[i].Source.HostPath.Type == v1.HostPathDirectoryOrCreate {
+				s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
+			}
+		} else {
 			// All other sources are considered to be mounted, for now.
-			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
-		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
-		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
 			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
 		}
 	}
@@ -450,6 +458,37 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 	}
 
 	if source.HostPath != nil {
+
+		// Validate InitMethod
+		if *source.HostPath.Type == v1.HostPathBlockDev {
+			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf(
+					"invalid init method %v for block volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+			// Note: Add validation for invalid initMethod if new get added.
+		} else if *source.HostPath.Type == v1.HostPathDirectory || *source.HostPath.Type == v1.HostPathDirectoryOrCreate {
+			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+				return fmt.Errorf(
+					"invalid init method %v for filesystem volume: %v2",
+					volume.InitMethod, volume,
+				)
+			}
+		}
+
+		// Validate hostPath type
+		hostPathType := source.HostPath.Type
+
+		if *hostPathType != v1.HostPathBlockDev &&
+			*hostPathType != v1.HostPathDirectory &&
+			*hostPathType != v1.HostPathDirectoryOrCreate {
+			return fmt.Errorf(
+				"invalid hostPath type `%s`. Valid types: %s, %s, %s", *hostPathType,
+				v1.HostPathBlockDev, v1.HostPathDirectory, v1.HostPathDirectoryOrCreate,
+			)
+		}
+
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		}

@@ -155,6 +155,7 @@ func (r *SingleClusterReconciler) createSTS(
 							Image: asdbv1beta1.AerospikeServerInitContainerImage,
 							// Change to PullAlways for image testing.
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{
@@ -851,10 +852,19 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 			"volume", volume,
 		)
 
+		initContainerVolumePathPrefix := ""
+		if volume.Source.HostPath != nil {
+			if *volume.Source.HostPath.Type == corev1.HostPathBlockDev {
+				initContainerVolumePathPrefix = "/workdir/block-volumes"
+			} else if (*volume.Source.HostPath.Type == corev1.HostPathDirectory) || (*volume.Source.HostPath.Type == corev1.HostPathDirectoryOrCreate) {
+				initContainerVolumePathPrefix = "/workdir/filesystem-volumes"
+			}
+		}
+
 		// Add volumeMount in statefulSet pod containers for volume
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
-			st.Spec.Template.Spec.InitContainers, "",
+			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,
