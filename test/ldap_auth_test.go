@@ -1,4 +1,5 @@
 //go:build !noac
+// +build !noac
 
 // Tests Aerospike ldap external authentication.
 
