@@ -369,6 +369,129 @@ var _ = Describe(
 						)
 					},
 				)
+
+				Context(
+					"When using valid rack storage config", func() {
+
+						clusterName := "rack-config-update"
+						clusterNamespacedName := getClusterNamespacedName(
+							clusterName, namespace,
+						)
+						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+
+						It(
+							"Should validate whole flow of rack.Storage use",
+							func() {
+
+								err := deployCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Adding rack in existing racks list")
+								err = addRack(
+									k8sClient, ctx, clusterNamespacedName,
+									asdbv1beta1.Rack{ID: 2},
+								)
+								Expect(err).ToNot(HaveOccurred())
+								err = validateRackEnabledCluster(
+									k8sClient, ctx,
+									clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = removeLastRack(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+								err = validateRackEnabledCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster, err = getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
+
+								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackEnabledCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								volumes := []asdbv1beta1.VolumeSpec{
+									{
+										Name: "ns",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeBlock,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/test/dev/xvdf",
+										},
+									},
+									{
+										Name: "workdir",
+										Source: asdbv1beta1.VolumeSource{
+											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+												Size:         resource.MustParse("1Gi"),
+												StorageClass: storageClass,
+												VolumeMode:   v1.PersistentVolumeFilesystem,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/opt/aerospike",
+										},
+									},
+									{
+										Name: aerospikeConfigSecret,
+										Source: asdbv1beta1.VolumeSource{
+											Secret: &v1.SecretVolumeSource{
+												SecretName: tlsSecretName,
+											},
+										},
+										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+											Path: "/etc/aerospike/secret",
+										},
+									},
+								}
+								aeroCluster.Spec.Storage.Volumes = volumes
+
+								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Adding rack in existing racks list")
+								err = addRack(
+									k8sClient, ctx, clusterNamespacedName,
+									asdbv1beta1.Rack{ID: 2},
+								)
+								Expect(err).ToNot(HaveOccurred())
+								err = validateRackEnabledCluster(
+									k8sClient, ctx,
+									clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								// cleanup: Remove the cluster
+								By("Cleaning up the cluster")
+
+								err = deleteCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
+					},
+				)
 			},
 		)
 
