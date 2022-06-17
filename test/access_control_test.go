@@ -1508,7 +1508,6 @@ var _ = Describe(
 									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
 									AerospikeConfig:        aerospikeConfigWithSecurity,
-									RackConfig:             rackConfig,
 								}
 
 								setRackConfigWithSecurity(&clusterSpec)
