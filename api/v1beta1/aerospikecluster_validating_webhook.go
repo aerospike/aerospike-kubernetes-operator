@@ -442,6 +442,20 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 
 		config := rack.AerospikeConfig
 
+		// Validate rack aerospike config
+		if len(rack.AerospikeConfig.Value) != 0 {
+			if err := validateAerospikeConfigSchema(
+				aslog, version, config,
+			); err != nil {
+				// Differentiating rack aware config log message.
+				if rack.ID > 0 {
+					return fmt.Errorf("aerospikeConfig not valid for rack %v with error %v", rack, err)
+				} else {
+					return fmt.Errorf("aerospikeConfig not valid: %v", err)
+				}
+			}
+		}
+
 		if len(rack.AerospikeConfig.Value) != 0 || len(rack.Storage.Volumes) != 0 {
 			// TODO:
 			// Replication-factor in rack and commonConfig can not be different
@@ -453,19 +467,6 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 			}
 		}
 
-		// Validate rack aerospike config
-		if len(rack.AerospikeConfig.Value) != 0 {
-			if err := validateAerospikeConfigSchema(
-				aslog, version, config,
-			); err != nil {
-				// Differentiating rack aware config log message.
-				if rack.ID > 0 {
-					return fmt.Errorf("aerospikeConfig not valid for rack %v", rack)
-				} else {
-					return fmt.Errorf("aerospikeConfig not valid: %v", err)
-				}
-			}
-		}
 	}
 
 	return nil
