@@ -95,20 +95,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -156,20 +146,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -226,20 +206,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -296,20 +266,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -363,20 +323,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -442,20 +392,10 @@ var _ = Describe(
 								},
 							}
 
-							rackConfig := asdbv1beta1.RackConfig{
-								Racks: []asdbv1beta1.Rack{
-									{
-										ID:              1,
-										AerospikeConfig: *aerospikeConfigWithSecurity,
-									},
-								},
-							}
-
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
-								RackConfig:             rackConfig,
 							}
 
 							setRackConfigWithSecurity(&clusterSpec)
@@ -525,20 +465,10 @@ var _ = Describe(
 								},
 							}
 
-							rackConfig := asdbv1beta1.RackConfig{
-								Racks: []asdbv1beta1.Rack{
-									{
-										ID:              1,
-										AerospikeConfig: *aerospikeConfigWithSecurity,
-									},
-								},
-							}
-
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
-								RackConfig:             rackConfig,
 							}
 
 							setRackConfigWithSecurity(&clusterSpec)
@@ -610,20 +540,10 @@ var _ = Describe(
 								},
 							}
 
-							rackConfig := asdbv1beta1.RackConfig{
-								Racks: []asdbv1beta1.Rack{
-									{
-										ID:              1,
-										AerospikeConfig: *aerospikeConfigWithSecurity,
-									},
-								},
-							}
-
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
-								RackConfig:             rackConfig,
 							}
 
 							setRackConfigWithSecurity(&clusterSpec)
@@ -693,20 +613,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -768,20 +678,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -846,20 +746,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -921,20 +811,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -1006,20 +886,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -1085,20 +955,10 @@ var _ = Describe(
 								},
 							}
 
-							rackConfig := asdbv1beta1.RackConfig{
-								Racks: []asdbv1beta1.Rack{
-									{
-										ID:              1,
-										AerospikeConfig: *aerospikeConfigWithSecurity,
-									},
-								},
-							}
-
 							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
-								RackConfig:             rackConfig,
 							}
 
 							setRackConfigWithSecurity(&clusterSpec)
@@ -1157,20 +1017,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -1225,20 +1075,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -1294,20 +1134,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
@@ -1367,20 +1197,10 @@ var _ = Describe(
 							},
 						}
 
-						rackConfig := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
-								{
-									ID:              1,
-									AerospikeConfig: *aerospikeConfigWithSecurity,
-								},
-							},
-						}
-
 						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
-							RackConfig:             rackConfig,
 						}
 
 						setRackConfigWithSecurity(&clusterSpec)
