@@ -43,14 +43,14 @@ func AerospikeAdminCredentials(
 			return "", "", err
 		}
 		enabled, err = asdbv1beta1.IsSecurityEnabled(
-			incomingVersion, desiredState.AerospikeConfig,
+			incomingVersion, &desiredState.RackConfig.Racks[0].AerospikeConfig,
 		)
 		if err != nil {
 			return "", "", err
 		}
 	} else {
 		enabled, err = asdbv1beta1.IsSecurityEnabled(
-			outgoingVersion, currentState.AerospikeConfig,
+			outgoingVersion, &currentState.RackConfig.Racks[0].AerospikeConfig,
 		)
 		if err != nil {
 			incomingVersion, err := asdbv1beta1.GetImageVersion(desiredState.Image)
@@ -59,7 +59,7 @@ func AerospikeAdminCredentials(
 			}
 			// Its possible this is a new cluster and current state is empty.
 			enabled, err = asdbv1beta1.IsSecurityEnabled(
-				incomingVersion, desiredState.AerospikeConfig,
+				incomingVersion, &desiredState.RackConfig.Racks[0].AerospikeConfig,
 			)
 
 			if err != nil {

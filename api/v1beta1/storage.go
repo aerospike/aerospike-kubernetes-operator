@@ -10,7 +10,19 @@ import (
 )
 
 // ValidateStorageSpecChange indicates if a change to storage spec is safe to apply.
-func (s *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
+func (s *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec, rackConfig *RackConfig) error {
+	if rackConfig != nil {
+		var commonStorageInUse bool
+		for _, rack := range rackConfig.Racks {
+			if rack.InputStorage == nil {
+				commonStorageInUse = true
+				break
+			}
+		}
+		if !commonStorageInUse {
+			return nil
+		}
+	}
 	for _, newVolume := range new.Volumes {
 		for _, oldVolume := range s.Volumes {
 			if oldVolume.Name == newVolume.Name {

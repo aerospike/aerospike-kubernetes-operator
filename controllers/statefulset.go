@@ -100,14 +100,14 @@ func (r *SingleClusterReconciler) createSTS(
 
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		r.aeroCluster.Spec.AerospikeConfig,
+		&rackState.Rack.AerospikeConfig,
 	)
 
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
 		r.aeroCluster.Name, rackState.Rack.ID,
 	)
 
-	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(&rackState.Rack.AerospikeConfig)
 	envVarList := []corev1.EnvVar{
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
 		newSTSEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
@@ -458,7 +458,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	return nil
 }
 
-func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
+func (r *SingleClusterReconciler) createSTSHeadlessSvc(rackState RackState) error {
 	r.Log.Info("Create headless service for statefulSet")
 
 	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
@@ -472,9 +472,9 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 	)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			_, stsServicePort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+			_, stsServicePort := asdbv1beta1.GetServiceTLSNameAndPort(&rackState.Rack.AerospikeConfig)
 			if stsServicePort == nil {
-				stsServicePort = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+				stsServicePort = asdbv1beta1.GetServicePort(&rackState.Rack.AerospikeConfig)
 			}
 
 			service = &corev1.Service{
@@ -549,10 +549,10 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 			if loadBalancer.TargetPort >= 1024 {
 				// if target port is specified in CR.
 				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig); tlsName != "" && tlsPort != nil {
+			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig); tlsName != "" && tlsPort != nil {
 				targetPort = int32(*tlsPort)
 			} else {
-				targetPort = int32(*asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
+				targetPort = int32(*asdbv1beta1.GetServicePort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig))
 			}
 			var port int32
 			if loadBalancer.Port >= 1024 {
@@ -662,7 +662,7 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 
 func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	if svcPort := asdbv1beta1.GetServicePort(
-		r.aeroCluster.Spec.
+		&r.aeroCluster.Spec.RackConfig.Racks[0].
 			AerospikeConfig,
 	); svcPort != nil {
 		service.Spec.Ports = append(
@@ -674,7 +674,7 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	}
 
 	if _, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
-		r.aeroCluster.Spec.AerospikeConfig,
+		&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 	); tlsPort != nil {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{

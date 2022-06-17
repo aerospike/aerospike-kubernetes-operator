@@ -98,7 +98,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	// Volume storage update is not allowed but cascadeDelete policy is allowed
-	if err := old.Spec.Storage.ValidateStorageSpecChange(c.Spec.Storage); err != nil {
+	if err := old.Spec.Storage.ValidateStorageSpecChange(c.Spec.Storage, &c.Spec.RackConfig); err != nil {
 		return fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
@@ -167,8 +167,6 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
-	configMap := c.Spec.AerospikeConfig
-
 	// Validate Image version
 	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
@@ -192,38 +190,33 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	// Storage should be validated before validating aerospikeConfig and fileStorage
-	if err := validateStorage(&c.Spec.Storage, &c.Spec.PodSpec); err != nil {
+	if err := c.validateRackStorage(aslog); err != nil {
 		return err
 	}
 
 	// Validate if passed aerospikeConfig
-	if err := validateAerospikeConfigSchema(
-		aslog, version, *configMap,
-	); err != nil {
-		return fmt.Errorf("aerospikeConfig not valid: %v", err)
-	}
+	/*	if err := validateAerospikeConfigSchema(
+			aslog, version, *configMap,
+		); err != nil {
+			return fmt.Errorf("aerospikeConfig not valid: %v", err)
+		}
 
-	// Validate common aerospike config
-	if err := c.validateAerospikeConfig(
-		aslog, configMap, &c.Spec.Storage, int(c.Spec.Size),
-	); err != nil {
-		return err
-	}
+		// Validate common aerospike config
+			if err := c.validateAerospikeConfig(
+				aslog, configMap, &c.Spec.Storage, int(c.Spec.Size),
+			); err != nil {
+				return err
+			}
+	*/
 
-	if err := validateClientCertSpec(
-		c.Spec.OperatorClientCertSpec, configMap,
-	); err != nil {
-		return err
-	}
-
-	if err := validateRequiredFileStorageForMetadata(
-		aslog, *configMap, &c.Spec.Storage, c.Spec.ValidationPolicy, version,
+	if err := c.validateRequiredRackFileStorageForMetadata(
+		aslog, version,
 	); err != nil {
 		return err
 	}
 
-	if err := validateRequiredFileStorageForFeatureConf(
-		aslog, *configMap, &c.Spec.Storage,
+	if err := c.validateRequiredRackFileStorageForFeatureConf(
+		aslog,
 	); err != nil {
 		return err
 	}
@@ -243,6 +236,12 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	if err := validateClientCertSpec(
+		c.Spec.OperatorClientCertSpec, c.Spec.RackConfig.Racks[0].AerospikeConfig,
+	); err != nil {
+		return err
+	}
+
 	// Validate Sidecars
 	if err := c.validatePodSpec(aslog); err != nil {
 		return err
@@ -253,7 +252,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 
 func validateClientCertSpec(
 	clientCertSpec *AerospikeOperatorClientCertSpec,
-	configSpec *AerospikeConfigSpec,
+	configSpec AerospikeConfigSpec,
 ) error {
 	networkConf, networkConfExist := configSpec.Value[confKeyNetwork]
 	if !networkConfExist {
@@ -347,7 +346,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 					oldStorage := oldRack.Storage
 					newStorage := newRack.Storage
 					// Volume storage update is not allowed but cascadeDelete policy is allowed
-					if err := oldStorage.ValidateStorageSpecChange(newStorage); err != nil {
+					if err := oldStorage.ValidateStorageSpecChange(newStorage, nil); err != nil {
 						return fmt.Errorf(
 							"rack storage config cannot be updated: %v", err,
 						)
@@ -386,6 +385,14 @@ func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
 	return nil
 }
 
+func (c *AerospikeCluster) validateRackStorage(aslog logr.Logger) error {
+	for _, rack := range c.Spec.RackConfig.Racks {
+		if err := validateStorage(&rack.Storage, &c.Spec.PodSpec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
@@ -456,7 +463,11 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 			if err := validateAerospikeConfigSchema(
 				aslog, version, config,
 			); err != nil {
-				return fmt.Errorf("aerospikeConfig not valid for rack %v", rack)
+				if rack.ID > 0 {
+					return fmt.Errorf("aerospikeConfig not valid for rack %v", rack)
+				} else {
+					return fmt.Errorf("aerospikeConfig not valid: %v", err)
+				}
 			}
 		}
 	}
@@ -1180,6 +1191,21 @@ func validateAerospikeConfigSchema(
 	return nil
 }
 
+func (c *AerospikeCluster) validateRequiredRackFileStorageForMetadata(
+	aslog logr.Logger, version string,
+) error {
+	for _, rack := range c.Spec.RackConfig.Racks {
+		configMap := rack.AerospikeConfig
+		if err := validateRequiredFileStorageForMetadata(
+			aslog, configMap, &rack.Storage, c.Spec.ValidationPolicy, version,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func validateRequiredFileStorageForMetadata(
 	aslog logr.Logger, configSpec AerospikeConfigSpec,
 	storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec,
@@ -1241,6 +1267,21 @@ func validateRequiredFileStorageForMetadata(
 					)
 				}
 			}
+		}
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateRequiredRackFileStorageForFeatureConf(
+	aslog logr.Logger,
+) error {
+	for _, rack := range c.Spec.RackConfig.Racks {
+		configMap := rack.AerospikeConfig
+		if err := validateRequiredFileStorageForFeatureConf(
+			aslog, configMap, &rack.Storage,
+		); err != nil {
+			return err
 		}
 	}
 

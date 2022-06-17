@@ -82,7 +82,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	if err != nil {
 		return false, err
 	}
-	enabled, err := IsSecurityEnabled(version, aerospikeClusterSpec.AerospikeConfig)
+	enabled, err := IsSecurityEnabled(version, &aerospikeClusterSpec.RackConfig.Racks[0].AerospikeConfig)
 	if err != nil {
 		return false, err
 	}
@@ -103,7 +103,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	// Validate roles.
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
-		*aerospikeClusterSpec.AerospikeConfig,
+		aerospikeClusterSpec.RackConfig.Racks[0].AerospikeConfig,
 	)
 	if err != nil {
 		return false, err
