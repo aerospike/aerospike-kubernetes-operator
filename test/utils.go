@@ -525,9 +525,11 @@ func getAerospikeStorageConfig(
 	// TODO
 	ddInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDD
 	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
+	blkDiscardWipeMethod := asdbv1beta1.AerospikeVolumeWipeMethodBlkdiscard
 	if cloudProvider == CloudProviderAWS {
 		// Blkdiscard methood is not supported in AWS so it is initialized as DD Method
 		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
+		blkDiscardWipeMethod = asdbv1beta1.AerospikeVolumeWipeMethodDD
 	}
 
 	return &asdbv1beta1.AerospikeStorageSpec{
@@ -600,6 +602,7 @@ func getAerospikeStorageConfig(
 				Name: "device-blkdiscard",
 				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod: &blkDiscardInitMethod,
+					InputWipeMethod: &blkDiscardWipeMethod,
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{

@@ -390,7 +390,7 @@ const (
 	AerospikeVolumeInitMethodDeleteFiles AerospikeVolumeInitMethod = "deleteFiles"
 )
 
-// AerospikeVolumeWipeMethod specifies how block volumes should be initialized.
+// AerospikeVolumeWipeMethod specifies how block volumes should be wiped.
 // +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
 type AerospikeVolumeWipeMethod string

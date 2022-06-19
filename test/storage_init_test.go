@@ -70,8 +70,7 @@ var _ = Describe(
 						storageConfig := getAerospikeStorageConfig(
 							containerName, false, cloudProvider)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
-						)
+							clusterNamespacedName, *storageConfig, racks, prevImage)
 
 						aeroCluster.Spec.PodSpec = podSpec
 
@@ -96,7 +95,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						err = UpdateClusterImage(aeroCluster, prevImage)
+						err = UpdateClusterImage(aeroCluster, pre57Image)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
@@ -112,8 +111,7 @@ var _ = Describe(
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
-						)
+							clusterNamespacedName, *storageConfig, racks, prevImage)
 						aeroCluster.Spec.PodSpec = podSpec
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
@@ -317,7 +315,7 @@ func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 // getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage. None of the  storage volumes are used by Aerospike and are free to be used for testing.
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
-	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
+	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack, image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
@@ -327,7 +325,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   latestImage,
+			Image:   image,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},

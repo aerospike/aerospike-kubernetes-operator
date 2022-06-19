@@ -403,13 +403,20 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 					volume.InitMethod, volume,
 				)
 			}
+			if volume.WipeMethod != AerospikeVolumeWipeMethodBlkdiscard && volume.WipeMethod != AerospikeVolumeWipeMethodDD {
+				return fmt.Errorf("invalid wipe method: %s for block volume: %s", volume.WipeMethod, volume.Name)
+			}
 			// Note: Add validation for invalid initMethod if new get added.
 		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
 			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
 				return fmt.Errorf(
-					"invalid init method %v for filesystem volume: %v2",
+					"invalid init method %v for filesystem volume: %v",
 					volume.InitMethod, volume,
 				)
+			}
+			if volume.WipeMethod != AerospikeVolumeWipeMethodDeleteFiles {
+				return fmt.Errorf("invalid wipe method %s for filesystem volume: %s",
+					volume.WipeMethod, volume.Name)
 			}
 		}
 

@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -17,7 +18,7 @@ type UnwipedVolumesError struct {
 }
 
 func (e UnwipedVolumesError) Error() string {
-	return fmt.Sprintf("unziroed volumes: %s\n", e.err)
+	return fmt.Sprintf("unwiped volumes: %s\n", e.err)
 }
 
 var _ = Describe(
@@ -50,7 +51,7 @@ var _ = Describe(
 
 				It(
 
-					"Should validate all storage-init policies", func() {
+					"Should validate all storage-wipe policies", func() {
 
 						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
 						rackStorageConfig.BlockVolumePolicy.WipeMethod = asdbv1beta1.AerospikeVolumeWipeMethodBlkdiscard
@@ -72,8 +73,7 @@ var _ = Describe(
 						storageConfig := getAerospikeStorageConfig(
 							containerName, false, cloudProvider)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
-						)
+							clusterNamespacedName, *storageConfig, racks, latestImage)
 
 						aeroCluster.Spec.PodSpec = podSpec
 
@@ -104,7 +104,31 @@ var _ = Describe(
 							Expect(nil).ToNot(HaveOccurred(), "volumes should not be zeroed")
 						}
 
-						By("Forcing a rolling restart, volumes should be wiped")
+						By(fmt.Sprintf("Downgrading image from %s to %s - volumes should not be wiped",
+							latestImage, version6))
+						err = UpdateClusterImage(aeroCluster, version6Image)
+						Expect(err).ToNot(HaveOccurred())
+						err = aerospikeClusterCreateUpdate(
+							k8sClient, aeroCluster, ctx,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Checking if volumes are wiped")
+						err = checkIfVolumesWiped(aeroCluster)
+						if err != nil {
+							switch err.(type) {
+							case UnwipedVolumesError:
+								Expect(err).To(HaveOccurred(), "volumes are not wiped")
+							default:
+								Expect(err).ToNot(HaveOccurred())
+
+							}
+						} else {
+							Expect(nil).ToNot(HaveOccurred(), "volumes should not be wiped")
+						}
+
+						By(fmt.Sprintf("Downgrading image from %s to %s - volumes should be wiped",
+							version6, prevServerVersion))
 						err = UpdateClusterImage(aeroCluster, prevImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
@@ -179,6 +203,9 @@ func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 				}
 			} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
 				volumeWasWiped, err = checkIfVolumeFileSystemZeored(&pod, volume)
+				if err != nil {
+					return err
+				}
 
 			} else {
 				return fmt.Errorf("pod: %s volume: %s mood: %s - invalid volume mode",
@@ -210,10 +237,10 @@ func checkIfVolumeBlockZeroed(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (b
 	if err != nil {
 		return false, err
 	}
-	if stderr == "" {
+	if stderr != "" {
 		return false, fmt.Errorf("%s", stderr)
 	}
-	retval, err := strconv.Atoi(stdout)
+	retval, err := strconv.Atoi(strings.TrimRight(stdout, "\r\n"))
 	if err != nil {
 		return false, err
 	}
@@ -225,15 +252,16 @@ func checkIfVolumeBlockZeroed(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (b
 
 func checkIfVolumeFileSystemZeored(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (bool, error) {
 	cName, path := getContainerNameAndPath(volume)
-	cmd := []string{"find", path, "-type f | wc -l"}
+
+	cmd := []string{"bash", "-c", fmt.Sprintf("find %s -type f | wc -l", path)}
 	stdout, stderr, err := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
 	if err != nil {
 		return false, err
 	}
-	if stderr == "" {
+	if stderr != "" {
 		return false, fmt.Errorf("%s", stderr)
 	}
-	retval, err := strconv.Atoi(stdout)
+	retval, err := strconv.Atoi(strings.TrimRight(stdout, "\r\n"))
 	if err != nil {
 		return false, err
 	}

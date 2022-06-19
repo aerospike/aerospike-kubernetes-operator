@@ -3416,7 +3416,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -3432,7 +3433,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -3461,7 +3463,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -3477,7 +3480,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -3539,7 +3543,8 @@ spec:
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
-                                    description: TODO David add comment
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -3839,7 +3844,8 @@ spec:
                                         type: object
                                     type: object
                                   wipeMethod:
-                                    description: TODO David add comment
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -4535,7 +4541,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -4551,7 +4558,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -4580,7 +4588,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -4596,7 +4605,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -4658,7 +4668,8 @@ spec:
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
-                                    description: TODO David add comment
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -4958,7 +4969,8 @@ spec:
                                         type: object
                                     type: object
                                   wipeMethod:
-                                    description: TODO David add comment
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -5048,7 +5060,8 @@ spec:
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
-                        description: TODO David add comment
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
                         enum:
                         - dd
                         - blkdiscard
@@ -5064,7 +5077,8 @@ spec:
                         - deleteFiles
                         type: string
                       wipeMethod:
-                        description: TODO David add comment
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
                         enum:
                         - dd
                         - blkdiscard
@@ -5093,7 +5107,8 @@ spec:
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
-                        description: TODO David add comment
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
                         enum:
                         - dd
                         - blkdiscard
@@ -5109,7 +5124,8 @@ spec:
                         - deleteFiles
                         type: string
                       wipeMethod:
-                        description: TODO David add comment
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
                         enum:
                         - dd
                         - blkdiscard
@@ -5168,7 +5184,8 @@ spec:
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
-                          description: TODO David add comment
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
                           enum:
                           - dd
                           - blkdiscard
@@ -5449,7 +5466,8 @@ spec:
                               type: object
                           type: object
                         wipeMethod:
-                          description: TODO David add comment
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
                           enum:
                           - dd
                           - blkdiscard
@@ -8986,7 +9004,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -9002,7 +9021,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -9031,7 +9051,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -9047,7 +9068,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -9109,7 +9131,8 @@ spec:
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
-                                    description: TODO David add comment
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -9409,7 +9432,8 @@ spec:
                                         type: object
                                     type: object
                                   wipeMethod:
-                                    description: TODO David add comment
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -10105,7 +10129,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -10121,7 +10146,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -10150,7 +10176,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
-                                  description: TODO David add comment
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -10166,7 +10193,8 @@ spec:
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
-                                  description: TODO David add comment
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
                                   enum:
                                   - dd
                                   - blkdiscard
@@ -10228,7 +10256,8 @@ spec:
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
-                                    description: TODO David add comment
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -10528,7 +10557,8 @@ spec:
                                         type: object
                                     type: object
                                   wipeMethod:
-                                    description: TODO David add comment
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
                                     enum:
                                     - dd
                                     - blkdiscard
@@ -10643,7 +10673,8 @@ spec:
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
-                        description: TODO David add comment
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
                         enum:
                         - dd
                         - blkdiscard
@@ -10659,7 +10690,8 @@ spec:
                         - deleteFiles
                         type: string
                       wipeMethod:
-                        description: TODO David add comment
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
                         enum:
                         - dd
                         - blkdiscard
@@ -10688,7 +10720,8 @@ spec:
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
-                        description: TODO David add comment
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
                         enum:
                         - dd
                         - blkdiscard
@@ -10704,7 +10737,8 @@ spec:
                         - deleteFiles
                         type: string
                       wipeMethod:
-                        description: TODO David add comment
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
                         enum:
                         - dd
                         - blkdiscard
@@ -10763,7 +10797,8 @@ spec:
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
-                          description: TODO David add comment
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
                           enum:
                           - dd
                           - blkdiscard
@@ -11044,7 +11079,8 @@ spec:
                               type: object
                           type: object
                         wipeMethod:
-                          description: TODO David add comment
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
                           enum:
                           - dd
                           - blkdiscard

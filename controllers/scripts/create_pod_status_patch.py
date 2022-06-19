@@ -7,14 +7,14 @@ import ipaddress
 from pprint import pprint as pp
 
 # Constants
-FILE_SYSTEM_MOUNT_POINT = '/workdir/filesystem-volumes'
-BLOCK_MOUNT_POINT = '/workdir/block-volumes'
+FILE_SYSTEM_MOUNT_POINT = "/workdir/filesystem-volumes"
+BLOCK_MOUNT_POINT = "/workdir/block-volumes"
 BASE_WIPE_VERSION = 6
 ADDRESS_TYPE_NAME = {
-    'access': 'accessEndpoints',
-    'alternate-access': 'alternateAccessEndpoints',
-    'tls-access': 'tlsAccessEndpoints',
-    'tls-alternate-access': 'tlsAlternateAccessEndpoints'
+    "access": "accessEndpoints",
+    "alternate-access": "alternateAccessEndpoints",
+    "tls-access": "tlsAccessEndpoints",
+    "tls-alternate-access": "tlsAlternateAccessEndpoints"
 }
 
 
@@ -30,37 +30,51 @@ def process_volumes(pod_name, find, dd, blkdiskard, volumes, effective_method_ke
         if volume_mode == "Block":
             volume_path = os.path.join(BLOCK_MOUNT_POINT, volume_name)
             if not os.path.exists(volume_path):
-                raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} not found")
+                raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} Not Found")
+
             if effective_method == "dd":
-                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Executing: {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
                 execute(dd.format(volume_path=volume_path))
-                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Execution Succeeded:  {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
             elif effective_method == "blkdiscard":
-                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Executing: {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
                 execute(blkdiskard.format(volume_path=volume_path))
-                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Execution Succeeded: {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
+            elif effective_method == "none" and effective_method_key == "effectiveInitMethod":
+                print(f"pod-name: {pod_name} - Passthrough: {effective_method_key}: {effective_method} "
+                      f"volume-name: {volume_name}")
+            else:
+                raise ValueError(f"Invalid effective method: {effective_method}")
         elif volume_mode == "Filesystem":
             volume_path = os.path.join(FILE_SYSTEM_MOUNT_POINT, volume_name)
+            if not os.path.exists(volume_path):
+                raise FileNotFoundError(f"pod-name: {pod_name} volume: {volume_path} Not Found")
+
             if effective_method == "deleteFiles":
-                print(f"start - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Executing: {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
                 execute(find.format(volume_path=volume_path))
-                print(f"end - pod-name: {pod_name} {effective_method_key}: {effective_method} "
+                print(f"pod-name: {pod_name} - Execution Succeeded: {effective_method_key}: {effective_method} "
                       f"volume-name: {volume_name}")
+            elif effective_method == "none" and effective_method_key == "effectiveInitMethod":
+                print(f"pod-name: {pod_name} - Passthrough: {effective_method_key}: {effective_method} "
+                      f"volume-name: {volume_name}")
+            else:
+                raise ValueError(f"Invalid effective method: {effective_method}")
         else:
-            raise ValueError(f"pod-name: {pod_name} invalid volume-mode: {volume_mode}")
+            raise ValueError(f"pod-name: {pod_name} Invalid volume-mode: {volume_mode}")
 
-        print(f"pod-name: {pod_name} added volume: {volume_name}")
+        print(f"pod-name: {pod_name} - Added volume: {volume_name}")
         result.append(volume_name)
     return result
 
 
-def get_rack(config, pod_name):
-    print('Checking for rack in rackConfig')
+def get_rack(pod_name, config):
+    print(f"pod-name: {pod_name} - Checking for rack in rackConfig")
     # Assuming podName format stsName-rackID-index
     rack_id = int(pod_name.split("-")[-2])
     try:
@@ -70,42 +84,45 @@ def get_rack(config, pod_name):
                 return rack
         raise ValueError(f"pod-name: {pod_name} rack-id: {rack_id} not found")
     except KeyError:
-        print(f"pod-name: f{pod_name} unable to get rack-id {rack_id}")
+        print(f"pod-name: f{pod_name} - Unable to get rack-id {rack_id}")
         raise
 
 
 def get_volumes(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
     try:
-        print(f"pod-name: {pod_name} Looking for volumes in rack.storage.volumes")
-        volumes = rack['storage']['volumes']
+        print(f"pod-name: {pod_name} - Looking for volumes in rack.storage.volumes")
+        volumes = rack["storage"]["volumes"]
         if not volumes:
-            print(f"pod-name: {pod_name} found an empty list in rack.storage.volumes")
+            print(f"pod-name: {pod_name} - Found an empty list in rack.storage.volumes")
             raise KeyError(f"pod-name: {pod_name} - volumes not found")
         return volumes
     except KeyError:
-        print(f"pod-name: {pod_name} volumes not found in rack.storage.volumes")
+        print(f"pod-name: {pod_name} - Volumes not found in rack.storage.volumes")
         try:
-            print(f"pod-name: {pod_name} Looking for volumes in spec.storage.volumes")
-            volumes = config['spec']['storage']['volumes']
+            print(f"pod-name: {pod_name} - Looking for volumes in spec.storage.volumes")
+            volumes = config["spec"]["storage"]["volumes"]
+            if not volumes:
+                print(f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
+                raise KeyError(f"pod-name: {pod_name} - volumes not found")
             return volumes
         except KeyError:
-            print(f"pod-name: {pod_name} volumes not found in spec.storage.volumes")
+            print(f"pod-name: {pod_name} - Volumes not found in spec.storage.volumes")
             return []
 
 
 def get_initialized_volumes(pod_name, config):
     try:
-        print(f"pod-name: {pod_name} looking for initialized volumes in status.pod.{pod_name}.initializedVolumes")
-        return set(config['status']['pods'][pod_name]['initializedVolumes'])
+        print(f"pod-name: {pod_name} - Looking for initialized volumes in status.pod.{pod_name}.initializedVolumes")
+        return set(config["status"]["pods"][pod_name]["initializedVolumes"])
     except KeyError:
-        print(f"pod-name: {pod_name} initialized volumes not found in status.pod.{pod_name}.initializedVolumes")
+        print(f"pod-name: {pod_name} - Initialized volumes not found in status.pod.{pod_name}.initializedVolumes")
         try:
-            print(f"pod-name: {pod_name} looking for initialized volumes in status.pod."
+            print(f"pod-name: {pod_name} - Looking for initialized volumes in status.pod."
                   f"{pod_name}.initializedVolumePaths")
-            return set(config['status']['pods'][pod_name]['initializedVolumePaths'])
+            return set(config["status"]["pods"][pod_name]["initializedVolumePaths"])
         except KeyError:
-            print(f"pod-name: {pod_name} looking for initialized volumes not found in status.pod."
+            print(f"pod-name: {pod_name} - Looking for initialized volumes not found in status.pod."
                   f"{pod_name}.initializedVolumePaths")
             return set()
 
@@ -165,7 +182,7 @@ def strtobool(param):
 def execute(cmd):
     return_value = os.system(cmd)
     if return_value != 0:
-        raise OSError(f"command: {cmd} - execution failed")
+        raise OSError(f"Execution Failed - command: {cmd}")
 
 
 def update_status(pod_name, metadata, volumes):
@@ -177,10 +194,10 @@ def update_status(pod_name, metadata, volumes):
         pod_spec_hash = f.read()
 
     metadata.update({
-        'initializedVolumes': volumes,
-        'aerospikeConfigHash': conf_hash,
-        'networkPolicyHash': network_policy_hash,
-        'podSpecHash': pod_spec_hash,
+        "initializedVolumes": volumes,
+        "aerospikeConfigHash": conf_hash,
+        "networkPolicyHash": network_policy_hash,
+        "podSpecHash": pod_spec_hash,
     })
     for pod_addr_name, conf_addr_name in ADDRESS_TYPE_NAME.items():
         metadata["aerospike"][conf_addr_name] = get_endpoints(address_type=pod_addr_name)
@@ -199,7 +216,6 @@ def main():
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
         parser.add_argument("--config", type=str, required=True, dest="config")
-        parser.parse_args()
         args = parser.parse_args()
         config = json.loads(args.config)
         metadata = get_node_metadata()
@@ -213,13 +229,14 @@ def main():
             image = config["status"]["image"]
         except KeyError:
             image = ""
-        print("Checking if volumes should be wiped")
+        print(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
         if image:
             prev_major_ver = get_image_version(image=image)[0]
-            print(f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
+            print(f"pod-name: {args.pod_name} - Checking if volumes should be wiped: "
+                  f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
             if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
                 (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
-                print("volumes should be wiped")
+                print(f"pod-name: {args.pod_name} - Volumes should be wiped")
                 volumes = process_volumes(pod_name=args.pod_name,
                                           dd=dd, find=find,
                                           blkdiskard=blkdiskard_wipe,
@@ -227,7 +244,7 @@ def main():
                                           volumes=get_volumes(pod_name=args.pod_name, config=config))
                 update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
                 return
-        print("volumes should not be wiped")
+        print(f"pod-name: {args.pod_name} - Volumes should not be wiped")
         init_volumes = get_initialized_volumes(pod_name=args.pod_name, config=config)
         volumes = process_volumes(
             pod_name=args.pod_name,
@@ -246,5 +263,5 @@ def main():
         sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
