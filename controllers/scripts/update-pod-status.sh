@@ -41,39 +41,13 @@ print(data['spec']['containers'][0]['image'])")"
 AERO_CLUSTER_NAME=${MY_POD_NAME%-*}
 AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
-# Read this pod's Aerospike pod status from the cluster status.
-AERO_CLUSTER_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1beta1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME")"
-
-if [ $? -ne 0 ]
-then
-   echo "ERROR: failed to read status for $AERO_CLUSTER_NAME"
-   exit 1
-fi
-
-IS_NEW="$(echo $AERO_CLUSTER_JSON | python3 -c "import sys, json
-data = json.load(sys.stdin)
-
-if 'status' in data:
-   status = data['status']
-else:
-   status = {}
-
-podname = '${MY_POD_NAME}';
-def isNew(status, podname):
-    if  not 'pods' in status:
-      return True
-    return podname not in status['pods']
-print(isNew(status, podname))")"
-
-if [ "$IS_NEW" == "True" ]
-then
-    echo "Pod first run - initializing"
-
-else
-    echo "Pod restarted"
-fi
-
-python3 create_pod_status_patch.py --pod-name $MY_POD_NAME --config $AERO_CLUSTER_JSON
+python3 create_pod_status_patch.py \
+--pod-name $MY_POD_NAME \
+--cluster-name $AERO_CLUSTER_NAME \
+--namespace $NAMESPACE \
+--api-server $KUBE_API_SERVER \
+--token $TOKEN \
+--ca-cer $CA_CERT
 
 if [ $? -ne 0 ]
 then

@@ -53,9 +53,9 @@ var _ = Describe(
 					"Should validate all storage-init policies", func() {
 
 						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
 						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
 						}
 						racks := []asdbv1beta1.Rack{
 							{
@@ -189,7 +189,7 @@ func checkData(
 			}
 
 			var expectedHasData = assertHasData && wasDataWritten
-			if volume.InitMethod == asdbv1beta1.AerospikeVolumeInitMethodNone {
+			if volume.InitMethod == asdbv1beta1.AerospikeVolumeMethodNone {
 				expectedHasData = wasDataWritten
 			}
 

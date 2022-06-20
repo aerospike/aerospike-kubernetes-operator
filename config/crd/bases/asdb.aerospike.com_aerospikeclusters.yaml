@@ -3419,6 +3419,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -3436,6 +3437,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -3466,6 +3468,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -3483,6 +3486,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -3546,6 +3550,7 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after apply
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -3847,6 +3852,7 @@ spec:
                                     description: WipeMethod determines how volumes
                                       attached to Aerospike server pods ar
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -4544,6 +4550,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -4561,6 +4568,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -4591,6 +4599,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -4608,6 +4617,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -4671,6 +4681,7 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after apply
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -4972,6 +4983,7 @@ spec:
                                     description: WipeMethod determines how volumes
                                       attached to Aerospike server pods ar
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -5063,6 +5075,7 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after apply
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -5080,6 +5093,7 @@ spec:
                         description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -5110,6 +5124,7 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after apply
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -5127,6 +5142,7 @@ spec:
                         description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -5187,6 +5203,7 @@ spec:
                           description: Effective/operative value to use as the volume
                             wipe method after apply
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -5469,6 +5486,7 @@ spec:
                           description: WipeMethod determines how volumes attached
                             to Aerospike server pods ar
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -9007,6 +9025,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -9024,6 +9043,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -9054,6 +9074,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -9071,6 +9092,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -9134,6 +9156,7 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after apply
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -9435,6 +9458,7 @@ spec:
                                     description: WipeMethod determines how volumes
                                       attached to Aerospike server pods ar
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -10132,6 +10156,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -10149,6 +10174,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -10179,6 +10205,7 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after apply
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -10196,6 +10223,7 @@ spec:
                                   description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -10259,6 +10287,7 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after apply
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -10560,6 +10589,7 @@ spec:
                                     description: WipeMethod determines how volumes
                                       attached to Aerospike server pods ar
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -10676,6 +10706,7 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after apply
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -10693,6 +10724,7 @@ spec:
                         description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -10723,6 +10755,7 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after apply
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -10740,6 +10773,7 @@ spec:
                         description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -10800,6 +10834,7 @@ spec:
                           description: Effective/operative value to use as the volume
                             wipe method after apply
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -11082,6 +11117,7 @@ spec:
                           description: WipeMethod determines how volumes attached
                             to Aerospike server pods ar
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles

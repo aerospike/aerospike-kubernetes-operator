@@ -412,12 +412,12 @@ func (in *AerospikePersistentVolumePolicySpec) DeepCopyInto(out *AerospikePersis
 	*out = *in
 	if in.InputInitMethod != nil {
 		in, out := &in.InputInitMethod, &out.InputInitMethod
-		*out = new(AerospikeVolumeInitMethod)
+		*out = new(AerospikeVolumeMethod)
 		**out = **in
 	}
 	if in.InputWipeMethod != nil {
 		in, out := &in.InputWipeMethod, &out.InputWipeMethod
-		*out = new(AerospikeVolumeWipeMethod)
+		*out = new(AerospikeVolumeMethod)
 		**out = **in
 	}
 	if in.InputCascadeDelete != nil {

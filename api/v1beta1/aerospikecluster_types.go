@@ -374,55 +374,39 @@ type AerospikeAccessControlSpec struct {
 // AerospikeVolumeInitMethod specifies how block volumes should be initialized.
 // +kubebuilder:validation:Enum=none;dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
-type AerospikeVolumeInitMethod string
+type AerospikeVolumeMethod string
 
 const (
 	// AerospikeVolumeInitMethodNone specifies the block volume should not be initialized.
-	AerospikeVolumeInitMethodNone AerospikeVolumeInitMethod = "none"
+	AerospikeVolumeMethodNone AerospikeVolumeMethod = "none"
 
 	// AerospikeVolumeInitMethodDD specifies the block volume should be zeroed using dd command.
-	AerospikeVolumeInitMethodDD AerospikeVolumeInitMethod = "dd"
+	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
 
 	// AerospikeVolumeInitMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
-	AerospikeVolumeInitMethodBlkdiscard AerospikeVolumeInitMethod = "blkdiscard"
+	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
 
 	// AerospikeVolumeInitMethodDeleteFiles specifies the filesystem volume should initialized by deleting files.
-	AerospikeVolumeInitMethodDeleteFiles AerospikeVolumeInitMethod = "deleteFiles"
-)
-
-// AerospikeVolumeWipeMethod specifies how block volumes should be wiped.
-// +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
-// +k8s:openapi-gen=true
-type AerospikeVolumeWipeMethod string
-
-const (
-	// AerospikeVolumeWipeMethodDD specifies the block volume should be zeroed using dd command.
-	AerospikeVolumeWipeMethodDD AerospikeVolumeWipeMethod = "dd"
-
-	// AerospikeVolumeWipeMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
-	AerospikeVolumeWipeMethodBlkdiscard AerospikeVolumeWipeMethod = "blkdiscard"
-
-	// AerospikeVolumeWipeMethodDeleteFiles specifies the filesystem volume should wiped by deleting files.
-	AerospikeVolumeWipeMethodDeleteFiles AerospikeVolumeWipeMethod = "deleteFiles"
+	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
+	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
 
-	// WipeMethod determines how volumes attached to Aerospike server pods are wiped when the pods upgraded to 6.0.
-	InputWipeMethod *AerospikeVolumeWipeMethod `json:"wipeMethod,omitempty"`
+	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format changes.
+	InputWipeMethod *AerospikeVolumeMethod `json:"wipeMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
-	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
+	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
 
 	// Effective/operative value to use as the volume wipe method after applying defaults.
-	WipeMethod AerospikeVolumeWipeMethod `json:"effectiveWipeMethod,omitempty"`
+	WipeMethod AerospikeVolumeMethod `json:"effectiveWipeMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`

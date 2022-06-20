@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import os
+import re
 import sys
 import json
 import argparse
 import ipaddress
+import urllib.error
+import urllib.request
 from pprint import pprint as pp
 
 # Constants
@@ -88,6 +91,31 @@ def get_rack(pod_name, config):
         raise
 
 
+def get_namespace_filtered_volumes(pod_name, config):
+    volume_set = set()
+    result = []
+    rack = get_rack(pod_name=pod_name, config=config)
+    namespaces = rack["aerospikeConfig"]["namespaces"]
+    for namespace in namespaces:
+        storage_engine = namespace["storage-engine"]
+        if storage_engine["type"] == "device":
+            print("Add storage-engine devices")
+            for fi in storage_engine["devices"]:
+                volume_set.add(fi)
+        elif storage_engine["type"] == "files":
+            print("Add storage-engine devices")
+            for fi in storage_engine["files"]:
+                path, _ = os.path.split(fi)
+                volume_set.add(path)
+
+    for volume in filter(lambda x: True if "aerospike" in x else False, get_volumes(pod_name=pod_name, config=config)):
+        path = volume["aerospike"]["path"]
+        if path in volume_set:
+            result.append(volume)
+
+    return result
+
+
 def get_volumes(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
     try:
@@ -127,8 +155,12 @@ def get_initialized_volumes(pod_name, config):
             return set()
 
 
+def get_image_tag(image):
+    return re.search(r"\d+\.\d+\.\d+\.\d+$", image).group(0)
+
+
 def get_image_version(image):
-    return tuple(map(int, image.partition(":")[2].split(".")))
+    return tuple(map(int, get_image_tag(image).split(".")))
 
 
 def get_node_metadata():
@@ -211,13 +243,39 @@ def update_status(pod_name, metadata, volumes):
         f.flush()
 
 
+def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
+    url = f"{api_server}/apis/asdb.aerospike.com/v1beta1/namespaces/{namespace}/aerospikeclusters/{cluster_name}"
+    request = urllib.request.Request(url=url, method="GET")
+    request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request, cafile=ca_cert) as response:
+        body = response.read()
+    return json.loads(body)
+
+
 def main():
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
-        parser.add_argument("--config", type=str, required=True, dest="config")
+        parser.add_argument("--ca-cer", type=str, required=True, dest="ca_cert")
+        parser.add_argument("--token", type=str, required=True, dest="token")
+        parser.add_argument("--api-server", type=str, required=True, dest="api_server")
+        parser.add_argument("--namespace", type=str, required=True, dest="namespace")
+        parser.add_argument("--cluster-name", type=str, required=True, dest="cluster_name")
         args = parser.parse_args()
-        config = json.loads(args.config)
+        try:
+            config = get_cluster_json(args.cluster_name, args.namespace, args.api_server, args.token, args.ca_cert)
+        except urllib.error.URLError as e:
+            print(f"pod-name: {args.pod_name} - Failed to read status for {args.cluster_name} error: {e}")
+            raise e
+        print(f"pod-name: {args.pod_name} - Config successfully loaded")
+
+        try:
+            image = config["status"]["image"]
+            print(f"pod-name: {args.pod_name} Restarted")
+        except KeyError:
+            print(f"pod-name: {args.pod_name} - First run - initializing")
+            image = ""
+
         metadata = get_node_metadata()
         dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
              '/tmp/init-stderr'
@@ -225,10 +283,7 @@ def main():
         blkdiskard_init = "blkdiscard {volume_path}"
         blkdiskard_wipe = "blkdiscard -z {volume_path}"
         next_major_ver = get_image_version(image=config["spec"]["image"])[0]
-        try:
-            image = config["status"]["image"]
-        except KeyError:
-            image = ""
+
         print(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
         if image:
             prev_major_ver = get_image_version(image=image)[0]
@@ -238,23 +293,22 @@ def main():
                 (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
                 print(f"pod-name: {args.pod_name} - Volumes should be wiped")
                 volumes = process_volumes(pod_name=args.pod_name,
-                                          dd=dd, find=find,
+                                          dd=dd,
+                                          find=find,
                                           blkdiskard=blkdiskard_wipe,
                                           effective_method_key="effectiveWipeMethod",
-                                          volumes=get_volumes(pod_name=args.pod_name, config=config))
-                update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
-                return
+                                          volumes=get_namespace_filtered_volumes(pod_name=args.pod_name, config=config))
+
         print(f"pod-name: {args.pod_name} - Volumes should not be wiped")
+        all_volumes = get_volumes(pod_name=args.pod_name,config=config)
         init_volumes = get_initialized_volumes(pod_name=args.pod_name, config=config)
         volumes = process_volumes(
-            pod_name=args.pod_name,
-            dd=dd,
-            blkdiskard=blkdiskard_init,
-            find=find,
-            effective_method_key="effectiveInitMethod",
-            volumes=filter(lambda x: True if x["name"] not in init_volumes else False, get_volumes(
-                pod_name=args.pod_name, config=config)))
-        volumes.extend(init_volumes)
+                pod_name=args.pod_name,
+                dd=dd,
+                blkdiskard=blkdiskard_init,
+                find=find,
+                effective_method_key="effectiveInitMethod",
+                volumes=filter(lambda x: True if x["name"] not in init_volumes else False, all_volumes))
         update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
     except Exception as e:
         print(e)

@@ -14,11 +14,13 @@ import (
 )
 
 type UnwipedVolumesError struct {
-	err string
+	shouldBeWiped    string
+	shouldNotBeWiped string
 }
 
 func (e UnwipedVolumesError) Error() string {
-	return fmt.Sprintf("unwiped volumes: %s\n", e.err)
+	return fmt.Sprintf("should be wiped volumes: %s\n should not be wiped volumes %s\n",
+		e.shouldBeWiped, e.shouldNotBeWiped)
 }
 
 var _ = Describe(
@@ -54,11 +56,11 @@ var _ = Describe(
 					"Should validate all storage-wipe policies", func() {
 
 						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.WipeMethod = asdbv1beta1.AerospikeVolumeWipeMethodBlkdiscard
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
+						rackStorageConfig.BlockVolumePolicy.WipeMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
 						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
-							rackStorageConfig.BlockVolumePolicy.WipeMethod = asdbv1beta1.AerospikeVolumeWipeMethodBlkdiscard
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+							rackStorageConfig.BlockVolumePolicy.WipeMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
 						}
 						racks := []asdbv1beta1.Rack{
 							{
@@ -170,7 +172,8 @@ var _ = Describe(
 )
 
 func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) error {
-	unzeroedVolumes := ""
+	shouldBeWiped := ""
+	shouldNotBeWiped := ""
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
 		return fmt.Errorf("failed to list pods: %v", err)
@@ -196,31 +199,56 @@ func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 				continue
 			}
 			volumeWasWiped := false
-			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-				volumeWasWiped, err = checkIfVolumeBlockZeroed(&pod, volume)
-				if err != nil {
-					return err
-				}
-			} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
-				volumeWasWiped, err = checkIfVolumeFileSystemZeored(&pod, volume)
-				if err != nil {
-					return err
-				}
+			if volume.Aerospike != nil {
 
-			} else {
-				return fmt.Errorf("pod: %s volume: %s mood: %s - invalid volume mode",
-					pod.Name, volume.Name, volume.Source.PersistentVolume.VolumeMode)
+				if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
+					volumeWasWiped, err = checkIfVolumeBlockZeroed(&pod, volume)
+					if err != nil {
+						return err
+					}
+				} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
+					volumeWasWiped, err = checkIfVolumeFileSystemZeored(&pod, volume)
+					if err != nil {
+						return err
+					}
+
+				} else {
+					return fmt.Errorf("pod: %s volume: %s mood: %s - invalid volume mode",
+						pod.Name, volume.Name, volume.Source.PersistentVolume.VolumeMode)
+				}
+				if !volumeWasWiped {
+					shouldBeWiped += fmt.Sprintf("pod: %s, volume: %s wipe-method: %s \n",
+						pod.Name, volume.Name, volume.WipeMethod)
+				}
 			}
-			if !volumeWasWiped {
-				unzeroedVolumes += fmt.Sprintf("pod: %s, volume: %s wipe-method: %s \n",
-					pod.Name, volume.Name, volume.WipeMethod)
+			if volume.Sidecars != nil || volume.InitContainers != nil {
+				if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
+					volumeWasWiped, err = checkIfVolumeBlockZeroed(&pod, volume)
+					if err != nil {
+						return err
+					}
+				} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
+					volumeWasWiped, err = checkIfVolumeFileSystemZeored(&pod, volume)
+					if err != nil {
+						return err
+					}
+
+				} else {
+					return fmt.Errorf("pod: %s volume: %s mood: %s - invalid volume mode",
+						pod.Name, volume.Name, volume.Source.PersistentVolume.VolumeMode)
+				}
+				if volumeWasWiped {
+					shouldNotBeWiped += fmt.Sprintf("pod: %s, volume: %s wipe-method: %s \n",
+						pod.Name, volume.Name, volume.WipeMethod)
+				}
 			}
 		}
 	}
-	if len(unzeroedVolumes) > 0 {
-		return UnwipedVolumesError{err: unzeroedVolumes}
+	if len(shouldBeWiped) > 0 || len(shouldNotBeWiped) > 0 {
+		return UnwipedVolumesError{shouldBeWiped: shouldBeWiped, shouldNotBeWiped: shouldNotBeWiped}
 	}
 	return nil
+
 }
 
 func checkIfVolumeBlockZeroed(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (bool, error) {
