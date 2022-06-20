@@ -155,9 +155,9 @@ CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1)
 
-KUSTOMIZE = $(GOBIN)/kustomize
+KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	go install sigs.k8s.io/kustomize/kustomize/v4@v4.5.4
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.4)
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
@@ -202,13 +202,7 @@ bundle-operatorhub: manifests kustomize
 	$(eval BUNDLE_DIR:= $(ROOT_DIR)/bundle/$(DISTRIBUTION)/$(VERSION)/)
 	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
 	$(eval KUSTOMIZE_DIR:= $(OVERLAYS_DIR)/base)
-
-	if [ -f $(ROOT_DIR)/bundle.Dockerfile ]; then \
-        rm -f $(ROOT_DIR)/bundle.Dockerfile; \
-      fi; \
-    if [ -d $(BUNDLE_DIR) ]; then \
-      rm -r $(BUNDLE_DIR); \
-      fi; \
+	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
 	operator-sdk generate kustomize manifests -q
 	cd $(ROOT_DIR)/config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation containerImage:$(IMG) createdAt:$(DATE)
@@ -238,13 +232,7 @@ bundle-rhmp: manifests kustomize
 	$(eval ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml)
 	$(eval KUSTOMIZE_DIR:= $(OVERLAYS_DIR)/$(DISTRIBUTION))
 	$(eval BUNDLE_METADATA_OPTS:= $(BUNDLE_METADATA_OPTS) --use-image-digests)
-
-	if [ -f $(ROOT_DIR)/bundle.Dockerfile ]; then \
-        rm -f $(ROOT_DIR)/bundle.Dockerfile; \
-      fi; \
-    if [ -d $(BUNDLE_DIR) ]; then \
-      rm -r $(BUNDLE_DIR); \
-      fi; \
+	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
 
 	operator-sdk generate kustomize manifests -q
 	cd $(ROOT_DIR)/config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
