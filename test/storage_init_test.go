@@ -218,12 +218,27 @@ func writeDataToVolumes(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 	}
 
 	for _, pod := range podList.Items {
-		// TODO: check rack as well.
+
+		rackID, err := getRackID(&pod)
+		if err != nil {
+			return fmt.Errorf("failed to get rackID pods: %v", err)
+		}
+
 		storage := aeroCluster.Spec.Storage
-		err := writeDataToPodVolumes(storage, &pod)
+
+		if rackID != 0 {
+			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+				if rack.ID == rackID {
+					storage = rack.Storage
+				}
+			}
+		}
+
+		err = writeDataToPodVolumes(storage, &pod)
 		if err != nil {
 			return err
 		}
+
 	}
 	return nil
 }

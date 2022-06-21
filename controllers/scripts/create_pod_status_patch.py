@@ -21,7 +21,7 @@ ADDRESS_TYPE_NAME = {
 }
 
 
-def process_volumes(pod_name, find, dd, blkdiskard, volumes, effective_method_key):
+def format_volumes(pod_name, find, dd, blkdiskard, volumes, effective_method_key):
 
     result = []
 
@@ -91,29 +91,34 @@ def get_rack(pod_name, config):
         raise
 
 
-def get_namespace_filtered_volumes(pod_name, config):
-    volume_set = set()
-    result = []
+def get_aerospike_volume_paths(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
-    namespaces = rack["aerospikeConfig"]["namespaces"]
+    try:
+        namespaces = rack["effectiveAerospikeConfig"]["namespaces"]
+    except KeyError as e:
+        print(f"pod-name: {pod_name} Unable to find namespaces")
+        raise e
     for namespace in namespaces:
         storage_engine = namespace["storage-engine"]
         if storage_engine["type"] == "device":
-            print("Add storage-engine devices")
-            for fi in storage_engine["devices"]:
-                volume_set.add(fi)
-        elif storage_engine["type"] == "files":
-            print("Add storage-engine devices")
-            for fi in storage_engine["files"]:
-                path, _ = os.path.split(fi)
-                volume_set.add(path)
+            if "devices" in storage_engine:
+                devices = storage_engine["devices"]
+                for device in devices:
+                    print(f"pod-name: {pod_name} Get namespace device: {device}")
+                    yield device
+            if "files" in storage_engine:
+                files = storage_engine["files"]
+                for f in files:
+                    dirname = os.path.dirname(f)
+                    print(f"pod-name: {pod_name} Get file path: {dirname}")
+                    yield dirname
 
+
+def get_volumes_for_wiping(pod_name, config):
+    aerospike_volume_paths = set(get_aerospike_volume_paths(pod_name=pod_name, config=config))
     for volume in filter(lambda x: True if "aerospike" in x else False, get_volumes(pod_name=pod_name, config=config)):
-        path = volume["aerospike"]["path"]
-        if path in volume_set:
-            result.append(volume)
-
-    return result
+        if volume["aerospike"]["path"] in aerospike_volume_paths:
+            yield volume
 
 
 def get_volumes(pod_name, config):
@@ -292,23 +297,28 @@ def main():
             if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
                 (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
                 print(f"pod-name: {args.pod_name} - Volumes should be wiped")
-                volumes = process_volumes(pod_name=args.pod_name,
-                                          dd=dd,
-                                          find=find,
-                                          blkdiskard=blkdiskard_wipe,
-                                          effective_method_key="effectiveWipeMethod",
-                                          volumes=get_namespace_filtered_volumes(pod_name=args.pod_name, config=config))
+                volumes = format_volumes(
+                    pod_name=args.pod_name,
+                    dd=dd,
+                    find=find,
+                    blkdiskard=blkdiskard_wipe,
+                    effective_method_key="effectiveWipeMethod",
+                    volumes=get_volumes_for_wiping(
+                        pod_name=args.pod_name,
+                        config=config))
 
         print(f"pod-name: {args.pod_name} - Volumes should not be wiped")
-        all_volumes = get_volumes(pod_name=args.pod_name,config=config)
-        init_volumes = get_initialized_volumes(pod_name=args.pod_name, config=config)
-        volumes = process_volumes(
+        all_volumes = get_volumes(pod_name=args.pod_name, config=config)
+        initialized_volumes = get_initialized_volumes(pod_name=args.pod_name, config=config)
+        print(f"pod-name: {args.pod_name} initialized-volumes: {initialized_volumes}")
+        volumes = format_volumes(
                 pod_name=args.pod_name,
                 dd=dd,
                 blkdiskard=blkdiskard_init,
                 find=find,
                 effective_method_key="effectiveInitMethod",
-                volumes=filter(lambda x: True if x["name"] not in init_volumes else False, all_volumes))
+                volumes=filter(lambda x: True if x["name"] not in initialized_volumes else False, all_volumes))
+        volumes.extend(initialized_volumes)
         update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
     except Exception as e:
         print(e)
