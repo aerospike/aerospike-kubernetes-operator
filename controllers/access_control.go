@@ -10,7 +10,7 @@ import (
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 )
 

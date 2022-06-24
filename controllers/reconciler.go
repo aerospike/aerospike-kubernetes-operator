@@ -12,7 +12,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"

@@ -13,7 +13,7 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -85,6 +85,46 @@ func getClient(
 	policy := getClientPolicy(
 		aeroCluster, k8sClient,
 	)
+	aeroClient, err := as.NewClientWithPolicyAndHost(
+		policy, hosts...,
+	)
+
+	if aeroClient == nil {
+		return nil, fmt.Errorf(
+			"failed to create aerospike cluster client: %v", err,
+		)
+	}
+
+	return aeroClient, nil
+}
+
+// getClientExternalAuth returns an Aerospike client using external
+// authentication user.
+func getClientExternalAuth(
+	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client, ldapUser string, ldapPassword string,
+) (*as.Client, error) {
+	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host info: %v", err)
+	}
+	var hosts []*as.Host
+	for _, conn := range conns {
+		hosts = append(
+			hosts, &as.Host{
+				Name:    conn.ASConn.AerospikeHostName,
+				TLSName: conn.ASConn.AerospikeTLSName,
+				Port:    conn.ASConn.AerospikePort,
+			},
+		)
+	}
+	// Create policy using status, status has current connection info
+	policy := getClientPolicy(
+		aeroCluster, k8sClient,
+	)
+	policy.User = ldapUser
+	policy.Password = ldapPassword
+	policy.AuthMode = as.AuthModeExternal
 	aeroClient, err := as.NewClientWithPolicyAndHost(
 		policy, hosts...,
 	)
