@@ -188,7 +188,7 @@ func writeDataToCluster(
 			return err
 		}
 
-		if err = clusterClient.Put(nil, newKey, map[string]interface{}{
+		if err = clusterClient.Put(nil, newKey, as.BinMap{
 			binName: binValue,
 		}); err != nil {
 			return err
@@ -218,7 +218,7 @@ func checkDataInCluster(
 			return nil, err
 		}
 
-		record, err := clusterClient.Get(nil, newKey, binName)
+		record, err := clusterClient.Get(nil, newKey)
 		if err != nil {
 			return nil, nil
 		}
