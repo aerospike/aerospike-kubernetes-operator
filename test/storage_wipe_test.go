@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	namespaces = []string{"test, test1"}
+	namespaces = []string{"test", "test1"}
 )
 var _ = Describe(
 	"StorageWipe", func() {
@@ -633,7 +633,7 @@ func getStorageWipeAerospikeCluster(
 			Image:   image,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
-				Namespaces: []string{"test", "test1"},
+				Namespaces: namespaces,
 				Racks:      racks,
 			},
 			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
