@@ -40,6 +40,11 @@ type AerospikeClusterSpec struct {
 	// Aerospike server image
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
+	// AerospikeInitImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// AerospikeInitImageRegistry, e.g. docker.io, redhat.access.com
+	// RegistryNamespace, e.g. aerospike
+	// image: <AerospikeInitImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
+	AerospikeInitImageRegistry string `json:"aerospikeInitImageRegistry,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
@@ -585,6 +590,11 @@ type AerospikeClusterStatusSpec struct {
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
+	// AerospikeInitImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// AerospikeInitImageRegistry, e.g. docker.io, redhat.access.com
+	// RegistryNamespace, e.g. aerospike
+	// image: <AerospikeInitImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
+	AerospikeInitImageRegistry string `json:"aerospikeInitImageRegistry,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -797,6 +807,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	status.Size = spec.Size
 	status.Image = spec.Image
+	status.AerospikeInitImageRegistry = spec.AerospikeInitImageRegistry
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
@@ -889,6 +900,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	spec.Size = status.Size
 	spec.Image = status.Image
+	spec.AerospikeInitImageRegistry = status.AerospikeInitImageRegistry
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}
