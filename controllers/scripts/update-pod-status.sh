@@ -28,12 +28,6 @@ source ./common-env.sh
 # Update pod status in the k8s aerospike cluster object
 # ------------------------------------------------------------------------------
 
-# Get pod image
-POD_JSON="$(curl -f --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$MY_POD_NAME")"
-export POD_IMAGE="$(echo $POD_JSON | python3 -c "import sys, json
-data = json.load(sys.stdin)
-print(data['spec']['containers'][0]['image'])")"
-
 # Parse out cluster name, formatted as: stsname-rackid-index
 # https://www.linuxjournal.com/article/8919
 # Trim index and rackid

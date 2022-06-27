@@ -3,19 +3,31 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"strconv"
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	setName  = "test"
+	key      = "key1"
+	binName  = "testBin"
+	binValue = "binValue"
+)
+
+var (
+	namespaces = []string{"test, test1"}
+)
 var _ = Describe(
 	"StorageWipe", func() {
 		ctx := goctx.TODO()
@@ -44,105 +56,186 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 
-				It(
+				It("Should validate all storage-wipe policies", func() {
 
-					"Should validate all storage-wipe policies", func() {
+					storageConfig := getAerospikeWipeStorageConfig(
+						containerName, asdbv1beta1.AerospikeServerInitContainerName,
+						false, cloudProvider)
+					rackStorageConfig := getAerospikeWipeRackStorageConfig(
+						containerName, asdbv1beta1.AerospikeServerInitContainerName,
+						false, cloudProvider)
+					racks := []asdbv1beta1.Rack{
+						{
+							ID: 1,
+						},
+						{
+							ID:           2,
+							InputStorage: rackStorageConfig,
+						},
+					}
+					aeroCluster := getStorageWipeAerospikeCluster(
+						clusterNamespacedName, *storageConfig, racks, latestImage, getAerospikeClusterConfig())
 
-						storageConfig := getAerospikeWipeStorageConfig(
-							containerName, asdbv1beta1.AerospikeServerInitContainerName,
-							false, cloudProvider)
-						rackStorageConfig := getAerospikeWipeRackStorageConfig(
-							containerName, asdbv1beta1.AerospikeServerInitContainerName,
-							false, cloudProvider)
-						racks := []asdbv1beta1.Rack{
-							{
-								ID: 1,
-							},
-							{
-								ID:           2,
-								InputStorage: rackStorageConfig,
-							},
-						}
-						aeroCluster := getStorageWipeAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks, latestImage, getAerospikeClusterConfig())
+					aeroCluster.Spec.PodSpec = podSpec
 
-						aeroCluster.Spec.PodSpec = podSpec
+					By("Cleaning up previous pvc")
 
-						By("Cleaning up previous pvc")
+					err := cleanupPVC(k8sClient, namespace)
+					Expect(err).ToNot(HaveOccurred())
 
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
+					By("Deploying the cluster")
 
-						By("Deploying the cluster")
+					err = deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					By("Writing some data to the all volumes")
+					err = writeDataToVolumes(aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Writing some data to the all volumes")
-						err = writeDataToVolumes(aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					By("Writing some data to the cluster")
+					err = writeDataToCluster(aeroCluster, k8sClient, namespaces)
+					Expect(err).ToNot(HaveOccurred())
 
-						wipedVolume, _, err := checkIfVolumesWiped(aeroCluster)
-						Expect(len(wipedVolume) == 0).To(BeTrue())
+					By(fmt.Sprintf("Downgrading image from %s to %s - volumes should not be wiped",
+						latestImage, version6))
+					err = UpdateClusterImage(aeroCluster, version6Image)
+					Expect(err).ToNot(HaveOccurred())
+					err = aerospikeClusterCreateUpdate(
+						k8sClient, aeroCluster, ctx,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						Expect(err).ToNot(HaveOccurred())
+					By("Checking - unrelated volume attachments should not be wiped")
+					err = checkData(aeroCluster, true, true)
+					Expect(err).ToNot(HaveOccurred())
 
-						By(fmt.Sprintf("Downgrading image from %s to %s - volumes should not be wiped",
-							latestImage, version6))
-						err = UpdateClusterImage(aeroCluster, version6Image)
-						Expect(err).ToNot(HaveOccurred())
-						err = aerospikeClusterCreateUpdate(
+					By("Checking - cluster data should not be wiped")
+					records, err := checkDataInCluster(aeroCluster, k8sClient, namespaces)
+					Expect(err).ToNot(HaveOccurred())
+
+					for namespace, recordExsist := range records {
+						Expect(recordExsist).To(BeTrue(), fmt.Sprintf(
+							"Namespace: %s - should have records", namespace))
+					}
+
+					By(fmt.Sprintf("Downgrading image from %s to %s - volumes should be wiped",
+						version6, prevServerVersion))
+					err = UpdateClusterImage(aeroCluster, prevImage)
+					Expect(err).ToNot(HaveOccurred())
+					err = aerospikeClusterCreateUpdate(
+						k8sClient, aeroCluster, ctx,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Checking - unrelated volume attachments should not be wiped")
+					err = checkData(aeroCluster, true, true)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Checking - cluster data should be wiped")
+					records, err = checkDataInCluster(aeroCluster, k8sClient, namespaces)
+					Expect(err).ToNot(HaveOccurred())
+
+					for namespace, recordExsist := range records {
+						Expect(recordExsist).To(BeFalse(), fmt.Sprintf(
+							"Namespace: %s - should have records", namespace))
+					}
+
+					if aeroCluster != nil {
+
+						By("Updating the volumes to cascade delete so that volumes are cleaned up")
+						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
+						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
+						err := aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						By("Checking if volumes are wiped")
-						wipedVolume, _, err = checkIfVolumesWiped(aeroCluster)
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(wipedVolume) == 0).To(BeTrue())
 
-						By(fmt.Sprintf("Downgrading image from %s to %s - volumes should be wiped",
-							version6, prevServerVersion))
-						err = UpdateClusterImage(aeroCluster, prevImage)
-						Expect(err).ToNot(HaveOccurred())
-						err = aerospikeClusterCreateUpdate(
-							k8sClient, aeroCluster, ctx,
+						pvcs, err := getAeroClusterPVCList(
+							aeroCluster, k8sClient,
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						By("Checking if volumes are wiped")
-						wipedVolume, unwipedVolumes, err := checkIfVolumesWiped(aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(checkWipedVolumes(wipedVolume)).ToNot(HaveOccurred())
-						Expect(checkUnwipedVolumes(unwipedVolumes)).ToNot(HaveOccurred())
-						if aeroCluster != nil {
-
-							By("Updating the volumes to cascade delete so that volumes are cleaned up")
-							aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
-							aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
-							err := aerospikeClusterCreateUpdate(
-								k8sClient, aeroCluster, ctx,
-							)
-							Expect(err).ToNot(HaveOccurred())
-
-							err = deleteCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).ToNot(HaveOccurred())
-
-							pvcs, err := getAeroClusterPVCList(
-								aeroCluster, k8sClient,
-							)
-							Expect(err).ToNot(HaveOccurred())
-
-							Expect(len(pvcs)).Should(
-								Equal(0), "PVCs not deleted",
-							)
-						}
-					},
+						Expect(len(pvcs)).Should(
+							Equal(0), "PVCs not deleted",
+						)
+					}
+				},
 				)
 			},
 		)
 	},
 )
+
+func writeDataToCluster(
+	aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string) error {
+
+	clusterClient, err := getClient(pkgLog, aeroCluster, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	defer clusterClient.Close()
+
+	for _, ns := range namespaces {
+
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return err
+		}
+
+		if err = clusterClient.Put(nil, newKey, map[string]interface{}{
+			binName: binValue,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func checkDataInCluster(
+	aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string) (map[string]bool, error) {
+
+	data := make(map[string]bool)
+
+	clusterClient, err := getClient(pkgLog, aeroCluster, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+
+	defer clusterClient.Close()
+
+	for _, ns := range namespaces {
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return nil, err
+		}
+
+		record, err := clusterClient.Get(nil, newKey, binName)
+		if err != nil {
+			return nil, nil
+		}
+
+		if value, ok := record.Bins[binName]; ok {
+			if value == binValue {
+				data[ns] = true
+			}
+			return nil, fmt.Errorf("bin: %s exsists but the value is gone", binName)
+		} else {
+			data[ns] = false
+		}
+	}
+
+	return data, nil
+
+}
 
 func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) ([]string, []string, error) {
 	wipedVolumes := make([]string, 0)
@@ -153,7 +246,6 @@ func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) ([]string, [
 	}
 
 	for _, pod := range podList.Items {
-
 		rackID, err := getRackID(&pod)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get rackID pods: %v", err)
