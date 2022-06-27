@@ -3,6 +3,7 @@ package v1beta1
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -81,14 +82,38 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName      string = "aerospike-server"
-	AerospikeServerInitContainerName  string = "aerospike-init"
-	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.15"
+	AerospikeServerContainerName                   string = "aerospike-server"
+	AerospikeInitContainerName                     string = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.15"
+	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIdLabel         = "aerospike.com/rack-id"
 )
+
+func GetInitContainerImage(registry string) string {
+	// registry = registry/registryNamespace
+	return registry + "/" + AerospikeInitContainerDefaultRepoAndTag
+}
+
+func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
+	// Given in CR
+	registry := aeroCluster.Spec.AerospikeInitImageRegistry
+	if registry != "" {
+		return GetInitContainerImage(registry)
+	}
+
+	// Given in EnvVar
+	registry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
+	if found {
+		return GetInitContainerImage(registry)
+	}
+
+	// Use default
+	return GetInitContainerImage(AerospikeInitContainerDefaultRegistryNamespace)
+}
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)

@@ -40,6 +40,11 @@ type AerospikeClusterSpec struct {
 	// Aerospike server image
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
+	// AerospikeInitImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// AerospikeInitImageRegistry, e.g. docker.io, redhat.access.com
+	// RegistryNamespace, e.g. aerospike
+	// image: <AerospikeInitImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
+	AerospikeInitImageRegistry string `json:"aerospikeInitImageRegistry,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
@@ -185,6 +190,9 @@ type AerospikePodSpec struct {
 	// AerospikeContainerSpec configures the aerospike-server container
 	// created by the operator.
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
+	// AerospikeInitContainerSpec configures the aerospike-init container
+	// created by the operator.
+	AerospikeInitContainerSpec AerospikeInitContainerSpec `json:"aerospikeInitContainer,omitempty"`
 	// MetaData to add to pods.
 	AerospikeObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 	// Sidecars to add to pods.
@@ -218,12 +226,31 @@ type AerospikePodSpec struct {
 
 	// Effective value of the DNSPolicy
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
+
+	// SecurityContext holds pod-level security attributes and common container settings.
+	// Optional: Defaults to empty.  See type description for default values of each field.
+	// +optional
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
+
+	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
+	// More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type AerospikeContainerSpec struct {
 	// SecurityContext that will be added to aerospike-server container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
+	// Only Memory and Cpu resources can be given
+	// Resources.Limits should be more than Resources.Requests.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
+type AerospikeInitContainerSpec struct {
+	// SecurityContext that will be added to aerospike-init container created by operator.
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// Define resources requests and limits for Aerospike init Container.
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -558,6 +585,11 @@ type AerospikeClusterStatusSpec struct {
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
+	// AerospikeInitImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// AerospikeInitImageRegistry, e.g. docker.io, redhat.access.com
+	// RegistryNamespace, e.g. aerospike
+	// image: <AerospikeInitImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
+	AerospikeInitImageRegistry string `json:"aerospikeInitImageRegistry,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -770,6 +802,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	status.Size = spec.Size
 	status.Image = spec.Image
+	status.AerospikeInitImageRegistry = spec.AerospikeInitImageRegistry
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
@@ -862,6 +895,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	spec.Size = status.Size
 	spec.Image = status.Image
+	spec.AerospikeInitImageRegistry = status.AerospikeInitImageRegistry
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}
