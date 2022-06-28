@@ -84,14 +84,14 @@ var _ = Describe(
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, false, false)
+						err = checkData(aeroCluster, false, false, map[string]struct{}{})
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to the all volumes")
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(aeroCluster, true, true, map[string]struct{}{})
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
@@ -102,7 +102,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(aeroCluster, true, true, map[string]struct{}{})
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
@@ -119,7 +119,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking volumes that need initialization, they should not have data")
-						err = checkData(aeroCluster, false, true)
+						err = checkData(aeroCluster, false, true, map[string]struct{}{})
 						Expect(err).ToNot(HaveOccurred())
 
 						if aeroCluster != nil {
@@ -153,7 +153,7 @@ var _ = Describe(
 
 func checkData(
 	aeroCluster *asdbv1beta1.AerospikeCluster, assertHasData bool,
-	wasDataWritten bool,
+	wasDataWritten bool, skip map[string]struct{},
 ) error {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
@@ -178,6 +178,9 @@ func checkData(
 		}
 		for _, volume := range storage.Volumes {
 			if volume.Source.PersistentVolume == nil {
+				continue
+			}
+			if _, ok := skip[volume.Name]; ok {
 				continue
 			}
 			// t.Logf("Check data for volume %v", volume.Path)

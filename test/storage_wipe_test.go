@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -30,11 +31,9 @@ var (
 )
 var _ = Describe(
 	"StorageWipe", func() {
-		ctx := goctx.TODO()
+		ctx := goctx.Background()
 		Context(
 			"When doing valid operations", func() {
-
-				trueVar := true
 
 				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
@@ -88,6 +87,11 @@ var _ = Describe(
 					err = deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Writing some data to the all volumes")
 					err = writeDataToVolumes(aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -105,8 +109,19 @@ var _ = Describe(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Checking - unrelated volume attachments should not be wiped")
-					err = checkData(aeroCluster, true, true)
+					err = checkData(aeroCluster, true, true, map[string]struct{}{
+						"test-wipe-device-dd-1":         {},
+						"test-wipe-device-blkdiscard-1": {},
+						"test-wipe-device-dd-2":         {},
+						"test-wipe-device-blkdiscard-2": {},
+						"test-wipe-files-deletefiles-2": {},
+					})
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Checking - cluster data should not be wiped")
@@ -127,8 +142,19 @@ var _ = Describe(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Checking - unrelated volume attachments should not be wiped")
-					err = checkData(aeroCluster, true, true)
+					err = checkData(aeroCluster, true, true, map[string]struct{}{
+						"test-wipe-device-dd-1":         {},
+						"test-wipe-device-blkdiscard-1": {},
+						"test-wipe-device-dd-2":         {},
+						"test-wipe-device-blkdiscard-2": {},
+						"test-wipe-files-deletefiles-2": {},
+					})
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Checking - cluster data should be wiped")
@@ -139,29 +165,12 @@ var _ = Describe(
 						Expect(recordExsist).To(BeFalse(), fmt.Sprintf(
 							"Namespace: %s - should have records", namespace))
 					}
+					err = deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-					if aeroCluster != nil {
+					err = cleanupPVC(k8sClient, namespace)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Updating the volumes to cascade delete so that volumes are cleaned up")
-						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
-						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
-						err := aerospikeClusterCreateUpdate(
-							k8sClient, aeroCluster, ctx,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						pvcs, err := getAeroClusterPVCList(
-							aeroCluster, k8sClient,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						Expect(len(pvcs)).Should(
-							Equal(0), "PVCs not deleted",
-						)
-					}
 				},
 				)
 			},
@@ -174,12 +183,37 @@ func writeDataToCluster(
 	k8sClient client.Client,
 	namespaces []string) error {
 
-	clusterClient, err := getClient(pkgLog, aeroCluster, k8sClient)
+	policy := getClientPolicy(aeroCluster, k8sClient)
+	policy.FailIfNotConnected = false
+	policy.Timeout = time.Minute * 2
+	policy.UseServicesAlternate = true
+	policy.ConnectionQueueSize = 100
+	policy.LimitConnectionsToQueueSize = true
+
+	var hostList []*as.Host
+	for _, pod := range aeroCluster.Status.Pods {
+		host, err := createHost(pod)
+		if err != nil {
+			return err
+		}
+		hostList = append(hostList, host)
+	}
+
+	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
 	if err != nil {
 		return err
 	}
 
-	defer clusterClient.Close()
+	defer asClient.Close()
+
+	if _, err = asClient.WarmUp(-1); err != nil {
+		return err
+	}
+
+	fmt.Printf("Loading record, isClusterConnected %v\n", asClient.IsConnected())
+	fmt.Println(asClient.GetNodes())
+
+	wp := as.NewWritePolicy(0, 0)
 
 	for _, ns := range namespaces {
 
@@ -188,7 +222,7 @@ func writeDataToCluster(
 			return err
 		}
 
-		if err = clusterClient.Put(nil, newKey, as.BinMap{
+		if err = asClient.Put(wp, newKey, as.BinMap{
 			binName: binValue,
 		}); err != nil {
 			return err
@@ -205,12 +239,39 @@ func checkDataInCluster(
 
 	data := make(map[string]bool)
 
-	clusterClient, err := getClient(pkgLog, aeroCluster, k8sClient)
+	policy := getClientPolicy(aeroCluster, k8sClient)
+	policy.FailIfNotConnected = false
+	policy.Timeout = time.Minute * 2
+	policy.UseServicesAlternate = true
+	policy.ConnectionQueueSize = 100
+	policy.LimitConnectionsToQueueSize = true
+
+	var hostList []*as.Host
+	for _, pod := range aeroCluster.Status.Pods {
+		host, err := createHost(pod)
+		if err != nil {
+			return nil, err
+		}
+		hostList = append(hostList, host)
+	}
+
+	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
 	if err != nil {
 		return nil, err
 	}
 
-	defer clusterClient.Close()
+	defer asClient.Close()
+
+	fmt.Printf("Loading record, isClusterConnected %v\n", asClient.IsConnected())
+	fmt.Println(asClient.GetNodes())
+
+	if _, err = asClient.WarmUp(-1); err != nil {
+		return nil, err
+	}
+
+	//if _, err = clusterClient.WarmUp(-1); err != nil {
+	//	return nil, err
+	//}
 
 	for _, ns := range namespaces {
 		newKey, err := as.NewKey(ns, setName, key)
@@ -218,16 +279,23 @@ func checkDataInCluster(
 			return nil, err
 		}
 
-		record, err := clusterClient.Get(nil, newKey)
+		record, err := asClient.Get(nil, newKey)
 		if err != nil {
 			return nil, nil
 		}
+		if bin, ok := record.Bins[binName]; ok {
 
-		if value, ok := record.Bins[binName]; ok {
+			value := bin.(string)
+			if !ok {
+				return nil, fmt.Errorf("Bin-Name: %s - conversion to bin value failed", binName)
+			}
+
 			if value == binValue {
 				data[ns] = true
+			} else {
+				return nil, fmt.Errorf("bin: %s exsists but the value is changed", binName)
 			}
-			return nil, fmt.Errorf("bin: %s exsists but the value is gone", binName)
+
 		} else {
 			data[ns] = false
 		}
@@ -347,7 +415,7 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 		Value: map[string]interface{}{
 			"service": map[string]interface{}{
 				"feature-key-file": "/etc/aerospike/secret/features.conf",
-				"migrate-threads":  4,
+				"proto-fd-max":     defaultProtofdmax,
 			},
 			"network":  getNetworkConfig(),
 			"security": map[string]interface{}{},
@@ -644,9 +712,16 @@ func getStorageWipeAerospikeCluster(
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
+			},
+			AerospikeNetworkPolicy: asdbv1beta1.AerospikeNetworkPolicy{
+				AccessType:             asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+				AlternateAccessType:    asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+				TLSAccessType:          asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+				TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
 			},
 			ValidationPolicy: &asdbv1beta1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
