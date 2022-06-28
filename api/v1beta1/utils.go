@@ -85,34 +85,38 @@ const (
 	AerospikeServerContainerName                   string = "aerospike-server"
 	AerospikeInitContainerName                     string = "aerospike-init"
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.15"
+	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.17"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIdLabel         = "aerospike.com/rack-id"
 )
 
-func GetInitContainerImage(registry string) string {
-	// registry = registry/registryNamespace
-	return registry + "/" + AerospikeInitContainerDefaultRepoAndTag
+func getInitContainerImage(registry string) string {
+	return fmt.Sprintf(
+		"%s/%s/%s", strings.TrimSuffix(registry, "/"),
+		strings.TrimSuffix(AerospikeInitContainerDefaultRegistryNamespace, "/"),
+		AerospikeInitContainerDefaultRepoAndTag,
+	)
 }
 
 func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
 	// Given in CR
 	registry := aeroCluster.Spec.AerospikeInitImageRegistry
 	if registry != "" {
-		return GetInitContainerImage(registry)
+		return getInitContainerImage(registry)
 	}
 
 	// Given in EnvVar
 	registry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
 	if found {
-		return GetInitContainerImage(registry)
+		return getInitContainerImage(registry)
 	}
 
 	// Use default
-	return GetInitContainerImage(AerospikeInitContainerDefaultRegistryNamespace)
+	return getInitContainerImage(AerospikeInitContainerDefaultRegistry)
 }
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
@@ -156,7 +160,9 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(version string, aerospikeConfig *AerospikeConfigSpec) (bool, error) {
+func IsSecurityEnabled(
+	version string, aerospikeConfig *AerospikeConfigSpec,
+) (bool, error) {
 
 	retval, err := asconfig.CompareVersions(version, "5.7.0")
 	if err != nil {
@@ -213,10 +219,14 @@ func GetConfigContext(
 			return validConfigMap, nil
 		}
 		return nil, fmt.Errorf(
-			"invalid aerospike.%s conf. %w", context, internalerrors.InvalidOrEmptyError)
+			"invalid aerospike.%s conf. %w", context,
+			internalerrors.InvalidOrEmptyError,
+		)
 
 	}
-	return nil, fmt.Errorf("context %s was %w", context, internalerrors.NotFoundError)
+	return nil, fmt.Errorf(
+		"context %s was %w", context, internalerrors.NotFoundError,
+	)
 }
 
 func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
