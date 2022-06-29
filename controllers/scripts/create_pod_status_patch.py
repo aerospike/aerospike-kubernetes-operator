@@ -110,14 +110,6 @@ def strtobool(param):
         raise ValueError("Invalid value")
 
 
-def join_path(base, path):
-    newpath = os.path.join(base, path)
-    logging.debug(f"base-path: {base} path: {path} new: {newpath}")
-    realpath = os.path.realpath(newpath)
-    logging.debug(f"base-path: {base} path: {path} new: {newpath} real-path: {realpath}")
-    return realpath
-
-
 def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
 
     url = f"{api_server}/apis/asdb.aerospike.com/v1beta1/namespaces/{namespace}/aerospikeclusters/{cluster_name}"
@@ -129,6 +121,26 @@ def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
         body = response.read()
 
     return json.loads(body)
+
+
+def get_pod_image(pod_name, namespace, api_server, token, ca_cert):
+    url = f"{api_server}/api/v1/namespaces/{namespace}/pods/{pod_name}"
+    logging.debug(f"Request pod-image from url: {url}")
+    request = urllib.request.Request(url=url, method="GET")
+    request.add_header("Authorization", f"Bearer {token}")
+
+    with urllib.request.urlopen(request, cafile=ca_cert) as response:
+        body = response.read()
+
+    data = json.loads(body)
+
+    try:
+        logging.debug("Looking for Pod-Image")
+        pod_server_image = data["spec"]["containers"][0]["image"]
+        return pod_server_image
+    except KeyError:
+        logging.debug("Pod-Image not found")
+        return ""
 
 
 def get_endpoints(address_type):
@@ -159,7 +171,6 @@ def get_node_metadata():
         service_port = os.environ["MAPPED_TLSPORT"]
 
     return {
-        "image": os.environ.get("POD_IMAGE", default=""),
         "podIP": os.environ.get("PODIP", default=""),
         "hostInternalIP": os.environ.get("INTERNALIP", default=""),
         "hostExternalIP": os.environ.get("EXTERNALIP", default=""),
@@ -173,7 +184,7 @@ def get_node_metadata():
     }
 
 
-def update_status(pod_name, metadata, volumes):
+def update_status(pod_name, pod_image, metadata, volumes):
 
     with open("aerospikeConfHash", mode="r") as f:
         conf_hash = f.read()
@@ -185,6 +196,7 @@ def update_status(pod_name, metadata, volumes):
         pod_spec_hash = f.read()
 
     metadata.update({
+        "image": pod_image,
         "initializedVolumes": volumes,
         "aerospikeConfigHash": conf_hash,
         "networkPolicyHash": network_policy_hash,
@@ -227,7 +239,6 @@ def get_initialized_volumes(pod_name, config):
 
 
 def get_rack(pod_name, config):
-
 
     # Assuming podName format stsName-rackID-index
     rack_id = int(pod_name.split("-")[-2])
@@ -465,9 +476,20 @@ def main():
 
         try:
             logging.info(f"pod-name: {args.pod_name} - Get configuration request")
-            config = get_cluster_json(args.cluster_name, args.namespace, args.api_server, args.token, args.ca_cert)
+            config = get_cluster_json(
+                cluster_name=args.cluster_name,
+                namespace=args.namespace,
+                api_server=args.api_server,
+                token=args.token,
+                ca_cert=args.ca_cert)
+            pod_image = get_pod_image(
+                pod_name=args.pod_name,
+                namespace=args.namespace,
+                api_server=args.api_server,
+                token=args.token,
+                ca_cert=args.ca_cert)
         except urllib.error.URLError as e:
-            logging.error(f"pod-name: {args.pod_name} - Unable to get configuration request - Error: {e}")
+            logging.error(f"pod-name: {args.pod_name} - Unable to prerform http request - Error: {e}")
             raise e
 
         try:
@@ -502,7 +524,7 @@ def main():
         volumes = init_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
-        update_status(pod_name=args.pod_name, metadata=metadata, volumes=volumes)
+        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes)
 
     except Exception as e:
         print(e)
