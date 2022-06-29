@@ -374,14 +374,6 @@ func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
 		return nil
 	}
 
-	if res.Requests != nil && res.Requests.Memory().IsZero() || res.Requests.Cpu().IsZero() {
-		return fmt.Errorf("resources.Requests.Memory or resources.Requests.Cpu cannot be zero")
-	}
-
-	if res.Limits != nil && res.Limits.Memory().IsZero() || res.Limits.Cpu().IsZero() {
-		return fmt.Errorf("resources.Limits.Memory or resources.Limits.Cpu cannot be zero")
-	}
-
 	if res.Limits != nil && res.Requests != nil &&
 		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
 			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
@@ -1124,7 +1116,6 @@ func validateNsConfUpdate(
 		}
 
 		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
-		var found bool
 		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
@@ -1138,7 +1129,6 @@ func validateNsConfUpdate(
 			}
 
 			if singleConf["name"] == oldSingleConf["name"] {
-				found = true
 
 				// replication-factor update not allowed
 				if isValueUpdated(
@@ -1149,46 +1139,9 @@ func validateNsConfUpdate(
 						oldSingleConf, singleConf,
 					)
 				}
-				if isValueUpdated(oldSingleConf, singleConf, "tls-name") {
-					return fmt.Errorf(
-						"tls-name cannot be update. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
-				if isValueUpdated(
-					oldSingleConf, singleConf, "tls-authenticate-client",
-				) {
-					return fmt.Errorf(
-						"tls-authenticate-client cannot be update. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
-
-				// storage-engine update not allowed for now
-				storage, ok1 := singleConf["storage-engine"]
-				oldStorage, ok2 := oldSingleConf["storage-engine"]
-				if ok1 && !ok2 || !ok1 && ok2 {
-					return fmt.Errorf(
-						"storage-engine config cannot be added or removed from existing cluster. Old namespace config %v, new namespace config %v",
-						oldSingleConf, singleConf,
-					)
-				}
-				if ok1 && ok2 && !reflect.DeepEqual(storage, oldStorage) {
-					return fmt.Errorf(
-						"storage-engine config cannot be changed. Old namespace config %v, new namespace config %v",
-						oldSingleConf, singleConf,
-					)
-				}
 			}
 		}
 
-		// Cannot add new persistent namespaces.
-		if !found && !isInMemoryNamespace(singleConf) {
-			return fmt.Errorf(
-				"new persistent storage namespace %s cannot be added. Old namespace list %v, new namespace list %v",
-				singleConf["name"], oldNsConfList, newNsConfList,
-			)
-		}
 	}
 	// Check for namespace name len
 	return nil

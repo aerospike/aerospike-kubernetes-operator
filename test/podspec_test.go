@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -56,7 +56,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						zones, err := getZones(k8sClient)
+						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 						// Deploy everything in single rack
 						aeroCluster := createDummyAerospikeCluster(
@@ -113,7 +113,7 @@ var _ = Describe(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					zones, err := getZones(k8sClient)
+					zones, err := getZones(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 					zone := zones[0]
 					if len(zones) > 1 {
@@ -220,8 +220,25 @@ var _ = Describe(
 							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
 						)
 
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
+							{
+								ContainerName: "init-myservice",
+								Path:          "/workdir",
+							},
+						}
+
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						// validate
+						stsList, err := getSTSList(aeroCluster, k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(len(stsList.Items)).ToNot(BeZero())
+
+						for _, sts := range stsList.Items {
+							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
+							Expect(stsInitMountPath).To(Equal("/workdir"))
+						}
 
 						// By("Adding the container2")
 
@@ -255,6 +272,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
+						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
 
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -344,7 +362,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.Sidecars[0].Image = newImage
 
 					// Update affinity
-					region, err := getRegion(k8sClient)
+					region, err := getRegion(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
 					desiredAffinity := corev1.Affinity{
