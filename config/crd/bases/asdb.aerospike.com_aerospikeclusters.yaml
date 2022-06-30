@@ -124,10 +124,6 @@ spec:
                   taken as default
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              aerospikeInitImageRegistry:
-                description: AerospikeInitImageRegistry is the name of image registry
-                  along with re
-                type: string
               aerospikeNetworkPolicy:
                 description: AerospikeNetworkPolicy specifies how clients and tools
                   access the Aero
@@ -344,6 +340,10 @@ spec:
                     description: AerospikeInitContainerSpec configures the aerospike-init
                       container cre
                     properties:
+                      imageRegistry:
+                        description: ImageRegistry is the name of image registry along
+                          with registry namesp
+                        type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
                           init Container.
@@ -5708,10 +5708,6 @@ spec:
                 nullable: true
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              aerospikeInitImageRegistry:
-                description: AerospikeInitImageRegistry is the name of image registry
-                  along with re
-                type: string
               aerospikeNetworkPolicy:
                 description: AerospikeNetworkPolicy specifies how clients and tools
                   access the Aero
@@ -5932,6 +5928,10 @@ spec:
                     description: AerospikeInitContainerSpec configures the aerospike-init
                       container cre
                     properties:
+                      imageRegistry:
+                        description: ImageRegistry is the name of image registry along
+                          with registry namesp
+                        type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
                           init Container.

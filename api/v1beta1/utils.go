@@ -104,7 +104,7 @@ func getInitContainerImage(registry string) string {
 
 func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
 	// Given in CR
-	registry := aeroCluster.Spec.AerospikeInitImageRegistry
+	registry := aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
 	if registry != "" {
 		return getInitContainerImage(registry)
 	}

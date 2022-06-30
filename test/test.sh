@@ -11,12 +11,14 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "c:f:a:" opt
+while getopts "c:f:a:r:s:" opt
 do
    case "$opt" in
       c ) CONTAINER="$OPTARG" ;;
       f ) focus="$OPTARG" ;;
       a ) args="$OPTARG" ;;
+      r ) registry="$OPTARG" ;;
+      s ) secret="$OPTARG" ;;
    esac
 done
 
@@ -37,9 +39,12 @@ echo "| Deploying the operator.... |"
 echo "------------------------------"
 "$DIR"/deploy-test-operator.sh "$CONTAINER"
 
-
 # Run tests
 echo "---------------------"
 echo "| Starting tests.... |"
 echo "---------------------"
+
+export CUSTOM_INIT_REGISTRY="$registry"
+export IMAGE_PULL_SECRET_NAME="$secret"
+
 make test FOCUS="$focus" ARGS="$args"
