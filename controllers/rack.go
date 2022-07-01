@@ -719,12 +719,14 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		)
 	}
 
+	rackStatusVolumes := r.getRackStatusVolumes(rackState)
+
 	if r.isVolumeAttachmentRemoved(
-		volumes, allConfiguredContainers,
+		volumes, rackStatusVolumes, allConfiguredContainers,
 		pod.Spec.Containers, false,
 	) ||
 		r.isVolumeAttachmentRemoved(
-			volumes, allConfiguredInitContainers,
+			volumes, rackStatusVolumes, allConfiguredInitContainers,
 			pod.Spec.InitContainers, true,
 		) {
 		r.Log.Info(
@@ -735,6 +737,15 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	}
 
 	return false
+}
+
+func (r *SingleClusterReconciler) getRackStatusVolumes(rackState RackState) []asdbv1beta1.VolumeSpec {
+	for _, rack := range r.aeroCluster.Status.RackConfig.Racks {
+		if rack.ID == rackState.Rack.ID {
+			return rack.Storage.Volumes
+		}
+	}
+	return nil
 }
 
 func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(
@@ -845,7 +856,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 }
 
 func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
-	volumes []asdbv1beta1.VolumeSpec, configuredContainers []string,
+	volumes []asdbv1beta1.VolumeSpec, rackStatusVolumes []asdbv1beta1.VolumeSpec, configuredContainers []string,
 	podContainers []corev1.Container, isInitContainers bool,
 ) bool {
 	// TODO: Deal with injected volumes later.
@@ -868,6 +879,11 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 			if !r.isContainerVolumeInStorage(
 				volumes, volumeDevice.Name, container.Name, isInitContainers,
 			) {
+				if !r.isContainerVolumeInStorageStatus(
+					rackStatusVolumes, volumeDevice.Name,
+				) {
+					continue
+				}
 				r.Log.Info(
 					"Volume for container."+
 						"volumeDevice removed from rack storage",
@@ -887,6 +903,11 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 			if !r.isContainerVolumeInStorage(
 				volumes, volumeMount.Name, container.Name, isInitContainers,
 			) {
+				if !r.isContainerVolumeInStorageStatus(
+					rackStatusVolumes, volumeMount.Name,
+				) {
+					continue
+				}
 				r.Log.Info(
 					"Volume for container."+
 						"volumeMount removed from rack storage",
@@ -908,7 +929,7 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorage(
 	if volume == nil {
 		// Volume may have been removed, we allow removal of all volumes (except pv type)
 		r.Log.Info(
-			"Volume removed from rack storage", "volumeName",
+			"Volume not found in rack storage", "volumeName",
 			containerVolumeName,
 		)
 		return false
@@ -932,6 +953,20 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorage(
 				return false
 			}
 		}
+	}
+	return true
+}
+
+func (r *SingleClusterReconciler) isContainerVolumeInStorageStatus(
+	volumes []asdbv1beta1.VolumeSpec, containerVolumeName string,
+) bool {
+	volume := getStorageVolume(volumes, containerVolumeName)
+	if volume == nil {
+		r.Log.Info(
+			"Volume is added from external source", "volumeName",
+			containerVolumeName,
+		)
+		return false
 	}
 	return true
 }
