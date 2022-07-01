@@ -5,8 +5,8 @@ while getopts "n:p:" opt
 do
    case "$opt" in
       n ) NAME="$OPTARG" ;;
-      p ) PATH="$OPTARG" ;;
+      p ) CREDPATH="$OPTARG" ;;
    esac
 done
 
-kubectl create secret generic "$NAME" --from-file=.dockerconfigjson="$PATH" --type=kubernetes.io/dockerconfigjson -n test
+kubectl create secret generic "$NAME" --from-file=.dockerconfigjson="$CREDPATH" --type=kubernetes.io/dockerconfigjson -n test
