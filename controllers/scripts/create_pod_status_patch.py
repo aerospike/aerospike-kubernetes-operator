@@ -406,7 +406,8 @@ def wipe_volumes(pod_name, config):
 
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
 
-    for vol in (v for v in filter(lambda x: True if "aerospike" in x else False, get_persistent_volumes(get_attached_volumes(pod_name=pod_name, config=config)))):
+    for vol in (v for v in filter(lambda x: True if "aerospike" in x else False, get_persistent_volumes(
+            get_attached_volumes(pod_name=pod_name, config=config)))):
 
         volume = Volume(pod_name=pod_name, volume=vol)
 
@@ -415,8 +416,8 @@ def wipe_volumes(pod_name, config):
             if volume.volume_path in ns_device_paths:
 
                 if not os.path.exists(volume.get_mount_point()):
-                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
-                                f"does not exists")
+                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name}"
+                                  f" - Mounting point does not exists")
                     raise FileNotFoundError(f"{volume} - Volume path not found")
 
                 if volume.effective_wipe_method == "dd":
@@ -440,7 +441,8 @@ def wipe_volumes(pod_name, config):
             if volume.effective_wipe_method == "deleteFiles":
 
                 if not os.path.exists(volume.get_mount_point()):
-                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point does not exists")
+                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} "
+                                  f"- Mounting point does not exists")
                     raise FileNotFoundError(f"{volume} Volume path not found")
 
                 for ns_file_path in filter(lambda x: x.startswith(volume.get_attachment_path()), ns_file_paths):
@@ -508,11 +510,12 @@ def main():
 
             prev_major_ver = get_image_version(image=image)[0]
             logging.info(
-                f"pod-name: {args.pod_name} - Checking if volumes should be wiped: next-major-version: {next_major_ver} "
-                f"prev-major-version: {prev_major_ver}")
+                f"pod-name: {args.pod_name} "
+                f"- Checking if volumes should be wiped: "
+                f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
 
             if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
-                (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
+                    (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
                 logging.info(f"pod-name: {args.pod_name} - Volumes should be wiped")
                 wipe_volumes(pod_name=args.pod_name, config=config)
             else:

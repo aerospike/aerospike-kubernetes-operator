@@ -4,6 +4,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"net"
 	"strings"
 	// log "github.com/inconshreveable/log15"
@@ -49,9 +50,12 @@ var PredefinedRoles = map[string]struct{}{
 	"read-write":     {},
 	"read-write-udf": {},
 	"write":          {},
-	"truncate":       {},
-	"sindex-admin":   {},
-	"udf-admin":      {},
+}
+
+var Post6PredefinedRoles = map[string]struct{}{
+	"truncate":     {},
+	"sindex-admin": {},
+	"udf-admin":    {},
 }
 
 // Expect at least one user with these required roles.
@@ -69,9 +73,12 @@ var Privileges = map[string][]PrivilegeScope{
 	"data-admin":     {Global},
 	"sys-admin":      {Global},
 	"user-admin":     {Global},
-	"truncate":       {Global, NamespaceSet},
-	"sindex-admin ":  {Global},
-	"udf-admin":      {Global},
+}
+
+var Post6Privileges = map[string][]PrivilegeScope{
+	"truncate":      {Global, NamespaceSet},
+	"sindex-admin ": {Global},
+	"udf-admin":     {Global},
 }
 
 // IsAerospikeAccessControlValid validates the accessControl speciication in the clusterSpec.
@@ -109,7 +116,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	// Validate roles.
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
-		*aerospikeClusterSpec.AerospikeConfig,
+		*aerospikeClusterSpec.AerospikeConfig, version,
 	)
 	if err != nil {
 		return false, err
@@ -174,7 +181,7 @@ func validateRoleQuotaParam(
 
 // isRoleSpecValid indicates if input role spec is valid.
 func isRoleSpecValid(
-	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec,
+	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec, version string,
 ) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
@@ -190,13 +197,19 @@ func isRoleSpecValid(
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
 			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf(
-				"cannot create or modify predefined role: %s", roleSpec.Name,
-			)
+			return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+		}
+		cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+		if err != nil {
+			return false, err
+		}
+		if cmp >= 0 {
+			if _, ok := Post6PredefinedRoles[roleSpec.Name]; ok {
+				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+			}
 		}
 
-		_, err := isRoleNameValid(roleSpec.Name)
-
+		_, err = isRoleNameValid(roleSpec.Name)
 		if err != nil {
 			return false, err
 		}
@@ -218,7 +231,7 @@ func isRoleSpecValid(
 			}
 			seenPrivileges[privilege] = true
 
-			_, err = isPrivilegeValid(privilege, aerospikeConfigSpec)
+			_, err = isPrivilegeValid(privilege, aerospikeConfigSpec, version)
 
 			if err != nil {
 				return false, fmt.Errorf(
@@ -281,14 +294,23 @@ func isRoleNameValid(roleName string) (bool, error) {
 
 // Indicates if privilege is a valid privilege.
 func isPrivilegeValid(
-	privilege string, aerospikeConfigSpec AerospikeConfigSpec,
+	privilege string, aerospikeConfigSpec AerospikeConfigSpec, version string,
 ) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
 	_, ok := Privileges[parts[0]]
 	if !ok {
-		// First part of the privilege is not part of defined privileges.
-		return false, fmt.Errorf("invalid privilege %s", privilege)
+		cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+		if err != nil {
+			return false, err
+		}
+		if cmp < 0 {
+			// First part of the privilege is not part of defined privileges.
+			return false, fmt.Errorf("invalid privilege %s", privilege)
+		}
+		if _, ok := Post6Privileges[parts[0]]; !ok {
+			return false, fmt.Errorf("invalid privilege %s", privilege)
+		}
 	}
 
 	nParts := len(parts)
