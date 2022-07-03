@@ -25,7 +25,6 @@ pipeline {
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
         
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
-        IMAGE_PULL_SECRET="registrycred"
     }
 
     stages {
@@ -66,8 +65,8 @@ pipeline {
                     steps {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"                            
-                            sh "./test/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p config/samples/secrets/registrycred.json"
-                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -s ${IMAGE_PULL_SECRET}"
+                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -p config/samples/secrets/registrycred.json"
+
                         }
                     }
                 }
