@@ -41,7 +41,7 @@ var roleNameForbiddenChars = []string{";", ":"}
 // userNameForbiddenChars are chacacters forbidden in username.
 var userNameForbiddenChars = []string{";", ":"}
 
-// PredefinedRoles are predefined role names.
+// PredefinedRoles are all roles predefined in Aerospike server.
 var PredefinedRoles = map[string]struct{}{
 	"user-admin":     {},
 	"sys-admin":      {},
@@ -50,8 +50,12 @@ var PredefinedRoles = map[string]struct{}{
 	"read-write":     {},
 	"read-write-udf": {},
 	"write":          {},
+	"truncate":       {},
+	"sindex-admin":   {},
+	"udf-admin":      {},
 }
 
+// Post6PredefinedRoles are roles predefined post version 6.0 in Aerospike server.
 var Post6PredefinedRoles = map[string]struct{}{
 	"truncate":     {},
 	"sindex-admin": {},
@@ -64,7 +68,7 @@ var requiredRoles = []string{
 	"user-admin",
 }
 
-// Privileges are privilege string allowed in the spec and associated scopes.
+// Privileges are all privilege string allowed in the spec and associated scopes.
 var Privileges = map[string][]PrivilegeScope{
 	"read":           {Global, NamespaceSet},
 	"write":          {Global, NamespaceSet},
@@ -73,12 +77,16 @@ var Privileges = map[string][]PrivilegeScope{
 	"data-admin":     {Global},
 	"sys-admin":      {Global},
 	"user-admin":     {Global},
+	"truncate":       {Global, NamespaceSet},
+	"sindex-admin":   {Global},
+	"udf-admin":      {Global},
 }
 
+// Post6Privileges are post version 6.0 privilege strings allowed in the spec and associated scopes.
 var Post6Privileges = map[string][]PrivilegeScope{
-	"truncate":      {Global, NamespaceSet},
-	"sindex-admin ": {Global},
-	"udf-admin":     {Global},
+	"truncate":     {Global, NamespaceSet},
+	"sindex-admin": {Global},
+	"udf-admin":    {Global},
 }
 
 // IsAerospikeAccessControlValid validates the accessControl speciication in the clusterSpec.
@@ -196,20 +204,20 @@ func isRoleSpecValid(
 
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
-			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
-		}
-		cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
-		if err != nil {
-			return false, err
-		}
-		if cmp >= 0 {
-			if _, ok := Post6PredefinedRoles[roleSpec.Name]; ok {
+			cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+			if err != nil {
+				return false, err
+			}
+			if cmp >= 0 {
+				// Cannot modify or add predefined roles.
+				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+			} else if _, ok := Post6PredefinedRoles[roleSpec.Name]; !ok {
+				// Version < 6.0 and attempt to modify a pre 6.0 role
 				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
 			}
 		}
 
-		_, err = isRoleNameValid(roleSpec.Name)
+		_, err := isRoleNameValid(roleSpec.Name)
 		if err != nil {
 			return false, err
 		}
@@ -300,15 +308,17 @@ func isPrivilegeValid(
 
 	_, ok := Privileges[parts[0]]
 	if !ok {
-		cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
-		if err != nil {
-			return false, err
-		}
-		if cmp < 0 {
-			// First part of the privilege is not part of defined privileges.
-			return false, fmt.Errorf("invalid privilege %s", privilege)
-		}
-		if _, ok := Post6Privileges[parts[0]]; !ok {
+		return false, fmt.Errorf("invalid privilege %s", privilege)
+	}
+
+	// Check if new privileges are used in an older version.
+	cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+	if err != nil {
+		return false, err
+	}
+	if cmp < 0 {
+		if _, ok := Post6Privileges[parts[0]]; ok {
+			// Version < 6.0 using post 6.0 privilege.
 			return false, fmt.Errorf("invalid privilege %s", privilege)
 		}
 	}
