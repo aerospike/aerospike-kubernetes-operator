@@ -2066,6 +2066,7 @@ func getUser(
 func validateRoles(
 	clientP *as.Client, clusterSpec *asdbv1beta1.AerospikeClusterSpec,
 ) error {
+
 	client := *clientP
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
 	asRoles, err := client.QueryRoles(&adminPolicy)
@@ -2076,10 +2077,11 @@ func validateRoles(
 	var currentRoleNames []string
 
 	for _, role := range asRoles {
-		_, isPredefined := asdbv1beta1.PredefinedRoles[role.Name]
+		if _, isPredefined := asdbv1beta1.PredefinedRoles[role.Name]; !isPredefined {
 
-		if !isPredefined {
-			currentRoleNames = append(currentRoleNames, role.Name)
+			if _, isPredefined = asdbv1beta1.Post6PredefinedRoles[role.Name]; !isPredefined {
+				currentRoleNames = append(currentRoleNames, role.Name)
+			}
 		}
 	}
 
@@ -2110,10 +2112,12 @@ func validateRoles(
 
 	// Verify the privileges and whitelists are correct.
 	for _, asRole := range asRoles {
-		_, isPredefined := asdbv1beta1.PredefinedRoles[asRole.Name]
-
-		if isPredefined {
+		if _, isPredefined := asdbv1beta1.PredefinedRoles[asRole.Name]; isPredefined {
 			continue
+		} else {
+			if _, isPredefined = asdbv1beta1.Post6PredefinedRoles[asRole.Name]; isPredefined {
+				continue
+			}
 		}
 
 		expectedRoleSpec := *getRole(accessControl.Roles, asRole.Name)
