@@ -160,11 +160,12 @@ func getAerospikeClusterSpecWithLDAP(
 							"query-user-dn": "cn=admin,dc=example,dc=org",
 							"query-user-password-file": "/etc/aerospike/secret" +
 								"/ldap-passwd.txt",
-							"user-dn-pattern": "cn=$${DNE}{un},ou=users," +
+							"user-dn-pattern": "cn=${un},ou=users," +
 								"dc=example,dc=org",
 							"role-query-search-ou": true,
 							"role-query-patterns": []string{
-								"(&(objectClass=groupOfNames)(member=cn=$${DNE}{un},ou=users,dc=example,dc=org))",
+								"(&(objectClass=groupOfNames)(member=cn=${un},ou=users,dc=example,dc=org))",
+								"(&(ou=db_groups)(uniqueMember=${dn}))",
 							},
 							"polling-period": 10,
 						},

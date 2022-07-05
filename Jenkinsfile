@@ -83,19 +83,36 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "2.0.0"
+    def prefix = "2.1.0"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
-        candidateName =  "nightly-${timestamp}-${env.BUILD_NUMBER}"
+        candidateName =  "nightly-${timestamp}"
     } else {
-        candidateName =  "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        candidateName =  "candidate-${env.BRANCH_NAME}"
     }
 
-    version = "${prefix}-${candidateName}"
+    def candidateNameMax = 30 - prefix.length()
+    candidateName = abbreviate(candidateName, candidateNameMax)
+    version = "${prefix}-${candidateName}-${env.BUILD_NUMBER}"
     return normalizeVersion(version)
 }
 
 String normalizeVersion(String version) {
     return version.toLowerCase().replaceAll(/[^a-zA-Z0-9-.]+/, "-").replaceAll(/(^-+)|(-+$)/,"")
+}
+
+String abbreviate(String str, int length) {
+  if(str.length() <= length) {
+    return str
+  }
+
+  def parts = str.split("[._\\-/]")
+  def abbreviated = ""
+  for(part in parts) {
+    abbreviated += part.substring(0,Math.min(part.length(), 2))
+    abbreviated += "-"
+  }
+
+  return abbreviated.substring(0, abbreviated.length()-1)
 }
