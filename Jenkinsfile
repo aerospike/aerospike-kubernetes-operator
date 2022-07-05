@@ -87,14 +87,14 @@ String getVersion() {
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
-        candidateName =  "nightly-${timestamp}-${env.BUILD_NUMBER}"
+        candidateName =  "nightly-${timestamp}"
     } else {
-        candidateName =  "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        candidateName =  "candidate-${env.BRANCH_NAME}"
     }
 
     def candidateNameMax = 30 - prefix.length()
     candidateName = abbreviate(candidateName, candidateNameMax)
-    version = "${prefix}-${candidateName}"
+    version = "${prefix}-${candidateName}-${env.BUILD_NUMBER}"
     return normalizeVersion(version)
 }
 
