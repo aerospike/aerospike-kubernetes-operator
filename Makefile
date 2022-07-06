@@ -113,7 +113,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 # docker-build: test ## Build docker image with the manager.
 docker-build: ## Build docker image with the manager.
-	docker build -t ${IMG} --build-arg VERSION=$(VERSION) .
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
@@ -203,7 +203,7 @@ bundle-clean:
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	docker build --pull --no-cache -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
