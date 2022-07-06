@@ -45,7 +45,8 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		// 	return fmt.Errorf("pod has terminated status")
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
-		if waiting := container.State.Waiting; waiting != nil && (isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason)) {
+		if waiting := container.State.Waiting; waiting != nil &&
+			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
 			return fmt.Errorf(
 				"pod failed message in container %s: %s reason: %s",
 				container.Name, waiting.Message, waiting.Reason,
@@ -236,4 +237,10 @@ func isPodImageError(reason string) bool {
 // isPodCrashError indicates whether the specified reason corresponds to an crash of the container.
 func isPodCrashError(reason string) bool {
 	return strings.HasPrefix(reason, "Crash")
+}
+
+// isPodError indicates whether the specified reason corresponds to a generic error like CreateContainerConfigError in the container.
+// https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
+func isPodError(reason string) bool {
+	return strings.HasSuffix(reason, "Error")
 }

@@ -286,23 +286,6 @@ func getClusterIfExists(
 	return aeroCluster, nil
 }
 
-func getPodsList(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
-) (*corev1.PodList, error) {
-	podList := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(clusterNamespacedName.Name))
-	listOps := &client.ListOptions{
-		Namespace:     clusterNamespacedName.Namespace,
-		LabelSelector: labelSelector,
-	}
-
-	if err := k8sClient.List(ctx, podList, listOps); err != nil {
-		return nil, err
-	}
-	return podList, nil
-}
-
 func deleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
@@ -328,8 +311,8 @@ func deleteCluster(
 		}
 		//Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
 		//tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
-		allClustersPods, err := getPodsList(
-			k8sClient, ctx, clusterNamespacedName,
+		allClustersPods, err := getClusterPodList(
+			k8sClient, ctx, aeroCluster,
 		)
 		if err != nil {
 			return err
