@@ -320,15 +320,17 @@ def get_namespace_volume_paths(pod_name, config):
                 devices = storage_engine["devices"]
 
                 for device in devices:
-                    logging.debug(f"pod-name: {pod_name} - Get device-type: {device_type}  device: {device}")
-                    devicepaths.add(device)
+                    for d in device.split():
+                        logging.debug(f"pod-name: {pod_name} - Get device-type: {device_type}  device: {d}")
+                        devicepaths.add(d)
 
             if "files" in storage_engine:
                 files = storage_engine["files"]
 
-                for f in files:
-                    logging.debug(f"pod-name: {pod_name} Get device-type: {device_type} file: {f}")
-                    filepaths.append(f)
+                for fi in files:
+                    for f in fi.split():
+                        logging.debug(f"pod-name: {pod_name} Get device-type: {device_type} file: {f}")
+                        filepaths.append(f)
 
     return devicepaths, filepaths
 
