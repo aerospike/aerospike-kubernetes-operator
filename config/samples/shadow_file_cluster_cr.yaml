@@ -26,7 +26,7 @@ spec:
             size: 1Gi
       - name: nsvol1
         aerospike:
-          path: /remote
+          path: /local
         source:
           persistentVolume:
             storageClass: local-ssd
@@ -34,7 +34,7 @@ spec:
             size: 5Gi
       - name: nsvol2
         aerospike:
-          path: /local
+          path: /remote
         source:
           persistentVolume:
             storageClass: ssd
