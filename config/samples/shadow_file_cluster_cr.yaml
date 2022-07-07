@@ -1,0 +1,80 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  # Add fields here
+  size: 2
+  image: aerospike/aerospike-server-enterprise:6.0.0.1
+
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    blockVolumePolicy:
+      cascadeDelete: true
+    volumes:
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: nsvol1
+        aerospike:
+          path: /remote
+        source:
+          persistentVolume:
+            storageClass: local-ssd
+            volumeMode: Filesystem
+            size: 5Gi
+      - name: nsvol2
+        aerospike:
+          path: /local
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 5Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
+
+  podSpec:
+    multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security: {}
+    network:
+      service:
+        port: 3000
+      fabric:
+        port: 3001
+      heartbeat:
+        port: 3002
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine:
+          type: device
+          filesize: 2000000000
+          files:
+            - /local/test.dat /remote/test.dat

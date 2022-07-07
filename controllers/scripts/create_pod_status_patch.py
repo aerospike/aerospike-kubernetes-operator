@@ -30,7 +30,8 @@ class Volume(object):
         self.pod_name = pod_name
         self.volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
         self.volume_name = volume["name"]
-        logging.debug(f"pod-name: {self.pod_name} - Initializing volume object: {self.volume_name}")
+        logging.debug(
+            f"pod-name: {self.pod_name} - Initializing volume object: {self.volume_name}")
 
         self.effective_wipe_method = volume["effectiveWipeMethod"]
         self.effective_init_method = volume["effectiveInitMethod"]
@@ -41,7 +42,8 @@ class Volume(object):
 
         elif "sidecars" in volume:
             self.attachment_type = "sidecars"
-            self.volume_path = [(sidecar["containerName"], sidecar["path"]) for sidecar in volume["sidecars"]]
+            self.volume_path = [(sidecar["containerName"], sidecar["path"])
+                                for sidecar in volume["sidecars"]]
 
         elif "initContainers" in volume:
             self.attachment_type = "initContainers"
@@ -53,18 +55,21 @@ class Volume(object):
                           f"Empty attachment-type and volume-path")
             self.attachment_type = ""
             self.volume_path = ""
-        logging.debug(f"pod-name: {self.pod_name} - Initialized volume object: {self.volume_name}")
+        logging.debug(
+            f"pod-name: {self.pod_name} - Initialized volume object: {self.volume_name}")
 
     def get_mount_point(self):
 
         if self.volume_mode == "Block":
 
             point = os.path.join(BLOCK_MOUNT_POINT, self.volume_name)
-            logging.debug(f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
+            logging.debug(
+                f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
             return point
 
         point = os.path.join(FILE_SYSTEM_MOUNT_POINT, self.volume_name)
-        logging.debug(f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
+        logging.debug(
+            f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
 
         return point
 
@@ -204,9 +209,11 @@ def update_status(pod_name, pod_image, metadata, volumes):
     })
 
     for pod_addr_name, conf_addr_name in ADDRESS_TYPE_NAME.items():
-        metadata["aerospike"][conf_addr_name] = get_endpoints(address_type=pod_addr_name)
+        metadata["aerospike"][conf_addr_name] = get_endpoints(
+            address_type=pod_addr_name)
 
-    payload = [{"op": "replace", "path": f"/status/pods/{pod_name}", "value": metadata}]
+    payload = [
+        {"op": "replace", "path": f"/status/pods/{pod_name}", "value": metadata}]
 
     print(40 * "#" + " payload " + 40 * "#")
     pp(payload)
@@ -234,7 +241,8 @@ def get_initialized_volumes(pod_name, config):
 
             return set(config["status"]["pods"][pod_name]["initializedVolumePaths"])
         except KeyError:
-            logging.warning(f"pod-name: {pod_name} - Initialized volumes not found")
+            logging.warning(
+                f"pod-name: {pod_name} - Initialized volumes not found")
             return set()
 
 
@@ -243,7 +251,8 @@ def get_rack(pod_name, config):
     # Assuming podName format stsName-rackID-index
     rack_id = int(pod_name.split("-")[-2])
 
-    logging.debug(f"pod-name: {pod_name} - Checking for rack in rackConfig rack-id: {rack_id}")
+    logging.debug(
+        f"pod-name: {pod_name} - Checking for rack in rackConfig rack-id: {rack_id}")
     try:
         racks = config["spec"]["rackConfig"]["racks"]
 
@@ -252,11 +261,13 @@ def get_rack(pod_name, config):
                 return rack
 
         logging.error(f"pod-name: {pod_name} rack-id: {rack_id} - Not found")
-        raise ValueError(f"pod-name: {pod_name} rack-id: {rack_id} - Not found")
+        raise ValueError(
+            f"pod-name: {pod_name} rack-id: {rack_id} - Not found")
 
     except KeyError:
 
-        logging.error(f"pod-name: {pod_name} - Unable to get rack-id {rack_id}")
+        logging.error(
+            f"pod-name: {pod_name} - Unable to get rack-id {rack_id}")
         raise
 
 
@@ -265,26 +276,32 @@ def get_attached_volumes(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
 
     try:
-        logging.debug(f"pod-name: {pod_name} - Looking for volumes in rack.storage.volumes")
+        logging.debug(
+            f"pod-name: {pod_name} - Looking for volumes in rack.storage.volumes")
         volumes = rack["storage"]["volumes"]
 
         if not volumes:
-            logging.warning(f"pod-name: {pod_name} - Found an empty list in rack.storage.volumes")
+            logging.warning(
+                f"pod-name: {pod_name} - Found an empty list in rack.storage.volumes")
             raise KeyError(f"pod-name: {pod_name} - volumes not found")
 
         return volumes
 
     except KeyError:
-        logging.debug(f"pod-name: {pod_name} - Volumes not found in rack.storage.volumes")
+        logging.debug(
+            f"pod-name: {pod_name} - Volumes not found in rack.storage.volumes")
 
         try:
-            logging.debug(f"pod-name: {pod_name} - Looking for volumes in spec.storage.volumes")
+            logging.debug(
+                f"pod-name: {pod_name} - Looking for volumes in spec.storage.volumes")
             volumes = config["spec"]["storage"]["volumes"]
 
             if not volumes:
 
-                logging.warning(f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
-                raise KeyError(f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
+                logging.warning(
+                    f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
+                raise KeyError(
+                    f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
 
             return volumes
 
@@ -320,16 +337,18 @@ def get_namespace_volume_paths(pod_name, config):
                 devices = storage_engine["devices"]
 
                 for device in devices:
-                    for d in device.split():
-                        logging.debug(f"pod-name: {pod_name} - Get device-type: {device_type}  device: {d}")
+                    for d in device.strip().split():
+                        logging.debug(
+                            f"pod-name: {pod_name} - Get device-type: {device_type}  device: {d}")
                         devicepaths.add(d)
 
             if "files" in storage_engine:
                 files = storage_engine["files"]
 
                 for fi in files:
-                    for f in fi.split():
-                        logging.debug(f"pod-name: {pod_name} Get device-type: {device_type} file: {f}")
+                    for f in fi.strip().split():
+                        logging.debug(
+                            f"pod-name: {pod_name} Get device-type: {device_type} file: {f}")
                         filepaths.append(f)
 
     return devicepaths, filepaths
@@ -338,7 +357,8 @@ def get_namespace_volume_paths(pod_name, config):
 def init_volumes(pod_name, config):
 
     volumes = []
-    initialized_volumes = get_initialized_volumes(pod_name=pod_name, config=config)
+    initialized_volumes = get_initialized_volumes(
+        pod_name=pod_name, config=config)
 
     for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
                                   get_persistent_volumes(volumes=get_attached_volumes(
@@ -357,13 +377,15 @@ def init_volumes(pod_name, config):
             if volume.effective_init_method == "dd":
 
                 dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" '\
-                     '/tmp/init-stderr'.format(volume_path=volume.get_mount_point())
+                     '/tmp/init-stderr'.format(
+                         volume_path=volume.get_mount_point())
                 execute(dd)
                 logging.info(f"{volume} - Initialized")
 
             elif volume.effective_init_method == "blkdiscard":
 
-                blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
+                blkdiskard = "blkdiscard {volume_path}".format(
+                    volume_path=volume.get_mount_point())
                 execute(blkdiskard)
                 logging.info(f"{volume} - Initialized")
 
@@ -382,7 +404,8 @@ def init_volumes(pod_name, config):
 
             if volume.effective_init_method == "deleteFiles":
 
-                find = "find {volume_path} -type f -delete".format(volume_path=volume.get_mount_point())
+                find = "find {volume_path} -type f -delete".format(
+                    volume_path=volume.get_mount_point())
                 execute(find)
                 logging.info(f"{volume} - Initialized")
 
@@ -497,20 +520,23 @@ def main():
             raise e
 
         try:
-            image = config["status"]["image"]
+            prev_image = config["status"]["pods"][args.pod_name]["image"]
             logging.info(f"pod-name: {args.pod_name} - Restarted")
         except KeyError:
             logging.info(f"pod-name: {args.pod_name} - Initializing")
-            image = ""
+            prev_image = ""
 
         metadata = get_node_metadata()
-        next_major_ver = get_image_version(image=config["spec"]["image"])[0]
+        next_major_ver = get_image_version(image=pod_image)[0]
+
+        logging.info(f"pod-name: {args.pod_name} - Checking if volume initialization needed")
+        volumes = init_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
 
-        if image:
+        if prev_image:
 
-            prev_major_ver = get_image_version(image=image)[0]
+            prev_major_ver = get_image_version(image=prev_image)[0]
             logging.info(
                 f"pod-name: {args.pod_name} "
                 f"- Checking if volumes should be wiped: "
@@ -524,9 +550,6 @@ def main():
                 logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
         else:
             logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
-
-        logging.info(f"pod-name: {args.pod_name} - Checking if volume initialization needed")
-        volumes = init_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
         update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes)
