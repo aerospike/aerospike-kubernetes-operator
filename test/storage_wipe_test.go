@@ -58,10 +58,10 @@ var _ = Describe(
 				It("Should validate all storage-wipe policies", func() {
 
 					storageConfig := getAerospikeWipeStorageConfig(
-						containerName, asdbv1beta1.AerospikeServerInitContainerName,
+						containerName, asdbv1beta1.AerospikeInitContainerName,
 						false, cloudProvider)
 					rackStorageConfig := getAerospikeWipeRackStorageConfig(
-						containerName, asdbv1beta1.AerospikeServerInitContainerName,
+						containerName, asdbv1beta1.AerospikeInitContainerName,
 						false, cloudProvider)
 					racks := []asdbv1beta1.Rack{
 						{
