@@ -213,7 +213,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	// Validate resource and limit
-	if err := c.validateResourceAndLimits(aslog); err != nil {
+	if err := c.validatePodSpecResourceAndLimits(aslog); err != nil {
 		return err
 	}
 
@@ -361,19 +361,25 @@ func (c *AerospikeCluster) validateAccessControl(_ logr.Logger) error {
 	return err
 }
 
-func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
-	res := c.Spec.PodSpec.AerospikeContainerSpec.Resources
+func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error {
+	if err := c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeContainerSpec.Resources); err != nil {
+		return err
+	}
 
-	if res == nil {
+	return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources)
+}
+
+func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements) error {
+	if resources == nil {
 		return nil
 	}
 
-	if res.Limits != nil && res.Requests != nil &&
-		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
-			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
+	if resources.Limits != nil && resources.Requests != nil &&
+		((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
+			(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
 		return fmt.Errorf(
 			"resources.Limits cannot be less than resource.Requests. Resources %v",
-			res,
+			resources,
 		)
 	}
 
@@ -874,7 +880,7 @@ func validateNamespaceConfig(
 		}
 	}
 
-	// Vaidate index-type
+	// Validate index-type
 	for _, nsConfInterface := range nsConfInterfaceList {
 		nsConf, ok := nsConfInterface.(map[string]interface{})
 		if !ok {
@@ -1010,9 +1016,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, oldSecConfFound := oldConf["security"]
 	newSec, newSecConfFound := newConf["security"]
-	if oldSecConfFound != oldSecConfFound {
-		return fmt.Errorf("cannot update cluster security config")
-	}
+
 	if oldSecConfFound && newSecConfFound {
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
@@ -1459,7 +1463,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 
 	for _, container := range containers {
 		// Check for reserved container name
-		if container.Name == AerospikeServerContainerName || container.Name == AerospikeServerInitContainerName {
+		if container.Name == AerospikeServerContainerName || container.Name == AerospikeInitContainerName {
 			return fmt.Errorf(
 				"cannot use reserved container name: %v", container.Name,
 			)

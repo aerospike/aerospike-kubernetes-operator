@@ -705,7 +705,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	// Check for removed volumeAttachments
 	allConfiguredInitContainers := []string{
 		asdbv1beta1.
-			AerospikeServerInitContainerName,
+			AerospikeInitContainerName,
 	}
 	allConfiguredContainers := []string{asdbv1beta1.AerospikeServerContainerName}
 
@@ -850,7 +850,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 ) bool {
 	// TODO: Deal with injected volumes later.
 	for _, container := range podContainers {
-		if isInitContainers && container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+		if isInitContainers && container.Name == asdbv1beta1.AerospikeInitContainerName {
 			// InitContainer has all the volumes mounted, there is no specific entry in storage for initContainer
 			continue
 		}
