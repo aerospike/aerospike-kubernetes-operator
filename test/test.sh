@@ -23,6 +23,11 @@ do
    esac
 done
 
+# Defaults
+CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
+REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
+
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 go get -d github.com/onsi/ginkgo/ginkgo

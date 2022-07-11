@@ -23,7 +23,7 @@ pipeline {
         VERSION="${env.OPERATOR_VERSION}"
         IMG="${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
-        
+
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
     }
 
@@ -64,8 +64,9 @@ pipeline {
                 stage('Test') {
                     steps {
                         dir("${env.GO_REPO}") {
-                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"                            
-                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -p config/samples/secrets/registrycred.json"
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com"
+                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY}"
 
                         }
                     }
