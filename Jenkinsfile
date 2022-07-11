@@ -65,7 +65,7 @@ pipeline {
                     steps {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-							sh "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p $(aws ecr get-login-password --region ap-south-1) set -x"
                             sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY}"
 
                         }
