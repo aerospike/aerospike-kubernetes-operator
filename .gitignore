@@ -44,3 +44,7 @@ GTAGS
 bundle/
 bundle.Dockerfile
 .DS_Store
+
+# RedHat OpenShift Preflight
+preflight.log
+artifacts/

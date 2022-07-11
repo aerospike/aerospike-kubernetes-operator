@@ -23,6 +23,8 @@ pipeline {
         VERSION="${env.OPERATOR_VERSION}"
         IMG="${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
+        
+        AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
     }
 
     stages {
@@ -62,8 +64,9 @@ pipeline {
                 stage('Test') {
                     steps {
                         dir("${env.GO_REPO}") {
-                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"                            
+                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -p config/samples/secrets/registrycred.json"
+
                         }
                     }
                 }
@@ -83,19 +86,36 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "2.0.0"
+    def prefix = "2.1.0"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
-        candidateName =  "nightly-${timestamp}-${env.BUILD_NUMBER}"
+        candidateName =  "nightly-${timestamp}"
     } else {
-        candidateName =  "candidate-${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        candidateName =  "candidate-${env.BRANCH_NAME}"
     }
 
-    version = "${prefix}-${candidateName}"
+    def candidateNameMax = 30 - prefix.length()
+    candidateName = abbreviate(candidateName, candidateNameMax)
+    version = "${prefix}-${candidateName}-${env.BUILD_NUMBER}"
     return normalizeVersion(version)
 }
 
 String normalizeVersion(String version) {
     return version.toLowerCase().replaceAll(/[^a-zA-Z0-9-.]+/, "-").replaceAll(/(^-+)|(-+$)/,"")
+}
+
+String abbreviate(String str, int length) {
+  if(str.length() <= length) {
+    return str
+  }
+
+  def parts = str.split("[._\\-/]")
+  def abbreviated = ""
+  for(part in parts) {
+    abbreviated += part.substring(0,Math.min(part.length(), 2))
+    abbreviated += "-"
+  }
+
+  return abbreviated.substring(0, abbreviated.length()-1)
 }
