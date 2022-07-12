@@ -9,7 +9,6 @@ metadata:
     createdAt: dateplaceholder
     description: The Aerospike Kubernetes Operator automates the deployment and management
       of Aerospike enterprise clusters on Kubernetes.
-    operatorframework.io/suggested-namespace: aerospike
     repository: https://github.com/aerospike/aerospike-kubernetes-operator/
   name: aerospike-kubernetes-operator.v0.0.0
   namespace: placeholder
