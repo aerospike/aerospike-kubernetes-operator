@@ -4,7 +4,7 @@
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 # Openshift platform supported version
-OPENSHIFT_VERSION="v4.6-v4.9"
+OPENSHIFT_VERSION="v4.6"
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
