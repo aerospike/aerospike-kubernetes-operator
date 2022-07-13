@@ -243,10 +243,8 @@ type AerospikeContainerSpec struct {
 }
 
 type AerospikeInitContainerSpec struct {
-	// ImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// ImageRegistry is the name of image registry for aerospike-init container image
 	// ImageRegistry, e.g. docker.io, redhat.access.com
-	// RegistryNamespace, e.g. aerospike
-	// image: <ImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
 	ImageRegistry string `json:"imageRegistry,omitempty"`
 	// SecurityContext that will be added to aerospike-init container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`

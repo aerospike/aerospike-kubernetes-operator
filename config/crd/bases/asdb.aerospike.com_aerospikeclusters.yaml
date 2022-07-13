@@ -341,8 +341,8 @@ spec:
                       container cre
                     properties:
                       imageRegistry:
-                        description: ImageRegistry is the name of image registry along
-                          with registry namesp
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
                         type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
@@ -6091,8 +6091,8 @@ spec:
                       container cre
                     properties:
                       imageRegistry:
-                        description: ImageRegistry is the name of image registry along
-                          with registry namesp
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
                         type: string
                       resources:
                         description: Define resources requests and limits for Aerospike

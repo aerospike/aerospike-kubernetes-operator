@@ -27,6 +27,7 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 ### Deploy the Aerospike Kubernetes Operator
 
 ```sh
+# helm install <chartName> <chartPath> --namespace <namespace>
 helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
 ```
 
@@ -35,8 +36,8 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | Name       | Description | Default   |
 | ---------- | ----------- | --------- |
 | `replicas` | Number of operator replicas | `2` |
-| `operatorImage.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator-nightly` |
-| `operatorImage.tag` | Operator image tag | `2.0.0-candidate-master-42` |
+| `operatorImage.repository` | Operator image repository | `aerospike/aerospike-kubernetes-operator` |
+| `operatorImage.tag` | Operator image tag | `2.1.0` |
 | `operatorImage.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Secrets containing credentials to pull Operator image from a private registry | `{}` (nil) |
 | `rbac.create` | Set this to `true` to let helm chart automatically create RBAC resources necessary for operator | `true` |
@@ -48,6 +49,7 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `certs.create` | Set this to `true` to let helm chart automatically create certificates using `cert-manager` | `true` |
 | `certs.webhookServerCertSecretName` | Kubernetes secret name which contains webhook server certificates | `webhook-server-cert`|
 | `watchNamespaces` | Namespaces to watch. Operator will watch for `AerospikeCluster` custom resources in these namespaces. Every watchedNamespace should already be existing. For every watched namespace, operator creates A ServiceAccount, ClusterRole and ClusterRoleBinding in that namespace. | `default` |
+| `aerospikeKubernetesInitRegistry` | Registry used to pull aerospike-init image | `docker.io` |
 | `resources` | Resource requests and limits for the operator pods | `{}` (nil) |
 | `affinity` | Affinity rules for the operator deployment | `{}` (nil) |
 | `extraEnv` | Extra environment variables that will be passed into the operator pods | `{}` (nil) |
@@ -70,9 +72,9 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `livenessProbe` | Liveliness probe for operator container | `initialDelaySeconds: 15`, `periodSeconds: 20`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3` |
 | `readinessProbe` | Readiness probe for the operator container | `initialDelaySeconds: 5`, `periodSeconds: 10`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3` |
 | `kubeRBACProxy.image.repository` | Kube RBAC Proxy image repository container | `gcr.io/kubebuilder/kube-rbac-proxy` |
-| `kubeRBACProxy.image.tag` | Kube RBAC Proxy image tag | `v0.5.0` |
+| `kubeRBACProxy.image.tag` | Kube RBAC Proxy image tag | `v0.11.0` |
 | `kubeRBACProxy.image.pullPolicy` | Kube RBAC Proxy image pull policy | `IfNotPresent` |
-
+| `kubeRBACProxy.resources` | Kube RBAC Proxy container resource | `{}` (nil) |
 <!-- ## Next Steps
 
 Deploy [Aerospike Cluster](https://artifacthub.io/packages/helm/aerospike/aerospike-cluster) -->
