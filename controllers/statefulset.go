@@ -1438,7 +1438,7 @@ func getNamespacedNameForSTSConfigMap(
 func getSTSPodOrdinal(podName string) (*int32, error) {
 	parts := strings.Split(podName, "-")
 	ordinalStr := parts[len(parts)-1]
-	ordinal, err := strconv.Atoi(ordinalStr)
+	ordinal, err := strconv.ParseInt(ordinalStr, 10, 32)
 	if err != nil {
 		return nil, err
 	}
