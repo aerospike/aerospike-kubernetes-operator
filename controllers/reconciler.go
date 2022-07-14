@@ -15,6 +15,7 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	rbac "k8s.io/api/rbac/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -35,10 +36,16 @@ type SingleClusterReconciler struct {
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
+	if err := r.checkPermissionForNamespace(); err != nil {
+		r.Log.Error(err, "Failed to start reconcile")
+		return reconcile.Result{}, err
+	}
+
 	r.Log.V(1).Info(
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
 	)
+
 	// Check DeletionTimestamp to see if cluster is being deleted
 	if !r.aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
@@ -102,6 +109,56 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
+	r.Log.Info("Checking for serviceAccount name in clusterRoleBindings",
+		"namespace", r.aeroCluster.Namespace, "serviceAccount", aeroClusterServiceAccountName)
+
+	crbs := &rbac.ClusterRoleBindingList{}
+	if err := r.Client.List(context.TODO(), crbs); err != nil {
+		return err
+	}
+
+	var isCRBFound bool
+	var svcActFound bool
+
+	for _, crb := range crbs.Items {
+		// Check only for olm setup
+		if _, ok := crb.Labels["olm.owner"]; !ok {
+			continue
+		}
+
+		if strings.HasPrefix(crb.Name, "aerospike-kubernetes-operator.v") {
+			r.Log.Info("Checking in clusterRoleBinding", "crb", crb.Name)
+
+			isCRBFound = true
+
+			for _, sub := range crb.Subjects {
+				// Verify serviceAccount for namespace
+				if sub.Kind == "ServiceAccount" &&
+					sub.Name == aeroClusterServiceAccountName &&
+					sub.Namespace == r.aeroCluster.Namespace {
+
+					r.Log.Info("Found the serviceAccount name in clusterRoleBindings",
+						"namespace", r.aeroCluster.Namespace, "serviceAccount", aeroClusterServiceAccountName)
+					svcActFound = true
+					break
+				}
+			}
+		}
+
+		if svcActFound {
+			break
+		}
+	}
+
+	// Skip if CRB not found, operator might have be deployed by non-olm method and CRB name maight have different prefix
+	// No need to check for permission in non-olm setup
+	if isCRBFound && !svcActFound {
+		return fmt.Errorf("cannot find permission for namespace `%s` in any `aerospike-kubernetes-operator*` clusterRoleBinding", r.aeroCluster.Namespace)
+	}
+	return nil
 }
 
 func (r *SingleClusterReconciler) reconcileAccessControl() error {
