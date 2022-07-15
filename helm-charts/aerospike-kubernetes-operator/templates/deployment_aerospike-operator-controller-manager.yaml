@@ -56,6 +56,8 @@ spec:
         env:
         - name: WATCH_NAMESPACE
           value: {{ .Values.watchNamespaces | default "default" | quote }}
+        - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
+          value: {{ .Values.aerospikeKubernetesInitRegistry | default "docker.io" }}
         {{- if .Values.extraEnv }}
         {{- range $key, $value := .Values.extraEnv }}
         - name: "{{ $key }}"
@@ -107,6 +109,9 @@ spec:
         - containerPort: {{ .Values.kubeRBACProxyPort | default 8443 }}
           name: https
           protocol: TCP
+        {{- with .Values.kubeRBACProxy.resources }}
+        resources: {{- toYaml . | nindent 10 }}
+        {{- end }}
       volumes:
       # TODO: Make adding volumes configurable.
       - name: cert

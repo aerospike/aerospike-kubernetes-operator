@@ -313,6 +313,15 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 		case "user-admin":
 			code = as.UserAdmin
 
+		case "truncate":
+			code = as.Truncate
+
+		case "sindex-admin":
+			code = as.SIndexAdmin
+
+		case "udf-admin":
+			code = as.UDFAdmin
+
 		default:
 			return nil, fmt.Errorf("unknown privilege %s", privilegeCode)
 
@@ -357,6 +366,15 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
 
 		case as.UserAdmin:
 			buffer.WriteString("user-admin")
+
+		case as.Truncate:
+			buffer.WriteString("truncate")
+
+		case as.SIndexAdmin:
+			buffer.WriteString("sindex-admin")
+
+		case as.UDFAdmin:
+			buffer.WriteString("udf-admin")
 
 		default:
 			return nil, fmt.Errorf(

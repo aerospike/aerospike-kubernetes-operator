@@ -1,9 +1,3 @@
-# Example where Aerospike data and index both use flash storage
-#
-# Note: This requires Aerospike pod to be run in elevated privileged
-# mode. In privileged mode when using index on flash Aerospike server
-# tweaks the Kubernetes worker node's sysctls for Virtual Memory.
-
 apiVersion: asdb.aerospike.com/v1beta1
 kind: AerospikeCluster
 metadata:
@@ -11,13 +5,14 @@ metadata:
   namespace: aerospike
 
 spec:
+  # Add fields here
   size: 2
   image: aerospike/aerospike-server-enterprise:6.0.0.1
 
   storage:
     filesystemVolumePolicy:
-      initMethod: deleteFiles
       cascadeDelete: true
+      initMethod: deleteFiles
     blockVolumePolicy:
       cascadeDelete: true
     volumes:
@@ -29,17 +24,17 @@ spec:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
-      - name: ns
+      - name: nsvol1
         aerospike:
-          path: /test/dev/xvdf
+          path: /local
         source:
           persistentVolume:
-            storageClass: ssd
-            volumeMode: Block
+            storageClass: local-ssd
+            volumeMode: Filesystem
             size: 5Gi
-      - name: ns-index
+      - name: nsvol2
         aerospike:
-          path: /test/dev/xvdf-index
+          path: /remote
         source:
           persistentVolume:
             storageClass: ssd
@@ -54,9 +49,6 @@ spec:
 
   podSpec:
     multiPodPerHost: true
-    aerospikeContainer:
-      securityContext:
-        privileged: true
 
   aerospikeAccessControl:
     users:
@@ -65,9 +57,6 @@ spec:
         roles:
           - sys-admin
           - user-admin
-          - data-admin
-          - read
-          - write
 
   aerospikeConfig:
     service:
@@ -84,12 +73,8 @@ spec:
       - name: test
         memory-size: 3000000000
         replication-factor: 2
-        index-type:
-          type: flash
-          mounts:
-            - /test/dev/xvdf-index
-          mounts-size-limit: 4294967296
         storage-engine:
           type: device
-          devices:
-            - /test/dev/xvdf
+          filesize: 2000000000
+          files:
+            - /local/test.dat /remote/test.dat

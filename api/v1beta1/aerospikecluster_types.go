@@ -187,10 +187,10 @@ type AerospikePodSpec struct {
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
 	// AerospikeInitContainerSpec configures the aerospike-init container
 	// created by the operator.
-	AerospikeInitContainerSpec AerospikeInitContainerSpec `json:"aerospikeInitContainer,omitempty"`
-	// MetaData to add to pods.
+	AerospikeInitContainerSpec *AerospikeInitContainerSpec `json:"aerospikeInitContainer,omitempty"`
+	// MetaData to add to the pod.
 	AerospikeObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
-	// Sidecars to add to pods.
+	// Sidecars to add to the pod.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
 	// InitContainers to add to the pods.
@@ -243,10 +243,8 @@ type AerospikeContainerSpec struct {
 }
 
 type AerospikeInitContainerSpec struct {
-	// ImageRegistry is the name of image registry along with registry namespace for aerospike-init container image
+	// ImageRegistry is the name of image registry for aerospike-init container image
 	// ImageRegistry, e.g. docker.io, redhat.access.com
-	// RegistryNamespace, e.g. aerospike
-	// image: <ImageRegistry/RegistryNamespace>/<Repository:tag> <docker.io/aerospike>/<aerospike-kubernetes-init:0.0.15>
 	ImageRegistry string `json:"imageRegistry,omitempty"`
 	// SecurityContext that will be added to aerospike-init container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
@@ -379,7 +377,8 @@ type AerospikeClientAdminPolicy struct {
 	Timeout int `json:"timeout"`
 }
 
-// AerospikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
+// AerospikeAccessControlSpec specifies the roles and users to set up on the
+// database fo access control.
 type AerospikeAccessControlSpec struct {
 	AdminPolicy *AerospikeClientAdminPolicy `json:"adminPolicy,omitempty"`
 
@@ -398,35 +397,43 @@ type AerospikeAccessControlSpec struct {
 	Users []AerospikeUserSpec `json:"users" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
-// AerospikeVolumeInitMethod specifies how block volumes should be initialized.
+// AerospikeVolumeMethod specifies how block volumes should be initialized.
 // +kubebuilder:validation:Enum=none;dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
-type AerospikeVolumeInitMethod string
+type AerospikeVolumeMethod string
 
 const (
-	// AerospikeVolumeInitMethodNone specifies the block volume should not be initialized.
-	AerospikeVolumeInitMethodNone AerospikeVolumeInitMethod = "none"
+	// AerospikeVolumeMethodNone specifies the block volume should not be initialized.
+	AerospikeVolumeMethodNone AerospikeVolumeMethod = "none"
 
-	// AerospikeVolumeInitMethodDD specifies the block volume should be zeroed using dd command.
-	AerospikeVolumeInitMethodDD AerospikeVolumeInitMethod = "dd"
+	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
+	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
 
-	// AerospikeVolumeInitMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
-	AerospikeVolumeInitMethodBlkdiscard AerospikeVolumeInitMethod = "blkdiscard"
+	// AerospikeVolumeMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
+	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
 
-	// AerospikeVolumeInitMethodDeleteFiles specifies the filesystem volume should initialized by deleting files.
-	AerospikeVolumeInitMethodDeleteFiles AerospikeVolumeInitMethod = "deleteFiles"
+	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
+	//should be initialized by deleting files.
+	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
-	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
-	InputInitMethod *AerospikeVolumeInitMethod `json:"initMethod,omitempty"`
+
+	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the first time. Defaults to "none".
+	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
+
+	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format changes.
+	InputWipeMethod *AerospikeVolumeMethod `json:"wipeMethod,omitempty"`
 
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
-	InitMethod AerospikeVolumeInitMethod `json:"effectiveInitMethod,omitempty"`
+	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
+
+	// Effective/operative value to use as the volume wipe method after applying defaults.
+	WipeMethod AerospikeVolumeMethod `json:"effectiveWipeMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
@@ -438,6 +445,12 @@ func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *Aerospi
 		p.InitMethod = defaultPolicy.InitMethod
 	} else {
 		p.InitMethod = *p.InputInitMethod
+	}
+
+	if p.InputWipeMethod == nil {
+		p.WipeMethod = defaultPolicy.WipeMethod
+	} else {
+		p.WipeMethod = *p.InputWipeMethod
 	}
 
 	if p.InputCascadeDelete == nil {
@@ -459,7 +472,7 @@ type AerospikeServerVolumeAttachment struct {
 type VolumeAttachment struct {
 	// ContainerName is the name of the container to attach this volume to.
 	ContainerName string `json:"containerName"`
-	// Path to attache the volume on the container.
+	// Path to attach the volume on the container.
 	Path string `json:"path"`
 	// AttachmentOptions that control how the volume is attached.
 	AttachmentOptions `json:",inline"`
@@ -656,10 +669,10 @@ const (
 	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
 	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
 
-	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
 
-	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 )
 

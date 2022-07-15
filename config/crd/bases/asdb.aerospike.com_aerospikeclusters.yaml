@@ -341,8 +341,8 @@ spec:
                       container cre
                     properties:
                       imageRegistry:
-                        description: ImageRegistry is the name of image registry along
-                          with registry namesp
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
                         type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
@@ -1941,7 +1941,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -2070,7 +2070,7 @@ spec:
                         type: object
                     type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -3670,8 +3670,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -3701,8 +3719,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -3765,6 +3801,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -3799,8 +3844,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -3854,8 +3899,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -4058,6 +4103,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -4747,8 +4801,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -4778,8 +4850,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -4842,6 +4932,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -4876,8 +4975,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -4931,8 +5030,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -5135,6 +5234,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -5218,8 +5326,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -5249,8 +5375,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -5310,6 +5454,15 @@ spec:
                           - blkdiscard
                           - deleteFiles
                           type: string
+                        effectiveWipeMethod:
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                         initContainers:
                           description: InitContainers are additional init containers
                             where this volume will b
@@ -5341,7 +5494,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -5392,7 +5545,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -5584,6 +5737,15 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                       required:
                       - name
                       type: object
@@ -5929,8 +6091,8 @@ spec:
                       container cre
                     properties:
                       imageRegistry:
-                        description: ImageRegistry is the name of image registry along
-                          with registry namesp
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
                         type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
@@ -7529,7 +7691,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -7658,7 +7820,7 @@ spec:
                         type: object
                     type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -9369,8 +9531,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -9400,8 +9580,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -9464,6 +9662,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -9498,8 +9705,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -9553,8 +9760,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -9757,6 +9964,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -10446,8 +10662,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -10477,8 +10711,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -10541,6 +10793,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -10575,8 +10836,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10630,8 +10891,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10834,6 +11095,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -10942,8 +11212,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -10973,8 +11261,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -11034,6 +11340,15 @@ spec:
                           - blkdiscard
                           - deleteFiles
                           type: string
+                        effectiveWipeMethod:
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                         initContainers:
                           description: InitContainers are additional init containers
                             where this volume will b
@@ -11065,7 +11380,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -11116,7 +11431,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -11308,6 +11623,15 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                       required:
                       - name
                       type: object

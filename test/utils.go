@@ -46,7 +46,7 @@ const multiClusterNs2 string = "test2"
 
 const aerospikeConfigSecret string = "aerospike-config-secret"
 
-var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
+var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
@@ -521,13 +521,15 @@ func getAerospikeStorageConfig(
 	// Create pods and strorge devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.
-	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
+	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 	// TODO
-	ddInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDD
-	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
+	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+	blkDiscardWipeMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
 	if cloudProvider == CloudProviderAWS {
 		// Blkdiscard methood is not supported in AWS so it is initialized as DD Method
-		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
+		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+		blkDiscardWipeMethod = asdbv1beta1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1beta1.AerospikeStorageSpec{
@@ -600,6 +602,7 @@ func getAerospikeStorageConfig(
 				Name: "device-blkdiscard",
 				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod: &blkDiscardInitMethod,
+					InputWipeMethod: &blkDiscardWipeMethod,
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{

@@ -42,6 +42,9 @@ GTAGS
 
 # OLM Bundle
 bundle/
+bundle-*/
+downloaded/
+upgrade-testing/
 bundle.Dockerfile
 .DS_Store
 
