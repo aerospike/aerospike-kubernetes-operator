@@ -679,6 +679,74 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	}
 }
 
+// isPodUpgraded checks if all containers in the pod have images from the
+//cluster spec.
+func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
+	if !utils.IsPodRunningAndReady(pod) {
+		return false
+	}
+
+	return r.isPodOnDesiredImage(pod, false)
+}
+
+// isPodOnDesiredImage indicates if the pod is ready and on desired images for
+// all containers.
+func (r *SingleClusterReconciler) isPodOnDesiredImage(
+	pod *corev1.Pod, logChanges bool,
+) bool {
+	return r.allContainersAreOnDesiredImages(
+		r.aeroCluster,
+		pod.Name, pod.Spec.Containers, logChanges,
+	) &&
+		r.allContainersAreOnDesiredImages(
+			r.aeroCluster,
+			pod.Name, pod.Spec.InitContainers,
+			logChanges,
+		)
+}
+
+func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podName string,
+	containers []corev1.Container, logChanges bool,
+) bool {
+	for _, container := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
+		if err != nil {
+			// Maybe a deleted sidecar. Ignore.
+			continue
+		}
+
+		// TODO: Should we check status here?
+		// status may not be ready due to any bad config (e.g. bad podSpec).
+		// Due to this check, flow will be stuck at this place (upgradeImage)
+		// status := getPodContainerStatus(pod, ps.Name)
+		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// 	return false
+		// }
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			if container.Name == asdbv1beta1.AerospikeInitContainerName {
+				if logChanges {
+					r.Log.Info(
+						"Ignoring change to Aerospike Init Image", "pod",
+						podName, "container", container.Name, "currentImage",
+						container.Image, "desiredImage", desiredImage,
+					)
+				}
+				continue
+			}
+			if logChanges {
+				r.Log.Info(
+					"Found container for upgrading/downgrading in pod", "pod",
+					podName, "container", container.Name, "currentImage",
+					container.Image, "desiredImage", desiredImage,
+				)
+			}
+			return false
+		}
+	}
+	return true
+}
+
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
 
@@ -1155,7 +1223,11 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 }
 
 func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.StatefulSet) {
-	resources := r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources
+	var resources *corev1.ResourceRequirements
+	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		resources = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources
+	}
+
 	if resources != nil {
 		// These resources are for main aerospike-init container. Other init containers can mention their own resources.
 		st.Spec.Template.Spec.InitContainers[0].Resources = *resources
@@ -1164,7 +1236,11 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.Statef
 	}
 
 	// This SecurityContext is for main aerospike-init container. Other init containers can mention their own SecurityContext.
-	st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext
+	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext
+	} else {
+		st.Spec.Template.Spec.InitContainers[0].SecurityContext = nil
+	}
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {

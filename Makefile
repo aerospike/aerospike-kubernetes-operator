@@ -12,7 +12,7 @@ OPENSHIFT_VERSION="v4.6"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.0.0
+VERSION ?= 2.1.0
 
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
@@ -177,7 +177,7 @@ endef
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.1.0-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/

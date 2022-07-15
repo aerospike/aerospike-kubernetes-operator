@@ -466,7 +466,11 @@ func (in *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVo
 func (in *AerospikePodSpec) DeepCopyInto(out *AerospikePodSpec) {
 	*out = *in
 	in.AerospikeContainerSpec.DeepCopyInto(&out.AerospikeContainerSpec)
-	in.AerospikeInitContainerSpec.DeepCopyInto(&out.AerospikeInitContainerSpec)
+	if in.AerospikeInitContainerSpec != nil {
+		in, out := &in.AerospikeInitContainerSpec, &out.AerospikeInitContainerSpec
+		*out = new(AerospikeInitContainerSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	in.AerospikeObjectMeta.DeepCopyInto(&out.AerospikeObjectMeta)
 	if in.Sidecars != nil {
 		in, out := &in.Sidecars, &out.Sidecars

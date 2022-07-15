@@ -372,7 +372,10 @@ func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error
 		return err
 	}
 
-	return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources)
+	if c.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources)
+	}
+	return nil
 }
 
 func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements) error {

@@ -187,10 +187,10 @@ type AerospikePodSpec struct {
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
 	// AerospikeInitContainerSpec configures the aerospike-init container
 	// created by the operator.
-	AerospikeInitContainerSpec AerospikeInitContainerSpec `json:"aerospikeInitContainer,omitempty"`
-	// MetaData to add to pods.
+	AerospikeInitContainerSpec *AerospikeInitContainerSpec `json:"aerospikeInitContainer,omitempty"`
+	// MetaData to add to the pod.
 	AerospikeObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
-	// Sidecars to add to pods.
+	// Sidecars to add to the pod.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
 	// InitContainers to add to the pods.
@@ -377,7 +377,8 @@ type AerospikeClientAdminPolicy struct {
 	Timeout int `json:"timeout"`
 }
 
-// AerospikeAccessControlSpec specifies the roles and users to setup on the database fo access control.
+// AerospikeAccessControlSpec specifies the roles and users to set up on the
+// database fo access control.
 type AerospikeAccessControlSpec struct {
 	AdminPolicy *AerospikeClientAdminPolicy `json:"adminPolicy,omitempty"`
 
@@ -396,29 +397,30 @@ type AerospikeAccessControlSpec struct {
 	Users []AerospikeUserSpec `json:"users" patchStrategy:"merge" patchMergeKey:"name"`
 }
 
-// AerospikeVolumeInitMethod specifies how block volumes should be initialized.
+// AerospikeVolumeMethod specifies how block volumes should be initialized.
 // +kubebuilder:validation:Enum=none;dd;blkdiscard;deleteFiles
 // +k8s:openapi-gen=true
 type AerospikeVolumeMethod string
 
 const (
-	// AerospikeVolumeInitMethodNone specifies the block volume should not be initialized.
+	// AerospikeVolumeMethodNone specifies the block volume should not be initialized.
 	AerospikeVolumeMethodNone AerospikeVolumeMethod = "none"
 
-	// AerospikeVolumeInitMethodDD specifies the block volume should be zeroed using dd command.
+	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
 	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
 
-	// AerospikeVolumeInitMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
+	// AerospikeVolumeMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
 	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
 
-	// AerospikeVolumeInitMethodDeleteFiles specifies the filesystem volume should initialized by deleting files.
+	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
+	//should be initialized by deleting files.
 	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 
-	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods comes up the first time. Defaults to "none".
+	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the first time. Defaults to "none".
 	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
 
 	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format changes.
@@ -470,7 +472,7 @@ type AerospikeServerVolumeAttachment struct {
 type VolumeAttachment struct {
 	// ContainerName is the name of the container to attach this volume to.
 	ContainerName string `json:"containerName"`
-	// Path to attache the volume on the container.
+	// Path to attach the volume on the container.
 	Path string `json:"path"`
 	// AttachmentOptions that control how the volume is attached.
 	AttachmentOptions `json:",inline"`
@@ -667,10 +669,10 @@ const (
 	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
 	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
 
-	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
 
-	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kunernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 )
 

@@ -455,7 +455,7 @@ def wipe_volumes(pod_name, config):
 
                 elif volume.effective_wipe_method == "blkdiscard":
 
-                    blkdiskard = "blkdiscard -z {volume_path}".format(volume_path=volume.get_mount_point())
+                    blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
                     execute(blkdiskard)
                     logging.info(f"{volume} - Wiped")
 

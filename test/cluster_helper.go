@@ -153,7 +153,8 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 }
 
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, dynamicNs map[string]interface{},
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	dynamicNs map[string]interface{},
 	clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -755,6 +756,8 @@ func createDummyAerospikeCluster(
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
+				AerospikeInitContainerSpec: &asdbv1beta1.
+					AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{

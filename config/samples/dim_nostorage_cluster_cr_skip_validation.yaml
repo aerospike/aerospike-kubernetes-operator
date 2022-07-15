@@ -3,8 +3,12 @@
 # license secret. This is not recommended for production use.
 # Visit https://docs.aerospike.com/cloud/kubernetes/operator for details.
 #
-# Before creating this cluster, be sure to create the secret containing
-# the Aerospike features.conf file as follows:
+# Before creating this cluster,
+# - Prepare the aerospike namespace by following instruction here
+#
+# https://docs.aerospike.com/cloud/kubernetes/operator/create-cluster-kubectl#prepare-the-namespace
+#
+# - Create the Kubernetes secret containing the Aerospike features.conf file as follows:
 #
 # kubectl create secret generic aerospike-secret --from-file=<path-of-features.conf> -n aerospike
 

@@ -1941,7 +1941,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -2070,7 +2070,7 @@ spec:
                         type: object
                     type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -3844,8 +3844,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -3899,8 +3899,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -4975,8 +4975,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -5030,8 +5030,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -5494,7 +5494,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -5545,7 +5545,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -7691,7 +7691,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -7820,7 +7820,7 @@ spec:
                         type: object
                     type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -9705,8 +9705,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -9760,8 +9760,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10836,8 +10836,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10891,8 +10891,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -11380,7 +11380,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -11431,7 +11431,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
