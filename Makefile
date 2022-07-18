@@ -197,7 +197,7 @@ bundle: manifests kustomize
 
 
 # Remove generated bundle
-.PHONY: bundle-cleanb
+.PHONY: bundle-clean
 bundle-clean:
 	rm -rf bundle bundle.Dockerfile
 
