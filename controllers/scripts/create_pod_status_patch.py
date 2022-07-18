@@ -8,7 +8,7 @@ import argparse
 import ipaddress
 import urllib.error
 import urllib.request
-from pprint import pprint as pp
+from pprint import pprint
 
 # Constants
 FILE_SYSTEM_MOUNT_POINT = "/workdir/filesystem-volumes"
@@ -30,8 +30,6 @@ class Volume(object):
         self.pod_name = pod_name
         self.volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
         self.volume_name = volume["name"]
-        logging.debug(
-            f"pod-name: {self.pod_name} - Initializing volume object: {self.volume_name}")
 
         self.effective_wipe_method = volume["effectiveWipeMethod"]
         self.effective_init_method = volume["effectiveInitMethod"]
@@ -55,22 +53,13 @@ class Volume(object):
                           f"Empty attachment-type and volume-path")
             self.attachment_type = ""
             self.volume_path = ""
-        logging.debug(
-            f"pod-name: {self.pod_name} - Initialized volume object: {self.volume_name}")
 
     def get_mount_point(self):
-
         if self.volume_mode == "Block":
-
             point = os.path.join(BLOCK_MOUNT_POINT, self.volume_name)
-            logging.debug(
-                f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
             return point
 
         point = os.path.join(FILE_SYSTEM_MOUNT_POINT, self.volume_name)
-        logging.debug(
-            f"pod-name: {self.pod_name} volume-name: {self.volume_name} mount-point: {point}")
-
         return point
 
     def get_attachment_path(self):
@@ -216,7 +205,7 @@ def update_status(pod_name, pod_image, metadata, volumes):
         {"op": "replace", "path": f"/status/pods/{pod_name}", "value": metadata}]
 
     print(40 * "#" + " payload " + 40 * "#")
-    pp(payload)
+    pprint(payload)
     print(89 * "#")
 
     with open("/tmp/patch.json", mode="w") as f:
@@ -277,19 +266,19 @@ def get_attached_volumes(pod_name, config):
 
     try:
         logging.debug(
-            f"pod-name: {pod_name} - Looking for volumes in rack.storage.volumes")
-        volumes = rack["storage"]["volumes"]
+            f"pod-name: {pod_name} - Looking for volumes in rack.effectiveStorage.volumes")
+        volumes = rack["effectiveStorage"]["volumes"]
 
         if not volumes:
             logging.warning(
-                f"pod-name: {pod_name} - Found an empty list in rack.storage.volumes")
+                f"pod-name: {pod_name} - Found an empty list in rack.effectiveStorage.volumes")
             raise KeyError(f"pod-name: {pod_name} - volumes not found")
 
         return volumes
 
     except KeyError:
         logging.debug(
-            f"pod-name: {pod_name} - Volumes not found in rack.storage.volumes")
+            f"pod-name: {pod_name} - Volumes not found in rack.effectiveStorage.volumes")
 
         try:
             logging.debug(
@@ -390,7 +379,7 @@ def init_volumes(pod_name, config):
                 logging.info(f"{volume} - Initialized")
 
             elif volume.effective_init_method == "none":
-                logging.info(f"{volume} - Passthrough")
+                logging.info(f"{volume} - Pass through")
             else:
                 logging.error(f"{volume} - Has invalid effective method")
                 raise ValueError(f"{volume} - Has invalid effective method")
@@ -410,7 +399,7 @@ def init_volumes(pod_name, config):
                 logging.info(f"{volume} - Initialized")
 
             elif volume.effective_init_method == "none":
-                logging.info(f"{volume} - Passthrough")
+                logging.info(f"{volume} - Pass through")
             else:
                 logging.error(f"{volume} - Has invalid effective method")
                 raise ValueError(f"{volume} - Has invalid effective method")
@@ -439,7 +428,7 @@ def wipe_volumes(pod_name, config):
         if volume.volume_mode == "Block":
 
             if volume.volume_path in ns_device_paths:
-
+                logging.info(f"Wiping - {volume}")
                 if not os.path.exists(volume.get_mount_point()):
                     logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name}"
                                   f" - Mounting point does not exists")
@@ -451,18 +440,17 @@ def wipe_volumes(pod_name, config):
                         '/tmp/init-stderr'.format(volume_path=volume.get_mount_point())
 
                     execute(dd)
-                    logging.info(f"{volume} - Wiped")
+                    logging.info(f"Wiped - {volume}")
 
                 elif volume.effective_wipe_method == "blkdiscard":
 
                     blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
                     execute(blkdiskard)
-                    logging.info(f"{volume} - Wiped")
+                    logging.info(f"Wiped - {volume}")
 
                 else:
                     raise ValueError(f"{volume} - Has invalid effective method")
         elif volume.volume_mode == "Filesystem":
-
             if volume.effective_wipe_method == "deleteFiles":
 
                 if not os.path.exists(volume.get_mount_point()):
@@ -474,9 +462,9 @@ def wipe_volumes(pod_name, config):
                     _, filename = os.path.split(ns_file_path)
                     file_path = os.path.join(volume.get_mount_point(), filename)
                     if os.path.exists(file_path):
-                        logging.info(f"{file_path} - Removing file")
+                        logging.info(f"Deleting file - {file_path}")
                         os.remove(file_path)
-                        logging.info(f"{file_path} - Wiped")
+                        logging.info(f"Deleted file - {file_path}")
                     else:
                         logging.warning(f"{volume} namespace-file-path: {file_path} - Does not exists")
 
@@ -516,7 +504,7 @@ def main():
                 token=args.token,
                 ca_cert=args.ca_cert)
         except urllib.error.URLError as e:
-            logging.error(f"pod-name: {args.pod_name} - Unable to prerform http request - Error: {e}")
+            logging.error(f"pod-name: {args.pod_name} - Unable to perform http request - Error: {e}")
             raise e
 
         try:
@@ -538,8 +526,7 @@ def main():
 
             prev_major_ver = get_image_version(image=prev_image)[0]
             logging.info(
-                f"pod-name: {args.pod_name} "
-                f"- Checking if volumes should be wiped: "
+                f"pod-name: {args.pod_name} - "
                 f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
 
             if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
