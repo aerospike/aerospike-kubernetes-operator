@@ -123,19 +123,22 @@ func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
 		return err
 	}
 
-	var isCRBFound bool
+	var isOlmCRBFound bool
 	var svcActFound bool
 
 	for _, crb := range crbs.Items {
-		// Check only for olm setup
-		if _, ok := crb.Labels["olm.owner"]; !ok {
+		_, aerospikeLabelExists := crb.Labels["aerospike.com/default-ns.kind"]
+		_, olmLabelExists := crb.Labels["olm.owner"]
+
+		// Verify that the role
+		if !aerospikeLabelExists && !olmLabelExists {
 			continue
 		}
 
 		if strings.HasPrefix(crb.Name, "aerospike-kubernetes-operator") {
 			r.Log.Info("Checking in clusterRoleBinding", "crb", crb.Name)
 
-			isCRBFound = true
+			isOlmCRBFound = true
 
 			for _, sub := range crb.Subjects {
 				// Verify serviceAccount for namespace
@@ -162,7 +165,7 @@ func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
 	// No need to check for permission in non-olm setup. Skip if CRB not found,
 	// operator might have been deployed by non-olm method and CRB name may
 	// have a different prefix.
-	if isCRBFound && !svcActFound {
+	if isOlmCRBFound && !svcActFound {
 		return fmt.Errorf(
 			"setup missing RBAC for namespace `%s` - see https://docs.aerospike.com/cloud/kubernetes/operator/2.0.0/create-cluster-kubectl#prepare-the-namespace",
 			r.aeroCluster.Namespace,
@@ -247,7 +250,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	}
 
 	// TODO: FIXME: Copy only required fields, StatusSpec may not have all the fields in Spec.
-	// Deepcopy at that location may create problem
+	// DeepCopy at that location may create problem
 	// Deep copy merges so blank out the spec part of status before copying over.
 	// newAeroCluster.Status.AerospikeClusterStatusSpec = asdbv1beta1.AerospikeClusterStatusSpec{}
 	// if err := lib.DeepCopy(&newAeroCluster.Status.AerospikeClusterStatusSpec, &aeroCluster.Spec); err != nil {
@@ -391,7 +394,7 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.Aerosp
 //
 // The cluster is not new but maybe unreachable or down. There could be an Aerospike configuration
 // error that passed the operator validation but is invalid on the server. This will happen for
-// example where deeper paramter or value of combination of parameter values need validation which
+// example where deeper parameter or value of combination of parameter values need validation which
 // is missed by the operator. For e.g. node-address-port values in xdr datacenter section needs better
 // validation for ip and port.
 //

@@ -4,7 +4,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: 1
+  name: aerospike-kubernetes-operator-default-ns
+  labels:
+    aerospike.com/default-ns.kind: ClusterRole
 rules:
 - apiGroups:
   - apps
