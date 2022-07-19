@@ -418,30 +418,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	return found, reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) needsToUpdateContainers(
-	containers []corev1.Container, podName string,
-) bool {
-	for _, container := range containers {
-		desiredImage, err := utils.GetDesiredImage(
-			r.aeroCluster, container.Name,
-		)
-		if err != nil {
-			// Delete or auto-injected container that is safe to delete.
-			continue
-		}
-
-		if !utils.IsImageEqual(container.Image, desiredImage) {
-			r.Log.Info(
-				"Found container for upgrading/downgrading in pod", "pod",
-				podName, "container", container.Name, "currentImage",
-				container.Image, "desiredImage", desiredImage,
-			)
-			return true
-		}
-	}
-	return false
-}
-
 func (r *SingleClusterReconciler) upgradeRack(
 	statefulSet *appsv1.StatefulSet, rackState RackState,
 	ignorablePods []corev1.Pod,
@@ -473,15 +449,10 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 	for _, p := range podList {
 		r.Log.Info("Check if pod needs upgrade or not", "podName", p.Name)
-		needPodUpgrade := r.needsToUpdateContainers(
-			p.Spec.Containers, p.Name,
-		) ||
-			r.needsToUpdateContainers(p.Spec.InitContainers, p.Name)
 
-		if !needPodUpgrade {
+		if r.isPodUpgraded(&p) {
 			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
-
 		}
 
 		// Also check if statefulSet is in stable condition
@@ -671,7 +642,7 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 		return true, fmt.Errorf("failed to list pods: %v", err)
 	}
 	for _, p := range podList.Items {
-		if !utils.IsPodOnDesiredImage(&p, r.aeroCluster) {
+		if !r.isPodOnDesiredImage(&p, true) {
 			r.Log.Info("Pod needs upgrade/downgrade", "podName", p.Name)
 			return true, nil
 		}

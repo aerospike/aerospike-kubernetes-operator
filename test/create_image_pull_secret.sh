@@ -9,4 +9,4 @@ do
    esac
 done
 
-kubectl create secret generic "$NAME" --from-file=.dockerconfigjson="$CRED_PATH" --type=kubernetes.io/dockerconfigjson -n test
+kubectl create secret generic "$NAME" --from-file=.dockerconfigjson="$CRED_PATH" --type=kubernetes.io/dockerconfigjson -n test --dry-run=client -o yaml | kubectl apply -f -

@@ -17,16 +17,23 @@ var _ = Describe(
 		// Context("Check for podSpec securityContext", func() {
 		// 	securityContextTest(ctx, true, false, false)
 		// })
-		Context("Check for aerospike-server container securityContext", func() {
-			securityContextTest(ctx, false, true, false)
-		})
-		Context("Check for aerospike-init securityContext", func() {
-			securityContextTest(ctx, false, false, true)
-		})
+		Context(
+			"Check for aerospike-server container securityContext", func() {
+				securityContextTest(ctx, false, true, false)
+			},
+		)
+		Context(
+			"Check for aerospike-init securityContext", func() {
+				securityContextTest(ctx, false, false, true)
+			},
+		)
 	},
 )
 
-func securityContextTest(ctx goctx.Context, checkPodSpec bool, checkAeroServer bool, checkAeroInit bool) {
+func securityContextTest(
+	ctx goctx.Context, checkPodSpec bool, checkAeroServer bool,
+	checkAeroInit bool,
+) {
 	It(
 		"Validate SecurityContext applied", func() {
 			By("DeployCluster with SecurityContext")
@@ -53,7 +60,9 @@ func securityContextTest(ctx goctx.Context, checkPodSpec bool, checkAeroServer b
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validate")
-			validateSecurityContext(aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit)
+			validateSecurityContext(
+				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+			)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -93,7 +102,9 @@ func securityContextTest(ctx goctx.Context, checkPodSpec bool, checkAeroServer b
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validate")
-			validateSecurityContext(aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit)
+			validateSecurityContext(
+				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+			)
 
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
@@ -112,7 +123,9 @@ func securityContextTest(ctx goctx.Context, checkPodSpec bool, checkAeroServer b
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validate")
-			validateSecurityContext(aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit)
+			validateSecurityContext(
+				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+			)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -120,7 +133,10 @@ func securityContextTest(ctx goctx.Context, checkPodSpec bool, checkAeroServer b
 	)
 }
 
-func validateSecurityContext(aeroCluster *asdbv1beta1.AerospikeCluster, checkPodSpec bool, checkAeroServer bool, checkAeroInit bool) {
+func validateSecurityContext(
+	aeroCluster *asdbv1beta1.AerospikeCluster, checkPodSpec bool,
+	checkAeroServer bool, checkAeroInit bool,
+) {
 	pods, err := getClusterPodList(
 		k8sClient, goctx.TODO(),
 		aeroCluster,
@@ -136,18 +152,17 @@ func validateSecurityContext(aeroCluster *asdbv1beta1.AerospikeCluster, checkPod
 		if aeroCluster.Spec.PodSpec.SecurityContext != nil {
 			// podSpecSecCtx = *aeroCluster.Spec.PodSpec.SecurityContext
 			Expect(pod.Spec.SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.SecurityContext))
-
 		}
+
 		if aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext != nil {
 			// serverSecCtx = *aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 			Expect(pod.Spec.Containers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext))
-
 		}
-		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
+
+		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil &&
+			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
 			// initSecCtx = *aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext
 			Expect(pod.Spec.InitContainers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext))
-
 		}
-
 	}
 }
