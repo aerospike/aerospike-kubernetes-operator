@@ -8,7 +8,8 @@
 bin
 testbin/*
 /manager
-/aerospike-kubernetes-opertor
+/aerospike-kubernetes-operator
+/snyk-linux
 
 # Test deployment config
 test/config

@@ -115,6 +115,9 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: ## Build docker image with the manager.
 	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) .
 
+docker-build-openshift: ## Build openshift docker image with the manager.
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
