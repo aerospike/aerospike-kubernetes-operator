@@ -25,6 +25,9 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 # Version of Operator (build arg)
 ARG VERSION="2.1.0"
 
+# User to run container as
+ARG USER="root"
+
 # Maintainer
 LABEL maintainer="Aerospike <support@aerospike.com>"
 
@@ -51,5 +54,7 @@ COPY --from=builder /workspace/manager .
 
 RUN chgrp 0 /manager \
     && chmod g=u /manager
+
+USER ${USER}
 
 ENTRYPOINT ["/manager"]

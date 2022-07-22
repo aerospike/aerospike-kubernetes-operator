@@ -51,19 +51,24 @@ type AerospikeClusterSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 	// RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Rack Config"
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Network Policy"
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
 	// Certificates to connect to Aerospike.
 	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operator Client Cert"
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 	// Specify additional configuration for the Aerospike pods
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 }
 
