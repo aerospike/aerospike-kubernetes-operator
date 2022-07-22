@@ -39,14 +39,14 @@ var _ = Describe(
 )
 
 func WarmRestart(ctx goCtx.Context) {
-	image := fmt.Sprintf(
-		"aerospike/aerospike-server-enterprise:%s", "tinibackport-5.7.0.8",
-	)
-	rollCluster(ctx, image, true)
+	rollCluster(ctx, latestImage, true)
 }
 
 func PodRestart(ctx goCtx.Context) {
-	rollCluster(ctx, latestImage, false)
+	image := fmt.Sprintf(
+		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
+	)
+	rollCluster(ctx, image, false)
 }
 
 func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {

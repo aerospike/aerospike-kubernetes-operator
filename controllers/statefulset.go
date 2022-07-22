@@ -146,13 +146,11 @@ func (r *SingleClusterReconciler) createSTS(
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: aeroClusterServiceAccountName,
-					HostNetwork:        r.aeroCluster.Spec.PodSpec.HostNetwork,
-					DNSPolicy:          r.aeroCluster.Spec.PodSpec.DNSPolicy,
 					//TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{
 						{
-							Name:  asdbv1beta1.AerospikeServerInitContainerName,
-							Image: asdbv1beta1.AerospikeServerInitContainerImage,
+							Name:  asdbv1beta1.AerospikeInitContainerName,
+							Image: asdbv1beta1.GetAerospikeInitContainerImage(r.aeroCluster),
 							// Change to PullAlways for image testing.
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
@@ -180,11 +178,9 @@ func (r *SingleClusterReconciler) createSTS(
 							Name:            asdbv1beta1.AerospikeServerContainerName,
 							Image:           r.aeroCluster.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 							Ports:           ports,
 							Env:             envVarList,
 							VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),
-							// Resources to be updated later
 						},
 					},
 
@@ -195,8 +191,6 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	r.updateSTSFromPodSpec(st, rackState)
-
-	r.updateAerospikeContainerResources(st)
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(st, rackState)
@@ -685,6 +679,74 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	}
 }
 
+// isPodUpgraded checks if all containers in the pod have images from the
+//cluster spec.
+func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
+	if !utils.IsPodRunningAndReady(pod) {
+		return false
+	}
+
+	return r.isPodOnDesiredImage(pod, false)
+}
+
+// isPodOnDesiredImage indicates if the pod is ready and on desired images for
+// all containers.
+func (r *SingleClusterReconciler) isPodOnDesiredImage(
+	pod *corev1.Pod, logChanges bool,
+) bool {
+	return r.allContainersAreOnDesiredImages(
+		r.aeroCluster,
+		pod.Name, pod.Spec.Containers, logChanges,
+	) &&
+		r.allContainersAreOnDesiredImages(
+			r.aeroCluster,
+			pod.Name, pod.Spec.InitContainers,
+			logChanges,
+		)
+}
+
+func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
+	aeroCluster *asdbv1beta1.AerospikeCluster, podName string,
+	containers []corev1.Container, logChanges bool,
+) bool {
+	for _, container := range containers {
+		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
+		if err != nil {
+			// Maybe a deleted sidecar. Ignore.
+			continue
+		}
+
+		// TODO: Should we check status here?
+		// status may not be ready due to any bad config (e.g. bad podSpec).
+		// Due to this check, flow will be stuck at this place (upgradeImage)
+		// status := getPodContainerStatus(pod, ps.Name)
+		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
+		// 	return false
+		// }
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			if container.Name == asdbv1beta1.AerospikeInitContainerName {
+				if logChanges {
+					r.Log.Info(
+						"Ignoring change to Aerospike Init Image", "pod",
+						podName, "container", container.Name, "currentImage",
+						container.Image, "desiredImage", desiredImage,
+					)
+				}
+				continue
+			}
+			if logChanges {
+				r.Log.Info(
+					"Found container for upgrading/downgrading in pod", "pod",
+					podName, "container", container.Name, "currentImage",
+					container.Image, "desiredImage", desiredImage,
+				)
+			}
+			return false
+		}
+	}
+	return true
+}
+
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
 
@@ -753,8 +815,6 @@ func (r *SingleClusterReconciler) updateSTS(
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(statefulSet, rackState)
-
-	r.updateAerospikeContainerResources(statefulSet)
 
 	// Save the updated stateful set.
 	// Can we optimize this? Update stateful set only if there is any change
@@ -1000,6 +1060,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	)
 
 	r.updateSTSSchedulingPolicy(st, rackState)
+
 	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
 	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
 
@@ -1008,6 +1069,9 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st.Spec.Template.ObjectMeta.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
 
 	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
+
+	st.Spec.Template.Spec.SecurityContext = r.aeroCluster.Spec.PodSpec.SecurityContext
+	st.Spec.Template.Spec.ImagePullSecrets = r.aeroCluster.Spec.PodSpec.ImagePullSecrets
 
 	st.Spec.Template.Spec.Containers =
 		updateStatefulSetContainers(
@@ -1020,6 +1084,8 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 			st.Spec.Template.Spec.InitContainers,
 			r.aeroCluster.Spec.PodSpec.InitContainers,
 		)
+
+	r.updateReservedContainers(st)
 }
 
 func updateStatefulSetContainers(
@@ -1138,7 +1204,12 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 	updateImage(statefulset.Spec.Template.Spec.InitContainers)
 }
 
-func (r *SingleClusterReconciler) updateAerospikeContainerResources(st *appsv1.StatefulSet) {
+func (r *SingleClusterReconciler) updateReservedContainers(st *appsv1.StatefulSet) {
+	r.updateAerospikeContainer(st)
+	r.updateAerospikeInitContainer(st)
+}
+
+func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSet) {
 	resources := r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources
 	if resources != nil {
 		// These resources are for main aerospike container. Other sidecar can mention their own resources.
@@ -1149,6 +1220,27 @@ func (r *SingleClusterReconciler) updateAerospikeContainerResources(st *appsv1.S
 
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
 	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
+}
+
+func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.StatefulSet) {
+	var resources *corev1.ResourceRequirements
+	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		resources = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources
+	}
+
+	if resources != nil {
+		// These resources are for main aerospike-init container. Other init containers can mention their own resources.
+		st.Spec.Template.Spec.InitContainers[0].Resources = *resources
+	} else {
+		st.Spec.Template.Spec.InitContainers[0].Resources = corev1.ResourceRequirements{}
+	}
+
+	// This SecurityContext is for main aerospike-init container. Other init containers can mention their own SecurityContext.
+	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext
+	} else {
+		st.Spec.Template.Spec.InitContainers[0].SecurityContext = nil
+	}
 }
 
 func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
@@ -1291,7 +1383,7 @@ func getFinalVolumeAttachmentsForVolume(volume asdbv1beta1.VolumeSpec) (initCont
 	)
 	initContainerAttachments = append(
 		initContainerAttachments, asdbv1beta1.VolumeAttachment{
-			ContainerName: asdbv1beta1.AerospikeServerInitContainerName,
+			ContainerName: asdbv1beta1.AerospikeInitContainerName,
 			Path:          initVolumePath,
 		},
 	)
@@ -1319,7 +1411,7 @@ func addVolumeMountInContainer(
 			container := &containers[i]
 
 			if container.Name == volumeAttachment.ContainerName {
-				if container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+				if container.Name == asdbv1beta1.AerospikeInitContainerName {
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: pathPrefix + volumeAttachment.Path,
@@ -1349,7 +1441,7 @@ func addVolumeDeviceInContainer(
 			container := &containers[i]
 
 			if container.Name == volumeAttachment.ContainerName {
-				if container.Name == asdbv1beta1.AerospikeServerInitContainerName {
+				if container.Name == asdbv1beta1.AerospikeInitContainerName {
 					volumeDevice = corev1.VolumeDevice{
 						Name:       volumeName,
 						DevicePath: pathPrefix + volumeAttachment.Path,
@@ -1422,7 +1514,7 @@ func getNamespacedNameForSTSConfigMap(
 func getSTSPodOrdinal(podName string) (*int32, error) {
 	parts := strings.Split(podName, "-")
 	ordinalStr := parts[len(parts)-1]
-	ordinal, err := strconv.Atoi(ordinalStr)
+	ordinal, err := strconv.ParseInt(ordinalStr, 10, 32)
 	if err != nil {
 		return nil, err
 	}

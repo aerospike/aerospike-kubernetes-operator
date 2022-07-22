@@ -125,54 +125,23 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
 	if pod.Status.ContainerStatuses == nil {
-		r.Log.Error(fmt.Errorf("pod %s containerStatus is nil",
-			pod.Name,
-		),
+		r.Log.Error(
+			fmt.Errorf(
+				"pod %s containerStatus is nil",
+				pod.Name,
+			),
 			"Pod may be in unscheduled state",
 		)
 		return reconcileRequeueAfter(1)
 	}
 
 	r.Log.Info("Rolling restart pod", "podName", pod.Name)
-	var pFound *corev1.Pod
 
-	for i := 0; i < 5; i++ {
-		r.Log.V(1).Info("Waiting for pod to be ready", "podName", pod.Name)
-
-		pFound = &corev1.Pod{}
-		err := r.Client.Get(
-			context.TODO(),
-			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
-			pFound,
-		)
-		if err != nil {
-			r.Log.Error(err, "Failed to get pod, retry after 5 sec")
-			time.Sleep(time.Second * 5)
-			pFound = nil
-			continue
-		}
-
-		if utils.IsPodRunningAndReady(pFound) {
-			break
-		}
-
-		if utils.IsPodCrashed(pFound) {
-			r.Log.Error(fmt.Errorf("pod has crashed"), "Failed to do rolling restart", "podName", pFound.Name)
-			break
-		}
-
-		time.Sleep(time.Second * 5)
-	}
-
-	if pFound == nil {
-		return reconcileError(fmt.Errorf("pod %s not ready", pod.Name))
-	}
-
-	err := utils.CheckPodFailed(pFound)
+	err := utils.CheckPodFailed(&pod)
 	if err == nil {
 		// Check for migration
 		if res := r.waitForNodeSafeStopReady(
-			pFound, ignorablePods,
+			&pod, ignorablePods,
 		); !res.isSuccess {
 			return res
 		}
@@ -185,10 +154,10 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	}
 
 	if restartType == QuickRestart {
-		return r.quickRestart(rackState, pFound)
+		return r.quickRestart(rackState, &pod)
 	}
 
-	return r.podRestart(pFound)
+	return r.podRestart(&pod)
 }
 
 func (r *SingleClusterReconciler) quickRestart(
@@ -336,7 +305,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 			return reconcileError(err)
 		}
 
-		if utils.IsPodUpgraded(pFound, r.aeroCluster) {
+		if r.isPodUpgraded(pFound) {
 			r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
 			return reconcileSuccess()
 		}

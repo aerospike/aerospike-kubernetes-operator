@@ -14,7 +14,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.7.0.8
+  image: aerospike/aerospike-server-enterprise:6.0.0.1
 
   podSpec:
     multiPodPerHost: true
@@ -66,19 +66,15 @@ spec:
       ldap:
         # The patterns are based on the demo OpenLDAP deployment.
         # You need to adapt them to your setup.
-        # Note: $${DNE}{un} evaluates to ${un} in the generated
-        # Aerospike configuration. The additional ${DNE} is to prevent
-        # double substitution that happens in Aerospike server container
-        # images.
         query-base-dn: 'dc=example,dc=org'
         server: ldap://openldap.default.svc.cluster.local:1389
         disable-tls: true
         query-user-dn: "cn=admin,dc=example,dc=org"
         query-user-password-file: /etc/aerospike/secret/ldap-passwd.txt
-        user-dn-pattern: 'cn=$${DNE}{un},ou=users,dc=example,dc=org'
+        user-dn-pattern: 'cn=${un},ou=users,dc=example,dc=org'
         role-query-search-ou: true
         role-query-patterns:
-          - '(&(objectClass=groupOfNames)(member=cn=$${DNE}{un},ou=users,dc=example,dc=org))'
+          - '(&(objectClass=groupOfNames)(member=cn=${un},ou=users,dc=example,dc=org))'
         polling-period: 10
     network:
       service:

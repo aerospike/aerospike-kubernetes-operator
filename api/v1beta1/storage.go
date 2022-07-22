@@ -78,17 +78,19 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 
 // SetDefaults sets default values for storage spec fields.
 func (s *AerospikeStorageSpec) SetDefaults() {
-	defaultFilesystemInitMethod := AerospikeVolumeInitMethodNone
-	defaultBlockInitMethod := AerospikeVolumeInitMethodNone
+	defaultFilesystemInitMethod := AerospikeVolumeMethodNone
+	defaultFilesystemWipeMethod := AerospikeVolumeMethodDeleteFiles
+	defaultBlockInitMethod := AerospikeVolumeMethodNone
+	defaultBlockWipeMethod := AerospikeVolumeMethodDD
 	// Set storage level defaults.
 	s.FileSystemVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
-			InitMethod: defaultFilesystemInitMethod, CascadeDelete: false,
+			InitMethod: defaultFilesystemInitMethod, WipeMethod: defaultFilesystemWipeMethod, CascadeDelete: false,
 		},
 	)
 	s.BlockVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
-			InitMethod: defaultBlockInitMethod, CascadeDelete: false,
+			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
 
@@ -300,10 +302,10 @@ func validateAttachment(
 	attachmentContainers := map[string]int{}
 
 	for _, attachment := range volumeAttachments {
-		if attachment.ContainerName == AerospikeServerInitContainerImage {
+		if attachment.ContainerName == AerospikeInitContainerName {
 			return fmt.Errorf(
 				"cannot attach volumes to: %s",
-				AerospikeServerInitContainerName,
+				AerospikeInitContainerName,
 			)
 		}
 
@@ -395,19 +397,26 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 	if source.PersistentVolume != nil {
 		// Validate InitMethod
 		if source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+			if volume.InitMethod == AerospikeVolumeMethodDeleteFiles {
 				return fmt.Errorf(
 					"invalid init method %v for block volume: %v",
 					volume.InitMethod, volume,
 				)
 			}
+			if volume.WipeMethod != AerospikeVolumeMethodBlkdiscard && volume.WipeMethod != AerospikeVolumeMethodDD {
+				return fmt.Errorf("invalid wipe method: %s for block volume: %s", volume.WipeMethod, volume.Name)
+			}
 			// Note: Add validation for invalid initMethod if new get added.
 		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+			if volume.InitMethod != AerospikeVolumeMethodNone && volume.InitMethod != AerospikeVolumeMethodDeleteFiles {
 				return fmt.Errorf(
-					"invalid init method %v for filesystem volume: %v2",
+					"invalid init method %v for filesystem volume: %v",
 					volume.InitMethod, volume,
 				)
+			}
+			if volume.WipeMethod != AerospikeVolumeMethodDeleteFiles {
+				return fmt.Errorf("invalid wipe method %s for filesystem volume: %s",
+					volume.WipeMethod, volume.Name)
 			}
 		}
 
