@@ -437,7 +437,12 @@ func (in *AerospikePersistentVolumePolicySpec) DeepCopyInto(out *AerospikePersis
 	*out = *in
 	if in.InputInitMethod != nil {
 		in, out := &in.InputInitMethod, &out.InputInitMethod
-		*out = new(AerospikeVolumeInitMethod)
+		*out = new(AerospikeVolumeMethod)
+		**out = **in
+	}
+	if in.InputWipeMethod != nil {
+		in, out := &in.InputWipeMethod, &out.InputWipeMethod
+		*out = new(AerospikeVolumeMethod)
 		**out = **in
 	}
 	if in.InputCascadeDelete != nil {
@@ -461,7 +466,11 @@ func (in *AerospikePersistentVolumePolicySpec) DeepCopy() *AerospikePersistentVo
 func (in *AerospikePodSpec) DeepCopyInto(out *AerospikePodSpec) {
 	*out = *in
 	in.AerospikeContainerSpec.DeepCopyInto(&out.AerospikeContainerSpec)
-	in.AerospikeInitContainerSpec.DeepCopyInto(&out.AerospikeInitContainerSpec)
+	if in.AerospikeInitContainerSpec != nil {
+		in, out := &in.AerospikeInitContainerSpec, &out.AerospikeInitContainerSpec
+		*out = new(AerospikeInitContainerSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	in.AerospikeObjectMeta.DeepCopyInto(&out.AerospikeObjectMeta)
 	if in.Sidecars != nil {
 		in, out := &in.Sidecars, &out.Sidecars

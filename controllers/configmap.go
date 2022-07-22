@@ -118,7 +118,7 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	confData[NetworkPolicyHashFileName] = policyHash
 
 	// Add podSpec hash
-	podSpec, err := creatPodSpecForRack(r.aeroCluster, rack)
+	podSpec, err := createPodSpecForRack(r.aeroCluster, rack)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +126,14 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	if err != nil {
 		return nil, err
 	}
+
+	// This is a newly introduced field in 2.1.0.
+	// Ignore empty value from hash computation so that on upgrade clusters are
+	// not rolling restarted.
+	podSpecStr = []byte(strings.ReplaceAll(
+		string(podSpecStr), "\"aerospikeInitContainer\":{},", "",
+	))
+
 	podSpecHash, err := utils.GetHash(string(podSpecStr))
 	if err != nil {
 		return nil, err
@@ -135,7 +143,7 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	return confData, nil
 }
 
-func creatPodSpecForRack(
+func createPodSpecForRack(
 	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
 ) (*asdbv1beta1.AerospikePodSpec, error) {
 	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}

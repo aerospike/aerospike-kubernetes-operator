@@ -4,6 +4,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"net"
 	"strings"
 	// log "github.com/inconshreveable/log15"
@@ -40,7 +41,7 @@ var roleNameForbiddenChars = []string{";", ":"}
 // userNameForbiddenChars are chacacters forbidden in username.
 var userNameForbiddenChars = []string{";", ":"}
 
-// PredefinedRoles are predefined role names.
+// PredefinedRoles are all roles predefined in Aerospike server.
 var PredefinedRoles = map[string]struct{}{
 	"user-admin":     {},
 	"sys-admin":      {},
@@ -49,6 +50,16 @@ var PredefinedRoles = map[string]struct{}{
 	"read-write":     {},
 	"read-write-udf": {},
 	"write":          {},
+	"truncate":       {},
+	"sindex-admin":   {},
+	"udf-admin":      {},
+}
+
+// Post6PredefinedRoles are roles predefined post version 6.0 in Aerospike server.
+var Post6PredefinedRoles = map[string]struct{}{
+	"truncate":     {},
+	"sindex-admin": {},
+	"udf-admin":    {},
 }
 
 // Expect at least one user with these required roles.
@@ -57,7 +68,7 @@ var requiredRoles = []string{
 	"user-admin",
 }
 
-// Privileges are privilege string allowed in the spec and associated scopes.
+// Privileges are all privilege string allowed in the spec and associated scopes.
 var Privileges = map[string][]PrivilegeScope{
 	"read":           {Global, NamespaceSet},
 	"write":          {Global, NamespaceSet},
@@ -66,6 +77,16 @@ var Privileges = map[string][]PrivilegeScope{
 	"data-admin":     {Global},
 	"sys-admin":      {Global},
 	"user-admin":     {Global},
+	"truncate":       {Global, NamespaceSet},
+	"sindex-admin":   {Global},
+	"udf-admin":      {Global},
+}
+
+// Post6Privileges are post version 6.0 privilege strings allowed in the spec and associated scopes.
+var Post6Privileges = map[string][]PrivilegeScope{
+	"truncate":     {Global, NamespaceSet},
+	"sindex-admin": {Global},
+	"udf-admin":    {Global},
 }
 
 // IsAerospikeAccessControlValid validates the accessControl speciication in the clusterSpec.
@@ -103,7 +124,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	// Validate roles.
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
-		aerospikeClusterSpec.RackConfig.Racks[0].AerospikeConfig,
+		aerospikeClusterSpec.RackConfig.Racks[0].AerospikeConfig, version,
 	)
 	if err != nil {
 		return false, err
@@ -168,7 +189,7 @@ func validateRoleQuotaParam(
 
 // isRoleSpecValid indicates if input role spec is valid.
 func isRoleSpecValid(
-	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec,
+	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec, version string,
 ) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
@@ -183,14 +204,20 @@ func isRoleSpecValid(
 
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
-			// Cannot modify or add predefined roles.
-			return false, fmt.Errorf(
-				"cannot create or modify predefined role: %s", roleSpec.Name,
-			)
+			cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+			if err != nil {
+				return false, err
+			}
+			if cmp >= 0 {
+				// Cannot modify or add predefined roles.
+				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+			} else if _, ok := Post6PredefinedRoles[roleSpec.Name]; !ok {
+				// Version < 6.0 and attempt to modify a pre 6.0 role
+				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
+			}
 		}
 
 		_, err := isRoleNameValid(roleSpec.Name)
-
 		if err != nil {
 			return false, err
 		}
@@ -212,7 +239,7 @@ func isRoleSpecValid(
 			}
 			seenPrivileges[privilege] = true
 
-			_, err = isPrivilegeValid(privilege, aerospikeConfigSpec)
+			_, err = isPrivilegeValid(privilege, aerospikeConfigSpec, version)
 
 			if err != nil {
 				return false, fmt.Errorf(
@@ -275,14 +302,25 @@ func isRoleNameValid(roleName string) (bool, error) {
 
 // Indicates if privilege is a valid privilege.
 func isPrivilegeValid(
-	privilege string, aerospikeConfigSpec AerospikeConfigSpec,
+	privilege string, aerospikeConfigSpec AerospikeConfigSpec, version string,
 ) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
 	_, ok := Privileges[parts[0]]
 	if !ok {
-		// First part of the privilege is not part of defined privileges.
 		return false, fmt.Errorf("invalid privilege %s", privilege)
+	}
+
+	// Check if new privileges are used in an older version.
+	cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+	if err != nil {
+		return false, err
+	}
+	if cmp < 0 {
+		if _, ok := Post6Privileges[parts[0]]; ok {
+			// Version < 6.0 using post 6.0 privilege.
+			return false, fmt.Errorf("invalid privilege %s", privilege)
+		}
 	}
 
 	nParts := len(parts)

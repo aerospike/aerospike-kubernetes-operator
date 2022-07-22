@@ -125,9 +125,11 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	// Also check if statefulSet is in stable condition
 	// Check for all containers. Status.ContainerStatuses doesn't include init container
 	if pod.Status.ContainerStatuses == nil {
-		r.Log.Error(fmt.Errorf("pod %s containerStatus is nil",
-			pod.Name,
-		),
+		r.Log.Error(
+			fmt.Errorf(
+				"pod %s containerStatus is nil",
+				pod.Name,
+			),
 			"Pod may be in unscheduled state",
 		)
 		return reconcileRequeueAfter(1)
@@ -303,7 +305,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 			return reconcileError(err)
 		}
 
-		if utils.IsPodUpgraded(pFound, r.aeroCluster) {
+		if r.isPodUpgraded(pFound) {
 			r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
 			return reconcileSuccess()
 		}

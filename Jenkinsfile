@@ -8,7 +8,7 @@ pipeline {
         GOPATH="/var/lib/jenkins/go"
         // Operator sdk command "operator-sdk" should be present in PATH or at
         // /usr/local/operator-sdk-1.10.1/
-        PATH="/usr/local/operator-sdk-1.10.1/:${GOPATH}/bin:${env.PATH}"
+        PATH="/usr/local/operator-sdk-1.10.1/:${GOPATH}/bin:/usr/local/bin:${env.PATH}"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY="docker.io"
@@ -23,7 +23,7 @@ pipeline {
         VERSION="${env.OPERATOR_VERSION}"
         IMG="${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
-        
+
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
     }
 
@@ -51,7 +51,7 @@ pipeline {
                         sh 'ln -sfn ${WORKSPACE} ${GO_REPO}'
 
                         dir("${env.GO_REPO}") {
-                            // Changing directory again otherwise operator generates binary with the symlink name.
+                            // Changing directory again otherwise operator generates binary with the symlink name
                             sh "cd ${GO_REPO} && make docker-build  IMG=${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                             sh "cd ${GO_REPO} && make docker-push  IMG=${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
                             sh "cd ${GO_REPO} && make bundle IMG=${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
@@ -61,11 +61,32 @@ pipeline {
                     }
                 }
 
+                stage("Vulnerability scanning") {
+                    steps {
+                        script {
+                           dir("${env.GO_REPO}") {
+                               // Install synk
+                               sh "wget https://static.snyk.io/cli/latest/snyk-linux"
+                               sh "chmod +x snyk-linux"
+                               sh "set +x; ./snyk-linux auth \$(cat ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/third-party-credentials/snyk); set -x"
+
+                               // Scan the dependencies
+                               sh "./snyk-linux test  --severity-threshold=high"
+
+                               // Scan the operator images
+                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high"
+                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high"
+                           }
+                        }
+                    }
+                }
+
                 stage('Test') {
                     steps {
                         dir("${env.GO_REPO}") {
-                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"                            
-                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -p config/samples/secrets/registrycred.json"
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -c ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY}"
 
                         }
                     }
