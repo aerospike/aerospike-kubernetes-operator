@@ -835,6 +835,49 @@ func (r *SingleClusterReconciler) updateSTS(
 	return nil
 }
 
+func (r *SingleClusterReconciler) addExternalStorageDevices(
+	container *corev1.Container, rackState RackState, stSpecVolumes []corev1.Volume,
+) ([]corev1.VolumeDevice, []corev1.Volume) {
+	var externalDevices []corev1.VolumeDevice
+	volumes := []corev1.Volume{}
+	rackStatusVolumes := r.getRackStatusVolumes(rackState)
+	for _, volumeDevice := range container.VolumeDevices {
+		volumeInSpec := getStorageVolume(rackState.Rack.Storage.Volumes, volumeDevice.Name)
+		volumeInStatus := getStorageVolume(rackStatusVolumes, volumeDevice.Name)
+		if volumeInSpec == nil && volumeInStatus == nil {
+			externalDevices = append(externalDevices, volumeDevice)
+			for _, volume := range stSpecVolumes {
+				if volume.Name == volumeDevice.Name {
+					volumes = append(volumes, volume)
+				}
+			}
+		}
+	}
+	return externalDevices, volumes
+}
+
+func (r *SingleClusterReconciler) addExternalStorageMounts(
+	container *corev1.Container, rackState RackState, stSpecVolumes []corev1.Volume,
+) ([]corev1.VolumeMount, []corev1.Volume) {
+	var externalMounts []corev1.VolumeMount
+	volumes := []corev1.Volume{}
+	rackStatusVolumes := r.getRackStatusVolumes(rackState)
+	for _, volumeMount := range container.VolumeMounts {
+		volumeInSpec := getStorageVolume(rackState.Rack.Storage.Volumes, volumeMount.Name)
+		volumeInStatus := getStorageVolume(rackStatusVolumes, volumeMount.Name)
+		volumeInDefault := getContainerVolumeMounts(getDefaultAerospikeInitContainerVolumeMounts(), volumeMount.Name)
+		if volumeInSpec == nil && volumeInStatus == nil && volumeInDefault == nil {
+			externalMounts = append(externalMounts, volumeMount)
+			for _, volume := range stSpecVolumes {
+				if volume.Name == volumeMount.Name {
+					volumes = append(volumes, volume)
+				}
+			}
+		}
+	}
+	return externalMounts, volumes
+}
+
 func (r *SingleClusterReconciler) updateSTSPVStorage(
 	st *appsv1.StatefulSet, rackState RackState,
 ) {
@@ -1295,29 +1338,41 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState RackState,
 ) {
 	// Initialize sts storage
+	var specVolumes []corev1.Volume
 	for i := range st.Spec.Template.Spec.InitContainers {
+		externalMounts, volumesForMount := r.addExternalStorageMounts(&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForMount...)
 		if i == 0 {
 			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
 		} else {
 			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
-
+		st.Spec.Template.Spec.InitContainers[i].VolumeMounts = append(st.Spec.Template.Spec.InitContainers[i].VolumeMounts, externalMounts...)
+		externalDevices, volumesForDevice := r.addExternalStorageDevices(&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForDevice...)
 		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = []corev1.VolumeDevice{}
+		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = append(st.Spec.Template.Spec.InitContainers[i].VolumeDevices, externalDevices...)
 	}
 
 	for i := range st.Spec.Template.Spec.Containers {
+		externalMounts, volumesForMount := r.addExternalStorageMounts(&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForMount...)
 		if i == 0 {
 			st.Spec.Template.Spec.Containers[i].VolumeMounts = getDefaultAerospikeContainerVolumeMounts()
 		} else {
 			st.Spec.Template.Spec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
-
+		st.Spec.Template.Spec.Containers[i].VolumeMounts = append(st.Spec.Template.Spec.Containers[i].VolumeMounts, externalMounts...)
+		externalDevices, volumesForDevice := r.addExternalStorageDevices(&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForDevice...)
 		st.Spec.Template.Spec.Containers[i].VolumeDevices = []corev1.VolumeDevice{}
+		st.Spec.Template.Spec.Containers[i].VolumeDevices = append(st.Spec.Template.Spec.Containers[i].VolumeDevices, externalDevices...)
 	}
 
 	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(
 		r.aeroCluster, rackState,
 	)
+	st.Spec.Template.Spec.Volumes = append(st.Spec.Template.Spec.Volumes, specVolumes...)
 }
 
 func createPVCForVolumeAttachment(
