@@ -1162,7 +1162,12 @@ func updateStatefulSetContainers(
 		for i, stsContainer := range stsContainers {
 			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
+				// Retain volume mounts and devices to make sure external storage will not loose.
+				volumeMounts := stsContainers[i].VolumeMounts
+				volumeDevices := stsContainers[i].VolumeDevices
 				stsContainers[i] = specContainerCopy
+				stsContainers[i].VolumeMounts = volumeMounts
+				stsContainers[i].VolumeDevices = volumeDevices
 				found = true
 				break
 			}

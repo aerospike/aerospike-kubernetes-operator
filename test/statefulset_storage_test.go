@@ -105,7 +105,7 @@ var _ = Describe(
 							)
 						}
 
-						isPresent, err := validateExternalVolume(sts)
+						isPresent, err := validateExternalVolumeInContainer(sts, 0)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -118,7 +118,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 						time.Sleep(5 * time.Second)
 
-						isPresent, err = validateExternalVolume(sts)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -185,7 +185,173 @@ var _ = Describe(
 							)
 						}
 
-						isPresent, err := validateExternalVolume(sts)
+						isPresent, err := validateExternalVolumeInContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+
+						volume := asdbv1beta1.VolumeSpec{
+							Name: "newvolume",
+							Source: asdbv1beta1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{},
+							},
+							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+								Path: "/newvolume",
+							},
+						}
+
+						aeroCluster.Spec.Storage.Volumes = append(
+							aeroCluster.Spec.Storage.Volumes, volume,
+						)
+						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						// Delete
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						newAeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						aeroCluster.Spec = newAeroCluster.Spec
+
+						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+					},
+				)
+
+				It(
+					"Should not affect external volume mount in sidecars when adding aerospike volumes", func() {
+						clusterName := "sts-storage"
+						clusterNamespacedName := getClusterNamespacedName(
+							clusterName, namespace,
+						)
+
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						sidecar1 := v1.Container{
+							Name:  "nginx1",
+							Image: "nginx:1.14.2",
+							Ports: []v1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						}
+
+						aeroCluster.Spec.PodSpec.Sidecars = append(
+							aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
+						)
+
+						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						sts, err := getSTSFromRackID(aeroCluster, 0)
+						Expect(err).ToNot(HaveOccurred())
+
+						mountedVolumes := sts.Spec.Template.Spec.Containers[0].VolumeMounts
+						mountedVolumes = append(mountedVolumes, v1.VolumeMount{
+							Name: "tzdata", MountPath: "/etc/localtime",
+						})
+
+						mountedVolumesSidecar := sts.Spec.Template.Spec.Containers[1].VolumeMounts
+						mountedVolumesSidecar = append(mountedVolumesSidecar, v1.VolumeMount{
+							Name: "tzdata", MountPath: "/etc/localtime",
+						})
+
+						initcontainerMountedVolumes := sts.Spec.Template.Spec.InitContainers[0].VolumeMounts
+						initcontainerMountedVolumes = append(initcontainerMountedVolumes, v1.VolumeMount{
+							Name: "tzdata", MountPath: "/etc/localtime",
+						})
+
+						volumes := sts.Spec.Template.Spec.Volumes
+						volumes = append(volumes, v1.Volume{
+							Name: "tzdata",
+							VolumeSource: v1.VolumeSource{
+								HostPath: &v1.HostPathVolumeSource{
+									Path: "/etc/localtime",
+								},
+							},
+						})
+
+						sts.Spec.Template.Spec.Containers[0].VolumeMounts = mountedVolumes
+						sts.Spec.Template.Spec.Containers[1].VolumeMounts = mountedVolumesSidecar
+						sts.Spec.Template.Spec.InitContainers[0].VolumeMounts = initcontainerMountedVolumes
+						sts.Spec.Template.Spec.Volumes = volumes
+
+						err = updateSTS(k8sClient, ctx, sts)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						sts, err = getSTSFromRackID(aeroCluster, 0)
+						Expect(err).ToNot(HaveOccurred())
+
+						rackPodList, err := getRackPodList(k8sClient, ctx, sts)
+						Expect(err).ToNot(HaveOccurred())
+
+						// restart pod
+						for _, pod := range rackPodList.Items {
+							err := k8sClient.Delete(ctx, &pod)
+							Expect(err).ToNot(HaveOccurred())
+							started := waitForPod(&pod)
+							Expect(started).To(
+								BeTrue(), "pod was not able to come online in time",
+							)
+						}
+
+						isPresent, err := validateExternalVolumeInContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						isPresent, err = validateExternalVolumeInContainer(sts, 1)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
+						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -210,31 +376,24 @@ var _ = Describe(
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						isPresent, err = validateExternalVolume(sts)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						// Delete
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						newAeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-						aeroCluster.Spec = newAeroCluster.Spec
-
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						isPresent, err = validateExternalVolume(sts)
+						isPresent, err = validateExternalVolumeInContainer(sts, 1)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
+
+						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(isPresent).To(
+							BeTrue(), "Unable to find volume",
+						)
+
 					},
 				)
 			},
@@ -257,7 +416,7 @@ func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
 	return found, nil
 }
 
-func validateExternalVolume(sts *appsv1.StatefulSet) (
+func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int) (
 	bool, error,
 ) {
 	rackPodList, err := getRackPodList(k8sClient, goctx.TODO(), sts)
@@ -265,10 +424,28 @@ func validateExternalVolume(sts *appsv1.StatefulSet) (
 		return false, err
 	}
 	for _, pod := range rackPodList.Items {
-		pkgLog.Info("Checking for pod", "podName", pod.Name)
-		volumeMounts := pod.Spec.Containers[0].VolumeMounts
+		volumeMounts := pod.Spec.Containers[index].VolumeMounts
 		for _, volumeMount := range volumeMounts {
-			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name)
+			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", pod.Spec.Containers[index].Name)
+			if volumeMount.Name == "tzdata" {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func validateExternalVolumeInInitContainer(sts *appsv1.StatefulSet, index int) (
+	bool, error,
+) {
+	rackPodList, err := getRackPodList(k8sClient, goctx.TODO(), sts)
+	if err != nil {
+		return false, err
+	}
+	for _, pod := range rackPodList.Items {
+		volumeMounts := pod.Spec.InitContainers[index].VolumeMounts
+		for _, volumeMount := range volumeMounts {
+			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", pod.Spec.InitContainers[index].Name)
 			if volumeMount.Name == "tzdata" {
 				return true, nil
 			}
