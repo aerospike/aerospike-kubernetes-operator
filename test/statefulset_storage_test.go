@@ -144,6 +144,11 @@ var _ = Describe(
 							Name: "tzdata", MountPath: "/etc/localtime",
 						})
 
+						initcontainerMountedVolumes := sts.Spec.Template.Spec.InitContainers[0].VolumeMounts
+						initcontainerMountedVolumes = append(initcontainerMountedVolumes, v1.VolumeMount{
+							Name: "tzdata", MountPath: "/etc/localtime",
+						})
+
 						volumes := sts.Spec.Template.Spec.Volumes
 						volumes = append(volumes, v1.Volume{
 							Name: "tzdata",
@@ -155,6 +160,7 @@ var _ = Describe(
 						})
 
 						sts.Spec.Template.Spec.Containers[0].VolumeMounts = mountedVolumes
+						sts.Spec.Template.Spec.InitContainers[0].VolumeMounts = initcontainerMountedVolumes
 						sts.Spec.Template.Spec.Volumes = volumes
 
 						err = updateSTS(k8sClient, ctx, sts)
