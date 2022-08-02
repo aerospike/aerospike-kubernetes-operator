@@ -25,8 +25,10 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "5.6.0.7"
-	latestServerVersion = "5.7.0.8"
+	prevServerVersion   = "5.7.0.17"
+	pre57Version        = "5.6.0.21"
+	version6            = "6.0.0.0"
+	latestServerVersion = "6.0.0.1"
 	invalidVersion      = "3.0.0.4"
 	pre5Version         = "4.9.0.33"
 )
@@ -38,6 +40,8 @@ var (
 	logger             = logr.Discard()
 	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
+	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
+	pre57Image         = fmt.Sprintf("%s:%s", baseImage, pre57Version)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
 )
@@ -149,7 +153,8 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 }
 
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, dynamicNs map[string]interface{},
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	dynamicNs map[string]interface{},
 	clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -282,23 +287,6 @@ func getClusterIfExists(
 	return aeroCluster, nil
 }
 
-func getPodsList(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
-) (*corev1.PodList, error) {
-	podList := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(clusterNamespacedName.Name))
-	listOps := &client.ListOptions{
-		Namespace:     clusterNamespacedName.Namespace,
-		LabelSelector: labelSelector,
-	}
-
-	if err := k8sClient.List(ctx, podList, listOps); err != nil {
-		return nil, err
-	}
-	return podList, nil
-}
-
 func deleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
@@ -324,8 +312,8 @@ func deleteCluster(
 		}
 		//Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
 		//tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
-		allClustersPods, err := getPodsList(
-			k8sClient, ctx, clusterNamespacedName,
+		allClustersPods, err := getClusterPodList(
+			k8sClient, ctx, aeroCluster,
 		)
 		if err != nil {
 			return err
@@ -768,6 +756,8 @@ func createDummyAerospikeCluster(
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
+				AerospikeInitContainerSpec: &asdbv1beta1.
+					AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{

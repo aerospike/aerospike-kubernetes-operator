@@ -14,7 +14,7 @@ DISTRIBUTION=operatorhub
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.0.0
+VERSION ?= 2.1.0
 
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
@@ -115,7 +115,10 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 # docker-build: test ## Build docker image with the manager.
 docker-build: ## Build docker image with the manager.
-	docker build -t ${IMG} --build-arg VERSION=$(VERSION) .
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) .
+
+docker-build-openshift: ## Build openshift docker image with the manager.
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
@@ -179,7 +182,7 @@ endef
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.1.0-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/
@@ -195,6 +198,7 @@ bundle: manifests kustomize
 	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
 	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
+	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" bundle/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 
 
 .PHONY: bundle-operatorhub
@@ -260,7 +264,7 @@ bundle-clean:
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	docker build --pull --no-cache -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.

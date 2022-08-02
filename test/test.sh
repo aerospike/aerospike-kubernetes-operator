@@ -11,14 +11,22 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "c:f:a:" opt
+while getopts "c:f:a:r:p:" opt
 do
    case "$opt" in
       c ) CONTAINER="$OPTARG" ;;
-      f ) focus="$OPTARG" ;;
-      a ) args="$OPTARG" ;;
+      f ) FOCUS="$OPTARG" ;;
+      a ) ARGS="$OPTARG" ;;
+      r ) REGISTRY="$OPTARG" ;;
+      p ) CRED_PATH="$OPTARG" ;;
+
    esac
 done
+
+# Defaults
+CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
+REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
+
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -43,8 +51,17 @@ echo "| Deploying OpenLDAP....     |"
 echo "------------------------------"
 "$DIR"/deploy-openldap.sh
 
+# Create imagePullSecret for AerospikeInitImage
+IMAGE_PULL_SECRET="registrycred"
+
+"$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH"
+
 # Run tests
 echo "---------------------"
 echo "| Starting tests.... |"
 echo "---------------------"
-make test FOCUS="$focus" ARGS="$args"
+
+export CUSTOM_INIT_REGISTRY="$REGISTRY"
+export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
+
+make test FOCUS="$FOCUS" ARGS="$ARGS"

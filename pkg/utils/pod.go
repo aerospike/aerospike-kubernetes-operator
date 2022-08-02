@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -45,7 +44,8 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		// 	return fmt.Errorf("pod has terminated status")
 		// }
 		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
-		if waiting := container.State.Waiting; waiting != nil && (isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason)) {
+		if waiting := container.State.Waiting; waiting != nil &&
+			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
 			return fmt.Errorf(
 				"pod failed message in container %s: %s reason: %s",
 				container.Name, waiting.Message, waiting.Reason,
@@ -93,18 +93,6 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 	return nil
 }
 
-// IsPodCrashed returns true if pod is running and the aerospike container has crashed.
-func IsPodCrashed(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodRunning {
-		// Assume a pod that is not running has not crashed.
-		return false
-	}
-
-	// Get aerospike server container status.
-	ps := pod.Status.ContainerStatuses[0]
-	return ps.State.Waiting != nil && isPodCrashError(ps.State.Waiting.Reason)
-}
-
 // isPodReady return true if all the container of the pod are in ready state
 func isPodReady(pod *corev1.Pod) bool {
 	for _, status := range pod.Status.ContainerStatuses {
@@ -118,48 +106,6 @@ func isPodReady(pod *corev1.Pod) bool {
 // IsPodTerminating returns true if pod's DeletionTimestamp has been set
 func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
-}
-
-// IsPodUpgraded assume that all container have same image or take containerID
-func IsPodUpgraded(
-	pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster,
-) bool {
-	if !IsPodRunningAndReady(pod) {
-		return false
-	}
-
-	return IsPodOnDesiredImage(pod, aeroCluster)
-}
-
-// IsPodOnDesiredImage indicates of pod is ready and on desired images for all containers.
-func IsPodOnDesiredImage(
-	pod *corev1.Pod, aeroCluster *asdbv1beta1.AerospikeCluster,
-) bool {
-	return allContainersAreOnDesiredImages(aeroCluster, pod.Spec.Containers) &&
-		allContainersAreOnDesiredImages(aeroCluster, pod.Spec.InitContainers)
-}
-
-func allContainersAreOnDesiredImages(
-	aeroCluster *asdbv1beta1.AerospikeCluster, containers []corev1.Container,
-) bool {
-	for _, ps := range containers {
-		desiredImage, err := GetDesiredImage(aeroCluster, ps.Name)
-		if err != nil {
-			// Maybe a deleted sidecar. Ignore.
-			desiredImage = ps.Image
-		}
-		// TODO: Should we check status here?
-		// status may not be ready due to any bad config (e.g. bad podSpec).
-		// Due to this check, flow will be stuck at this place (upgradeImage)
-		// status := getPodContainerStatus(pod, ps.Name)
-		// if status == nil || !status.Ready || !IsImageEqual(ps.Image, desiredImage) {
-		// 	return false
-		// }
-		if !IsImageEqual(ps.Image, desiredImage) {
-			return false
-		}
-	}
-	return true
 }
 
 // GetPod get pod from pod list by name
@@ -236,4 +182,10 @@ func isPodImageError(reason string) bool {
 // isPodCrashError indicates whether the specified reason corresponds to an crash of the container.
 func isPodCrashError(reason string) bool {
 	return strings.HasPrefix(reason, "Crash")
+}
+
+// isPodError indicates whether the specified reason corresponds to a generic error like CreateContainerConfigError in the container.
+// https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
+func isPodError(reason string) bool {
+	return strings.HasSuffix(reason, "Error")
 }

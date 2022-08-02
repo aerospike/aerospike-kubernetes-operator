@@ -74,7 +74,7 @@ func (c *AerospikeCluster) ValidateDelete() error {
 func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
-	aslog.Info("validate update")
+	aslog.Info("Validate update")
 
 	old := oldObj.(*AerospikeCluster)
 	if err := c.validate(aslog); err != nil {
@@ -229,7 +229,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	// Validate resource and limit
-	if err := c.validateResourceAndLimits(aslog); err != nil {
+	if err := c.validatePodSpecResourceAndLimits(aslog); err != nil {
 		return err
 	}
 
@@ -367,19 +367,28 @@ func (c *AerospikeCluster) validateAccessControl(_ logr.Logger) error {
 	return err
 }
 
-func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
-	res := c.Spec.PodSpec.AerospikeContainerSpec.Resources
+func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error {
+	if err := c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeContainerSpec.Resources); err != nil {
+		return err
+	}
 
-	if res == nil {
+	if c.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources)
+	}
+	return nil
+}
+
+func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements) error {
+	if resources == nil {
 		return nil
 	}
 
-	if res.Limits != nil && res.Requests != nil &&
-		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
-			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
+	if resources.Limits != nil && resources.Requests != nil &&
+		((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
+			(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
 		return fmt.Errorf(
 			"resources.Limits cannot be less than resource.Requests. Resources %v",
-			res,
+			resources,
 		)
 	}
 
@@ -592,6 +601,7 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 	return nil
 }
 
+// ValidateTLSAuthenticateClient validate the tls-authenticate-client field in the service configuration.
 func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 	[]string, error,
 ) {
@@ -802,7 +812,9 @@ func validateNamespaceConfig(
 						)
 					}
 
-					// device list Fields cannot be more that 2 in single line. Two in shadow device case. validate.
+					device = strings.TrimSpace(device.(string))
+
+					// device list Fields cannot be more that 2 in single line. Two in shadow device case. Validate.
 					if len(strings.Fields(device.(string))) > 2 {
 						return fmt.Errorf(
 							"invalid device name %v. Max 2 device can be mentioned in single line (Shadow device config)",
@@ -850,14 +862,27 @@ func validateNamespaceConfig(
 						)
 					}
 
-					dirPath := filepath.Dir(file.(string))
-					if !isFileStorageConfiguredForDir(
-						fileStorageList, dirPath,
-					) {
+					file = strings.TrimSpace(file.(string))
+
+					// File list Fields cannot be more that 2 in single line. Two in shadow device case. Validate.
+					if len(strings.Fields(file.(string))) > 2 {
 						return fmt.Errorf(
-							"namespace storage file related mountPath %v not found in storage config %v",
-							dirPath, storage,
+							"invalid file name %v. Max 2 file can be mentioned in single line (Shadow file config)",
+							file,
 						)
+					}
+
+					fList := strings.Fields(file.(string))
+					for _, f := range fList {
+						dirPath := filepath.Dir(f)
+						if !isFileStorageConfiguredForDir(
+							fileStorageList, dirPath,
+						) {
+							return fmt.Errorf(
+								"namespace storage file related mountPath %v not found in storage config %v",
+								dirPath, storage,
+							)
+						}
 					}
 				}
 			}
@@ -866,7 +891,7 @@ func validateNamespaceConfig(
 		}
 	}
 
-	// Vaidate index-type
+	// Validate index-type
 	for _, nsConfInterface := range nsConfInterfaceList {
 		nsConf, ok := nsConfInterface.(map[string]interface{})
 		if !ok {
@@ -1002,9 +1027,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, oldSecConfFound := oldConf["security"]
 	newSec, newSecConfFound := newConf["security"]
-	if oldSecConfFound != oldSecConfFound {
-		return fmt.Errorf("cannot update cluster security config")
-	}
+
 	if oldSecConfFound && newSecConfFound {
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
@@ -1421,7 +1444,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 
 	for _, container := range containers {
 		// Check for reserved container name
-		if container.Name == AerospikeServerContainerName || container.Name == AerospikeServerInitContainerName {
+		if container.Name == AerospikeServerContainerName || container.Name == AerospikeInitContainerName {
 			return fmt.Errorf(
 				"cannot use reserved container name: %v", container.Name,
 			)

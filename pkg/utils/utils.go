@@ -71,8 +71,8 @@ func GetDesiredImage(
 	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
-	if containerName == asdbv1beta1.AerospikeServerInitContainerName {
-		return asdbv1beta1.AerospikeServerInitContainerImage, nil
+	if containerName == asdbv1beta1.AerospikeInitContainerName {
+		return asdbv1beta1.GetAerospikeInitContainerImage(aeroCluster), nil
 	}
 
 	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {

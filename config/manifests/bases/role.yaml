@@ -1,13 +1,12 @@
-{{- if .Values.rbac.create }}
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: aerospike-operator-manager-role
+  name: aerospike-kubernetes-operator-default-ns
   labels:
-    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
-    chart: {{ .Chart.Name }}
-    release: {{ .Release.Name }}
+    aerospike.com/default-ns.kind: ClusterRole
 rules:
 - apiGroups:
   - apps
@@ -135,4 +134,3 @@ rules:
   verbs:
   - get
   - list
-{{- end }}
