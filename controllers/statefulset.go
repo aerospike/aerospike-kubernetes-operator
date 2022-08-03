@@ -835,6 +835,66 @@ func (r *SingleClusterReconciler) updateSTS(
 	return nil
 }
 
+// Returns external storage devices and the corresponding source
+// that have been attached to the containers directly.
+// Devices that are attached to containers and not present in aerospike config spec
+// as well status are considered as external devices.
+func (r *SingleClusterReconciler) getExternalStorageDevices(
+	container *corev1.Container, rackState RackState, stSpecVolumes []corev1.Volume,
+) ([]corev1.VolumeDevice, []corev1.Volume) {
+	var externalDevices []corev1.VolumeDevice
+	var volumesForDevice []corev1.Volume
+
+	rackStatusVolumes := r.getRackStatusVolumes(rackState)
+
+	for _, volumeDevice := range container.VolumeDevices {
+		volumeInSpec := getStorageVolume(rackState.Rack.Storage.Volumes, volumeDevice.Name)
+		volumeInStatus := getStorageVolume(rackStatusVolumes, volumeDevice.Name)
+
+		if volumeInSpec == nil && volumeInStatus == nil {
+			externalDevices = append(externalDevices, volumeDevice)
+
+			for _, volume := range stSpecVolumes {
+				if volume.Name == volumeDevice.Name {
+					volumesForDevice = append(volumesForDevice, volume)
+				}
+			}
+		}
+	}
+	return externalDevices, volumesForDevice
+}
+
+// Returns external volume mounts and the corresponding source
+// that have been mounted to the containers directly.
+// Volumes that are mounted to containers and not present in aerospike config spec
+// as well status and are not one of the default volume mounts
+// are considered as external Volumes.
+func (r *SingleClusterReconciler) getExternalStorageMounts(
+	container *corev1.Container, rackState RackState, stSpecVolumes []corev1.Volume,
+) ([]corev1.VolumeMount, []corev1.Volume) {
+	var externalMounts []corev1.VolumeMount
+	var volumesForMounts []corev1.Volume
+
+	rackStatusVolumes := r.getRackStatusVolumes(rackState)
+
+	for _, volumeMount := range container.VolumeMounts {
+		volumeInSpec := getStorageVolume(rackState.Rack.Storage.Volumes, volumeMount.Name)
+		volumeInStatus := getStorageVolume(rackStatusVolumes, volumeMount.Name)
+		volumeInDefault := getContainerVolumeMounts(getDefaultAerospikeInitContainerVolumeMounts(), volumeMount.Name)
+
+		if volumeInSpec == nil && volumeInStatus == nil && volumeInDefault == nil {
+			externalMounts = append(externalMounts, volumeMount)
+
+			for _, volume := range stSpecVolumes {
+				if volume.Name == volumeMount.Name {
+					volumesForMounts = append(volumesForMounts, volume)
+				}
+			}
+		}
+	}
+	return externalMounts, volumesForMounts
+}
+
 func (r *SingleClusterReconciler) updateSTSPVStorage(
 	st *appsv1.StatefulSet, rackState RackState,
 ) {
@@ -1102,6 +1162,9 @@ func updateStatefulSetContainers(
 		for i, stsContainer := range stsContainers {
 			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
+				// Retain volume mounts and devices to make sure external storage will not loose.
+				specContainerCopy.VolumeMounts = stsContainers[i].VolumeMounts
+				specContainerCopy.VolumeDevices = stsContainers[i].VolumeDevices
 				stsContainers[i] = specContainerCopy
 				found = true
 				break
@@ -1295,29 +1358,58 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState RackState,
 ) {
 	// Initialize sts storage
+	var specVolumes []corev1.Volume
+
 	for i := range st.Spec.Template.Spec.InitContainers {
+		externalMounts, volumesForMount := r.getExternalStorageMounts(&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForMount...)
+
 		if i == 0 {
 			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
 		} else {
 			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
 
+		// Appending external volume mounts back to the corresponding container.
+		st.Spec.Template.Spec.InitContainers[i].VolumeMounts = append(st.Spec.Template.Spec.InitContainers[i].VolumeMounts, externalMounts...)
+
+		externalDevices, volumesForDevice := r.getExternalStorageDevices(&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForDevice...)
+
 		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = []corev1.VolumeDevice{}
+
+		// Appending external devices back to the corresponding container.
+		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = append(st.Spec.Template.Spec.InitContainers[i].VolumeDevices, externalDevices...)
 	}
 
 	for i := range st.Spec.Template.Spec.Containers {
+		externalMounts, volumesForMount := r.getExternalStorageMounts(&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForMount...)
+
 		if i == 0 {
 			st.Spec.Template.Spec.Containers[i].VolumeMounts = getDefaultAerospikeContainerVolumeMounts()
 		} else {
 			st.Spec.Template.Spec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
 
+		// Appending external volume mounts back to the corresponding container.
+		st.Spec.Template.Spec.Containers[i].VolumeMounts = append(st.Spec.Template.Spec.Containers[i].VolumeMounts, externalMounts...)
+
+		externalDevices, volumesForDevice := r.getExternalStorageDevices(&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes)
+		specVolumes = append(specVolumes, volumesForDevice...)
+
 		st.Spec.Template.Spec.Containers[i].VolumeDevices = []corev1.VolumeDevice{}
+
+		// Appending external devices back to the corresponding container.
+		st.Spec.Template.Spec.Containers[i].VolumeDevices = append(st.Spec.Template.Spec.Containers[i].VolumeDevices, externalDevices...)
 	}
 
 	st.Spec.Template.Spec.Volumes = getDefaultSTSVolumes(
 		r.aeroCluster, rackState,
 	)
+
+	// Populating unique volume source to statefulSet spec storage.
+	st.Spec.Template.Spec.Volumes = r.appendUniqueVolume(st.Spec.Template.Spec.Volumes, specVolumes)
 }
 
 func createPVCForVolumeAttachment(
@@ -1545,4 +1637,26 @@ func newSTSEnvVarStatic(name, value string) corev1.EnvVar {
 		Name:  name,
 		Value: value,
 	}
+}
+
+// Return if volume with name given is present in volumes array else return nil.
+func getVolume(
+	volumes []corev1.Volume, name string,
+) *corev1.Volume {
+	for _, volume := range volumes {
+		if volume.Name == name {
+			return &volume
+		}
+	}
+	return nil
+}
+
+// Merge and return two core volume arrays with unique entry.
+func (r *SingleClusterReconciler) appendUniqueVolume(stSpecVolumes []corev1.Volume, externalSpecVolumes []corev1.Volume) []corev1.Volume {
+	for _, externalVolume := range externalSpecVolumes {
+		if getVolume(stSpecVolumes, externalVolume.Name) == nil {
+			stSpecVolumes = append(stSpecVolumes, externalVolume)
+		}
+	}
+	return stSpecVolumes
 }
