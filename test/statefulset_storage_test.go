@@ -20,14 +20,13 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
+				clusterName := "sts-storage"
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
 
 				BeforeEach(
 					func() {
-						clusterName := "sts-storage"
-						clusterNamespacedName := getClusterNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -39,11 +38,6 @@ var _ = Describe(
 				)
 				AfterEach(
 					func() {
-						clusterName := "sts-storage"
-						clusterNamespacedName := getClusterNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -54,11 +48,6 @@ var _ = Describe(
 
 				It(
 					"Should allow external volume mount on aerospike nodes", func() {
-						clusterName := "sts-storage"
-						clusterNamespacedName := getClusterNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -105,7 +94,7 @@ var _ = Describe(
 							)
 						}
 
-						isPresent, err := validateExternalVolumeInContainer(sts, 0)
+						isPresent, err := validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -118,7 +107,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 						time.Sleep(5 * time.Second)
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -128,11 +117,6 @@ var _ = Describe(
 
 				It(
 					"Should not affect external volume mount when adding or deleting aerospike volumes", func() {
-						clusterName := "sts-storage"
-						clusterNamespacedName := getClusterNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -185,13 +169,13 @@ var _ = Describe(
 							)
 						}
 
-						isPresent, err := validateExternalVolumeInContainer(sts, 0)
+						isPresent, err := validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, true)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -217,13 +201,13 @@ var _ = Describe(
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, true)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -243,13 +227,13 @@ var _ = Describe(
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, true)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -259,11 +243,6 @@ var _ = Describe(
 
 				It(
 					"Should not affect external volume mount in sidecars when adding aerospike volumes", func() {
-						clusterName := "sts-storage"
-						clusterNamespacedName := getClusterNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -339,19 +318,19 @@ var _ = Describe(
 							)
 						}
 
-						isPresent, err := validateExternalVolumeInContainer(sts, 0)
+						isPresent, err := validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 1)
+						isPresent, err = validateExternalVolumeInContainer(sts, 1, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, true)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -376,19 +355,19 @@ var _ = Describe(
 						err = updateAndWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInContainer(sts, 1)
+						isPresent, err = validateExternalVolumeInContainer(sts, 1, false)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
 
-						isPresent, err = validateExternalVolumeInInitContainer(sts, 0)
+						isPresent, err = validateExternalVolumeInContainer(sts, 0, true)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
@@ -416,7 +395,7 @@ func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
 	return found, nil
 }
 
-func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int) (
+func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isInit bool) (
 	bool, error,
 ) {
 	rackPodList, err := getRackPodList(k8sClient, goctx.TODO(), sts)
@@ -424,28 +403,15 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int) (
 		return false, err
 	}
 	for _, pod := range rackPodList.Items {
-		volumeMounts := pod.Spec.Containers[index].VolumeMounts
-		for _, volumeMount := range volumeMounts {
-			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", pod.Spec.Containers[index].Name)
-			if volumeMount.Name == "tzdata" {
-				return true, nil
-			}
+		var container v1.Container
+		if isInit {
+			container = pod.Spec.InitContainers[index]
+		} else {
+			container = pod.Spec.Containers[index]
 		}
-	}
-	return false, nil
-}
-
-func validateExternalVolumeInInitContainer(sts *appsv1.StatefulSet, index int) (
-	bool, error,
-) {
-	rackPodList, err := getRackPodList(k8sClient, goctx.TODO(), sts)
-	if err != nil {
-		return false, err
-	}
-	for _, pod := range rackPodList.Items {
-		volumeMounts := pod.Spec.InitContainers[index].VolumeMounts
+		volumeMounts := container.VolumeMounts
 		for _, volumeMount := range volumeMounts {
-			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", pod.Spec.InitContainers[index].Name)
+			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", container.Name)
 			if volumeMount.Name == "tzdata" {
 				return true, nil
 			}

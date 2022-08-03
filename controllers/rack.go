@@ -827,8 +827,9 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 }
 
 func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
-	volumes []asdbv1beta1.VolumeSpec, rackStatusVolumes []asdbv1beta1.VolumeSpec, configuredContainers []string,
-	podContainers []corev1.Container, isInitContainers bool,
+	volumes []asdbv1beta1.VolumeSpec, rackStatusVolumes []asdbv1beta1.VolumeSpec,
+	configuredContainers []string, podContainers []corev1.Container,
+	isInitContainers bool,
 ) bool {
 	// TODO: Deal with injected volumes later.
 	for _, container := range podContainers {
