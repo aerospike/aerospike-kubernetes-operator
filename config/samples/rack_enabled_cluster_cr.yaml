@@ -22,6 +22,8 @@ spec:
     filesystemVolumePolicy:
       cascadeDelete: true
       initMethod: deleteFiles
+    blockVolumePolicy:
+      cascadeDelete: true
     volumes:
       - name: workdir
         aerospike:
