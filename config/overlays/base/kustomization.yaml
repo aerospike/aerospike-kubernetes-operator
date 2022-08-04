@@ -25,3 +25,17 @@ patchesJson6902:
       # Update the indices in this path if adding or removing volumes in the manager's Deployment.
       - op: remove
         path: /spec/template/spec/volumes/0
+#  - target:
+#      group: rbac.authorization.k8s.io
+#      kind: ClusterRoleBinding
+#      name: aerospike-kubernetes-operator-default-ns
+#      version: v1
+#    #      labelSelector: "aerospike.com/default-ns.kind=ClusterRoleBinding"
+#    patch: |-
+#      - op: add
+#        path: /roleRef/name
+#        value: aerospike-kubernetes-operator-default-ns
+#      - op: add
+#        path: /roleRef/apiGroup
+#        value: rbac.authorization.k8s.io
+#      -
