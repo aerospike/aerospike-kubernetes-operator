@@ -13,6 +13,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -391,6 +392,14 @@ func updateCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(aeroCluster.Spec.Size),
 	)
+}
+
+func updateSTS(
+	k8sClient client.Client, ctx goctx.Context,
+	sts *appsv1.StatefulSet,
+) error {
+	err := k8sClient.Update(ctx, sts)
+	return err
 }
 
 // TODO: remove it
