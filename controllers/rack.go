@@ -140,6 +140,8 @@ func (r *SingleClusterReconciler) createRack(rackState RackState) (
 		_ = r.deleteSTS(found)
 		return nil, reconcileError(err)
 	}
+        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+                fmt.Sprintf("Created Rack with rackID %d successfully", rackState.Rack.ID))
 	return found, reconcileSuccess()
 }
 
@@ -194,8 +196,12 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 		// Delete sts
 		if err := r.deleteSTS(found); err != nil {
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedDelete",
+				fmt.Sprintf("Failed to delete StatefulSet %s/%s", found.Namespace, found.Name))
 			return reconcileError(err)
 		}
+        	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+        	        fmt.Sprintf("Deleted Rack with rackID %d successfully", rack.ID))
 	}
 	return reconcileSuccess()
 }
@@ -224,9 +230,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to scaleDown StatefulSet pods", "stsName",
 					found.Name,
 				)
+				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+					fmt.Sprintf("Failed to update StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 			}
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
-				fmt.Sprintf("Failed to scaleDown StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 			return res
 		}
 	}
@@ -263,9 +269,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to update StatefulSet image", "stsName",
 					found.Name,
 				)
+				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+					fmt.Sprintf("Failed to update StatefulSet image %s/%s", found.Namespace, found.Name))
 			}
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
-				fmt.Sprintf("Failed to update StatefulSet image %s/%s", found.Namespace, found.Name))
 			return res
 		}
 	} else {
@@ -281,9 +287,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 						res.err, "Failed to do rolling restart", "stsName",
 						found.Name,
 					)
+					r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+						fmt.Sprintf("Failed to do rolling restart %s/%s", found.Namespace, found.Name))
 				}
-				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
-					fmt.Sprintf("Failed to do rolling restart %s/%s", found.Namespace, found.Name))
 				return res
 			}
 		}
@@ -297,8 +303,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 				res.err, "Failed to scaleUp StatefulSet pods", "stsName",
 				found.Name,
 			)
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Update",
-				fmt.Sprintf("Failed to scaleUp StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+				fmt.Sprintf("Failed to update StatefulSet %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 			return res
 		}
 	}
@@ -413,8 +419,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
-        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-                fmt.Sprintf("Scaled up successfully %s/%s with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
+        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+                fmt.Sprintf("Updated StatefulSet %s/%s successfully with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 	return found, reconcileSuccess()
 }
 
@@ -469,8 +475,8 @@ func (r *SingleClusterReconciler) upgradeRack(
 	if err != nil {
 		return statefulSet, reconcileError(err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-                fmt.Sprintf("Successfully upgraded statefulSet %s/%s", statefulSet.Namespace, statefulSet.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+                fmt.Sprintf("Upgraded StatefulSet %s/%s successfully", statefulSet.Namespace, statefulSet.Name))
 	return statefulSet, reconcileSuccess()
 }
 
@@ -559,12 +565,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		r.Log.Info("Pod Removed", "podName", podName)
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Deleted",
-			fmt.Sprintf("Deleted pod successfully %s, desired size: %d, current size: %d", pod.Name, desiredSize, *found.Spec.Replicas))
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+			fmt.Sprintf("Deleted Pod %s successfully", pod.Name))
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-		fmt.Sprintf("Scaled down successfully %s/%s, desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		fmt.Sprintf("Updated Statefulset %s/%s successfully, desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 	return found, reconcileRequeueAfter(0)
 }
 
@@ -615,8 +621,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			return found, res
 		}
 
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-			fmt.Sprintf("Successfully restarted statefulSet node with new config %s", pod.Name))
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+			fmt.Sprintf("Restarted Pod %s successfully with new config", pod.Name))
 		// Handle next pod in subsequent Reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
@@ -628,7 +634,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	}
 
 	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-                fmt.Sprintf("Successfully restarted statefulSet nodes with new config %s/%s", found.Namespace, found.Name))
+                fmt.Sprintf("Restarted StatefulSet %s/%s nodes with new config %s/%s", found.Namespace, found.Name))
 
 	return found, reconcileSuccess()
 }

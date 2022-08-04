@@ -209,8 +209,6 @@ func (r *SingleClusterReconciler) createSTS(
 		"Created new StatefulSet", "StatefulSet.Namespace", st.Namespace,
 		"StatefulSet.Name", st.Name,
 	)
-	r.Recorder.Event(r.aeroCluster, "Normal", "Created",
-		fmt.Sprintf("Created statefulSet %s/%s", st.Namespace, st.Name))
 
 	if err := r.waitForSTSToBeReady(st); err != nil {
 		return st, fmt.Errorf(
@@ -218,13 +216,14 @@ func (r *SingleClusterReconciler) createSTS(
 		)
 	}
 
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+		fmt.Sprintf("Created StatefulSet %s/%s successfully", st.Namespace, st.Name))
+
 	return r.getSTS(rackState)
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	r.Log.Info("Delete statefulset")
-	r.Recorder.Event(r.aeroCluster, "Normal", "Deleted",
-		fmt.Sprintf("Deleting statefulSet  %s/%s", st.Namespace, st.Name))
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
@@ -397,8 +396,8 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 				"Created new ConfigMap", "ConfigMap.Namespace",
 				confMap.Namespace, "ConfigMap.Name", confMap.Name,
 			)
-			r.Recorder.Event(r.aeroCluster, "Normal", "Created",
-				fmt.Sprintf("Created new configMap %s/%s", confMap.Namespace, confMap.Name))
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+				fmt.Sprintf("Created new ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
 
 			return nil
 		}
@@ -424,8 +423,9 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
 	}
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
-		fmt.Sprintf("Updated configMap %s/%s", confMap.Namespace, confMap.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		fmt.Sprintf("Updated ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
+
 	return nil
 }
 
@@ -457,8 +457,9 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
 	}
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
-		fmt.Sprintf("Updated configMap %s/%s", confMap.Namespace, confMap.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		fmt.Sprintf("Updated ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
+
 	return nil
 }
 
@@ -519,8 +520,8 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 				)
 			}
 			r.Log.Info("Created new headless service")
-			r.Recorder.Event(r.aeroCluster, "Normal", "Created",
-				fmt.Sprintf("Created new headless service  %s/%s", r.aeroCluster.Namespace, serviceName))
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+				fmt.Sprintf("Created new Headless Service  %s/%s successfully", r.aeroCluster.Namespace, serviceName))
 
 			return nil
 		}
@@ -663,6 +664,8 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 			"failed to create new service for pod %s: %v", pName, err,
 		)
 	}
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+		fmt.Sprintf("Created new Pod Service  %s/%s successfully", pNamespace, pName))
 	return nil
 }
 
@@ -776,6 +779,8 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
 	}
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+		fmt.Sprintf("Deleted Pod Service  %s/%s successfully", pNamespace, pName))
 	return nil
 }
 
@@ -844,8 +849,8 @@ func (r *SingleClusterReconciler) updateSTS(
 	r.Log.V(1).Info(
 		"Saved StatefulSet", "statefulSet", *statefulSet,
 	)
-	r.Recorder.Event(r.aeroCluster, "Normal", "Updated",
-		fmt.Sprintf("Updated statefulSet %s/%s", statefulSet.Namespace, statefulSet.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		fmt.Sprintf("Updated StatefulSet %s/%s successfully", statefulSet.Namespace, statefulSet.Name))
 	return nil
 }
 
