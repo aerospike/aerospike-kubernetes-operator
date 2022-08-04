@@ -34,7 +34,7 @@ type SingleClusterReconciler struct {
 	KubeConfig *rest.Config
 	Log        logr.Logger
 	Scheme     *k8sRuntime.Scheme
-	Recorder record.EventRecorder
+	Recorder   record.EventRecorder
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {

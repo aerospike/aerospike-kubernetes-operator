@@ -140,8 +140,8 @@ func (r *SingleClusterReconciler) createRack(rackState RackState) (
 		_ = r.deleteSTS(found)
 		return nil, reconcileError(err)
 	}
-        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
-                fmt.Sprintf("Created Rack with rackID %d successfully", rackState.Rack.ID))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+		fmt.Sprintf("Created Rack with rackID %d successfully", rackState.Rack.ID))
 	return found, reconcileSuccess()
 }
 
@@ -200,8 +200,8 @@ func (r *SingleClusterReconciler) deleteRacks(
 				fmt.Sprintf("Failed to delete StatefulSet %s/%s", found.Namespace, found.Name))
 			return reconcileError(err)
 		}
-        	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
-        	        fmt.Sprintf("Deleted Rack with rackID %d successfully", rack.ID))
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+			fmt.Sprintf("Deleted Rack with rackID %d successfully", rack.ID))
 	}
 	return reconcileSuccess()
 }
@@ -419,8 +419,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
-        r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-                fmt.Sprintf("Updated StatefulSet %s/%s successfully with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		fmt.Sprintf("Updated StatefulSet %s/%s successfully with desired size: %d, current size: %d", found.Namespace, found.Name, desiredSize, *found.Spec.Replicas))
 	return found, reconcileSuccess()
 }
 
@@ -476,7 +476,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		return statefulSet, reconcileError(err)
 	}
 	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-                fmt.Sprintf("Upgraded StatefulSet %s/%s successfully", statefulSet.Namespace, statefulSet.Name))
+		fmt.Sprintf("Upgraded StatefulSet %s/%s successfully", statefulSet.Namespace, statefulSet.Name))
 	return statefulSet, reconcileSuccess()
 }
 
@@ -634,7 +634,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	}
 
 	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
-                fmt.Sprintf("Restarted StatefulSet %s/%s nodes with new config %s/%s", found.Namespace, found.Name))
+		fmt.Sprintf("Restarted StatefulSet %s/%s nodes with new config", found.Namespace, found.Name))
 
 	return found, reconcileSuccess()
 }
