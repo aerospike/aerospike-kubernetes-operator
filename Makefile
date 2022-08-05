@@ -204,6 +204,8 @@ bundle: manifests kustomize
 	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation containerImage:$(IMG) createdAt:$(DATE)
 	cd $(ROOT_DIR) && $(KUSTOMIZE) build $(OVERLAYS_DIR) | \
     operator-sdk generate bundle --overwrite --version $(VERSION) --output-dir $(BUNDLE_DIR) $(BUNDLE_METADATA_OPTS); \
+    sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" \
+    $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 	if [ $(DISTRIBUTION) == operatorhub ]; then \
         operator-sdk bundle validate $(BUNDLE_DIR) --select-optional name=$(DISTRIBUTION); \
     else \
@@ -237,11 +239,23 @@ bundle-okd: bundle
 .PHONY: bundle-rhmp
 bundle-rhmp: bundle
 
-
 # Remove generated bundle
 .PHONY: bundle-clean
 bundle-clean:
 	rm -rf bundle bundle.Dockerfile
+	rm -rf bundle
+
+.PHONY: bundle-clean-operatorhub
+bundle-clean-operatorhub:
+	rm -rf bundle/operatorhub
+
+.PHONY: bundle-clean-okd
+bundle-clean-okd:
+	rm -rf bundle/okd
+
+.PHONY: bundle-clean-rhmp
+bundle-clean-rhmp:
+	rm -rf bundle/rhmp
 
 # Build the bundle image.
 .PHONY: bundle-build

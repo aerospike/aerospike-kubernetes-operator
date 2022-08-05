@@ -3,8 +3,7 @@ kind: Kustomization
 
 resources:
 - aerospike-kubernetes-operator.clusterserviceversion.yaml
-- role.yaml
-- role_binding.yaml
+
 commonAnnotations:
   containerImage: controller:latest
   createdAt: dateplaceholder
