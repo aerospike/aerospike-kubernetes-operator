@@ -86,7 +86,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
 		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Creating",
-			fmt.Sprintf("Failed to create STS Load Balancer Services %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
+			fmt.Sprintf("Failed to create Service(LoadBalancer) %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 
@@ -238,18 +238,13 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 
 	pp := r.getPasswordProvider()
 
-	statusAsSpec, err := asdbv1beta1.CopyStatusToSpec(
-		r.aeroCluster.Status.
-			AerospikeClusterStatusSpec,
-	)
 	if err != nil {
 		r.Log.Error(err, "Failed to copy spec in status", "err", err)
 		return err
 	}
 
-	err = ReconcileAccessControl(
-		&r.aeroCluster.Spec, statusAsSpec,
-		aeroClient, pp, r.Log,
+	err = r.ReconcileAccessControl(
+		aeroClient, pp,
 	)
 	if err == nil {
 		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
@@ -294,8 +289,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("Updated AerospikeCluster %s/%s status successfully ", r.aeroCluster.Namespace, r.aeroCluster.Name))
+
 	return nil
 }
 

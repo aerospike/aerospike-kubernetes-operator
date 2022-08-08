@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -216,9 +217,6 @@ func (r *SingleClusterReconciler) createSTS(
 		)
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
-		fmt.Sprintf("Created StatefulSet %s/%s successfully", st.Namespace, st.Name))
-
 	return r.getSTS(rackState)
 }
 
@@ -396,8 +394,6 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 				"Created new ConfigMap", "ConfigMap.Namespace",
 				confMap.Namespace, "ConfigMap.Name", confMap.Name,
 			)
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
-				fmt.Sprintf("Created new ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
 
 			return nil
 		}
@@ -415,7 +411,15 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
 
-	// Replace config map data since we are supposed to create a new config map.
+	// Replace config map data if differs since we are supposed to create a new config map.
+	if reflect.DeepEqual(confMap.Data, configMapData) {
+		r.Log.Info(
+			"Already existed configmap is same as current configmap, so no change required",
+			"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
+		)
+		return nil
+	}
+
 	confMap.Data = configMapData
 
 	if err := r.Client.Update(
@@ -423,8 +427,6 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("Updated ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
 
 	return nil
 }
@@ -457,8 +459,6 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("Updated ConfigMap %s/%s successfully", confMap.Namespace, confMap.Name))
 
 	return nil
 }
@@ -520,8 +520,6 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 				)
 			}
 			r.Log.Info("Created new headless service")
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
-				fmt.Sprintf("Created new Headless Service  %s/%s successfully", r.aeroCluster.Namespace, serviceName))
 
 			return nil
 		}
@@ -664,8 +662,6 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 			"failed to create new service for pod %s: %v", pName, err,
 		)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
-		fmt.Sprintf("Created new Pod Service  %s/%s successfully", pNamespace, pName))
 	return nil
 }
 
@@ -779,8 +775,6 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
-		fmt.Sprintf("Deleted Pod Service  %s/%s successfully", pNamespace, pName))
 	return nil
 }
 
@@ -849,8 +843,6 @@ func (r *SingleClusterReconciler) updateSTS(
 	r.Log.V(1).Info(
 		"Saved StatefulSet", "statefulSet", *statefulSet,
 	)
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("Updated StatefulSet %s/%s successfully", statefulSet.Namespace, statefulSet.Name))
 	return nil
 }
 
