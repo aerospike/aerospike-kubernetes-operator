@@ -140,7 +140,7 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	err := utils.CheckPodFailed(&pod)
 	if err == nil {
 		// Check for migration
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Waiting",
 			fmt.Sprintf("[rack-%d] Waiting to safely restart pod %s", rackState.Rack.ID, pod.Name))
 		if res := r.waitForNodeSafeStopReady(
 			&pod, ignorablePods,
@@ -280,7 +280,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	r.Log.V(1).Info("Pod deleted", "podName", p.Name)
 
 	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("[rack-%d] Waiting to update Pod %s", p.Name))
+		fmt.Sprintf("[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name))
 	// Wait for pod to come up
 	const maxRetries = 6
 	const retryInterval = time.Second * 10
