@@ -107,8 +107,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.getClientPolicy(), allHostConns,
 	); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
-			fmt.Sprintf("Failed to check for Quiesced nodes %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
 

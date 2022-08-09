@@ -595,7 +595,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updating",
 		fmt.Sprintf("[rack-%d] Started Rolling restart", rackState.Rack.ID))
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
@@ -648,7 +648,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(err)
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updated",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
 		fmt.Sprintf("[rack-%d] Finished Rolling restart", rackState.Rack.ID))
 
 	return found, reconcileSuccess()
