@@ -140,7 +140,7 @@ func (r *SingleClusterReconciler) createRack(rackState RackState) (
 		_ = r.deleteSTS(found)
 		return nil, reconcileError(err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulCreate",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackCreated",
 		fmt.Sprintf("[rack-%d] Rack Created", rackState.Rack.ID))
 	return found, reconcileSuccess()
 }
@@ -196,11 +196,11 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 		// Delete sts
 		if err := r.deleteSTS(found); err != nil {
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedDelete",
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "STSDeleteFailed",
 				fmt.Sprintf("[rack-%d] Failed to delete {STS: %s/%s}", rack.ID, found.Namespace, found.Name))
 			return reconcileError(err)
 		}
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackDeleted",
 			fmt.Sprintf("[rack-%d] Rack deleted", rack.ID))
 	}
 	return reconcileSuccess()
@@ -231,7 +231,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to scaleDown StatefulSet pods", "stsName",
 					found.Name,
 				)
-				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "RackScaleDownFailed",
 					fmt.Sprintf("[rack-%d] Failed to scale-down {STS %s/%s, currentSize: %d desiredSize: %d}: %s",
 						rackState.Rack.ID, found.Namespace, found.Name, currentSize, desiredSize, res.err))
 			}
@@ -271,7 +271,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to update StatefulSet image", "stsName",
 					found.Name,
 				)
-				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+				r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "RackImageUpdateFailed",
 					fmt.Sprintf("[rack-%d] Failed to update image {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name))
 			}
 			return res
@@ -289,7 +289,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 						res.err, "Failed to do rolling restart", "stsName",
 						found.Name,
 					)
-					r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+					r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "RackRollingRestartFailed",
 						fmt.Sprintf("[rack-%d] Failed to do rolling restart {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name))
 				}
 				return res
@@ -307,7 +307,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 				found.Name,
 			)
 
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
 				fmt.Sprintf("[rack-%d] Failed to scale-up {STS %s/%s, currentSize: %d desiredSize: %d}: %s",
 					rackState.Rack.ID, found.Namespace, found.Name, currentSize, desiredSize, res.err))
 			return res
@@ -353,7 +353,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	found.Spec.Replicas = &desiredSize
 
 	r.Log.Info("Scaling up pods", "currentSz", oldSz, "desiredSz", desiredSize)
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "ScaleUpCluster",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "ScaleUp",
 		fmt.Sprintf("[rack-%d] Scaling-up {STS %s/%s, currentSize: %d desiredSize: %d}",
 			rackState.Rack.ID, found.Namespace, found.Name, oldSz, desiredSize))
 	// No need for this? But if image is bad then new pod will also come up
@@ -413,8 +413,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Waiting",
-		fmt.Sprintf("[rack-%d] Waiting to be ready", rackState.Rack.ID))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "STSWaitReady",
+		fmt.Sprintf("[rack-%d] Waiting to be ready {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name))
 	if err := r.waitForSTSToBeReady(found); err != nil {
 		return found, reconcileError(
 			fmt.Errorf(
@@ -428,7 +428,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "ScaledUp",
 		fmt.Sprintf("[rack-%d] Scaled-up {STS: %s/%s, currentSize: %d desiredSize: %d}", rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize))
 	return found, reconcileSuccess()
 }
@@ -469,7 +469,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
 		}
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Upgrading",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
 			fmt.Sprintf("[rack-%d] Updating containers on pod %s", rackState.Rack.ID, p.Name))
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
@@ -477,7 +477,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		if !res.isSuccess {
 			return statefulSet, res
 		}
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Upgrading",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			fmt.Sprintf("[rack-%d] Updated containers on pod %s", rackState.Rack.ID, p.Name))
 		// Handle the next pod in subsequent Reconcile.
 		return statefulSet, reconcileRequeueAfter(0)
@@ -487,8 +487,8 @@ func (r *SingleClusterReconciler) upgradeRack(
 	if err != nil {
 		return statefulSet, reconcileError(err)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-		fmt.Sprintf("[rack-%d] Image Upgraded {STS: %s/%s}", rackState.Rack.ID, statefulSet.Namespace, statefulSet.Name))
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackImageUpdated",
+		fmt.Sprintf("[rack-%d] Image Updated {STS: %s/%s}", rackState.Rack.ID, statefulSet.Namespace, statefulSet.Name))
 	return statefulSet, reconcileSuccess()
 }
 
@@ -502,7 +502,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		"ScaleDown AerospikeCluster statefulset", "desiredSz", desiredSize,
 		"currentSz", *found.Spec.Replicas,
 	)
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "ScaleDownCluster",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackScaleDown",
 		fmt.Sprintf("[rack-%d] Scaling-down {STS:%s/%s, currentSize: %d desiredSize: %d",
 			rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize))
 
@@ -580,11 +580,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		r.Log.Info("Pod Removed", "podName", podName)
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulDelete",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "PodDeleted",
 			fmt.Sprintf("[rack-%d] Deleted Pod %s", rackState.Rack.ID, pod.Name))
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",
 		fmt.Sprintf("[rack-%d] Scaled-down {STS:%s/%s, currentSize: %d desiredSize: %d",
 			rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize))
 	return found, reconcileRequeueAfter(0)
@@ -595,7 +595,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Updating",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",
 		fmt.Sprintf("[rack-%d] Started Rolling restart", rackState.Rack.ID))
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
@@ -648,7 +648,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileError(err)
 	}
 
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
+	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestarted",
 		fmt.Sprintf("[rack-%d] Finished Rolling restart", rackState.Rack.ID))
 
 	return found, reconcileSuccess()

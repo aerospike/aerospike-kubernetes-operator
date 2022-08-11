@@ -53,9 +53,12 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
 		// The cluster is being deleted
 		if err := r.handleClusterDeletion(finalizerName); err != nil {
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedDelete",
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
 				fmt.Sprintf("Unable to handle AerospikeCluster delete operations %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 			return reconcile.Result{}, err
+		} else {
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "Deleted",
+				fmt.Sprintf("Deleted cluster %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		}
 		// Stop reconciliation as the cluster is being deleted
 		return reconcile.Result{}, nil
@@ -64,7 +67,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// The cluster is not being deleted, add finalizer in not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
 			fmt.Sprintf("Unable to add Finalizer %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
@@ -77,7 +80,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
 		if res.err != nil {
-			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+			r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
 				fmt.Sprintf("Failed to reconcile Racks for cluster %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		}
 		return res.result, res.err
@@ -85,7 +88,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "Creating",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "ServiceDeleteFailed",
 			fmt.Sprintf("Failed to create Service(LoadBalancer) %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
@@ -98,8 +101,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			"failed to get hostConn for aerospike cluster nodes: %v", err,
 		)
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
-			fmt.Sprintf("Failed to get HostConn for Aerospike Cluster nodes %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, e
 	}
 	if err := deployment.InfoQuiesceUndo(
@@ -113,7 +114,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Setup access control.
 	if err := r.reconcileAccessControl(); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
 			fmt.Sprintf("Failed to setup Access Control %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
@@ -121,7 +122,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Update the AerospikeCluster status.
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "FailedUpdate",
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
 			fmt.Sprintf("Failed to update AerospikeCluster status %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 		return reconcile.Result{}, err
 	}
@@ -245,8 +246,8 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 		aeroClient, pp,
 	)
 	if err == nil {
-		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "SuccessfulUpdate",
-			fmt.Sprintf("Updated Access Control List successfully %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
+		r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
+			fmt.Sprintf("Updated Access Control %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name))
 	}
 	return err
 }
@@ -287,7 +288,6 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
-
 	return nil
 }
 

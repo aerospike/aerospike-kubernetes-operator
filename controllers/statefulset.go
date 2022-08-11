@@ -427,7 +427,6 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
 	}
-
 	return nil
 }
 
@@ -459,7 +458,6 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	); err != nil {
 		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
 	}
-
 	return nil
 }
 
