@@ -413,13 +413,12 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 
 	// Replace config map data if differs since we are supposed to create a new config map.
 	if reflect.DeepEqual(confMap.Data, configMapData) {
-		r.Log.Info(
-			"Already existed configmap is same as current configmap, so no change required",
-			"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
-		)
 		return nil
 	}
-
+	r.Log.Info(
+		"Updating existed configmap",
+		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
+	)
 	confMap.Data = configMapData
 
 	if err := r.Client.Update(
@@ -1171,7 +1170,7 @@ func updateStatefulSetContainers(
 		for i, stsContainer := range stsContainers {
 			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
-				// Retain volume mounts and devices to make sure external storage will not loose.
+				// Retain volume mounts and devices to make sure external storage will not lose.
 				specContainerCopy.VolumeMounts = stsContainers[i].VolumeMounts
 				specContainerCopy.VolumeDevices = stsContainers[i].VolumeDevices
 				stsContainers[i] = specContainerCopy

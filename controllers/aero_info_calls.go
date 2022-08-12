@@ -77,8 +77,8 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 			),
 		)
 	}
-	r.Recorder.Event(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
-		fmt.Sprintf("[rack-%s] Waiting for migrations to complete", pod.Labels[asdbv1beta1.AerospikeRackIdLabel]))
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete", pod.Labels[asdbv1beta1.AerospikeRackIdLabel])
 
 	const maxRetry = 6
 	const retryInterval = time.Second * 10
