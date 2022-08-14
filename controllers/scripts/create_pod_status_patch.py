@@ -11,7 +11,6 @@ import urllib.error
 import urllib.request
 import concurrent.futures
 from pprint import pprint
-from distutils.util import strtobool
 
 # Constants
 MAX_WORKERS = 10
@@ -113,13 +112,28 @@ def get_image_version(image):
 def execute(cmd):
 
     try:
-        completed_process = subprocess.run([cmd], shell=True, capture_output=True)
+        completed_process = subprocess.run([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         logging.debug(f"Execution: {completed_process.stdout} - completed")
     except subprocess.CalledProcessError as e:
         if "No space left on device" not in e.stderr:
             logging.debug(f"Execution: {e.stderr} - failed")
             raise
         logging.debug(f"Execution: {e.stderr} - completed with known error")
+
+
+def strtobool(param):
+
+    if len(param) == 0:
+        return False
+
+    param = param.lower()
+
+    if param == "false":
+        return False
+    elif param == "true":
+        return True
+    else:
+        raise ValueError("Invalid value")
 
 
 def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
@@ -153,18 +167,6 @@ def get_pod_image(pod_name, namespace, api_server, token, ca_cert):
     except KeyError:
         logging.debug("Pod-Image not found")
         return ""
-
-
-def patch_status(cluster_name, namespace, api_server, token, ca_cert):
-    url = f"{api_server}/apis/asdb.aerospike.com/v1beta1/namespaces/{namespace}/aerospikeclusters/" \
-          f"{cluster_name}/status?fieldManager=pod"
-    request = urllib.request.Request(url=url, method="PATCH")
-    request.add_header("Authorization", f"Bearer {token}")
-    request.add_header("Accept", "application/json")
-    request.add_header("Content-Type", "application/json-patch+json")
-
-    with urllib.request.urlopen(request, cafile=ca_cert) as response:
-        logging.debug(f"patch status: {response.getstatus()}")
 
 
 def get_endpoints(address_type):
@@ -519,7 +521,7 @@ def main():
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
-        parser.add_argument("--ca-cer", type=str, required=True, dest="ca_cert")
+        parser.add_argument("--ca-cert", type=str, required=True, dest="ca_cert")
         parser.add_argument("--token", type=str, required=True, dest="token")
         parser.add_argument("--api-server", type=str, required=True, dest="api_server")
         parser.add_argument("--namespace", type=str, required=True, dest="namespace")
