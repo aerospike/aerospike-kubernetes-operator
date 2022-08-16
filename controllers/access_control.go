@@ -5,8 +5,6 @@ package controllers
 import (
 	"bytes"
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/record"
 	"reflect"
 	"strings"
 	"time"
@@ -14,6 +12,8 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 )
 
 // Logger type alias.

@@ -141,7 +141,7 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	if err == nil {
 		// Check for migration
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitSafeDelete",
-			"[rack-%d] Waiting to safely restart pod %s", rackState.Rack.ID, pod.Name)
+			"[rack-%d] Waiting to safely restart Pod %s", rackState.Rack.ID, pod.Name)
 		if res := r.waitForNodeSafeStopReady(
 			&pod, ignorablePods,
 		); !res.isSuccess {
@@ -189,7 +189,7 @@ func (r *SingleClusterReconciler) quickRestart(
 		return r.podRestart(pod)
 	}
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-		"[rack-%d] Restarted pod %s", rackState.Rack.ID, pod.Name)
+		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name)
 
 	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
 	return reconcileSuccess()
@@ -254,7 +254,7 @@ func (r *SingleClusterReconciler) podRestart(pod *corev1.Pod) reconcileResult {
 		)
 	} else {
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
-			"[rack-%s] Restarted pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
+			"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
 	}
 
 	return reconcileSuccess()

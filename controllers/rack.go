@@ -272,7 +272,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 					found.Name,
 				)
 				r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "RackImageUpdateFailed",
-					"[rack-%d] Failed to update image {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name)
+					"[rack-%d] Failed to update Image {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name)
 			}
 			return res
 		}
@@ -470,7 +470,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 			continue
 		}
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
-			"[rack-%d] Updating containers on pod %s", rackState.Rack.ID, p.Name)
+			"[rack-%d] Updating Containers on Pod %s", rackState.Rack.ID, p.Name)
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
 		res := r.deletePodAndEnsureImageUpdated(rackState, p, ignorablePods)
@@ -478,7 +478,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 			return statefulSet, res
 		}
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
-			"[rack-%d] Updated containers on pod %s", rackState.Rack.ID, p.Name)
+			"[rack-%d] Updated Containers on Pod %s", rackState.Rack.ID, p.Name)
 		// Handle the next pod in subsequent Reconcile.
 		return statefulSet, reconcileRequeueAfter(0)
 	}
