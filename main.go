@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"k8s.io/client-go/tools/record"
 	"os"
+	"strconv"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -11,10 +13,12 @@ import (
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	v1 "k8s.io/api/core/v1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -130,12 +134,22 @@ func main() {
 	schemaMapLogger := ctrl.Log.WithName("schema-map")
 	asconfig.InitFromMap(schemaMapLogger, schemaMap)
 
+	eventBroadcaster := record.NewBroadcasterWithCorrelatorOptions(record.CorrelatorOptions{
+		BurstSize: getEventBurstSize(),
+		QPS:       1,
+	})
+	// Start events processing pipeline.
+	eventBroadcaster.StartStructuredLogging(0)
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+	defer eventBroadcaster.Shutdown()
+
 	if err := (&aerospikecluster.AerospikeClusterReconciler{
 		Client:     mgr.GetClient(),
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
 		Scheme:     mgr.GetScheme(),
+		Recorder:   eventBroadcaster.NewRecorder(mgr.GetScheme(), v1.EventSource{Component: "aerospikeCluster-controller"}),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(
 			err, "unable to create controller", "controller",
@@ -179,6 +193,24 @@ func getWatchNamespace() (string, error) {
 		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
 	}
 	return ns, nil
+}
+
+// getEventBurstSize returns the burst size of events that can be handled in the cluster
+func getEventBurstSize() int {
+	// EventBurstSizeEnvVar is the constant for env variable EVENT_BURST_SIZE
+	// An empty value means the default burst size which is 150.
+	var eventBurstSizeEnvVar = "EVENT_BURST_SIZE"
+	var eventBurstSize = 150
+	burstSize, found := os.LookupEnv(eventBurstSizeEnvVar)
+	if found {
+		eventBurstSizeInt, err := strconv.Atoi(burstSize)
+		if err != nil {
+			setupLog.Info("Invalid EVENT_BURST_SIZE value: using default 150")
+		} else {
+			eventBurstSize = eventBurstSizeInt
+		}
+	}
+	return eventBurstSize
 }
 
 // newClient creates the default caching client

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -410,7 +411,14 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
 
-	// Replace config map data since we are supposed to create a new config map.
+	// Replace config map data if differs since we are supposed to create a new config map.
+	if reflect.DeepEqual(confMap.Data, configMapData) {
+		return nil
+	}
+	r.Log.Info(
+		"Updating existed configmap",
+		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
+	)
 	confMap.Data = configMapData
 
 	if err := r.Client.Update(
@@ -1162,7 +1170,7 @@ func updateStatefulSetContainers(
 		for i, stsContainer := range stsContainers {
 			if specContainer.Name == stsContainer.Name {
 				// Update the sidecar in case something has changed.
-				// Retain volume mounts and devices to make sure external storage will not loose.
+				// Retain volume mounts and devices to make sure external storage will not lose.
 				specContainerCopy.VolumeMounts = stsContainers[i].VolumeMounts
 				specContainerCopy.VolumeDevices = stsContainers[i].VolumeDevices
 				stsContainers[i] = specContainerCopy

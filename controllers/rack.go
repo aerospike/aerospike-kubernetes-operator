@@ -140,6 +140,8 @@ func (r *SingleClusterReconciler) createRack(rackState RackState) (
 		_ = r.deleteSTS(found)
 		return nil, reconcileError(err)
 	}
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackCreated",
+		"[rack-%d] Created Rack", rackState.Rack.ID)
 	return found, reconcileSuccess()
 }
 
@@ -194,8 +196,12 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 		// Delete sts
 		if err := r.deleteSTS(found); err != nil {
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "STSDeleteFailed",
+				"[rack-%d] Failed to delete {STS: %s/%s}", rack.ID, found.Namespace, found.Name)
 			return reconcileError(err)
 		}
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackDeleted",
+			"[rack-%d] Deleted Rack", rack.ID)
 	}
 	return reconcileSuccess()
 }
@@ -215,8 +221,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found.Name,
 	)
 	desiredSize := int32(rackState.Size)
+	currentSize := *found.Spec.Replicas
 	// Scale down
-	if *found.Spec.Replicas > desiredSize {
+	if currentSize > desiredSize {
 		found, res = r.scaleDownRack(found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
@@ -224,6 +231,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to scaleDown StatefulSet pods", "stsName",
 					found.Name,
 				)
+				r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "RackScaleDownFailed",
+					"[rack-%d] Failed to scale-down {STS %s/%s, currentSize: %d desiredSize: %d}: %s",
+					rackState.Rack.ID, found.Namespace, found.Name, currentSize, desiredSize, res.err)
 			}
 			return res
 		}
@@ -261,6 +271,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 					res.err, "Failed to update StatefulSet image", "stsName",
 					found.Name,
 				)
+				r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "RackImageUpdateFailed",
+					"[rack-%d] Failed to update Image {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name)
 			}
 			return res
 		}
@@ -277,6 +289,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 						res.err, "Failed to do rolling restart", "stsName",
 						found.Name,
 					)
+					r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "RackRollingRestartFailed",
+						"[rack-%d] Failed to do rolling restart {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name)
 				}
 				return res
 			}
@@ -284,13 +298,18 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	// Scale up after upgrading, so that new pods come up with new image
-	if *found.Spec.Replicas < desiredSize {
+	currentSize = *found.Spec.Replicas
+	if currentSize < desiredSize {
 		found, res = r.scaleUpRack(found, rackState)
 		if !res.isSuccess {
 			r.Log.Error(
 				res.err, "Failed to scaleUp StatefulSet pods", "stsName",
 				found.Name,
 			)
+
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
+				"[rack-%d] Failed to scale-up {STS %s/%s, currentSize: %d desiredSize: %d}: %s",
+				rackState.Rack.ID, found.Namespace, found.Name, currentSize, desiredSize, res.err)
 			return res
 		}
 	}
@@ -334,7 +353,9 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	found.Spec.Replicas = &desiredSize
 
 	r.Log.Info("Scaling up pods", "currentSz", oldSz, "desiredSz", desiredSize)
-
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackScaleUp",
+		"[rack-%d] Scaling-up {STS %s/%s, currentSize: %d desiredSize: %d}",
+		rackState.Rack.ID, found.Namespace, found.Name, oldSz, desiredSize)
 	// No need for this? But if image is bad then new pod will also come up
 	//with bad node.
 	podList, err := r.getRackPodList(rackState.Rack.ID)
@@ -392,6 +413,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "STSWaitReady",
+		"[rack-%d] Waiting to be ready {STS: %s/%s}", rackState.Rack.ID, found.Namespace, found.Name)
 	if err := r.waitForSTSToBeReady(found); err != nil {
 		return found, reconcileError(
 			fmt.Errorf(
@@ -405,6 +428,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackScaledUp",
+		"[rack-%d] Scaled-up {STS: %s/%s, currentSize: %d desiredSize: %d}", rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize)
 	return found, reconcileSuccess()
 }
 
@@ -444,13 +469,16 @@ func (r *SingleClusterReconciler) upgradeRack(
 			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
 			continue
 		}
-
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
+			"[rack-%d] Updating Containers on Pod %s", rackState.Rack.ID, p.Name)
 		// Also check if statefulSet is in stable condition
 		// Check for all containers. Status.ContainerStatuses doesn't include init container
 		res := r.deletePodAndEnsureImageUpdated(rackState, p, ignorablePods)
 		if !res.isSuccess {
 			return statefulSet, res
 		}
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
+			"[rack-%d] Updated Containers on Pod %s", rackState.Rack.ID, p.Name)
 		// Handle the next pod in subsequent Reconcile.
 		return statefulSet, reconcileRequeueAfter(0)
 	}
@@ -459,6 +487,8 @@ func (r *SingleClusterReconciler) upgradeRack(
 	if err != nil {
 		return statefulSet, reconcileError(err)
 	}
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackImageUpdated",
+		"[rack-%d] Image Updated {STS: %s/%s}", rackState.Rack.ID, statefulSet.Namespace, statefulSet.Name)
 	return statefulSet, reconcileSuccess()
 }
 
@@ -468,15 +498,18 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	desiredSize := int32(rackState.Size)
 
-	r.Log.Info(
-		"ScaleDown AerospikeCluster statefulset", "desiredSz", desiredSize,
-		"currentSz", *found.Spec.Replicas,
-	)
-
 	// Continue if scaleDown is not needed
 	if *found.Spec.Replicas <= desiredSize {
 		return found, reconcileSuccess()
 	}
+
+	r.Log.Info(
+		"ScaleDown AerospikeCluster statefulset", "desiredSz", desiredSize,
+		"currentSz", *found.Spec.Replicas,
+	)
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackScaleDown",
+		"[rack-%d] Scaling-down {STS:%s/%s, currentSize: %d desiredSize: %d",
+		rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize)
 
 	oldPodList, err := r.getRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -547,8 +580,13 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		r.Log.Info("Pod Removed", "podName", podName)
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodDeleted",
+			"[rack-%d] Deleted Pod %s", rackState.Rack.ID, pod.Name)
 	}
 
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",
+		"[rack-%d] Scaled-down {STS:%s/%s, currentSize: %d desiredSize: %d",
+		rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas, desiredSize)
 	return found, reconcileRequeueAfter(0)
 }
 
@@ -557,7 +595,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
-
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",
+		"[rack-%d] Started Rolling restart", rackState.Rack.ID)
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -608,6 +647,10 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	if err != nil {
 		return found, reconcileError(err)
 	}
+
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestarted",
+		"[rack-%d] Finished Rolling restart", rackState.Rack.ID)
+
 	return found, reconcileSuccess()
 }
 

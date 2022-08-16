@@ -140,6 +140,8 @@ func (r *SingleClusterReconciler) rollingRestartPod(
 	err := utils.CheckPodFailed(&pod)
 	if err == nil {
 		// Check for migration
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitSafeDelete",
+			"[rack-%d] Waiting to safely restart Pod %s", rackState.Rack.ID, pod.Name)
 		if res := r.waitForNodeSafeStopReady(
 			&pod, ignorablePods,
 		); !res.isSuccess {
@@ -186,6 +188,8 @@ func (r *SingleClusterReconciler) quickRestart(
 		// Fallback to pod restart.
 		return r.podRestart(pod)
 	}
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
+		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name)
 
 	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
 	return reconcileSuccess()
@@ -248,6 +252,9 @@ func (r *SingleClusterReconciler) podRestart(pod *corev1.Pod) reconcileResult {
 			"podName", pod.Name, "status", pod.Status.Phase,
 			"DeletionTimestamp", pod.DeletionTimestamp,
 		)
+	} else {
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
+			"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
 	}
 
 	return reconcileSuccess()
@@ -272,6 +279,8 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	}
 	r.Log.V(1).Info("Pod deleted", "podName", p.Name)
 
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
+		"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name)
 	// Wait for pod to come up
 	const maxRetries = 6
 	const retryInterval = time.Second * 10
