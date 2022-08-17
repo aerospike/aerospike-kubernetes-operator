@@ -110,15 +110,15 @@ def get_image_version(image):
 
 
 def execute(cmd):
-
     try:
-        completed_process = subprocess.run([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        logging.debug(f"Execution: {completed_process.stdout} - completed")
+        completed_process = subprocess.run([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        completed_process.check_returncode()
     except subprocess.CalledProcessError as e:
-        if "No space left on device" not in e.stderr:
-            logging.debug(f"Execution: {e.stderr} - failed")
+        msg = e.stderr.decode("utf-8")
+        if "No space left on device" not in msg:
+            logging.debug(f"Execution: {cmd} failed - error: {msg}")
             raise
-        logging.debug(f"Execution: {e.stderr} - completed with known error")
+    logging.debug(f"Execution: {cmd} - completed")
 
 
 def strtobool(param):
