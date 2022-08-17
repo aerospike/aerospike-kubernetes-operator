@@ -47,11 +47,11 @@ do
     fi
     count=$count+1
     echo $namespace "contains" $podname
-    filename="${describe_Directory}/${namespace}.${podname}.describe"
+    filename="${describe_Directory_Pod}/${namespace}.${podname}.describe"
     kubectl describe pod -n "$namespace" "$podname" > "$filename"
     for container in $(kubectl get po -n "$namespace" "$podname" -o jsonpath="{.spec.containers[*].name}")
     do
-        filename_Prefix="$podlogs_Directory"/"$namespace"."$podname"."$container"
+        filename_Prefix="$logs_Directory_Pod"/"$namespace"."$podname"."$container"
         filename=$filename_Prefix".current."$extension
         kubectl logs -n "$namespace" "$podname" "$container" > "$filename"
         filename=$filename_Prefix".previous."$extension
@@ -60,7 +60,7 @@ do
 
     for initcontainer in $(kubectl get po -n "$namespace" "$podname" -o jsonpath="{.spec.initContainers[*].name}")
     do
-        filename_Prefix="$podlogs_Directory"/"$namespace"."$podname"."$initcontainer"
+        filename_Prefix="$logs_Directory_Pod"/"$namespace"."$podname"."$initcontainer"
         filename=$filename_Prefix".current."$extension
         kubectl logs -n "$namespace" "$podname" "$initcontainer" > "$filename"
         filename=$filename_Prefix".previous."$extension
