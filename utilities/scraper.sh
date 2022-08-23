@@ -1,6 +1,6 @@
 #!/bin/bash
 
-root_OutputDir="./scrapperlogs"
+root_OutputDir="./scraperlogs"
 today=`date +%m-%d-%Y`
 output_Context_Directory="$(kubectl config current-context)_$today"
 
