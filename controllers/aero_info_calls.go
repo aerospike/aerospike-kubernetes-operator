@@ -108,6 +108,11 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		return reconcileRequeueAfter(60)
 	}
 
+	ns, err := r.removedNamespaces(pod.Labels[asdbv1beta1.AerospikeRackIdLabel])
+	if err != nil {
+		return reconcileError(err)
+	}
+
 	// Quiesce node
 	selectedHostConn, err := r.newHostConn(pod)
 	if err != nil {
@@ -119,7 +124,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		)
 	}
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn,
+		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn, ns,
 	); err != nil {
 		return reconcileError(err)
 	}

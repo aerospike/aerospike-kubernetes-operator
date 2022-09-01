@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -599,4 +600,44 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 		}
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) removedNamespaces(rackID string) ([]string, error) {
+	var rackStatus asdbv1beta1.Rack
+	var rackSpec asdbv1beta1.Rack
+	var ns []string
+
+	foundStatus := false
+	foundSpec := false
+	for _, rackStatus = range r.aeroCluster.Status.RackConfig.Racks {
+		if strconv.Itoa(rackStatus.ID) == rackID {
+			foundStatus = true
+			break
+		}
+	}
+
+	for _, rackSpec = range r.aeroCluster.Spec.RackConfig.Racks {
+		if strconv.Itoa(rackSpec.ID) == rackID {
+			foundSpec = true
+			break
+		}
+	}
+
+	if !foundStatus || !foundSpec {
+		return ns, fmt.Errorf("could not find rack with ID: %d", rackSpec.ID)
+	}
+
+	for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		found := false
+		for _, specNamespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] == statusNamespace.(map[string]interface{})["name"] {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ns = append(ns, statusNamespace.(map[string]interface{})["name"].(string))
+		}
+	}
+	return ns, nil
 }
