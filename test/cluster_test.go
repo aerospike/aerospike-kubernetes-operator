@@ -269,14 +269,21 @@ func UpdateClusterTest(ctx goctx.Context) {
 					By("RollingRestart By Updating NamespaceStorage")
 
 					err = rollingRestartClusterByUpdatingNamespaceStorageTest(
-						logger, k8sClient, ctx, clusterNamespacedName,
+						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("RollingRestart By Adding Namespace Dynamically")
 
 					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
-						logger, k8sClient, ctx, dynamicNs, clusterNamespacedName,
+						k8sClient, ctx, dynamicNs, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Removing Namespace Dynamically")
+
+					err = rollingRestartClusterByRemovingNamespaceDynamicallyTest(
+						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
