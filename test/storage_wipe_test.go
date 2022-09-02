@@ -3,12 +3,9 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -57,12 +54,8 @@ var _ = Describe(
 
 				It("Should validate all storage-wipe policies", func() {
 
-					storageConfig := getAerospikeWipeStorageConfig(
-						containerName, asdbv1beta1.AerospikeInitContainerName,
-						false, cloudProvider)
-					rackStorageConfig := getAerospikeWipeRackStorageConfig(
-						containerName, asdbv1beta1.AerospikeInitContainerName,
-						false, cloudProvider)
+					storageConfig := getAerospikeWipeStorageConfig(containerName, false, cloudProvider)
+					rackStorageConfig := getAerospikeWipeRackStorageConfig(containerName, false, cloudProvider)
 					racks := []asdbv1beta1.Rack{
 						{
 							ID: 1,
@@ -134,7 +127,7 @@ var _ = Describe(
 					}
 
 					By(fmt.Sprintf("Downgrading image from %s to %s - volumes should be wiped",
-						version6, prevServerVersion))
+						version6, pre6Version))
 					err = UpdateClusterImage(aeroCluster, prevImage)
 					Expect(err).ToNot(HaveOccurred())
 					err = aerospikeClusterCreateUpdate(
@@ -305,110 +298,6 @@ func checkDataInCluster(
 
 }
 
-func checkIfVolumesWiped(aeroCluster *asdbv1beta1.AerospikeCluster) ([]string, []string, error) {
-	wipedVolumes := make([]string, 0)
-	unwipedVolumes := make([]string, 0)
-	podList, err := getPodList(aeroCluster, k8sClient)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
-	}
-
-	for _, pod := range podList.Items {
-		rackID, err := getRackID(&pod)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get rackID pods: %v", err)
-		}
-
-		storage := aeroCluster.Spec.Storage
-		if rackID != 0 {
-			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
-				if rack.ID == rackID {
-					storage = rack.Storage
-				}
-			}
-		}
-		for _, volume := range storage.Volumes {
-			if volume.Source.PersistentVolume == nil {
-				continue
-			}
-			volumeWiped := false
-			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-				volumeWiped, err = checkIfVolumeBlockZeroed(&pod, volume)
-				if err != nil {
-					return nil, nil, err
-				}
-			} else if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem {
-				volumeWiped, err = checkIfVolumeFileSystemZeored(&pod, volume)
-				if err != nil {
-					return nil, nil, err
-				}
-
-			} else {
-				return nil, nil, fmt.Errorf("pod: %s volume: %s mood: %s - invalid volume mode",
-					pod.Name, volume.Name, volume.Source.PersistentVolume.VolumeMode)
-			}
-			if volumeWiped {
-				fmt.Printf("pod: %s, volume: %s wipe-method: %s - Volume wiped\n",
-					pod.Name, volume.Name, volume.WipeMethod)
-				wipedVolumes = append(wipedVolumes, pod.Name)
-			} else {
-				fmt.Printf("pod: %s, volume: %s wipe-method: %s - Volume unwiped\n",
-					pod.Name, volume.Name, volume.WipeMethod)
-				unwipedVolumes = append(unwipedVolumes, volume.Name)
-			}
-		}
-	}
-	return wipedVolumes, unwipedVolumes, nil
-}
-
-func checkIfVolumeBlockZeroed(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (bool, error) {
-	cName, path := getContainerNameAndPath(volume)
-	cmd := []string{
-		"bash", "-c", fmt.Sprintf("dd if=%s bs=1M status=none "+
-			"| od -An "+
-			"| head "+
-			"| grep -v '*' "+
-			"| awk '{for(i=1;i<=NF;i++)$i=(sum[i]+=$i)}END{print}' "+
-			"| awk '{sum=0; for(i=1; i<=NF; i++) sum += $i; print sum}'", path)}
-
-	stdout, stderr, err := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
-	if err != nil {
-		return false, err
-	}
-	if stderr != "" {
-		return false, fmt.Errorf("%s", stderr)
-	}
-	retval, err := strconv.Atoi(strings.TrimRight(stdout, "\r\n"))
-	if err != nil {
-		return false, err
-	}
-	if retval == 0 {
-		return true, nil
-	}
-	return false, nil
-}
-
-func checkIfVolumeFileSystemZeored(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) (bool, error) {
-	cName, path := getContainerNameAndPath(volume)
-
-	cmd := []string{"bash", "-c", fmt.Sprintf("find %s -type f | wc -l", path)}
-	stdout, stderr, err := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
-	if err != nil {
-		return false, err
-	}
-	if stderr != "" {
-		return false, fmt.Errorf("%s", stderr)
-	}
-	retval, err := strconv.Atoi(strings.TrimRight(stdout, "\r\n"))
-	if err != nil {
-		return false, err
-	}
-	if retval == 0 {
-		return true, nil
-	}
-	return false, nil
-}
-
 func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 
 	return &asdbv1beta1.AerospikeConfigSpec{
@@ -451,10 +340,9 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 	}
 }
 
-func getAerospikeWipeStorageConfig(
-	containerName string, initContainerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
+func getAerospikeWipeStorageConfig(containerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
 
-	// Create pods and strorge devices write data to the devices.
+	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
@@ -670,13 +558,8 @@ func getAerospikeWipeStorageConfig(
 	}
 }
 
-func getAerospikeWipeRackStorageConfig(
-	containerName string,
-	initContainerName string,
-	inputCascadeDelete bool,
-	cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
-	aerospikeStorageSpec := getAerospikeWipeStorageConfig(
-		containerName, initContainerName, inputCascadeDelete, cloudProvider)
+func getAerospikeWipeRackStorageConfig(containerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
+	aerospikeStorageSpec := getAerospikeWipeStorageConfig(containerName, inputCascadeDelete, cloudProvider)
 	aerospikeStorageSpec.Volumes[0].Name = "test-wipe-device-dd-2"
 	aerospikeStorageSpec.Volumes[1].Name = "test-wipe-device-blkdiscard-2"
 	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-files-deletefiles-2"
@@ -733,51 +616,4 @@ func getStorageWipeAerospikeCluster(
 			AerospikeConfig: aerospikeConfigSpec,
 		},
 	}
-}
-
-func checkWipedVolumes(wipedVolumes []string) error {
-	shouldNotBeWiped := ""
-	wipedVolumeNames := map[string]struct{}{
-		"test-wipe-device-dd-1":         {},
-		"test-wipe-device-blkdiscard-1": {},
-		"test-wipe-files-deletefiles-1": {},
-		"test-wipe-device-dd-2":         {},
-		"test-wipe-device-blkdiscard-2": {},
-		"test-wipe-files-deletefiles-2": {},
-	}
-	for _, volume := range wipedVolumes {
-
-		if _, ok := wipedVolumeNames[volume]; !ok {
-			shouldNotBeWiped += fmt.Sprintf("%s\n", volume)
-		}
-	}
-	if shouldNotBeWiped != "" {
-		return fmt.Errorf("volumes should not be wiped: %s", shouldNotBeWiped)
-	}
-	return nil
-}
-
-func checkUnwipedVolumes(unwipedVolumes []string) error {
-	shouldBeWiped := ""
-
-	unwipedVolumeNames := map[string]struct{}{
-		"file-noinit":       {},
-		"file-init":         {},
-		"device-noinit":     {},
-		"device-dd":         {},
-		"file-noinit-1":     {},
-		"device-blkdiscard": {},
-		"sidecar-dd-1":      {},
-	}
-
-	for _, volume := range unwipedVolumes {
-		if _, ok := unwipedVolumeNames[volume]; !ok {
-			shouldBeWiped += fmt.Sprintf("%s\n", volume)
-		}
-	}
-
-	if shouldBeWiped != "" {
-		return fmt.Errorf("volumes should be wiped: %s", shouldBeWiped)
-	}
-	return nil
 }

@@ -70,7 +70,7 @@ var _ = Describe(
 						storageConfig := getAerospikeStorageConfig(
 							containerName, false, cloudProvider)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks, prevImage)
+							clusterNamespacedName, *storageConfig, racks, latestServerVersion)
 
 						aeroCluster.Spec.PodSpec = podSpec
 
@@ -95,7 +95,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						err = UpdateClusterImage(aeroCluster, pre57Image)
+						err = UpdateClusterImage(aeroCluster, prevImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
