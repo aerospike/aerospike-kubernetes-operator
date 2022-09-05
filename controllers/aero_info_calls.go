@@ -108,7 +108,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		return reconcileRequeueAfter(60)
 	}
 
-	ns, err := r.removedNamespaces(pod.Labels[asdbv1beta1.AerospikeRackIdLabel])
+	ns, err := r.removedNamespaces()
 	if err != nil {
 		return reconcileError(err)
 	}

@@ -1138,7 +1138,7 @@ func validateNsConfUpdate(
 			)
 		}
 
-		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
+		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
 		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
