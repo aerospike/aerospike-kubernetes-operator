@@ -147,11 +147,9 @@ func createPodSpecForRack(
 	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
 ) (*asdbv1beta1.AerospikePodSpec, error) {
 	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
-	); err != nil {
-		return nil, err
-	}
+	)
 
 	if rack.PodSpec.Affinity != nil {
 		rackFullPodSpec.Affinity = rack.PodSpec.Affinity
