@@ -52,119 +52,152 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 
-				It("Should validate all storage-wipe policies", func() {
+				It(
+					"Should validate all storage-wipe policies", func() {
 
-					storageConfig := getAerospikeWipeStorageConfig(containerName, false, cloudProvider)
-					rackStorageConfig := getAerospikeWipeRackStorageConfig(containerName, false, cloudProvider)
-					racks := []asdbv1beta1.Rack{
-						{
-							ID: 1,
-						},
-						{
-							ID:           2,
-							InputStorage: rackStorageConfig,
-						},
-					}
-					aeroCluster := getStorageWipeAerospikeCluster(
-						clusterNamespacedName, *storageConfig, racks, latestImage, getAerospikeClusterConfig())
+						storageConfig := getAerospikeWipeStorageConfig(
+							containerName, false, cloudProvider,
+						)
+						rackStorageConfig := getAerospikeWipeRackStorageConfig(
+							containerName, false, cloudProvider,
+						)
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
+							},
+							{
+								ID:           2,
+								InputStorage: rackStorageConfig,
+							},
+						}
+						aeroCluster := getStorageWipeAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage, getAerospikeClusterConfig(),
+						)
 
-					aeroCluster.Spec.PodSpec = podSpec
+						aeroCluster.Spec.PodSpec = podSpec
 
-					By("Cleaning up previous pvc")
+						By("Cleaning up previous pvc")
 
-					err := cleanupPVC(k8sClient, namespace)
-					Expect(err).ToNot(HaveOccurred())
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Deploying the cluster")
+						By("Deploying the cluster")
 
-					err = deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Writing some data to the all volumes")
-					err = writeDataToVolumes(aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						By("Writing some data to the all volumes")
+						err = writeDataToVolumes(aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Writing some data to the cluster")
-					err = writeDataToCluster(aeroCluster, k8sClient, namespaces)
-					Expect(err).ToNot(HaveOccurred())
+						By("Writing some data to the cluster")
+						err = writeDataToCluster(
+							aeroCluster, k8sClient, namespaces,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By(fmt.Sprintf("Downgrading image from %s to %s - volumes should not be wiped",
-						latestImage, version6))
-					err = UpdateClusterImage(aeroCluster, version6Image)
-					Expect(err).ToNot(HaveOccurred())
-					err = aerospikeClusterCreateUpdate(
-						k8sClient, aeroCluster, ctx,
-					)
-					Expect(err).ToNot(HaveOccurred())
+						By(
+							fmt.Sprintf(
+								"Downgrading image from %s to %s - volumes should not be wiped",
+								latestImage, version6,
+							),
+						)
+						err = UpdateClusterImage(aeroCluster, version6Image)
+						Expect(err).ToNot(HaveOccurred())
+						err = aerospikeClusterCreateUpdate(
+							k8sClient, aeroCluster, ctx,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Checking - unrelated volume attachments should not be wiped")
-					err = checkData(aeroCluster, true, true, map[string]struct{}{
-						"test-wipe-device-dd-1":         {},
-						"test-wipe-device-blkdiscard-1": {},
-						"test-wipe-device-dd-2":         {},
-						"test-wipe-device-blkdiscard-2": {},
-						"test-wipe-files-deletefiles-2": {},
-					})
-					Expect(err).ToNot(HaveOccurred())
+						By("Checking - unrelated volume attachments should not be wiped")
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{
+								"test-wipe-device-dd-1":         {},
+								"test-wipe-device-blkdiscard-1": {},
+								"test-wipe-device-dd-2":         {},
+								"test-wipe-device-blkdiscard-2": {},
+								"test-wipe-files-deletefiles-2": {},
+							},
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Checking - cluster data should not be wiped")
-					records, err := checkDataInCluster(aeroCluster, k8sClient, namespaces)
-					Expect(err).ToNot(HaveOccurred())
+						By("Checking - cluster data should not be wiped")
+						records, err := checkDataInCluster(
+							aeroCluster, k8sClient, namespaces,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					for namespace, recordExsist := range records {
-						Expect(recordExsist).To(BeTrue(), fmt.Sprintf(
-							"Namespace: %s - should have records", namespace))
-					}
+						for namespace, recordExsist := range records {
+							Expect(recordExsist).To(
+								BeTrue(), fmt.Sprintf(
+									"Namespace: %s - should have records",
+									namespace,
+								),
+							)
+						}
 
-					By(fmt.Sprintf("Downgrading image from %s to %s - volumes should be wiped",
-						version6, pre6Version))
-					err = UpdateClusterImage(aeroCluster, prevImage)
-					Expect(err).ToNot(HaveOccurred())
-					err = aerospikeClusterCreateUpdate(
-						k8sClient, aeroCluster, ctx,
-					)
-					Expect(err).ToNot(HaveOccurred())
+						By(
+							fmt.Sprintf(
+								"Downgrading image from %s to %s - volumes should be wiped",
+								version6, pre6Version,
+							),
+						)
+						err = UpdateClusterImage(aeroCluster, pre6Image)
+						Expect(err).ToNot(HaveOccurred())
+						err = aerospikeClusterCreateUpdate(
+							k8sClient, aeroCluster, ctx,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Checking - unrelated volume attachments should not be wiped")
-					err = checkData(aeroCluster, true, true, map[string]struct{}{
-						"test-wipe-device-dd-1":         {},
-						"test-wipe-device-blkdiscard-1": {},
-						"test-wipe-device-dd-2":         {},
-						"test-wipe-device-blkdiscard-2": {},
-						"test-wipe-files-deletefiles-2": {},
-					})
-					Expect(err).ToNot(HaveOccurred())
+						By("Checking - unrelated volume attachments should not be wiped")
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{
+								"test-wipe-device-dd-1":         {},
+								"test-wipe-device-blkdiscard-1": {},
+								"test-wipe-device-dd-2":         {},
+								"test-wipe-device-blkdiscard-2": {},
+								"test-wipe-files-deletefiles-2": {},
+							},
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Checking - cluster data should be wiped")
-					records, err = checkDataInCluster(aeroCluster, k8sClient, namespaces)
-					Expect(err).ToNot(HaveOccurred())
+						By("Checking - cluster data should be wiped")
+						records, err = checkDataInCluster(
+							aeroCluster, k8sClient, namespaces,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					for namespace, recordExsist := range records {
-						Expect(recordExsist).To(BeFalse(), fmt.Sprintf(
-							"Namespace: %s - should have records", namespace))
-					}
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						for namespace, recordExist := range records {
+							Expect(recordExist).To(
+								BeFalse(), fmt.Sprintf(
+									"Namespace: %s - should have records",
+									namespace,
+								),
+							)
+						}
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					err = cleanupPVC(k8sClient, namespace)
-					Expect(err).ToNot(HaveOccurred())
+						err = cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
 
-				},
+					},
 				)
 			},
 		)
@@ -174,7 +207,8 @@ var _ = Describe(
 func writeDataToCluster(
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 	k8sClient client.Client,
-	namespaces []string) error {
+	namespaces []string,
+) error {
 
 	policy := getClientPolicy(aeroCluster, k8sClient)
 	policy.FailIfNotConnected = false
@@ -203,7 +237,9 @@ func writeDataToCluster(
 		return err
 	}
 
-	fmt.Printf("Loading record, isClusterConnected %v\n", asClient.IsConnected())
+	fmt.Printf(
+		"Loading record, isClusterConnected %v\n", asClient.IsConnected(),
+	)
 	fmt.Println(asClient.GetNodes())
 
 	wp := as.NewWritePolicy(0, 0)
@@ -215,9 +251,11 @@ func writeDataToCluster(
 			return err
 		}
 
-		if err = asClient.Put(wp, newKey, as.BinMap{
-			binName: binValue,
-		}); err != nil {
+		if err = asClient.Put(
+			wp, newKey, as.BinMap{
+				binName: binValue,
+			},
+		); err != nil {
 			return err
 		}
 	}
@@ -228,7 +266,8 @@ func writeDataToCluster(
 func checkDataInCluster(
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 	k8sClient client.Client,
-	namespaces []string) (map[string]bool, error) {
+	namespaces []string,
+) (map[string]bool, error) {
 
 	data := make(map[string]bool)
 
@@ -255,7 +294,9 @@ func checkDataInCluster(
 
 	defer asClient.Close()
 
-	fmt.Printf("Loading record, isClusterConnected %v\n", asClient.IsConnected())
+	fmt.Printf(
+		"Loading record, isClusterConnected %v\n", asClient.IsConnected(),
+	)
 	fmt.Println(asClient.GetNodes())
 
 	if _, err = asClient.WarmUp(-1); err != nil {
@@ -280,13 +321,17 @@ func checkDataInCluster(
 
 			value := bin.(string)
 			if !ok {
-				return nil, fmt.Errorf("Bin-Name: %s - conversion to bin value failed", binName)
+				return nil, fmt.Errorf(
+					"Bin-Name: %s - conversion to bin value failed", binName,
+				)
 			}
 
 			if value == binValue {
 				data[ns] = true
 			} else {
-				return nil, fmt.Errorf("bin: %s exsists but the value is changed", binName)
+				return nil, fmt.Errorf(
+					"bin: %s exsists but the value is changed", binName,
+				)
 			}
 
 		} else {
@@ -340,7 +385,9 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 	}
 }
 
-func getAerospikeWipeStorageConfig(containerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
+func getAerospikeWipeStorageConfig(
+	containerName string, inputCascadeDelete bool, cloudProvider CloudProvider,
+) *asdbv1beta1.AerospikeStorageSpec {
 
 	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
@@ -558,8 +605,12 @@ func getAerospikeWipeStorageConfig(containerName string, inputCascadeDelete bool
 	}
 }
 
-func getAerospikeWipeRackStorageConfig(containerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
-	aerospikeStorageSpec := getAerospikeWipeStorageConfig(containerName, inputCascadeDelete, cloudProvider)
+func getAerospikeWipeRackStorageConfig(
+	containerName string, inputCascadeDelete bool, cloudProvider CloudProvider,
+) *asdbv1beta1.AerospikeStorageSpec {
+	aerospikeStorageSpec := getAerospikeWipeStorageConfig(
+		containerName, inputCascadeDelete, cloudProvider,
+	)
 	aerospikeStorageSpec.Volumes[0].Name = "test-wipe-device-dd-2"
 	aerospikeStorageSpec.Volumes[1].Name = "test-wipe-device-blkdiscard-2"
 	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-files-deletefiles-2"
@@ -571,7 +622,8 @@ func getStorageWipeAerospikeCluster(
 	storageConfig asdbv1beta1.AerospikeStorageSpec,
 	racks []asdbv1beta1.Rack,
 	image string,
-	aerospikeConfigSpec *asdbv1beta1.AerospikeConfigSpec) *asdbv1beta1.AerospikeCluster {
+	aerospikeConfigSpec *asdbv1beta1.AerospikeConfigSpec,
+) *asdbv1beta1.AerospikeCluster {
 
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{

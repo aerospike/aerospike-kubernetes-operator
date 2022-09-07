@@ -44,6 +44,7 @@ var (
 	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
+	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func scaleUpClusterTest(
@@ -127,7 +128,7 @@ func rollingRestartClusterTest(
 }
 
 func rollingRestartClusterByUpdatingNamespaceStorageTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -153,7 +154,7 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 }
 
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	k8sClient client.Client, ctx goctx.Context,
 	dynamicNs map[string]interface{},
 	clusterNamespacedName types.NamespacedName,
 ) error {
