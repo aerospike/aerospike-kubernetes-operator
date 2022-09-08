@@ -68,9 +68,12 @@ var _ = Describe(
 						}
 
 						storageConfig := getAerospikeStorageConfig(
-							containerName, false, cloudProvider)
+							containerName, false, cloudProvider,
+						)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks, prevImage)
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
 
 						aeroCluster.Spec.PodSpec = podSpec
 
@@ -84,25 +87,31 @@ var _ = Describe(
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, false, false, map[string]struct{}{})
+						err = checkData(
+							aeroCluster, false, false, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to the all volumes")
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true, map[string]struct{}{})
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						err = UpdateClusterImage(aeroCluster, pre57Image)
+						err = UpdateClusterImage(aeroCluster, prevImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true, map[string]struct{}{})
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
@@ -111,7 +120,9 @@ var _ = Describe(
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks, prevImage)
+							clusterNamespacedName, *storageConfig, racks,
+							prevImage,
+						)
 						aeroCluster.Spec.PodSpec = podSpec
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
@@ -119,7 +130,9 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking volumes that need initialization, they should not have data")
-						err = checkData(aeroCluster, false, true, map[string]struct{}{})
+						err = checkData(
+							aeroCluster, false, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						if aeroCluster != nil {
@@ -205,7 +218,7 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not.", volume.Name,
+					"expected volume %s %s but is not", volume.Name,
 					expectedStr,
 				)
 			}
@@ -333,7 +346,8 @@ func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 // getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage. None of the  storage volumes are used by Aerospike and are free to be used for testing.
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
-	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack, image string,
+	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
+	image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{

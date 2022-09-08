@@ -110,23 +110,35 @@ func newAsConn(
 	return asConn, nil
 }
 
-func getEndpointIP(pod *corev1.Pod, k8sClient client.Client, networkType asdbv1beta1.AerospikeNetworkType) (string, error) {
+func getEndpointIP(
+	pod *corev1.Pod, k8sClient client.Client,
+	networkType asdbv1beta1.AerospikeNetworkType,
+) (string, error) {
 	switch networkType {
 	case asdbv1beta1.AerospikeNetworkTypePod:
 		if pod.Status.PodIP == "" {
-			return "", fmt.Errorf("pod ip is not assigned yet for the pod %s", pod.Name)
+			return "", fmt.Errorf(
+				"pod ip is not assigned yet for the pod %s", pod.Name,
+			)
 		}
 		return pod.Status.PodIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if pod.Status.HostIP == "" {
-			return "", fmt.Errorf("host ip is not assigned yet for the pod %s", pod.Name)
+			return "", fmt.Errorf(
+				"host ip is not assigned yet for the pod %s", pod.Name,
+			)
 		}
 		return pod.Status.HostIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
-		err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode)
+		err := k8sClient.Get(
+			goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
+		)
 		if err != nil {
-			return "", fmt.Errorf("failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName, pod.Name, err)
+			return "", fmt.Errorf(
+				"failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName,
+				pod.Name, err,
+			)
 		}
 
 		// TODO: when refactoring this to use this as main code, this might need to be the
@@ -139,8 +151,10 @@ func getEndpointIP(pod *corev1.Pod, k8sClient client.Client, networkType asdbv1b
 				return add.Address, nil
 			}
 		}
-		return "", fmt.Errorf("failed to find %s address in the node %s for pod %s: nodes addresses are %v",
-			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses)
+		return "", fmt.Errorf(
+			"failed to find %s address in the node %s for pod %s: nodes addresses are %v",
+			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses,
+		)
 	}
 	return "", fmt.Errorf("anknown network type: %s", networkType)
 }
@@ -151,23 +165,33 @@ func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 	switch networkType {
 	case asdbv1beta1.AerospikeNetworkTypePod:
 		if pod.PodIP == "" {
-			return nil, fmt.Errorf("pod ip is not defined in pod status yet: %+v", pod)
+			return nil, fmt.Errorf(
+				"pod ip is not defined in pod status yet: %+v", pod,
+			)
 		}
-		return &as.Host{Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName}, nil
+		return &as.Host{
+			Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName,
+		}, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if pod.HostInternalIP == "" {
-			return nil, fmt.Errorf("internal host ip is not defined in pod status yet: %+v", pod)
+			return nil, fmt.Errorf(
+				"internal host ip is not defined in pod status yet: %+v", pod,
+			)
 		}
 		host = pod.HostInternalIP
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		if pod.HostExternalIP == "" {
-			return nil, fmt.Errorf("external host ip is not defined in pod status yet: %+v", pod)
+			return nil, fmt.Errorf(
+				"external host ip is not defined in pod status yet: %+v", pod,
+			)
 		}
 		host = pod.HostExternalIP
 	default:
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
-	return &as.Host{Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName}, nil
+	return &as.Host{
+		Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName,
+	}, nil
 }
 
 func newHostConn(
@@ -179,7 +203,7 @@ func newHostConn(
 		return nil, err
 	}
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(log, host, asConn, nil), nil
+	return deployment.NewHostConn(log, host, asConn), nil
 }
 
 func getPodList(
@@ -212,7 +236,9 @@ func getSTSList(
 	return stsList, nil
 }
 
-func getNodeList(ctx goctx.Context, k8sClient client.Client) (*corev1.NodeList, error) {
+func getNodeList(ctx goctx.Context, k8sClient client.Client) (
+	*corev1.NodeList, error,
+) {
 	nodeList := &corev1.NodeList{}
 	if err := k8sClient.List(ctx, nodeList); err != nil {
 		return nil, err
@@ -247,7 +273,9 @@ func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
 	return nodes.Items[0].Labels["failure-domain.beta.kubernetes.io/region"], nil
 }
 
-func getCloudProvider(ctx goctx.Context, k8sClient client.Client) (CloudProvider, error) {
+func getCloudProvider(
+	ctx goctx.Context, k8sClient client.Client,
+) (CloudProvider, error) {
 	labelKeys := map[string]struct{}{}
 	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
