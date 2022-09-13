@@ -46,7 +46,7 @@ var immutableNetworkParams = []string{
 	"tls-alternate-access-port",
 }
 
-var versionPrefixRegex = regexp.MustCompile("^.*-")
+var versionRegex = regexp.MustCompile(`([0-9]+(\.[0-9]+)+)`)
 
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
@@ -507,8 +507,7 @@ func validateClusterSize(_ logr.Logger, version string, sz int) error {
 }
 
 func (c *AerospikeCluster) validateAerospikeConfig(
-	configSpec *AerospikeConfigSpec,
-	storage *AerospikeStorageSpec, clSize int,
+	configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int,
 ) error {
 	config := configSpec.Value
 
@@ -736,8 +735,8 @@ func validateNetworkConnection(
 }
 
 func validateNamespaceConfig(
-	nsConfInterfaceList []interface{},
-	storage *AerospikeStorageSpec, clSize int,
+	nsConfInterfaceList []interface{}, storage *AerospikeStorageSpec,
+	clSize int,
 ) error {
 	if len(nsConfInterfaceList) == 0 {
 		return fmt.Errorf("aerospikeConfig.namespace list cannot be empty")
@@ -1102,9 +1101,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(
-		incomingSpec, outgoingSpec,
-	); err != nil {
+	if err := validateNsConfUpdate(incomingSpec, outgoingSpec); err != nil {
 		return err
 	}
 
@@ -1126,9 +1123,7 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateNsConfUpdate(
-	newConfSpec, oldConfSpec *AerospikeConfigSpec,
-) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1244,9 +1239,8 @@ func validateAerospikeConfigSchema(
 }
 
 func validateRequiredFileStorageForMetadata(
-	configSpec AerospikeConfigSpec,
-	storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec,
-	version string,
+	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
+	validationPolicy *ValidationPolicySpec, version string,
 ) error {
 
 	_, fileStorageList, err := storage.GetAerospikeStorageList()
@@ -1311,8 +1305,7 @@ func validateRequiredFileStorageForMetadata(
 }
 
 func validateRequiredFileStorageForFeatureConf(
-	configSpec AerospikeConfigSpec,
-	storage *AerospikeStorageSpec,
+	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 ) error {
 	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
@@ -1333,6 +1326,12 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 
+//
+// GetImageVersion extracts the Aerospike version from a container image.
+// The implementation extracts the image tag and find the longest string from
+// it that is a version string.
+// Note: The behaviour should match the operator's python implementation in
+// init container extracting version.
 func GetImageVersion(imageStr string) (string, error) {
 	_, _, version := ParseDockerImageTag(imageStr)
 
@@ -1342,10 +1341,22 @@ func GetImageVersion(imageStr string) (string, error) {
 		)
 	}
 
-	// Ignore special prefixes.
-	version = string(versionPrefixRegex.ReplaceAll([]byte(version), []byte("")))
+	// Ignore special prefixes and suffixes.
+	matches := versionRegex.FindAllString(version, -1)
+	if matches == nil || len(matches) < 1 {
+		return "", fmt.Errorf(
+			"invalid image version format: %v", version,
+		)
+	}
 
-	return version, nil
+	longest := 0
+	for i := range matches {
+		if len(matches[i]) >= len(matches[longest]) {
+			longest = i
+		}
+	}
+
+	return matches[longest], nil
 }
 
 // isInMemoryNamespace returns true if this namespace config uses memory for storage.

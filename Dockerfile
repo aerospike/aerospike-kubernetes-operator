@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 # Version of Operator (build arg)
-ARG VERSION="2.1.0"
+ARG VERSION="2.2.0"
 
 # User to run container as
 ARG USER="root"

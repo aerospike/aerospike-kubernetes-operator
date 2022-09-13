@@ -26,10 +26,10 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "5.7.0.17"
-	pre57Version        = "5.6.0.21"
-	version6            = "6.0.0.0"
-	latestServerVersion = "6.0.0.1"
+	prevServerVersion   = "6.0.0.1"
+	pre6Version         = "5.7.0.17"
+	version6            = "6.0.0.5"
+	latestServerVersion = "6.1.0.1"
 	invalidVersion      = "3.0.0.4"
 	pre5Version         = "4.9.0.33"
 )
@@ -42,9 +42,9 @@ var (
 	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
-	pre57Image         = fmt.Sprintf("%s:%s", baseImage, pre57Version)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
+	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func scaleUpClusterTest(
