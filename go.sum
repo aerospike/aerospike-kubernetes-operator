@@ -66,6 +66,8 @@ github.com/aerospike/aerospike-management-lib v0.0.0-20220906071724-4c45d068f4c6
 github.com/aerospike/aerospike-management-lib v0.0.0-20220906071724-4c45d068f4c6/go.mod h1:03xLvJeJqlVB7j+3xFfbXvErgXbpR8LTQq4ijeVuYn8=
 github.com/aerospike/aerospike-management-lib v0.0.0-20220913091700-06d67da4da54 h1:aTPNedwlbG2oezT/jkkgpupU2NTtQXCwQwLvom5+u9U=
 github.com/aerospike/aerospike-management-lib v0.0.0-20220913091700-06d67da4da54/go.mod h1:RdUDVojTVpPkaTq5+HRrxsUcC+pVXjNq0GHodurMHhg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20220921083938-29b7f222a4ff h1:pT3Qq4y5MzeFJqOOaL6JO8hHRY3yA3PuI4rZZDFts0c=
+github.com/aerospike/aerospike-management-lib v0.0.0-20220921083938-29b7f222a4ff/go.mod h1:RdUDVojTVpPkaTq5+HRrxsUcC+pVXjNq0GHodurMHhg=
 github.com/agnivade/levenshtein v1.0.1/go.mod h1:CURSv5d9Uaml+FovSIICkLbAUZ9S4RqaHDIsdSBg7lM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
