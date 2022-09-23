@@ -3,14 +3,15 @@ kind: AerospikeCluster
 metadata:
   name: aerocluster
   namespace: aerospike
+
 spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:6.1.0.1
 
   storage:
     filesystemVolumePolicy:
-      cascadeDelete: true
       initMethod: deleteFiles
+      cascadeDelete: true
     blockVolumePolicy:
       cascadeDelete: true
     volumes:
@@ -22,22 +23,22 @@ spec:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
-      - name: nstest
+      - name: pmem-data
         aerospike:
-          path: /opt/aerospike/data/test
+          path: /mnt/pmem0
         source:
           persistentVolume:
-            storageClass: ssd
+            storageClass: pmem-csi-sc-late-binding
             volumeMode: Filesystem
-            size: 3Gi
-      - name: nsbar
+            size: 1.5Gi
+      - name: pmem-index
         aerospike:
-          path: /opt/aerospike/data/bar
+          path: /mnt/pmem1
         source:
           persistentVolume:
-            storageClass: ssd
+            storageClass: pmem-csi-sc-late-binding
             volumeMode: Filesystem
-            size: 3Gi
+            size: 1.5Gi
       - name: aerospike-config-secret
         source:
           secret:
@@ -46,7 +47,7 @@ spec:
           path: /etc/aerospike/secret
 
   podSpec:
-    multiPodPerHost: true
+    multiPodPerHost: false
 
   aerospikeAccessControl:
     users:
@@ -55,11 +56,14 @@ spec:
         roles:
           - sys-admin
           - user-admin
+          - data-admin
+          - read
+          - write
 
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-    security: {}
+    security: { }
     network:
       service:
         port: 3000
@@ -69,24 +73,15 @@ spec:
         port: 3002
     namespaces:
       - name: test
-        memory-size: 2000000000
-        single-bin: true
-        data-in-index: true
-        replication-factor: 1
-        storage-engine:
-          type: device
-          files:
-            - /opt/aerospike/data/test/test.dat
-          filesize: 2000000000
-          data-in-memory: true
-      - name: bar
         memory-size: 3000000000
-        single-bin: true
-        data-in-index: true
-        replication-factor: 1
+        replication-factor: 2
         storage-engine:
-          type: device
+          type: pmem
           files:
-            - /opt/aerospike/data/bar/bar.dat
-          filesize: 2000000000
-          data-in-memory: true
+            - /mnt/pmem0/test.data
+          filesize: 1073741824
+        index-type:
+          type: pmem
+          mounts:
+            - /mnt/pmem1
+          mounts-size-limit: 1073741824

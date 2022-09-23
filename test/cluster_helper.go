@@ -13,6 +13,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,10 +26,10 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "5.7.0.17"
-	pre57Version        = "5.6.0.21"
-	version6            = "6.0.0.0"
-	latestServerVersion = "6.0.0.1"
+	prevServerVersion   = "6.0.0.1"
+	pre6Version         = "5.7.0.17"
+	version6            = "6.0.0.5"
+	latestServerVersion = "6.1.0.1"
 	invalidVersion      = "3.0.0.4"
 	pre5Version         = "4.9.0.33"
 )
@@ -41,9 +42,9 @@ var (
 	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
-	pre57Image         = fmt.Sprintf("%s:%s", baseImage, pre57Version)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
+	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func scaleUpClusterTest(
@@ -127,7 +128,7 @@ func rollingRestartClusterTest(
 }
 
 func rollingRestartClusterByUpdatingNamespaceStorageTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -153,7 +154,7 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 }
 
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	k8sClient client.Client, ctx goctx.Context,
 	dynamicNs map[string]interface{},
 	clusterNamespacedName types.NamespacedName,
 ) error {
@@ -391,6 +392,14 @@ func updateCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(aeroCluster.Spec.Size),
 	)
+}
+
+func updateSTS(
+	k8sClient client.Client, ctx goctx.Context,
+	sts *appsv1.StatefulSet,
+) error {
+	err := k8sClient.Update(ctx, sts)
+	return err
 }
 
 // TODO: remove it

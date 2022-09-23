@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -33,6 +34,7 @@ type SingleClusterReconciler struct {
 	KubeConfig *rest.Config
 	Log        logr.Logger
 	Scheme     *k8sRuntime.Scheme
+	Recorder   record.EventRecorder
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
@@ -51,7 +53,12 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
 		// The cluster is being deleted
 		if err := r.handleClusterDeletion(finalizerName); err != nil {
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
+				"Unable to handle AerospikeCluster delete operations %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
 			return reconcile.Result{}, err
+		} else {
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "Deleted",
+				"Deleted AerospikeCluster %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
 		}
 		// Stop reconciliation as the cluster is being deleted
 		return reconcile.Result{}, nil
@@ -70,11 +77,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
+		if res.err != nil {
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
+				"Failed to reconcile Racks for cluster %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
+		}
 		return res.result, res.err
 	}
 
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
+			"Failed to create Service(LoadBalancer) %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
 		return reconcile.Result{}, err
 	}
 
@@ -99,12 +112,16 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Setup access control.
 	if err := r.reconcileAccessControl(); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
+			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
 		return reconcile.Result{}, err
 	}
 
 	// Update the AerospikeCluster status.
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
+			"Failed to update AerospikeCluster status %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
 		return reconcile.Result{}, err
 	}
 
@@ -218,19 +235,18 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 
 	pp := r.getPasswordProvider()
 
-	statusAsSpec, err := asdbv1beta1.CopyStatusToSpec(
-		r.aeroCluster.Status.
-			AerospikeClusterStatusSpec,
-	)
 	if err != nil {
 		r.Log.Error(err, "Failed to copy spec in status", "err", err)
 		return err
 	}
 
-	err = ReconcileAccessControl(
-		&r.aeroCluster.Spec, statusAsSpec,
-		aeroClient, pp, r.Log,
+	err = r.ReconcileAccessControl(
+		aeroClient, pp,
 	)
+	if err == nil {
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
+			"Updated Access Control %s/%s", r.aeroCluster.Namespace, r.aeroCluster.Name)
+	}
 	return err
 }
 

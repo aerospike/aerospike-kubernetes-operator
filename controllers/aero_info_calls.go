@@ -77,6 +77,11 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 			),
 		)
 	}
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete",
+		pod.Labels[asdbv1beta1.AerospikeRackIdLabel],
+	)
 
 	const maxRetry = 6
 	const retryInterval = time.Second * 10
@@ -84,7 +89,11 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 	var isStable bool
 	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
-		r.Log.V(1).Info("Waiting for migrations to be zero before stopping pod", "pod", pod.Name)
+		r.Log.V(1).Info(
+			"Waiting for migrations to be zero before stopping pod", "pod",
+			pod.Name,
+		)
+
 		time.Sleep(retryInterval)
 
 		// This should fail if coldstart is going on.
@@ -249,7 +258,7 @@ func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 		return nil, err
 	}
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(r.Log, host, asConn, nil), nil
+	return deployment.NewHostConn(r.Log, host, asConn), nil
 }
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (

@@ -51,7 +51,8 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21",
+		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17",
+		"5.1.0.25", "5.0.0.21",
 		"4.9.0.11",
 	}
 
@@ -67,7 +68,9 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				image := fmt.Sprintf(
 					"aerospike/aerospike-server-enterprise:%s", v,
 				)
-				aeroCluster, err := getAeroClusterConfig(clusterNamespacedName, image)
+				aeroCluster, err := getAeroClusterConfig(
+					clusterNamespacedName, image,
+				)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = deployCluster(k8sClient, ctx, aeroCluster)
@@ -219,7 +222,9 @@ func UpdateClusterTest(ctx goctx.Context) {
 	BeforeEach(
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, dynamicNsVolume)
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume,
+			)
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -269,14 +274,14 @@ func UpdateClusterTest(ctx goctx.Context) {
 					By("RollingRestart By Updating NamespaceStorage")
 
 					err = rollingRestartClusterByUpdatingNamespaceStorageTest(
-						logger, k8sClient, ctx, clusterNamespacedName,
+						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("RollingRestart By Adding Namespace Dynamically")
 
 					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
-						logger, k8sClient, ctx, dynamicNs, clusterNamespacedName,
+						k8sClient, ctx, dynamicNs, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 

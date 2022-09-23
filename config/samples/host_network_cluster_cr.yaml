@@ -6,12 +6,14 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:6.0.0.1
+  image: aerospike/aerospike-server-enterprise:6.1.0.1
 
   storage:
     filesystemVolumePolicy:
       cascadeDelete: false
       initMethod: deleteFiles
+    blockVolumePolicy:
+      cascadeDelete: true
     volumes:
       - name: workdir
         aerospike:
