@@ -1212,7 +1212,7 @@ func (c *AerospikeCluster) validateRequiredRackFileStorageForMetadata(
 	for _, rack := range c.Spec.RackConfig.Racks {
 		configMap := rack.AerospikeConfig
 		if err := validateRequiredFileStorageForMetadata(
-			aslog, configMap, &rack.Storage, c.Spec.ValidationPolicy, version,
+			configMap, &rack.Storage, c.Spec.ValidationPolicy, version,
 		); err != nil {
 			return err
 		}
@@ -1293,7 +1293,7 @@ func (c *AerospikeCluster) validateRequiredRackFileStorageForFeatureConf(
 	for _, rack := range c.Spec.RackConfig.Racks {
 		configMap := rack.AerospikeConfig
 		if err := validateRequiredFileStorageForFeatureConf(
-			aslog, configMap, &rack.Storage,
+			configMap, &rack.Storage,
 		); err != nil {
 			return err
 		}
