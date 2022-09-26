@@ -707,6 +707,8 @@ func createDummyAerospikeCluster(
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
+				AerospikeInitContainerSpec: &asdbv1beta1.
+					AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
