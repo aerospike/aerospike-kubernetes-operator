@@ -106,6 +106,42 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		}
 	}
 
+	// Wait for pods across all racks to get ready before completing
+	// reconcile for the racks. The STS may be correctly updated but the pods
+	// might not be ready if they are running long-running init scripts or
+	// aerospike index load.
+	for _, state := range rackStateList {
+		found := &appsv1.StatefulSet{}
+		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		if err := r.Client.Get(context.TODO(), stsName, found); err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcileError(err)
+			}
+
+			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
+			zeroSizedRack := RackState{Rack: state.Rack, Size: 0}
+			found, res = r.createRack(zeroSizedRack)
+			if !res.isSuccess {
+				return res
+			}
+		}
+		// Wait for pods to be ready.
+		if err := r.waitForSTSToBeReady(found); err != nil {
+			// If the wait times out try again.
+			// The wait is required in cases where scale up waits for a pod to
+			// terminate times out and event is re-queued.
+			// Next reconcile will not invoke scale up or down and will
+			// fall through,
+			// and might run reconcile steps common to all racks before the racks
+			// have scaled up.
+			r.Log.Error(
+				err, "Failed to wait for statefulset to be ready",
+				"STS", stsName,
+			)
+			return reconcileRequeueAfter(1)
+		}
+	}
+
 	return reconcileSuccess()
 }
 
@@ -339,19 +375,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// All regular operation are complete. Take time and cleanup dangling nodes that have not been cleaned up previously due to errors.
 	if err = r.cleanupDanglingPodsRack(found, rackState); err != nil {
 		return reconcileError(err)
-	}
-
-	// Wait for pods to be ready.
-	if err := r.waitForSTSToBeReady(found); err != nil {
-		// If the wait times out try again.
-		// The wait is required in cases where scale up waits for a pod to
-		// terminate times out and event is re-queued.
-		// Next reconcile will not invoke scale up or down and will
-		// fall through,
-		// and might run reconcile steps common to all racks before the racks
-		// have scaled up.
-		r.Log.Error(err, "Failed to wait for statefulset to be ready")
-		return reconcileRequeueAfter(1)
 	}
 
 	return reconcileSuccess()
