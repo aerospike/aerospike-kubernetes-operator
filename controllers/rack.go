@@ -462,33 +462,52 @@ func (r *SingleClusterReconciler) upgradeRack(
 		)
 	}
 
-	for _, p := range podList {
-		r.Log.Info("Check if pod needs upgrade or not", "podName", p.Name)
+	podsBatch := chunkBy(podList, r.aeroCluster.Spec.RackConfig.RestartNodesCount)
 
-		if r.isPodUpgraded(&p) {
-			r.Log.Info("Pod doesn't need upgrade", "podName", p.Name)
+	for _, batch := range podsBatch {
+		var podsToUpgrade []*corev1.Pod
+		for i := range batch {
+			pod := batch[i]
+			r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
+
+			if r.isPodUpgraded(&pod) {
+				r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
+				continue
+			}
+			podsToUpgrade = append(podsToUpgrade, &pod)
+		}
+
+		// No pods to upgrade in this batch
+		if len(podsToUpgrade) == 0 {
 			continue
 		}
+
+		podNames := getPodNames(podsToUpgrade)
+
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
-			"[rack-%d] Updating Containers on Pod %s", rackState.Rack.ID, p.Name)
-		// Also check if statefulSet is in stable condition
-		// Check for all containers. Status.ContainerStatuses doesn't include init container
-		res := r.deletePodAndEnsureImageUpdated(rackState, p, ignorablePods)
+			"[rack-%d] Updating Containers on Pods %v", rackState.Rack.ID, podNames)
+
+		res := r.safelyDeletePodsAndEnsureImageUpdated(rackState, podsToUpgrade, ignorablePods)
 		if !res.isSuccess {
 			return statefulSet, res
 		}
+
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
-			"[rack-%d] Updated Containers on Pod %s", rackState.Rack.ID, p.Name)
+			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
+
 		// Handle the next pod in subsequent Reconcile.
 		return statefulSet, reconcileRequeueAfter(0)
 	}
+
 	// return a fresh copy
 	statefulSet, err = r.getSTS(rackState)
 	if err != nil {
 		return statefulSet, reconcileError(err)
 	}
+
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackImageUpdated",
 		"[rack-%d] Image Updated {STS: %s/%s}", rackState.Rack.ID, statefulSet.Namespace, statefulSet.Name)
+
 	return statefulSet, reconcileSuccess()
 }
 
@@ -618,22 +637,32 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			" config",
 	)
 
-	for _, pod := range podList {
-		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return found, reconcileError(err)
+	podsBatch := chunkBy(podList, r.aeroCluster.Spec.RackConfig.RestartNodesCount)
+
+	for _, batch := range podsBatch {
+		var podsToRestart []*corev1.Pod
+		for i := range batch {
+			pod := batch[i]
+
+			// Check if this pod needs restart
+			restartType, err := r.getRollingRestartTypePod(rackState, pod)
+			if err != nil {
+				return found, reconcileError(err)
+			}
+
+			if restartType == NoRestart {
+				r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
+				continue
+			}
+			podsToRestart = append(podsToRestart, &pod)
 		}
 
-		if restartType == NoRestart {
-			r.Log.Info(
-				"This Pod doesn't need rolling restart, Skip this", "pod",
-				pod.Name,
-			)
+		// No pods to restart in this batch
+		if len(podsToRestart) == 0 {
 			continue
 		}
 
-		res := r.rollingRestartPod(rackState, pod, restartType, ignorablePods)
+		res := r.rollingRestartPods(rackState, podsToRestart, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -1189,4 +1218,14 @@ func getOriginalPath(path string) string {
 	path = strings.TrimPrefix(path, "/workdir/filesystem-volumes")
 	path = strings.TrimPrefix(path, "/workdir/block-volumes")
 	return path
+}
+
+func chunkBy[T any](items []T, chunkSize int) (chunks [][]T) {
+	if chunkSize == 0 {
+		chunkSize = 1
+	}
+	for chunkSize < len(items) {
+		items, chunks = items[chunkSize:], append(chunks, items[0:chunkSize:chunkSize])
+	}
+	return append(chunks, items)
 }

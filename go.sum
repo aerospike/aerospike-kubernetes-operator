@@ -64,6 +64,8 @@ github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbt
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/aerospike/aerospike-management-lib v0.0.0-20220907084954-555b898340bb h1:joX7MuW+Ia+NOjK4pdT/HlhbBWhR0TsP1a9EPctRXbs=
 github.com/aerospike/aerospike-management-lib v0.0.0-20220907084954-555b898340bb/go.mod h1:RdUDVojTVpPkaTq5+HRrxsUcC+pVXjNq0GHodurMHhg=
+github.com/aerospike/aerospike-management-lib v0.0.0-20220926121737-0c8dc498d13c h1:TrlEVPHeP+5DM0Cu2fOGJD8r+F/tn0za+Q/oYAWIDp0=
+github.com/aerospike/aerospike-management-lib v0.0.0-20220926121737-0c8dc498d13c/go.mod h1:RdUDVojTVpPkaTq5+HRrxsUcC+pVXjNq0GHodurMHhg=
 github.com/agnivade/levenshtein v1.0.1/go.mod h1:CURSv5d9Uaml+FovSIICkLbAUZ9S4RqaHDIsdSBg7lM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

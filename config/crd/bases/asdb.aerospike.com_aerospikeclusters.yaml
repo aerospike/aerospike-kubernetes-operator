@@ -5259,6 +5259,14 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  restartNodesCount:
+                    description: RestartNodesCount is number of nodes that will be
+                      restarted simultaneo
+                    type: integer
+                  restartPercentage:
+                    description: RestartPercentage is the percentage of rack nodes
+                      that will be restart
+                    type: integer
                 type: object
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
@@ -11120,6 +11128,14 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  restartNodesCount:
+                    description: RestartNodesCount is number of nodes that will be
+                      restarted simultaneo
+                    type: integer
+                  restartPercentage:
+                    description: RestartPercentage is the percentage of rack nodes
+                      that will be restart
+                    type: integer
                 type: object
               resources:
                 description: Define resources requests and limits for Aerospike Server

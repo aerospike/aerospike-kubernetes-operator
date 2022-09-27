@@ -303,6 +303,12 @@ type RackConfig struct {
 	// Racks is the list of all racks
 	// +nullable
 	Racks []Rack `json:"racks,omitempty"`
+
+	// RestartPercentage is the percentage of rack nodes that will be restarted simultaneously
+	RestartPercentage int `json:"restartPercentage,omitempty"`
+
+	// RestartNodesCount is number of nodes that will be restarted simultaneously
+	RestartNodesCount int `json:"restartNodesCount,omitempty"`
 }
 
 // Rack specifies single rack config
