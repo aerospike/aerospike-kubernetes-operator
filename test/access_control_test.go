@@ -1207,6 +1207,8 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
+						setRackConfigWithSecurity(&clusterSpec)
+
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -1289,6 +1291,8 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
+
+						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
