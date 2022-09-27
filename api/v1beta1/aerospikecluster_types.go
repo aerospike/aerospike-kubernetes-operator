@@ -18,7 +18,6 @@ package v1beta1
 
 import (
 	"fmt"
-
 	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -283,6 +282,8 @@ func (p *AerospikePodSpec) ValidatePodSpecChange(_ AerospikePodSpec) error {
 
 // SetDefaults applies defaults to the pod spec.
 func (p *AerospikePodSpec) SetDefaults() error {
+	var groupID int64 = 0
+
 	if p.InputDNSPolicy == nil {
 		if p.HostNetwork {
 			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
@@ -291,6 +292,17 @@ func (p *AerospikePodSpec) SetDefaults() error {
 		}
 	} else {
 		p.DNSPolicy = *p.InputDNSPolicy
+	}
+
+	if p.SecurityContext != nil {
+		if p.SecurityContext.FSGroup == nil {
+			p.SecurityContext.FSGroup = &groupID
+		}
+	} else {
+		SecurityContext := &corev1.PodSecurityContext{
+			FSGroup: &groupID,
+		}
+		p.SecurityContext = SecurityContext
 	}
 
 	return nil

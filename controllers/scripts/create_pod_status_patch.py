@@ -72,8 +72,34 @@ class Volume(object):
                f"{self.effective_wipe_method}"
 
 
+def longest_match(matches):
+    longest = matches[0]
+    for i in range(0, len(matches)):
+        if isinstance(matches[i], str):
+            match = matches[i]
+        else:
+            match = matches[i][0]
+        if len(match) > len(longest):
+            longest = match
+    return longest
+
+
+'''
+The implementation extracts the image tag and find the longest string from it that is a version string.
+Note: The behaviour should match the operator's go implementation for extracting version.
+'''
 def get_image_tag(image):
-    return re.search(r"\d+\.\d+\.\d+\.\d+$", image).group(0)
+    matches = re.findall(r":(.*)", image)
+    if not matches:
+        # Should not happen since the image tag is validate
+        raise OSError(f"Invalid image: {image}")
+
+    tag = longest_match(matches)
+    matches = re.findall(r"([0-9]+(\.[0-9]+)+)", tag)
+    if not matches:
+        # Should not happen since the image tag is validate
+        raise OSError(f"Invalid image tag for image: {image}")
+    return longest_match(matches)
 
 
 def get_image_version(image):

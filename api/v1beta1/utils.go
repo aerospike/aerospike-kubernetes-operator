@@ -140,6 +140,11 @@ func ParseDockerImageTag(tag string) (
 	}
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
+
+	if matches == nil {
+		return "", "", ""
+	}
+
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
