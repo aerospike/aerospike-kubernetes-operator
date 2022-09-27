@@ -377,8 +377,8 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 
 	for _, pod := range pods.Items {
 		err := utils.CheckPodFailed(&pod)
-		if err != nil {
-			// There is at least on pod that is has not yet failed.
+		if err == nil {
+			// There is at least one pod that has not yet failed.
 			// It's possible that the containers are stuck doing a long disk
 			// initialization.
 			// Don't consider this cluster as failed and needing recovery
@@ -387,7 +387,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 		}
 	}
 
-	return !isNew && r.aeroCluster.Status.AerospikeConfig == nil, nil
+	return r.aeroCluster.Status.AerospikeConfig == nil, nil
 }
 
 func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.AerospikeCluster) error {

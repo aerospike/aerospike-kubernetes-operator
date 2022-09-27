@@ -45,7 +45,7 @@ for namespace in $namespaces; do
   fi
 done
 
-operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",")
+operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",") --timeout=10m0s
 
 for namespace in $namespaces; do
 ATTEMPT=0

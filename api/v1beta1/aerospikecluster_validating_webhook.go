@@ -775,14 +775,12 @@ func validateNamespaceConfig(
 				continue
 			}
 
-			if !isDeviceNamespace(nsConf) {
-				// storage-engine pmem
+			if !isDeviceOrPmemNamespace(nsConf) {
 				return fmt.Errorf(
 					"storage-engine not supported for namespace %v", nsConf,
 				)
 			}
 
-			// TODO: worry about pmem.
 			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf(
@@ -1332,8 +1330,8 @@ func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return ok && typeStr == "memory"
 }
 
-// isDeviceNamespace returns true if this namespace config uses device for storage.
-func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
+// isDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
+func isDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf["storage-engine"]
 	if !ok {
 		return false
@@ -1342,7 +1340,7 @@ func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
 	storageConf := storage.(map[string]interface{})
 	typeStr, ok := storageConf["type"]
 
-	return ok && typeStr == "device"
+	return ok && (typeStr == "device" || typeStr == "pmem")
 }
 
 // isShmemIndexTypeNamespace returns true if this namespace index type is shmem.
