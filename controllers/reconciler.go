@@ -602,11 +602,11 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) removedNamespaces() (map[string]bool, error) {
+func (r *SingleClusterReconciler) removedNamespaces() ([]string, error) {
 
+	var ns []string
 	statusNamespaces := make(map[string]bool)
 	specNamespaces := make(map[string]bool)
-	ns := make(map[string]bool)
 
 	for _, rackStatus := range r.aeroCluster.Status.RackConfig.Racks {
 		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
@@ -622,7 +622,7 @@ func (r *SingleClusterReconciler) removedNamespaces() (map[string]bool, error) {
 
 	for statusNamespace := range statusNamespaces {
 		if !specNamespaces[statusNamespace] {
-			ns[statusNamespace] = true
+			ns = append(ns, statusNamespace)
 		}
 	}
 	return ns, nil
