@@ -2,6 +2,22 @@ apiVersion: v1
 entries:
   aerospike-cluster:
   - apiVersion: v2
+    appVersion: 2.2.0
+    created: "2022-09-29T10:32:36.421034588+05:30"
+    description: A Helm chart for Aerospike Cluster Custom Resource
+    digest: f29efb7596494db11d3970bd356e81c8d4dd7c74bb826a3ceea2b8946df2cfb1
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-cluster
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-2.2.0.tgz
+    version: 2.2.0
+  - apiVersion: v2
     appVersion: 2.1.0
     created: "2022-07-29T17:33:33.770344088+05:30"
     description: A Helm chart for Aerospike Cluster Custom Resource
@@ -67,6 +83,22 @@ entries:
     version: 1.0.0
   aerospike-kubernetes-operator:
   - apiVersion: v2
+    appVersion: 2.2.0
+    created: "2022-09-29T10:32:36.433605941+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 4e33470a7ed69d552dc59e247ca6b0c25c09973c8c7f3fc9ec0c7d843857c223
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-2.2.0.tgz
+    version: 2.2.0
+  - apiVersion: v2
     appVersion: 2.1.0
     created: "2022-07-29T17:33:33.779666421+05:30"
     description: A Helm chart for Aerospike Kubernetes Operator
@@ -130,4 +162,4 @@ entries:
     urls:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-1.0.0.tgz
     version: 1.0.0
-generated: "2022-07-29T17:33:33.767647599+05:30"
+generated: "2022-09-29T10:32:36.417970134+05:30"
