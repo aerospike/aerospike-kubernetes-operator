@@ -380,70 +380,81 @@ def init_volumes(pod_name, config):
     volumes = []
     initialized_volumes = get_initialized_volumes(
         pod_name=pod_name, config=config)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 
-    for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
-                                  get_persistent_volumes(volumes=get_attached_volumes(
-                                      pod_name=pod_name, config=config)))):
+        futures = {}
 
-        volume = Volume(pod_name=pod_name, volume=vol)
+        for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
+                                     get_persistent_volumes(volumes=get_attached_volumes(
+                                         pod_name=pod_name, config=config)))):
 
-        logging.debug(f"Starting initialization: {volume}")
-        if volume.volume_mode == "Block":
+            volume = Volume(pod_name=pod_name, volume=vol)
 
-            if not os.path.exists(volume.get_mount_point()):
-                logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
-                              f"does not exists")
-                raise FileNotFoundError(f"{volume} Volume path not found")
+            logging.debug(f"Starting initialization: {volume}")
+            if volume.volume_mode == "Block":
 
-            if volume.effective_init_method == "dd":
+                if not os.path.exists(volume.get_mount_point()):
+                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
+                                f"does not exists")
+                    raise FileNotFoundError(f"{volume} Volume path not found")
 
-                dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
-                     '/tmp/init-stderr'.format(
-                    volume_path=volume.get_mount_point())
-                execute(dd)
-                logging.info(f"{volume} - Initialized")
+                if volume.effective_init_method == "dd":
 
-            elif volume.effective_init_method == "blkdiscard":
+                    dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
+                        '/tmp/init-stderr'.format(
+                        volume_path=volume.get_mount_point())
+                    futures[executor.submit(lambda: execute(cmd=dd))] = dd
+                    logging.info(f"{volume} - Submitted")
 
-                blkdiskard = "blkdiscard {volume_path}".format(
-                    volume_path=volume.get_mount_point())
-                execute(blkdiskard)
-                logging.info(f"{volume} - Initialized")
+                elif volume.effective_init_method == "blkdiscard":
 
-            elif volume.effective_init_method == "none":
-                logging.info(f"{volume} - Pass through")
+                    blkdiskard = "blkdiscard {volume_path}".format(
+                        volume_path=volume.get_mount_point())
+                    futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
+                    logging.info(f"{volume} - Submitted")
+
+                elif volume.effective_init_method == "none":
+                    logging.info(f"{volume} - Pass through")
+                else:
+                    logging.error(f"{volume} - Has invalid effective method")
+                    raise ValueError(f"{volume} - Has invalid effective method")
+
+            elif volume.volume_mode == "Filesystem":
+                logging.debug(f"In Filesystem initialization: {volume}")
+                if not os.path.exists(volume.get_mount_point()):
+                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
+                                  f"does not exists")
+                    raise FileNotFoundError(f"{volume} Volume path not found")
+
+                if volume.effective_init_method == "deleteFiles":
+
+                    find = "find {volume_path} -type f -delete".format(
+                        volume_path=volume.get_mount_point())
+                    execute(find)
+                    logging.info(f"{volume} - Initialized")
+
+                elif volume.effective_init_method == "none":
+                    logging.info(f"{volume} - Pass through")
+                else:
+                    logging.error(f"{volume} - Has invalid effective method")
+                    raise ValueError(f"{volume} - Has invalid effective method")
             else:
-                logging.error(f"{volume} - Has invalid effective method")
-                raise ValueError(f"{volume} - Has invalid effective method")
-
-        elif volume.volume_mode == "Filesystem":
-            logging.debug(f"In Filesystem initialization: {volume}")
-            if not os.path.exists(volume.get_mount_point()):
-                logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
-                              f"does not exists")
-                raise FileNotFoundError(f"{volume} Volume path not found")
-
-            if volume.effective_init_method == "deleteFiles":
-
-                find = "find {volume_path} -type f -delete".format(
-                    volume_path=volume.get_mount_point())
-                execute(find)
-                logging.info(f"{volume} - Initialized")
-
-            elif volume.effective_init_method == "none":
-                logging.info(f"{volume} - Pass through")
-            else:
-                logging.error(f"{volume} - Has invalid effective method")
-                raise ValueError(f"{volume} - Has invalid effective method")
-        else:
-            logging.error(f"{volume} - Invalid volume-mode: {volume.volume_mode}")
-            raise ValueError(f"pod-name: {pod_name} - Invalid volume-mode: {volume.volume_mode}")
+                logging.error(f"{volume} - Invalid volume-mode: {volume.volume_mode}")
+                raise ValueError(f"pod-name: {pod_name} - Invalid volume-mode: {volume.volume_mode}")
 
         logging.debug(f"{volume} - Added to initialized-volume list")
         volumes.append(volume.volume_name)
 
-    logging.debug(f"{volumes} - Extending initialized-volume list")
-    volumes.extend(initialized_volumes)
+        for future in concurrent.futures.as_completed(fs=futures):
+            cmd = futures[future]
+            try:
+                if future.done():
+                    logging.info(f"pod-name: {pod_name} Finished Successfully: {cmd}")
+            except Exception as e:
+                logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
+
+        logging.debug(f"{volumes} - Extending initialized-volume list")
+        volumes.extend(initialized_volumes)
 
     return volumes
 
