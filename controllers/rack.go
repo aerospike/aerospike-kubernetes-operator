@@ -205,6 +205,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 	}
 	return reconcileSuccess()
 }
+
 func (r *SingleClusterReconciler) reconcileRack(
 	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
 ) reconcileResult {
@@ -323,26 +324,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
-	bool, error,
-) {
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
-	if err != nil {
-		return false, fmt.Errorf("failed to list pods: %v", err)
-	}
-	for _, pod := range podList {
-		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return false, err
-		}
-		if restartType != NoRestart {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (r *SingleClusterReconciler) scaleUpRack(
 	found *appsv1.StatefulSet, rackState RackState,
 ) (*appsv1.StatefulSet, reconcileResult) {
@@ -362,7 +343,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
-	if r.isAnyPodInFailedState(podList.Items) {
+	if r.isAnyPodInImageFailedState(podList.Items) {
 		return found, reconcileError(fmt.Errorf("cannot scale up AerospikeCluster. A pod is already in failed state"))
 	}
 
@@ -462,7 +443,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		)
 	}
 
-	podsBatch := chunkBy(podList, r.aeroCluster.Spec.RackConfig.RestartNodesCount)
+	podsBatch := r.getPodsBatchToRestart(podList)
 
 	for _, batch := range podsBatch {
 		var podsToUpgrade []*corev1.Pod
@@ -495,7 +476,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
 
-		// Handle the next pod in subsequent Reconcile.
+		// Handle the next batch in subsequent Reconcile.
 		return statefulSet, reconcileRequeueAfter(0)
 	}
 
@@ -535,7 +516,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
 
-	if r.isAnyPodInFailedState(oldPodList.Items) {
+	if r.isAnyPodInImageFailedState(oldPodList.Items) {
 		return found, reconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
@@ -616,13 +597,14 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",
 		"[rack-%d] Started Rolling restart", rackState.Rack.ID)
+
 	// List the pods for this aeroCluster's statefulset
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
-	if r.isAnyPodInFailedState(podList) {
-		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state"))
+	if r.isAnyPodInImageFailedState(podList) {
+		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state due to image related issues"))
 	}
 
 	err = r.updateSTS(found, rackState)
@@ -637,7 +619,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			" config",
 	)
 
-	podsBatch := chunkBy(podList, r.aeroCluster.Spec.RackConfig.RestartNodesCount)
+	podsBatch := r.getPodsBatchToRestart(podList)
 
 	for _, batch := range podsBatch {
 		var podsToRestart []*corev1.Pod
@@ -667,7 +649,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			return found, res
 		}
 
-		// Handle next pod in subsequent Reconcile.
+		// Handle next batch in subsequent Reconcile.
 		return found, reconcileRequeueAfter(0)
 	}
 
@@ -681,6 +663,26 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		"[rack-%d] Finished Rolling restart", rackState.Rack.ID)
 
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
+	bool, error,
+) {
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return false, fmt.Errorf("failed to list pods: %v", err)
+	}
+	for _, pod := range podList {
+		// Check if this pod needs restart
+		restartType, err := r.getRollingRestartTypePod(rackState, pod)
+		if err != nil {
+			return false, err
+		}
+		if restartType != NoRestart {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
@@ -1218,6 +1220,16 @@ func getOriginalPath(path string) string {
 	path = strings.TrimPrefix(path, "/workdir/filesystem-volumes")
 	path = strings.TrimPrefix(path, "/workdir/block-volumes")
 	return path
+}
+
+func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []corev1.Pod) [][]corev1.Pod {
+	restartNodesCount := r.aeroCluster.Spec.RackConfig.RestartNodesCount
+	restartPercentage := r.aeroCluster.Spec.RackConfig.RestartPercentage
+	if restartPercentage != 0 {
+		restartNodesCount = len(podList) * restartPercentage / 100
+	}
+
+	return chunkBy(podList, restartNodesCount)
 }
 
 func chunkBy[T any](items []T, chunkSize int) (chunks [][]T) {

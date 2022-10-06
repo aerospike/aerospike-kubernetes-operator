@@ -470,7 +470,54 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		}
 	}
 
+	// Validate batch upgrade/restart param
+	if c.Spec.RackConfig.RestartPercentage < 0 || c.Spec.RackConfig.RestartPercentage > 100 {
+		return fmt.Errorf("rackConfig.RestartPercentage `%d` can not be <0 or >100", c.Spec.RackConfig.RestartPercentage)
+	}
+	if c.Spec.RackConfig.RestartNodesCount < 0 {
+		return fmt.Errorf("rackConfig.RestartNodesCount `%d` can not be <0", c.Spec.RackConfig.RestartNodesCount)
+	}
+	if c.Spec.RackConfig.RestartNodesCount > 0 && c.Spec.RackConfig.RestartPercentage > 0 {
+		return fmt.Errorf(
+			"only one of rackConfig.RestartNodesCount `%d` and rackConfig.RestartPercentage `%d` can be set to non-zero",
+			c.Spec.RackConfig.RestartNodesCount, c.Spec.RackConfig.RestartPercentage)
+	}
+
+	if c.Spec.RackConfig.RestartNodesCount > 0 || c.Spec.RackConfig.RestartPercentage > 0 {
+		if len(c.Spec.RackConfig.Racks) < 2 {
+			return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when number of racks is less than two")
+		}
+
+		namespaces := c.getNamespaces()
+		for _, ns := range namespaces {
+			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
+				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when there is any non-rack enabled namespace %s", ns)
+			}
+		}
+	}
+
+	// TODO: should not use batch if replication-factor is 1 or racks are less than replication-factor
+	// TODO: Need to figure out those conditions where some pod may go in unschedulable state
+	// e.g. Batch of pods are deleted, few pods may come up but others are stuck due to resource constrains
+	// In next reconcile, operator should always pick those unscheduled pods and delete them without checking
+	// for cluster stability
 	return nil
+}
+
+func (c *AerospikeCluster) getNamespaces() []string {
+	nsNames := map[string]bool{}
+	for _, rack := range c.Spec.RackConfig.Racks {
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		for _, nsInterface := range nsList {
+			nsName := nsInterface.(map[string]interface{})["name"].(string)
+			nsNames[nsName] = true
+		}
+	}
+	var namespaces []string
+	for name := range nsNames {
+		namespaces = append(namespaces, name)
+	}
+	return namespaces
 }
 
 //******************************************************************************
