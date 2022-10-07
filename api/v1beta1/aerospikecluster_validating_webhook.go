@@ -888,6 +888,11 @@ func validateNamespaceConfig(
 		}
 	}
 
+	err = validateStorageEngineDeviceList(nsConfInterfaceList)
+	if err != nil {
+		return err
+	}
+
 	// Validate index-type
 	for _, nsConfInterface := range nsConfInterfaceList {
 		nsConf, ok := nsConfInterface.(map[string]interface{})
@@ -1123,7 +1128,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newNsConfList := newConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
-		// Validate new namespaceonf
+		// Validate new namespaceconf
 		singleConf, ok := singleConfInterface.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf(
@@ -1131,7 +1136,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 			)
 		}
 
-		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
+		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
 		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
@@ -1157,9 +1162,44 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 				}
 			}
 		}
-
 	}
+
+	err := validateStorageEngineDeviceList(newNsConfList)
+	if err != nil {
+		return err
+	}
+
 	// Check for namespace name len
+	return nil
+}
+
+func validateStorageEngineDeviceList(nsConfList []interface{}) error {
+	deviceList := map[string]string{}
+
+	// build a map device -> namespace
+	for _, nsConfInterface := range nsConfList {
+		nsConf := nsConfInterface.(map[string]interface{})
+		namespace := nsConf["name"].(string)
+		storage := nsConf["storage-engine"].(map[string]interface{})
+		devices, ok := storage["devices"]
+		if !ok {
+			continue
+		}
+
+		for _, d := range devices.([]interface{}) {
+			device := d.(string)
+			previousNamespace, exists := deviceList[device]
+			if exists {
+				return fmt.Errorf(
+					"device %s is already being referenced in multiple namespaces (%s, %s)",
+					device, previousNamespace, namespace,
+				)
+			} else {
+				deviceList[device] = namespace
+			}
+		}
+	}
+
 	return nil
 }
 
