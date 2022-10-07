@@ -114,7 +114,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		return reconcileRequeueAfter(60)
 	}
 
-	ns, err := r.removedNamespaces()
+	removedNSes, err := r.removedNamespaces()
 	if err != nil {
 		return reconcileError(err)
 	}
@@ -130,7 +130,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		)
 	}
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn, ns,
+		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn, removedNSes,
 	); err != nil {
 		return reconcileError(err)
 	}

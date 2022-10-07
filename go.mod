@@ -3,7 +3,7 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.17
 
 require (
-	github.com/aerospike/aerospike-management-lib v0.0.0-20220927161723-ca654fdc460f
+	github.com/aerospike/aerospike-management-lib v0.0.0-20221007025641-10f4c78bc989
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/ashishshinde/aerospike-client-go/v6 v6.0.1-0.20220606044039-77304169d3a4
 	github.com/evanphx/json-patch v4.11.0+incompatible
