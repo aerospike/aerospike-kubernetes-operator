@@ -509,32 +509,37 @@ func (r *SingleClusterReconciler) upgradeRack(
 		)
 	}
 
-	podsBatch := r.getPodsBatchToRestart(podList)
+	// Find pods which needs to be updated
+	var podsToUpgrade []*corev1.Pod
+	for i := range podList {
+		pod := podList[i]
+		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
 
-	for _, batch := range podsBatch {
-		var podsToUpgrade []*corev1.Pod
-		for i := range batch {
-			pod := batch[i]
-			r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
-
-			if r.isPodUpgraded(&pod) {
-				r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
-				continue
-			}
-			podsToUpgrade = append(podsToUpgrade, &pod)
-		}
-
-		// No pods to upgrade in this batch
-		if len(podsToUpgrade) == 0 {
+		if r.isPodUpgraded(&pod) {
+			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
 			continue
 		}
+		podsToUpgrade = append(podsToUpgrade, &pod)
+	}
 
-		podNames := getPodNames(podsToUpgrade)
+	// Failed pods should always come before active pods.
+	// We make info calls before restarting active pods,
+	// if active pods are checked before failed pods then
+	// info call will fail in failed pods and operator will not go ahead
+	rearrangedPods := rearrangedFailedAndActivePods(podsToUpgrade)
+
+	// Create batch of pods
+	podsBatchList := r.getPodsBatchToRestart(rearrangedPods)
+
+	// Update batch of pods
+	for _, podsBatch := range podsBatchList {
+
+		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
 			"[rack-%d] Updating Containers on Pods %v", rackState.Rack.ID, podNames)
 
-		res := r.safelyDeletePodsAndEnsureImageUpdated(rackState, podsToUpgrade, ignorablePods)
+		res := r.safelyDeletePodsAndEnsureImageUpdated(rackState, podsBatch, ignorablePods)
 		if !res.isSuccess {
 			return statefulSet, res
 		}
@@ -600,9 +605,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 		// Ignore safe stop check on pod not in running state.
 		if utils.IsPodRunningAndReady(pod) {
-			if res := r.waitForNodeSafeStopReady(
-				pod, ignorablePods,
-			); !res.isSuccess {
+			if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
 				// The pod is running and is unsafe to terminate.
 				return found, res
 			}
@@ -695,32 +698,37 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			" config",
 	)
 
-	podsBatch := r.getPodsBatchToRestart(podList)
+	// Find pods which needs restart
+	var podsToRestart []*corev1.Pod
+	for i := range podList {
+		pod := podList[i]
 
-	for _, batch := range podsBatch {
-		var podsToRestart []*corev1.Pod
-		for i := range batch {
-			pod := batch[i]
-
-			// Check if this pod needs restart
-			restartType, err := r.getRollingRestartTypePod(rackState, pod)
-			if err != nil {
-				return found, reconcileError(err)
-			}
-
-			if restartType == NoRestart {
-				r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
-				continue
-			}
-			podsToRestart = append(podsToRestart, &pod)
+		// Check if this pod needs restart
+		restartType, err := r.getRollingRestartTypePod(rackState, pod)
+		if err != nil {
+			return found, reconcileError(err)
 		}
 
-		// No pods to restart in this batch
-		if len(podsToRestart) == 0 {
+		if restartType == NoRestart {
+			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
+		podsToRestart = append(podsToRestart, &pod)
+	}
 
-		res := r.rollingRestartPods(rackState, podsToRestart, ignorablePods)
+	// Failed pods should always come before active pods.
+	// We make info calls before restarting active pods,
+	// if active pods are checked before failed pods then
+	// info call will fail in failed pods and operator will not go ahead
+	rearrangedPods := rearrangedFailedAndActivePods(podsToRestart)
+
+	// Create batch of pods
+	podsBatchList := r.getPodsBatchToRestart(rearrangedPods)
+
+	// Restart batch of pods
+	for _, podsBatch := range podsBatchList {
+
+		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -729,7 +737,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		return found, reconcileRequeueAfter(0)
 	}
 
-	// return a fresh copy
+	// Return a fresh copy
 	found, err = r.getSTS(rackState)
 	if err != nil {
 		return found, reconcileError(err)
@@ -1301,7 +1309,7 @@ func getOriginalPath(path string) string {
 	return path
 }
 
-func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []corev1.Pod) [][]corev1.Pod {
+func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []*corev1.Pod) [][]*corev1.Pod {
 	restartNodesCount := r.aeroCluster.Spec.RackConfig.RestartNodesCount
 	restartPercentage := r.aeroCluster.Spec.RackConfig.RestartPercentage
 	if restartPercentage != 0 {
@@ -1311,7 +1319,7 @@ func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []corev1.Pod) []
 	return chunkBy(podList, restartNodesCount)
 }
 
-func chunkBy[T any](items []T, chunkSize int) (chunks [][]T) {
+func chunkBy[T any](items []*T, chunkSize int) (chunks [][]*T) {
 	if chunkSize == 0 {
 		chunkSize = 1
 	}

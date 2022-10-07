@@ -114,30 +114,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
 
-	var failedPods, activePods []*corev1.Pod
-	for i := range podsToRestart {
-		pod := podsToRestart[i]
+	failedPods, activePods := getFailedAndActivePods(podsToRestart)
 
-		// TODO: Due to this condition, a pod in FailedScheduling state was not getting restarted
-		// TODO: No need for this condition, waitForMultipleNodesSafeStopReady will fail if pod in not runningAndReady
-		//// Also check if statefulSet is in stable condition
-		//// Check for all containers. Status.ContainerStatuses doesn't include init container
-		//if pod.Status.ContainerStatuses == nil {
-		//	r.Log.Error(
-		//		fmt.Errorf("pod %s containerStatus is nil", pod.Name),
-		//		"Pod may be in unscheduled state",
-		//	)
-		//	return reconcileRequeueAfter(1)
-		//}
-
-		if err := utils.CheckPodFailed(pod); err != nil {
-			failedPods = append(failedPods, pod)
-			continue
-		}
-		activePods = append(activePods, pod)
-	}
-
-	// TODO: Should we restart all failed pods for the rack in one go
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
@@ -276,30 +254,45 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
+func rearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
+	var rearrangedPods []*corev1.Pod
+
+	failedPods, activePods := getFailedAndActivePods(pods)
+	rearrangedPods = append(rearrangedPods, failedPods...)
+	rearrangedPods = append(rearrangedPods, activePods...)
+
+	return rearrangedPods
+}
+
+func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+	for i := range pods {
+		pod := pods[i]
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			failedPods = append(failedPods, pod)
+			continue
+		}
+		activePods = append(activePods, pod)
+	}
+	return failedPods, activePods
+}
+
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState RackState, podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
 
-	var failedPods, activePods []*corev1.Pod
-	for i, p := range podsToUpdate {
-		if err := utils.CheckPodFailed(p); err != nil {
-			failedPods = append(failedPods, podsToUpdate[i])
-			continue
-		}
-		activePods = append(activePods, podsToUpdate[i])
-	}
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
 
-	// TODO: Should we restart all failed pods for the rack in one go
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
-		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
+		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
 		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.isSuccess {
 			return res
 		}
 	}
 
 	if len(activePods) != 0 {
-		r.Log.Info("Restart active pods", "pods", getPodNames(failedPods))
+		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(failedPods))
 		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}

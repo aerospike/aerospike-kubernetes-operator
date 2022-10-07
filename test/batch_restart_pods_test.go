@@ -39,6 +39,7 @@ var _ = Describe("BatchRestart", func() {
 			BatchUpgrade(ctx, clusterNamespacedName)
 		})
 	})
+
 	Context("When doing invalid operations", func() {
 		clusterName := "batch-restart"
 		clusterNamespacedName := getClusterNamespacedName(
@@ -172,7 +173,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		By("Using default RestartPercentage/RestartNodesCount")
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -206,7 +207,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartPercentage = 100
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -225,7 +226,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartPercentage = 0
 		aeroCluster.Spec.RackConfig.RestartNodesCount = 10
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -243,7 +244,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartPercentage = 90
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -260,7 +261,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartPercentage = 0
 		aeroCluster.Spec.RackConfig.RestartNodesCount = 3
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -271,7 +272,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartNodesCount = 3
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = k8sClient.Update(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -291,7 +292,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RestartNodesCount = 3
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource()
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = updateAndWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -451,66 +452,6 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 	// Should be able to deal with failed nodes
 }
 
-//func BatchRollingRestart() {
-//	// Restart 1 node at a time
-//	It("Should do simple RollingRestart by default", func() {
-//		By("Deploy a cluster")
-//		By("Change podSpec, trigger rollingRestart and wait")
-//	})
-//	It("Should do simple RollingRestart if RestartPercentage is not enough", func() {
-//		By("Deploy a cluster")
-//		By("Change podSpec, trigger rollingRestart and wait")
-//	})
-//
-//	// Restart full rack at a time
-//	It("Should do allow BatchRollingRestart if RestartNodesCount is more than rack size", func() {
-//		By("Deploy a cluster")
-//		By("Change podSpec, trigger rollingRestart and wait")
-//	})
-//	// RestartPercentage is 100
-//
-//	// Restart batch of nodes
-//	It("Should do BatchRollingRestart", func() {
-//		By("Deploy a cluster")
-//		By("Update RestartPercentage")
-//		By("Change podSpec, trigger batchRollingRestart and wait")
-//		By("Update RestartNodesCount")
-//		By("Change podSpec, trigger batchRollingRestart and wait")
-//	})
-//
-//	// User should be able to change RestartPercentage/RestartNodesCount when restart is going on
-//	It("Should do allow multiple changes in RestartPercentage/RestartNodesCount", func() {
-//		By("Deploy a cluster")
-//		By("Update RestartPercentage")
-//		By("Change podSpec and trigger batchRollingRestart")
-//		By("Update RestartPercentage")
-//		By("Change podSpec and trigger batchRollingRestart")
-//	})
-//
-//	// Should be able to deal with failed nodes
-//}
-
-//func BatchUpgrade() {
-//	It("Should do simple Upgrade by default", func() {
-//		By("Deploy a cluster")
-//		By("Change image and trigger simple Upgrade")
-//	})
-//	It("Should do BatchUpgrade", func() {
-//		By("Deploy a cluster")
-//		By("Update RestartPercentage")
-//		By("Change image, trigger BatchUpgrade and wait")
-//		By("Update RestartNodesCount")
-//		By("Change image, trigger BatchUpgrade and wait")
-//	})
-//	It("Should do allow multiple changes in RestartPercentage/RestartNodesCount", func() {
-//		By("Deploy a cluster")
-//		By("Update RestartPercentage")
-//		By("Change podSpec and trigger BatchUpgrade")
-//		By("Update RestartPercentage")
-//		By("Change podSpec and trigger BatchUpgrade")
-//	})
-//}
-
 func isBatchRestart(aeroCluster *v1beta1.AerospikeCluster) bool {
 	// Wait for starting the pod restart process
 	for {
@@ -559,10 +500,6 @@ func updateClusterForBatchRestart(
 	if !isBatchRestart(aeroCluster) {
 		return fmt.Errorf("looks like pods are not restarting in batch")
 	}
-	//return waitForAerospikeCluster(
-	//	k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-	//	getTimeout(aeroCluster.Spec.Size),
-	//)
 	return nil
 }
 
@@ -576,8 +513,8 @@ func unschedulableResource() *corev1.ResourceRequirements {
 	}
 }
 
-func schedulableResource() *corev1.ResourceRequirements {
-	resourceMem := resource.MustParse("1Gi")
+func schedulableResource(mem string) *corev1.ResourceRequirements {
+	resourceMem := resource.MustParse(mem)
 
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
