@@ -55,12 +55,12 @@ mkdir -p "${CONFIG_VOLUME}"
 bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
 
 # Copy scripts and binaries needed for warm restart.
-cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
-cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
-cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
+\cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
+\cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
+\cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
 
 if [ -f /configs/features.conf ]; then
-    cp -L /configs/features.conf "${CONFIG_VOLUME}"/
+    \cp -L /configs/features.conf "${CONFIG_VOLUME}"/
 fi
 
 # ------------------------------------------------------------------------------
