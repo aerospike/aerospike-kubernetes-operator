@@ -836,81 +836,64 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
-	if err := lib.DeepCopy(&statusStorage, &spec.Storage); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusStorage, &spec.Storage)
+
 	status.Storage = statusStorage
 
 	if spec.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
 		statusAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			statusAerospikeAccessControl, spec.AerospikeAccessControl,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.AerospikeAccessControl = statusAerospikeAccessControl
 	}
 
 	// AerospikeConfig
 	statusAerospikeConfig := &AerospikeConfigSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		statusAerospikeConfig, spec.AerospikeConfig,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.AerospikeConfig = statusAerospikeConfig
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
 		statusValidationPolicy := &ValidationPolicySpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			statusValidationPolicy, spec.ValidationPolicy,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.ValidationPolicy = statusValidationPolicy
 	}
 
 	// RackConfig
 	statusRackConfig := RackConfig{}
-	if err := lib.DeepCopy(&statusRackConfig, &spec.RackConfig); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusRackConfig, &spec.RackConfig)
 	status.RackConfig = statusRackConfig
 
 	// AerospikeNetworkPolicy
 	statusAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
 
 	if spec.OperatorClientCertSpec != nil {
 		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			clientCertSpec, spec.OperatorClientCertSpec,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
 	statusPodSpec := AerospikePodSpec{}
-	if err := lib.DeepCopy(&statusPodSpec, &spec.PodSpec); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusPodSpec, &spec.PodSpec)
 	status.PodSpec = statusPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&seedsFinderServices, &spec.SeedsFinderServices,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.SeedsFinderServices = seedsFinderServices
 
 	return &status, nil
@@ -928,81 +911,63 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}
-	if err := lib.DeepCopy(&specStorage, &status.Storage); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specStorage, &status.Storage)
 	spec.Storage = specStorage
 
 	if status.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
 		specAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			specAerospikeAccessControl, status.AerospikeAccessControl,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.AerospikeAccessControl = specAerospikeAccessControl
 	}
 
 	// AerospikeConfig
 	specAerospikeConfig := &AerospikeConfigSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		specAerospikeConfig, status.AerospikeConfig,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.AerospikeConfig = specAerospikeConfig
 
 	if status.ValidationPolicy != nil {
 		// ValidationPolicy
 		specValidationPolicy := &ValidationPolicySpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			specValidationPolicy, status.ValidationPolicy,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.ValidationPolicy = specValidationPolicy
 	}
 
 	// RackConfig
 	specRackConfig := RackConfig{}
-	if err := lib.DeepCopy(&specRackConfig, &status.RackConfig); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specRackConfig, &status.RackConfig)
 	spec.RackConfig = specRackConfig
 
 	// AerospikeNetworkPolicy
 	specAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
 
 	if status.OperatorClientCertSpec != nil {
 		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			clientCertSpec, status.OperatorClientCertSpec,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
 	specPodSpec := AerospikePodSpec{}
-	if err := lib.DeepCopy(&specPodSpec, &status.PodSpec); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specPodSpec, &status.PodSpec)
 	spec.PodSpec = specPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&seedsFinderServices, &status.SeedsFinderServices,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.SeedsFinderServices = seedsFinderServices
 
 	return &spec, nil

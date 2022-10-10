@@ -112,6 +112,11 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return reconcileRequeueAfter(60)
 	}
 
+	removedNSes, err := r.removedNamespaces()
+	if err != nil {
+		return reconcileError(err)
+	}
+
 	var selectedHostConns []*deployment.HostConn
 	for _, pod := range pods {
 		// Quiesce node
@@ -128,7 +133,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConns,
+		r.Log, r.getClientPolicy(), allHostConns, selectedHostConns, removedNSes,
 	); err != nil {
 		return reconcileError(err)
 	}

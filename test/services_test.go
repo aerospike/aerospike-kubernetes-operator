@@ -127,8 +127,7 @@ func createLoadBalancer() *asdbv1beta1.LoadBalancerSpec {
 		),
 	)
 	result := &asdbv1beta1.LoadBalancerSpec{}
-	err := lib.DeepCopy(result, lb)
-	Expect(err).ToNot(HaveOccurred())
+	lib.DeepCopy(result, lb)
 	return result
 }
 

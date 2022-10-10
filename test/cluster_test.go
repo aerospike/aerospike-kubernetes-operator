@@ -285,6 +285,13 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("RollingRestart By Removing Namespace Dynamically")
+
+					err = rollingRestartClusterByRemovingNamespaceDynamicallyTest(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Upgrade/Downgrade")
 
 					// TODO: How to check if it is checking cluster stability before killing node
@@ -643,7 +650,7 @@ func negativeDeployClusterValidationTest(
 									)
 
 									It(
-										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot a device which doesn't exist in storage",
+										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which doesn't exist in storage",
 										func() {
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
@@ -659,6 +666,32 @@ func negativeDeployClusterValidationTest(
 												)
 												Expect(err).Should(HaveOccurred())
 											}
+										},
+									)
+
+									It(
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which already exist in another namespace",
+										func() {
+											aeroCluster := createDummyAerospikeCluster(
+												clusterNamespacedName, 1,
+											)
+											secondNs := map[string]interface{}{
+												"name":               "ns1",
+												"memory-size":        1000955200,
+												"replication-factor": 2,
+												"storage-engine": map[string]interface{}{
+													"type":    "device",
+													"devices": []interface{}{"/test/dev/xvdf"},
+												},
+											}
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList = append(nsList, secondNs)
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											err := deployCluster(
+												k8sClient, ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
 										},
 									)
 
@@ -1029,6 +1062,35 @@ func negativeUpdateClusterValidationTest(
 												)
 												Expect(err).Should(HaveOccurred())
 											}
+										},
+									)
+
+									It(
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot add a device which already exist in another namespace",
+										func() {
+											aeroCluster, err := getCluster(
+												k8sClient, ctx,
+												clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											secondNs := map[string]interface{}{
+												"name":               "ns1",
+												"memory-size":        1000955200,
+												"replication-factor": 2,
+												"storage-engine": map[string]interface{}{
+													"type":    "device",
+													"devices": []interface{}{"/test/dev/xvdf"},
+												},
+											}
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList = append(nsList, secondNs)
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											err = k8sClient.Update(
+												ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
 										},
 									)
 
