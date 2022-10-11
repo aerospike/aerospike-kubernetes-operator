@@ -6,7 +6,7 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,14 +39,14 @@ var _ = Describe(
 )
 
 func WarmRestart(ctx goCtx.Context) {
-	image := fmt.Sprintf(
-		"aerospike/aerospike-server-enterprise:%s", "tinibackport-5.7.0.8",
-	)
-	rollCluster(ctx, image, true)
+	rollCluster(ctx, latestImage, true)
 }
 
 func PodRestart(ctx goCtx.Context) {
-	rollCluster(ctx, latestImage, false)
+	image := fmt.Sprintf(
+		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
+	)
+	rollCluster(ctx, image, false)
 }
 
 func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {

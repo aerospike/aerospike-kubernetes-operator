@@ -8,7 +8,7 @@ import (
 
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 var (

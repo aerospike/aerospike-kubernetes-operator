@@ -1,10 +1,10 @@
 # # /bin/sh does not support source command needed in make test
-# SHELL := /bin/bash
+#SHELL := /bin/bash
 
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-# Minimum Openshift platform version supported
-OPENSHIFT_VERSION=v4.6
+# Openshift platform supported version
+OPENSHIFT_VERSION="v4.6"
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
@@ -12,7 +12,7 @@ OPENSHIFT_VERSION=v4.6
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.0.0
+VERSION ?= 2.2.1
 
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
@@ -101,7 +101,7 @@ vet: ## Run go vet against code.
 
 test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" cd $(shell pwd)/test; go test ${TEST_ARGS}  -ginkgo.v -ginkgo.progress -timeout=600m -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -progress -v -timeout=12h0m0s -focus=${FOCUS} --junit-report="junit.xml"  -- ${ARGS}
 
 ##@ Build
 
@@ -113,7 +113,10 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 # docker-build: test ## Build docker image with the manager.
 docker-build: ## Build docker image with the manager.
-	docker build -t ${IMG} --build-arg VERSION=$(VERSION) .
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) .
+
+docker-build-openshift: ## Build openshift docker image with the manager.
+	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
@@ -177,7 +180,7 @@ endef
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.2.1-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/
@@ -185,20 +188,16 @@ bundle: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/overlays/manifests/olm | operator-sdk generate bundle -q --kustomize-dir config/overlays/manifests/olm --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+	sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
+	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
+	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
+	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
+	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" bundle/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 
-	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-		sed -I '' "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	else \
-		sed -i "s@createdAt: dateplaceholder@createdAt: $(DATE)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-		sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" bundle/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml; \
-	fi
-
-	if [[ $(OS) = Darwin ]]; then \
-		sed -I '' '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
-	else \
-		sed -i '/^FROM.*/a \\n# Labels for RedHat Openshift Platform\nLABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"\nLABEL com.redhat.delivery.operator.bundle=true\nLABEL com.redhat.delivery.backport=false' $(ROOT_DIR)/bundle.Dockerfile; \
-	fi
 
 # Remove generated bundle
 .PHONY: bundle-clean
@@ -208,7 +207,7 @@ bundle-clean:
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	docker build --pull --no-cache -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.

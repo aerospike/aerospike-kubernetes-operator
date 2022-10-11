@@ -9,7 +9,7 @@ import (
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"

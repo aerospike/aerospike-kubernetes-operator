@@ -3,6 +3,7 @@ package v1beta1
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -61,13 +62,13 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
-	confKeyTLS       = "tls"
 	confKeyTLSName   = "tls-name"
 
 	// Network section keys.
 	confKeyNetwork          = "network"
 	confKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
+	confKeyNetworkFabric    = "fabric"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -81,14 +82,45 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName      string = "aerospike-server"
-	AerospikeServerInitContainerName  string = "aerospike-init"
-	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.15"
+	AerospikeServerContainerName                   string = "aerospike-server"
+	AerospikeInitContainerName                     string = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry          string = "docker.io"
+	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.17"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIdLabel         = "aerospike.com/rack-id"
 )
+
+func getInitContainerImage(registry string) string {
+	return fmt.Sprintf(
+		"%s/%s/%s", strings.TrimSuffix(registry, "/"),
+		strings.TrimSuffix(AerospikeInitContainerDefaultRegistryNamespace, "/"),
+		AerospikeInitContainerDefaultRepoAndTag,
+	)
+}
+
+func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
+	// Given in CR
+	registry := ""
+	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		registry = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
+	}
+	if registry != "" {
+		return getInitContainerImage(registry)
+	}
+
+	// Given in EnvVar
+	registry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
+	if found {
+		return getInitContainerImage(registry)
+	}
+
+	// Use default
+	return getInitContainerImage(AerospikeInitContainerDefaultRegistry)
+}
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
@@ -108,6 +140,11 @@ func ParseDockerImageTag(tag string) (
 	}
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
+
+	if matches == nil {
+		return "", "", ""
+	}
+
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
@@ -131,7 +168,9 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(version string, aerospikeConfig *AerospikeConfigSpec) (bool, error) {
+func IsSecurityEnabled(
+	version string, aerospikeConfig *AerospikeConfigSpec,
+) (bool, error) {
 
 	retval, err := asconfig.CompareVersions(version, "5.7.0")
 	if err != nil {
@@ -188,10 +227,14 @@ func GetConfigContext(
 			return validConfigMap, nil
 		}
 		return nil, fmt.Errorf(
-			"invalid aerospike.%s conf. %w", context, internalerrors.InvalidOrEmptyError)
+			"invalid aerospike.%s conf. %w", context,
+			internalerrors.InvalidOrEmptyError,
+		)
 
 	}
-	return nil, fmt.Errorf("context %s was %w", context, internalerrors.NotFoundError)
+	return nil, fmt.Errorf(
+		"context %s was %w", context, internalerrors.NotFoundError,
+	)
 }
 
 func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
@@ -311,6 +354,10 @@ func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
 }
 
+func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (string, *int) {
+	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
+}
+
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
 ) (string, *int) {
@@ -335,6 +382,10 @@ func GetServicePort(aeroConf *AerospikeConfigSpec) *int {
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
+}
+
+func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
 }
 
 func GetPortFromConfig(

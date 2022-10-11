@@ -38,19 +38,25 @@ kubectl -n test2 delete serviceaccount aerospike-operator-controller-manager || 
 
 # Uninstall the operator
 echo "Removing test operator deployment"
-operator-sdk cleanup aerospike-kubernetes-operator --namespace=test
+OPERATOR_NS=test
+kubectl delete subscription -n $OPERATOR_NS $(kubectl get subscription -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') || true
+kubectl delete clusterserviceversion -n $OPERATOR_NS $(kubectl get clusterserviceversion -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') || true
+kubectl delete job $(kubectl get job -o=jsonpath='{.items[?(@.status.succeeded==1)].metadata.name}' -n $OPERATOR_NS) -n $OPERATOR_NS || true
+kubectl delete CatalogSource $(kubectl get CatalogSource -n $OPERATOR_NS | grep aerospike-kubernetes-operator  | cut -f 1 -d ' ') || true
 
 # Delete webhook configurations. Web hooks from older versions linger around and intercept requests.
 kubectl delete mutatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  mutatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
 kubectl delete validatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  validatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
 
-# Ensure all unlisted resources are also deleted
-kubectl -n test1 delete all --all
-kubectl -n test2 delete all --all
-kubectl -n test delete all --all
+namespaces="test test1 test2"
+for namespace in $namespaces; do
+  # Delete operator CSVs
+  kubectl -n "$namespace" delete csv $(kubectl get  csv -n "$namespace"| grep aerospike | cut -f 1 -d " ")
 
-# Delete namespaces
-echo "Removing test namespaces"
-kubectl delete namespace test1 || true
-kubectl delete namespace test2 || true
-kubectl delete namespace test || true
+  # Ensure all unlisted resources are also deleted
+  kubectl -n "$namespace" delete all --all
+
+  # Delete namespaces
+  echo "Removing namespace $namespace"
+  kubectl delete namespace "$namespace" || true
+done

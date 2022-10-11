@@ -21,7 +21,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -52,42 +52,56 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 
 	r.Log.Info("Namespace list", "namespaces", namespaces)
 
-	// Find non-sc namespace or a sc namespace for which node is part of roster
-	// and use that namespace to quiesce the node
+	//// Find non-sc namespace or a sc namespace for which node is part of roster
+	//// and use that namespace to quiesce the node
+	//for _, ns := range namespaces {
+	//	isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
+	//	if err != nil {
+	//		return reconcileError(err)
+	//	}
+	//
+	//	if !isEnabled {
+	//		r.Log.Info("Namespace is not sc enabled, do quiesce using this namespace", "namespace", ns)
+	//		return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
+	//	}
+	//
+	//	isInRoster, err := r.isNodeInRoster(policy, hostConn, ns)
+	//	if err != nil {
+	//		return reconcileError(err)
+	//	}
+	//
+	//	if isInRoster {
+	//		r.Log.Info("Namespace is sc enabled and in roster, do quiesce using this namespce", "namespace", ns)
+	//		return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
+	//	}
+	//
+	//	r.Log.Info("Node is not in roster for namespace. Skip quiesce", "node", pod.Name, "namespace", ns)
+	//}
+
+	var scNamespaces []string
 	for _, ns := range namespaces {
 		isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
 		if err != nil {
 			return reconcileError(err)
 		}
 
-		if !isEnabled {
-			r.Log.Info("Namespace is not sc enabled, do quiesce using this namespace", "namespace", ns)
-			return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
+		if isEnabled {
+			scNamespaces = append(scNamespaces, ns)
 		}
-
-		isInRoster, err := r.isNodeInRoster(policy, hostConn, ns)
-		if err != nil {
-			return reconcileError(err)
-		}
-
-		if isInRoster {
-			r.Log.Info("Namespace is sc enabled and in roster, do quiesce using this namespce", "namespace", ns)
-			return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
-		}
-
-		r.Log.Info("Node is not in roster for namespace. Skip quiesce", "node", pod.Name, "namespace", ns)
 	}
 
-	r.Log.Info("Quiesce not needed in node. Node is blocked or does not have any non-sc namespace", "node", pod.Name)
+	return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, scNamespaces)
 
-	return reconcileSuccess()
+	//r.Log.Info("Quiesce not needed in node. Node is blocked or does not have any non-sc namespace", "node", pod.Name)
+	//
+	//return reconcileSuccess()
 }
 
 // waitForNodeSafeStopReady waits util the input pod is safe to stop,
 // skipping pods that are not running and present in ignorablePods for stability check.
 // The ignorablePods list should be a list of failed or pending pods that are going to be
 // deleted eventually and are safe to ignore in stability checks.
-func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.ClientPolicy, pod *corev1.Pod, ignorablePods []corev1.Pod, ns string) reconcileResult {
+func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.ClientPolicy, pod *corev1.Pod, ignorablePods []corev1.Pod, scNamespaces []string) reconcileResult {
 
 	// Remove a node only if cluster is stable
 	err := r.waitForAllSTSToBeReady()
@@ -107,20 +121,34 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.
 		),
 		)
 	}
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete",
+		pod.Labels[asdbv1beta1.AerospikeRackIdLabel],
+	)
 
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 		return res
 	}
 
-	// Quiesce node
-	selectedHostConn, err := r.newHostConn(pod)
+	removedNSes, err := r.removedNamespaces()
 	if err != nil {
 		return reconcileError(err)
 	}
 
+	// Quiesce node
+	selectedHostConn, err := r.newHostConn(pod)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes %v: %v",
+				pod.Name, err,
+			),
+		)
+	}
 	if err := deployment.InfoQuiesce(
-		r.Log, policy, allHostConns, selectedHostConn, ns,
+		r.Log, r.getClientPolicy(), allHostConns, []*deployment.HostConn{selectedHostConn}, removedNSes, r.aeroCluster.Spec.RosterBlockList, scNamespaces,
 	); err != nil {
 		return reconcileError(err)
 	}
@@ -144,7 +172,7 @@ func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolic
 		// Info command in coldstarting node should give error, is it? confirm.
 
 		isStable, err = deployment.IsClusterAndStable(
-			r.Log, r.getClientPolicy(), allHostConns,
+			r.Log, policy, allHostConns,
 		)
 		if err != nil {
 			return reconcileError(err)
@@ -287,7 +315,7 @@ func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 		return nil, err
 	}
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(r.Log, host, asConn, nil), nil
+	return deployment.NewHostConn(r.Log, host, asConn), nil
 }
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (

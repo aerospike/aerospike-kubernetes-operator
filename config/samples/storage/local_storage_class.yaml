@@ -3,4 +3,5 @@ kind: StorageClass
 metadata:
   name: "local-ssd"
 provisioner: "kubernetes.io/no-provisioner"
+reclaimPolicy: Delete
 volumeBindingMode: "WaitForFirstConsumer"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -51,7 +51,8 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17", "5.1.0.25", "5.0.0.21",
+		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17",
+		"5.1.0.25", "5.0.0.21",
 		"4.9.0.11",
 	}
 
@@ -67,7 +68,9 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				image := fmt.Sprintf(
 					"aerospike/aerospike-server-enterprise:%s", v,
 				)
-				aeroCluster, err := getAeroClusterConfig(clusterNamespacedName, image)
+				aeroCluster, err := getAeroClusterConfig(
+					clusterNamespacedName, image,
+				)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = deployCluster(k8sClient, ctx, aeroCluster)
@@ -191,9 +194,37 @@ func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
+	// Note: this storage will be used by dynamically added namespace after deployment of cluster
+	dynamicNsPath := "/test/dev/dynamicns"
+	dynamicNsVolume := asdbv1beta1.VolumeSpec{
+		Name: "dynamicns",
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: dynamicNsPath,
+		},
+	}
+	dynamicNs := map[string]interface{}{
+		"name":               "dynamicns",
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{dynamicNsPath},
+		},
+	}
+
 	BeforeEach(
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume,
+			)
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -237,6 +268,27 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					err = rollingRestartClusterTest(
 						logger, k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Updating NamespaceStorage")
+
+					err = rollingRestartClusterByUpdatingNamespaceStorageTest(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Adding Namespace Dynamically")
+
+					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
+						k8sClient, ctx, dynamicNs, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Removing Namespace Dynamically")
+
+					err = rollingRestartClusterByRemovingNamespaceDynamicallyTest(
+						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -328,51 +380,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 						"AerospikeConfig", func() {
 							Context(
 								"Namespace", func() {
-									It(
-										"UpdateNamespaceList: should fail for updating namespace list. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-											nsList = append(
-												nsList, map[string]interface{}{
-													"name":        "bar",
-													"memory-size": 2000955200,
-													"storage-engine": map[string]interface{}{
-														"type":    "device",
-														"devices": []interface{}{"/test/dev/xvdf"},
-													},
-												},
-											)
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-
-										},
-									)
-									It(
-										"UpdateStorageEngine: should fail for updating namespace storage-engine. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["type"] = "memory"
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
-									)
 									It(
 										"UpdateReplicationFactor: should fail for updating namespace replication-factor. Cannot be updated",
 										func() {
@@ -643,7 +650,7 @@ func negativeDeployClusterValidationTest(
 									)
 
 									It(
-										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot a device which doesn't exist in storage",
+										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which doesn't exist in storage",
 										func() {
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
@@ -659,6 +666,32 @@ func negativeDeployClusterValidationTest(
 												)
 												Expect(err).Should(HaveOccurred())
 											}
+										},
+									)
+
+									It(
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which already exist in another namespace",
+										func() {
+											aeroCluster := createDummyAerospikeCluster(
+												clusterNamespacedName, 1,
+											)
+											secondNs := map[string]interface{}{
+												"name":               "ns1",
+												"memory-size":        1000955200,
+												"replication-factor": 2,
+												"storage-engine": map[string]interface{}{
+													"type":    "device",
+													"devices": []interface{}{"/test/dev/xvdf"},
+												},
+											}
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList = append(nsList, secondNs)
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											err := deployCluster(
+												k8sClient, ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
 										},
 									)
 
@@ -1029,6 +1062,35 @@ func negativeUpdateClusterValidationTest(
 												)
 												Expect(err).Should(HaveOccurred())
 											}
+										},
+									)
+
+									It(
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot add a device which already exist in another namespace",
+										func() {
+											aeroCluster, err := getCluster(
+												k8sClient, ctx,
+												clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											secondNs := map[string]interface{}{
+												"name":               "ns1",
+												"memory-size":        1000955200,
+												"replication-factor": 2,
+												"storage-engine": map[string]interface{}{
+													"type":    "device",
+													"devices": []interface{}{"/test/dev/xvdf"},
+												},
+											}
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList = append(nsList, secondNs)
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											err = k8sClient.Update(
+												ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
 										},
 									)
 

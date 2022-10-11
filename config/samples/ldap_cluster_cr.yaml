@@ -1,0 +1,100 @@
+# A demo example of LDAP based external authentication for Aerospike
+# using Aerospike Kubernetes Operator.
+#
+# This example assumes openldap cluster deployed following instructions
+# and manifests from the /openldap/ folder. See openldap/README.md.
+#
+# Assumes OpenLDAP installed from openldap/ folder. For details
+# see https://docs.aerospike.com/server/operations/configure/security/ldap
+
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+spec:
+  size: 2
+  image: aerospike/aerospike-server-enterprise:6.1.0.1
+
+  podSpec:
+    multiPodPerHost: true
+
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - name: workdir
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 3Gi
+        aerospike:
+          path: /opt/aerospike
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
+
+  aerospikeAccessControl:
+    users:
+      # Internal admin user.
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  operatorClientCert:
+    tlsClientName: aerospike-a-0.test-runner
+    secretCertSource:
+      secretName: aerospike-secret
+      caCertsFilename: cacert.pem
+      clientCertFilename: svc_cluster_chain.pem
+      clientKeyFilename: svc_key.pem
+
+  aerospikeConfig:
+    logging:
+      - name: /var/log/aerospike/aerospike.log
+        any: info
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security:
+      ldap:
+        # The patterns are based on the demo OpenLDAP deployment.
+        # You need to adapt them to your setup.
+        query-base-dn: 'dc=example,dc=org'
+        server: ldap://openldap.default.svc.cluster.local:1389
+        disable-tls: true
+        query-user-dn: "cn=admin,dc=example,dc=org"
+        query-user-password-file: /etc/aerospike/secret/ldap-passwd.txt
+        user-dn-pattern: 'cn=${un},ou=users,dc=example,dc=org'
+        role-query-search-ou: true
+        role-query-patterns:
+          - '(&(objectClass=groupOfNames)(member=cn=${un},ou=users,dc=example,dc=org))'
+        polling-period: 10
+    network:
+      service:
+        tls-name: aerospike-a-0.test-runner
+        tls-authenticate-client: false
+        tls-port: 4333
+      heartbeat:
+        tls-name: aerospike-a-0.test-runner
+        tls-port: 3012
+      fabric:
+        tls-name: aerospike-a-0.test-runner
+        tls-port: 3011
+      tls:
+        - name: aerospike-a-0.test-runner
+          cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
+          key-file: /etc/aerospike/secret/svc_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        storage-engine:
+          type: memory

@@ -8,7 +8,8 @@
 bin
 testbin/*
 /manager
-/aerospike-kubernetes-opertor
+/aerospike-kubernetes-operator
+/snyk-linux
 
 # Test deployment config
 test/config
@@ -42,5 +43,12 @@ GTAGS
 
 # OLM Bundle
 bundle/
+bundle-*/
+downloaded/
+upgrade-testing/
 bundle.Dockerfile
 .DS_Store
+
+# RedHat OpenShift Preflight
+preflight.log
+artifacts/

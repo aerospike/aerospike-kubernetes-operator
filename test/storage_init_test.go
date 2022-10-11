@@ -1,20 +1,16 @@
-//go:build !noac
-// +build !noac
-
-// Tests storage initialization works as expected.
-// If specifed devices should be initialized only on first use.
-
 package test
 
+// Tests storage initialization works as expected.
+// If specified devices should be initialized only on first use.
 import (
 	goctx "context"
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -28,11 +24,9 @@ const magicBytes = "aero"
 var _ = Describe(
 	"StorageInit", func() {
 		ctx := goctx.TODO()
-
 		Context(
 			"When doing valid operations", func() {
 
-				falseVar := false
 				trueVar := true
 
 				containerName := "tomcat"
@@ -49,225 +43,39 @@ var _ = Describe(
 						},
 					},
 				}
-				// Create pods and strorge devices write data to the devices.
-				// - deletes cluster without cascade delete of volumes.
-				// - recreate and check if volumes are reinitialized correctly.
-				fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
-				// TODO
-				ddInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDD
-				blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
-
-				storageConfig := asdbv1beta1.AerospikeStorageSpec{
-					BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-						InputCascadeDelete: &falseVar,
-					},
-					FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-						InputCascadeDelete: &falseVar,
-					},
-					Volumes: []asdbv1beta1.VolumeSpec{
-						{
-							Name: "file-noinit",
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeFilesystem,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/filesystem-noinit",
-							},
-						},
-						{
-							Name: "file-init",
-							AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-								InputInitMethod: &fileDeleteInitMethod,
-							},
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeFilesystem,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/filesystem-init",
-							},
-						},
-						{
-							Name: "device-noinit",
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeBlock,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/blockdevice-noinit",
-							},
-						},
-						{
-							Name: "device-dd",
-							AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-								InputInitMethod: &ddInitMethod,
-							},
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeBlock,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/blockdevice-init-dd",
-							},
-						},
-						{
-							Name: "device-blkdiscard",
-							AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-								InputInitMethod: &blkDiscardInitMethod,
-							},
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeBlock,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/blockdevice-init-blkdiscard",
-							},
-						},
-						{
-							Name: "file-noinit-1",
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeFilesystem,
-								},
-							},
-							Sidecars: []asdbv1beta1.VolumeAttachment{
-								{
-									ContainerName: containerName,
-									Path:          "/opt/aerospike/filesystem-noinit",
-								},
-							},
-						},
-						// {
-						// 	Name: "file-init-1",
-						// 	AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-						// 		InputInitMethod: &fileDeleteInitMethod,
-						// 	},
-						// 	Source: asdbv1beta1.VolumeSource{
-						// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						// 			Size:         resource.MustParse("1Gi"),
-						// 			StorageClass: storageClass,
-						// 			VolumeMode:   corev1.PersistentVolumeFilesystem,
-						// 		},
-						// 	},
-						// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-						// 		{
-						// 			ContainerName: containerName,
-						// 			Path:          "/opt/aerospike/filesystem-init",
-						// 		},
-						// 	},
-						// },
-						// {
-						// 	Name: "device-noinit-1",
-						// 	Source: asdbv1beta1.VolumeSource{
-						// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						// 			Size:         resource.MustParse("1Gi"),
-						// 			StorageClass: storageClass,
-						// 			VolumeMode:   corev1.PersistentVolumeBlock,
-						// 		},
-						// 	},
-						// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-						// 		{
-						// 			ContainerName: containerName,
-						// 			Path:          "/opt/aerospike/blockdevice-noinit",
-						// 		},
-						// 	},
-						// },
-						{
-							Name: "device-dd-1",
-							AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-								InputInitMethod: &ddInitMethod,
-							},
-							Source: asdbv1beta1.VolumeSource{
-								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeBlock,
-								},
-							},
-							Sidecars: []asdbv1beta1.VolumeAttachment{
-								{
-									ContainerName: containerName,
-									Path:          "/opt/aerospike/blockdevice-init-dd",
-								},
-							},
-						},
-						// {
-						// 	Name: "device-blkdiscard-1",
-						// 	AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-						// 		InputInitMethod: &blkDiscardInitMethod,
-						// 	},
-						// 	Source: asdbv1beta1.VolumeSource{
-						// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						// 			Size:         resource.MustParse("1Gi"),
-						// 			StorageClass: storageClass,
-						// 			VolumeMode:   corev1.PersistentVolumeBlock,
-						// 		},
-						// 	},
-						// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-						// 		{
-						// 			ContainerName: containerName,
-						// 			Path:          "/opt/aerospike/blockdevice-init-blkdiscard",
-						// 		},
-						// 	},
-						// },
-						{
-							Name: aerospikeConfigSecret,
-							Source: asdbv1beta1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: tlsSecretName,
-								},
-							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-								Path: "/etc/aerospike/secret",
-							},
-						},
-					},
-				}
-
-				var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-				rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
-
-				racks := []asdbv1beta1.Rack{
-					{
-						ID:      1,
-						Storage: rackStorageConfig,
-					},
-					{
-						ID: 2,
-					},
-				}
 
 				clusterName := "storage-init"
 				clusterNamespacedName := getClusterNamespacedName(
 					clusterName, namespace,
 				)
 
-				aeroCluster := getStorageInitAerospikeCluster(
-					clusterNamespacedName, storageConfig, racks,
-				)
-
-				aeroCluster.Spec.PodSpec = podSpec
-
 				It(
 					"Should validate all storage-init policies", func() {
+
+						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+						if cloudProvider == CloudProviderAWS {
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+						}
+						racks := []asdbv1beta1.Rack{
+							{
+								ID:      1,
+								Storage: rackStorageConfig,
+							},
+							{
+								ID: 2,
+							},
+						}
+
+						storageConfig := getAerospikeStorageConfig(
+							containerName, false, "1Gi", cloudProvider,
+						)
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
 
 						By("Cleaning up previous pvc")
 
@@ -279,14 +87,18 @@ var _ = Describe(
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, false, false)
+						err = checkData(
+							aeroCluster, false, false, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
-						By("Writing some data to the all volumes")
+						By("Writing some data to all volumes")
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
@@ -297,7 +109,9 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
@@ -306,7 +120,8 @@ var _ = Describe(
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
-							clusterNamespacedName, storageConfig, racks,
+							clusterNamespacedName, *storageConfig, racks,
+							prevImage,
 						)
 						aeroCluster.Spec.PodSpec = podSpec
 						err = aerospikeClusterCreateUpdate(
@@ -315,7 +130,9 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking volumes that need initialization, they should not have data")
-						err = checkData(aeroCluster, false, true)
+						err = checkData(
+							aeroCluster, false, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						if aeroCluster != nil {
@@ -342,6 +159,43 @@ var _ = Describe(
 						}
 					},
 				)
+
+				It(
+					"Should work for large device with long init", func() {
+
+						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+						if cloudProvider == CloudProviderAWS {
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+						}
+						racks := []asdbv1beta1.Rack{
+							{
+								ID:      1,
+								Storage: rackStorageConfig,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
 			},
 		)
 	},
@@ -349,7 +203,7 @@ var _ = Describe(
 
 func checkData(
 	aeroCluster *asdbv1beta1.AerospikeCluster, assertHasData bool,
-	wasDataWritten bool,
+	wasDataWritten bool, skip map[string]struct{},
 ) error {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
@@ -376,6 +230,9 @@ func checkData(
 			if volume.Source.PersistentVolume == nil {
 				continue
 			}
+			if _, ok := skip[volume.Name]; ok {
+				continue
+			}
 			// t.Logf("Check data for volume %v", volume.Path)
 			var volumeHasData bool
 			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
@@ -385,7 +242,7 @@ func checkData(
 			}
 
 			var expectedHasData = assertHasData && wasDataWritten
-			if volume.InitMethod == asdbv1beta1.AerospikeVolumeInitMethodNone {
+			if volume.InitMethod == asdbv1beta1.AerospikeVolumeMethodNone {
 				expectedHasData = wasDataWritten
 			}
 
@@ -398,7 +255,7 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not.", volume.Name,
+					"expected volume %s %s but is not", volume.Name,
 					expectedStr,
 				)
 			}
@@ -414,12 +271,27 @@ func writeDataToVolumes(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 	}
 
 	for _, pod := range podList.Items {
-		// TODO: check rack as well.
+
+		rackID, err := getRackID(&pod)
+		if err != nil {
+			return fmt.Errorf("failed to get rackID pods: %v", err)
+		}
+
 		storage := aeroCluster.Spec.Storage
-		err := writeDataToPodVolumes(storage, &pod)
+
+		if rackID != 0 {
+			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+				if rack.ID == rackID {
+					storage = rack.Storage
+				}
+			}
+		}
+
+		err = writeDataToPodVolumes(storage, &pod)
 		if err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -512,6 +384,7 @@ func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
 	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
+	image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
@@ -521,7 +394,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   latestImage,
+			Image:   image,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},
@@ -565,6 +438,75 @@ func getStorageInitAerospikeCluster(
 							},
 						},
 					},
+				},
+			},
+		},
+	}
+}
+
+func getLongInitStorageConfig(
+	inputCascadeDelete bool, storageSize string, cloudProvider CloudProvider,
+) *asdbv1beta1.AerospikeStorageSpec {
+
+	// Create pods and storage devices write data to the devices.
+	// - deletes cluster without cascade delete of volumes.
+	// - recreate and check if volumes are reinitialized correctly.
+	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
+	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+	if cloudProvider == CloudProviderAWS {
+		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
+
+	}
+
+	return &asdbv1beta1.AerospikeStorageSpec{
+		BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputCascadeDelete: &inputCascadeDelete,
+		},
+		FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputCascadeDelete: &inputCascadeDelete,
+		},
+		Volumes: []asdbv1beta1.VolumeSpec{
+			{
+				Name: "file-init",
+				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &fileDeleteInitMethod,
+				},
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeFilesystem,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/filesystem-init",
+				},
+			},
+			{
+				Name: "device-dd",
+				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &ddInitMethod,
+				},
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/blockdevice-init-dd",
+				},
+			},
+			{
+				Name: aerospikeConfigSecret,
+				Source: asdbv1beta1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: tlsSecretName,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/etc/aerospike/secret",
 				},
 			},
 		},
