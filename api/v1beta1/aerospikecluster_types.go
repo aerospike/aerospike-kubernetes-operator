@@ -39,6 +39,9 @@ type AerospikeClusterSpec struct {
 	// Aerospike server image
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
+	// PauseAerospikeOperations pause all the Aerospike related operation for a particular Aerospike cluster
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pause Aerospike Operations"
+	PauseAerospikeOperations bool `json:"pauseClusterOperations,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`

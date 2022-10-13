@@ -198,6 +198,10 @@ spec:
                       list '
                     type: string
                 type: object
+              pauseClusterOperations:
+                description: PauseAerospikeOperations pause all the Aerospike related
+                  operation for
+                type: boolean
               podSpec:
                 description: Specify additional configuration for the Aerospike pods
                 properties:

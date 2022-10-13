@@ -93,7 +93,7 @@ type RackState struct {
 
 // Reconcile AerospikeCluster object
 func (r *AerospikeClusterReconciler) Reconcile(
-	_ context.Context, request reconcile.Request,
+	ctx context.Context, request reconcile.Request,
 ) (ctrl.Result, error) {
 	log := r.Log.WithValues("aerospikecluster", request.NamespacedName)
 
@@ -101,14 +101,19 @@ func (r *AerospikeClusterReconciler) Reconcile(
 
 	// Fetch the AerospikeCluster instance
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster)
-	if err != nil {
+	if err := r.Client.Get(ctx, request.NamespacedName, aeroCluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{Requeue: true}, err
+	}
+
+	if aeroCluster.Spec.PauseAerospikeOperations {
+		log.Info("Skipping Reconciliation as operations are paused for Aerospike cluster",
+			"namespace/name", request.String())
+		return ctrl.Result{}, nil
 	}
 
 	cr := SingleClusterReconciler{
