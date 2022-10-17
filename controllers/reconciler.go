@@ -136,7 +136,8 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	policy := r.getClientPolicyFromSpec()
 
 	// Wait for migration before setting roster (only in scale down)
-	if r.aeroCluster.Spec.Size < r.aeroCluster.Status.Size {
+	if r.aeroCluster.Status.AerospikeConfig != nil &&
+		(r.aeroCluster.Spec.Size < r.aeroCluster.Status.Size) {
 		if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 			return res.result, res.err
 		}

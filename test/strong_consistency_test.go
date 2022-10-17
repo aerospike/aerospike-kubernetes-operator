@@ -3,14 +3,15 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"strings"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v5"
-	. "github.com/onsi/ginkgo"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,7 +20,7 @@ import (
 var _ = Describe("SCMode", func() {
 	ctx := goctx.TODO()
 
-	clusterName := "scmode"
+	clusterName := "sc-mode"
 	clusterNamespacedName := getClusterNamespacedName(
 		clusterName, namespace,
 	)
@@ -27,7 +28,7 @@ var _ = Describe("SCMode", func() {
 	Context("When doing valid operation", func() {
 
 		// Dead/Unavailable partition
-		// If there are D/U p then it should stuck and not succeed,
+		// If there are D/U p then it should get stuck and not succeed,
 
 		// Should we allow replication factor 1 in general or in SC mode
 		// Rack aware setup
@@ -54,7 +55,8 @@ var _ = Describe("SCMode", func() {
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("Should test sc cluster lifecycle in a no rack cluster", func() {
@@ -70,7 +72,8 @@ var _ = Describe("SCMode", func() {
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("Should test sc cluster blocked node in single namespace cluster", func() {
@@ -95,7 +98,8 @@ var _ = Describe("SCMode", func() {
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 
-			deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 	})
@@ -110,13 +114,13 @@ var _ = Describe("SCMode", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			scflag := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"]
+			scFlag := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"]
 
-			var scflagBool bool
-			if scflag != nil {
-				scflagBool = scflag.(bool)
+			var scFlagBool bool
+			if scFlag != nil {
+				scFlagBool = scFlag.(bool)
 			}
-			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"] = !scflagBool
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"] = !scFlagBool
 
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
@@ -201,14 +205,17 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 				break
 			}
 		}
-		Expect(found).To(BeTrue(), "roster node should be in pod list", "rosterNode", rosterNode, "podlist", aeroCluster.Status.Pods)
+		Expect(found).To(BeTrue(), "roster node should be in pod list", "rosterNode", rosterNode, "podList", aeroCluster.Status.Pods)
 
 	}
 
 	// Check3 Scaleup: pod should be in roster or in blockList
-	for _, pod := range aeroCluster.Status.Pods {
+	for podName, pod := range aeroCluster.Status.Pods {
 		nodeID := strings.TrimLeft(pod.Aerospike.NodeID, "0")
-		rackID := pod.Aerospike.RackID
+		rackIDPtr, err := utils.GetRackIDFromPodName(podName)
+		Expect(err).ToNot(HaveOccurred())
+		rackID := *rackIDPtr
+
 		nodeRoster := nodeID
 		if rackID != 0 {
 			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
@@ -216,7 +223,7 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 		if !v1beta1.ContainsString(aeroCluster.Spec.RosterBlockList, nodeID) &&
 			!v1beta1.ContainsString(rosterList, nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod %v", rosterList, aeroCluster.Spec.RosterBlockList, nodeRoster)
+			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod roster %v, rackID %v", rosterList, aeroCluster.Spec.RosterBlockList, nodeRoster, rackID)
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}

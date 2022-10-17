@@ -485,6 +485,23 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
+	// TODO: Set roster after scaling one rack. Otherwise First rack will not be ready un-till last rack
+	// This will be a problem when user add a new rack and removed old rack simultaneously.
+	// New rack will not be added in roster and old rack may be removed, leaving no nodes in roster
+
+	// If status is nil then cluster is being deployed for the first time.
+	// Admin user will not have permission to set roster,
+	// before reconciling access-control (which is done at the end of deployment),
+	if r.aeroCluster.Status.AerospikeConfig != nil {
+		// Setup roster for added nodes.
+		// This should be set so that new nodes can take up the load
+		// Otherwise new nodes will not be in roster and scale down will further reduce the size
+		if err := r.getAndSetRoster(r.getClientPolicy()); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return found, reconcileError(err)
+		}
+	}
+
 	// return a fresh copy
 	found, err = r.getSTS(rackState)
 	if err != nil {

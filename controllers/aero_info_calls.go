@@ -29,80 +29,78 @@ import (
 // Aerospike helper
 //------------------------------------------------------------------------------------
 
-func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
-	pod *corev1.Pod, ignorablePods []corev1.Pod,
-) reconcileResult {
-	// Skip SC namespace in blocked node
-	// If node not blocked then normal flow
-	// If node blocked then skip SC namespaces
-	// Find non SC namespace, if not found then go out. No need for quiesce
-	r.Log.Info("Do quiesce for node", "node", pod.Name)
+//func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
+//	pod *corev1.Pod, ignorablePods []corev1.Pod,
+//) reconcileResult {
+//	// Skip SC namespace in blocked node
+//	// If node not blocked then normal flow
+//	// If node blocked then skip SC namespaces
+//	// Find non SC namespace, if not found then go out. No need for quiesce
+//	r.Log.Info("Do quiesce for node", "node", pod.Name)
+//
+//	hostConn, err := r.newHostConn(pod)
+//	if err != nil {
+//		return reconcileError(err)
+//	}
+//
+//	policy := r.getClientPolicy()
+//
+//	namespaces, err := r.getNamespaces(policy, hostConn)
+//	if err != nil {
+//		return reconcileError(err)
+//	}
+//
+//	r.Log.Info("Namespace list", "namespaces", namespaces)
+//
+//	var scNamespaces []string
+//	for _, ns := range namespaces {
+//		isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
+//		if err != nil {
+//			return reconcileError(err)
+//		}
+//
+//		if isEnabled {
+//			scNamespaces = append(scNamespaces, ns)
+//		}
+//	}
+//
+//	return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, scNamespaces)
+//}
 
-	hostConn, err := r.newHostConn(pod)
-	if err != nil {
-		return reconcileError(err)
-	}
-
-	policy := r.getClientPolicy()
-
-	namespaces, err := r.getNamespaces(policy, hostConn)
-	if err != nil {
-		return reconcileError(err)
-	}
-
-	r.Log.Info("Namespace list", "namespaces", namespaces)
-
-	//// Find non-sc namespace or a sc namespace for which node is part of roster
-	//// and use that namespace to quiesce the node
-	//for _, ns := range namespaces {
-	//	isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
-	//	if err != nil {
-	//		return reconcileError(err)
-	//	}
-	//
-	//	if !isEnabled {
-	//		r.Log.Info("Namespace is not sc enabled, do quiesce using this namespace", "namespace", ns)
-	//		return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
-	//	}
-	//
-	//	isInRoster, err := r.isNodeInRoster(policy, hostConn, ns)
-	//	if err != nil {
-	//		return reconcileError(err)
-	//	}
-	//
-	//	if isInRoster {
-	//		r.Log.Info("Namespace is sc enabled and in roster, do quiesce using this namespce", "namespace", ns)
-	//		return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, ns)
-	//	}
-	//
-	//	r.Log.Info("Node is not in roster for namespace. Skip quiesce", "node", pod.Name, "namespace", ns)
-	//}
-
-	var scNamespaces []string
-	for _, ns := range namespaces {
-		isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
-		if err != nil {
-			return reconcileError(err)
-		}
-
-		if isEnabled {
-			scNamespaces = append(scNamespaces, ns)
-		}
-	}
-
-	return r.waitForNodeSafeStopReadyAndQuiesce(policy, pod, ignorablePods, scNamespaces)
-
-	//r.Log.Info("Quiesce not needed in node. Node is blocked or does not have any non-sc namespace", "node", pod.Name)
-	//
-	//return reconcileSuccess()
-}
+//func (r *SingleClusterReconciler) getSCNamespaces(policy *as.ClientPolicy, pod *corev1.Pod) ([]string, error) {
+//	hostConn, err := r.newHostConn(pod)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	namespaces, err := r.getNamespaces(policy, hostConn)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	r.Log.Info("Namespace list", "namespaces", namespaces)
+//
+//	var scNamespaces []string
+//	for _, ns := range namespaces {
+//		isEnabled, err := r.isNamespaceSCEnabled(policy, hostConn, ns)
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		if isEnabled {
+//			scNamespaces = append(scNamespaces, ns)
+//		}
+//	}
+//	return scNamespaces, nil
+//}
 
 // waitForNodeSafeStopReady waits util the input pod is safe to stop,
 // skipping pods that are not running and present in ignorablePods for stability check.
 // The ignorablePods list should be a list of failed or pending pods that are going to be
 // deleted eventually and are safe to ignore in stability checks.
-func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.ClientPolicy, pod *corev1.Pod, ignorablePods []corev1.Pod, scNamespaces []string) reconcileResult {
-
+func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
+	pod *corev1.Pod, ignorablePods []corev1.Pod,
+) reconcileResult {
 	// Remove a node only if cluster is stable
 	err := r.waitForAllSTSToBeReady()
 	if err != nil {
@@ -116,9 +114,10 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {
-		return reconcileError(fmt.Errorf(
-			"failed to get hostConn for aerospike cluster nodes: %v", err,
-		),
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
 		)
 	}
 	r.Recorder.Eventf(
@@ -126,6 +125,8 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.
 		"[rack-%s] Waiting for migrations to complete",
 		pod.Labels[asdbv1beta1.AerospikeRackIdLabel],
 	)
+
+	policy := r.getClientPolicy()
 
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
@@ -147,8 +148,28 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.
 			),
 		)
 	}
+
+	//scNamespaces, err := r.getSCNamespaces([]*deployment.HostConn{selectedHostConn}, policy)
+	//if err != nil {
+	//	return reconcileError(err)
+	//}
+	//
+	//blockedPodList, err := r.podsForRosterBlockList()
+	//if err != nil {
+	//	return reconcileError(err)
+	//}
+	//
+	//var blockedPodsHostIDs []string
+	//for _, pod := range blockedPodList {
+	//	blockedPodsHostIDs = append(blockedPodsHostIDs, r.hostIDForPod(&pod))
+	//}
+	//
+	//r.Log.V(1).Info("Doing quiesce", "removedNSes", removedNSes, "rosterBlockedPodsHostIDs", blockedPodsHostIDs, "rosterBlockList", r.aeroCluster.Spec.RosterBlockList, "scNamespaces", scNamespaces)
+	//
+	r.Log.V(1).Info("Doing quiesce", "removedNSes", removedNSes, "rosterBlockList", r.aeroCluster.Spec.RosterBlockList)
+
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, []*deployment.HostConn{selectedHostConn}, removedNSes, r.aeroCluster.Spec.RosterBlockList, scNamespaces,
+		r.Log, r.getClientPolicy(), allHostConns, []*deployment.HostConn{selectedHostConn}, removedNSes,
 	); err != nil {
 		return reconcileError(err)
 	}
@@ -156,9 +177,39 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReadyAndQuiesce(policy *as.
 	return reconcileSuccess()
 }
 
+func getNodeIDFromPodName(podName string) string {
+	// POD_ORDINAL="{name[-1]}"
+	// RACK_ID="{name[-2]}"
+	// NODE_ID="${RACK_ID}a${POD_ORDINAL}"
+	nameSection := strings.Split(podName, "-")
+	rackID := nameSection[len(nameSection)-2]
+	idx := nameSection[len(nameSection)-1]
+	nodeID := "A" + idx
+	if rackID != "0" {
+		nodeID = rackID + nodeID
+	}
+	return nodeID
+}
+
+func (r *SingleClusterReconciler) podsForRosterBlockList() ([]corev1.Pod, error) {
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		return nil, err
+	}
+
+	var blockedPods []corev1.Pod
+	for _, pod := range podList.Items {
+		nodeID := getNodeIDFromPodName(pod.Name)
+		if utils.ContainsString(r.aeroCluster.Spec.RosterBlockList, nodeID) {
+			blockedPods = append(blockedPods, pod)
+		}
+	}
+	return blockedPods, nil
+}
+
 // TODO: Check only for migration
 func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolicy, allHostConns []*deployment.HostConn) reconcileResult {
-	const maxRetry = 12
+	const maxRetry = 6
 	const retryInterval = time.Second * 10
 
 	var isStable bool
@@ -314,7 +365,8 @@ func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 	if err != nil {
 		return nil, err
 	}
-	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
+	//host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
+	host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
 	return deployment.NewHostConn(r.Log, host, asConn), nil
 }
 
@@ -336,6 +388,20 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 	}
 
 	return asConn, nil
+}
+
+func hostID(hostName string, hostPort int) string {
+	return fmt.Sprintf("%s:%d", hostName, hostPort)
+}
+
+func (r *SingleClusterReconciler) hostIDForPod(pod *corev1.Pod) string {
+	// Use pod IP and direct service port from within the operator for info calls.
+	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if tlsName == "" || port == nil {
+		port = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+	}
+
+	return hostID(pod.Status.PodIP, *port)
 }
 
 // ParseInfoIntoMap parses info string into a map.

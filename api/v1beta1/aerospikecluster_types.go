@@ -896,12 +896,10 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	// RosterBlockList
 	if len(spec.RosterBlockList) != 0 {
-		rosterBlockList := []string{}
-		if err := lib.DeepCopy(
+		var rosterBlockList []string
+		lib.DeepCopy(
 			&rosterBlockList, &spec.RosterBlockList,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.RosterBlockList = rosterBlockList
 	}
 
@@ -981,12 +979,10 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	// RosterBlockList
 	if len(status.RosterBlockList) != 0 {
-		rosterBlockList := []string{}
-		if err := lib.DeepCopy(
+		var rosterBlockList []string
+		lib.DeepCopy(
 			&rosterBlockList, &status.RosterBlockList,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.RosterBlockList = rosterBlockList
 	}
 

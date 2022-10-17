@@ -103,6 +103,11 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		c.Spec.ValidationPolicy = &validationPolicy
 	}
 
+	// Update rosterBlockList
+	for idx, nodeID := range c.Spec.RosterBlockList {
+		c.Spec.RosterBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
 	return nil
 }
 

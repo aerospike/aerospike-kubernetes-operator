@@ -26,7 +26,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy) error
 		return err
 	}
 
-	// TODO: Should we allow diff sc nodes on different nodes. What if a sc ns is added dynamically?
+	// TODO: Should we allow diff sc namespaces on different nodes. What if a sc ns is added dynamically?
 	// dynamic sc ns can be allowed but roster should be set only after all the nodes have sc ns
 	scNsList, err := r.getSCNamespaces(hostConns, policy)
 	if err != nil {
@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) getSCNamespaces(hostConns []*deployment.HostCo
 			scNsList = nsList
 		}
 		if !reflect.DeepEqual(scNsList, nsList) {
-			return nil, fmt.Errorf("SC namespaces list can not be different for nodes. node1 %v, node2 %v", scNsList, nsList)
+			return nil, fmt.Errorf("SC namespaces list can not be different for nodes. list1 %v, list2 %v", scNsList, nsList)
 		}
 	}
 	return scNsList, nil
@@ -102,12 +102,12 @@ func (r *SingleClusterReconciler) getRosterNodesForNs(hostConns []*deployment.Ho
 	rosterNodes := map[string]map[string]string{}
 
 	for _, hostConn := range hostConns {
-		kvmap, err := r.getRoster(hostConn, policy, ns)
+		kvMap, err := r.getRoster(hostConn, policy, ns)
 		if err != nil {
 			return nil, err
 		}
 
-		rosterNodes[hostConn.String()] = kvmap
+		rosterNodes[hostConn.String()] = kvMap
 	}
 
 	r.Log.V(1).Info("roster nodes in cluster", "roster_nodes", rosterNodes)
@@ -145,7 +145,7 @@ func (r *SingleClusterReconciler) setRosterForNs(hostConns []*deployment.HostCon
 		var newObservedNodesList []string
 
 		for _, obn := range observedNodesList {
-			// nodeRoster := nodeID + "@" + fmt.Sprint(rackID)
+			// nodeRoster := nodeID + "@" + rackID
 			obnNodeID := strings.Split(obn, "@")[0]
 			if !v1beta1.ContainsString(r.aeroCluster.Spec.RosterBlockList, obnNodeID) {
 				newObservedNodesList = append(newObservedNodesList, obn)
@@ -207,7 +207,7 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 
 	for _, hostConn := range hostConns {
 
-		kvmap, err := r.getNamespaceStats(hostConn, policy, ns)
+		kvMap, err := r.getNamespaceStats(hostConn, policy, ns)
 		if err != nil {
 			return err
 		}
@@ -217,13 +217,13 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 		// Will turn into dead_partitions if still unavailable when all roster nodes are present.
 		// Some partitions would typically be unavailable under some cluster split situations or
 		// when removing more than replication-factor number of nodes from a strong-consistency enabled namespace
-		if kvmap[nsKeyUnavailablePartitions] != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero unavailable_partitions %v", ns, kvmap[nsKeyUnavailablePartitions])
+		if kvMap[nsKeyUnavailablePartitions] != "0" {
+			return fmt.Errorf("cluster namespace %s has non-zero unavailable_partitions %v", ns, kvMap[nsKeyUnavailablePartitions])
 		}
 
 		// https://docs.aerospike.com/reference/metrics#dead_partitions
-		if kvmap[nsKeyDeadPartitions] != "0" {
-			return fmt.Errorf("cluster namespace %s has non-zero dead_partitions %v", ns, kvmap[nsKeyDeadPartitions])
+		if kvMap[nsKeyDeadPartitions] != "0" {
+			return fmt.Errorf("cluster namespace %s has non-zero dead_partitions %v", ns, kvMap[nsKeyDeadPartitions])
 		}
 	}
 	return nil
@@ -262,22 +262,21 @@ func (r *SingleClusterReconciler) isNamespaceSCEnabled(policy *as.ClientPolicy, 
 		return false, err
 	}
 
-	r.Log.Info("Check if namespace is SC namespace", "ns", ns, "nsstat", res)
-
 	configs, err := ParseInfoIntoMap(res[cmd], ";", "=")
 	if err != nil {
 		return false, err
 	}
-	scstr, ok := configs[nsKeyStrongConsistency]
+	scStr, ok := configs[nsKeyStrongConsistency]
 	if !ok {
 		return false, fmt.Errorf("strong-consistency config not found, config %v", res)
 	}
-	scbool, err := strconv.ParseBool(scstr)
+	scBool, err := strconv.ParseBool(scStr)
 	if err != nil {
 		return false, err
 	}
+	r.Log.Info("Check if namespace is SC namespace", "ns", ns, nsKeyStrongConsistency, scBool)
 
-	return scbool, nil
+	return scBool, nil
 }
 
 // Info calls
