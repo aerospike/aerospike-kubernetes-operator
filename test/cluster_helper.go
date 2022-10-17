@@ -181,6 +181,33 @@ func rollingRestartClusterByAddingNamespaceDynamicallyTest(
 	return err
 }
 
+func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Change namespace list
+	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList = nsList[:len(nsList)-1]
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
+}
+
 func validateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, updatedKeys []string,

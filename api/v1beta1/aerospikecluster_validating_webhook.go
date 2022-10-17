@@ -785,14 +785,12 @@ func validateNamespaceConfig(
 				continue
 			}
 
-			if !isDeviceNamespace(nsConf) {
-				// storage-engine pmem
+			if !isDeviceOrPmemNamespace(nsConf) {
 				return fmt.Errorf(
 					"storage-engine not supported for namespace %v", nsConf,
 				)
 			}
 
-			// TODO: worry about pmem.
 			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf(
@@ -898,6 +896,11 @@ func validateNamespaceConfig(
 		} else {
 			return fmt.Errorf("storage-engine config is required for namespace")
 		}
+	}
+
+	err = validateStorageEngineDeviceList(nsConfInterfaceList)
+	if err != nil {
+		return err
 	}
 
 	// Validate index-type
@@ -1135,7 +1138,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newNsConfList := newConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
-		// Validate new namespaceonf
+		// Validate new namespaceconf
 		singleConf, ok := singleConfInterface.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf(
@@ -1143,7 +1146,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 			)
 		}
 
-		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
+		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
 		oldNsConfList := oldConf["namespaces"].([]interface{})
 
 		for _, oldSingleConfInterface := range oldNsConfList {
@@ -1169,9 +1172,44 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 				}
 			}
 		}
-
 	}
+
+	err := validateStorageEngineDeviceList(newNsConfList)
+	if err != nil {
+		return err
+	}
+
 	// Check for namespace name len
+	return nil
+}
+
+func validateStorageEngineDeviceList(nsConfList []interface{}) error {
+	deviceList := map[string]string{}
+
+	// build a map device -> namespace
+	for _, nsConfInterface := range nsConfList {
+		nsConf := nsConfInterface.(map[string]interface{})
+		namespace := nsConf["name"].(string)
+		storage := nsConf["storage-engine"].(map[string]interface{})
+		devices, ok := storage["devices"]
+		if !ok {
+			continue
+		}
+
+		for _, d := range devices.([]interface{}) {
+			device := d.(string)
+			previousNamespace, exists := deviceList[device]
+			if exists {
+				return fmt.Errorf(
+					"device %s is already being referenced in multiple namespaces (%s, %s)",
+					device, previousNamespace, namespace,
+				)
+			} else {
+				deviceList[device] = namespace
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1372,8 +1410,8 @@ func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return ok && typeStr == "memory"
 }
 
-// isDeviceNamespace returns true if this namespace config uses device for storage.
-func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
+// isDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
+func isDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf["storage-engine"]
 	if !ok {
 		return false
@@ -1382,7 +1420,7 @@ func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
 	storageConf := storage.(map[string]interface{})
 	typeStr, ok := storageConf["type"]
 
-	return ok && typeStr == "device"
+	return ok && (typeStr == "device" || typeStr == "pmem")
 }
 
 // isShmemIndexTypeNamespace returns true if this namespace index type is shmem.
