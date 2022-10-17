@@ -212,34 +212,34 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		)
 	}
 
-	asConfig := rack.AerospikeConfig
+	asConfig := r.aeroCluster.Spec.AerospikeConfig
 	var serviceTlsPortParam int32
-	if _, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(&asConfig); serviceTlsPort != nil {
+	if _, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTlsPort != nil {
 		serviceTlsPortParam = int32(*serviceTlsPort)
 	}
 
 	var servicePortParam int32
-	if servicePort := asdbv1beta1.GetServicePort(&asConfig); servicePort != nil {
+	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
 		servicePortParam = int32(*servicePort)
 	}
 
 	var hbTlsPortParam int32
-	if _, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(&asConfig); hbTlsPort != nil {
+	if _, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTlsPort != nil {
 		hbTlsPortParam = int32(*hbTlsPort)
 	}
 
 	var hbPortParam int32
-	if hbPort := asdbv1beta1.GetHeartbeatPort(&asConfig); hbPort != nil {
+	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
 		hbPortParam = int32(*hbPort)
 	}
 
 	var fabricTlsPortParam int32
-	if _, fabricTlsPort := asdbv1beta1.GetFabricTLSNameAndPort(&asConfig); fabricTlsPort != nil {
+	if _, fabricTlsPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTlsPort != nil {
 		fabricTlsPortParam = int32(*fabricTlsPort)
 	}
 
 	var fabricPortParam int32
-	if fabricPort := asdbv1beta1.GetFabricPort(&asConfig); fabricPort != nil {
+	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
 		fabricPortParam = int32(*fabricPort)
 	}
 

@@ -140,7 +140,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 		return err
 	}
 
-	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatTlsPort != nil {
 		if err = asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
@@ -150,7 +150,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 		}
 	}
 
-	heartbeatPort := asdbv1beta1.GetHeartbeatPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatPort != nil {
 		if err = asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
@@ -171,7 +171,7 @@ func (r *SingleClusterReconciler) tipHostname(
 		return err
 	}
 
-	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatTlsPort != nil {
 		if err = asConn.TipHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
@@ -181,7 +181,7 @@ func (r *SingleClusterReconciler) tipHostname(
 		}
 	}
 
-	heartbeatPort := asdbv1beta1.GetHeartbeatPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatPort != nil {
 		if err = asConn.TipHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
@@ -265,7 +265,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 	*deployment.ASConn, error,
 ) {
 	// Use pod IP and direct service port from within the operator for info calls.
-	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if tlsName == "" || port == nil {
 		port = asdbv1beta1.GetServicePort(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
 	}

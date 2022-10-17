@@ -117,7 +117,7 @@ func (r *SingleClusterReconciler) createRack(rackState RackState) (
 
 	// NoOp if already exist
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
-	if err := r.createSTSHeadlessSvc(rackState); err != nil {
+	if err := r.createSTSHeadlessSvc(); err != nil {
 		r.Log.Error(err, "Failed to create headless service")
 		return nil, reconcileError(err)
 	}

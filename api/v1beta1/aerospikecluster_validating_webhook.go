@@ -435,7 +435,9 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		}
 
 		if rack.InputAerospikeConfig != nil {
-			if _, ok := rack.InputAerospikeConfig.Value["network"]; ok {
+			_, inputRackNetwork := rack.InputAerospikeConfig.Value["network"]
+			_, inputRackSecurity := rack.InputAerospikeConfig.Value["security"]
+			if inputRackNetwork || inputRackSecurity {
 				// Aerospike K8s Operator doesn't support different network configurations for different racks.
 				// I.e.
 				//    - the same heartbeat port (taken from current node) is used for all peers regardless to racks.

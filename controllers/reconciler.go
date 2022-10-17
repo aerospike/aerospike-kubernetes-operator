@@ -198,7 +198,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 		return err
 	}
 	enabled, err := asdbv1beta1.IsSecurityEnabled(
-		version, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
+		version, r.aeroCluster.Spec.AerospikeConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
