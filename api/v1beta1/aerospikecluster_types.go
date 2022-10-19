@@ -432,6 +432,10 @@ const (
 	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
 	//should be initialized by deleting files.
 	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
+
+	// AerospikeVolumeSingleCleanupThread specifies the single thread
+	//for disks cleanup in init container.
+	AerospikeVolumeSingleCleanupThread int = 1
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
@@ -446,6 +450,9 @@ type AerospikePersistentVolumePolicySpec struct {
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
+	// CleanupThreads determines number of parallel clean-up threads that will be running in InitContainer.
+	InputCleanupThreads *int `json:"cleanupThreads,omitempty"`
+
 	// Effective/operative value to use as the volume init method after applying defaults.
 	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
 
@@ -454,6 +461,9 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
+
+	// Effective/operative value to use for cleanup threads after applying defaults.
+	CleanupThreads int `json:"effectiveCleanupThreads,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -474,6 +484,12 @@ func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *Aerospi
 		p.CascadeDelete = defaultPolicy.CascadeDelete
 	} else {
 		p.CascadeDelete = *p.InputCascadeDelete
+	}
+
+	if p.InputCleanupThreads == nil {
+		p.CleanupThreads = defaultPolicy.CleanupThreads
+	} else {
+		p.CleanupThreads = *p.InputCleanupThreads
 	}
 }
 

@@ -13,7 +13,6 @@ import concurrent.futures
 from pprint import pprint
 
 # Constants
-MAX_WORKERS = 10
 FILE_SYSTEM_MOUNT_POINT = "/workdir/filesystem-volumes"
 BLOCK_MOUNT_POINT = "/workdir/block-volumes"
 BASE_WIPE_VERSION = 6
@@ -72,7 +71,7 @@ class Volume(object):
         return f"pod-name: {self.pod_name} volume-name: {self.volume_name} " \
                f"volume-type: {self.attachment_type} volume-path: {self.volume_path} " \
                f"effective-init-method: {self.effective_init_method} effective-wipe-method: " \
-               f"{self.effective_wipe_method}"
+               f"{self.effective_wipe_method} "
 
 
 def longest_match(matches):
@@ -378,9 +377,13 @@ def get_namespace_volume_paths(pod_name, config):
 def init_volumes(pod_name, config):
 
     volumes = []
+
     initialized_volumes = get_initialized_volumes(
         pod_name=pod_name, config=config)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+    worker_threads = int(config["spec"]["storage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
         futures = {}
 
@@ -462,7 +465,9 @@ def init_volumes(pod_name, config):
 def wipe_volumes(pod_name, config):
 
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    worker_threads = int(config["spec"]["storage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
         futures = {}
 
