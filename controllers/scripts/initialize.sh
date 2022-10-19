@@ -55,16 +55,25 @@ mkdir -p "${CONFIG_VOLUME}"
 bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
 
 # Copy scripts and binaries needed for warm restart.
-cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
-cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
-cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
+\cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
+\cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
+\cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
 
 if [ -f /configs/features.conf ]; then
-    cp /configs/features.conf "${CONFIG_VOLUME}"/
+    \cp -L /configs/features.conf "${CONFIG_VOLUME}"/
 fi
 
+# ------------------------------------------------------------------------------
+# Run the following scripts using a copy of the configmap, so that config map
+# refresh does not break them. Refresh deletes the working dir of a running
+# script and breaks the scripts.
+# ------------------------------------------------------------------------------
+CONFIG_MAP_DIR="${CONFIG_VOLUME}/configmap"
+mkdir -p "${CONFIG_MAP_DIR}"
+\cp -r -L /configs/* "${CONFIG_MAP_DIR}"
+
 # Create Aerospike configuration
-bash ./create-aerospike-conf.sh
+bash "${CONFIG_MAP_DIR}"/create-aerospike-conf.sh
 
 # Update pod status in the k8s aerospike cluster object
-bash ./update-pod-status.sh
+bash "${CONFIG_MAP_DIR}"/update-pod-status.sh

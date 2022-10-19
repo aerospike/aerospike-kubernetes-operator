@@ -38,5 +38,5 @@ fi
 source=$1
 destination=$2
 echo installing aerospike.conf into "${destination}"
-cp "${source}/aerospike.template.conf" "${destination}"/
-cp "${source}/peers" "${destination}"/
+\cp -L "${source}/aerospike.template.conf" "${destination}"/
+\cp -L "${source}/peers" "${destination}"/

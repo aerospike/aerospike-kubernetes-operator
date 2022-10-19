@@ -114,6 +114,11 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		return reconcileRequeueAfter(60)
 	}
 
+	removedNSes, err := r.removedNamespaces()
+	if err != nil {
+		return reconcileError(err)
+	}
+
 	// Quiesce node
 	selectedHostConn, err := r.newHostConn(pod)
 	if err != nil {
@@ -125,7 +130,7 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		)
 	}
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn,
+		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn, removedNSes,
 	); err != nil {
 		return reconcileError(err)
 	}

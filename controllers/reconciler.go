@@ -448,7 +448,8 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.Aerosp
 	// FIXME: Json unmarshal used by above client.Status(),Patch()  does not convert empty lists in the new JSON to empty lists in the target. Seems like a bug in encoding/json/Unmarshall.
 	//
 	// Workaround by force copying new object's status to old object's status.
-	return lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	return nil
 }
 
 // recoverFailedCreate deletes the stateful sets for every rack and retries creating the cluster again when the first cluster create has failed.
@@ -644,4 +645,30 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 		}
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) removedNamespaces() ([]string, error) {
+
+	var ns []string
+	statusNamespaces := make(map[string]bool)
+	specNamespaces := make(map[string]bool)
+
+	for _, rackStatus := range r.aeroCluster.Status.RackConfig.Racks {
+		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			statusNamespaces[statusNamespace.(map[string]interface{})["name"].(string)] = true
+		}
+	}
+
+	for _, rackSpec := range r.aeroCluster.Spec.RackConfig.Racks {
+		for _, specNamespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			specNamespaces[specNamespace.(map[string]interface{})["name"].(string)] = true
+		}
+	}
+
+	for statusNamespace := range statusNamespaces {
+		if !specNamespaces[statusNamespace] {
+			ns = append(ns, statusNamespace)
+		}
+	}
+	return ns, nil
 }
