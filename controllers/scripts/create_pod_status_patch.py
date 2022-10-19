@@ -71,7 +71,7 @@ class Volume(object):
         return f"pod-name: {self.pod_name} volume-name: {self.volume_name} " \
                f"volume-type: {self.attachment_type} volume-path: {self.volume_path} " \
                f"effective-init-method: {self.effective_init_method} effective-wipe-method: " \
-               f"{self.effective_wipe_method} "
+               f"{self.effective_wipe_method}"
 
 
 def longest_match(matches):
@@ -445,8 +445,8 @@ def init_volumes(pod_name, config):
                 logging.error(f"{volume} - Invalid volume-mode: {volume.volume_mode}")
                 raise ValueError(f"pod-name: {pod_name} - Invalid volume-mode: {volume.volume_mode}")
 
-        logging.debug(f"{volume} - Added to initialized-volume list")
-        volumes.append(volume.volume_name)
+            logging.debug(f"{volume} - Added to initialized-volume list")
+            volumes.append(volume.volume_name)
 
         for future in concurrent.futures.as_completed(fs=futures):
             cmd = futures[future]
