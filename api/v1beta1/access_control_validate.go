@@ -124,7 +124,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	// Validate roles.
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
-		aerospikeClusterSpec.RackConfig.Racks[0].AerospikeConfig, version,
+		*aerospikeClusterSpec.AerospikeConfig, version,
 	)
 	if err != nil {
 		return false, err

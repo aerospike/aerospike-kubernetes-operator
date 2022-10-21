@@ -107,8 +107,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(valid).To(
@@ -157,8 +155,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -218,8 +214,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -278,8 +272,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -334,8 +326,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -403,8 +393,6 @@ var _ = Describe(
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
-
-							setRackConfigWithSecurity(&clusterSpec)
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -476,8 +464,6 @@ var _ = Describe(
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
-
-							setRackConfigWithSecurity(&clusterSpec)
 
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -552,8 +538,6 @@ var _ = Describe(
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							setRackConfigWithSecurity(&clusterSpec)
-
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
@@ -625,8 +609,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -689,8 +671,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -758,8 +738,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -822,8 +800,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -898,8 +874,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -966,8 +940,6 @@ var _ = Describe(
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							setRackConfigWithSecurity(&clusterSpec)
-
 							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
@@ -1028,8 +1000,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
@@ -1085,8 +1055,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -1144,8 +1112,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -1206,8 +1172,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -1292,8 +1256,6 @@ var _ = Describe(
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						setRackConfigWithSecurity(&clusterSpec)
-
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						Expect(err).ToNot(HaveOccurred())
@@ -1341,8 +1303,6 @@ var _ = Describe(
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
-
-						setRackConfigWithSecurity(&clusterSpec)
 
 						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -1581,20 +1541,10 @@ var _ = Describe(
 									},
 								}
 
-								rackConfig := asdbv1beta1.RackConfig{
-									Racks: []asdbv1beta1.Rack{
-										{
-											ID:              1,
-											AerospikeConfig: *aerospikeConfigWithSecurityWithQuota,
-										},
-									},
-								}
-
 								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
 									AerospikeConfig:        aerospikeConfigWithSecurityWithQuota,
-									RackConfig:             rackConfig,
 								}
 
 								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
@@ -1642,14 +1592,11 @@ var _ = Describe(
 										},
 									},
 								}
-
 								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
 									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
 									AerospikeConfig:        aerospikeConfigWithSecurity,
 								}
-
-								setRackConfigWithSecurity(&clusterSpec)
 
 								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
 
@@ -2201,16 +2148,6 @@ func getAerospikeClusterSpecWithAccessControl(
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),
 			},
-			RackConfig: asdbv1beta1.RackConfig{
-				Racks: []asdbv1beta1.Rack{
-					{
-						ID: 1,
-						AerospikeConfig: asdbv1beta1.AerospikeConfigSpec{
-							Value: aerospikeConfSpec.getSpec(),
-						},
-					},
-				},
-			},
 		},
 	}
 }
@@ -2470,18 +2407,4 @@ func randString(n int) string {
 		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
 	return string(b)
-}
-
-func setRackConfigWithSecurity(aerospikeClusterSpec *asdbv1beta1.AerospikeClusterSpec) {
-
-	rackConfig := asdbv1beta1.RackConfig{
-		Racks: []asdbv1beta1.Rack{
-			{
-				ID:              1,
-				AerospikeConfig: *aerospikeConfigWithSecurity,
-			},
-		},
-	}
-	aerospikeClusterSpec.RackConfig = rackConfig
-	return
 }
