@@ -369,6 +369,34 @@ var _ = Describe(
 						)
 					},
 				)
+
+				Context(
+					"When using valid rack storage config", func() {
+
+						clusterName := "rack-specific-storage"
+						clusterNamespacedName := getClusterNamespacedName(
+							clusterName, namespace,
+						)
+						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+
+						It(
+							"Should validate empty common storage if per rack storage is provided",
+							func() {
+
+								err := deployCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackEnabledCluster(
+									k8sClient, ctx,
+									clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
+					},
+				)
 			},
 		)
 
@@ -435,6 +463,27 @@ var _ = Describe(
 											k8sClient, ctx, aeroCluster,
 										)
 										Expect(err).Should(HaveOccurred())
+									},
+								)
+							},
+						)
+
+						Context(
+							"When using invalid rack storage config", func() {
+
+								It(
+									"Should fail for empty common storage if per rack storage is not provided",
+									func() {
+
+										aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+											clusterNamespacedName, 2,
+										)
+
+										aeroCluster.Spec.RackConfig.Racks[0].InputStorage = nil
+
+										err := deployCluster(k8sClient, ctx, aeroCluster)
+										Expect(err).Should(HaveOccurred())
+
 									},
 								)
 							},
