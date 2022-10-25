@@ -28,6 +28,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				trueVar := true
+				threeVar := 3
 
 				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
@@ -42,11 +43,73 @@ var _ = Describe(
 							},
 						},
 					},
+					AerospikeInitContainerSpec: &asdbv1beta1.
+						AerospikeInitContainerSpec{},
 				}
 
 				clusterName := "storage-init"
 				clusterNamespacedName := getClusterNamespacedName(
 					clusterName, namespace,
+				)
+
+				It(
+					"Should work for large device with long init and multithreading", func() {
+
+						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+						if cloudProvider == CloudProviderAWS {
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+						}
+						racks := []asdbv1beta1.Rack{
+							{
+								ID:      1,
+								Storage: rackStorageConfig,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						storageConfig.BlockVolumePolicy.InputCleanupThreads = &threeVar
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
+
+						// It should be greater than given in cluster namespace
+						resourceMem := resource.MustParse("2Gi")
+						resourceCPU := resource.MustParse("500m")
+						limitMem := resource.MustParse("2Gi")
+						limitCPU := resource.MustParse("500m")
+
+						resources := &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resourceCPU,
+								corev1.ResourceMemory: resourceMem,
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    limitCPU,
+								corev1.ResourceMemory: limitMem,
+							},
+						}
+
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
 				)
 
 				It(
@@ -194,6 +257,57 @@ var _ = Describe(
 
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
+
+		Context(
+			"When doing invalid operations", func() {
+
+				threeVar := 3
+
+				clusterName := "storage-init"
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
+
+				It(
+					"Should fail multithreading in init container if resource limit is not set", func() {
+
+						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
+						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+						if cloudProvider == CloudProviderAWS {
+							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+						}
+						racks := []asdbv1beta1.Rack{
+							{
+								ID:      1,
+								Storage: rackStorageConfig,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						storageConfig.BlockVolumePolicy.InputCleanupThreads = &threeVar
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
 					},
 				)
 			},

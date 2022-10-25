@@ -381,7 +381,13 @@ def init_volumes(pod_name, config):
     initialized_volumes = get_initialized_volumes(
         pod_name=pod_name, config=config)
 
-    worker_threads = int(config["spec"]["storage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+    rack = get_rack(pod_name=pod_name, config=config)
+
+    try:
+        worker_threads = int(rack["effectiveStorage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+    except KeyError as e:
+        logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
+        raise e
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
@@ -465,7 +471,14 @@ def init_volumes(pod_name, config):
 def wipe_volumes(pod_name, config):
 
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
-    worker_threads = int(config["spec"]["storage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+
+    rack = get_rack(pod_name=pod_name, config=config)
+
+    try:
+        worker_threads = int(rack["effectiveStorage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+    except KeyError as e:
+        logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
+        raise e
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
