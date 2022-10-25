@@ -191,6 +191,36 @@ func getAerospikeConfig(
 				},
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
+			RackConfig: asdbv1beta1.RackConfig{
+				Racks: []asdbv1beta1.Rack{
+					{
+						ID: 1,
+						AerospikeConfig: asdbv1beta1.AerospikeConfigSpec{
+							Value: map[string]interface{}{
+								"service": map[string]interface{}{
+									"feature-key-file": "/etc/aerospike/secret/features.conf",
+									"migrate-threads":  1,
+								},
+								"network":  networkConf,
+								"security": map[string]interface{}{},
+								"namespaces": []interface{}{
+									map[string]interface{}{
+										"name":               "test",
+										"replication-factor": 1,
+										"memory-size":        3000000000,
+										"migrate-sleep":      0,
+										"storage-engine": map[string]interface{}{
+											"type":     "device",
+											"files":    []interface{}{"/opt/aerospike/data/test.dat"},
+											"filesize": 2000955200,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 }
