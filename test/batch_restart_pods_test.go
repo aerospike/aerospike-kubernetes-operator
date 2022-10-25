@@ -47,7 +47,7 @@ var _ = Describe("BatchRestart", func() {
 		)
 		BeforeEach(
 			func() {
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -138,20 +138,93 @@ var _ = Describe("BatchRestart", func() {
 			err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
-		// TODO: What if a namespace is in only few racks, should we allow this feature only if namespace configs across racks are same?
-		// TODO: Should we ensure that racks are not less than replication-factor?
-		// Or just keep printing warning during validation?, Can we disable the feature in this case?
-		// TODO: What if racks according to namespace replication-factor are not maintained
 	})
-	//Context("Try normal cluster lifecycle operation along with batchRestart", func() {
-	//
-	//})
+
+	Context("When doing namespace related operations", func() {
+		clusterName := "batch-restart"
+		clusterNamespacedName := getClusterNamespacedName(
+			clusterName, namespace,
+		)
+		It("Should fail if replication-factor is 1", func() {
+			By("Using RestartPercentage")
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+			racks := getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+			aeroCluster.Spec.RackConfig.RestartPercentage = 100
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			By("Using RestartNodesCount")
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+			racks = getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+			aeroCluster.Spec.RackConfig.RestartNodesCount = 10
+			err = deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Should fail if namespace is configured in single rack", func() {
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			racks := getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
+			aeroCluster.Spec.RackConfig.RestartPercentage = 100
+			aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &v1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "bar",
+							"memory-size":        1000955200,
+							"replication-factor": 2,
+							"storage-engine": map[string]interface{}{
+								"type": "memory",
+							},
+						},
+					},
+				},
+			}
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Should pass if namespace is configured in 1+ racks", func() {
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			racks := getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
+			aeroCluster.Spec.RackConfig.RestartPercentage = 100
+			config := &v1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "bar",
+							"memory-size":        1000955200,
+							"replication-factor": 2,
+							"storage-engine": map[string]interface{}{
+								"type": "memory",
+							},
+						},
+					},
+				},
+			}
+			aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = config
+			aeroCluster.Spec.RackConfig.Racks[1].InputAerospikeConfig = config
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	// TODO: Should we ensure that racks are not less than replication-factor?
+	// Or just keep printing warning during validation?, Can we disable the feature in this case?
+	// TODO: What if racks according to namespace replication-factor are not maintained
 })
 
 func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
 	BeforeEach(
 		func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 8)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -303,7 +376,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
 	BeforeEach(
 		func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 8)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}

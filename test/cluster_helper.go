@@ -712,8 +712,8 @@ func createDummyRackAwareAerospikeCluster(
 
 var defaultProtofdmax int64 = 15000
 
-func createDummyAerospikeCluster(
-	clusterNamespacedName types.NamespacedName, size int32,
+func createDummyAerospikeClusterWithRF(
+	clusterNamespacedName types.NamespacedName, size int32, rf int,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
@@ -808,7 +808,7 @@ func createDummyAerospikeCluster(
 						map[string]interface{}{
 							"name":               "test",
 							"memory-size":        1000955200,
-							"replication-factor": 1,
+							"replication-factor": rf,
 							"storage-engine": map[string]interface{}{
 								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
@@ -820,6 +820,12 @@ func createDummyAerospikeCluster(
 		},
 	}
 	return aeroCluster
+}
+
+func createDummyAerospikeCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	return createDummyAerospikeClusterWithRF(clusterNamespacedName, size, 1)
 }
 
 func UpdateClusterImage(

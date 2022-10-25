@@ -488,36 +488,52 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 			return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when number of racks is less than two")
 		}
 
-		namespaces := c.getNamespaces()
-		for _, ns := range namespaces {
+		nsConfsNamespaces := c.getNsConfsForNamespaces()
+		for ns, nsConf := range nsConfsNamespaces {
 			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
 				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when there is any non-rack enabled namespace %s", ns)
+			}
+
+			if nsConf.noOfRacksForNamespaces <= 1 {
+				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when namespace `%s` is configured in only one rack", ns)
+			}
+			if nsConf.replicationFactor <= 1 {
+				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when namespace `%s` is configured with replication-factor 1", ns)
 			}
 		}
 	}
 
-	// TODO: should not use batch if replication-factor is 1 or racks are less than replication-factor
-	// TODO: Need to figure out those conditions where some pod may go in unschedulable state
-	// e.g. Batch of pods are deleted, few pods may come up but others are stuck due to resource constrains
-	// In next reconcile, operator should always pick those unscheduled pods and delete them without checking
-	// for cluster stability
+	// TODO: should not use batch if racks are less than replication-factor
 	return nil
 }
 
-func (c *AerospikeCluster) getNamespaces() []string {
-	nsNames := map[string]bool{}
+type nsConf struct {
+	noOfRacksForNamespaces int
+	replicationFactor      int
+}
+
+func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
+	nsConfs := map[string]nsConf{}
 	for _, rack := range c.Spec.RackConfig.Racks {
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 		for _, nsInterface := range nsList {
 			nsName := nsInterface.(map[string]interface{})["name"].(string)
-			nsNames[nsName] = true
+
+			var noOfRacksForNamespaces int
+			if _, ok := nsConfs[nsName]; !ok {
+				noOfRacksForNamespaces = 1
+			} else {
+				noOfRacksForNamespaces = nsConfs[nsName].noOfRacksForNamespaces + 1
+			}
+
+			rf, _ := getNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+			nsConfs[nsName] = nsConf{
+				noOfRacksForNamespaces: noOfRacksForNamespaces,
+				replicationFactor:      rf,
+			}
 		}
 	}
-	var namespaces []string
-	for name := range nsNames {
-		namespaces = append(namespaces, name)
-	}
-	return namespaces
+	return nsConfs
 }
 
 //******************************************************************************
@@ -1000,42 +1016,36 @@ func validateNamespaceConfig(
 func validateNamespaceReplicationFactor(
 	nsConf map[string]interface{}, clSize int,
 ) error {
-	// Validate replication-factor with cluster size only at the time of deployment
+	rf, err := getNamespaceReplicationFactor(nsConf)
+	if err != nil {
+		return err
+	}
+	if clSize < rf {
+		return fmt.Errorf("namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
+	}
+
+	return nil
+}
+
+func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	rfInterface, ok := nsConf["replication-factor"]
 	if !ok {
 		rfInterface = 2 // default replication-factor
 	}
 
-	if rf, ok := rfInterface.(int64); ok {
-		if int64(clSize) < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else if rf, ok := rfInterface.(int); ok {
-		if clSize < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else if rf, ok := rfInterface.(float64); ok {
-		// Values of yaml are getting parsed in float64 in the new scheme
-		if float64(clSize) < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else {
-		return fmt.Errorf(
-			"namespace replication-factor %v not valid int or int64",
-			rfInterface,
+	switch rf := rfInterface.(type) {
+	case int64:
+		return int(rf), nil
+	case int:
+		return rf, nil
+	case float64:
+		return int(rf), nil
+	default:
+		return 0, fmt.Errorf(
+			"namespace replication-factor %v not valid int, int64 or float64",
+			rf,
 		)
 	}
-
-	return nil
 }
 
 func validateLoadBalancerUpdate(
