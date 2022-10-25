@@ -482,54 +482,6 @@ func createAerospikeClusterPost460(
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
 			Image: image,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				Volumes: []asdbv1beta1.VolumeSpec{
-					{
-						Name: "ns",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeBlock,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/test/dev/xvdf",
-						},
-					},
-					{
-						Name: "workdir",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					{
-						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: tlsSecretName,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/etc/aerospike/secret",
-						},
-					},
-				},
-			},
 			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
@@ -581,6 +533,9 @@ func createAerospikeClusterPost460(
 			},
 		},
 	}
+	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+	aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+	aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 	return aeroCluster
 }
 
@@ -598,54 +553,6 @@ func createAerospikeClusterPost560(
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
 			Image: image,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				Volumes: []asdbv1beta1.VolumeSpec{
-					{
-						Name: "ns",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeBlock,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/test/dev/xvdf",
-						},
-					},
-					{
-						Name: "workdir",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					{
-						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: tlsSecretName,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/etc/aerospike/secret",
-						},
-					},
-				},
-			},
 			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
@@ -695,6 +602,27 @@ func createAerospikeClusterPost560(
 			},
 		},
 	}
+	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+	aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+	aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+	return aeroCluster
+}
+
+func createDummyRackAwareWithStorageAerospikeCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	// Will be used in Update also
+	aeroCluster := createDummyAerospikeClusterWithoutStorage(clusterNamespacedName, size)
+	// This needs to be changed based on setup. update zone, region, nodeName according to setup
+	racks := []asdbv1beta1.Rack{
+		{
+			ID: 1,
+		},
+	}
+	inputStorage := getBasicStorageSpecObject()
+	racks[0].InputStorage = &inputStorage
+	rackConf := asdbv1beta1.RackConfig{Racks: racks}
+	aeroCluster.Spec.RackConfig = rackConf
 	return aeroCluster
 }
 
@@ -712,8 +640,21 @@ func createDummyRackAwareAerospikeCluster(
 
 var defaultProtofdmax int64 = 15000
 
+func createDummyAerospikeClusterWithoutStorage(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, 1, nil)
+}
+
 func createDummyAerospikeClusterWithRF(
 	clusterNamespacedName types.NamespacedName, size int32, rf int,
+) *asdbv1beta1.AerospikeCluster {
+	storage := getBasicStorageSpecObject()
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, rf, &storage)
+}
+
+func createDummyAerospikeClusterWithRFAndStorage(
+	clusterNamespacedName types.NamespacedName, size int32, rf int, storage *asdbv1beta1.AerospikeStorageSpec,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
@@ -728,54 +669,6 @@ func createDummyAerospikeClusterWithRF(
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:  size,
 			Image: latestImage,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDeleteFalse,
-				},
-				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteFalse,
-				},
-				Volumes: []asdbv1beta1.VolumeSpec{
-					{
-						Name: "ns",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeBlock,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/test/dev/xvdf",
-						},
-					},
-					{
-						Name: "workdir",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					{
-						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: tlsSecretName,
-							},
-						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
-							Path: "/etc/aerospike/secret",
-						},
-					},
-				},
-			},
 			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
@@ -819,6 +712,7 @@ func createDummyAerospikeClusterWithRF(
 			},
 		},
 	}
+	aeroCluster.Spec.Storage = *storage
 	return aeroCluster
 }
 
@@ -1176,4 +1070,57 @@ func aerospikeClusterCreateUpdate(
 	return aerospikeClusterCreateUpdateWithTO(
 		k8sClient, desired, ctx, retryInterval, getTimeout(1),
 	)
+}
+
+func getBasicStorageSpecObject() asdbv1beta1.AerospikeStorageSpec {
+
+	storage := asdbv1beta1.AerospikeStorageSpec{
+		BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputCascadeDelete: &cascadeDeleteFalse,
+		},
+		FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+			InputCascadeDelete: &cascadeDeleteFalse,
+		},
+		Volumes: []asdbv1beta1.VolumeSpec{
+			{
+				Name: "ns",
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse("1Gi"),
+						StorageClass: storageClass,
+						VolumeMode:   v1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/test/dev/xvdf",
+				},
+			},
+			{
+				Name: "workdir",
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse("1Gi"),
+						StorageClass: storageClass,
+						VolumeMode:   v1.PersistentVolumeFilesystem,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike",
+				},
+			},
+			{
+				Name: aerospikeConfigSecret,
+				Source: asdbv1beta1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: tlsSecretName,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/etc/aerospike/secret",
+				},
+			},
+		},
+	}
+	return storage
 }
