@@ -612,7 +612,7 @@ func createDummyRackAwareWithStorageAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
 	// Will be used in Update also
-	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	aeroCluster := createDummyAerospikeClusterWithoutStorage(clusterNamespacedName, size)
 	// This needs to be changed based on setup. update zone, region, nodeName according to setup
 	racks := []asdbv1beta1.Rack{
 		{
