@@ -229,30 +229,6 @@ func (r *SingleClusterReconciler) validateClusterNsState(hostConns []*deployment
 	return nil
 }
 
-func (r *SingleClusterReconciler) isNodeInRoster(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
-	nodeID, err := r.getNodeID(policy, hostConn)
-	if err != nil {
-		return false, err
-	}
-
-	rosterNodesMap, err := r.getRoster(hostConn, policy, ns)
-	if err != nil {
-		return false, err
-	}
-	r.Log.Info("Check if node is in roster or not", "node", hostConn.String(), "roster", rosterNodesMap)
-
-	rosterStr := rosterNodesMap[rosterKeyRosterNodes]
-	rosterList := strings.Split(rosterStr, ",")
-
-	for _, roster := range rosterList {
-		rosterNodeID := strings.Split(roster, "@")[0]
-		if nodeID == rosterNodeID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (r *SingleClusterReconciler) isNamespaceSCEnabled(policy *as.ClientPolicy, hostConn *deployment.HostConn, ns string) (bool, error) {
 
 	cmd := fmt.Sprintf("get-config:context=namespace;id=%s", ns)
