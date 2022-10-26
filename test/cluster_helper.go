@@ -712,7 +712,9 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			},
 		},
 	}
-	aeroCluster.Spec.Storage = *storage
+	if storage != nil {
+		aeroCluster.Spec.Storage = *storage
+	}
 	return aeroCluster
 }
 
