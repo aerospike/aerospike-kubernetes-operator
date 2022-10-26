@@ -91,9 +91,12 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 	)
 	s.BlockVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
-			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false, CleanupThreads: defaultCleanupThreads,
+			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
+	if s.CleanupThreads == 0 {
+		s.CleanupThreads = defaultCleanupThreads
+	}
 
 	for i := range s.Volumes {
 		if s.Volumes[i].Source.PersistentVolume == nil {

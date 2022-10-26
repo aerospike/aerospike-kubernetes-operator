@@ -384,7 +384,7 @@ def init_volumes(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
 
     try:
-        worker_threads = int(rack["effectiveStorage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+        worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
         logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
         raise e
@@ -394,8 +394,8 @@ def init_volumes(pod_name, config):
         futures = {}
 
         for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
-                                     get_persistent_volumes(volumes=get_attached_volumes(
-                                         pod_name=pod_name, config=config)))):
+                                      get_persistent_volumes(volumes=get_attached_volumes(
+                                          pod_name=pod_name, config=config)))):
 
             volume = Volume(pod_name=pod_name, volume=vol)
 
@@ -404,13 +404,13 @@ def init_volumes(pod_name, config):
 
                 if not os.path.exists(volume.get_mount_point()):
                     logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
-                                f"does not exists")
+                                  f"does not exists")
                     raise FileNotFoundError(f"{volume} Volume path not found")
 
                 if volume.effective_init_method == "dd":
 
                     dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
-                        '/tmp/init-stderr'.format(
+                         '/tmp/init-stderr'.format(
                         volume_path=volume.get_mount_point())
                     futures[executor.submit(lambda: execute(cmd=dd))] = dd
                     logging.info(f"{volume} - Submitted")
@@ -475,7 +475,7 @@ def wipe_volumes(pod_name, config):
     rack = get_rack(pod_name=pod_name, config=config)
 
     try:
-        worker_threads = int(rack["effectiveStorage"]["blockVolumePolicy"]["effectiveCleanupThreads"])
+        worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
         logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
         raise e

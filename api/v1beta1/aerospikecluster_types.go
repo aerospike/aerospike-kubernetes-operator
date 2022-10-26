@@ -450,9 +450,6 @@ type AerospikePersistentVolumePolicySpec struct {
 	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
-	// CleanupThreads determines number of parallel clean-up threads that will be running in InitContainer.
-	InputCleanupThreads *int `json:"cleanupThreads,omitempty"`
-
 	// Effective/operative value to use as the volume init method after applying defaults.
 	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
 
@@ -461,9 +458,6 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
-
-	// Effective/operative value to use for cleanup threads after applying defaults.
-	CleanupThreads int `json:"effectiveCleanupThreads,omitempty"`
 }
 
 // SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
@@ -484,12 +478,6 @@ func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *Aerospi
 		p.CascadeDelete = defaultPolicy.CascadeDelete
 	} else {
 		p.CascadeDelete = *p.InputCascadeDelete
-	}
-
-	if p.InputCleanupThreads == nil {
-		p.CleanupThreads = defaultPolicy.CleanupThreads
-	} else {
-		p.CleanupThreads = *p.InputCleanupThreads
 	}
 }
 
@@ -615,6 +603,9 @@ type AerospikeStorageSpec struct {
 
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
+
+	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
+	CleanupThreads int `json:"cleanupThreads,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name

@@ -3657,18 +3657,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -3706,6 +3698,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -3714,18 +3710,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -3804,18 +3792,10 @@ spec:
                                     description: CascadeDelete determines if the persistent
                                       volumes are deleted after t
                                     type: boolean
-                                  cleanupThreads:
-                                    description: CleanupThreads determines number
-                                      of parallel clean-up threads that wil
-                                    type: integer
                                   effectiveCascadeDelete:
                                     description: Effective/operative value to use
                                       for cascade delete after applying def
                                     type: boolean
-                                  effectiveCleanupThreads:
-                                    description: Effective/operative value to use
-                                      for cleanup threads after applying de
-                                    type: integer
                                   effectiveInitMethod:
                                     description: Effective/operative value to use
                                       as the volume init method after apply
@@ -4812,18 +4792,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -4861,6 +4833,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -4869,18 +4845,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -4959,18 +4927,10 @@ spec:
                                     description: CascadeDelete determines if the persistent
                                       volumes are deleted after t
                                     type: boolean
-                                  cleanupThreads:
-                                    description: CleanupThreads determines number
-                                      of parallel clean-up threads that wil
-                                    type: integer
                                   effectiveCascadeDelete:
                                     description: Effective/operative value to use
                                       for cascade delete after applying def
                                     type: boolean
-                                  effectiveCleanupThreads:
-                                    description: Effective/operative value to use
-                                      for cleanup threads after applying de
-                                    type: integer
                                   effectiveInitMethod:
                                     description: Effective/operative value to use
                                       as the volume init method after apply
@@ -5361,18 +5321,10 @@ spec:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after t
                         type: boolean
-                      cleanupThreads:
-                        description: CleanupThreads determines number of parallel
-                          clean-up threads that wil
-                        type: integer
                       effectiveCascadeDelete:
                         description: Effective/operative value to use for cascade
                           delete after applying def
                         type: boolean
-                      effectiveCleanupThreads:
-                        description: Effective/operative value to use for cleanup
-                          threads after applying de
-                        type: integer
                       effectiveInitMethod:
                         description: Effective/operative value to use as the volume
                           init method after apply
@@ -5410,6 +5362,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -5418,18 +5374,10 @@ spec:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after t
                         type: boolean
-                      cleanupThreads:
-                        description: CleanupThreads determines number of parallel
-                          clean-up threads that wil
-                        type: integer
                       effectiveCascadeDelete:
                         description: Effective/operative value to use for cascade
                           delete after applying def
                         type: boolean
-                      effectiveCleanupThreads:
-                        description: Effective/operative value to use for cleanup
-                          threads after applying de
-                        type: integer
                       effectiveInitMethod:
                         description: Effective/operative value to use as the volume
                           init method after apply
@@ -5505,18 +5453,10 @@ spec:
                           description: CascadeDelete determines if the persistent
                             volumes are deleted after t
                           type: boolean
-                        cleanupThreads:
-                          description: CleanupThreads determines number of parallel
-                            clean-up threads that wil
-                          type: integer
                         effectiveCascadeDelete:
                           description: Effective/operative value to use for cascade
                             delete after applying def
                           type: boolean
-                        effectiveCleanupThreads:
-                          description: Effective/operative value to use for cleanup
-                            threads after applying de
-                          type: integer
                         effectiveInitMethod:
                           description: Effective/operative value to use as the volume
                             init method after apply
@@ -9590,18 +9530,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -9639,6 +9571,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -9647,18 +9583,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -9737,18 +9665,10 @@ spec:
                                     description: CascadeDelete determines if the persistent
                                       volumes are deleted after t
                                     type: boolean
-                                  cleanupThreads:
-                                    description: CleanupThreads determines number
-                                      of parallel clean-up threads that wil
-                                    type: integer
                                   effectiveCascadeDelete:
                                     description: Effective/operative value to use
                                       for cascade delete after applying def
                                     type: boolean
-                                  effectiveCleanupThreads:
-                                    description: Effective/operative value to use
-                                      for cleanup threads after applying de
-                                    type: integer
                                   effectiveInitMethod:
                                     description: Effective/operative value to use
                                       as the volume init method after apply
@@ -10745,18 +10665,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -10794,6 +10706,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -10802,18 +10718,10 @@ spec:
                                   description: CascadeDelete determines if the persistent
                                     volumes are deleted after t
                                   type: boolean
-                                cleanupThreads:
-                                  description: CleanupThreads determines number of
-                                    parallel clean-up threads that wil
-                                  type: integer
                                 effectiveCascadeDelete:
                                   description: Effective/operative value to use for
                                     cascade delete after applying def
                                   type: boolean
-                                effectiveCleanupThreads:
-                                  description: Effective/operative value to use for
-                                    cleanup threads after applying de
-                                  type: integer
                                 effectiveInitMethod:
                                   description: Effective/operative value to use as
                                     the volume init method after apply
@@ -10892,18 +10800,10 @@ spec:
                                     description: CascadeDelete determines if the persistent
                                       volumes are deleted after t
                                     type: boolean
-                                  cleanupThreads:
-                                    description: CleanupThreads determines number
-                                      of parallel clean-up threads that wil
-                                    type: integer
                                   effectiveCascadeDelete:
                                     description: Effective/operative value to use
                                       for cascade delete after applying def
                                     type: boolean
-                                  effectiveCleanupThreads:
-                                    description: Effective/operative value to use
-                                      for cleanup threads after applying de
-                                    type: integer
                                   effectiveInitMethod:
                                     description: Effective/operative value to use
                                       as the volume init method after apply
@@ -11319,18 +11219,10 @@ spec:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after t
                         type: boolean
-                      cleanupThreads:
-                        description: CleanupThreads determines number of parallel
-                          clean-up threads that wil
-                        type: integer
                       effectiveCascadeDelete:
                         description: Effective/operative value to use for cascade
                           delete after applying def
                         type: boolean
-                      effectiveCleanupThreads:
-                        description: Effective/operative value to use for cleanup
-                          threads after applying de
-                        type: integer
                       effectiveInitMethod:
                         description: Effective/operative value to use as the volume
                           init method after apply
@@ -11368,6 +11260,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -11376,18 +11272,10 @@ spec:
                         description: CascadeDelete determines if the persistent volumes
                           are deleted after t
                         type: boolean
-                      cleanupThreads:
-                        description: CleanupThreads determines number of parallel
-                          clean-up threads that wil
-                        type: integer
                       effectiveCascadeDelete:
                         description: Effective/operative value to use for cascade
                           delete after applying def
                         type: boolean
-                      effectiveCleanupThreads:
-                        description: Effective/operative value to use for cleanup
-                          threads after applying de
-                        type: integer
                       effectiveInitMethod:
                         description: Effective/operative value to use as the volume
                           init method after apply
@@ -11463,18 +11351,10 @@ spec:
                           description: CascadeDelete determines if the persistent
                             volumes are deleted after t
                           type: boolean
-                        cleanupThreads:
-                          description: CleanupThreads determines number of parallel
-                            clean-up threads that wil
-                          type: integer
                         effectiveCascadeDelete:
                           description: Effective/operative value to use for cascade
                             delete after applying def
                           type: boolean
-                        effectiveCleanupThreads:
-                          description: Effective/operative value to use for cleanup
-                            threads after applying de
-                          type: integer
                         effectiveInitMethod:
                           description: Effective/operative value to use as the volume
                             init method after apply

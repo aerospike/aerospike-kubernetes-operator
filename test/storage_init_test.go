@@ -55,22 +55,16 @@ var _ = Describe(
 				It(
 					"Should work for large device with long init and multithreading", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
 							},
 						}
 
 						storageConfig := getLongInitStorageConfig(
 							false, "50Gi", cloudProvider,
 						)
-						storageConfig.BlockVolumePolicy.InputCleanupThreads = &threeVar
+						storageConfig.CleanupThreads = threeVar
 						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, *storageConfig, racks,
 							latestImage,
@@ -115,15 +109,9 @@ var _ = Describe(
 				It(
 					"Should validate all storage-init policies", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
 							},
 							{
 								ID: 2,
@@ -226,15 +214,9 @@ var _ = Describe(
 				It(
 					"Should work for large device with long init", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
 							},
 						}
 
@@ -278,22 +260,16 @@ var _ = Describe(
 				It(
 					"Should fail multithreading in init container if resource limit is not set", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
 							},
 						}
 
 						storageConfig := getLongInitStorageConfig(
 							false, "50Gi", cloudProvider,
 						)
-						storageConfig.BlockVolumePolicy.InputCleanupThreads = &threeVar
+						storageConfig.CleanupThreads = threeVar
 						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, *storageConfig, racks,
 							latestImage,

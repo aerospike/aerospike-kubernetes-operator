@@ -381,7 +381,7 @@ func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error
 	}
 
 	for _, rack := range c.Spec.RackConfig.Racks {
-		if rack.Storage.BlockVolumePolicy.CleanupThreads != AerospikeVolumeSingleCleanupThread {
+		if rack.Storage.CleanupThreads != AerospikeVolumeSingleCleanupThread {
 			checkResourcesLimits = true
 			break
 		}
