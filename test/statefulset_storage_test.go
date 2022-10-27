@@ -27,7 +27,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -219,7 +219,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						newAeroCluster := createDummyAerospikeCluster(
+						newAeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec = newAeroCluster.Spec

@@ -702,6 +702,34 @@ func createDummyAerospikeClusterWithoutStorage(
 	return aeroCluster
 }
 
+func createNonSCDummyAerospikeCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	aerospikeCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	aerospikeCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+		Value: map[string]interface{}{
+			"service": map[string]interface{}{
+				"feature-key-file": "/etc/aerospike/secret/features.conf",
+				"proto-fd-max":     defaultProtofdmax,
+			},
+			"security": map[string]interface{}{},
+			"network":  getNetworkConfig(),
+			"namespaces": []interface{}{
+				map[string]interface{}{
+					"name":               "test",
+					"memory-size":        1000955200,
+					"replication-factor": 2,
+					"storage-engine": map[string]interface{}{
+						"type":    "device",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					},
+				},
+			},
+		},
+	}
+	return aerospikeCluster
+}
+
 func createDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
