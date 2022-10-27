@@ -170,8 +170,9 @@ func (r *SingleClusterReconciler) restartASDInPod(
 }
 
 func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod) reconcileResult {
-
-	for _, pod := range podsToRestart {
+	var restartedPods []*corev1.Pod
+	for i := range podsToRestart {
+		pod := podsToRestart[i]
 		// Check if this pod needs restart
 		restartType, err := r.getRollingRestartTypePod(rackState, *pod)
 		if err != nil {
@@ -179,7 +180,7 @@ func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart
 		}
 
 		if restartType == QuickRestart {
-			if err := r.restartASDInPod(rackState, pod); err != nil {
+			if err := r.restartASDInPod(rackState, pod); err == nil {
 				continue
 			}
 			// If ASD restart fails then go ahead and restart the pod
@@ -189,10 +190,14 @@ func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart
 			r.Log.Error(err, "Failed to delete pod")
 			return reconcileError(err)
 		}
+		restartedPods = append(restartedPods, pod)
+
 		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 	}
-
-	return r.ensurePodsRunningAndReady(podsToRestart)
+	if len(restartedPods) > 0 {
+		return r.ensurePodsRunningAndReady(restartedPods)
+	}
+	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev1.Pod) reconcileResult {
