@@ -386,7 +386,7 @@ def init_volumes(pod_name, config):
     try:
         worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
-        logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
+        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
         raise e
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
@@ -461,9 +461,10 @@ def init_volumes(pod_name, config):
                     logging.info(f"pod-name: {pod_name} Finished Successfully: {cmd}")
             except Exception as e:
                 logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
+                raise e
 
-        logging.debug(f"{volumes} - Extending initialized-volume list")
-        volumes.extend(initialized_volumes)
+    logging.debug(f"{volumes} - Extending initialized-volume list")
+    volumes.extend(initialized_volumes)
 
     return volumes
 
@@ -477,7 +478,7 @@ def wipe_volumes(pod_name, config):
     try:
         worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
-        logging.error(f"pod-name: {pod_name} - Unable to find namespaces")
+        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
         raise e
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
@@ -523,8 +524,9 @@ def wipe_volumes(pod_name, config):
                         _, filename = os.path.split(ns_file_path)
                         file_path = os.path.join(volume.get_mount_point(), filename)
                         if os.path.exists(file_path):
-                            logging.info(f"Submitting file: - {file_path}")
-                            futures[executor.submit(lambda: os.remove(file_path))] = file_path
+                            logging.info(f"Deleting file - {file_path}")
+                            os.remove(file_path)
+                            logging.info(f"Deleted file - {file_path}")
                         else:
                             logging.warning(f"{volume} namespace-file-path: {file_path} - Does not exists")
 
@@ -542,6 +544,7 @@ def wipe_volumes(pod_name, config):
                     logging.info(f"pod-name: {pod_name} Finished Successfully: {cmd}")
             except Exception as e:
                 logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
+                raise e
     return
 
 

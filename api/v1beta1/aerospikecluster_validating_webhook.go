@@ -389,7 +389,7 @@ func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error
 
 	if checkResourcesLimits && c.Spec.PodSpec.AerospikeInitContainerSpec == nil {
 		return fmt.Errorf(
-			"init container spec cannot be empty if CleanupThreads is being set more than 1",
+			"init container spec should have resources.Limits set if CleanupThreads is more than 1",
 		)
 	}
 	if c.Spec.PodSpec.AerospikeInitContainerSpec != nil {
@@ -401,12 +401,7 @@ func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error
 func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements, checkResourcesLimits bool) error {
 
 	if checkResourcesLimits {
-		if resources == nil {
-			return fmt.Errorf(
-				"resources for init container cannot be empty if CleanupThreads is being set more than 1",
-			)
-		}
-		if resources.Limits == nil {
+		if resources == nil || resources.Limits == nil {
 			return fmt.Errorf(
 				"resources.Limits for init container cannot be empty if CleanupThreads is being set more than 1",
 			)

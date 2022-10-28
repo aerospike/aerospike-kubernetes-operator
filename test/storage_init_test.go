@@ -28,7 +28,8 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				trueVar := true
-				threeVar := 3
+				cleanupThreads := 3
+				updatedCleanupThreads := 5
 
 				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
@@ -55,6 +56,8 @@ var _ = Describe(
 				It(
 					"Should work for large device with long init and multithreading", func() {
 
+						ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+
 						racks := []asdbv1beta1.Rack{
 							{
 								ID: 1,
@@ -62,12 +65,47 @@ var _ = Describe(
 						}
 
 						storageConfig := getLongInitStorageConfig(
-							false, "50Gi", cloudProvider,
+							false, "10Gi", cloudProvider,
 						)
-						storageConfig.CleanupThreads = threeVar
+						storageConfig.CleanupThreads = cleanupThreads
 						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, *storageConfig, racks,
 							latestImage,
+						)
+
+						storageConfig.Volumes = append(
+							storageConfig.Volumes, asdbv1beta1.VolumeSpec{
+								Name: "device-dd1",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd1",
+								},
+							},
+							asdbv1beta1.VolumeSpec{
+								Name: "device-dd2",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd2",
+								},
+							},
 						)
 
 						aeroCluster.Spec.PodSpec = podSpec
@@ -100,6 +138,11 @@ var _ = Describe(
 
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Storage.CleanupThreads = updatedCleanupThreads
+
+						err = k8sClient.Update(ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
 
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
