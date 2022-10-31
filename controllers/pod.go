@@ -432,6 +432,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 				"About to remove host from tipHostnames and reset alumni in pod...",
 				"pod to remove", podName, "remove and reset on pod", np.Name,
 			)
+			// TODO: Should we return error?
 			_ = r.tipClearHostname(&np, podName)
 
 			_ = r.alumniReset(&np)

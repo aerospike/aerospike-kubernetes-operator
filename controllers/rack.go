@@ -453,19 +453,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
-	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "STSWaitReady",
-		"[rack-%d] Waiting to be ready {STS: %s/%s}", rackState.Rack.ID,
-		found.Namespace, found.Name,
-	)
-	if err := r.waitForSTSToBeReady(found); err != nil {
-		return found, reconcileError(
-			fmt.Errorf(
-				"failed to wait for statefulset to be ready: %v", err,
-			),
-		)
-	}
-
 	// return a fresh copy
 	found, err = r.getSTS(rackState)
 	if err != nil {
