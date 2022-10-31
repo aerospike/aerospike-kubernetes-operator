@@ -68,10 +68,6 @@ var _ = Describe(
 							false, "10Gi", cloudProvider,
 						)
 						storageConfig.CleanupThreads = cleanupThreads
-						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
-							latestImage,
-						)
 
 						storageConfig.Volumes = append(
 							storageConfig.Volumes, asdbv1beta1.VolumeSpec{
@@ -108,6 +104,11 @@ var _ = Describe(
 							},
 						)
 
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
 						aeroCluster.Spec.PodSpec = podSpec
 
 						// It should be greater than given in cluster namespace
@@ -139,10 +140,17 @@ var _ = Describe(
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
 						aeroCluster.Spec.Storage.CleanupThreads = updatedCleanupThreads
 
+						By("Updating the cluster")
+
 						err = k8sClient.Update(ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
