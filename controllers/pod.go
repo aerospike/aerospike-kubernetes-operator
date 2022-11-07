@@ -259,7 +259,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func rearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
+func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
 	var rearrangedPods []*corev1.Pod
 
 	failedPods, activePods := getFailedAndActivePods(pods)
@@ -647,17 +647,14 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod) bool {
 
 	for _, p := range podList {
-		for _, ps := range p.Status.ContainerStatuses {
-			// TODO: Should we use checkPodFailed or CheckPodImageFailed?
-			// scaleDown, rollingRestart should work even if node is crashed
-			// If node was crashed due to wrong config then only rollingRestart can bring it back.
-			if err := utils.CheckPodImageFailed(&p); err != nil {
-				r.Log.Info(
-					"AerospikeCluster Pod is in failed state", "currentImage",
-					ps.Image, "podName", p.Name, "err", err,
-				)
-				return true
-			}
+		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
+		// scaleDown, rollingRestart should work even if node is crashed
+		// If node was crashed due to wrong config then only rollingRestart can bring it back.
+		if err := utils.CheckPodImageFailed(&p); err != nil {
+			r.Log.Info(
+				"AerospikeCluster Pod is in failed state", "podName", p.Name, "err", err,
+			)
+			return true
 		}
 	}
 	return false

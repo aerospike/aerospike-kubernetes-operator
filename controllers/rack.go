@@ -513,10 +513,10 @@ func (r *SingleClusterReconciler) upgradeRack(
 	// We make info calls before restarting active pods,
 	// if active pods are checked before failed pods then
 	// info call will fail in failed pods and operator will not go ahead
-	rearrangedPods := rearrangedFailedAndActivePods(podsToUpgrade)
+	rearrangedPods := getRearrangedFailedAndActivePods(podsToUpgrade)
 
 	// Create batch of pods
-	podsBatchList := r.getPodsBatchToRestart(rearrangedPods)
+	podsBatchList := r.getPodsBatchToRestart(rearrangedPods, len(podList))
 
 	// Update batch of pods
 	for _, podsBatch := range podsBatchList {
@@ -707,10 +707,10 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	// We make info calls before restarting active pods,
 	// if active pods are checked before failed pods then
 	// info call will fail in failed pods and operator will not go ahead
-	rearrangedPods := rearrangedFailedAndActivePods(podsToRestart)
+	rearrangedPods := getRearrangedFailedAndActivePods(podsToRestart)
 
 	// Create batch of pods
-	podsBatchList := r.getPodsBatchToRestart(rearrangedPods)
+	podsBatchList := r.getPodsBatchToRestart(rearrangedPods, len(podList))
 
 	// Restart batch of pods
 	for _, podsBatch := range podsBatchList {
@@ -1296,11 +1296,11 @@ func getOriginalPath(path string) string {
 	return path
 }
 
-func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []*corev1.Pod) [][]*corev1.Pod {
+func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []*corev1.Pod, rackSize int) [][]*corev1.Pod {
 	restartNodesCount := r.aeroCluster.Spec.RackConfig.RestartNodesCount
 	restartPercentage := r.aeroCluster.Spec.RackConfig.RestartPercentage
 	if restartPercentage != 0 {
-		restartNodesCount = len(podList) * restartPercentage / 100
+		restartNodesCount = rackSize * restartPercentage / 100
 	}
 
 	return chunkBy(podList, restartNodesCount)
