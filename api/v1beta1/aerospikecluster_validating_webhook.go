@@ -373,18 +373,40 @@ func (c *AerospikeCluster) validateAccessControl(_ logr.Logger) error {
 }
 
 func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error {
-	if err := c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeContainerSpec.Resources); err != nil {
+
+	checkResourcesLimits := false
+
+	if err := c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeContainerSpec.Resources, checkResourcesLimits); err != nil {
 		return err
 	}
 
+	for _, rack := range c.Spec.RackConfig.Racks {
+		if rack.Storage.CleanupThreads != AerospikeVolumeSingleCleanupThread {
+			checkResourcesLimits = true
+			break
+		}
+	}
+
+	if checkResourcesLimits && c.Spec.PodSpec.AerospikeInitContainerSpec == nil {
+		return fmt.Errorf(
+			"init container spec should have resources.Limits set if CleanupThreads is more than 1",
+		)
+	}
 	if c.Spec.PodSpec.AerospikeInitContainerSpec != nil {
-		return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources)
+		return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources, checkResourcesLimits)
 	}
 	return nil
 }
 
-func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements) error {
-	if resources == nil {
+func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements, checkResourcesLimits bool) error {
+
+	if checkResourcesLimits {
+		if resources == nil || resources.Limits == nil {
+			return fmt.Errorf(
+				"resources.Limits for init container cannot be empty if CleanupThreads is being set more than 1",
+			)
+		}
+	} else if resources == nil {
 		return nil
 	}
 

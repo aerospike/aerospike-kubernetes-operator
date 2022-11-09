@@ -438,6 +438,10 @@ const (
 	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
 	//should be initialized by deleting files.
 	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
+
+	// AerospikeVolumeSingleCleanupThread specifies the single thread
+	//for disks cleanup in init container.
+	AerospikeVolumeSingleCleanupThread int = 1
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
@@ -605,6 +609,9 @@ type AerospikeStorageSpec struct {
 
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
+
+	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
+	CleanupThreads int `json:"cleanupThreads,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name

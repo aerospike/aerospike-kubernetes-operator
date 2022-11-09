@@ -41,7 +41,7 @@ python3 create_pod_status_patch.py \
 --namespace $NAMESPACE \
 --api-server $KUBE_API_SERVER \
 --token $TOKEN \
---ca-cer $CA_CERT
+--ca-cert $CA_CERT
 
 if [ $? -ne 0 ]
 then

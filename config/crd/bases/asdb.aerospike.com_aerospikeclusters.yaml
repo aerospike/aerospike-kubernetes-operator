@@ -3698,6 +3698,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -4829,6 +4833,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -5362,6 +5370,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -9567,6 +9579,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -10698,6 +10714,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -11256,6 +11276,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume

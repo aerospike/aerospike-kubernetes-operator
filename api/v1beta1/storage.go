@@ -82,6 +82,7 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 	defaultFilesystemWipeMethod := AerospikeVolumeMethodDeleteFiles
 	defaultBlockInitMethod := AerospikeVolumeMethodNone
 	defaultBlockWipeMethod := AerospikeVolumeMethodDD
+	defaultCleanupThreads := AerospikeVolumeSingleCleanupThread
 	// Set storage level defaults.
 	s.FileSystemVolumePolicy.SetDefaults(
 		&AerospikePersistentVolumePolicySpec{
@@ -93,6 +94,9 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
+	if s.CleanupThreads == 0 {
+		s.CleanupThreads = defaultCleanupThreads
+	}
 
 	for i := range s.Volumes {
 		if s.Volumes[i].Source.PersistentVolume == nil {
