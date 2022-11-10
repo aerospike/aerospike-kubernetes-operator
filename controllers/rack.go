@@ -225,10 +225,10 @@ func (r *SingleClusterReconciler) deleteRacks(
 			}
 			return reconcileError(err)
 		}
+
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
-		found, res := r.scaleDownRack(
-			found, RackState{Size: 0, Rack: rack}, ignorablePods,
-		)
+		rackState := RackState{Size: 0, Rack: rack}
+		found, res := r.scaleDownRack(found, rackState, ignorablePods)
 		if !res.isSuccess {
 			return res
 		}
@@ -242,11 +242,24 @@ func (r *SingleClusterReconciler) deleteRacks(
 			)
 			return reconcileError(err)
 		}
+
+		// Delete configMap
+		cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rack.ID)
+		if err := r.deleteRackConfigMap(cmName); err != nil {
+			return reconcileError(err)
+		}
+
+		// Rack cleanup is done. Take time and cleanup dangling nodes and related resources that may not been cleaned up previously due to errors.
+		if err = r.cleanupDanglingPodsRack(found, rackState); err != nil {
+			return reconcileError(err)
+		}
+
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "RackDeleted",
 			"[rack-%d] Deleted Rack", rack.ID,
 		)
 	}
+
 	return reconcileSuccess()
 }
 
@@ -389,7 +402,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	desiredSize := int32(rackState.Size)
 
 	oldSz := *found.Spec.Replicas
-	found.Spec.Replicas = &desiredSize
 
 	r.Log.Info("Scaling up pods", "currentSz", oldSz, "desiredSz", desiredSize)
 	r.Recorder.Eventf(
@@ -444,6 +456,9 @@ func (r *SingleClusterReconciler) scaleUpRack(
 			}
 		}
 	}
+
+	// update replicas here to avoid new replicas count comparison while cleaning up dangling pods of rack
+	found.Spec.Replicas = &desiredSize
 
 	// Scale up the statefulset
 	if err := r.Client.Update(context.TODO(), found, updateOption); err != nil {
@@ -589,67 +604,67 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	var pod *corev1.Pod
 
-	if *found.Spec.Replicas > desiredSize {
+	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
 
-		// maintain list of removed pods. It will be used for alumni-reset and tip-clear
-		podName := getSTSPodName(found.Name, *found.Spec.Replicas-1)
+	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
+	podName := getSTSPodName(found.Name, *found.Spec.Replicas-1)
 
-		pod = utils.GetPod(podName, oldPodList.Items)
+	pod = utils.GetPod(podName, oldPodList.Items)
 
-		// Ignore safe stop check on pod not in running state.
-		if utils.IsPodRunningAndReady(pod) {
-			if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
-				// The pod is running and is unsafe to terminate.
-				return found, res
-			}
+	// Ignore safe stop check on pod not in running state.
+	if utils.IsPodRunningAndReady(pod) {
+		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{
+			pod}, ignorablePods
+		); !res.isSuccess {
+			// The pod is running and is unsafe to terminate.
+			return found, res
 		}
+	}
 
-		// Update new object with new size
-		newSize := *found.Spec.Replicas - 1
-		found.Spec.Replicas = &newSize
-		if err := r.Client.Update(
-			context.TODO(), found, updateOption,
-		); err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to update pod size %d StatefulSet pods: %v",
-					newSize, err,
-				),
-			)
-		}
-
-		// Wait for pods to get terminated
-		if err := r.waitForSTSToBeReady(found); err != nil {
-			r.Log.Error(err, "Failed to wait for statefulset to be ready")
-			return found, reconcileRequeueAfter(1)
-		}
-
-		// Fetch new object
-		nFound, err := r.getSTS(rackState)
-		if err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to get StatefulSet pods: %v", err,
-				),
-			)
-		}
-		found = nFound
-
-		err = r.cleanupPods([]string{podName}, rackState)
-		if err != nil {
-			return nFound, reconcileError(
-				fmt.Errorf(
-					"failed to cleanup pod %s: %v", podName, err,
-				),
-			)
-		}
-
-		r.Log.Info("Pod Removed", "podName", podName)
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "PodDeleted",
-			"[rack-%d] Deleted Pod %s", rackState.Rack.ID, pod.Name,
+	// Update new object with new size
+	newSize := *found.Spec.Replicas - 1
+	found.Spec.Replicas = &newSize
+	if err := r.Client.Update(
+		context.TODO(), found, updateOption,
+	); err != nil {
+		return found, reconcileError(
+			fmt.Errorf(
+				"failed to update pod size %d StatefulSet pods: %v",
+				newSize, err,
+			),
 		)
 	}
+
+	// Wait for pods to get terminated
+	if err := r.waitForSTSToBeReady(found); err != nil {
+		r.Log.Error(err, "Failed to wait for statefulset to be ready")
+		return found, reconcileRequeueAfter(1)
+	}
+
+	// Fetch new object
+	nFound, err := r.getSTS(rackState)
+	if err != nil {
+		return found, reconcileError(
+			fmt.Errorf(
+				"failed to get StatefulSet pods: %v", err,
+			),
+		)
+	}
+	found = nFound
+
+	if err := r.cleanupPods([]string{podName}, rackState); err != nil {
+		return nFound, reconcileError(
+			fmt.Errorf(
+				"failed to cleanup pod %s: %v", podName, err,
+			),
+		)
+	}
+
+	r.Log.Info("Pod Removed", "podName", podName)
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "PodDeleted",
+		"[rack-%d] Deleted Pod %s", rackState.Rack.ID, pod.Name,
+	)
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",

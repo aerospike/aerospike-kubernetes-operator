@@ -502,8 +502,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 			newPodNames = append(newPodNames, pods.Items[i].Name)
 		}
 
-		err = r.cleanupPods(newPodNames, state)
-		if err != nil {
+		if err := r.cleanupPods(newPodNames, state); err != nil {
 			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 	}
