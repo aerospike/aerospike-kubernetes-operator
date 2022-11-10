@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -473,34 +474,34 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 	}
 
 	// Validate batch upgrade/restart param
-	if c.Spec.RackConfig.RestartPercentage < 0 || c.Spec.RackConfig.RestartPercentage > 100 {
-		return fmt.Errorf("rackConfig.RestartPercentage `%d` can not be <0 or >100", c.Spec.RackConfig.RestartPercentage)
-	}
-	if c.Spec.RackConfig.RestartNodesCount < 0 {
-		return fmt.Errorf("rackConfig.RestartNodesCount `%d` can not be <0", c.Spec.RackConfig.RestartNodesCount)
-	}
-	if c.Spec.RackConfig.RestartNodesCount > 0 && c.Spec.RackConfig.RestartPercentage > 0 {
-		return fmt.Errorf(
-			"only one of rackConfig.RestartNodesCount `%d` and rackConfig.RestartPercentage `%d` can be set to non-zero",
-			c.Spec.RackConfig.RestartNodesCount, c.Spec.RackConfig.RestartPercentage)
-	}
+	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
 
-	if c.Spec.RackConfig.RestartNodesCount > 0 || c.Spec.RackConfig.RestartPercentage > 0 {
+		// Just validate if RollingUpdateBatchSize is valid number or string.
+		randomNumber := 100
+		count, err := intstr.GetScaledValueFromIntOrPercent(c.Spec.RackConfig.RollingUpdateBatchSize, randomNumber, false)
+		if err != nil {
+			return err
+		}
+		// Only negative is not allowed. Any big number can be given.
+		if count < 0 {
+			return fmt.Errorf("can not use negative rackConfig.RollingUpdateBatchSize  %s", c.Spec.RackConfig.RollingUpdateBatchSize.String())
+		}
+
 		if len(c.Spec.RackConfig.Racks) < 2 {
-			return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when number of racks is less than two")
+			return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when number of racks is less than two")
 		}
 
 		nsConfsNamespaces := c.getNsConfsForNamespaces()
 		for ns, nsConf := range nsConfsNamespaces {
 			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
-				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when there is any non-rack enabled namespace %s", ns)
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when there is any non-rack enabled namespace %s", ns)
 			}
 
 			if nsConf.noOfRacksForNamespaces <= 1 {
-				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when namespace `%s` is configured in only one rack", ns)
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured in only one rack", ns)
 			}
 			if nsConf.replicationFactor <= 1 {
-				return fmt.Errorf("can not use rackConfig.RestartNodesCount or rackConfig.RestartPercentage when namespace `%s` is configured with replication-factor 1", ns)
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured with replication-factor 1", ns)
 			}
 		}
 	}

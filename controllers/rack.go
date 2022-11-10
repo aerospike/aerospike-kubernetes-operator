@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"strconv"
 	"strings"
@@ -518,8 +519,9 @@ func (r *SingleClusterReconciler) upgradeRack(
 	// Create batch of pods
 	podsBatchList := r.getPodsBatchToRestart(rearrangedPods, len(podList))
 
-	// Update batch of pods
-	for _, podsBatch := range podsBatchList {
+	if len(podsBatchList) > 0 {
+		// Handle one batch
+		podsBatch := podsBatchList[0]
 
 		podNames := getPodNames(podsBatch)
 
@@ -535,7 +537,11 @@ func (r *SingleClusterReconciler) upgradeRack(
 			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
 
 		// Handle the next batch in subsequent Reconcile.
-		return statefulSet, reconcileRequeueAfter(0)
+		if len(podsBatchList) > 1 {
+			return statefulSet, reconcileRequeueAfter(0)
+		}
+
+		// If it's last batch then go ahead
 	}
 
 	// return a fresh copy
@@ -713,7 +719,9 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	podsBatchList := r.getPodsBatchToRestart(rearrangedPods, len(podList))
 
 	// Restart batch of pods
-	for _, podsBatch := range podsBatchList {
+	if len(podsBatchList) > 0 {
+		// Handle one batch
+		podsBatch := podsBatchList[0]
 
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods)
 		if !res.isSuccess {
@@ -721,7 +729,11 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		}
 
 		// Handle next batch in subsequent Reconcile.
-		return found, reconcileRequeueAfter(0)
+		if len(podsBatchList) > 1 {
+			return found, reconcileRequeueAfter(0)
+		}
+
+		// If it's last batch then go ahead
 	}
 
 	// Return a fresh copy
@@ -1297,17 +1309,13 @@ func getOriginalPath(path string) string {
 }
 
 func (r *SingleClusterReconciler) getPodsBatchToRestart(podList []*corev1.Pod, rackSize int) [][]*corev1.Pod {
-	restartNodesCount := r.aeroCluster.Spec.RackConfig.RestartNodesCount
-	restartPercentage := r.aeroCluster.Spec.RackConfig.RestartPercentage
-	if restartPercentage != 0 {
-		restartNodesCount = rackSize * restartPercentage / 100
-	}
-
-	return chunkBy(podList, restartNodesCount)
+	// Error is already handled in validation
+	rollingUpdateBatchSize, _ := intstr.GetScaledValueFromIntOrPercent(r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize, rackSize, false)
+	return chunkBy(podList, rollingUpdateBatchSize)
 }
 
 func chunkBy[T any](items []*T, chunkSize int) (chunks [][]*T) {
-	if chunkSize == 0 {
+	if chunkSize <= 0 {
 		chunkSize = 1
 	}
 	for chunkSize < len(items) {
