@@ -43,8 +43,9 @@ Run the following command with the appropriate name and version for the operator
 ```sh
 IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator-nightly
 VERSION=2.2.1-dev
-make docker-build docker-push IMG=${IMAGE_TAG_BASE}:${VERSION}
+make docker-buildx IMG=${IMAGE_TAG_BASE}:${VERSION} PLATFORMS=linux/amd64
 ```
+**Note**: Change `PLATFORMS` var as per host machine or remove it to build multi-arch image
 
 ### Developer testing
 
