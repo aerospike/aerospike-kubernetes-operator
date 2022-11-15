@@ -110,61 +110,36 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	return restartType, nil
 }
 
-func (r *SingleClusterReconciler) rollingRestartPod(
-	rackState RackState, pod corev1.Pod, restartType RestartType,
-	ignorablePods []corev1.Pod,
+func (r *SingleClusterReconciler) rollingRestartPods(
+	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
 
-	if restartType == NoRestart {
-		r.Log.Info(
-			"This Pod doesn't need rolling restart, Skip this", "pod", pod.Name,
-		)
-		return reconcileSuccess()
-	}
+	failedPods, activePods := getFailedAndActivePods(podsToRestart)
 
-	// Also check if statefulSet is in stable condition
-	// Check for all containers. Status.ContainerStatuses doesn't include init container
-	if pod.Status.ContainerStatuses == nil {
-		r.Log.Error(
-			fmt.Errorf(
-				"pod %s containerStatus is nil",
-				pod.Name,
-			),
-			"Pod may be in unscheduled state",
-		)
-		return reconcileRequeueAfter(1)
-	}
-
-	r.Log.Info("Rolling restart pod", "podName", pod.Name)
-
-	err := utils.CheckPodFailed(&pod)
-	if err == nil {
-		// Check for migration
-		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitSafeDelete",
-			"[rack-%d] Waiting to safely restart Pod %s", rackState.Rack.ID, pod.Name)
-		if res := r.waitForNodeSafeStopReady(
-			&pod, ignorablePods,
-		); !res.isSuccess {
+	// If already dead node (failed pod) then no need to check node safety, migration
+	if len(failedPods) != 0 {
+		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
+		if res := r.restartPods(rackState, failedPods); !res.isSuccess {
 			return res
 		}
-	} else {
-		// TODO: Check a user flag to restart failed pods.
-		r.Log.Info("Restarting failed pod", "podName", pod.Name, "error", err)
-
-		// The pod has failed. Quick start is not possible.
-		restartType = PodRestart
 	}
 
-	if restartType == QuickRestart {
-		return r.quickRestart(rackState, &pod)
+	if len(activePods) != 0 {
+		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+			return res
+		}
+		if res := r.restartPods(rackState, activePods); !res.isSuccess {
+			return res
+		}
 	}
 
-	return r.podRestart(&pod)
+	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) quickRestart(
+func (r *SingleClusterReconciler) restartASDInPod(
 	rackState RackState, pod *corev1.Pod,
-) reconcileResult {
+) error {
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
 	cmd := []string{
 		"bash",
@@ -185,155 +160,227 @@ func (r *SingleClusterReconciler) quickRestart(
 			stdout, "stderr", stderr,
 		)
 
-		// Fallback to pod restart.
-		return r.podRestart(pod)
+		return err
 	}
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
 		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name)
 
 	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
-	return reconcileSuccess()
+	return nil
 }
 
-func (r *SingleClusterReconciler) podRestart(pod *corev1.Pod) reconcileResult {
-	var err error = nil
-
-	// Delete pod
-	if err := r.Client.Delete(context.TODO(), pod); err != nil {
-		r.Log.Error(err, "Failed to delete pod")
-		return reconcileError(err)
-	}
-	r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
-
-	// Wait for pod to come up
-	var started bool
-	for i := 0; i < 20; i++ {
-		r.Log.V(1).Info(
-			"Waiting for pod to be ready after delete", "podName", pod.Name,
-			"status", pod.Status.Phase, "DeletionTimestamp",
-			pod.DeletionTimestamp,
-		)
-
-		updatedPod := &corev1.Pod{}
-		err := r.Client.Get(
-			context.TODO(),
-			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
-			updatedPod,
-		)
+func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod) reconcileResult {
+	var restartedPods []*corev1.Pod
+	for i := range podsToRestart {
+		pod := podsToRestart[i]
+		// Check if this pod needs restart
+		restartType, err := r.getRollingRestartTypePod(rackState, *pod)
 		if err != nil {
-			r.Log.Error(err, "Failed to get pod")
-			time.Sleep(time.Second * 5)
-			continue
-		}
-
-		if err := utils.CheckPodFailed(updatedPod); err != nil {
 			return reconcileError(err)
 		}
 
-		if !utils.IsPodRunningAndReady(updatedPod) {
-			r.Log.V(1).Info(
-				"Waiting for pod to be ready", "podName", updatedPod.Name,
-				"status", updatedPod.Status.Phase, "DeletionTimestamp",
-				updatedPod.DeletionTimestamp,
-			)
-			time.Sleep(time.Second * 5)
-			continue
+		if restartType == QuickRestart {
+			if err := r.restartASDInPod(rackState, pod); err == nil {
+				continue
+			}
+			// If ASD restart fails then go ahead and restart the pod
 		}
 
-		r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
-		started = true
-		break
+		if err := r.Client.Delete(context.TODO(), pod); err != nil {
+			r.Log.Error(err, "Failed to delete pod")
+			return reconcileError(err)
+		}
+		restartedPods = append(restartedPods, pod)
+
+		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+	}
+	if len(restartedPods) > 0 {
+		return r.ensurePodsRunningAndReady(restartedPods)
+	}
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev1.Pod) reconcileResult {
+	podNames := getPodNames(podsToCheck)
+	readyPods := map[string]bool{}
+
+	const maxRetries = 6
+	const retryInterval = time.Second * 10
+
+	for i := 0; i < maxRetries; i++ {
+		r.Log.V(1).Info("Waiting for pods to be ready after delete", "pods", podNames)
+
+		for _, pod := range podsToCheck {
+			if readyPods[pod.Name] {
+				continue
+			}
+
+			r.Log.V(1).Info(
+				"Waiting for pod to be ready", "podName", pod.Name,
+				"status", pod.Status.Phase, "DeletionTimestamp",
+				pod.DeletionTimestamp,
+			)
+
+			updatedPod := &corev1.Pod{}
+			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
+			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if err := utils.CheckPodFailed(updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if !utils.IsPodRunningAndReady(updatedPod) {
+				break
+			}
+
+			readyPods[pod.Name] = true
+
+			r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
+				"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
+		}
+
+		if len(readyPods) == len(podsToCheck) {
+			r.Log.Info(
+				"Pods are running and ready", "pods",
+				podNames,
+			)
+			return reconcileSuccess()
+		}
+		time.Sleep(retryInterval)
 	}
 
-	// TODO: In what situation this can happen?
-	if !started {
-		r.Log.Error(
-			err, "Pod is not running or ready. Pod might also be terminating",
-			"podName", pod.Name, "status", pod.Status.Phase,
-			"DeletionTimestamp", pod.DeletionTimestamp,
-		)
-	} else {
-		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
-			"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
+	r.Log.Info(
+		"Timed out waiting for pods to come up", "pods",
+		podNames,
+	)
+	return reconcileRequeueAfter(10)
+}
+
+func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
+	var rearrangedPods []*corev1.Pod
+
+	failedPods, activePods := getFailedAndActivePods(pods)
+	rearrangedPods = append(rearrangedPods, failedPods...)
+	rearrangedPods = append(rearrangedPods, activePods...)
+
+	return rearrangedPods
+}
+
+func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+	for i := range pods {
+		pod := pods[i]
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			failedPods = append(failedPods, pod)
+			continue
+		}
+		activePods = append(activePods, pod)
+	}
+	return failedPods, activePods
+}
+
+func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
+	rackState RackState, podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod,
+) reconcileResult {
+
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+
+	// If already dead node (failed pod) then no need to check node safety, migration
+	if len(failedPods) != 0 {
+		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
+		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.isSuccess {
+			return res
+		}
+	}
+
+	if len(activePods) != 0 {
+		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(failedPods))
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+			return res
+		}
+		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.isSuccess {
+			return res
+		}
 	}
 
 	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
-	rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod,
-) reconcileResult {
-	// If already dead node, so no need to check node safety, migration
-	if err := utils.CheckPodFailed(&p); err == nil {
-		if res := r.waitForNodeSafeStopReady(
-			&p, ignorablePods,
-		); !res.isSuccess {
-			return res
+	rackState RackState, podsToUpdate []*corev1.Pod) reconcileResult {
+
+	// Delete pods
+	for _, p := range podsToUpdate {
+		if err := r.Client.Delete(context.TODO(), p); err != nil {
+			return reconcileError(err)
 		}
+		r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
+			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name)
 	}
 
-	r.Log.V(1).Info("Delete the Pod", "podName", p.Name)
-	// Delete pod
-	if err := r.Client.Delete(context.TODO(), &p); err != nil {
-		return reconcileError(err)
-	}
-	r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+	return r.ensurePodsImageUpdated(podsToUpdate)
+}
 
-	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
-		"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name)
-	// Wait for pod to come up
+func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) reconcileResult {
+	podNames := getPodNames(podsToCheck)
+	updatedPods := map[string]bool{}
+
 	const maxRetries = 6
 	const retryInterval = time.Second * 10
+
 	for i := 0; i < maxRetries; i++ {
 		r.Log.V(1).Info(
-			"Waiting for pod to be ready after delete", "podName", p.Name,
+			"Waiting for pods to be ready after delete", "pods", podNames,
 		)
 
-		pFound := &corev1.Pod{}
-		err := r.Client.Get(
-			context.TODO(),
-			types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound,
-		)
-		if err != nil {
-			r.Log.Error(err, "Failed to get pod", "podName", p.Name, "err", err)
+		for _, pod := range podsToCheck {
+			if updatedPods[pod.Name] {
+				continue
+			}
 
-			if _, err = r.getSTS(rackState); err != nil {
-				// Stateful set has been deleted.
-				// TODO Ashish to remember which scenario this can happen.
-				r.Log.Error(
-					err, "Statefulset has been deleted for pod", "podName",
-					p.Name, "err", err,
-				)
+			r.Log.V(1).Info(
+				"Waiting for pod to be ready", "podName", pod.Name,
+			)
+
+			updatedPod := &corev1.Pod{}
+			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
+			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
 				return reconcileError(err)
 			}
 
-			time.Sleep(retryInterval)
-			continue
-		}
-		if err := utils.CheckPodFailed(pFound); err != nil {
-			return reconcileError(err)
+			if err := utils.CheckPodFailed(updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if !r.isPodUpgraded(updatedPod) {
+				break
+			}
+
+			updatedPods[pod.Name] = true
+			r.Log.Info("Pod is upgraded/downgraded", "podName", pod.Name)
 		}
 
-		if r.isPodUpgraded(pFound) {
-			r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
+		if len(updatedPods) == len(podsToCheck) {
+			r.Log.Info("Pods are upgraded/downgraded", "pod", podNames)
 			return reconcileSuccess()
 		}
-
-		r.Log.V(1).Info(
-			"Waiting for pod to come up with new image", "podName", p.Name,
-		)
 		time.Sleep(retryInterval)
 	}
 
 	r.Log.Info(
-		"Timed out waiting for pod to come up with new image", "podName",
-		p.Name,
+		"Timed out waiting for pods to come up with new image", "pods",
+		podNames,
 	)
 	return reconcileRequeueAfter(10)
 }
 
 // cleanupPods checks pods and status before scale-up to detect and fix any
-//status anomalies.
+// status anomalies.
 func (r *SingleClusterReconciler) cleanupPods(
 	podNames []string, rackState RackState,
 ) error {
@@ -385,6 +432,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 				"About to remove host from tipHostnames and reset alumni in pod...",
 				"pod to remove", podName, "remove and reset on pod", np.Name,
 			)
+			// TODO: Should we return error?
 			_ = r.tipClearHostname(&np, podName)
 
 			_ = r.alumniReset(&np)
@@ -596,20 +644,17 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) isAnyPodInFailedState(podList []corev1.Pod) bool {
+func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod) bool {
 
 	for _, p := range podList {
-		for _, ps := range p.Status.ContainerStatuses {
-			// TODO: Should we use checkPodFailed or CheckPodImageFailed?
-			// scaleDown, rollingRestart should work even if node is crashed
-			// If node was crashed due to wrong config then only rollingRestart can bring it back.
-			if err := utils.CheckPodImageFailed(&p); err != nil {
-				r.Log.Info(
-					"AerospikeCluster Pod is in failed state", "currentImage",
-					ps.Image, "podName", p.Name, "err", err,
-				)
-				return true
-			}
+		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
+		// scaleDown, rollingRestart should work even if node is crashed
+		// If node was crashed due to wrong config then only rollingRestart can bring it back.
+		if err := utils.CheckPodImageFailed(&p); err != nil {
+			r.Log.Info(
+				"AerospikeCluster Pod is in failed state", "podName", p.Name, "err", err,
+			)
+			return true
 		}
 	}
 	return false
@@ -656,4 +701,12 @@ func GetEndpointsFromInfo(
 		)
 	}
 	return endpoints
+}
+
+func getPodNames(pods []*corev1.Pod) []string {
+	var podNames []string
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
+	}
+	return podNames
 }

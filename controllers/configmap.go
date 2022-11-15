@@ -151,15 +151,10 @@ func createPodSpecForRack(
 		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
 	)
 
-	if rack.PodSpec.Affinity != nil {
-		rackFullPodSpec.Affinity = rack.PodSpec.Affinity
-	}
-	if rack.PodSpec.Tolerations != nil {
-		rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
-	}
-	if rack.PodSpec.NodeSelector != nil {
-		rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
-	}
+	rackFullPodSpec.Affinity = rack.PodSpec.Affinity
+	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
+	rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
+
 	return &rackFullPodSpec, nil
 }
 

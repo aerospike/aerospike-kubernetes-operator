@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
@@ -315,6 +316,9 @@ type RackConfig struct {
 	// Racks is the list of all racks
 	// +nullable
 	Racks []Rack `json:"racks,omitempty"`
+	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
+	// +optional
+	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
 }
 
 // Rack specifies single rack config

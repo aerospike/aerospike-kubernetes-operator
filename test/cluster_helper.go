@@ -643,67 +643,18 @@ var defaultProtofdmax int64 = 15000
 func createDummyAerospikeClusterWithoutStorage(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
-	// create Aerospike custom resource
-	aeroCluster := &asdbv1beta1.AerospikeCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "asdb.aerospike.com/v1beta1",
-			Kind:       "AerospikeCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterNamespacedName.Name,
-			Namespace: clusterNamespacedName.Namespace,
-		},
-		Spec: asdbv1beta1.AerospikeClusterSpec{
-			Size:  size,
-			Image: latestImage,
-			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
-				Users: []asdbv1beta1.AerospikeUserSpec{
-					{
-						Name:       "admin",
-						SecretName: authSecretName,
-						Roles: []string{
-							"sys-admin",
-							"user-admin",
-							"read-write",
-						},
-					},
-				},
-			},
-
-			PodSpec: asdbv1beta1.AerospikePodSpec{
-				MultiPodPerHost: true,
-				AerospikeInitContainerSpec: &asdbv1beta1.
-					AerospikeInitContainerSpec{},
-			},
-
-			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"service": map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":     defaultProtofdmax,
-					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkConfig(),
-					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 1,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return aeroCluster
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, 1, nil)
 }
 
-func createDummyAerospikeCluster(
-	clusterNamespacedName types.NamespacedName, size int32,
+func createDummyAerospikeClusterWithRF(
+	clusterNamespacedName types.NamespacedName, size int32, rf int,
+) *asdbv1beta1.AerospikeCluster {
+	storage := getBasicStorageSpecObject()
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, rf, &storage)
+}
+
+func createDummyAerospikeClusterWithRFAndStorage(
+	clusterNamespacedName types.NamespacedName, size int32, rf int, storage *asdbv1beta1.AerospikeStorageSpec,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
@@ -750,7 +701,7 @@ func createDummyAerospikeCluster(
 						map[string]interface{}{
 							"name":               "test",
 							"memory-size":        1000955200,
-							"replication-factor": 1,
+							"replication-factor": rf,
 							"storage-engine": map[string]interface{}{
 								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
@@ -761,8 +712,16 @@ func createDummyAerospikeCluster(
 			},
 		},
 	}
-	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+	if storage != nil {
+		aeroCluster.Spec.Storage = *storage
+	}
 	return aeroCluster
+}
+
+func createDummyAerospikeCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	return createDummyAerospikeClusterWithRF(clusterNamespacedName, size, 1)
 }
 
 func UpdateClusterImage(

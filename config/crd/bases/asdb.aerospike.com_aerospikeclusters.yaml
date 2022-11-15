@@ -5267,6 +5267,13 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
@@ -11140,6 +11147,13 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
               resources:
                 description: Define resources requests and limits for Aerospike Server

@@ -51,13 +51,16 @@ func (r *SingleClusterReconciler) getAerospikeServerVersionFromPod(pod *corev1.P
 	return version, nil
 }
 
-// waitForNodeSafeStopReady waits util the input pod is safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
-func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
-	pod *corev1.Pod, ignorablePods []corev1.Pod,
+// waitForMultipleNodesSafeStopReady waits util the input pods are safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
+func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
+	pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
 	// TODO: Check post quiesce recluster conditions first.
 	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
 
+	if len(pods) == 0 {
+		return reconcileSuccess()
+	}
 	// Remove a node only if cluster is stable
 	err := r.waitForAllSTSToBeReady()
 	if err != nil {
@@ -77,11 +80,8 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 			),
 		)
 	}
-	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
-		"[rack-%s] Waiting for migrations to complete",
-		pod.Labels[asdbv1beta1.AerospikeRackIdLabel],
-	)
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIdLabel])
 
 	const maxRetry = 6
 	const retryInterval = time.Second * 10
@@ -89,15 +89,13 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 	var isStable bool
 	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
-		r.Log.V(1).Info(
-			"Waiting for migrations to be zero before stopping pod", "pod",
-			pod.Name,
-		)
+		r.Log.V(1).Info("Waiting for migrations to be zero before stopping pods", "pods", getPodNames(pods))
 
 		time.Sleep(retryInterval)
 
-		// This should fail if coldstart is going on.
-		// Info command in coldstarting node should give error, is it? confirm.
+		// This should fail if cold start is going on.
+		// Info command in cold starting node should give error, is it? confirm
+		//.
 
 		isStable, err = deployment.IsClusterAndStable(
 			r.Log, r.getClientPolicy(), allHostConns,
@@ -119,21 +117,27 @@ func (r *SingleClusterReconciler) waitForNodeSafeStopReady(
 		return reconcileError(err)
 	}
 
-	// Quiesce node
-	selectedHostConn, err := r.newHostConn(pod)
-	if err != nil {
-		return reconcileError(
-			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes %v: %v",
-				pod.Name, err,
-			),
-		)
+	var selectedHostConns []*deployment.HostConn
+	for _, pod := range pods {
+		// Quiesce node
+		hostConn, err := r.newHostConn(pod)
+		if err != nil {
+			return reconcileError(
+				fmt.Errorf(
+					"failed to get hostConn for aerospike cluster nodes %v: %v",
+					pod.Name, err,
+				),
+			)
+		}
+		selectedHostConns = append(selectedHostConns, hostConn)
 	}
+
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConn, removedNSes,
+		r.Log, r.getClientPolicy(), allHostConns, selectedHostConns, removedNSes,
 	); err != nil {
 		return reconcileError(err)
 	}
+
 	return reconcileSuccess()
 }
 
