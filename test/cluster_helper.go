@@ -643,6 +643,19 @@ var defaultProtofdmax int64 = 15000
 func createDummyAerospikeClusterWithoutStorage(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, 1, nil)
+}
+
+func createDummyAerospikeClusterWithRF(
+	clusterNamespacedName types.NamespacedName, size int32, rf int,
+) *asdbv1beta1.AerospikeCluster {
+	storage := getBasicStorageSpecObject()
+	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, rf, &storage)
+}
+
+func createDummyAerospikeClusterWithRFAndStorage(
+	clusterNamespacedName types.NamespacedName, size int32, rf int, storage *asdbv1beta1.AerospikeStorageSpec,
+) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := &asdbv1beta1.AerospikeCluster{
 		TypeMeta: metav1.TypeMeta{
@@ -688,7 +701,7 @@ func createDummyAerospikeClusterWithoutStorage(
 						map[string]interface{}{
 							"name":               "test",
 							"memory-size":        1000955200,
-							"replication-factor": 1,
+							"replication-factor": rf,
 							"storage-engine": map[string]interface{}{
 								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
@@ -698,6 +711,9 @@ func createDummyAerospikeClusterWithoutStorage(
 				},
 			},
 		},
+	}
+	if storage != nil {
+		aeroCluster.Spec.Storage = *storage
 	}
 	return aeroCluster
 }

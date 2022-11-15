@@ -28,6 +28,8 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				trueVar := true
+				cleanupThreads := 3
+				updatedCleanupThreads := 5
 
 				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
@@ -42,6 +44,8 @@ var _ = Describe(
 							},
 						},
 					},
+					AerospikeInitContainerSpec: &asdbv1beta1.
+						AerospikeInitContainerSpec{},
 				}
 
 				clusterName := "storage-init"
@@ -50,17 +54,115 @@ var _ = Describe(
 				)
 
 				It(
-					"Should validate all storage-init policies", func() {
+					"Should work for large device with long init and multithreading", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
+						ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "10Gi", cloudProvider,
+						)
+						storageConfig.CleanupThreads = cleanupThreads
+
+						storageConfig.Volumes = append(
+							storageConfig.Volumes, asdbv1beta1.VolumeSpec{
+								Name: "device-dd1",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd1",
+								},
+							},
+							asdbv1beta1.VolumeSpec{
+								Name: "device-dd2",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd2",
+								},
+							},
+						)
+
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
+
+						// It should be greater than given in cluster namespace
+						resourceMem := resource.MustParse("2Gi")
+						resourceCPU := resource.MustParse("500m")
+						limitMem := resource.MustParse("2Gi")
+						limitCPU := resource.MustParse("500m")
+
+						resources := &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resourceCPU,
+								corev1.ResourceMemory: resourceMem,
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    limitCPU,
+								corev1.ResourceMemory: limitMem,
+							},
+						}
+
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Storage.CleanupThreads = updatedCleanupThreads
+
+						By("Updating the cluster")
+
+						err = k8sClient.Update(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should validate all storage-init policies", func() {
+
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
 							},
 							{
 								ID: 2,
@@ -163,15 +265,9 @@ var _ = Describe(
 				It(
 					"Should work for large device with long init", func() {
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
 							},
 						}
 
@@ -194,6 +290,51 @@ var _ = Describe(
 
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
+
+		Context(
+			"When doing invalid operations", func() {
+
+				threeVar := 3
+
+				clusterName := "storage-init"
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
+
+				It(
+					"Should fail multithreading in init container if resource limit is not set", func() {
+
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						storageConfig.CleanupThreads = threeVar
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
 					},
 				)
 			},

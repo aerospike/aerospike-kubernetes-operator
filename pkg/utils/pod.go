@@ -31,6 +31,9 @@ func CheckPodFailed(pod *corev1.Pod) error {
 		return fmt.Errorf("pod %s has failed status", pod.Name)
 	}
 
+	if pod.Status.Phase == corev1.PodPending && isPodReasonUnschedulable(pod) {
+		return fmt.Errorf("pod %s is in unschedulable state", pod.Name)
+	}
 	// grab the status of every container in the pod (including its init containers)
 	containerStatus := append(
 		pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...,
@@ -188,4 +191,13 @@ func isPodCrashError(reason string) bool {
 // https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
 func isPodError(reason string) bool {
 	return strings.HasSuffix(reason, "Error")
+}
+
+func isPodReasonUnschedulable(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodScheduled && condition.Reason == corev1.PodReasonUnschedulable {
+			return true
+		}
+	}
+	return false
 }
