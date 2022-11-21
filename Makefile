@@ -14,6 +14,9 @@ OPENSHIFT_VERSION="v4.6"
 # TODO: Version must be pulled from git tags
 VERSION ?= 2.2.1
 
+# Platforms supported
+PLATFORMS ?= linux/amd64,linux/arm64
+
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
 # CHANNELS define the bundle channels used in the bundle.
@@ -46,8 +49,12 @@ IMAGE_TAG_BASE ?= aerospike/aerospike-kubernetes-operator-nightly
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
-# Image URL to use all building/pushing image targets
+# Image URL to use all building/pushing operator manager image targets
 IMG ?= controller:latest
+
+# Image URL to use all building/pushing operator-init image targets
+INIT_IMG ?= aerospike/aerospike-kubernetes-init:latest
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=70"
 
@@ -111,16 +118,38 @@ build: generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
-# docker-build: test ## Build docker image with the manager.
-docker-build: ## Build docker image with the manager.
-	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) .
+.PHONY: docker-buildx
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) .
+	- docker buildx rm project-v3-builder
 
-docker-build-openshift: ## Build openshift docker image with the manager.
-	docker build --pull --no-cache -t ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+.PHONY: docker-buildx-openshift
+docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	- docker buildx rm project-v3-builder
 
+.PHONY: docker-init-buildx
+docker-init-buildx: ## Build and push docker image for the init container for cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	cd init
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(VERSION) -f init/Dockerfile init/
+	- docker buildx rm project-v3-builder
+
+.PHONY: docker-init-buildx-openshift
+docker-init-buildx-openshift: ## Build and push docker image for the init container for openshift cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 -f init/Dockerfile init/
+	- docker buildx rm project-v3-builder
+
+.PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
-
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -205,6 +234,7 @@ bundle-clean:
 	rm -rf bundle bundle.Dockerfile
 
 # Build the bundle image.
+# Bundle images are not architecture-specific. They contain only plaintext kubernetes manifests and operator metadata.
 .PHONY: bundle-build
 bundle-build:
 	docker build --pull --no-cache -f bundle.Dockerfile -t $(BUNDLE_IMG) .

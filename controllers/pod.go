@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 }
 
 // cleanupPods checks pods and status before scale-up to detect and fix any
-//status anomalies.
+// status anomalies.
 func (r *SingleClusterReconciler) cleanupPods(
 	podNames []string, rackState RackState,
 ) error {
