@@ -12,7 +12,7 @@ OPENSHIFT_VERSION="v4.6"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.2.1
+VERSION ?= 2.3.0
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -52,8 +52,9 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Image URL to use all building/pushing operator manager image targets
 IMG ?= controller:latest
 
+INIT_VERSION ?= 0.0.18
 # Image URL to use all building/pushing operator-init image targets
-INIT_IMG ?= aerospike/aerospike-kubernetes-init:latest
+INIT_IMG ?= aerospike/aerospike-kubernetes-init:${INIT_VERSION}
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=70"
@@ -137,14 +138,14 @@ docker-init-buildx: ## Build and push docker image for the init container for cr
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
 	cd init
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(VERSION) -f init/Dockerfile init/
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(INIT_VERSION) -f init/Dockerfile init/
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-init-buildx-openshift
 docker-init-buildx-openshift: ## Build and push docker image for the init container for openshift cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 -f init/Dockerfile init/
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(INIT_VERSION) --build-arg USER=1001 -f init/Dockerfile init/
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push
