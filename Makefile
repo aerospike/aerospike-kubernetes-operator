@@ -51,10 +51,12 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
 # Image URL to use all building/pushing operator manager image targets
 IMG ?= controller:latest
+IMG_TAGS ?= ""
+
 
 INIT_VERSION ?= 0.0.18
 # Image URL to use all building/pushing operator-init image targets
-INIT_IMG ?= aerospike/aerospike-kubernetes-init:${INIT_VERSION}
+INIT_IMG ?= aerospike/aerospike-kubernetes-init-nightly:${INIT_VERSION}
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=70"
@@ -130,7 +132,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-init-buildx
@@ -145,7 +147,7 @@ docker-init-buildx: ## Build and push docker image for the init container for cr
 docker-init-buildx-openshift: ## Build and push docker image for the init container for openshift cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(INIT_VERSION) --build-arg USER=1001 -f init/Dockerfile init/
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(INIT_VERSION) --build-arg USER=1001 -f init/Dockerfile init/
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push
@@ -210,7 +212,7 @@ endef
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.2.1-5-dev make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.3.0-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/
@@ -284,3 +286,4 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+

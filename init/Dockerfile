@@ -10,7 +10,7 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 # Maintainer
 LABEL maintainer="Aerospike, Inc. <developers@aerospike.com>"
 
-ARG VERSION=0.0.16
+ARG VERSION=0.0.18
 ARG USER=root
 ARG DESCRIPTION="Initializes Aerospike pods created but the Aerospike Kubernetes Operator. Initialization includes setting up devices."
 
