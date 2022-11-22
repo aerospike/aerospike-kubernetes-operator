@@ -330,12 +330,13 @@ func (r *SingleClusterReconciler) reconcileRack(
 			return res
 		}
 	} else {
-		needRollingRestartRack, err := r.needRollingRestartRack(rackState)
+
+		needRollingRestartRack, restartTypeList, err := r.needRollingRestartRack(rackState)
 		if err != nil {
 			return reconcileError(err)
 		}
 		if needRollingRestartRack {
-			found, res = r.rollingRestartRack(found, rackState, ignorablePods)
+			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeList)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -503,11 +504,11 @@ func (r *SingleClusterReconciler) upgradeRack(
 		pod := podList[i]
 		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
 
-		if r.isPodUpgraded(&pod) {
+		if r.isPodUpgraded(pod) {
 			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
 			continue
 		}
-		podsToUpgrade = append(podsToUpgrade, &pod)
+		podsToUpgrade = append(podsToUpgrade, pod)
 	}
 
 	// Failed pods should always come before active pods.
@@ -661,7 +662,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
-	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
+	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod, restartTypeList map[string]RestartType,
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -675,7 +676,14 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
-	if r.isAnyPodInImageFailedState(podList) {
+
+	var pods []corev1.Pod
+
+	for i := range podList {
+		pods = append(pods, *podList[i])
+	}
+
+	if r.isAnyPodInImageFailedState(pods) {
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state due to image related issues"))
 	}
 
@@ -693,20 +701,18 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 
 	// Find pods which needs restart
 	var podsToRestart []*corev1.Pod
+	//	var podsToRestartTypeMap = make(map[*corev1.Pod]RestartType)
 	for i := range podList {
 		pod := podList[i]
 
-		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return found, reconcileError(err)
-		}
-
+		restartType := restartTypeList[pod.Name]
 		if restartType == NoRestart {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
-		podsToRestart = append(podsToRestart, &pod)
+		//	podsToRestart = append(podsToRestart, pod)
+		//	podsToRestartTypeMap[pod] = restartType
+		podsToRestart = append(podsToRestart, pod)
 	}
 
 	// Failed pods should always come before active pods.
@@ -723,7 +729,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
-		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods)
+		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeList)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -751,23 +757,26 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 }
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
-	bool, error,
+	bool, map[string]RestartType, error,
 ) {
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+
+	restartTypeList, err := r.getRollingRestartTypeList(rackState, podList)
 	if err != nil {
-		return false, fmt.Errorf("failed to list pods: %v", err)
+		return false, nil, err
+	}
+
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 	for _, pod := range podList {
 		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return false, err
-		}
+		restartType := restartTypeList[pod.Name]
 		if restartType != NoRestart {
-			return true, nil
+			return true, restartTypeList, nil
 		}
 	}
-	return false, nil
+	return false, nil, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
@@ -1125,13 +1134,13 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int) (
 }
 
 func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
-	[]corev1.Pod, error,
+	[]*corev1.Pod, error,
 ) {
 	podList, err := r.getRackPodList(rackID)
 	if err != nil {
 		return nil, err
 	}
-	sortedList := make([]corev1.Pod, len(podList.Items))
+	sortedList := make([]*corev1.Pod, len(podList.Items))
 	for _, p := range podList.Items {
 		indexStr := strings.Split(p.Name, "-")
 		// Index is last, [1] can be rackID
@@ -1140,7 +1149,7 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 			// Happens if we do not get full list of pods due to a crash,
 			return nil, fmt.Errorf("error get pod list for rack:%v", rackID)
 		}
-		sortedList[(len(podList.Items)-1)-indexInt] = p
+		sortedList[(len(podList.Items)-1)-indexInt] = &p
 	}
 	return sortedList, nil
 }

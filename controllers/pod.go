@@ -47,6 +47,21 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
+func (r *SingleClusterReconciler) getRollingRestartTypeList(
+	rackState RackState, pods []*corev1.Pod,
+) (map[string]RestartType, error) {
+	var restartTypeList = make(map[string]RestartType)
+	for i := range pods {
+		pod := *pods[i]
+		restartType, err := r.getRollingRestartTypePod(rackState, pod)
+		if err != nil {
+			return nil, err
+		}
+		restartTypeList[pod.Name] = restartType
+	}
+	return restartTypeList, nil
+}
+
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	rackState RackState, pod corev1.Pod,
 ) (RestartType, error) {
@@ -73,6 +88,18 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
+		podRestart, err := r.podRestartNeeded(rackState, pod.Name)
+		if err != nil {
+			return restartType, err
+		}
+		if podRestart {
+			restartType = mergeRestartType(restartType, PodRestart)
+			r.Log.Info(
+				"AerospikeConfig changed. Need rolling PodRestart",
+			)
+		} else {
+			restartType = mergeRestartType(restartType, QuickRestart)
+		}
 		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info(
 			"AerospikeConfig changed. Need rolling restart",
@@ -111,7 +138,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
+	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod, restartTypeList map[string]RestartType,
 ) reconcileResult {
 
 	failedPods, activePods := getFailedAndActivePods(podsToRestart)
@@ -119,7 +146,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
-		if res := r.restartPods(rackState, failedPods); !res.isSuccess {
+		if res := r.restartPods(rackState, failedPods, restartTypeList); !res.isSuccess {
 			return res
 		}
 	}
@@ -129,7 +156,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}
-		if res := r.restartPods(rackState, activePods); !res.isSuccess {
+		if res := r.restartPods(rackState, activePods, restartTypeList); !res.isSuccess {
 			return res
 		}
 	}
@@ -169,15 +196,12 @@ func (r *SingleClusterReconciler) restartASDInPod(
 	return nil
 }
 
-func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod) reconcileResult {
+func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeList map[string]RestartType) reconcileResult {
 	var restartedPods []*corev1.Pod
 	for i := range podsToRestart {
 		pod := podsToRestart[i]
 		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, *pod)
-		if err != nil {
-			return reconcileError(err)
-		}
+		restartType := restartTypeList[pod.Name]
 
 		if restartType == QuickRestart {
 			if err := r.restartASDInPod(rackState, pod); err == nil {
@@ -259,6 +283,21 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
+/*func getRearrangedFailedAndActivePods(pods map[*corev1.Pod]RestartType) map[*corev1.Pod]RestartType {
+	var rearrangedPods = make(map[*corev1.Pod]RestartType)
+
+	failedPods, activePods := getFailedAndActivePods(pods)
+
+	for pod, restartType := range failedPods {
+		rearrangedPods[pod] = restartType
+	}
+	for pod, restartType := range activePods {
+		rearrangedPods[pod] = restartType
+	}
+
+	return rearrangedPods
+}*/
+
 func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
 	var rearrangedPods []*corev1.Pod
 
@@ -268,6 +307,25 @@ func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
 
 	return rearrangedPods
 }
+
+/*
+func getFailedAndActivePods(pods map[*corev1.Pod]RestartType) (map[*corev1.Pod]RestartType, map[*corev1.Pod]RestartType) {
+
+	var failedPods = make(map[*corev1.Pod]RestartType)
+	var activePods = make(map[*corev1.Pod]RestartType)
+	for pod := range pods {
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			//	failedPods = append(failedPods, pod)
+			failedPods[pod] = pods[pod]
+			continue
+		}
+		activePods[pod] = pods[pod]
+		//		activePods = append(activePods, pod)
+	}
+	return failedPods, activePods
+}
+*/
 
 func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
 	for i := range pods {
@@ -709,4 +767,372 @@ func getPodNames(pods []*corev1.Pod) []string {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
+}
+func (r *SingleClusterReconciler) podRestartNeeded(rackState RackState, podName string) (bool, error) {
+
+	if err := r.handleNSOrDeviceRemoval(rackState, podName); err != nil {
+		return false, err
+	}
+
+	return r.handleNSOrDeviceAddition(rackState, podName)
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, podName string) error {
+	var rackStatus asdbv1beta1.Rack
+	//	var err error
+	var removedDevices []string
+	updateCluster := false
+
+	found := false
+	for _, rackStatus = range r.aeroCluster.Status.RackConfig.Racks {
+		if rackStatus.ID == rackState.Rack.ID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("could not find rack status with ID: %d", rackState.Rack.ID)
+	}
+	r.Log.Info(
+		"Got rack status",
+	)
+
+	for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		found := false
+		for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] == statusNamespace.(map[string]interface{})["name"] {
+				r.Log.Info(
+					"namespace found %s", "namespace", specNamespace.(map[string]interface{})["name"],
+				)
+				found = true
+				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
+				if statusStorage["devices"] != nil {
+					for _, statusDevice := range statusStorage["devices"].([]interface{}) {
+						deviceFound := false
+						if specStorage["devices"] != nil {
+							for _, specDevice := range specStorage["devices"].([]interface{}) {
+								if specDevice.(string) == statusDevice.(string) {
+									r.Log.Info(
+										"device found in namespace",
+									)
+									deviceFound = true
+								}
+							}
+						}
+
+						if deviceFound == false {
+							r.Log.Info(
+								"device from namespace is deleted",
+							)
+							deviceName := getDeviceNameFromPath(rackStatus.Storage.Volumes, statusDevice.(string))
+							removedDevices = append(removedDevices, deviceName)
+
+							updateCluster = true
+						}
+					}
+				}
+
+				if statusStorage["files"] != nil {
+					for _, statusFiles := range statusStorage["files"].([]interface{}) {
+						fileFound := false
+						if specStorage["files"] != nil {
+							for _, specFile := range specStorage["files"].([]interface{}) {
+								if specFile.(string) == statusFiles.(string) {
+									r.Log.Info(
+										"file found in namespace",
+									)
+									fileFound = true
+								}
+							}
+						}
+
+						if fileFound == false {
+							r.Log.Info(
+								"file from namespace is deleted",
+							)
+							deviceName := getDeviceNameFromFilePath(r.aeroCluster.Spec.RackConfig.Racks[0].Storage.Volumes, statusFiles.(string))
+							removedDevices = append(removedDevices, deviceName)
+
+							updateCluster = true
+						}
+					}
+				}
+			}
+		}
+		if found == false {
+			r.Log.Info(
+				"namespace deleted",
+			)
+			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			if statusStorage["type"] == "device" {
+				for _, statusDevice := range statusStorage["devices"].([]interface{}) {
+					deviceName := getDeviceNameFromPath(r.aeroCluster.Spec.RackConfig.Racks[0].Storage.Volumes, statusDevice.(string))
+					removedDevices = append(removedDevices, deviceName)
+
+				}
+				for _, statusFile := range statusStorage["files"].([]interface{}) {
+					deviceName := getDeviceNameFromPath(r.aeroCluster.Spec.RackConfig.Racks[0].Storage.Volumes, statusFile.(string))
+					removedDevices = append(removedDevices, deviceName)
+				}
+			}
+			updateCluster = true
+		}
+	}
+	if updateCluster {
+		var patches []jsonpatch.JsonPatchOperation
+
+		var initalizedList []string
+
+		for _, volume := range r.aeroCluster.Status.Pods[podName].InitializedVolumes {
+			if !utils.ContainsString(removedDevices, volume) {
+				initalizedList = append(initalizedList, volume)
+			}
+		}
+		patch1 := jsonpatch.JsonPatchOperation{
+			Operation: "replace",
+			Path:      "/status/pods/" + podName + "/initializedVolumes",
+			Value:     initalizedList,
+		}
+		patch2 := jsonpatch.JsonPatchOperation{
+			Operation: "replace",
+			Path:      "/status/pods/" + podName + "/dirtyVolumes",
+			Value:     removedDevices,
+		}
+		patches = append(patches, patch1)
+		patches = append(patches, patch2)
+		jsonPatchJSON, err := json.Marshal(patches)
+		if err != nil {
+			return err
+		}
+		constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
+		r.Log.Info("before Updated status with new initialised volumes", "status", r.aeroCluster.Status, "jsonPatch", jsonPatchJSON)
+		// Since the pod status is updated from pod init container,
+		//set the field owner to "pod" for pod status updates.
+		if err = r.Client.Status().Patch(
+			context.TODO(), r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+		); err != nil {
+			return fmt.Errorf("error updating status: %v", err)
+		}
+
+		r.Log.Info("Updated status with new initialised volumes", "status", r.aeroCluster.Status)
+		newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+		err = r.Client.Get(
+			context.TODO(), types.NamespacedName{
+				Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+			}, newAeroCluster,
+		)
+		if err != nil {
+			return err
+		}
+		r.Log.Info("get new aerocluster from client status after patch initialised volumes", "status", newAeroCluster.Status)
+	}
+	return nil
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, podName string) (bool, error) {
+	var rackStatus asdbv1beta1.Rack
+	var err error
+
+	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	err = r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	found := false
+	for _, rackStatus = range newAeroCluster.Status.RackConfig.Racks {
+		if rackStatus.ID == rackState.Rack.ID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return false, fmt.Errorf("could not find rack with ID: %d", rackState.Rack.ID)
+	}
+	r.Log.Info(
+		"Got rack status",
+	)
+
+	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		found := false
+		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] == statusNamespace.(map[string]interface{})["name"] {
+				r.Log.Info(
+					"namespace exists",
+				)
+				found = true
+				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
+				if specStorage["devices"] != nil {
+					for _, specDevice := range specStorage["devices"].([]interface{}) {
+						deviceFound := false
+						if statusStorage["devices"] != nil {
+							for _, statusDevice := range statusStorage["devices"].([]interface{}) {
+								if specDevice.(string) == statusDevice.(string) {
+									r.Log.Info(
+										"device exist in namespace",
+									)
+									deviceFound = true
+								}
+							}
+						}
+
+						if deviceFound == false {
+							r.Log.Info(
+								"device has been added in namespace",
+							)
+							deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
+							for key, podStatus := range newAeroCluster.Status.Pods {
+								if podName == key {
+									r.Log.Info(
+										"checking dirty volumes list", "device", deviceName, "podname", podName,
+									)
+									if utils.ContainsString(podStatus.InitializedVolumes, deviceName) {
+										return true, nil
+									}
+								}
+							}
+							/*							for index, rackSpec := range newAeroCluster.Spec.RackConfig.Racks {
+														if rackStatus.ID == rackState.Rack.ID {
+															for volIndex, vol := range rackSpec.Storage.Volumes {
+																if vol.Name == deviceName && newAeroCluster.Spec.RackConfig.Racks[index].Storage.Volumes[volIndex].IsDirty == true {
+																	return true, nil
+																}
+															}
+															break
+														}
+													}*/
+						}
+					}
+				}
+
+				if specStorage["files"] != nil {
+					for _, specFile := range specStorage["files"].([]interface{}) {
+						fileFound := false
+						if specStorage["files"] != nil {
+							for _, statusFile := range statusStorage["files"].([]interface{}) {
+								if statusFile.(string) == specFile.(string) {
+									r.Log.Info(
+										"file found in namespace",
+									)
+									fileFound = true
+								}
+							}
+						}
+
+						if fileFound == false {
+							r.Log.Info(
+								"file has been added in namespace",
+							)
+
+							deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specFile.(string))
+							for key, podStatus := range newAeroCluster.Status.Pods {
+								if podName == key {
+									r.Log.Info(
+										"checking dirty volumes list", "device", deviceName, "podname", podName,
+									)
+									if utils.ContainsString(podStatus.InitializedVolumes, deviceName) {
+										return true, nil
+									}
+								}
+							}
+							/*							for index, rackSpec := range newAeroCluster.Spec.RackConfig.Racks {
+														if rackStatus.ID == rackState.Rack.ID {
+															for volIndex, vol := range rackSpec.Storage.Volumes {
+																if vol.Name == deviceName && newAeroCluster.Spec.RackConfig.Racks[index].Storage.Volumes[volIndex].IsDirty == true {
+																	return true, nil
+																}
+															}
+															break
+														}
+													}*/
+						}
+					}
+				}
+			}
+		}
+		if found == false {
+			r.Log.Info(
+				"namespace added",
+			)
+			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			if specStorage["type"] == "device" {
+				for _, specDevice := range specStorage["devices"].([]interface{}) {
+					deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
+					for key, podStatus := range newAeroCluster.Status.Pods {
+						if podName == key {
+							r.Log.Info(
+								"checking dirty volumes list", "device", deviceName, "podname", podName,
+							)
+							if utils.ContainsString(podStatus.InitializedVolumes, deviceName) {
+								return true, nil
+							}
+						}
+					}
+					/*					for index, rackSpec := range newAeroCluster.Spec.RackConfig.Racks {
+										if rackStatus.ID == rackState.Rack.ID {
+											for volIndex, vol := range rackSpec.Storage.Volumes {
+												if vol.Name == deviceName && newAeroCluster.Spec.RackConfig.Racks[index].Storage.Volumes[volIndex].IsDirty == true {
+													return true, nil
+												}
+											}
+											break
+										}
+									}*/
+				}
+				for _, specDevice := range specStorage["files"].([]interface{}) {
+
+					deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specDevice.(string))
+					for key, podStatus := range newAeroCluster.Status.Pods {
+						if podName == key {
+							r.Log.Info(
+								"checking dirty volumes list", "device", deviceName, "podname", podName,
+							)
+							if utils.ContainsString(podStatus.InitializedVolumes, deviceName) {
+								return true, nil
+							}
+						}
+					}
+					/*					for index, rackSpec := range newAeroCluster.Spec.RackConfig.Racks {
+										if rackStatus.ID == rackState.Rack.ID {
+											for volIndex, vol := range rackSpec.Storage.Volumes {
+												if vol.Name == deviceName && newAeroCluster.Spec.RackConfig.Racks[index].Storage.Volumes[volIndex].IsDirty == true {
+													return true, nil
+												}
+											}
+											break
+										}
+									}*/
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+func getDeviceNameFromPath(volumes []asdbv1beta1.VolumeSpec, s string) string {
+	for _, volume := range volumes {
+		if volume.Aerospike.Path == s {
+			return volume.Name
+		}
+	}
+	return ""
+}
+
+func getDeviceNameFromFilePath(volumes []asdbv1beta1.VolumeSpec, s string) string {
+	for _, volume := range volumes {
+		if strings.HasPrefix(s, volume.Aerospike.Path+"/") {
+			return volume.Name
+		}
+	}
+	return ""
 }

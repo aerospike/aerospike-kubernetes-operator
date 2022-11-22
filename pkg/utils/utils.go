@@ -175,3 +175,13 @@ func RemoveString(slice []string, s string) (result []string) {
 	}
 	return
 }
+
+func AddString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			return
+		}
+	}
+	result = append(result, s)
+	return
+}

@@ -300,7 +300,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	}
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 
-	err = r.patchStatus(newAeroCluster)
+	err = r.patchStatus(newAeroCluster, false)
 	if err != nil {
 		return fmt.Errorf("error updating status: %w", err)
 	}
@@ -390,7 +390,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 	return r.aeroCluster.Status.AerospikeConfig == nil, nil
 }
 
-func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.AerospikeCluster) error {
+func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.AerospikeCluster, podStatusUpdate bool) error {
 	oldAeroCluster := r.aeroCluster
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
@@ -416,7 +416,7 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.Aerosp
 		// 2: While pod cleanup, it will remove pod from pods
 		if strings.HasPrefix(
 			operation.Path, "/status",
-		) && !strings.HasPrefix(operation.Path, "/status/pods") {
+		) && (podStatusUpdate || !strings.HasPrefix(operation.Path, "/status/pods")) {
 			filteredPatch = append(filteredPatch, operation)
 		}
 	}

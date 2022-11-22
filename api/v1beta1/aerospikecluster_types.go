@@ -597,6 +597,10 @@ type VolumeSpec struct {
 	// InitContainers are additional init containers where this volume will be mounted
 	// +optional
 	InitContainers []VolumeAttachment `json:"initContainers,omitempty"`
+
+	// IsDirty represents if this volume needs to be cleaned up or not
+	// +optional
+	// IsDirty bool `json:"isDirty,omitempty"`
 }
 
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
@@ -788,6 +792,10 @@ type AerospikePodStatus struct {
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
+	// DirtyVolumes is the list of volume those needs to be clean
+	// during init.
+	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
+
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
 	// +optional
 	// +nullable
@@ -807,7 +815,7 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
-//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
 type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

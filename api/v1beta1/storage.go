@@ -2,6 +2,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/go-logr/logr"
 	"path/filepath"
 	"reflect"
 
@@ -77,7 +78,7 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 }
 
 // SetDefaults sets default values for storage spec fields.
-func (s *AerospikeStorageSpec) SetDefaults() {
+func (s *AerospikeStorageSpec) SetDefaults(asLog logr.Logger) {
 	defaultFilesystemInitMethod := AerospikeVolumeMethodNone
 	defaultFilesystemWipeMethod := AerospikeVolumeMethodDeleteFiles
 	defaultBlockInitMethod := AerospikeVolumeMethodNone
