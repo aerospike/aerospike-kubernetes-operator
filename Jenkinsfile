@@ -73,8 +73,8 @@ pipeline {
                                sh "./snyk-linux test  --severity-threshold=high"
 
                                // Scan the operator images
-                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high"
-                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high"
+                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk"
+                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk"
                            }
                         }
                     }
