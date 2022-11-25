@@ -399,9 +399,9 @@ def init_volumes(pod_name, config):
 
             elif volume.effective_init_method == "blkdiscard":
 
-                blkdiskard = "blkdiscard {volume_path}".format(
+                blkdiscard_cmd = "blkdiscard {volume_path} && blkdiscard -z --length 8MiB {volume_path}".format(
                     volume_path=volume.get_mount_point())
-                execute(blkdiskard)
+                execute(blkdiscard_cmd)
                 logging.info(f"{volume} - Initialized")
 
             elif volume.effective_init_method == "none":
@@ -470,8 +470,8 @@ def wipe_volumes(pod_name, config):
 
                 elif volume.effective_wipe_method == "blkdiscard":
 
-                    blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
-                    execute(blkdiskard)
+                    blkdiscard_cmd = "blkdiscard {volume_path} && blkdiscard -z --length 8MiB {volume_path}".format(volume_path=volume.get_mount_point())
+                    execute(blkdiscard_cmd)
                     logging.info(f"Wiped - {volume}")
 
                 else:
