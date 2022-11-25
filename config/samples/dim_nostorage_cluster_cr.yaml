@@ -39,10 +39,6 @@ spec:
           - user-admin
 
   aerospikeConfig:
-    logging:
-      - name: /var/log/aerospike/aerospike.log
-        any: info
-        clustering: debug
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
     security: {}
