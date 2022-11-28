@@ -57,9 +57,6 @@ spec:
       clientKeyFilename: svc_key.pem
 
   aerospikeConfig:
-    logging:
-      - name: /var/log/aerospike/aerospike.log
-        any: info
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
     security:
