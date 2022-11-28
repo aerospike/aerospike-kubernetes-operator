@@ -597,10 +597,6 @@ type VolumeSpec struct {
 	// InitContainers are additional init containers where this volume will be mounted
 	// +optional
 	InitContainers []VolumeAttachment `json:"initContainers,omitempty"`
-
-	// IsDirty represents if this volume needs to be cleaned up or not
-	// +optional
-	// IsDirty bool `json:"isDirty,omitempty"`
 }
 
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
@@ -791,10 +787,6 @@ type AerospikePodStatus struct {
 	// InitializedVolumes is the list of volume names that have already been
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
-
-	// DirtyVolumes is the list of volume those needs to be clean
-	// during init.
-	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
 
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
 	// +optional

@@ -62,7 +62,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	c.Spec.AerospikeNetworkPolicy.SetDefaults()
 
 	// Set common storage defaults.
-	c.Spec.Storage.SetDefaults(asLog)
+	c.Spec.Storage.SetDefaults()
 
 	// Add default rackConfig if not already given. Disallow use of defaultRackID by user.
 	// Need to set before setting defaults in aerospikeConfig.
@@ -165,7 +165,7 @@ func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error
 		}
 
 		// Set storage defaults if rack has storage section
-		rack.Storage.SetDefaults(asLog)
+		rack.Storage.SetDefaults()
 	}
 	return nil
 }

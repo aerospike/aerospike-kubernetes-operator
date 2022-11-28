@@ -330,7 +330,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 			return res
 		}
 	} else {
-
 		needRollingRestartRack, restartTypeList, err := r.needRollingRestartRack(rackState)
 		if err != nil {
 			return reconcileError(err)

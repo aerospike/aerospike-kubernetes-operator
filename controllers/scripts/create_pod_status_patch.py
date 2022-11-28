@@ -265,19 +265,6 @@ def get_initialized_volumes(pod_name, config):
                 f"pod-name: {pod_name} - Initialized volumes not found")
             return set()
 
-
-def get_dirty_volumes(pod_name, config):
-
-    try:
-        logging.debug(
-            f"pod-name: {pod_name} - Looking for dirty volumes in status.pod.{pod_name}.dirtyVolumes")
-
-        return set(config["status"]["pods"][pod_name]["dirtyVolumes"])
-    except KeyError:
-            logging.warning(
-                f"pod-name: {pod_name} - Dirty volumes not found")
-            return set()
-
 def get_rack(pod_name, config):
 
     # Assuming podName format stsName-rackID-index
@@ -393,9 +380,6 @@ def init_volumes(pod_name, config):
     initialized_volumes = get_initialized_volumes(
         pod_name=pod_name, config=config)
 
-    dirty_volumes = get_dirty_volumes(
-        pod_name=pod_name, config=config)
-
     initialized_volumes_length = len(initialized_volumes)
 
     rack = get_rack(pod_name=pod_name, config=config)
@@ -415,13 +399,17 @@ def init_volumes(pod_name, config):
         for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
                                       get_persistent_volumes(volumes=get_attached_volumes(
                                           pod_name=pod_name, config=config)))):
-
+            logging.debug(f"Starting initialization vol before: {vol}")
             volume = Volume(pod_name=pod_name, volume=vol)
+            logging.debug(f"Starting initialization before: {initialized_volumes}")
             isDirty = False
-            if vol["name"] in dirty_volumes:
+            #Assuming disk is clean if not part of initialised list, because in first boot all disks are getting cleaned.
+            if volume.volume_name + '#' in initialized_volumes:
                 isDirty = True
-            if initialized_volumes_length == 0 or (isDirty and (volume.volume_path in ns_device_paths or volume.volume_path in ns_file_paths)):
 
+            if initialized_volumes_length == 0 or (isDirty and (volume.volume_path in ns_device_paths or volume.volume_path in ns_file_paths)):
+                if isDirty:
+                    initialized_volumes.remove(volume.volume_name + '#')
                 logging.debug(f"Starting initialization: {volume}")
                 if volume.volume_mode == "Block":
 
@@ -474,9 +462,9 @@ def init_volumes(pod_name, config):
                     logging.error(f"{volume} - Invalid volume-mode: {volume.volume_mode}")
                     raise ValueError(f"pod-name: {pod_name} - Invalid volume-mode: {volume.volume_mode}")
 
-                if (volume.volume_path in ns_device_paths or volume.volume_path in ns_file_paths):
-                    logging.debug(f"{volume} - Added to initialized-volume list")
-                    volumes.append(volume.volume_name)
+                # Assuming disk is clean here.
+                logging.debug(f"{volume} - Added to initialized-volume list")
+                volumes.append(volume.volume_name)
 
         for future in concurrent.futures.as_completed(fs=futures):
             cmd = futures[future]

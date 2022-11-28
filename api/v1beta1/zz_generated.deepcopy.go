@@ -524,11 +524,6 @@ func (in *AerospikePodStatus) DeepCopyInto(out *AerospikePodStatus) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.DirtyVolumes != nil {
-		in, out := &in.DirtyVolumes, &out.DirtyVolumes
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.InitializedVolumePaths != nil {
 		in, out := &in.InitializedVolumePaths, &out.InitializedVolumePaths
 		*out = make([]string, len(*in))
