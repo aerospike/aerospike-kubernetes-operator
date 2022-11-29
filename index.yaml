@@ -2,6 +2,22 @@ apiVersion: v1
 entries:
   aerospike-cluster:
   - apiVersion: v2
+    appVersion: 2.3.0
+    created: "2022-11-29T18:04:03.67310356+05:30"
+    description: A Helm chart for Aerospike Cluster Custom Resource
+    digest: ea3cc1d98b951512396fd111c2b5e3be3f95c89e5ba6679c896ffe4bc34c79f6
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-cluster
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-2.3.0.tgz
+    version: 2.3.0
+  - apiVersion: v2
     appVersion: 2.2.1
     created: "2022-10-06T15:21:39.05223734+05:30"
     description: A Helm chart for Aerospike Cluster Custom Resource
@@ -99,6 +115,22 @@ entries:
     version: 1.0.0
   aerospike-kubernetes-operator:
   - apiVersion: v2
+    appVersion: 2.3.0
+    created: "2022-11-29T18:04:03.688558983+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 30da84386dc8d97912218cea3fcf97fa8c766b8e2ee6496476558989e63fe825
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-2.3.0.tgz
+    version: 2.3.0
+  - apiVersion: v2
     appVersion: 2.2.1
     created: "2022-10-06T15:21:39.064328994+05:30"
     description: A Helm chart for Aerospike Kubernetes Operator
@@ -194,4 +226,4 @@ entries:
     urls:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-1.0.0.tgz
     version: 1.0.0
-generated: "2022-10-06T15:21:39.047000456+05:30"
+generated: "2022-11-29T18:04:03.669466484+05:30"
