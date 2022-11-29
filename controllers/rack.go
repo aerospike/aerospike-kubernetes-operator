@@ -249,7 +249,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 			return reconcileError(err)
 		}
 
-		// Rack cleanup is done. Take time and cleanup dangling nodes and related resources that may not been cleaned up previously due to errors.
+		// Rack cleanup is done. Take time and cleanup dangling nodes and related resources that may not have been cleaned up previously due to errors.
 		if err = r.cleanupDanglingPodsRack(found, rackState); err != nil {
 			return reconcileError(err)
 		}
@@ -614,8 +614,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check on pod not in running state.
 	if utils.IsPodRunningAndReady(pod) {
 		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{
-			pod}, ignorablePods
-		); !res.isSuccess {
+			pod}, ignorablePods); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}
