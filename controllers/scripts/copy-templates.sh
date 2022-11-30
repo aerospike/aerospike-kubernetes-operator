@@ -29,7 +29,7 @@ then
 	exit 1
 fi
 
-if [ -z "$1" ]
+if [ -z "$2" ]
 then
     echo "Error: Template destination volume not specified"
 	exit 1
