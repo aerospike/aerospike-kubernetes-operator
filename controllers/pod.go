@@ -100,7 +100,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		} else {
 			restartType = mergeRestartType(restartType, QuickRestart)
 		}
-		restartType = mergeRestartType(restartType, QuickRestart)
 		r.Log.Info(
 			"AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
@@ -844,10 +843,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 		for _, volume := range r.aeroCluster.Status.Pods[podName].InitializedVolumes {
 			if !utils.ContainsString(removedDevices, volume) {
 				initalizedList = append(initalizedList, volume)
-			} else {
-				if volume[len(volume)-1:] != "#" {
-					initalizedList = append(initalizedList, volume+"#")
-				}
 			}
 		}
 		patch1 := jsonpatch.JsonPatchOperation{
@@ -855,8 +850,13 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 			Path:      "/status/pods/" + podName + "/initializedVolumes",
 			Value:     initalizedList,
 		}
-
+		patch2 := jsonpatch.JsonPatchOperation{
+			Operation: "replace",
+			Path:      "/status/pods/" + podName + "/dirtyVolumes",
+			Value:     removedDevices,
+		}
 		patches = append(patches, patch1)
+		patches = append(patches, patch2)
 
 		jsonPatchJSON, err := json.Marshal(patches)
 		if err != nil {
@@ -939,7 +939,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 									r.Log.Info(
 										"checking dirty volumes", "device", deviceName, "podname", podName,
 									)
-									if utils.ContainsString(podStatus.InitializedVolumes, deviceName+"#") {
+									if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
 										return true, nil
 									}
 								}
@@ -973,7 +973,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 									r.Log.Info(
 										"checking dirty volumes", "device", deviceName, "podname", podName,
 									)
-									if utils.ContainsString(podStatus.InitializedVolumes, deviceName+"#") {
+									if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
 										return true, nil
 									}
 								}
@@ -989,29 +989,32 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 			)
 			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 			if specStorage["type"] == "device" {
-				for _, specDevice := range specStorage["devices"].([]interface{}) {
-					deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
-					for key, podStatus := range newAeroCluster.Status.Pods {
-						if podName == key {
-							r.Log.Info(
-								"checking dirty volumes list", "device", deviceName, "podname", podName,
-							)
-							if utils.ContainsString(podStatus.InitializedVolumes, deviceName+"#") {
-								return true, nil
+				if specStorage["devices"] != nil {
+					for _, specDevice := range specStorage["devices"].([]interface{}) {
+						deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
+						for key, podStatus := range newAeroCluster.Status.Pods {
+							if podName == key {
+								r.Log.Info(
+									"checking dirty volumes list", "device", deviceName, "podname", podName,
+								)
+								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
+									return true, nil
+								}
 							}
 						}
 					}
 				}
-				for _, specDevice := range specStorage["files"].([]interface{}) {
-
-					deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specDevice.(string))
-					for key, podStatus := range newAeroCluster.Status.Pods {
-						if podName == key {
-							r.Log.Info(
-								"checking dirty volumes list", "device", deviceName, "podname", podName,
-							)
-							if utils.ContainsString(podStatus.InitializedVolumes, deviceName+"#") {
-								return true, nil
+				if specStorage["files"] != nil {
+					for _, specDevice := range specStorage["files"].([]interface{}) {
+						deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specDevice.(string))
+						for key, podStatus := range newAeroCluster.Status.Pods {
+							if podName == key {
+								r.Log.Info(
+									"checking dirty volumes list", "device", deviceName, "podname", podName,
+								)
+								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
+									return true, nil
+								}
 							}
 						}
 					}

@@ -8802,6 +8802,12 @@ spec:
                       description: 'AerospikeConfigHash is ripemd160 hash of aerospikeConfig
                         used by this '
                       type: string
+                    dirtyVolumes:
+                      description: DirtyVolumes is the list of volume those needs
+                        to be clean during init
+                      items:
+                        type: string
+                      type: array
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.

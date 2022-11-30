@@ -209,7 +209,7 @@ def get_node_metadata():
     }
 
 
-def update_status(pod_name, pod_image, metadata, volumes):
+def update_status(pod_name, pod_image, metadata, volumes, dirtyVolumes):
 
     with open("aerospikeConfHash", mode="r") as f:
         conf_hash = f.read()
@@ -223,6 +223,7 @@ def update_status(pod_name, pod_image, metadata, volumes):
     metadata.update({
         "image": pod_image,
         "initializedVolumes": volumes,
+        "dirtyVolumes": dirtyVolumes,
         "aerospikeConfigHash": conf_hash,
         "networkPolicyHash": network_policy_hash,
         "podSpecHash": pod_spec_hash,
@@ -264,6 +265,18 @@ def get_initialized_volumes(pod_name, config):
             logging.warning(
                 f"pod-name: {pod_name} - Initialized volumes not found")
             return set()
+
+def get_dirty_volumes(pod_name, config):
+
+    try:
+        logging.debug(
+            f"pod-name: {pod_name} - Looking for dirty volumes in status.pod.{pod_name}.dirtyVolumes")
+
+        return set(config["status"]["pods"][pod_name]["dirtyVolumes"])
+    except KeyError:
+        logging.warning(
+            f"pod-name: {pod_name} - Dirty volumes not found")
+        return set()
 
 def get_rack(pod_name, config):
 
@@ -380,6 +393,9 @@ def init_volumes(pod_name, config):
     initialized_volumes = get_initialized_volumes(
         pod_name=pod_name, config=config)
 
+    dirty_volumes = list(get_dirty_volumes(
+        pod_name=pod_name, config=config))
+
     initialized_volumes_length = len(initialized_volumes)
 
     rack = get_rack(pod_name=pod_name, config=config)
@@ -399,17 +415,18 @@ def init_volumes(pod_name, config):
         for vol in (v for v in filter(lambda x: True if x["name"] not in initialized_volumes else False,
                                       get_persistent_volumes(volumes=get_attached_volumes(
                                           pod_name=pod_name, config=config)))):
-            logging.debug(f"Starting initialization vol before: {vol}")
+
             volume = Volume(pod_name=pod_name, volume=vol)
-            logging.debug(f"Starting initialization before: {initialized_volumes}")
+            cleanupMethod = volume.effective_init_method
             isDirty = False
-            #Assuming disk is clean if not part of initialised list, because in first boot all disks are getting cleaned.
-            if volume.volume_name + '#' in initialized_volumes:
+
+            if vol["name"] in dirty_volumes:
                 isDirty = True
 
             if initialized_volumes_length == 0 or (isDirty and (volume.volume_path in ns_device_paths or volume.volume_path in ns_file_paths)):
+
                 if isDirty:
-                    initialized_volumes.remove(volume.volume_name + '#')
+                    cleanupMethod = volume.effective_wipe_method
                 logging.debug(f"Starting initialization: {volume}")
                 if volume.volume_mode == "Block":
 
@@ -418,7 +435,7 @@ def init_volumes(pod_name, config):
                                       f"does not exists")
                         raise FileNotFoundError(f"{volume} Volume path not found")
 
-                    if volume.effective_init_method == "dd":
+                    if cleanupMethod == "dd":
 
                         dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
                              '/tmp/init-stderr'.format(
@@ -426,34 +443,45 @@ def init_volumes(pod_name, config):
                         futures[executor.submit(lambda: execute(cmd=dd))] = dd
                         logging.info(f"{volume} - Submitted")
 
-                    elif volume.effective_init_method == "blkdiscard":
+                    elif cleanupMethod == "blkdiscard":
 
                         blkdiskard = "blkdiscard {volume_path}".format(
                             volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                         logging.info(f"{volume} - Submitted")
 
-                    elif volume.effective_init_method == "none":
+                    elif cleanupMethod == "none":
                         logging.info(f"{volume} - Pass through")
                     else:
                         logging.error(f"{volume} - Has invalid effective method")
                         raise ValueError(f"{volume} - Has invalid effective method")
 
                 elif volume.volume_mode == "Filesystem":
+
                     logging.debug(f"In Filesystem initialization: {volume}")
                     if not os.path.exists(volume.get_mount_point()):
                         logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
                                       f"does not exists")
                         raise FileNotFoundError(f"{volume} Volume path not found")
 
-                    if volume.effective_init_method == "deleteFiles":
+                    if cleanupMethod == "deleteFiles":
+                        if isDirty:
+                            for ns_file_path in filter(lambda x: x.startswith(volume.get_attachment_path()), ns_file_paths):
+                                _, filename = os.path.split(ns_file_path)
+                                file_path = os.path.join(volume.get_mount_point(), filename)
+                                if os.path.exists(file_path):
+                                    logging.info(f"Deleting file - {file_path}")
+                                    os.remove(file_path)
+                                    logging.info(f"Deleted file - {file_path}")
+                                else:
+                                    logging.warning(f"{volume} namespace-file-path: {file_path} - Does not exists")
+                        else:
+                            find = "find {volume_path} -type f -delete".format(
+                                volume_path=volume.get_mount_point())
+                            execute(find)
+                            logging.info(f"{volume} - Initialized")
 
-                        find = "find {volume_path} -type f -delete".format(
-                            volume_path=volume.get_mount_point())
-                        execute(find)
-                        logging.info(f"{volume} - Initialized")
-
-                    elif volume.effective_init_method == "none":
+                    elif cleanupMethod == "none":
                         logging.info(f"{volume} - Pass through")
                     else:
                         logging.error(f"{volume} - Has invalid effective method")
@@ -465,6 +493,8 @@ def init_volumes(pod_name, config):
                 # Assuming disk is clean here.
                 logging.debug(f"{volume} - Added to initialized-volume list")
                 volumes.append(volume.volume_name)
+                if isDirty:
+                    dirty_volumes.remove(vol["name"])
 
         for future in concurrent.futures.as_completed(fs=futures):
             cmd = futures[future]
@@ -478,7 +508,7 @@ def init_volumes(pod_name, config):
     logging.debug(f"{volumes} - Extending initialized-volume list")
     volumes.extend(initialized_volumes)
 
-    return volumes
+    return volumes, dirty_volumes
 
 
 def wipe_volumes(pod_name, config):
@@ -601,7 +631,7 @@ def main():
         next_major_ver = get_image_version(image=pod_image)[0]
 
         logging.info(f"pod-name: {args.pod_name} - Checking if volume initialization needed")
-        volumes = init_volumes(pod_name=args.pod_name, config=config)
+        volumes, dirtyVolumes = init_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
 
@@ -622,7 +652,7 @@ def main():
             logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
-        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes)
+        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes, dirtyVolumes=dirtyVolumes)
 
     except Exception as e:
         print(e)
