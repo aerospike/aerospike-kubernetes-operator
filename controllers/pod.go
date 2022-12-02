@@ -801,10 +801,9 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 						}
 
 						if fileFound == false {
-							deviceName := getDeviceNameFromFilePath(rackStatus.Storage.Volumes, statusFiles.(string))
-							removedDevices = append(removedDevices, deviceName)
+							removedDevices = append(removedDevices, statusFiles.(string))
 							r.Log.Info(
-								"file is removed from namespace", "file", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
+								"file is removed from namespace", "file", statusFiles.(string), "namespace", specNamespace.(map[string]interface{})["name"],
 							)
 							updateCluster = true
 						}
@@ -822,13 +821,11 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 					for _, statusDevice := range statusStorage["devices"].([]interface{}) {
 						deviceName := getDeviceNameFromPath(rackStatus.Storage.Volumes, statusDevice.(string))
 						removedDevices = append(removedDevices, deviceName)
-
 					}
 				}
 				if statusStorage["files"] != nil {
 					for _, statusFile := range statusStorage["files"].([]interface{}) {
-						deviceName := getDeviceNameFromPath(rackStatus.Storage.Volumes, statusFile.(string))
-						removedDevices = append(removedDevices, deviceName)
+						removedDevices = append(removedDevices, statusFile.(string))
 					}
 				}
 			}
@@ -838,25 +835,13 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 	if updateCluster {
 		var patches []jsonpatch.JsonPatchOperation
 
-		var initalizedList []string
-
-		for _, volume := range r.aeroCluster.Status.Pods[podName].InitializedVolumes {
-			if !utils.ContainsString(removedDevices, volume) {
-				initalizedList = append(initalizedList, volume)
-			}
-		}
 		patch1 := jsonpatch.JsonPatchOperation{
-			Operation: "replace",
-			Path:      "/status/pods/" + podName + "/initializedVolumes",
-			Value:     initalizedList,
-		}
-		patch2 := jsonpatch.JsonPatchOperation{
 			Operation: "replace",
 			Path:      "/status/pods/" + podName + "/dirtyVolumes",
 			Value:     removedDevices,
 		}
+
 		patches = append(patches, patch1)
-		patches = append(patches, patch2)
 
 		jsonPatchJSON, err := json.Marshal(patches)
 		if err != nil {
@@ -967,13 +952,12 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 								"file has been added in namespace",
 							)
 
-							deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specFile.(string))
 							for key, podStatus := range newAeroCluster.Status.Pods {
 								if podName == key {
 									r.Log.Info(
-										"checking dirty volumes", "device", deviceName, "podname", podName,
+										"checking dirty volumes", "file", specFile.(string), "podname", podName,
 									)
-									if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
+									if utils.ContainsString(podStatus.DirtyVolumes, specFile.(string)) {
 										return true, nil
 									}
 								}
@@ -1006,13 +990,12 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 				}
 				if specStorage["files"] != nil {
 					for _, specDevice := range specStorage["files"].([]interface{}) {
-						deviceName := getDeviceNameFromFilePath(rackState.Rack.Storage.Volumes, specDevice.(string))
 						for key, podStatus := range newAeroCluster.Status.Pods {
 							if podName == key {
 								r.Log.Info(
-									"checking dirty volumes list", "device", deviceName, "podname", podName,
+									"checking dirty volumes list", "file", specDevice.(string), "podname", podName,
 								)
-								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
+								if utils.ContainsString(podStatus.DirtyVolumes, specDevice.(string)) {
 									return true, nil
 								}
 							}
