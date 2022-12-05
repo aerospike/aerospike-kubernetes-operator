@@ -90,6 +90,8 @@ def longest_match(matches):
 The implementation extracts the image tag and find the longest string from it that is a version string.
 Note: The behaviour should match the operator's go implementation for extracting version.
 '''
+
+
 def get_image_tag(image):
     matches = re.findall(r":(.*)", image)
     if not matches:
@@ -121,7 +123,6 @@ def execute(cmd):
 
 
 def strtobool(param):
-
     if len(param) == 0:
         return False
 
@@ -136,7 +137,6 @@ def strtobool(param):
 
 
 def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
-
     url = f"{api_server}/apis/asdb.aerospike.com/v1beta1/namespaces/{namespace}/aerospikeclusters/{cluster_name}"
     logging.debug(f"Request config from url: {url}")
     request = urllib.request.Request(url=url, method="GET")
@@ -169,7 +169,6 @@ def get_pod_image(pod_name, namespace, api_server, token, ca_cert):
 
 
 def get_endpoints(address_type):
-
     try:
         addr_type = address_type.replace("-", "_")
         host = ipaddress.ip_address(os.environ[f"global_{addr_type}_address"])
@@ -187,7 +186,6 @@ def get_endpoints(address_type):
 
 
 def get_node_metadata():
-
     pod_port = os.environ["POD_PORT"]
     service_port = os.environ["MAPPED_PORT"]
 
@@ -210,7 +208,6 @@ def get_node_metadata():
 
 
 def update_status(pod_name, pod_image, metadata, volumes, dirtyVolumes):
-
     with open("aerospikeConfHash", mode="r") as f:
         conf_hash = f.read()
 
@@ -246,7 +243,6 @@ def update_status(pod_name, pod_image, metadata, volumes, dirtyVolumes):
 
 
 def get_initialized_volumes(pod_name, config):
-
     try:
         logging.debug(
             f"pod-name: {pod_name} - Looking for initialized volumes in status.pod.{pod_name}.initializedVolumes")
@@ -266,8 +262,8 @@ def get_initialized_volumes(pod_name, config):
                 f"pod-name: {pod_name} - Initialized volumes not found")
             return set()
 
-def get_dirty_volumes(pod_name, config):
 
+def get_dirty_volumes(pod_name, config):
     try:
         logging.debug(
             f"pod-name: {pod_name} - Looking for dirty volumes in status.pod.{pod_name}.dirtyVolumes")
@@ -278,8 +274,8 @@ def get_dirty_volumes(pod_name, config):
             f"pod-name: {pod_name} - Dirty volumes not found")
         return set()
 
-def get_rack(pod_name, config):
 
+def get_rack(pod_name, config):
     # Assuming podName format stsName-rackID-index
     rack_id = int(pod_name.split("-")[-2])
 
@@ -304,7 +300,6 @@ def get_rack(pod_name, config):
 
 
 def get_attached_volumes(pod_name, config):
-
     rack = get_rack(pod_name=pod_name, config=config)
 
     try:
@@ -329,7 +324,6 @@ def get_attached_volumes(pod_name, config):
             volumes = config["spec"]["storage"]["volumes"]
 
             if not volumes:
-
                 logging.warning(
                     f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
                 raise KeyError(
@@ -348,7 +342,6 @@ def get_persistent_volumes(volumes):
 
 
 def get_namespace_volume_paths(pod_name, config):
-
     filepaths = []
     devicepaths = set()
     rack = get_rack(pod_name=pod_name, config=config)
@@ -386,8 +379,7 @@ def get_namespace_volume_paths(pod_name, config):
     return devicepaths, filepaths
 
 
-def iscleanupneeded(volume, dirty_volumes):
-
+def is_cleanup_needed(volume, dirty_volumes):
     dirty_paths = []
     for s in dirty_volumes:
         if s.startswith(volume.volume_path):
@@ -396,8 +388,8 @@ def iscleanupneeded(volume, dirty_volumes):
 
     return dirty_paths
 
-def clean_dirty_volumes(pod_name, config):
 
+def clean_dirty_volumes(pod_name, config):
     dirty_volumes = list(get_dirty_volumes(
         pod_name=pod_name, config=config))
 
@@ -417,21 +409,16 @@ def clean_dirty_volumes(pod_name, config):
         for vol in (v for v in filter(lambda x: True if "aerospike" in x else False, get_persistent_volumes(
                 get_attached_volumes(pod_name=pod_name, config=config)))):
 
-            isDirty = False
             volume = Volume(pod_name=pod_name, volume=vol)
-            cleanupMethod = volume.effective_wipe_method
-            dirty_paths = iscleanupneeded(volume, dirty_volumes)
-            dirty_paths_len = len(dirty_paths)
+
             if volume.volume_name in dirty_volumes and volume.volume_path in ns_device_paths:
-                isDirty = True
-            if volume.volume_mode == "Block" and isDirty:
 
                 if not os.path.exists(volume.get_mount_point()):
                     logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
                                   f"does not exists")
                     raise FileNotFoundError(f"{volume} Volume path not found")
 
-                if cleanupMethod == "dd":
+                if volume.effective_wipe_method == "dd":
 
                     dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
                          '/tmp/init-stderr'.format(
@@ -439,51 +426,24 @@ def clean_dirty_volumes(pod_name, config):
                     futures[executor.submit(lambda: execute(cmd=dd))] = dd
                     logging.info(f"{volume} - Submitted")
 
-                elif cleanupMethod == "blkdiscard":
+                elif volume.effective_wipe_method == "blkdiscard":
 
                     blkdiskard = "blkdiscard {volume_path}".format(
                         volume_path=volume.get_mount_point())
                     futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                     logging.info(f"{volume} - Submitted")
 
-                elif cleanupMethod == "none":
+                elif volume.effective_wipe_method == "none":
                     logging.info(f"{volume} - Pass through")
                 else:
                     logging.error(f"{volume} - Has invalid effective method")
                     raise ValueError(f"{volume} - Has invalid effective method")
 
-            if volume.volume_mode == "Filesystem" and dirty_paths_len != 0:
-                logging.debug(f"In Filesystem initialization: {volume}")
-                if not os.path.exists(volume.get_mount_point()):
-                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
-                                  f"does not exists")
-                    raise FileNotFoundError(f"{volume} Volume path not found")
-                if cleanupMethod == "deleteFiles":
-                    for ns_file_path in dirty_paths:
-                        _, filename = os.path.split(ns_file_path)
-                        file_path = os.path.join(volume.get_mount_point(), filename)
-                        if os.path.exists(file_path):
-                            logging.info(f"Deleting file - {file_path}")
-                            os.remove(file_path)
-                            logging.info(f"Deleted file - {file_path}")
-                        else:
-                            logging.warning(f"{volume} namespace-file-path: {file_path} - Does not exists")
-                elif cleanupMethod == "none":
-                    logging.info(f"{volume} - Pass through")
-                else:
-                    logging.error(f"{volume} - Has invalid effective method")
-                    raise ValueError(f"{volume} - Has invalid effective method")
-
-            if dirty_paths_len != 0:
-                for path in dirty_paths:
-                    dirty_volumes.remove(path)
-
-            if isDirty:
                 dirty_volumes.remove(vol["name"])
     return dirty_volumes
 
-def init_volumes(pod_name, config):
 
+def init_volumes(pod_name, config):
     volumes = []
 
     initialized_volumes = get_initialized_volumes(
@@ -578,7 +538,6 @@ def init_volumes(pod_name, config):
 
 
 def wipe_volumes(pod_name, config):
-
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
 
     rack = get_rack(pod_name=pod_name, config=config)
@@ -657,7 +616,6 @@ def wipe_volumes(pod_name, config):
 
 
 def main():
-
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
@@ -724,7 +682,8 @@ def main():
             dirtyVolumes = clean_dirty_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
-        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes, dirtyVolumes=dirtyVolumes)
+        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes,
+                      dirtyVolumes=dirtyVolumes)
 
     except Exception as e:
         print(e)

@@ -1384,7 +1384,6 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 
-//
 // GetImageVersion extracts the Aerospike version from a container image.
 // The implementation extracts the image tag and find the longest string from
 // it that is a version string.

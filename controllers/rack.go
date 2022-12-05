@@ -759,15 +759,14 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	bool, map[string]RestartType, error,
 ) {
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
-
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to list pods: %v", err)
+	}
 	restartTypeList, err := r.getRollingRestartTypeList(rackState, podList)
 	if err != nil {
 		return false, nil, err
 	}
 
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to list pods: %v", err)
-	}
 	for _, pod := range podList {
 		// Check if this pod needs restart
 		restartType := restartTypeList[pod.Name]
