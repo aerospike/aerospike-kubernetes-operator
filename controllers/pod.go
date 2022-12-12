@@ -52,18 +52,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypeList(
 ) (map[string]RestartType, error) {
 	var restartTypeList = make(map[string]RestartType)
 	for i := range pods {
-		pod := *pods[i]
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
+		restartType, err := r.getRollingRestartTypePod(rackState, pods[i])
 		if err != nil {
 			return nil, err
 		}
-		restartTypeList[pod.Name] = restartType
+		restartTypeList[pods[i].Name] = restartType
 	}
 	return restartTypeList, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
-	rackState RackState, pod corev1.Pod,
+	rackState RackState, pod *corev1.Pod,
 ) (RestartType, error) {
 
 	restartType := NoRestart
@@ -128,7 +127,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	}
 
 	// Check if rack storage is updated
-	if r.isRackStorageUpdatedInAeroCluster(rackState, pod) {
+	if r.isRackStorageUpdatedInAeroCluster(rackState, *pod) {
 		restartType = mergeRestartType(restartType, PodRestart)
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}

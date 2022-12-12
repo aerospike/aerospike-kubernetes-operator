@@ -762,12 +762,14 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
+
 	restartTypeList, err := r.getRollingRestartTypeList(rackState, podList)
 	if err != nil {
 		return false, nil, err
 	}
 
-	for _, pod := range podList {
+	for i := range podList {
+		pod := podList[i]
 		// Check if this pod needs restart
 		restartType := restartTypeList[pod.Name]
 		if restartType != NoRestart {
@@ -1139,16 +1141,18 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 		return nil, err
 	}
 	sortedList := make([]*corev1.Pod, len(podList.Items))
-	for _, p := range podList.Items {
-		indexStr := strings.Split(p.Name, "-")
+	for i := range podList.Items {
+		indexStr := strings.Split(podList.Items[i].Name, "-")
 		// Index is last, [1] can be rackID
 		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
 		if indexInt >= len(podList.Items) {
 			// Happens if we do not get full list of pods due to a crash,
 			return nil, fmt.Errorf("error get pod list for rack:%v", rackID)
 		}
-		sortedList[(len(podList.Items)-1)-indexInt] = &p
+		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[i]
+
 	}
+
 	return sortedList, nil
 }
 
