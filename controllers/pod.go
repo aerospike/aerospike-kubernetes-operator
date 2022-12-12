@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -426,6 +427,8 @@ func (r *SingleClusterReconciler) cleanupPods(
 		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
 	}
 
+	podNameSet := sets.NewString(podNames...)
+
 	for _, podName := range podNames {
 		// Clear references to this pod in the running cluster.
 		for _, np := range clusterPodList.Items {
@@ -437,7 +440,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 				continue
 			}
 
-			if utils.ContainsString(podNames, np.Name) {
+			if podNameSet.Has(np.Name) {
 				// Skip running info commands on pods which are being cleaned
 				// up.
 				continue
@@ -454,10 +457,14 @@ func (r *SingleClusterReconciler) cleanupPods(
 				"About to remove host from tipHostnames and reset alumni in pod...",
 				"pod to remove", podName, "remove and reset on pod", np.Name,
 			)
-			// TODO: Should we return error?
-			_ = r.tipClearHostname(&np, podName)
 
-			_ = r.alumniReset(&np)
+			if err := r.tipClearHostname(&np, podName); err != nil {
+				r.Log.V(2).Info("Failed to tipClear", "hostName", podName, "from the pod", np.Name)
+			}
+
+			if err := r.alumniReset(&np); err != nil {
+				r.Log.V(2).Info(fmt.Sprintf("Failed to reset alumni for the pod %s", np.Name))
+			}
 		}
 
 		if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
@@ -470,8 +477,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 			}
 		}
 
-		_, ok := r.aeroCluster.Status.Pods[podName]
-		if ok {
+		if _, ok := r.aeroCluster.Status.Pods[podName]; ok {
 			needStatusCleanup = append(needStatusCleanup, podName)
 		}
 	}
@@ -527,32 +533,29 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 	var danglingPods []string
 
 	// Find dangling pods in pods
-	if r.aeroCluster.Status.Pods != nil {
-		for podName := range r.aeroCluster.Status.Pods {
-			rackID, err := utils.GetRackIDFromPodName(podName)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to get rackID for the pod %s", podName,
-				)
-			}
-			if *rackID != rackState.Rack.ID {
-				// This pod is from other rack, so skip it
-				continue
-			}
+	for podName := range r.aeroCluster.Status.Pods {
+		rackID, err := utils.GetRackIDFromPodName(podName)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get rackID for the pod %s", podName,
+			)
+		}
+		if *rackID != rackState.Rack.ID {
+			// This pod is from other rack, so skip it
+			continue
+		}
 
-			ordinal, err := getSTSPodOrdinal(podName)
-			if err != nil {
-				return fmt.Errorf("invalid pod name: %s", podName)
-			}
+		ordinal, err := getSTSPodOrdinal(podName)
+		if err != nil {
+			return fmt.Errorf("invalid pod name: %s", podName)
+		}
 
-			if *ordinal >= *sts.Spec.Replicas {
-				danglingPods = append(danglingPods, podName)
-			}
+		if *ordinal >= *sts.Spec.Replicas {
+			danglingPods = append(danglingPods, podName)
 		}
 	}
 
-	err := r.cleanupPods(danglingPods, rackState)
-	if err != nil {
+	if err := r.cleanupPods(danglingPods, rackState); err != nil {
 		return fmt.Errorf("failed dangling pod cleanup: %v", err)
 	}
 

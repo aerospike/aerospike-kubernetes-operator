@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,10 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -307,4 +312,26 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	}
 
 	return podNames, nil
+}
+
+func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.NamespacedName) error {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namespacedName.Name,
+			Namespace: namespacedName.Namespace,
+		},
+	}
+
+	if err := r.Client.Delete(context.TODO(), configMap); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info(
+				"Can't find rack configmap while trying to delete it. Skipping...",
+				"configmap", namespacedName.Name,
+			)
+			return nil
+		}
+		return fmt.Errorf("failed to delete rack configmap for pod %s: %v", namespacedName.Name, err)
+	}
+
+	return nil
 }
