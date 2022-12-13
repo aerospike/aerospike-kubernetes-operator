@@ -153,6 +153,45 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 	return err
 }
 
+func rollingRestartClusterByReusingNamespaceStorageTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Change namespace storage-engine
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+
+	dynamicNs1 := map[string]interface{}{
+		"name":               "dynamicns1",
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{"/test/dev/dynamicns1"},
+		},
+	}
+
+	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList = append(nsList, dynamicNs1)
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
+}
+
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
 	k8sClient client.Client, ctx goctx.Context,
 	dynamicNs map[string]interface{},
