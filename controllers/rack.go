@@ -319,6 +319,10 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
+	if err := r.handleNSOrDeviceRemoval(rackState); err != nil {
+		return reconcileError(err)
+	}
+
 	// Upgrade
 	upgradeNeeded, err := r.isRackUpgradeNeeded(rackState.Rack.ID)
 	if err != nil {
@@ -326,6 +330,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	if upgradeNeeded {
+
 		found, res = r.upgradeRack(found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {

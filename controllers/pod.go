@@ -88,7 +88,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		podRestart, err := r.handleNSOrDeviceOperations(rackState, pod.Name)
+		podRestart, err := r.handleNSOrDeviceAddition(rackState, pod.Name)
 		if err != nil {
 			return restartType, err
 		}
@@ -735,16 +735,22 @@ func getPodNames(pods []*corev1.Pod) []string {
 	}
 	return podNames
 }
-func (r *SingleClusterReconciler) handleNSOrDeviceOperations(rackState RackState, podName string) (bool, error) {
 
-	if err := r.handleNSOrDeviceRemoval(rackState, podName); err != nil {
-		return false, err
+func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) error {
+	podList, err := r.getRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return err
 	}
-
-	return r.handleNSOrDeviceAddition(rackState, podName)
+	for _, pod := range podList.Items {
+		err := r.handleNSOrDeviceRemovalPerPod(rackState, pod.Name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, podName string) error {
+func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackState, podName string) error {
 	var rackStatus asdbv1beta1.Rack
 	var removedDevices []string
 	updateCluster := false
