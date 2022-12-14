@@ -88,18 +88,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		podRestart, err := r.handleNSOrDeviceAddition(rackState, pod.Name)
+		podRestartType, err := r.handleNSOrDeviceAddition(rackState, pod.Name)
 		if err != nil {
 			return restartType, err
 		}
-		if podRestart {
-			restartType = mergeRestartType(restartType, PodRestart)
-			r.Log.Info(
-				"AerospikeConfig changed. Need rolling PodRestart",
-			)
-		} else {
-			restartType = mergeRestartType(restartType, QuickRestart)
-		}
+		restartType = mergeRestartType(restartType, podRestartType)
 		r.Log.Info(
 			"AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
@@ -813,22 +806,9 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 						}
 
 						if fileFound == false {
-							r.Log.Info(
-								"file is removed from namespace", "file", statusFile.(string), "namespace", specNamespace.(map[string]interface{})["name"],
-							)
-							cmd := []string{
-								"bash", "-c", fmt.Sprintf(
-									"rm %s",
-									statusFile.(string),
-								),
-							}
-
-							err := r.Client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}, pod)
-
-							_, _, err = utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
-
+							err = r.deleteFileStorage(pod, statusFile.(string))
 							if err != nil {
-								return fmt.Errorf("error deleting file %v", err)
+								return err
 							}
 						}
 					}
@@ -849,19 +829,9 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 				}
 				if statusStorage["files"] != nil {
 					for _, statusFile := range statusStorage["files"].([]interface{}) {
-						cmd := []string{
-							"bash", "-c", fmt.Sprintf(
-								"rm %s",
-								statusFile.(string),
-							),
-						}
-
-						err := r.Client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}, pod)
-
-						_, _, err = utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
-
+						err = r.deleteFileStorage(pod, statusFile.(string))
 						if err != nil {
-							return fmt.Errorf("error deleting file %v", err)
+							return err
 						}
 					}
 				}
@@ -897,7 +867,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 	return nil
 }
 
-func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, podName string) (bool, error) {
+func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, podName string) (RestartType, error) {
 	var rackStatus asdbv1beta1.Rack
 	var err error
 
@@ -908,7 +878,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 		}, newAeroCluster,
 	)
 	if err != nil {
-		return false, err
+		return QuickRestart, err
 	}
 
 	found := false
@@ -920,7 +890,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 	}
 
 	if !found {
-		return false, fmt.Errorf("could not find rack with ID: %d", rackState.Rack.ID)
+		return QuickRestart, fmt.Errorf("could not find rack with ID: %d", rackState.Rack.ID)
 	}
 	r.Log.Info(
 		"Got rack status",
@@ -962,7 +932,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 										"checking dirty volumes", "device", deviceName, "podname", podName,
 									)
 									if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
-										return true, nil
+										return PodRestart, nil
 									}
 								}
 							}
@@ -986,7 +956,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 									"checking dirty volumes list", "device", deviceName, "podname", podName,
 								)
 								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
-									return true, nil
+									return PodRestart, nil
 								}
 							}
 						}
@@ -995,7 +965,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 			}
 		}
 	}
-	return false, nil
+	return QuickRestart, nil
 }
 
 func getDeviceNameFromPath(volumes []asdbv1beta1.VolumeSpec, s string) string {
@@ -1007,11 +977,23 @@ func getDeviceNameFromPath(volumes []asdbv1beta1.VolumeSpec, s string) string {
 	return ""
 }
 
-func getDeviceNameFromFilePath(volumes []asdbv1beta1.VolumeSpec, s string) string {
-	for _, volume := range volumes {
-		if strings.HasPrefix(s, volume.Aerospike.Path+"/") {
-			return volume.Name
-		}
+func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName string) error {
+	r.Log.Info(
+		"file is getting removed", "file", fileName,
+	)
+	cmd := []string{
+		"bash", "-c", fmt.Sprintf(
+			"rm %s",
+			fileName,
+		),
 	}
-	return ""
+
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: r.aeroCluster.Namespace}, pod)
+
+	_, _, err = utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+
+	if err != nil {
+		return fmt.Errorf("error deleting file %v", err)
+	}
+	return nil
 }

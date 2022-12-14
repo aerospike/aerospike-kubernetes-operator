@@ -719,7 +719,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 
 	// Find pods which needs restart
 	var podsToRestart []*corev1.Pod
-	//	var podsToRestartTypeMap = make(map[*corev1.Pod]RestartType)
+
 	for i := range podList {
 		pod := podList[i]
 
@@ -728,8 +728,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
-		//	podsToRestart = append(podsToRestart, pod)
-		//	podsToRestartTypeMap[pod] = restartType
+
 		podsToRestart = append(podsToRestart, pod)
 	}
 
@@ -790,8 +789,7 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 	for i := range podList {
 		pod := podList[i]
 		// Check if this pod needs restart
-		restartType := restartTypeList[pod.Name]
-		if restartType != NoRestart {
+		if restartTypeList[pod.Name] != NoRestart {
 			return true, restartTypeList, nil
 		}
 	}

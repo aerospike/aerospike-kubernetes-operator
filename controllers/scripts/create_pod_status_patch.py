@@ -207,7 +207,7 @@ def get_node_metadata():
     }
 
 
-def update_status(pod_name, pod_image, metadata, volumes, dirtyVolumes):
+def update_status(pod_name, pod_image, metadata, volumes, dirty_volumes):
     with open("aerospikeConfHash", mode="r") as f:
         conf_hash = f.read()
 
@@ -220,7 +220,7 @@ def update_status(pod_name, pod_image, metadata, volumes, dirtyVolumes):
     metadata.update({
         "image": pod_image,
         "initializedVolumes": volumes,
-        "dirtyVolumes": dirtyVolumes,
+        "dirtyVolumes": dirty_volumes,
         "aerospikeConfigHash": conf_hash,
         "networkPolicyHash": network_policy_hash,
         "podSpecHash": pod_spec_hash,
@@ -655,7 +655,7 @@ def main():
         metadata = get_node_metadata()
         next_major_ver = get_image_version(image=pod_image)[0]
         volumes = list(get_initialized_volumes(pod_name=args.pod_name, config=config))
-        dirtyVolumes = list(get_dirty_volumes(pod_name=args.pod_name, config=config))
+        dirty_volumes = list(get_dirty_volumes(pod_name=args.pod_name, config=config))
 
         logging.info(f"pod-name: {args.pod_name} {args.restart_type}- Checking if volume initialization needed")
         if args.restart_type == "pod":
@@ -679,11 +679,11 @@ def main():
             else:
                 logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
 
-            dirtyVolumes = clean_dirty_volumes(pod_name=args.pod_name, config=config)
+            dirty_volumes = clean_dirty_volumes(pod_name=args.pod_name, config=config)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
         update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes,
-                      dirtyVolumes=dirtyVolumes)
+                      dirty_volumes=dirty_volumes)
 
     except Exception as e:
         print(e)
