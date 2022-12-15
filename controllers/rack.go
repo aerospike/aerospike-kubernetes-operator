@@ -815,7 +815,7 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 }
 
 func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
-	rackState RackState, pod corev1.Pod,
+	rackState RackState, pod *corev1.Pod,
 ) bool {
 
 	volumes := rackState.Rack.Storage.Volumes
@@ -905,7 +905,7 @@ func (r *SingleClusterReconciler) getRackStatusVolumes(rackState RackState) []as
 }
 
 func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(
-	volume asdbv1beta1.VolumeSpec, pod corev1.Pod,
+	volume asdbv1beta1.VolumeSpec, pod *corev1.Pod,
 ) bool {
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
@@ -1299,7 +1299,7 @@ func getContainerVolumeMounts(
 	return nil
 }
 
-func getPodVolume(pod corev1.Pod, name string) *corev1.Volume {
+func getPodVolume(pod *corev1.Pod, name string) *corev1.Volume {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.Name == name {
 			return &volume

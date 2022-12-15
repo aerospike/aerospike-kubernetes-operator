@@ -8803,8 +8803,8 @@ spec:
                         used by this '
                       type: string
                     dirtyVolumes:
-                      description: DirtyVolumes is the list of volume those needs
-                        to be clean during init
+                      description: DirtyVolumes is the list of volume names that needs
+                        to be cleaned duri
                       items:
                         type: string
                       type: array

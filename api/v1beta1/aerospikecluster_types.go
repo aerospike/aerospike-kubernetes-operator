@@ -788,7 +788,7 @@ type AerospikePodStatus struct {
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
-	// DirtyVolumes is the list of volume those needs to be clean
+	// DirtyVolumes is the list of volume names that needs to be cleaned
 	// during init.
 	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
 
