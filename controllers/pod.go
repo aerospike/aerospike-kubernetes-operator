@@ -730,23 +730,9 @@ func getPodNames(pods []*corev1.Pod) []string {
 }
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) error {
-	podList, err := r.getRackPodList(rackState.Rack.ID)
-	if err != nil {
-		return err
-	}
-	for _, pod := range podList.Items {
-		err := r.handleNSOrDeviceRemovalPerPod(rackState, &pod)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackState, pod *corev1.Pod) error {
 	var rackStatus asdbv1beta1.Rack
 	var removedDevices []string
-	updateCluster := false
+	var removedFiles []string
 
 	rackFound := false
 	for _, rackStatus = range r.aeroCluster.Status.RackConfig.Racks {
@@ -770,11 +756,19 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
 				if statusStorage["devices"] != nil {
-					for _, statusDevice := range statusStorage["devices"].([]interface{}) {
+					var statusDevices []string
+					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+						statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
+					}
+					for _, statusDevice := range statusDevices {
 						deviceFound := false
 						if specStorage["devices"] != nil {
-							for _, specDevice := range specStorage["devices"].([]interface{}) {
-								if specDevice.(string) == statusDevice.(string) {
+							var specDevices []string
+							for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+								specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
+							}
+							for _, specDevice := range specDevices {
+								if specDevice == statusDevice {
 									deviceFound = true
 									break
 								}
@@ -782,22 +776,29 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 						}
 
 						if !deviceFound {
-							deviceName := getDeviceNameFromPath(rackStatus.Storage.Volumes, statusDevice.(string))
+							deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
 							removedDevices = append(removedDevices, deviceName)
 							r.Log.Info(
 								"device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
 							)
-							updateCluster = true
 						}
 					}
 				}
 
 				if statusStorage["files"] != nil {
-					for _, statusFile := range statusStorage["files"].([]interface{}) {
+					var statusFiles []string
+					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
+						statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
+					}
+					for _, statusFile := range statusFiles {
 						fileFound := false
 						if specStorage["files"] != nil {
-							for _, specFile := range specStorage["files"].([]interface{}) {
-								if specFile.(string) == statusFile.(string) {
+							var specFiles []string
+							for _, specFileInterface := range specStorage["files"].([]interface{}) {
+								specFiles = append(specFiles, strings.Fields(specFileInterface.(string))...)
+							}
+							for _, specFile := range specFiles {
+								if specFile == statusFile {
 									fileFound = true
 									break
 								}
@@ -805,13 +806,11 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 						}
 
 						if !fileFound {
-							err := r.deleteFileStorage(pod, statusFile.(string))
-							if err != nil {
-								return err
-							}
+							removedFiles = append(removedFiles, statusFile)
 						}
 					}
 				}
+				break
 			}
 		}
 		if !namespaceFound {
@@ -821,24 +820,61 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(rackState RackSt
 			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 			if statusStorage["type"] == "device" {
 				if statusStorage["devices"] != nil {
-					for _, statusDevice := range statusStorage["devices"].([]interface{}) {
-						deviceName := getDeviceNameFromPath(rackStatus.Storage.Volumes, statusDevice.(string))
+					var statusDevices []string
+					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+						statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
+					}
+					for _, statusDevice := range statusDevices {
+						deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
 						removedDevices = append(removedDevices, deviceName)
 					}
-					updateCluster = true
+
 				}
 				if statusStorage["files"] != nil {
-					for _, statusFile := range statusStorage["files"].([]interface{}) {
-						err := r.deleteFileStorage(pod, statusFile.(string))
-						if err != nil {
-							return err
-						}
+					var statusFiles []string
+					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
+						statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
+					}
+					for _, statusFile := range statusFiles {
+						removedFiles = append(removedFiles, statusFile)
 					}
 				}
 			}
 		}
 	}
-	if updateCluster {
+	podList, err := r.getRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, &pod, rackState.Rack.ID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(removedDevices []string, removedFiles []string, pod *corev1.Pod, rackID int) error {
+
+	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackID)
+	confMap := &corev1.ConfigMap{}
+	err := r.Client.Get(context.TODO(), cmName, confMap)
+	if err != nil {
+		return err
+	}
+	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
+	podStatus := r.aeroCluster.Status.Pods[pod.Name]
+	if podStatus.AerospikeConfigHash == requiredConfHash {
+		return nil
+	}
+	for _, file := range removedFiles {
+		err := r.deleteFileStorage(pod, file)
+		if err != nil {
+			return err
+		}
+	}
+	if len(removedDevices) > 0 {
 		var patches []jsonpatch.JsonPatchOperation
 
 		patch1 := jsonpatch.JsonPatchOperation{
@@ -889,11 +925,9 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 	}
 
 	if !rackFound {
-		return QuickRestart, fmt.Errorf("could not find rack with ID: %d", rackState.Rack.ID)
+		r.Log.Info("Could not find rack status, skipping namespace device handling", "ID", rackState.Rack.ID)
+		return QuickRestart, nil
 	}
-	r.Log.Info(
-		"Got rack status",
-	)
 
 	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
 		namespaceFound := false
@@ -907,11 +941,19 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
 				if specStorage["devices"] != nil {
-					for _, specDevice := range specStorage["devices"].([]interface{}) {
+					var specDevices []string
+					for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+						specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
+					}
+					for _, specDevice := range specDevices {
 						deviceFound := false
 						if statusStorage["devices"] != nil {
-							for _, statusDevice := range statusStorage["devices"].([]interface{}) {
-								if specDevice.(string) == statusDevice.(string) {
+							var statusDevices []string
+							for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+								statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
+							}
+							for _, statusDevice := range statusDevices {
+								if specDevice == statusDevice {
 									r.Log.Info(
 										"device exist in namespace",
 									)
@@ -925,35 +967,10 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 							r.Log.Info(
 								"device has been added in namespace",
 							)
-							deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
-							for key, podStatus := range newAeroCluster.Status.Pods {
-								if podName == key {
-									r.Log.Info(
-										"checking dirty volumes", "device", deviceName, "podname", podName,
-									)
-									if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
-										return PodRestart, nil
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		if !namespaceFound {
-			r.Log.Info(
-				"namespace added",
-			)
-			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
-			if specStorage["type"] == "device" {
-				if specStorage["devices"] != nil {
-					for _, specDevice := range specStorage["devices"].([]interface{}) {
-						deviceName := getDeviceNameFromPath(rackState.Rack.Storage.Volumes, specDevice.(string))
-						for key, podStatus := range newAeroCluster.Status.Pods {
-							if podName == key {
+							deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+							if podStatus, ok := newAeroCluster.Status.Pods[podName]; ok {
 								r.Log.Info(
-									"checking dirty volumes list", "device", deviceName, "podname", podName,
+									"checking dirty volumes", "device", deviceName, "podname", podName,
 								)
 								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
 									return PodRestart, nil
@@ -962,13 +979,36 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 						}
 					}
 				}
+				break
+			}
+		}
+		if !namespaceFound {
+			r.Log.Info(
+				"namespace added",
+			)
+			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			podStatus, ok := newAeroCluster.Status.Pods[podName]
+			if specStorage["type"] == "device" && specStorage["devices"] != nil && ok {
+				var specDevices []string
+				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+					specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
+				}
+				for _, specDevice := range specDevices {
+					deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+					r.Log.Info(
+						"checking dirty volumes list", "device", deviceName, "podname", podName,
+					)
+					if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
+						return PodRestart, nil
+					}
+				}
 			}
 		}
 	}
 	return QuickRestart, nil
 }
 
-func getDeviceNameFromPath(volumes []asdbv1beta1.VolumeSpec, s string) string {
+func getVolumeNameFromDevicePath(volumes []asdbv1beta1.VolumeSpec, s string) string {
 	for _, volume := range volumes {
 		if volume.Aerospike.Path == s {
 			return volume.Name
@@ -978,16 +1018,16 @@ func getDeviceNameFromPath(volumes []asdbv1beta1.VolumeSpec, s string) string {
 }
 
 func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName string) error {
-	r.Log.Info(
-		"file is getting removed", "file", fileName,
-	)
+
 	cmd := []string{
 		"bash", "-c", fmt.Sprintf(
-			"rm %s",
+			"rm -f %s",
 			fileName,
 		),
 	}
-
+	r.Log.Info(
+		"file is getting removed", "file", fileName, "cmd", cmd, "podname", pod.Name,
+	)
 	_, _, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
 
 	if err != nil {
