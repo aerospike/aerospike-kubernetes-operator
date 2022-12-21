@@ -52,8 +52,21 @@ func (r *SingleClusterReconciler) getRollingRestartTypeList(
 	rackState RackState, pods []*corev1.Pod,
 ) (map[string]RestartType, error) {
 	var restartTypeList = make(map[string]RestartType)
+	var addedNSDevices []string
+	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	if err != nil {
+		return nil, err
+	}
+	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
 	for i := range pods {
-		restartType, err := r.getRollingRestartTypePod(rackState, pods[i])
+		podStatus := r.aeroCluster.Status.Pods[pods[i].Name]
+		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
+			addedNSDevices, err = r.getNSAddedDevices(rackState)
+			if err != nil {
+				return nil, err
+			}
+		}
+		restartType, err := r.getRollingRestartTypePod(rackState, pods[i], confMap, addedNSDevices)
 		if err != nil {
 			return nil, err
 		}
@@ -64,6 +77,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeList(
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	rackState RackState, pod *corev1.Pod,
+	confMap *corev1.ConfigMap, addedNSDevices []string,
 ) (RestartType, error) {
 
 	restartType := NoRestart
@@ -71,13 +85,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	// AerospikeConfig nil means status not updated yet
 	if r.aeroCluster.Status.AerospikeConfig == nil {
 		return restartType, nil
-	}
-
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
-	confMap := &corev1.ConfigMap{}
-	err := r.Client.Get(context.TODO(), cmName, confMap)
-	if err != nil {
-		return restartType, err
 	}
 
 	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
@@ -88,7 +95,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		podRestartType, err := r.handleNSOrDeviceAddition(rackState, pod.Name)
+
+		podRestartType, err := r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
 		if err != nil {
 			return restartType, err
 		}
@@ -804,7 +812,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 								}
 							}
 						}
-
 						if !fileFound {
 							removedFiles = append(removedFiles, statusFile)
 						}
@@ -857,9 +864,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(removedDevices []string, removedFiles []string, pod *corev1.Pod, rackID int) error {
 
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackID)
-	confMap := &corev1.ConfigMap{}
-	err := r.Client.Get(context.TODO(), cmName, confMap)
+	confMap, err := r.getConfigMap(rackID)
 	if err != nil {
 		return err
 	}
@@ -902,9 +907,10 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(removedDevices [
 	return nil
 }
 
-func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, podName string) (RestartType, error) {
+func (r *SingleClusterReconciler) getNSAddedDevices(rackState RackState) ([]string, error) {
 	var rackStatus asdbv1beta1.Rack
 	var err error
+	var volumes []string
 
 	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
 	err = r.Client.Get(
@@ -913,7 +919,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 		}, newAeroCluster,
 	)
 	if err != nil {
-		return QuickRestart, err
+		return nil, err
 	}
 
 	rackFound := false
@@ -926,7 +932,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 
 	if !rackFound {
 		r.Log.Info("Could not find rack status, skipping namespace device handling", "ID", rackState.Rack.ID)
-		return QuickRestart, nil
+		return nil, nil
 	}
 
 	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
@@ -968,14 +974,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 								"device has been added in namespace",
 							)
 							deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
-							if podStatus, ok := newAeroCluster.Status.Pods[podName]; ok {
-								r.Log.Info(
-									"checking dirty volumes", "device", deviceName, "podname", podName,
-								)
-								if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
-									return PodRestart, nil
-								}
-							}
+							volumes = append(volumes, deviceName)
 						}
 					}
 				}
@@ -987,24 +986,32 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(rackState RackState, 
 				"namespace added",
 			)
 			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
-			podStatus, ok := newAeroCluster.Status.Pods[podName]
-			if specStorage["type"] == "device" && specStorage["devices"] != nil && ok {
+			if specStorage["type"] == "device" && specStorage["devices"] != nil {
 				var specDevices []string
 				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
 					specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
 				}
 				for _, specDevice := range specDevices {
 					deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
-					r.Log.Info(
-						"checking dirty volumes list", "device", deviceName, "podname", podName,
-					)
-					if utils.ContainsString(podStatus.DirtyVolumes, deviceName) {
-						return PodRestart, nil
-					}
+					volumes = append(volumes, deviceName)
 				}
 			}
 		}
 	}
+	return volumes, nil
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceAddition(volumes []string, podName string) (RestartType, error) {
+	podStatus := r.aeroCluster.Status.Pods[podName]
+	for _, volume := range volumes {
+		r.Log.Info(
+			"checking dirty volumes list", "device", volume, "podname", podName,
+		)
+		if utils.ContainsString(podStatus.DirtyVolumes, volume) {
+			return PodRestart, nil
+		}
+	}
+
 	return QuickRestart, nil
 }
 
@@ -1034,4 +1041,14 @@ func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName st
 		return fmt.Errorf("error deleting file %v", err)
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
+	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackID)
+	confMap := &corev1.ConfigMap{}
+	err := r.Client.Get(context.TODO(), cmName, confMap)
+	if err != nil {
+		return nil, err
+	}
+	return confMap, nil
 }
