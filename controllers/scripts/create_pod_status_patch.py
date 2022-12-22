@@ -379,19 +379,7 @@ def get_namespace_volume_paths(pod_name, config):
     return devicepaths, filepaths
 
 
-def is_cleanup_needed(volume, dirty_volumes):
-    dirty_paths = []
-    for s in dirty_volumes:
-        if s.startswith(volume.volume_path):
-            if volume.volume_mode == "Filesystem":
-                dirty_paths.append(s)
-
-    return dirty_paths
-
-
-def clean_dirty_volumes(pod_name, config):
-    dirty_volumes = list(get_dirty_volumes(
-        pod_name=pod_name, config=config))
+def clean_dirty_volumes(pod_name, config, dirty_volumes):
 
     rack = get_rack(pod_name=pod_name, config=config)
     ns_device_paths, _ = get_namespace_volume_paths(pod_name=pod_name, config=config)
@@ -537,7 +525,7 @@ def init_volumes(pod_name, config):
     return volumes
 
 
-def wipe_volumes(pod_name, config):
+def wipe_volumes(pod_name, config, dirty_volumes):
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
 
     rack = get_rack(pod_name=pod_name, config=config)
@@ -570,12 +558,16 @@ def wipe_volumes(pod_name, config):
                         dd = "dd if=/dev/zero of={volume_path} bs=1M".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=dd))] = dd
                         logging.info(f"Submitted - {volume}")
+                        if vol["name"] in dirty_volumes:
+                            dirty_volumes.remove(vol["name"])
 
                     elif volume.effective_wipe_method == "blkdiscard":
 
                         blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                         logging.info(f"Submitted - {volume}")
+                        if vol["name"] in dirty_volumes:
+                           dirty_volumes.remove(vol["name"])
 
                     else:
                         raise ValueError(f"{volume} - Has invalid effective method")
@@ -612,7 +604,7 @@ def wipe_volumes(pod_name, config):
             except Exception as e:
                 logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
                 raise e
-    return
+    return dirty_volumes
 
 
 def main():
@@ -673,13 +665,13 @@ def main():
                 if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
                         (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
                     logging.info(f"pod-name: {args.pod_name} - Volumes should be wiped")
-                    wipe_volumes(pod_name=args.pod_name, config=config)
+                    dirty_volumes = wipe_volumes(pod_name=args.pod_name, config=config, dirty_volumes=dirty_volumes)
                 else:
                     logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
             else:
                 logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
 
-            dirty_volumes = clean_dirty_volumes(pod_name=args.pod_name, config=config)
+            dirty_volumes = clean_dirty_volumes(pod_name=args.pod_name, config=config, dirty_volumes=dirty_volumes)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
         update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes,

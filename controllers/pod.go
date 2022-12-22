@@ -48,6 +48,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
+// Fetching restartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeList(
 	rackState RackState, pods []*corev1.Pod,
 ) (map[string]RestartType, error) {
@@ -61,6 +62,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeList(
 	for i := range pods {
 		podStatus := r.aeroCluster.Status.Pods[pods[i].Name]
 		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
+			// Fetching all block devices that has been added in namespaces.
 			addedNSDevices, err = r.getNSAddedDevices(rackState)
 			if err != nil {
 				return nil, err
@@ -96,6 +98,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
 
+		// checking if volumes added in namespace is part of dirtyVolumes.
+		// if yes, then podRestart is needed.
 		podRestartType, err := r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
 		if err != nil {
 			return restartType, err

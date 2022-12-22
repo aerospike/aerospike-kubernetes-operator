@@ -319,6 +319,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
+	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+	// For each file removed from a namespace, it has been deleted right away.
 	if err := r.handleNSOrDeviceRemoval(rackState); err != nil {
 		return reconcileError(err)
 	}
@@ -330,7 +332,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	if upgradeNeeded {
-
 		found, res = r.upgradeRack(found, rackState, ignorablePods)
 		if !res.isSuccess {
 			if res.err != nil {
@@ -786,13 +787,12 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 		return false, nil, err
 	}
 
-	for i := range podList {
-		pod := podList[i]
-		// Check if this pod needs restart
-		if restartTypeList[pod.Name] != NoRestart {
+	for _, restartType := range restartTypeList {
+		if restartType != NoRestart {
 			return true, restartTypeList, nil
 		}
 	}
+
 	return false, nil, nil
 }
 
