@@ -21,6 +21,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	"github.com/ashishshinde/aerospike-client-go/v6"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -62,8 +63,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return reconcileSuccess()
 	}
 	// Remove a node only if cluster is stable
-	err := r.waitForAllSTSToBeReady()
-	if err != nil {
+	if err := r.waitForAllSTSToBeReady(); err != nil {
 		return reconcileError(
 			fmt.Errorf(
 				"failed to wait for cluster to be ready: %v", err,
@@ -313,4 +313,37 @@ func ParseInfoIntoMap(
 	}
 
 	return m, nil
+}
+
+func (r *SingleClusterReconciler) setMigrateFillDelay(policy *aerospike.ClientPolicy, rack asdbv1beta1.Rack, delay bool, ignorablePods []corev1.Pod) reconcileResult {
+
+	serviceConfig := rack.AerospikeConfig.Value["service"].(map[string]interface{})
+
+	fillDelay, exists := serviceConfig["migrate-fill-delay"]
+	if !exists || fillDelay.(float64) == 0 {
+		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
+		return reconcileSuccess()
+	}
+
+	// Set migrate-fill-delay to original value if delay flag is set
+	migrateFillDelay := float64(0)
+	if delay {
+		migrateFillDelay = fillDelay.(float64)
+	}
+
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
+		return reconcileError(err)
+	}
+
+	return reconcileSuccess()
 }

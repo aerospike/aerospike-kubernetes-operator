@@ -113,6 +113,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
 		return reconcile.Result{}, e
 	}
+
 	if err := deployment.InfoQuiesceUndo(
 		r.Log,
 		r.getClientPolicy(), allHostConns,
@@ -130,6 +131,14 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			r.aeroCluster.Name,
 		)
 		return reconcile.Result{}, err
+	}
+
+	// revert migrate-fill-delay to original value if it was set to 0 during scale down
+	// Passing first rack from the list as all the racks will have same migrate-fill-delay
+	if res := r.setMigrateFillDelay(r.getClientPolicyFromSpec(), r.aeroCluster.Spec.RackConfig.Racks[0],
+		true, nil); !res.isSuccess {
+		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
+		return reconcile.Result{}, res.err
 	}
 
 	// Update the AerospikeCluster status.
@@ -268,6 +277,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 			r.aeroCluster.Name,
 		)
 	}
+
 	return err
 }
 

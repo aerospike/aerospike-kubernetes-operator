@@ -237,28 +237,25 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						if aeroCluster != nil {
+						By("Updating the volumes to cascade delete so that volumes are cleaned up")
+						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
+						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
+						err = aerospikeClusterCreateUpdate(
+							k8sClient, aeroCluster, ctx,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-							By("Updating the volumes to cascade delete so that volumes are cleaned up")
-							aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
-							aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
-							err := aerospikeClusterCreateUpdate(
-								k8sClient, aeroCluster, ctx,
-							)
-							Expect(err).ToNot(HaveOccurred())
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-							err = deleteCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).ToNot(HaveOccurred())
+						pvcs, err := getAeroClusterPVCList(
+							aeroCluster, k8sClient,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-							pvcs, err := getAeroClusterPVCList(
-								aeroCluster, k8sClient,
-							)
-							Expect(err).ToNot(HaveOccurred())
-
-							Expect(len(pvcs)).Should(
-								Equal(0), "PVCs not deleted",
-							)
-						}
+						Expect(len(pvcs)).Should(
+							Equal(0), "PVCs not deleted",
+						)
 					},
 				)
 

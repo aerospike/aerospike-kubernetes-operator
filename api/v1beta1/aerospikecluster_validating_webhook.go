@@ -21,14 +21,14 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -423,7 +423,7 @@ func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequi
 	return nil
 }
 
-func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
+func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range c.Spec.RackConfig.Namespaces {
@@ -436,6 +436,11 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
+	var (
+		migrateFillDelay float64
+		previouslyExist  bool
+	)
+
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
@@ -469,6 +474,18 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 					"you can't specify network or security configuration for rack %d (network and security should be the same for all racks)",
 					rack.ID,
 				)
+			}
+		}
+
+		serviceConfig := rack.AerospikeConfig.Value["service"]
+		if serviceConfig != nil {
+			service := serviceConfig.(map[string]interface{})
+			fillDelay := service["migrate-fill-delay"]
+			if previouslyExist && (fillDelay == nil || fillDelay.(float64) != migrateFillDelay) {
+				return fmt.Errorf("migrate-fill-delay value should be same across all racks")
+			} else if !previouslyExist && fillDelay != nil {
+				migrateFillDelay = fillDelay.(float64)
+				previouslyExist = true
 			}
 		}
 	}
@@ -683,7 +700,7 @@ func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 			"tls-authenticate-client contains invalid value: %s", value,
 		)
 	case bool:
-		if value == false {
+		if !value {
 			return []string{}, nil
 		}
 		return nil, fmt.Errorf(
@@ -758,7 +775,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 	if clientCertSpec == nil || clientCertSpec.CertPathInOperator == nil || clientCertSpec.CertPathInOperator.ClientCertPath == "" {
 		return result, nil
 	}
-	r, err := ioutil.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
+	r, err := os.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
 	if err != nil {
 		return result, err
 	}
@@ -1384,7 +1401,6 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 
-//
 // GetImageVersion extracts the Aerospike version from a container image.
 // The implementation extracts the image tag and find the longest string from
 // it that is a version string.
