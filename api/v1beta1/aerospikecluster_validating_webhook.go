@@ -29,6 +29,7 @@ import (
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -436,10 +437,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
-	var (
-		migrateFillDelay float64
-		previouslyExist  bool
-	)
+	migrateFillDelaySet := sets.Int64{}
 
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
@@ -481,13 +479,17 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 		if serviceConfig != nil {
 			service := serviceConfig.(map[string]interface{})
 			fillDelay := service["migrate-fill-delay"]
-			if previouslyExist && (fillDelay == nil || fillDelay.(float64) != migrateFillDelay) {
-				return fmt.Errorf("migrate-fill-delay value should be same across all racks")
-			} else if !previouslyExist && fillDelay != nil {
-				migrateFillDelay = fillDelay.(float64)
-				previouslyExist = true
+			if fillDelay == nil {
+				migrateFillDelaySet.Insert(0)
+			} else {
+				migrateFillDelaySet.Insert(int64(fillDelay.(float64)))
 			}
 		}
+	}
+
+	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
+	if migrateFillDelaySet.Len() > 1 {
+		return fmt.Errorf("migrate-fill-delay value should be same across all racks")
 	}
 
 	// Validate batch upgrade/restart param
