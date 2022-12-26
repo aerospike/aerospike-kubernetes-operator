@@ -688,7 +688,7 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 }
 
 // isPodUpgraded checks if all containers in the pod have images from the
-//cluster spec.
+// cluster spec.
 func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
 	if !utils.IsPodRunningAndReady(pod) {
 		return false

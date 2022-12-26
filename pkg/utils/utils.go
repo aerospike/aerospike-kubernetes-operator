@@ -155,8 +155,7 @@ func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 	return &rackID, nil
 }
 
-// Helper functions to check and remove string from a slice of strings.
-
+// ContainsString returns true if a string exists in a slice of strings.
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -166,6 +165,7 @@ func ContainsString(slice []string, s string) bool {
 	return false
 }
 
+// RemoveString removes a string from a slice of strings.
 func RemoveString(slice []string, s string) (result []string) {
 	for _, item := range slice {
 		if item == s {
