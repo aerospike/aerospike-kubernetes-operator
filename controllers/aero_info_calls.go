@@ -315,9 +315,10 @@ func ParseInfoIntoMap(
 	return m, nil
 }
 
-func (r *SingleClusterReconciler) setMigrateFillDelay(policy *aerospike.ClientPolicy, rack asdbv1beta1.Rack, delay bool, ignorablePods []corev1.Pod) reconcileResult {
+func (r *SingleClusterReconciler) setMigrateFillDelay(policy *aerospike.ClientPolicy, asConfig *asdbv1beta1.AerospikeConfigSpec,
+	delay bool, ignorablePods []corev1.Pod) reconcileResult {
 
-	serviceConfig := rack.AerospikeConfig.Value["service"].(map[string]interface{})
+	serviceConfig := asConfig.Value["service"].(map[string]interface{})
 
 	fillDelay, exists := serviceConfig["migrate-fill-delay"]
 	if !exists || fillDelay.(float64) == 0 {

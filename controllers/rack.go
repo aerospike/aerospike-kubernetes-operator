@@ -622,7 +622,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
 	// temporarily add the pod to be deleted in ignorablePods slice to avoid setting migrate-fill-delay to pod when pod is not ready
-	if res := r.setMigrateFillDelay(r.getClientPolicy(), rackState.Rack, false, append(ignorablePods, *pod)); !res.isSuccess {
+	if res := r.setMigrateFillDelay(r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false, append(ignorablePods, *pod)); !res.isSuccess {
 		return found, res
 	}
 

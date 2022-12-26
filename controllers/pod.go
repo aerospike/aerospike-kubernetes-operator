@@ -492,7 +492,7 @@ func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
 	if err != nil {
 		return fmt.Errorf("error creating json-patch : %v", err)
 	}
-	
+
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
 	// Since the pod status is updated from pod init container,
