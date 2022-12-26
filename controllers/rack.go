@@ -589,7 +589,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	var pod *corev1.Pod
 
-	aerospikePolicy := r.getClientPolicy()
+	policy := r.getClientPolicy()
 
 	if *found.Spec.Replicas > desiredSize {
 
@@ -604,12 +604,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				// The pod is running and is unsafe to terminate.
 				return found, res
 			}
-		}
 
-		// Setup roster after migration
-		if err := r.getAndSetRoster(aerospikePolicy); err != nil {
-			r.Log.Error(err, "Failed to set roster for cluster")
-			return found, reconcileRequeueAfter(0)
+			// Setup roster after migration.
+			if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterBlockList); err != nil {
+				r.Log.Error(err, "Failed to set roster for cluster")
+				return found, reconcileRequeueAfter(0)
+			}
 		}
 
 		// Update new object with new size
@@ -635,7 +635,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			return found, reconcileRequeueAfter(1)
 		}
 
-		if err := r.validateClusterState(aerospikePolicy); err != nil {
+		// This check is added only in scale down but not in rolling restart.
+		// If scale down leads to unavailable or dead partition then we should scale up the cluster,
+		// This can be left to the user but if we would do it here on our own then we can reuse
+		// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
+		// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
+		if err := r.validateSCClusterState(policy); err != nil {
 			// reset cluster size
 			newSize := *found.Spec.Replicas + 1
 			found.Spec.Replicas = &newSize

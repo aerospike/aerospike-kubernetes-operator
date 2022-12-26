@@ -1206,13 +1206,20 @@ func updateStatefulSetContainers(
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
-	// User r.aeroCluster.Status to get all existing sts.
-	// Can status be empty here
 	r.Log.Info("Waiting for cluster to be ready")
 
+	allRackIDs := map[int]bool{}
 	for _, rack := range r.aeroCluster.Status.RackConfig.Racks {
+		allRackIDs[rack.ID] = true
+	}
+	// Check for newly added racks also because we do not check for these racks just after they are added
+	for _, rack := range r.aeroCluster.Spec.RackConfig.Racks {
+		allRackIDs[rack.ID] = true
+	}
+
+	for rackID := range allRackIDs {
 		st := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rack.ID)
+		stsName := getNamespacedNameForSTS(r.aeroCluster, rackID)
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
 				return err

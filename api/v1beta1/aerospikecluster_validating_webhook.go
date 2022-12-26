@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
@@ -254,6 +255,42 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	if err := c.validateSCNamespaces(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateSCNamespaces() error {
+	var scNSList []string
+
+	for _, rack := range c.Spec.RackConfig.Racks {
+		var tmpSCNSList []string
+
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		for _, nsConfInterface := range nsList {
+			nsConf := nsConfInterface.(map[string]interface{})
+
+			isEnabled, err := isNSSCEnabled(nsConf)
+			if err != nil {
+				return err
+			}
+			if isEnabled {
+				tmpSCNSList = append(tmpSCNSList, nsConf["name"].(string))
+			}
+		}
+
+		sort.Strings(tmpSCNSList)
+
+		if len(scNSList) == 0 {
+			scNSList = tmpSCNSList
+			continue
+		}
+		if !reflect.DeepEqual(scNSList, tmpSCNSList) {
+			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
+		}
+	}
 	return nil
 }
 
@@ -1023,11 +1060,29 @@ func validateNamespaceReplicationFactor(
 	if err != nil {
 		return err
 	}
-	if clSize < rf {
+
+	scEnabled, err := isNSSCEnabled(nsConf)
+	if err != nil {
+		return err
+	}
+
+	// clSize < rf is allowed in AP mode but not in sc mode
+	if scEnabled && (clSize < rf) {
 		return fmt.Errorf("namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
 	}
 
 	return nil
+}
+func isNSSCEnabled(nsConf map[string]interface{}) (bool, error) {
+	scEnabledInterface, ok := nsConf["strong-consistency"]
+	if !ok {
+		return false, nil
+	}
+	scEnabled, ok := scEnabledInterface.(bool)
+	if !ok {
+		return false, fmt.Errorf("namespace strong-consistency %v is not a valid boolean value", nsConf["strong-consistency"])
+	}
+	return scEnabled, nil
 }
 
 func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {

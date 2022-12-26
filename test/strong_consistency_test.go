@@ -125,6 +125,71 @@ var _ = Describe("SCMode", func() {
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("Should not allow different sc namespaces in different racks", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			racks := getDummyRackConf(1, 2)
+			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "sc1",
+							"memory-size":        1000955200,
+							"replication-factor": 2,
+							"strong-consistency": true,
+							"storage-engine": map[string]interface{}{
+								"type": "memory",
+							},
+						},
+					},
+				},
+			}
+			racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "sc2",
+							"memory-size":        1000955200,
+							"replication-factor": 2,
+							"strong-consistency": true,
+							"storage-engine": map[string]interface{}{
+								"type": "memory",
+							},
+						},
+					},
+				},
+			}
+
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should not allow cluster size < replication factor for sc namespace", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			racks := getDummyRackConf(1)
+			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{
+						map[string]interface{}{
+							"name":               "sc1",
+							"memory-size":        1000955200,
+							"replication-factor": 5,
+							"strong-consistency": true,
+							"storage-engine": map[string]interface{}{
+								"type": "memory",
+							},
+						},
+					},
+				},
+			}
+
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })
 

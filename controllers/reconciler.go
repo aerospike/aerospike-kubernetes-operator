@@ -135,16 +135,13 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicyFromSpec()
 
-	// Wait for migration before setting roster (only in scale down)
-	if r.aeroCluster.Status.AerospikeConfig != nil &&
-		(r.aeroCluster.Spec.Size < r.aeroCluster.Status.Size) {
-		if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
-			return res.result, res.err
-		}
+	// TODO: Should we just Wait for migration before setting roster only in scale down?
+	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+		return res.result, res.err
 	}
 
 	// Setup roster
-	if err := r.getAndSetRoster(policy); err != nil {
+	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterBlockList); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return reconcile.Result{}, err
 	}

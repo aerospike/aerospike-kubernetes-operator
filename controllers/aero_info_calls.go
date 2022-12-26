@@ -39,38 +39,42 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if len(pods) == 0 {
 		return reconcileSuccess()
 	}
+
 	// Remove a node only if cluster is stable
-	err := r.waitForAllSTSToBeReady()
-	if err != nil {
-		return reconcileError(
-			fmt.Errorf(
-				"failed to wait for cluster to be ready: %v", err,
-			),
-		)
+	if err := r.waitForAllSTSToBeReady(); err != nil {
+		return reconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {
-		return reconcileError(
-			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes: %v", err,
-			),
-		)
+		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
-	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
-		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIdLabel])
 
 	policy := r.getClientPolicy()
+
+	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIdLabel])
 
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 		return res
 	}
 
+	if err := r.validateSCClusterState(policy); err != nil {
+		return reconcileError(err)
+	}
+
+	if err := r.quiescePods(policy, allHostConns, pods); err != nil {
+		return reconcileError(err)
+	}
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod) error {
 	removedNSes, err := r.removedNamespaces()
 	if err != nil {
-		return reconcileError(err)
+		return err
 	}
 
 	var selectedHostConns []*deployment.HostConn
@@ -78,23 +82,19 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		// Quiesce node
 		hostConn, err := r.newHostConn(pod)
 		if err != nil {
-			return reconcileError(
-				fmt.Errorf(
-					"failed to get hostConn for aerospike cluster nodes %v: %v",
-					pod.Name, err,
-				),
-			)
+			return fmt.Errorf("failed to get hostConn for aerospike cluster nodes %v: %v",
+				pod.Name, err)
 		}
 		selectedHostConns = append(selectedHostConns, hostConn)
 	}
 
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConns, removedNSes,
+		r.Log, policy, allHostConns, selectedHostConns, removedNSes,
 	); err != nil {
-		return reconcileError(err)
+		return err
 	}
 
-	return reconcileSuccess()
+	return nil
 }
 
 func getNodeIDFromPodName(podName string) string {
@@ -109,22 +109,6 @@ func getNodeIDFromPodName(podName string) string {
 		nodeID = rackID + nodeID
 	}
 	return nodeID
-}
-
-func (r *SingleClusterReconciler) podsForRosterBlockList() ([]corev1.Pod, error) {
-	podList, err := r.getClusterPodList()
-	if err != nil {
-		return nil, err
-	}
-
-	var blockedPods []corev1.Pod
-	for _, pod := range podList.Items {
-		nodeID := getNodeIDFromPodName(pod.Name)
-		if utils.ContainsString(r.aeroCluster.Spec.RosterBlockList, nodeID) {
-			blockedPods = append(blockedPods, pod)
-		}
-	}
-	return blockedPods, nil
 }
 
 // TODO: Check only for migration
@@ -286,7 +270,7 @@ func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 		return nil, err
 	}
 	host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(r.Log, host, asConn), nil
+	return deployment.NewHostConn(asConn.Log, host, asConn), nil
 }
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
@@ -303,7 +287,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 		AerospikeHostName: host,
 		AerospikePort:     *port,
 		AerospikeTLSName:  tlsName,
-		Log:               r.Log,
+		Log:               r.Log.WithValues("host", pod.Name),
 	}
 
 	return asConn, nil
