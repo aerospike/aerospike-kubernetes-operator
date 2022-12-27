@@ -97,20 +97,6 @@ func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostCo
 	return nil
 }
 
-func getNodeIDFromPodName(podName string) string {
-	// POD_ORDINAL="{name[-1]}"
-	// RACK_ID="{name[-2]}"
-	// NODE_ID="${RACK_ID}a${POD_ORDINAL}"
-	nameSection := strings.Split(podName, "-")
-	rackID := nameSection[len(nameSection)-2]
-	idx := nameSection[len(nameSection)-1]
-	nodeID := "A" + idx
-	if rackID != "0" {
-		nodeID = rackID + nodeID
-	}
-	return nodeID
-}
-
 // TODO: Check only for migration
 func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolicy, allHostConns []*deployment.HostConn) reconcileResult {
 	const maxRetry = 6
@@ -296,16 +282,6 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 
 func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
-}
-
-func (r *SingleClusterReconciler) hostIDForPod(pod *corev1.Pod) string {
-	// Use pod IP and direct service port from within the operator for info calls.
-	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	if tlsName == "" || port == nil {
-		port = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
-	}
-
-	return hostID(pod.Status.PodIP, *port)
 }
 
 // ParseInfoIntoMap parses info string into a map.
