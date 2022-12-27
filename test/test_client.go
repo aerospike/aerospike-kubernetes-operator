@@ -8,13 +8,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -182,7 +183,7 @@ func getClientPolicy(
 
 	// tls config
 	if tlsName != "" {
-		// r.Log.V(1).Info("Set tls config in aerospike client policy")
+		logrus.Info("Set tls config in aerospike client policy")
 		clientCertSpec := aeroCluster.Spec.OperatorClientCertSpec
 		tlsConf := tls.Config{
 			RootCAs: getClusterServerPool(
@@ -201,7 +202,7 @@ func getClientPolicy(
 		); err == nil {
 			tlsConf.Certificates = append(tlsConf.Certificates, *cert)
 		} else {
-			// r.Log.Error(err, "Failed to get client certificate. Using basic clientPolicy")
+			logrus.Error(err, "Failed to get client certificate. Using basic clientPolicy")
 		}
 
 		policy.TlsConfig = &tlsConf
@@ -209,7 +210,7 @@ func getClientPolicy(
 
 	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		// r.Log.Error(err, "Failed to copy spec in status", "err", err)
+		logrus.Error("Failed to copy spec in status", "err: ", err)
 	}
 
 	user, pass, err := aerospikecluster.AerospikeAdminCredentials(
@@ -217,7 +218,7 @@ func getClientPolicy(
 		getPasswordProvider(aeroCluster, k8sClient),
 	)
 	if err != nil {
-		// r.Log.Error(err, "Failed to get cluster auth info", "err", err)
+		logrus.Error("Failed to get cluster auth info", "err: ", err)
 	}
 	// TODO: What should be the timeout, should make it configurable or just keep it default
 	policy.Timeout = time.Minute * 1
@@ -279,7 +280,7 @@ func appendCACertFromFile(
 ) *x509.CertPool {
 	if caPath == "" {
 		// r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
-	} else if caData, err := ioutil.ReadFile(caPath); err != nil {
+	} else if caData, err := os.ReadFile(caPath); err != nil {
 		// r.Log.Error(err, "Failed to load CA certs from file.", "ca-path", caPath)
 	} else {
 		serverPool.AppendCertsFromPEM(caData)
@@ -297,7 +298,7 @@ func appendCACertFromSecret(
 		return serverPool
 	}
 	// get the tls info from secret
-	// r.Log.Info("Trying to find an appropriate CA cert from the secret...", "secret", secretSource)
+	logrus.Info("Trying to find an appropriate CA cert from the secret...", "secret: ", secretSource)
 	found := &v1.Secret{}
 	secretName := namespacedSecret(secretSource, defaultNamespace)
 	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
@@ -305,11 +306,11 @@ func appendCACertFromSecret(
 		return serverPool
 	}
 	if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
-		// r.Log.V(1).Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
+		logrus.Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
 		serverPool.AppendCertsFromPEM(caData)
 	} else {
-		// r.Log.V(1).Info("WARN: Can't find ca-file in the secret. using default certPool.",
-		// "secret", secretName, "ca-file", secretSource.CaCertsFilename)
+		logrus.Info("WARN: Can't find ca-file in the secret. using default certPool.",
+			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename)
 	}
 	return serverPool
 }
@@ -365,11 +366,11 @@ func namespacedSecret(
 func loadCertAndKeyFromFiles(certPath string, keyPath string) (
 	*tls.Certificate, error,
 ) {
-	certData, certErr := ioutil.ReadFile(certPath)
+	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
 		return nil, certErr
 	}
-	keyData, keyErr := ioutil.ReadFile(keyPath)
+	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
 		return nil, keyErr
 	}

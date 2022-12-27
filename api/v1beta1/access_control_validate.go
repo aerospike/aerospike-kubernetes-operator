@@ -92,10 +92,11 @@ var Post6Privileges = map[string][]PrivilegeScope{
 // IsAerospikeAccessControlValid validates the accessControl speciication in the clusterSpec.
 //
 // Asserts that the Aerospikeaccesscontrolspec
-//    has correct references to other objects like namespaces
-//    follows rules defined https://www.aerospike.com/docs/guide/limitations.html
-//    follows rules found through server code inspection for e.g. predefined roles
-//    meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
+//
+//	has correct references to other objects like namespaces
+//	follows rules defined https://www.aerospike.com/docs/guide/limitations.html
+//	follows rules found through server code inspection for e.g. predefined roles
+//	meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
 func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	bool, error,
 ) {
@@ -289,7 +290,7 @@ func isRoleNameValid(roleName string) (bool, error) {
 	}
 
 	for _, forbiddenChar := range roleNameForbiddenChars {
-		if strings.Index(roleName, forbiddenChar) > -1 {
+		if strings.Contains(roleName, forbiddenChar) {
 			return false, fmt.Errorf(
 				"role name '%s' cannot contain  %s", roleName, forbiddenChar,
 			)
@@ -508,7 +509,7 @@ func isUserNameValid(userName string) (bool, error) {
 	}
 
 	for _, forbiddenChar := range userNameForbiddenChars {
-		if strings.Index(userName, forbiddenChar) > -1 {
+		if strings.Contains(userName, forbiddenChar) {
 			return false, fmt.Errorf(
 				"username '%s' cannot contain  %s", userName, forbiddenChar,
 			)
