@@ -835,6 +835,9 @@ func UpdateClusterImage(
 		return err
 	}
 	nv, err := asconfig.CompareVersions(incomingVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
 
 	switch {
 	case nv >= 0 && ov >= 0:

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	//nolint:staticcheck
+	// this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 )

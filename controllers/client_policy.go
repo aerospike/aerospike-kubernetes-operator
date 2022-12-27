@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -186,7 +186,7 @@ func (r *SingleClusterReconciler) appendCACertFromFile(
 ) *x509.CertPool {
 	if caPath == "" {
 		r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
-	} else if caData, err := ioutil.ReadFile(caPath); err != nil {
+	} else if caData, err := os.ReadFile(caPath); err != nil {
 		r.Log.Error(
 			err, "Failed to load CA certs from file.", "ca-path", caPath,
 		)
@@ -312,11 +312,11 @@ func namespacedSecret(
 func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 	certPath string, keyPath string,
 ) (*tls.Certificate, error) {
-	certData, certErr := ioutil.ReadFile(certPath)
+	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
 		return nil, certErr
 	}
-	keyData, keyErr := ioutil.ReadFile(keyPath)
+	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
 		return nil, keyErr
 	}

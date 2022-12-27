@@ -20,7 +20,10 @@ require (
 	sigs.k8s.io/controller-runtime v0.9.2
 )
 
-require golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+require (
+	github.com/sirupsen/logrus v1.7.0
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+)
 
 require (
 	cloud.google.com/go v0.76.0 // indirect

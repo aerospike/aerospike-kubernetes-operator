@@ -78,6 +78,8 @@ var _ = Describe(
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
+						Expect(err).ToNot(HaveOccurred())
+
 						sts, err = getSTSFromRackID(aeroCluster, 0)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -153,6 +155,8 @@ var _ = Describe(
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
+						Expect(err).ToNot(HaveOccurred())
+
 						sts, err = getSTSFromRackID(aeroCluster, 0)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -184,6 +188,7 @@ var _ = Describe(
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
+						Expect(err).ToNot(HaveOccurred())
 
 						volume := asdbv1beta1.VolumeSpec{
 							Name: "newvolume",
@@ -302,6 +307,8 @@ var _ = Describe(
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
+						Expect(err).ToNot(HaveOccurred())
+
 						sts, err = getSTSFromRackID(aeroCluster, 0)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -338,6 +345,7 @@ var _ = Describe(
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
+						Expect(err).ToNot(HaveOccurred())
 
 						volume := asdbv1beta1.VolumeSpec{
 							Name: "newvolume",

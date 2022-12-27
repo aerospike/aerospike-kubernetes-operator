@@ -474,11 +474,6 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 	)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			_, stsServicePort := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-			if stsServicePort == nil {
-				stsServicePort = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
-			}
-
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					// Headless service has the same name as AerospikeCluster

@@ -175,6 +175,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 	return nil
 }
 
+// nolint:unused
 func (r *SingleClusterReconciler) tipHostname(
 	pod *corev1.Pod, clearPod *corev1.Pod,
 ) error {

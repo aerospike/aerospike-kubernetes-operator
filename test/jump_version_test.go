@@ -151,7 +151,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					},
 				)
 
