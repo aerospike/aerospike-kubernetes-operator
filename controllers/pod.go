@@ -767,58 +767,43 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
+				var statusDevices []string
+				specDevices := sets.String{}
 				if statusStorage["devices"] != nil {
-					var statusDevices []string
 					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
 						statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
 					}
-					for _, statusDevice := range statusDevices {
-						deviceFound := false
-						if specStorage["devices"] != nil {
-							var specDevices []string
-							for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
-								specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
-							}
-							for _, specDevice := range specDevices {
-								if specDevice == statusDevice {
-									deviceFound = true
-									break
-								}
-							}
-						}
-
-						if !deviceFound {
-							deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
-							removedDevices = append(removedDevices, deviceName)
-							r.Log.Info(
-								"device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
-							)
-						}
+				}
+				if specStorage["devices"] != nil {
+					for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+						specDevices.Insert(strings.Fields(specDeviceInterface.(string))...)
+					}
+				}
+				for _, statusDevice := range statusDevices {
+					if !specDevices.Has(statusDevice) {
+						deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
+						removedDevices = append(removedDevices, deviceName)
+						r.Log.Info(
+							"device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
+						)
 					}
 				}
 
+				var statusFiles []string
+				specFiles := sets.String{}
 				if statusStorage["files"] != nil {
-					var statusFiles []string
 					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
 						statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
 					}
-					for _, statusFile := range statusFiles {
-						fileFound := false
-						if specStorage["files"] != nil {
-							var specFiles []string
-							for _, specFileInterface := range specStorage["files"].([]interface{}) {
-								specFiles = append(specFiles, strings.Fields(specFileInterface.(string))...)
-							}
-							for _, specFile := range specFiles {
-								if specFile == statusFile {
-									fileFound = true
-									break
-								}
-							}
-						}
-						if !fileFound {
-							removedFiles = append(removedFiles, statusFile)
-						}
+				}
+				if specStorage["files"] != nil {
+					for _, specFileInterface := range specStorage["files"].([]interface{}) {
+						specFiles.Insert(strings.Fields(specFileInterface.(string))...)
+					}
+				}
+				for _, statusFile := range statusFiles {
+					if !specFiles.Has(statusFile) {
+						removedFiles = append(removedFiles, statusFile)
 					}
 				}
 				break
@@ -950,36 +935,25 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState RackState) ([]stri
 				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
+				var specDevices []string
+				statusDevices := sets.String{}
 				if specStorage["devices"] != nil {
-					var specDevices []string
 					for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
 						specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
 					}
-					for _, specDevice := range specDevices {
-						deviceFound := false
-						if statusStorage["devices"] != nil {
-							var statusDevices []string
-							for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
-								statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
-							}
-							for _, statusDevice := range statusDevices {
-								if specDevice == statusDevice {
-									r.Log.Info(
-										"device exist in namespace",
-									)
-									deviceFound = true
-									break
-								}
-							}
-						}
-
-						if !deviceFound {
-							r.Log.Info(
-								"device has been added in namespace",
-							)
-							deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
-							volumes = append(volumes, deviceName)
-						}
+				}
+				if statusStorage["devices"] != nil {
+					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+						statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
+					}
+				}
+				for _, specDevice := range specDevices {
+					if !statusDevices.Has(specDevice) {
+						r.Log.Info(
+							"device has been added in namespace",
+						)
+						deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+						volumes = append(volumes, deviceName)
 					}
 				}
 				break
