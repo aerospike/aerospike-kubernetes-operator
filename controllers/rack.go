@@ -320,7 +320,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
-	// For each file removed from a namespace, it has been deleted right away.
+	// For each file removed from a namespace, it is deleted right away.
 	if err := r.handleNSOrDeviceRemoval(rackState); err != nil {
 		return reconcileError(err)
 	}

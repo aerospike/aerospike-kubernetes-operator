@@ -837,9 +837,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
 						statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
 					}
-					for _, statusFile := range statusFiles {
-						removedFiles = append(removedFiles, statusFile)
-					}
+					removedFiles = append(removedFiles, statusFiles...)
 				}
 			}
 		}
