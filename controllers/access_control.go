@@ -298,6 +298,8 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 			setName = parts[2]
 		}
 
+		//nolint:ineffassign
+		// type is a private type in the pkg
 		var code = as.Read
 		switch privilegeCode {
 		case "read":

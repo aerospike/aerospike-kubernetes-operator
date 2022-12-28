@@ -86,6 +86,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	Expect(err).ToNot(HaveOccurred())
 
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
 
 	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 

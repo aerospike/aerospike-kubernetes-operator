@@ -591,10 +591,8 @@ func getLongInitStorageConfig(
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
-	if cloudProvider == CloudProviderAWS {
-		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
 
-	}
+	// Note: Blkdiscard method is not supported in AWS, so it is initialized as DD Method
 
 	return &asdbv1beta1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{

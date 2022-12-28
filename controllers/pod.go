@@ -565,6 +565,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1beta1.R
 	return ignorablePods, nil
 }
 
+// nolint:unused
 // getPodIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
 // Note: the IPs returned from here should match the IPs generated in the pod initialization script for the init container.
 func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
@@ -596,6 +597,7 @@ func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
 	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
+// nolint:unused
 func (r *SingleClusterReconciler) getServiceForPod(pod *corev1.Pod) (
 	*corev1.Service, error,
 ) {

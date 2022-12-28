@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 				r.aeroCluster.Namespace, r.aeroCluster.Name,
 			)
 		}
-		return res.result, res.err
+		return res.getResult()
 	}
 
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
