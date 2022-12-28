@@ -355,7 +355,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 ) *asdbv1beta1.AerospikeCluster {
 	cascadeDelete := true
 
-	var networkConf = map[string]interface{}{}
+	var networkConf map[string]interface{}
 
 	var operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec = nil
 

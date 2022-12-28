@@ -21,8 +21,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -423,7 +423,7 @@ func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequi
 	return nil
 }
 
-func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
+func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range c.Spec.RackConfig.Namespaces {
@@ -683,7 +683,7 @@ func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 			"tls-authenticate-client contains invalid value: %s", value,
 		)
 	case bool:
-		if value == false {
+		if !value {
 			return []string{}, nil
 		}
 		return nil, fmt.Errorf(
@@ -758,7 +758,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 	if clientCertSpec == nil || clientCertSpec.CertPathInOperator == nil || clientCertSpec.CertPathInOperator.ClientCertPath == "" {
 		return result, nil
 	}
-	r, err := ioutil.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
+	r, err := os.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
 	if err != nil {
 		return result, err
 	}

@@ -290,7 +290,7 @@ func isRoleNameValid(roleName string) (bool, error) {
 	}
 
 	for _, forbiddenChar := range roleNameForbiddenChars {
-		if strings.Index(roleName, forbiddenChar) > -1 {
+		if strings.Contains(roleName, forbiddenChar) {
 			return false, fmt.Errorf(
 				"role name '%s' cannot contain  %s", roleName, forbiddenChar,
 			)
@@ -509,7 +509,7 @@ func isUserNameValid(userName string) (bool, error) {
 	}
 
 	for _, forbiddenChar := range userNameForbiddenChars {
-		if strings.Index(userName, forbiddenChar) > -1 {
+		if strings.Contains(userName, forbiddenChar) {
 			return false, fmt.Errorf(
 				"username '%s' cannot contain  %s", userName, forbiddenChar,
 			)

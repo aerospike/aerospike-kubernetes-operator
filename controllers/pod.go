@@ -516,6 +516,10 @@ func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
 	}
 
 	jsonPatchJSON, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("error creating json-patch : %v", err)
+	}
+
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
 	// Since the pod status is updated from pod init container,
@@ -588,6 +592,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1beta1.R
 	return ignorablePods, nil
 }
 
+// nolint:unused
 // getPodIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
 // Note: the IPs returned from here should match the IPs generated in the pod initialization script for the init container.
 func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
@@ -619,6 +624,7 @@ func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
 	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
+// nolint:unused
 func (r *SingleClusterReconciler) getServiceForPod(pod *corev1.Pod) (
 	*corev1.Service, error,
 ) {

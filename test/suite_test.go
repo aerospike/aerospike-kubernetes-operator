@@ -70,7 +70,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeEach(func() {
-	By(fmt.Sprintf("Cleaning up all Aerospike clusters."))
+	By("Cleaning up all Aerospike clusters.")
 	deleteAllClusters(namespace)
 	deleteAllClusters(multiClusterNs1)
 	deleteAllClusters(multiClusterNs2)
