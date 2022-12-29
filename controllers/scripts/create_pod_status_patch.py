@@ -427,7 +427,16 @@ def clean_dirty_volumes(pod_name, config, dirty_volumes):
                     logging.error(f"{volume} - Has invalid effective method")
                     raise ValueError(f"{volume} - Has invalid effective method")
 
-                dirty_volumes.remove(vol["name"])
+                dirty_volumes.remove(volume.volume_name)
+
+        for future in concurrent.futures.as_completed(fs=futures):
+            cmd = futures[future]
+            try:
+                if future.done():
+                    logging.info(f"pod-name: {pod_name} Finished Successfully: {cmd}")
+            except Exception as e:
+                logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
+                raise e
     return dirty_volumes
 
 
@@ -558,16 +567,16 @@ def wipe_volumes(pod_name, config, dirty_volumes):
                         dd = "dd if=/dev/zero of={volume_path} bs=1M".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=dd))] = dd
                         logging.info(f"Submitted - {volume}")
-                        if vol["name"] in dirty_volumes:
-                            dirty_volumes.remove(vol["name"])
+                        if volume.volume_name in dirty_volumes:
+                            dirty_volumes.remove(volume.volume_name)
 
                     elif volume.effective_wipe_method == "blkdiscard":
 
                         blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                         logging.info(f"Submitted - {volume}")
-                        if vol["name"] in dirty_volumes:
-                           dirty_volumes.remove(vol["name"])
+                        if volume.volume_name in dirty_volumes:
+                           dirty_volumes.remove(volume.volume_name)
 
                     else:
                         raise ValueError(f"{volume} - Has invalid effective method")
@@ -650,7 +659,7 @@ def main():
         dirty_volumes = list(get_dirty_volumes(pod_name=args.pod_name, config=config))
 
         logging.info(f"pod-name: {args.pod_name} {args.restart_type}- Checking if volume initialization needed")
-        if args.restart_type == "pod":
+        if args.restart_type == "podRestart":
             volumes = init_volumes(pod_name=args.pod_name, config=config)
 
             logging.info(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")

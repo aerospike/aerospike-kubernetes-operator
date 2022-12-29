@@ -954,7 +954,7 @@ func validateNamespaceConfig(
 		}
 	}
 
-	err = validateStorageEngineDeviceList(nsConfInterfaceList)
+	err = validateStorageEngineDeviceList(nsConfInterfaceList, nil)
 	if err != nil {
 		return err
 	}
@@ -1186,6 +1186,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	oldConf := oldConfSpec.Value
 
 	newNsConfList := newConf["namespaces"].([]interface{})
+	oldNsConfList := oldConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
 		// Validate new namespaceconf
@@ -1197,8 +1198,6 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 		}
 
 		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
-		oldNsConfList := oldConf["namespaces"].([]interface{})
-
 		for _, oldSingleConfInterface := range oldNsConfList {
 
 			oldSingleConf, ok := oldSingleConfInterface.(map[string]interface{})
@@ -1224,7 +1223,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 		}
 	}
 
-	err := validateStorageEngineDeviceList(newNsConfList)
+	err := validateStorageEngineDeviceList(newNsConfList, oldNsConfList)
 	if err != nil {
 		return err
 	}
@@ -1233,7 +1232,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	return nil
 }
 
-func validateStorageEngineDeviceList(nsConfList []interface{}) error {
+func validateStorageEngineDeviceList(nsConfList []interface{}, oldNsConfList []interface{}) error {
 	deviceList := map[string]string{}
 
 	// build a map device -> namespace
@@ -1256,6 +1255,26 @@ func validateStorageEngineDeviceList(nsConfList []interface{}) error {
 				)
 			} else {
 				deviceList[device] = namespace
+			}
+		}
+	}
+
+	for _, oldNsConfInterface := range oldNsConfList {
+		nsConf := oldNsConfInterface.(map[string]interface{})
+		namespace := nsConf["name"].(string)
+		storage := nsConf["storage-engine"].(map[string]interface{})
+		devices, ok := storage["devices"]
+		if !ok {
+			continue
+		}
+
+		for _, d := range devices.([]interface{}) {
+			device := d.(string)
+			if deviceList[device] != "" && deviceList[device] != namespace {
+				return fmt.Errorf(
+					"device %s can not be re-used in single CR update namespace= %s, oldNamespace= %s",
+					device, deviceList[device], namespace,
+				)
 			}
 		}
 	}

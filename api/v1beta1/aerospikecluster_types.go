@@ -788,8 +788,9 @@ type AerospikePodStatus struct {
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
-	// DirtyVolumes is the list of volume names that needs to be cleaned
-	// during init.
+	// DirtyVolumes is the list of volume names that are removed
+	// from aerospike namespaces and will be cleaned during init
+	// if they are reused in any namespace.
 	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
 
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
