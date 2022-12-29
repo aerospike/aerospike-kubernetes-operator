@@ -318,20 +318,21 @@ func ParseInfoIntoMap(
 }
 
 func (r *SingleClusterReconciler) setMigrateFillDelay(policy *aerospike.ClientPolicy, asConfig *asdbv1beta1.AerospikeConfigSpec,
-	delay bool, ignorablePods []corev1.Pod) reconcileResult {
+	setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
 
-	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
+	if err != nil {
+		reconcileError(err)
+	}
 
-	fillDelay, exists := serviceConfig["migrate-fill-delay"]
-	if !exists || fillDelay.(float64) == 0 {
+	if migrateFillDelay == 0 {
 		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
 		return reconcileSuccess()
 	}
 
-	// Set migrate-fill-delay to original value if delay flag is set
-	migrateFillDelay := float64(0)
-	if delay {
-		migrateFillDelay = fillDelay.(float64)
+	// Set migrate-fill-delay to 0 if setToZero flag is set
+	if setToZero {
+		migrateFillDelay = 0
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created

@@ -401,3 +401,34 @@ func GetPortFromConfig(
 	}
 	return nil
 }
+
+// GetIntType typecasts the numeric value to the support type
+func GetIntType(value interface{}) (int, error) {
+	switch val := value.(type) {
+	case int64:
+		return int(val), nil
+	case int:
+		return val, nil
+	case float64:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("value %v not valid int, int64 or float64", val)
+	}
+}
+
+// GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
+func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
+	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+
+	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
+	if !exists {
+		return 0, nil
+	}
+
+	fillDelay, err := GetIntType(fillDelayIFace)
+	if err != nil {
+		return 0, fmt.Errorf("migrate-fill-delay %v", err)
+	}
+
+	return fillDelay, nil
+}

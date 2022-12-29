@@ -437,7 +437,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Int64{}
+	migrateFillDelaySet := sets.Int{}
 
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
@@ -475,16 +475,12 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 			}
 		}
 
-		serviceConfig := rack.AerospikeConfig.Value["service"]
-		if serviceConfig != nil {
-			service := serviceConfig.(map[string]interface{})
-			fillDelay := service["migrate-fill-delay"]
-			if fillDelay == nil {
-				migrateFillDelaySet.Insert(0)
-			} else {
-				migrateFillDelaySet.Insert(int64(fillDelay.(float64)))
-			}
+		migrateFillDelay, err := GetMigrateFillDelay(&rack.AerospikeConfig)
+		if err != nil {
+			return err
 		}
+
+		migrateFillDelaySet.Insert(migrateFillDelay)
 	}
 
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
@@ -1055,19 +1051,12 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 		rfInterface = 2 // default replication-factor
 	}
 
-	switch rf := rfInterface.(type) {
-	case int64:
-		return int(rf), nil
-	case int:
-		return rf, nil
-	case float64:
-		return int(rf), nil
-	default:
-		return 0, fmt.Errorf(
-			"namespace replication-factor %v not valid int, int64 or float64",
-			rf,
-		)
+	rf, err := GetIntType(rfInterface)
+	if err != nil {
+		return 0, fmt.Errorf("namespace replication-factor %v", err)
 	}
+
+	return rf, nil
 }
 
 func validateLoadBalancerUpdate(
