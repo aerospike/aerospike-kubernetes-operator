@@ -15,7 +15,6 @@ package controllers
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -282,27 +281,4 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 
 func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
-}
-
-// ParseInfoIntoMap parses info string into a map.
-// TODO adapted from management lib. Should be made public there.
-func ParseInfoIntoMap(str string, del string, sep string) (map[string]string, error) {
-	m := map[string]string{}
-	if str == "" {
-		return m, nil
-	}
-	items := strings.Split(str, del)
-	for _, item := range items {
-		if item == "" {
-			continue
-		}
-		kv := strings.Split(item, sep)
-		if len(kv) < 2 {
-			return nil, fmt.Errorf("error parsing info item %s", item)
-		}
-
-		m[kv[0]] = strings.Join(kv[1:], sep)
-	}
-
-	return m, nil
 }

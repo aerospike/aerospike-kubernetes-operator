@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
@@ -311,7 +310,7 @@ func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, 
 
 	cmdOutput := res[cmd]
 
-	return aerospikecluster.ParseInfoIntoMap(cmdOutput, ":", "=")
+	return deployment.ParseInfoIntoMap(cmdOutput, ":", "=")
 }
 
 func getSCAndNonSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
