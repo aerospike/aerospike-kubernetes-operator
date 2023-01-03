@@ -343,12 +343,12 @@ func (r *SingleClusterReconciler) reconcileRack(
 			return res
 		}
 	} else {
-		needRollingRestartRack, restartTypeList, err := r.needRollingRestartRack(rackState)
+		needRollingRestartRack, restartTypeMap, err := r.needRollingRestartRack(rackState)
 		if err != nil {
 			return reconcileError(err)
 		}
 		if needRollingRestartRack {
-			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeList)
+			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeMap)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -681,7 +681,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
-	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod, restartTypeList map[string]RestartType,
+	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -724,7 +724,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	for i := range podList {
 		pod := podList[i]
 
-		restartType := restartTypeList[pod.Name]
+		restartType := restartTypeMap[pod.Name]
 		if restartType == NoRestart {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
@@ -747,7 +747,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
-		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeList)
+		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -787,14 +787,14 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
 		return false, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	restartTypeList, err := r.getRollingRestartTypeList(rackState, podList)
+	restartTypeMap, err := r.getRollingRestartTypeMap(rackState, podList)
 	if err != nil {
 		return false, nil, err
 	}
 
-	for _, restartType := range restartTypeList {
+	for _, restartType := range restartTypeMap {
 		if restartType != NoRestart {
-			return true, restartTypeList, nil
+			return true, restartTypeMap, nil
 		}
 	}
 

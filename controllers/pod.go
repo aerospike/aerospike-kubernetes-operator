@@ -49,10 +49,10 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 }
 
 // Fetching restartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeList(
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	rackState RackState, pods []*corev1.Pod,
 ) (map[string]RestartType, error) {
-	var restartTypeList = make(map[string]RestartType)
+	var restartTypeMap = make(map[string]RestartType)
 	var addedNSDevices []string
 	confMap, err := r.getConfigMap(rackState.Rack.ID)
 	if err != nil {
@@ -72,9 +72,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypeList(
 		if err != nil {
 			return nil, err
 		}
-		restartTypeList[pods[i].Name] = restartType
+		restartTypeMap[pods[i].Name] = restartType
 	}
-	return restartTypeList, nil
+	return restartTypeMap, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
@@ -142,7 +142,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod, restartTypeList map[string]RestartType,
+	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
 ) reconcileResult {
 
 	failedPods, activePods := getFailedAndActivePods(podsToRestart)
@@ -150,7 +150,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
-		if res := r.restartPods(rackState, failedPods, restartTypeList); !res.isSuccess {
+		if res := r.restartPods(rackState, failedPods, restartTypeMap); !res.isSuccess {
 			return res
 		}
 	}
@@ -160,7 +160,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}
-		if res := r.restartPods(rackState, activePods, restartTypeList); !res.isSuccess {
+		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.isSuccess {
 			return res
 		}
 	}
@@ -200,12 +200,12 @@ func (r *SingleClusterReconciler) restartASDInPod(
 	return nil
 }
 
-func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeList map[string]RestartType) reconcileResult {
+func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) reconcileResult {
 	var restartedPods []*corev1.Pod
 	for i := range podsToRestart {
 		pod := podsToRestart[i]
 		// Check if this pod needs restart
-		restartType := restartTypeList[pod.Name]
+		restartType := restartTypeMap[pod.Name]
 
 		if restartType == QuickRestart {
 			if err := r.restartASDInPod(rackState, pod); err == nil {
@@ -773,11 +773,11 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
-				var statusDevices []string
+				statusDevices := sets.String{}
 				specDevices := sets.String{}
 				if statusStorage["devices"] != nil {
 					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
-						statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
+						statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
 					}
 				}
 				if specStorage["devices"] != nil {
@@ -785,21 +785,21 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 						specDevices.Insert(strings.Fields(specDeviceInterface.(string))...)
 					}
 				}
-				for _, statusDevice := range statusDevices {
-					if !specDevices.Has(statusDevice) {
-						deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
-						removedDevices = append(removedDevices, deviceName)
-						r.Log.Info(
-							"Device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
-						)
-					}
+
+				removedDevicesPerNS := statusDevices.Difference(specDevices).List()
+				for _, removedDevice := range removedDevicesPerNS {
+					deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, removedDevice)
+					r.Log.Info(
+						"Device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
+					)
+					removedDevices = append(removedDevices, deviceName)
 				}
 
-				var statusFiles []string
+				statusFiles := sets.String{}
 				specFiles := sets.String{}
 				if statusStorage["files"] != nil {
 					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
-						statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
+						statusFiles.Insert(strings.Fields(statusFileInterface.(string))...)
 					}
 				}
 				if specStorage["files"] != nil {
@@ -807,40 +807,10 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 						specFiles.Insert(strings.Fields(specFileInterface.(string))...)
 					}
 				}
-				for _, statusFile := range statusFiles {
-					if !specFiles.Has(statusFile) {
-						removedFiles = append(removedFiles, statusFile)
-					}
-				}
 
-				var statusMounts []string
-				specMounts := sets.String{}
-				if statusNamespace.(map[string]interface{})["index-type"] != nil {
-					statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-					if statusIndex["mounts"] != nil {
-						for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
-							statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
-						}
-					}
-				}
-				if specNamespace.(map[string]interface{})["index-type"] != nil {
-					specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-					if specIndex["mounts"] != nil {
-						for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
-							specMounts.Insert(strings.Fields(specMountInterface.(string))...)
-						}
-					}
-				}
-
-				indexMountRemoved := false
-				for index, statusMount := range statusMounts {
-					statusMounts[index] = statusMounts[index] + "/*"
-					if !specMounts.Has(statusMount) {
-						indexMountRemoved = true
-					}
-				}
-				if indexMountRemoved {
-					removedFiles = append(removedFiles, statusMounts...)
+				removedFilesPerNS := statusFiles.Difference(specFiles).List()
+				if len(removedFilesPerNS) > 0 {
+					removedFiles = append(removedFiles, removedFilesPerNS...)
 				}
 				break
 			}
@@ -867,19 +837,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 					statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
 				}
 				removedFiles = append(removedFiles, statusFiles...)
-			}
-			if statusNamespace.(map[string]interface{})["index-type"] != nil {
-				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-				if statusIndex["mounts"] != nil {
-					var statusMounts []string
-					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
-						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
-					}
-					for index := range statusMounts {
-						statusMounts[index] = statusMounts[index] + "/*"
-					}
-					removedFiles = append(removedFiles, statusMounts...)
-				}
 			}
 		}
 	}
