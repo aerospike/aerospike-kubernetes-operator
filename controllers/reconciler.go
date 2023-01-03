@@ -135,7 +135,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicyFromSpec()
 
-	// TODO: Should we just Wait for migration before setting roster only in scale down?
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 		return res.result, res.err
 	}
