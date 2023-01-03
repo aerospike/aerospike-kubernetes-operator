@@ -299,6 +299,20 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("Scaling up along with modifying Namespace storage Dynamically")
+
+					err = scaleUpClusterTestWithNSDeviceHandling(
+						k8sClient, ctx, clusterNamespacedName, 1,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Scaling down along with modifying Namespace storage Dynamically")
+
+					err = scaleDownClusterTestWithNSDeviceHandling(
+						k8sClient, ctx, clusterNamespacedName, 1,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("RollingRestart By Removing Namespace Dynamically")
 
 					err = rollingRestartClusterByRemovingNamespaceDynamicallyTest(
@@ -310,13 +324,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
 						k8sClient, ctx, dynamicNs, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					By("RollingRestart By Re-using Namespace Storage Dynamically")
-
-					err = rollingRestartClusterByReusingNamespaceStorageTest(
-						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -357,6 +364,16 @@ func UpdateClusterTest(ctx goctx.Context) {
 							aeroCluster.Spec.PodSpec.MultiPodPerHost = !aeroCluster.Spec.PodSpec.MultiPodPerHost
 
 							err = k8sClient.Update(ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"Should fail for Re-using Namespace Storage Dynamically",
+						func() {
+							err := rollingRestartClusterByReusingNamespaceStorageTest(
+								k8sClient, ctx, clusterNamespacedName, dynamicNs,
+							)
 							Expect(err).Should(HaveOccurred())
 						},
 					)
@@ -455,7 +472,9 @@ func NegativeClusterValidationTest(ctx goctx.Context) {
 }
 
 func negativeDeployClusterValidationTest(
+
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+
 ) {
 	Context(
 		"Validation", func() {

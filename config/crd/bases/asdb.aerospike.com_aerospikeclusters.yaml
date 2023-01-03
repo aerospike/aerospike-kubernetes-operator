@@ -8803,8 +8803,8 @@ spec:
                         used by this '
                       type: string
                     dirtyVolumes:
-                      description: DirtyVolumes is the list of volume names that needs
-                        to be cleaned duri
+                      description: DirtyVolumes is the list of volume names that are
+                        removed from aerospi
                       items:
                         type: string
                       type: array

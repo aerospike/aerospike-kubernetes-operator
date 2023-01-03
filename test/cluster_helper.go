@@ -47,6 +47,51 @@ var (
 	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
+func scaleUpClusterTestWithNSDeviceHandling(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, increaseBy int32,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.Size = aeroCluster.Spec.Size + increaseBy
+	oldDeviceList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	// Wait for aerocluster to reach 2 replicas
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(increaseBy),
+	)
+	if err != nil {
+		return err
+	}
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.Size = aeroCluster.Spec.Size + increaseBy
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	// Wait for aerocluster to reach 2 replicas
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(increaseBy),
+	)
+	return err
+}
+
 func scaleUpClusterTest(
 	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, increaseBy int32,
@@ -67,6 +112,51 @@ func scaleUpClusterTest(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(increaseBy),
 	)
+}
+
+func scaleDownClusterTestWithNSDeviceHandling(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, decreaseBy int32,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.Size = aeroCluster.Spec.Size - decreaseBy
+	oldDeviceList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	// Wait for aerocluster to reach 2 replicas
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(decreaseBy),
+	)
+	if err != nil {
+		return err
+	}
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.Size = aeroCluster.Spec.Size - decreaseBy
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	// Wait for aerocluster to reach 2 replicas
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(decreaseBy),
+	)
+	return err
 }
 
 func scaleDownClusterTest(
@@ -155,8 +245,14 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 
 func rollingRestartClusterByReusingNamespaceStorageTest(
 	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
+	clusterNamespacedName types.NamespacedName, dynamicNs map[string]interface{},
 ) error {
+	err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
+		k8sClient, ctx, dynamicNs, clusterNamespacedName,
+	)
+	if err != nil {
+		return err
+	}
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err

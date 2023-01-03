@@ -747,7 +747,7 @@ func getPodNames(pods []*corev1.Pod) []string {
 	return podNames
 }
 
-func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) error {
+func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, podsToRestart []*corev1.Pod) error {
 	var rackStatus asdbv1beta1.Rack
 	var removedDevices []string
 	var removedFiles []string
@@ -812,6 +812,36 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 						removedFiles = append(removedFiles, statusFile)
 					}
 				}
+
+				var statusMounts []string
+				specMounts := sets.String{}
+				if statusNamespace.(map[string]interface{})["index-type"] != nil {
+					statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if statusIndex["mounts"] != nil {
+						for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
+							statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+						}
+					}
+				}
+				if specNamespace.(map[string]interface{})["index-type"] != nil {
+					specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if specIndex["mounts"] != nil {
+						for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
+							specMounts.Insert(strings.Fields(specMountInterface.(string))...)
+						}
+					}
+				}
+
+				indexMountRemoved := false
+				for index, statusMount := range statusMounts {
+					statusMounts[index] = statusMounts[index] + "/*"
+					if !specMounts.Has(statusMount) {
+						indexMountRemoved = true
+					}
+				}
+				if indexMountRemoved {
+					removedFiles = append(removedFiles, statusMounts...)
+				}
 				break
 			}
 		}
@@ -820,6 +850,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})["name"],
 			)
 			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
 			if statusStorage["devices"] != nil {
 				var statusDevices []string
 				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
@@ -829,7 +860,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 					deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
 					removedDevices = append(removedDevices, deviceName)
 				}
-
 			}
 			if statusStorage["files"] != nil {
 				var statusFiles []string
@@ -838,15 +868,25 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState) e
 				}
 				removedFiles = append(removedFiles, statusFiles...)
 			}
+			if statusNamespace.(map[string]interface{})["index-type"] != nil {
+				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+				if statusIndex["mounts"] != nil {
+					var statusMounts []string
+					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
+						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+					}
+					for index := range statusMounts {
+						statusMounts[index] = statusMounts[index] + "/*"
+					}
+					removedFiles = append(removedFiles, statusMounts...)
+				}
+			}
 		}
 	}
-	podList, err := r.getRackPodList(rackState.Rack.ID)
-	if err != nil {
-		return err
-	}
-	for _, pod := range podList.Items {
+
+	for _, pod := range podsToRestart {
 		r.Log.Info("handleNSOrDeviceRemovalPerPod call", "pod", pod.Name)
-		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, &pod)
+		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, pod)
 		if err != nil {
 			return err
 		}
@@ -1002,7 +1042,7 @@ func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName st
 
 	cmd := []string{
 		"bash", "-c", fmt.Sprintf(
-			"rm -f %s",
+			"rm -rf %s",
 			fileName,
 		),
 	}
