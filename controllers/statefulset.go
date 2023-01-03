@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
 	"sort"
 	"strconv"
@@ -1202,14 +1203,13 @@ func updateStatefulSetContainers(
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
 	r.Log.Info("Waiting for cluster to be ready")
-
-	allRackIDs := map[int]bool{}
+	allRackIDs := sets.NewInt()
 	for _, rack := range r.aeroCluster.Status.RackConfig.Racks {
-		allRackIDs[rack.ID] = true
+		allRackIDs.Insert(rack.ID)
 	}
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	for _, rack := range r.aeroCluster.Spec.RackConfig.Racks {
-		allRackIDs[rack.ID] = true
+		allRackIDs.Insert(rack.ID)
 	}
 
 	for rackID := range allRackIDs {

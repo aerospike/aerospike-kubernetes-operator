@@ -178,8 +178,8 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 	}
 	in.PodSpec.DeepCopyInto(&out.PodSpec)
 	in.SeedsFinderServices.DeepCopyInto(&out.SeedsFinderServices)
-	if in.RosterBlockList != nil {
-		in, out := &in.RosterBlockList, &out.RosterBlockList
+	if in.RosterNodeBlockList != nil {
+		in, out := &in.RosterNodeBlockList, &out.RosterNodeBlockList
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
@@ -250,8 +250,8 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 	}
 	in.PodSpec.DeepCopyInto(&out.PodSpec)
 	in.SeedsFinderServices.DeepCopyInto(&out.SeedsFinderServices)
-	if in.RosterBlockList != nil {
-		in, out := &in.RosterBlockList, &out.RosterBlockList
+	if in.RosterNodeBlockList != nil {
+		in, out := &in.RosterNodeBlockList, &out.RosterNodeBlockList
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

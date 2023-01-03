@@ -22,11 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"sort"
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
@@ -104,7 +104,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
-	// MultiPodPerHost can not be updated
+	// MultiPodPerHost cannot be updated
 	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
@@ -263,10 +263,10 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
-	var scNSList []string
+	scNamespaceSet := sets.NewString()
 
-	for _, rack := range c.Spec.RackConfig.Racks {
-		var tmpSCNSList []string
+	for i, rack := range c.Spec.RackConfig.Racks {
+		tmpSCNamespaceSet := sets.NewString()
 
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 		for _, nsConfInterface := range nsList {
@@ -277,17 +277,15 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 				return err
 			}
 			if isEnabled {
-				tmpSCNSList = append(tmpSCNSList, nsConf["name"].(string))
+				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
 			}
 		}
 
-		sort.Strings(tmpSCNSList)
-
-		if len(scNSList) == 0 {
-			scNSList = tmpSCNSList
+		if i == 0 {
+			scNamespaceSet = tmpSCNamespaceSet
 			continue
 		}
-		if !reflect.DeepEqual(scNSList, tmpSCNSList) {
+		if !scNamespaceSet.Equal(tmpSCNamespaceSet) {
 			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
 		}
 	}
@@ -353,7 +351,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 	if err != nil {
 		return err
 	}
-	// Old racks can not be updated
+	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
 	for _, oldRack := range old.Spec.RackConfig.Racks {
@@ -367,7 +365,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 					oldRack.Zone != newRack.Zone {
 
 					return fmt.Errorf(
-						"old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v",
+						"old RackConfig (NodeName, RackLabel, Region, Zone) cannot be updated. Old rack %v, new rack %v",
 						oldRack, newRack,
 					)
 				}
@@ -1068,21 +1066,18 @@ func validateNamespaceReplicationFactor(
 
 	// clSize < rf is allowed in AP mode but not in sc mode
 	if scEnabled && (clSize < rf) {
-		return fmt.Errorf("namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
+		return fmt.Errorf("strong-consistency namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
 	}
 
 	return nil
 }
 func isNSSCEnabled(nsConf map[string]interface{}) (bool, error) {
-	scEnabledInterface, ok := nsConf["strong-consistency"]
+	scEnabled, ok := nsConf["strong-consistency"]
 	if !ok {
 		return false, nil
 	}
-	scEnabled, ok := scEnabledInterface.(bool)
-	if !ok {
-		return false, fmt.Errorf("namespace strong-consistency %v is not a valid boolean value", nsConf["strong-consistency"])
-	}
-	return scEnabled, nil
+
+	return scEnabled.(bool), nil
 }
 
 func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
@@ -1139,7 +1134,7 @@ func validateSecurityConfigUpdate(
 func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	// Security can not be updated dynamically
+	// Security cannot be updated dynamically
 	// TODO: How to enable dynamic security update, need to pass policy for individual nodes.
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, oldSecConfFound := oldConf["security"]
@@ -1197,7 +1192,7 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS can not be updated dynamically
+	// TLS cannot be updated dynamically
 	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
 	oldtls, ok11 := oldConf["network"].(map[string]interface{})["tls"]
 	newtls, ok22 := newConf["network"].(map[string]interface{})["tls"]
@@ -1271,7 +1266,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(
-						"replication-factor cannot be update. old nsconf %v, new nsconf %v",
+						"replication-factor cannot be updated. old nsconf %v, new nsconf %v",
 						oldSingleConf, singleConf,
 					)
 				}
@@ -1281,7 +1276,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 					oldSingleConf, singleConf, "strong-consistency",
 				) {
 					return fmt.Errorf(
-						"strong-consistency cannot be update. old nsconf %v, new nsconf %v",
+						"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",
 						oldSingleConf, singleConf,
 					)
 				}

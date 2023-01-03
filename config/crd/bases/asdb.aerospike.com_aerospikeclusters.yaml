@@ -5275,9 +5275,9 @@ spec:
                       rack pods that will
                     x-kubernetes-int-or-string: true
                 type: object
-              rosterBlockList:
-                description: RosterBlockList is a list of blocked nodeIDs from roster
-                  in a strong-c
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
                 items:
                   type: string
                 type: array
@@ -11186,9 +11186,9 @@ spec:
                       resources required.
                     type: object
                 type: object
-              rosterBlockList:
-                description: RosterBlockList is a list of blocked nodeIDs from roster
-                  in a strong-c
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
                 items:
                   type: string
                 type: array

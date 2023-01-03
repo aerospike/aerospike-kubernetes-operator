@@ -6,7 +6,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"strings"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -14,18 +13,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("SCMode", func() {
 	ctx := goctx.TODO()
 
-	clusterName := "sc-mode"
-	clusterNamespacedName := getClusterNamespacedName(
-		clusterName, namespace,
-	)
-
 	Context("When doing valid operation", func() {
+		clusterName := "sc-mode"
+		clusterNamespacedName := getClusterNamespacedName(
+			clusterName, namespace,
+		)
+		AfterEach(func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
 
 		// Dead/Unavailable partition
 		// If there are D/U p then it should get stuck and not succeed,
@@ -33,10 +39,10 @@ var _ = Describe("SCMode", func() {
 		// Should we allow replication factor 1 in general or in SC mode
 		// Rack aware setup
 
-		It("Should test sc cluster lifecycle in a rack enabled cluster", func() {
+		It("Should test combination of sc and non-sc namespace cluster lifecycle in a rack enabled cluster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig2Ns()
+			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := "test"
 			racks := []asdbv1beta1.Rack{
 				{ID: 1},
@@ -54,15 +60,12 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("Should test sc cluster lifecycle in a no rack cluster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig2Ns()
+			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := "test"
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -71,15 +74,12 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("Should test sc cluster blocked node in single namespace cluster", func() {
+		It("Should test single sc namespace cluster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig1Ns()
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := "test"
 			racks := []asdbv1beta1.Rack{
 				{ID: 1},
@@ -97,13 +97,23 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
+		})
+	})
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+	Context("When doing invalid operation", func() {
+		clusterName := "sc-mode-invalid"
+		clusterNamespacedName := getClusterNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(func() {
+			aeroCluster, _ := getCluster(k8sClient, ctx, clusterNamespacedName)
+			if aeroCluster != nil {
+				err := deleteCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+			}
 		})
 
-	})
-	Context("When doing invalid operation", func() {
 		// Validation: can not remove more than replica node.
 		//             not allow updating strong-consistency config
 		It("Should not allow updating strong-consistency config", func() {
@@ -207,10 +217,12 @@ func validateLifecycleOperationInSCCluster(
 	By("Set roster blockList")
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
-	aeroCluster.Spec.RosterBlockList = []string{"1A0", "2A7"}
+	// Keep IDs in lowercase
+	aeroCluster.Spec.RosterNodeBlockList = []string{"1A0", "2A7"}
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
-
+	// 1 - 1, 1,
+	// 2 - 1,
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("ScaleDown")
@@ -245,38 +257,35 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroNamespace)
 	Expect(err).ToNot(HaveOccurred())
 
+	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
 	rosterStr := rosterNodesMap["roster"]
 	rosterList := strings.Split(rosterStr, ",")
 
 	// Check2 roster+blockList >= len(pods)
-	if len(rosterList)+len(aeroCluster.Spec.RosterBlockList) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterBlockList, aeroCluster.Status.Pods)
+	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
+		err := fmt.Errorf("roster len not matching pods list. roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
 		Expect(err).ToNot(HaveOccurred())
+	}
+
+	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
+	podNodeIDSet := sets.NewString()
+	for _, pod := range aeroCluster.Status.Pods {
+		// Remove 0 from start of nodeID (we add this dummy rack)
+		podNodeIDSet.Insert(strings.ToUpper(strings.TrimLeft(pod.Aerospike.NodeID, "0")))
 	}
 
 	for _, rosterNode := range rosterList {
 		nodeID := strings.Split(rosterNode, "@")[0]
-
 		// Check1 roster should not have blocked pod
-		contains := v1beta1.ContainsString(aeroCluster.Spec.RosterBlockList, nodeID)
-		Expect(contains).To(BeFalse(), "roster should not have blocked node", "roster", rosterNode, "blockList", aeroCluster.Spec.RosterBlockList)
-
+		Expect(rosterNodeBlockListSet.Has(nodeID)).To(BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v", rosterNode, aeroCluster.Spec.RosterNodeBlockList))
 		// Check4 Scaledown: all the roster should be in pod list
-		var found bool
-		for _, pod := range aeroCluster.Status.Pods {
-			// Remove 0 from start of nodeid (we add this dummy rack)
-			if strings.EqualFold(nodeID, strings.TrimLeft(pod.Aerospike.NodeID, "0")) {
-				found = true
-				break
-			}
-		}
-		Expect(found).To(BeTrue(), "roster node should be in pod list", "rosterNode", rosterNode, "podList", aeroCluster.Status.Pods)
-
+		Expect(podNodeIDSet.Has(nodeID)).To(BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
 	}
 
+	rosterListSet := sets.NewString(rosterList...)
 	// Check3 Scaleup: pod should be in roster or in blockList
 	for podName, pod := range aeroCluster.Status.Pods {
-		nodeID := strings.TrimLeft(pod.Aerospike.NodeID, "0")
+		nodeID := strings.ToUpper(strings.TrimLeft(pod.Aerospike.NodeID, "0"))
 		rackIDPtr, err := utils.GetRackIDFromPodName(podName)
 		Expect(err).ToNot(HaveOccurred())
 		rackID := *rackIDPtr
@@ -285,10 +294,9 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 		if rackID != 0 {
 			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
 		}
-
-		if !v1beta1.ContainsString(aeroCluster.Spec.RosterBlockList, nodeID) &&
-			!v1beta1.ContainsString(rosterList, nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod roster %v, rackID %v", rosterList, aeroCluster.Spec.RosterBlockList, nodeRoster, rackID)
+		if !rosterNodeBlockListSet.Has(nodeID) &&
+			!rosterListSet.Has(nodeRoster) {
+			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod roster %v, rackID %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}
@@ -306,40 +314,21 @@ func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, 
 	return aerospikecluster.ParseInfoIntoMap(cmdOutput, ":", "=")
 }
 
-func getSCAerospikeConfig2Ns() *asdbv1beta1.AerospikeConfigSpec {
-	return &asdbv1beta1.AerospikeConfigSpec{
-		Value: map[string]interface{}{
-			"service": map[string]interface{}{
-				"feature-key-file": "/etc/aerospike/secret/features.conf",
-				"proto-fd-max":     defaultProtofdmax,
-			},
-			"security": map[string]interface{}{},
-			"network":  getNetworkConfig(),
-			"namespaces": []interface{}{
-				map[string]interface{}{
-					"name":               "test",
-					"memory-size":        1000955200,
-					"replication-factor": 2,
-					"strong-consistency": true,
-					"storage-engine": map[string]interface{}{
-						"type":    "device",
-						"devices": []interface{}{"/test/dev/xvdf"},
-					},
-				},
-				map[string]interface{}{
-					"name":               "bar",
-					"memory-size":        1000955200,
-					"replication-factor": 2,
-					"storage-engine": map[string]interface{}{
-						"type": "memory",
-					},
-				},
-			},
+func getSCAndNonSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
+	conf := getSCAerospikeConfig()
+	nonSCConf := map[string]interface{}{
+		"name":               "bar",
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type": "memory",
 		},
 	}
+	conf.Value["namespaces"] = append(conf.Value["namespaces"].([]interface{}), nonSCConf)
+	return conf
 }
 
-func getSCAerospikeConfig1Ns() *asdbv1beta1.AerospikeConfigSpec {
+func getSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 	return &asdbv1beta1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
 			"service": map[string]interface{}{

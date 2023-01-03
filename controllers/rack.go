@@ -621,7 +621,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		// Setup roster after migration.
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterBlockList); err != nil {
+		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return found, reconcileRequeueAfter(0)
 		}

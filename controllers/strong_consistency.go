@@ -5,7 +5,7 @@ import (
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
-func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy, rosterBlockList []string) error {
+func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy, rosterNodeBlockList []string) error {
 	hostConns, err := r.newAllHostConn()
 	if err != nil {
 		return err
@@ -16,7 +16,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(policy *as.ClientPolicy, roste
 		return err
 	}
 
-	return deployment.GetAndSetRoster(r.Log, hostConns, policy, rosterBlockList, removedNSes)
+	return deployment.GetAndSetRoster(r.Log, hostConns, policy, rosterNodeBlockList, removedNSes)
 }
 
 func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy) error {
