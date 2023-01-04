@@ -64,7 +64,6 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		return err
 	}
 
-	// Wait for aerocluster to reach 2 replicas
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(increaseBy),
@@ -76,18 +75,17 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	if err != nil {
 		return err
 	}
-	index := 0
-	for _, podStatus := range aeroCluster.Status.Pods {
+
+	for podName, podStatus := range aeroCluster.Status.Pods {
 		// DirtyVolumes are not populated for scaled-up pods.
-		if index >= len(aeroCluster.Status.Pods)-1 {
-			break
+		if podName == "update-cluster-0-3" {
+			continue
 		}
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
 				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
-		index++
 	}
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + increaseBy
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
@@ -96,7 +94,6 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		return err
 	}
 
-	// Wait for aerocluster to reach 3 replicas
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(increaseBy),
@@ -109,7 +106,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		return err
 	}
 	for _, podStatus := range aeroCluster.Status.Pods {
-		if contains(podStatus.DirtyVolumes, "dynamicns") {
+		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
 				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
@@ -195,7 +192,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 		return err
 	}
 	for _, podStatus := range aeroCluster.Status.Pods {
-		if contains(podStatus.DirtyVolumes, "dynamicns") {
+		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
 				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
