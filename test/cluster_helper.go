@@ -76,7 +76,19 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	if err != nil {
 		return err
 	}
-
+	index := 0
+	for _, podStatus := range aeroCluster.Status.Pods {
+		// DirtyVolumes are not populated for scaled-up pods.
+		if index >= len(aeroCluster.Status.Pods)-1 {
+			break
+		}
+		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
+			return fmt.Errorf(
+				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+			)
+		}
+		index++
+	}
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + increaseBy
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
 	err = k8sClient.Update(ctx, aeroCluster)
@@ -84,12 +96,26 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		return err
 	}
 
-	// Wait for aerocluster to reach 2 replicas
+	// Wait for aerocluster to reach 3 replicas
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(increaseBy),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+	for _, podStatus := range aeroCluster.Status.Pods {
+		if contains(podStatus.DirtyVolumes, "dynamicns") {
+			return fmt.Errorf(
+				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+			)
+		}
+	}
+	return nil
 }
 
 func scaleUpClusterTest(
@@ -131,7 +157,32 @@ func scaleDownClusterTestWithNSDeviceHandling(
 		return err
 	}
 
-	// Wait for aerocluster to reach 2 replicas
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(decreaseBy),
+	)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+	for _, podStatus := range aeroCluster.Status.Pods {
+		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
+			return fmt.Errorf(
+				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+			)
+		}
+	}
+	aeroCluster.Spec.Size = aeroCluster.Spec.Size - decreaseBy
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(decreaseBy),
@@ -143,20 +194,14 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	if err != nil {
 		return err
 	}
-
-	aeroCluster.Spec.Size = aeroCluster.Spec.Size - decreaseBy
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
+	for _, podStatus := range aeroCluster.Status.Pods {
+		if contains(podStatus.DirtyVolumes, "dynamicns") {
+			return fmt.Errorf(
+				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+			)
+		}
 	}
-
-	// Wait for aerocluster to reach 2 replicas
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(decreaseBy),
-	)
-	return err
+	return nil
 }
 
 func scaleDownClusterTest(
@@ -279,11 +324,6 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	if err != nil {
 		return err
 	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
 
 	return err
 }

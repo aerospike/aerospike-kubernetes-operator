@@ -472,9 +472,7 @@ func NegativeClusterValidationTest(ctx goctx.Context) {
 }
 
 func negativeDeployClusterValidationTest(
-
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
-
 ) {
 	Context(
 		"Validation", func() {

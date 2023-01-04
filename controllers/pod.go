@@ -1004,13 +1004,13 @@ func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName st
 		),
 	}
 	r.Log.Info(
-		"File is removed", "file", fileName, "cmd", cmd, "podname", pod.Name,
+		"Deleting file", "file", fileName, "cmd", cmd, "podname", pod.Name,
 	)
 	stdout, stderr, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
 
 	if err != nil {
 		r.Log.V(1).Info(
-			"Failed removed files deletion", "err", err, "podName", pod.Name, "stdout",
+			"File deletion failed", "err", err, "podName", pod.Name, "stdout",
 			stdout, "stderr", stderr,
 		)
 		return fmt.Errorf("error deleting file %v", err)
