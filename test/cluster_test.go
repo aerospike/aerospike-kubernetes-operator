@@ -209,13 +209,27 @@ func UpdateClusterTest(ctx goctx.Context) {
 			Path: dynamicNsPath,
 		},
 	}
+	dynamicNsPath1 := "/test/dev/dynamicns1"
+	dynamicNsVolume1 := asdbv1beta1.VolumeSpec{
+		Name: "dynamicns1",
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: dynamicNsPath1,
+		},
+	}
 	dynamicNs := map[string]interface{}{
 		"name":               "dynamicns",
 		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
-			"devices": []interface{}{dynamicNsPath},
+			"devices": []interface{}{dynamicNsPath, dynamicNsPath1},
 		},
 	}
 
@@ -223,7 +237,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			aeroCluster.Spec.Storage.Volumes = append(
-				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume,
+				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume, dynamicNsVolume1,
 			)
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -285,10 +299,31 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("Scaling up along with modifying Namespace storage Dynamically")
+
+					err = scaleUpClusterTestWithNSDeviceHandling(
+						k8sClient, ctx, clusterNamespacedName, 1,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Scaling down along with modifying Namespace storage Dynamically")
+
+					err = scaleDownClusterTestWithNSDeviceHandling(
+						k8sClient, ctx, clusterNamespacedName, 1,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("RollingRestart By Removing Namespace Dynamically")
 
 					err = rollingRestartClusterByRemovingNamespaceDynamicallyTest(
 						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By Re-using Previously Removed Namespace Storage")
+
+					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
+						k8sClient, ctx, dynamicNs, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -329,6 +364,16 @@ func UpdateClusterTest(ctx goctx.Context) {
 							aeroCluster.Spec.PodSpec.MultiPodPerHost = !aeroCluster.Spec.PodSpec.MultiPodPerHost
 
 							err = k8sClient.Update(ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"Should fail for Re-using Namespace Storage Dynamically",
+						func() {
+							err := rollingRestartClusterByReusingNamespaceStorageTest(
+								k8sClient, ctx, clusterNamespacedName, dynamicNs,
+							)
 							Expect(err).Should(HaveOccurred())
 						},
 					)
@@ -403,7 +448,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 				},
 			)
-
 		},
 	)
 }

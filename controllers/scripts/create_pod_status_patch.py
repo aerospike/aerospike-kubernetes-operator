@@ -90,6 +90,8 @@ def longest_match(matches):
 The implementation extracts the image tag and find the longest string from it that is a version string.
 Note: The behaviour should match the operator's go implementation for extracting version.
 '''
+
+
 def get_image_tag(image):
     matches = re.findall(r":(.*)", image)
     if not matches:
@@ -121,7 +123,6 @@ def execute(cmd):
 
 
 def strtobool(param):
-
     if len(param) == 0:
         return False
 
@@ -136,7 +137,6 @@ def strtobool(param):
 
 
 def get_cluster_json(cluster_name, namespace, api_server, token, ca_cert):
-
     url = f"{api_server}/apis/asdb.aerospike.com/v1beta1/namespaces/{namespace}/aerospikeclusters/{cluster_name}"
     logging.debug(f"Request config from url: {url}")
     request = urllib.request.Request(url=url, method="GET")
@@ -169,7 +169,6 @@ def get_pod_image(pod_name, namespace, api_server, token, ca_cert):
 
 
 def get_endpoints(address_type):
-
     try:
         addr_type = address_type.replace("-", "_")
         host = ipaddress.ip_address(os.environ[f"global_{addr_type}_address"])
@@ -187,7 +186,6 @@ def get_endpoints(address_type):
 
 
 def get_node_metadata():
-
     pod_port = os.environ["POD_PORT"]
     service_port = os.environ["MAPPED_PORT"]
 
@@ -209,8 +207,7 @@ def get_node_metadata():
     }
 
 
-def update_status(pod_name, pod_image, metadata, volumes):
-
+def update_status(pod_name, pod_image, metadata, volumes, dirty_volumes):
     with open("aerospikeConfHash", mode="r") as f:
         conf_hash = f.read()
 
@@ -223,6 +220,7 @@ def update_status(pod_name, pod_image, metadata, volumes):
     metadata.update({
         "image": pod_image,
         "initializedVolumes": volumes,
+        "dirtyVolumes": dirty_volumes,
         "aerospikeConfigHash": conf_hash,
         "networkPolicyHash": network_policy_hash,
         "podSpecHash": pod_spec_hash,
@@ -245,7 +243,6 @@ def update_status(pod_name, pod_image, metadata, volumes):
 
 
 def get_initialized_volumes(pod_name, config):
-
     try:
         logging.debug(
             f"pod-name: {pod_name} - Looking for initialized volumes in status.pod.{pod_name}.initializedVolumes")
@@ -266,8 +263,19 @@ def get_initialized_volumes(pod_name, config):
             return set()
 
 
-def get_rack(pod_name, config):
+def get_dirty_volumes(pod_name, config):
+    try:
+        logging.debug(
+            f"pod-name: {pod_name} - Looking for dirty volumes in status.pod.{pod_name}.dirtyVolumes")
 
+        return set(config["status"]["pods"][pod_name]["dirtyVolumes"])
+    except KeyError:
+        logging.warning(
+            f"pod-name: {pod_name} - Dirty volumes not found")
+        return set()
+
+
+def get_rack(pod_name, config):
     # Assuming podName format stsName-rackID-index
     rack_id = int(pod_name.split("-")[-2])
 
@@ -292,7 +300,6 @@ def get_rack(pod_name, config):
 
 
 def get_attached_volumes(pod_name, config):
-
     rack = get_rack(pod_name=pod_name, config=config)
 
     try:
@@ -317,7 +324,6 @@ def get_attached_volumes(pod_name, config):
             volumes = config["spec"]["storage"]["volumes"]
 
             if not volumes:
-
                 logging.warning(
                     f"pod-name: {pod_name} - Found an empty list in spec.storage.volumes")
                 raise KeyError(
@@ -336,7 +342,6 @@ def get_persistent_volumes(volumes):
 
 
 def get_namespace_volume_paths(pod_name, config):
-
     filepaths = []
     devicepaths = set()
     rack = get_rack(pod_name=pod_name, config=config)
@@ -374,8 +379,68 @@ def get_namespace_volume_paths(pod_name, config):
     return devicepaths, filepaths
 
 
-def init_volumes(pod_name, config):
+def clean_dirty_volumes(pod_name, config, dirty_volumes):
 
+    rack = get_rack(pod_name=pod_name, config=config)
+    ns_device_paths, _ = get_namespace_volume_paths(pod_name=pod_name, config=config)
+
+    try:
+        worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
+    except KeyError as e:
+        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
+        raise e
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
+
+        futures = {}
+
+        for vol in (v for v in filter(lambda x: True if "aerospike" in x else False, get_persistent_volumes(
+                get_attached_volumes(pod_name=pod_name, config=config)))):
+
+            volume = Volume(pod_name=pod_name, volume=vol)
+
+            if volume.volume_name in dirty_volumes and volume.volume_path in ns_device_paths:
+
+                if not os.path.exists(volume.get_mount_point()):
+                    logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
+                                  f"does not exists")
+                    raise FileNotFoundError(f"{volume} Volume path not found")
+
+                if volume.effective_wipe_method == "dd":
+
+                    dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
+                         '/tmp/init-stderr'.format(
+                        volume_path=volume.get_mount_point())
+                    futures[executor.submit(lambda: execute(cmd=dd))] = dd
+                    logging.info(f"{volume} - Submitted")
+
+                elif volume.effective_wipe_method == "blkdiscard":
+
+                    blkdiskard = "blkdiscard {volume_path}".format(
+                        volume_path=volume.get_mount_point())
+                    futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
+                    logging.info(f"{volume} - Submitted")
+
+                elif volume.effective_wipe_method == "none":
+                    logging.info(f"{volume} - Pass through")
+                else:
+                    logging.error(f"{volume} - Has invalid effective method")
+                    raise ValueError(f"{volume} - Has invalid effective method")
+
+                dirty_volumes.remove(volume.volume_name)
+
+        for future in concurrent.futures.as_completed(fs=futures):
+            cmd = futures[future]
+            try:
+                if future.done():
+                    logging.info(f"pod-name: {pod_name} Finished Successfully: {cmd}")
+            except Exception as e:
+                logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
+                raise e
+    return dirty_volumes
+
+
+def init_volumes(pod_name, config):
     volumes = []
 
     initialized_volumes = get_initialized_volumes(
@@ -469,8 +534,7 @@ def init_volumes(pod_name, config):
     return volumes
 
 
-def wipe_volumes(pod_name, config):
-
+def wipe_volumes(pod_name, config, dirty_volumes):
     ns_device_paths, ns_file_paths = get_namespace_volume_paths(pod_name=pod_name, config=config)
 
     rack = get_rack(pod_name=pod_name, config=config)
@@ -503,12 +567,16 @@ def wipe_volumes(pod_name, config):
                         dd = "dd if=/dev/zero of={volume_path} bs=1M".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=dd))] = dd
                         logging.info(f"Submitted - {volume}")
+                        if volume.volume_name in dirty_volumes:
+                            dirty_volumes.remove(volume.volume_name)
 
                     elif volume.effective_wipe_method == "blkdiscard":
 
                         blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
                         futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                         logging.info(f"Submitted - {volume}")
+                        if volume.volume_name in dirty_volumes:
+                           dirty_volumes.remove(volume.volume_name)
 
                     else:
                         raise ValueError(f"{volume} - Has invalid effective method")
@@ -545,11 +613,10 @@ def wipe_volumes(pod_name, config):
             except Exception as e:
                 logging.error(f"pod-name: {pod_name} Error running: {cmd} Error: {e}")
                 raise e
-    return
+    return dirty_volumes
 
 
 def main():
-
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("--pod-name", type=str, required=True, dest="pod_name")
@@ -558,6 +625,7 @@ def main():
         parser.add_argument("--api-server", type=str, required=True, dest="api_server")
         parser.add_argument("--namespace", type=str, required=True, dest="namespace")
         parser.add_argument("--cluster-name", type=str, required=True, dest="cluster_name")
+        parser.add_argument("--restart-type", type=str, required=True, dest="restart_type")
         args = parser.parse_args()
 
         try:
@@ -587,30 +655,36 @@ def main():
 
         metadata = get_node_metadata()
         next_major_ver = get_image_version(image=pod_image)[0]
+        volumes = list(get_initialized_volumes(pod_name=args.pod_name, config=config))
+        dirty_volumes = list(get_dirty_volumes(pod_name=args.pod_name, config=config))
 
-        logging.info(f"pod-name: {args.pod_name} - Checking if volume initialization needed")
-        volumes = init_volumes(pod_name=args.pod_name, config=config)
+        logging.info(f"pod-name: {args.pod_name} {args.restart_type}- Checking if volume initialization needed")
+        if args.restart_type == "podRestart":
+            volumes = init_volumes(pod_name=args.pod_name, config=config)
 
-        logging.info(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
+            logging.info(f"pod-name: {args.pod_name} - Checking if volumes should be wiped")
 
-        if prev_image:
+            if prev_image:
 
-            prev_major_ver = get_image_version(image=prev_image)[0]
-            logging.info(
-                f"pod-name: {args.pod_name} - "
-                f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
+                prev_major_ver = get_image_version(image=prev_image)[0]
+                logging.info(
+                    f"pod-name: {args.pod_name} - "
+                    f"next-major-version: {next_major_ver} prev-major-version: {prev_major_ver}")
 
-            if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
-                    (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
-                logging.info(f"pod-name: {args.pod_name} - Volumes should be wiped")
-                wipe_volumes(pod_name=args.pod_name, config=config)
+                if (next_major_ver >= BASE_WIPE_VERSION > prev_major_ver) or \
+                        (next_major_ver < BASE_WIPE_VERSION <= prev_major_ver):
+                    logging.info(f"pod-name: {args.pod_name} - Volumes should be wiped")
+                    dirty_volumes = wipe_volumes(pod_name=args.pod_name, config=config, dirty_volumes=dirty_volumes)
+                else:
+                    logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
             else:
                 logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
-        else:
-            logging.info(f"pod-name: {args.pod_name} - Volumes should not be wiped")
+
+            dirty_volumes = clean_dirty_volumes(pod_name=args.pod_name, config=config, dirty_volumes=dirty_volumes)
 
         logging.info(f"pod-name: {args.pod_name} - Updating pod status")
-        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes)
+        update_status(pod_name=args.pod_name, pod_image=pod_image, metadata=metadata, volumes=volumes,
+                      dirty_volumes=dirty_volumes)
 
     except Exception as e:
         print(e)
