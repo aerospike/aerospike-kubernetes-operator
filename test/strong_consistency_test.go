@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -96,6 +97,107 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
+		})
+
+		It("Should allow adding and removing SC namespace", func() {
+			By("Deploy")
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
+			scNamespace := "test"
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+
+			By("Add new SC namespace")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			addedSCNs := "newscns"
+			SCConf := map[string]interface{}{
+				"name":               addedSCNs,
+				"memory-size":        1000955200,
+				"replication-factor": 2,
+				"strong-consistency": true,
+				"storage-engine": map[string]interface{}{
+					"type": "memory",
+				},
+			}
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
+
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
+
+			By("Add new non-SC namespace")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			addedNs := "newns"
+			conf := map[string]interface{}{
+				"name":               addedNs,
+				"memory-size":        1000955200,
+				"replication-factor": 2,
+				"storage-engine": map[string]interface{}{
+					"type": "memory",
+				},
+			}
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
+
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
+
+			By("Remove added namespaces")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
+			scNamespace = "test"
+
+			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+		})
+
+		It("Should allow batch restart in the SC setup", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
+			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
+			scNamespace := "test"
+			nonSCNamespace := "bar"
+			racks := []asdbv1beta1.Rack{
+				{ID: 1},
+				{ID: 2},
+			}
+			rollingUpdateBatchSize := intstr.FromInt(2)
+			rackConf := asdbv1beta1.RackConfig{
+				Namespaces:             []string{scNamespace, nonSCNamespace},
+				Racks:                  racks,
+				RollingUpdateBatchSize: &rollingUpdateBatchSize,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+
+			By("RollingRestart")
+			err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+
+			By("Upgrade/Downgrade")
+			// don't change image, it upgrades
+			err = upgradeClusterTest(
+				k8sClient, ctx, clusterNamespacedName, prevImage,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
 	})
 
