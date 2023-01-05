@@ -788,6 +788,11 @@ type AerospikePodStatus struct {
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
+	// DirtyVolumes is the list of volume names that are removed
+	// from aerospike namespaces and will be cleaned during init
+	// if they are reused in any namespace.
+	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
+
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
 	// +optional
 	// +nullable
@@ -807,7 +812,7 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
-//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
 type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

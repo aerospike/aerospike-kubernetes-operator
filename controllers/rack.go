@@ -343,12 +343,12 @@ func (r *SingleClusterReconciler) reconcileRack(
 			return res
 		}
 	} else {
-		needRollingRestartRack, err := r.needRollingRestartRack(rackState)
+		needRollingRestartRack, restartTypeMap, err := r.needRollingRestartRack(rackState)
 		if err != nil {
 			return reconcileError(err)
 		}
 		if needRollingRestartRack {
-			found, res = r.rollingRestartRack(found, rackState, ignorablePods)
+			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeMap)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -518,11 +518,11 @@ func (r *SingleClusterReconciler) upgradeRack(
 		pod := podList[i]
 		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
 
-		if r.isPodUpgraded(&pod) {
+		if r.isPodUpgraded(pod) {
 			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
 			continue
 		}
-		podsToUpgrade = append(podsToUpgrade, &pod)
+		podsToUpgrade = append(podsToUpgrade, pod)
 	}
 
 	// Failed pods should always come before active pods.
@@ -550,6 +550,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
+
+		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+		// For each file removed from a namespace, it is deleted right away.
+		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
+			return statefulSet, reconcileError(err)
+		}
 
 		// Handle the next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
@@ -675,7 +681,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
-	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod,
+	found *appsv1.StatefulSet, rackState RackState, ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
 ) (*appsv1.StatefulSet, reconcileResult) {
 
 	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
@@ -689,7 +695,14 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	if err != nil {
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
-	if r.isAnyPodInImageFailedState(podList) {
+
+	var pods []corev1.Pod
+
+	for i := range podList {
+		pods = append(pods, *podList[i])
+	}
+
+	if r.isAnyPodInImageFailedState(pods) {
 		return found, reconcileError(fmt.Errorf("cannot Rolling restart AerospikeCluster. A pod is already in failed state due to image related issues"))
 	}
 
@@ -707,20 +720,17 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 
 	// Find pods which needs restart
 	var podsToRestart []*corev1.Pod
+
 	for i := range podList {
 		pod := podList[i]
 
-		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return found, reconcileError(err)
-		}
-
+		restartType := restartTypeMap[pod.Name]
 		if restartType == NoRestart {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
-		podsToRestart = append(podsToRestart, &pod)
+
+		podsToRestart = append(podsToRestart, pod)
 	}
 
 	// Failed pods should always come before active pods.
@@ -737,11 +747,16 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
-		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods)
+		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
 			return found, res
 		}
 
+		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+		// For each file removed from a namespace, it is deleted right away.
+		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
+			return found, reconcileError(err)
+		}
 		// Handle next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
 			return found, reconcileRequeueAfter(0)
@@ -765,23 +780,25 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 }
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState RackState) (
-	bool, error,
+	bool, map[string]RestartType, error,
 ) {
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
-		return false, fmt.Errorf("failed to list pods: %v", err)
+		return false, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
-	for _, pod := range podList {
-		// Check if this pod needs restart
-		restartType, err := r.getRollingRestartTypePod(rackState, pod)
-		if err != nil {
-			return false, err
-		}
+
+	restartTypeMap, err := r.getRollingRestartTypeMap(rackState, podList)
+	if err != nil {
+		return false, nil, err
+	}
+
+	for _, restartType := range restartTypeMap {
 		if restartType != NoRestart {
-			return true, nil
+			return true, restartTypeMap, nil
 		}
 	}
-	return false, nil
+
+	return false, nil, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
@@ -803,7 +820,7 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 }
 
 func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
-	rackState RackState, pod corev1.Pod,
+	rackState RackState, pod *corev1.Pod,
 ) bool {
 
 	volumes := rackState.Rack.Storage.Volumes
@@ -893,7 +910,7 @@ func (r *SingleClusterReconciler) getRackStatusVolumes(rackState RackState) []as
 }
 
 func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(
-	volume asdbv1beta1.VolumeSpec, pod corev1.Pod,
+	volume asdbv1beta1.VolumeSpec, pod *corev1.Pod,
 ) bool {
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
@@ -1139,23 +1156,25 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int) (
 }
 
 func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
-	[]corev1.Pod, error,
+	[]*corev1.Pod, error,
 ) {
 	podList, err := r.getRackPodList(rackID)
 	if err != nil {
 		return nil, err
 	}
-	sortedList := make([]corev1.Pod, len(podList.Items))
-	for _, p := range podList.Items {
-		indexStr := strings.Split(p.Name, "-")
+	sortedList := make([]*corev1.Pod, len(podList.Items))
+	for i := range podList.Items {
+		indexStr := strings.Split(podList.Items[i].Name, "-")
 		// Index is last, [1] can be rackID
 		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
 		if indexInt >= len(podList.Items) {
 			// Happens if we do not get full list of pods due to a crash,
 			return nil, fmt.Errorf("error get pod list for rack:%v", rackID)
 		}
-		sortedList[(len(podList.Items)-1)-indexInt] = p
+		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[i]
+
 	}
+
 	return sortedList, nil
 }
 
@@ -1285,7 +1304,7 @@ func getContainerVolumeMounts(
 	return nil
 }
 
-func getPodVolume(pod corev1.Pod, name string) *corev1.Volume {
+func getPodVolume(pod *corev1.Pod, name string) *corev1.Volume {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.Name == name {
 			return &volume

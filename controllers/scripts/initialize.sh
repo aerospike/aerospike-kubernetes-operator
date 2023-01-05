@@ -76,4 +76,4 @@ mkdir -p "${CONFIG_MAP_DIR}"
 bash "${CONFIG_MAP_DIR}"/create-aerospike-conf.sh
 
 # Update pod status in the k8s aerospike cluster object
-bash "${CONFIG_MAP_DIR}"/update-pod-status.sh
+bash "${CONFIG_MAP_DIR}"/update-pod-status.sh "podRestart"
