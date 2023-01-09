@@ -503,6 +503,11 @@ func (in *AerospikePodSpec) DeepCopyInto(out *AerospikePodSpec) {
 		*out = new(v1.DNSPolicy)
 		**out = **in
 	}
+	if in.DNSConfig != nil {
+		in, out := &in.DNSConfig, &out.DNSConfig
+		*out = new(v1.PodDNSConfig)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.SecurityContext != nil {
 		in, out := &in.SecurityContext, &out.SecurityContext
 		*out = new(v1.PodSecurityContext)

@@ -929,6 +929,30 @@ func negativeDeployClusterValidationTest(
 					)
 				},
 			)
+
+			Context(
+				"InvalidDNSConfiguration", func() {
+					It(
+						"InvalidDnsPolicy: should fail when dnsPolicy is set to 'Default'",
+						func() {
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSDefault
+							err := deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"MissingDnsConfig: should fail when dnsPolicy is set to 'None' and no dnsConfig given",
+						func() {
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSNone
+							err := deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+				},
+			)
 		},
 	)
 }
@@ -999,6 +1023,36 @@ func negativeUpdateClusterValidationTest(
 					// aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 9)
 					// err = deployCluster(k8sClient, ctx, aeroCluster)
 					// validateError(err, "should fail for community eidition having more than 8 nodes")
+				},
+			)
+
+			Context(
+				"InvalidDNSConfiguration", func() {
+					It(
+						"InvalidDnsPolicy: should fail when dnsPolicy is set to 'Default'",
+						func() {
+							aeroCluster, err := getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
+							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSDefault
+							err = deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"MissingDnsConfig: Should fail when dnsPolicy is set to 'None' and no dnsConfig given",
+						func() {
+							aeroCluster, err := getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
+							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSNone
+							err = deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
 				},
 			)
 

@@ -708,13 +708,8 @@ func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Po
 	return false
 }
 
-func getFQDNForPod(
-	aeroCluster *asdbv1beta1.AerospikeCluster, host string,
-) string {
-	return fmt.Sprintf(
-		"%s.%s.%s.svc.cluster.local", host, aeroCluster.Name,
-		aeroCluster.Namespace,
-	)
+func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) string {
+	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
 // GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in endpointsMap.
