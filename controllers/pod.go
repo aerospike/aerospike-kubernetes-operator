@@ -812,6 +812,35 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 				if len(removedFilesPerNS) > 0 {
 					removedFiles = append(removedFiles, removedFilesPerNS...)
 				}
+				var statusMounts []string
+				specMounts := sets.String{}
+				if statusNamespace.(map[string]interface{})["index-type"] != nil {
+					statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if statusIndex["mounts"] != nil {
+						for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
+							statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+						}
+					}
+				}
+				if specNamespace.(map[string]interface{})["index-type"] != nil {
+					specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if specIndex["mounts"] != nil {
+						for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
+							specMounts.Insert(strings.Fields(specMountInterface.(string))...)
+						}
+					}
+				}
+
+				indexMountRemoved := false
+				for index, statusMount := range statusMounts {
+					statusMounts[index] = statusMounts[index] + "/*"
+					if !specMounts.Has(statusMount) {
+						indexMountRemoved = true
+					}
+				}
+				if indexMountRemoved {
+					removedFiles = append(removedFiles, statusMounts...)
+				}
 				break
 			}
 		}
@@ -837,6 +866,19 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 					statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
 				}
 				removedFiles = append(removedFiles, statusFiles...)
+			}
+			if statusNamespace.(map[string]interface{})["index-type"] != nil {
+				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+				if statusIndex["mounts"] != nil {
+					var statusMounts []string
+					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
+						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+					}
+					for index := range statusMounts {
+						statusMounts[index] = statusMounts[index] + "/*"
+					}
+					removedFiles = append(removedFiles, statusMounts...)
+				}
 			}
 		}
 	}
