@@ -884,7 +884,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 	}
 
 	for _, pod := range podsToRestart {
-		r.Log.Info("handleNSOrDeviceRemovalPerPod call", "pod", pod.Name)
 		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, pod)
 		if err != nil {
 			return err

@@ -83,7 +83,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		}
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -108,7 +108,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -169,7 +169,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -194,7 +194,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}

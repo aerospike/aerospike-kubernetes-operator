@@ -540,6 +540,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 		podNames := getPodNames(podsBatch)
 
+		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+		// For each file removed from a namespace, it is deleted right away.
+		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
+			return statefulSet, reconcileError(err)
+		}
+
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
 			"[rack-%d] Updating Containers on Pods %v", rackState.Rack.ID, podNames)
 
@@ -550,12 +556,6 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
-
-		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
-		// For each file removed from a namespace, it is deleted right away.
-		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
-			return statefulSet, reconcileError(err)
-		}
 
 		// Handle the next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
@@ -747,16 +747,17 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
-		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
-		if !res.isSuccess {
-			return found, res
-		}
-
 		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
 		// For each file removed from a namespace, it is deleted right away.
 		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
 			return found, reconcileError(err)
 		}
+
+		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
+		if !res.isSuccess {
+			return found, res
+		}
+
 		// Handle next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
 			return found, reconcileRequeueAfter(0)
