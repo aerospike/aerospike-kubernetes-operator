@@ -283,9 +283,8 @@ func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
 }
 
-func (r *SingleClusterReconciler) setMigrateFillDelay(policy *aerospike.ClientPolicy, asConfig *asdbv1beta1.AerospikeConfigSpec,
-	setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
-
+func (r *SingleClusterReconciler) setMigrateFillDelay(policy *as.ClientPolicy,
+	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
 	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
 	if err != nil {
 		reconcileError(err)
