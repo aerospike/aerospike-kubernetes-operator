@@ -131,14 +131,19 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	return policy
 }
 
+// This should be called only after access-control is reconciled.
+// This uses password from password-secret given in CR spec
 func (r *SingleClusterReconciler) getClientPolicyFromSpec() *as.ClientPolicy {
+
 	adminUserSpec := asdbv1beta1.GetUsersFromSpec(&r.aeroCluster.Spec)[asdbv1beta1.AdminUsername]
 	password, err := r.getPasswordProvider().Get(asdbv1beta1.AdminUsername, &adminUserSpec)
 	if err != nil {
 		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
 	}
+
 	policy := r.getClientPolicy()
 	policy.Password = password
+
 	return policy
 }
 

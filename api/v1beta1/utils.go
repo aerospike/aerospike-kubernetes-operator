@@ -34,7 +34,7 @@ const baseVersion = "4.9.0.3"
 // ContainsString check whether list contains given string
 func ContainsString(list []string, ele string) bool {
 	for _, listEle := range list {
-		if ele == listEle {
+		if strings.EqualFold(ele, listEle) {
 			return true
 		}
 	}
@@ -87,7 +87,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.17"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.18"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"

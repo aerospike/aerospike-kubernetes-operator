@@ -133,12 +133,25 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	// Use policy from spec after setting up access control
+	policy := r.getClientPolicyFromSpec()
+
 	// revert migrate-fill-delay to original value if it was set to 0 during scale down
 	// Passing first rack from the list as all the racks will have same migrate-fill-delay
-	if res := r.setMigrateFillDelay(r.getClientPolicyFromSpec(), &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
+	if res := r.setMigrateFillDelay(policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 		false, nil); !res.isSuccess {
 		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
 		return reconcile.Result{}, res.err
+	}
+
+	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+		return res.result, res.err
+	}
+
+	// Setup roster
+	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster")
+		return reconcile.Result{}, err
 	}
 
 	// Update the AerospikeCluster status.

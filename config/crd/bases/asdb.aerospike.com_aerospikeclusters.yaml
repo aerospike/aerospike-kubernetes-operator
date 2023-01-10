@@ -5275,6 +5275,12 @@ spec:
                       rack pods that will
                     x-kubernetes-int-or-string: true
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
                   that allow c
@@ -8802,6 +8808,12 @@ spec:
                       description: 'AerospikeConfigHash is ripemd160 hash of aerospikeConfig
                         used by this '
                       type: string
+                    dirtyVolumes:
+                      description: DirtyVolumes is the list of volume names that are
+                        removed from aerospi
+                      items:
+                        type: string
+                      type: array
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -11180,6 +11192,12 @@ spec:
                       resources required.
                     type: object
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aero

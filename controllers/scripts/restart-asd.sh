@@ -57,4 +57,4 @@ if ps -p $asd_pid >/dev/null; then
 fi
 
 # Update pod status in the k8s aerospike cluster object
-bash ./update-pod-status.sh
+bash ./update-pod-status.sh "quickRestart"
