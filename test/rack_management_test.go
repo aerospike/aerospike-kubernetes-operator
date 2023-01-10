@@ -233,14 +233,16 @@ var _ = Describe(
 								racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
-											"proto-fd-max": 10000,
+											"proto-fd-max":       10000,
+											"migrate-fill-delay": 30,
 										},
 									},
 								}
 								racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
-											"proto-fd-max": 12000,
+											"proto-fd-max":       12000,
+											"migrate-fill-delay": 30,
 										},
 									},
 								}
@@ -505,6 +507,31 @@ var _ = Describe(
 												"namespaces": "invalidConf",
 											},
 										}
+										err := deployCluster(
+											k8sClient, ctx, aeroCluster,
+										)
+										Expect(err).Should(HaveOccurred())
+									},
+								)
+
+								It(
+									"should fail for different aerospikeConfig.service.migrate-fill-delay value across racks",
+									func() {
+										aeroCluster := createDummyRackAwareAerospikeCluster(
+											clusterNamespacedName, 2,
+										)
+
+										RackASConfig := &asdbv1beta1.AerospikeConfigSpec{
+											Value: map[string]interface{}{
+												"service": map[string]interface{}{
+													"migrate-fill-delay": 200,
+												},
+											},
+										}
+										// set migrate-fill-delay only in rack 2
+										aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks,
+											asdbv1beta1.Rack{ID: 2, InputAerospikeConfig: RackASConfig})
+
 										err := deployCluster(
 											k8sClient, ctx, aeroCluster,
 										)

@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -21,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -434,6 +436,53 @@ func validateAerospikeConfigServiceClusterUpdate(
 	}
 
 	return nil
+}
+
+func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log logr.Logger,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Use any pod for confirmation. Using first pod for the confirmation
+	firstPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-" + strconv.Itoa(0)
+	firstPod, exists := aeroCluster.Status.Pods[firstPodName]
+	if !exists {
+		return fmt.Errorf("pod %s missing from the status", firstPodName)
+	}
+
+	host, err := createHost(firstPod)
+	if err != nil {
+		return err
+	}
+	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+
+	err = wait.Poll(
+		retryInterval, getTimeout(1), func() (done bool, err error) {
+
+			confs, err := getAsConfig(asinfo, "service")
+			if err != nil {
+				return false, err
+			}
+			svcConfs := confs["service"].(lib.Stats)
+			current, exists := svcConfs["migrate-fill-delay"]
+			if !exists {
+				return false, fmt.Errorf("migrate-fill-delay missing from the Aerospike Service config")
+			}
+
+			if current.(int64) != expectedMigFillDelay {
+				pkgLog.Info("Waiting for migrate-fill-delay to be", "value", expectedMigFillDelay)
+				return false, nil
+			}
+
+			pkgLog.Info("Found expected migrate-fill-delay", "value", expectedMigFillDelay)
+
+			return true, nil
+		})
+
+	return err
 }
 
 func upgradeClusterTest(

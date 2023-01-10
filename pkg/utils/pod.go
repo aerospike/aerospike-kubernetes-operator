@@ -66,7 +66,7 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 		return nil
 	}
 
-	// if the value of ".status.phase" is "Failed", trhe pod is trivially in a failure state
+	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
 	if pod.Status.Phase == corev1.PodFailed {
 		return fmt.Errorf("pod has failed status")
 	}
@@ -182,7 +182,7 @@ func isPodImageError(reason string) bool {
 	return reason == ReasonErrImagePull || reason == ReasonImageInspectError || reason == ReasonImagePullBackOff || reason == ReasonRegistryUnavailable
 }
 
-// isPodCrashError indicates whether the specified reason corresponds to an crash of the container.
+// isPodCrashError indicates whether the specified reason corresponds to a crash of the container.
 func isPodCrashError(reason string) bool {
 	return strings.HasPrefix(reason, "Crash")
 }

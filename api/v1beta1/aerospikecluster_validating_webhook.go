@@ -21,8 +21,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,6 +28,8 @@ import (
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -471,6 +471,8 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
+	migrateFillDelaySet := sets.Int{}
+
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
@@ -506,6 +508,18 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 				)
 			}
 		}
+
+		migrateFillDelay, err := GetMigrateFillDelay(&rack.AerospikeConfig)
+		if err != nil {
+			return err
+		}
+
+		migrateFillDelaySet.Insert(migrateFillDelay)
+	}
+
+	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
+	if migrateFillDelaySet.Len() > 1 {
+		return fmt.Errorf("migrate-fill-delay value should be same across all racks")
 	}
 
 	// Validate batch upgrade/restart param
@@ -1086,19 +1100,12 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 		rfInterface = 2 // default replication-factor
 	}
 
-	switch rf := rfInterface.(type) {
-	case int64:
-		return int(rf), nil
-	case int:
-		return rf, nil
-	case float64:
-		return int(rf), nil
-	default:
-		return 0, fmt.Errorf(
-			"namespace replication-factor %v not valid int, int64 or float64",
-			rf,
-		)
+	rf, err := GetIntType(rfInterface)
+	if err != nil {
+		return 0, fmt.Errorf("namespace replication-factor %v", err)
 	}
+
+	return rf, nil
 }
 
 func validateLoadBalancerUpdate(

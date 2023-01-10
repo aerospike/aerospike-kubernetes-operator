@@ -608,13 +608,13 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, reconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
+	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
+
+	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
 	var pod *corev1.Pod
 
 	policy := r.getClientPolicy()
 
-	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
-
-	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
 	podName := getSTSPodName(found.Name, *found.Spec.Replicas-1)
 
 	pod = utils.GetPod(podName, oldPodList.Items)
@@ -631,6 +631,13 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return found, reconcileRequeueAfter(0)
 		}
+	}
+
+	// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
+	// temporarily add the pod to be deleted in ignorablePods slice to avoid setting migrate-fill-delay to pod when pod is not ready
+	if res := r.setMigrateFillDelay(policy, &rackState.Rack.AerospikeConfig, true,
+		append(ignorablePods, *pod)); !res.isSuccess {
+		return found, res
 	}
 
 	// Update new object with new size
