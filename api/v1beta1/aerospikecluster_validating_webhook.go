@@ -337,9 +337,10 @@ func (c *AerospikeCluster) validateRackUpdate(
 				}
 
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
-					var statusRack Rack
-					for _, statusRack = range c.Status.RackConfig.Racks {
+					var rackStatusConfig *AerospikeConfigSpec
+					for _, statusRack := range c.Status.RackConfig.Racks {
 						if statusRack.ID == newRack.ID {
+							rackStatusConfig = &statusRack.AerospikeConfig
 							break
 						}
 					}
@@ -347,7 +348,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
-						&statusRack.AerospikeConfig,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -1325,6 +1326,7 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 
 	return nil
 }
+
 func validateAerospikeConfigSchema(
 	aslog logr.Logger, version string, configSpec AerospikeConfigSpec,
 ) error {

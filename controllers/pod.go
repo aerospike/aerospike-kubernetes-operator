@@ -202,6 +202,13 @@ func (r *SingleClusterReconciler) restartASDInPod(
 
 func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) reconcileResult {
 	var restartedPods []*corev1.Pod
+
+	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+	// For each file removed from a namespace, it is deleted right away.
+	if err := r.handleNSOrDeviceRemoval(rackState, podsToRestart); err != nil {
+		return reconcileError(err)
+	}
+
 	for i := range podsToRestart {
 		pod := podsToRestart[i]
 		// Check if this pod needs restart
@@ -340,6 +347,11 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	rackState RackState, podsToUpdate []*corev1.Pod) reconcileResult {
 
+	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+	// For each file removed from a namespace, it is deleted right away.
+	if err := r.handleNSOrDeviceRemoval(rackState, podsToUpdate); err != nil {
+		return reconcileError(err)
+	}
 	// Delete pods
 	for _, p := range podsToUpdate {
 		if err := r.Client.Delete(context.TODO(), p); err != nil {
