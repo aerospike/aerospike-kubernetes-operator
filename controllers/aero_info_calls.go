@@ -290,7 +290,16 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(policy *as.ClientPolicy,
 		reconcileError(err)
 	}
 
-	if migrateFillDelay == 0 {
+	var oldMigrateFillDelay int
+
+	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
+		oldMigrateFillDelay, err = asdbv1beta1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
+		if err != nil {
+			reconcileError(err)
+		}
+	}
+
+	if migrateFillDelay == 0 && oldMigrateFillDelay == 0 {
 		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
 		return reconcileSuccess()
 	}

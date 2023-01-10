@@ -608,7 +608,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, reconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
-
 	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
 
 	// maintain list of removed pods. It will be used for alumni-reset and tip-clear

@@ -402,7 +402,7 @@ func GetPortFromConfig(
 	return nil
 }
 
-// GetIntType typecasts the numeric value to the support type
+// GetIntType typecasts the numeric value to the supported type
 func GetIntType(value interface{}) (int, error) {
 	switch val := value.(type) {
 	case int64:
