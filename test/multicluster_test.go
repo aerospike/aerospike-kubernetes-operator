@@ -100,7 +100,7 @@ func multiClusterGenChangeTest(
 			err = deployCluster(k8sClient, ctx, aeroCluster2)
 			Expect(err).ToNot(HaveOccurred())
 
-			validateLifecycleOperation(ctx, clusterNamespacedName2)
+			validateLifecycleOperationInRackCluster(ctx, clusterNamespacedName2)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster2)
 			Expect(err).ToNot(HaveOccurred())
@@ -196,7 +196,7 @@ func multiClusterPVCTest(
 	)
 }
 
-func validateLifecycleOperation(
+func validateLifecycleOperationInRackCluster(
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 ) {
 	By("Scaleup")

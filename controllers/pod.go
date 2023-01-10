@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -47,8 +48,38 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 	return NoRestart
 }
 
+// Fetching restartType of all pods, based on the operation being performed.
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(
+	rackState RackState, pods []*corev1.Pod,
+) (map[string]RestartType, error) {
+	var restartTypeMap = make(map[string]RestartType)
+	var addedNSDevices []string
+	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	if err != nil {
+		return nil, err
+	}
+	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
+	for i := range pods {
+		podStatus := r.aeroCluster.Status.Pods[pods[i].Name]
+		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
+			// Fetching all block devices that has been added in namespaces.
+			addedNSDevices, err = r.getNSAddedDevices(rackState)
+			if err != nil {
+				return nil, err
+			}
+		}
+		restartType, err := r.getRollingRestartTypePod(rackState, pods[i], confMap, addedNSDevices)
+		if err != nil {
+			return nil, err
+		}
+		restartTypeMap[pods[i].Name] = restartType
+	}
+	return restartTypeMap, nil
+}
+
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
-	rackState RackState, pod corev1.Pod,
+	rackState RackState, pod *corev1.Pod,
+	confMap *corev1.ConfigMap, addedNSDevices []string,
 ) (RestartType, error) {
 
 	restartType := NoRestart
@@ -56,13 +87,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	// AerospikeConfig nil means status not updated yet
 	if r.aeroCluster.Status.AerospikeConfig == nil {
 		return restartType, nil
-	}
-
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
-	confMap := &corev1.ConfigMap{}
-	err := r.Client.Get(context.TODO(), cmName, confMap)
-	if err != nil {
-		return restartType, err
 	}
 
 	requiredConfHash := confMap.Data[AerospikeConfHashFileName]
@@ -73,7 +97,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
-		restartType = mergeRestartType(restartType, QuickRestart)
+
+		// checking if volumes added in namespace is part of dirtyVolumes.
+		// if yes, then podRestart is needed.
+		podRestartType, err := r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
+		if err != nil {
+			return restartType, err
+		}
+		restartType = mergeRestartType(restartType, podRestartType)
 		r.Log.Info(
 			"AerospikeConfig changed. Need rolling restart",
 			"requiredHash", requiredConfHash,
@@ -110,61 +141,36 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	return restartType, nil
 }
 
-func (r *SingleClusterReconciler) rollingRestartPod(
-	rackState RackState, pod corev1.Pod, restartType RestartType,
-	ignorablePods []corev1.Pod,
+func (r *SingleClusterReconciler) rollingRestartPods(
+	rackState RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
 ) reconcileResult {
 
-	if restartType == NoRestart {
-		r.Log.Info(
-			"This Pod doesn't need rolling restart, Skip this", "pod", pod.Name,
-		)
-		return reconcileSuccess()
-	}
+	failedPods, activePods := getFailedAndActivePods(podsToRestart)
 
-	// Also check if statefulSet is in stable condition
-	// Check for all containers. Status.ContainerStatuses doesn't include init container
-	if pod.Status.ContainerStatuses == nil {
-		r.Log.Error(
-			fmt.Errorf(
-				"pod %s containerStatus is nil",
-				pod.Name,
-			),
-			"Pod may be in unscheduled state",
-		)
-		return reconcileRequeueAfter(1)
-	}
-
-	r.Log.Info("Rolling restart pod", "podName", pod.Name)
-
-	err := utils.CheckPodFailed(&pod)
-	if err == nil {
-		// Check for migration
-		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitSafeDelete",
-			"[rack-%d] Waiting to safely restart Pod %s", rackState.Rack.ID, pod.Name)
-		if res := r.waitForNodeSafeStopReady(
-			&pod, ignorablePods,
-		); !res.isSuccess {
+	// If already dead node (failed pod) then no need to check node safety, migration
+	if len(failedPods) != 0 {
+		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
+		if res := r.restartPods(rackState, failedPods, restartTypeMap); !res.isSuccess {
 			return res
 		}
-	} else {
-		// TODO: Check a user flag to restart failed pods.
-		r.Log.Info("Restarting failed pod", "podName", pod.Name, "error", err)
-
-		// The pod has failed. Quick start is not possible.
-		restartType = PodRestart
 	}
 
-	if restartType == QuickRestart {
-		return r.quickRestart(rackState, &pod)
+	if len(activePods) != 0 {
+		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+			return res
+		}
+		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.isSuccess {
+			return res
+		}
 	}
 
-	return r.podRestart(&pod)
+	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) quickRestart(
+func (r *SingleClusterReconciler) restartASDInPod(
 	rackState RackState, pod *corev1.Pod,
-) reconcileResult {
+) error {
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
 	cmd := []string{
 		"bash",
@@ -185,149 +191,218 @@ func (r *SingleClusterReconciler) quickRestart(
 			stdout, "stderr", stderr,
 		)
 
-		// Fallback to pod restart.
-		return r.podRestart(pod)
+		return err
 	}
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
 		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name)
 
 	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
+	return nil
+}
+
+func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) reconcileResult {
+	var restartedPods []*corev1.Pod
+	for i := range podsToRestart {
+		pod := podsToRestart[i]
+		// Check if this pod needs restart
+		restartType := restartTypeMap[pod.Name]
+
+		if restartType == QuickRestart {
+			if err := r.restartASDInPod(rackState, pod); err == nil {
+				continue
+			}
+			// If ASD restart fails then go ahead and restart the pod
+		}
+
+		if err := r.Client.Delete(context.TODO(), pod); err != nil {
+			r.Log.Error(err, "Failed to delete pod")
+			return reconcileError(err)
+		}
+		restartedPods = append(restartedPods, pod)
+
+		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+	}
+	if len(restartedPods) > 0 {
+		return r.ensurePodsRunningAndReady(restartedPods)
+	}
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) podRestart(pod *corev1.Pod) reconcileResult {
-	var err error = nil
+func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev1.Pod) reconcileResult {
+	podNames := getPodNames(podsToCheck)
+	readyPods := map[string]bool{}
 
-	// Delete pod
-	if err := r.Client.Delete(context.TODO(), pod); err != nil {
-		r.Log.Error(err, "Failed to delete pod")
-		return reconcileError(err)
-	}
-	r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+	const maxRetries = 6
+	const retryInterval = time.Second * 10
 
-	// Wait for pod to come up
-	var started bool
-	for i := 0; i < 20; i++ {
-		r.Log.V(1).Info(
-			"Waiting for pod to be ready after delete", "podName", pod.Name,
-			"status", pod.Status.Phase, "DeletionTimestamp",
-			pod.DeletionTimestamp,
-		)
+	for i := 0; i < maxRetries; i++ {
+		r.Log.V(1).Info("Waiting for pods to be ready after delete", "pods", podNames)
 
-		updatedPod := &corev1.Pod{}
-		err := r.Client.Get(
-			context.TODO(),
-			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
-			updatedPod,
-		)
-		if err != nil {
-			r.Log.Error(err, "Failed to get pod")
-			time.Sleep(time.Second * 5)
-			continue
-		}
+		for _, pod := range podsToCheck {
+			if readyPods[pod.Name] {
+				continue
+			}
 
-		if err := utils.CheckPodFailed(updatedPod); err != nil {
-			return reconcileError(err)
-		}
-
-		if !utils.IsPodRunningAndReady(updatedPod) {
 			r.Log.V(1).Info(
-				"Waiting for pod to be ready", "podName", updatedPod.Name,
-				"status", updatedPod.Status.Phase, "DeletionTimestamp",
-				updatedPod.DeletionTimestamp,
+				"Waiting for pod to be ready", "podName", pod.Name,
+				"status", pod.Status.Phase, "DeletionTimestamp",
+				pod.DeletionTimestamp,
 			)
-			time.Sleep(time.Second * 5)
-			continue
+
+			updatedPod := &corev1.Pod{}
+			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
+			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if err := utils.CheckPodFailed(updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if !utils.IsPodRunningAndReady(updatedPod) {
+				break
+			}
+
+			readyPods[pod.Name] = true
+
+			r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
+			r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
+				"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
 		}
 
-		r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
-		started = true
-		break
+		if len(readyPods) == len(podsToCheck) {
+			r.Log.Info(
+				"Pods are running and ready", "pods",
+				podNames,
+			)
+			return reconcileSuccess()
+		}
+		time.Sleep(retryInterval)
 	}
 
-	// TODO: In what situation this can happen?
-	if !started {
-		r.Log.Error(
-			err, "Pod is not running or ready. Pod might also be terminating",
-			"podName", pod.Name, "status", pod.Status.Phase,
-			"DeletionTimestamp", pod.DeletionTimestamp,
-		)
-	} else {
-		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
-			"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIdLabel], pod.Name)
+	r.Log.Info(
+		"Timed out waiting for pods to come up", "pods",
+		podNames,
+	)
+	return reconcileRequeueAfter(10)
+}
+
+func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
+	var rearrangedPods []*corev1.Pod
+
+	failedPods, activePods := getFailedAndActivePods(pods)
+	rearrangedPods = append(rearrangedPods, failedPods...)
+	rearrangedPods = append(rearrangedPods, activePods...)
+
+	return rearrangedPods
+}
+
+func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+	for i := range pods {
+		pod := pods[i]
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			failedPods = append(failedPods, pod)
+			continue
+		}
+		activePods = append(activePods, pod)
+	}
+	return failedPods, activePods
+}
+
+func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
+	rackState RackState, podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod,
+) reconcileResult {
+
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+
+	// If already dead node (failed pod) then no need to check node safety, migration
+	if len(failedPods) != 0 {
+		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
+		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.isSuccess {
+			return res
+		}
+	}
+
+	if len(activePods) != 0 {
+		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(failedPods))
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+			return res
+		}
+		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.isSuccess {
+			return res
+		}
 	}
 
 	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
-	rackState RackState, p corev1.Pod, ignorablePods []corev1.Pod,
-) reconcileResult {
-	// If already dead node, so no need to check node safety, migration
-	if err := utils.CheckPodFailed(&p); err == nil {
-		if res := r.waitForNodeSafeStopReady(
-			&p, ignorablePods,
-		); !res.isSuccess {
-			return res
+	rackState RackState, podsToUpdate []*corev1.Pod) reconcileResult {
+
+	// Delete pods
+	for _, p := range podsToUpdate {
+		if err := r.Client.Delete(context.TODO(), p); err != nil {
+			return reconcileError(err)
 		}
+		r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+
+		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
+			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name)
 	}
 
-	r.Log.V(1).Info("Delete the Pod", "podName", p.Name)
-	// Delete pod
-	if err := r.Client.Delete(context.TODO(), &p); err != nil {
-		return reconcileError(err)
-	}
-	r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+	return r.ensurePodsImageUpdated(podsToUpdate)
+}
 
-	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
-		"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name)
-	// Wait for pod to come up
+func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) reconcileResult {
+	podNames := getPodNames(podsToCheck)
+	updatedPods := map[string]bool{}
+
 	const maxRetries = 6
 	const retryInterval = time.Second * 10
+
 	for i := 0; i < maxRetries; i++ {
 		r.Log.V(1).Info(
-			"Waiting for pod to be ready after delete", "podName", p.Name,
+			"Waiting for pods to be ready after delete", "pods", podNames,
 		)
 
-		pFound := &corev1.Pod{}
-		err := r.Client.Get(
-			context.TODO(),
-			types.NamespacedName{Name: p.Name, Namespace: p.Namespace}, pFound,
-		)
-		if err != nil {
-			r.Log.Error(err, "Failed to get pod", "podName", p.Name, "err", err)
+		for _, pod := range podsToCheck {
+			if updatedPods[pod.Name] {
+				continue
+			}
 
-			if _, err = r.getSTS(rackState); err != nil {
-				// Stateful set has been deleted.
-				// TODO Ashish to remember which scenario this can happen.
-				r.Log.Error(
-					err, "Statefulset has been deleted for pod", "podName",
-					p.Name, "err", err,
-				)
+			r.Log.V(1).Info(
+				"Waiting for pod to be ready", "podName", pod.Name,
+			)
+
+			updatedPod := &corev1.Pod{}
+			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
+			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
 				return reconcileError(err)
 			}
 
-			time.Sleep(retryInterval)
-			continue
-		}
-		if err := utils.CheckPodFailed(pFound); err != nil {
-			return reconcileError(err)
+			if err := utils.CheckPodFailed(updatedPod); err != nil {
+				return reconcileError(err)
+			}
+
+			if !r.isPodUpgraded(updatedPod) {
+				break
+			}
+
+			updatedPods[pod.Name] = true
+			r.Log.Info("Pod is upgraded/downgraded", "podName", pod.Name)
 		}
 
-		if r.isPodUpgraded(pFound) {
-			r.Log.Info("Pod is upgraded/downgraded", "podName", p.Name)
+		if len(updatedPods) == len(podsToCheck) {
+			r.Log.Info("Pods are upgraded/downgraded", "pod", podNames)
 			return reconcileSuccess()
 		}
-
-		r.Log.V(1).Info(
-			"Waiting for pod to come up with new image", "podName", p.Name,
-		)
 		time.Sleep(retryInterval)
 	}
 
 	r.Log.Info(
-		"Timed out waiting for pod to come up with new image", "podName",
-		p.Name,
+		"Timed out waiting for pods to come up with new image", "pods",
+		podNames,
 	)
 	return reconcileRequeueAfter(10)
 }
@@ -357,6 +432,8 @@ func (r *SingleClusterReconciler) cleanupPods(
 		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
 	}
 
+	podNameSet := sets.NewString(podNames...)
+
 	for _, podName := range podNames {
 		// Clear references to this pod in the running cluster.
 		for _, np := range clusterPodList.Items {
@@ -368,7 +445,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 				continue
 			}
 
-			if utils.ContainsString(podNames, np.Name) {
+			if podNameSet.Has(np.Name) {
 				// Skip running info commands on pods which are being cleaned
 				// up.
 				continue
@@ -385,9 +462,14 @@ func (r *SingleClusterReconciler) cleanupPods(
 				"About to remove host from tipHostnames and reset alumni in pod...",
 				"pod to remove", podName, "remove and reset on pod", np.Name,
 			)
-			_ = r.tipClearHostname(&np, podName)
 
-			_ = r.alumniReset(&np)
+			if err := r.tipClearHostname(&np, podName); err != nil {
+				r.Log.V(2).Info("Failed to tipClear", "hostName", podName, "from the pod", np.Name)
+			}
+
+			if err := r.alumniReset(&np); err != nil {
+				r.Log.V(2).Info(fmt.Sprintf("Failed to reset alumni for the pod %s", np.Name))
+			}
 		}
 
 		if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
@@ -400,8 +482,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 			}
 		}
 
-		_, ok := r.aeroCluster.Status.Pods[podName]
-		if ok {
+		if _, ok := r.aeroCluster.Status.Pods[podName]; ok {
 			needStatusCleanup = append(needStatusCleanup, podName)
 		}
 	}
@@ -435,6 +516,10 @@ func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
 	}
 
 	jsonPatchJSON, err := json.Marshal(patches)
+	if err != nil {
+		return fmt.Errorf("error creating json-patch : %v", err)
+	}
+
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
 	// Since the pod status is updated from pod init container,
@@ -457,32 +542,29 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 	var danglingPods []string
 
 	// Find dangling pods in pods
-	if r.aeroCluster.Status.Pods != nil {
-		for podName := range r.aeroCluster.Status.Pods {
-			rackID, err := utils.GetRackIDFromPodName(podName)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to get rackID for the pod %s", podName,
-				)
-			}
-			if *rackID != rackState.Rack.ID {
-				// This pod is from other rack, so skip it
-				continue
-			}
+	for podName := range r.aeroCluster.Status.Pods {
+		rackID, err := utils.GetRackIDFromPodName(podName)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get rackID for the pod %s", podName,
+			)
+		}
+		if *rackID != rackState.Rack.ID {
+			// This pod is from other rack, so skip it
+			continue
+		}
 
-			ordinal, err := getSTSPodOrdinal(podName)
-			if err != nil {
-				return fmt.Errorf("invalid pod name: %s", podName)
-			}
+		ordinal, err := getSTSPodOrdinal(podName)
+		if err != nil {
+			return fmt.Errorf("invalid pod name: %s", podName)
+		}
 
-			if *ordinal >= *sts.Spec.Replicas {
-				danglingPods = append(danglingPods, podName)
-			}
+		if *ordinal >= *sts.Spec.Replicas {
+			danglingPods = append(danglingPods, podName)
 		}
 	}
 
-	err := r.cleanupPods(danglingPods, rackState)
-	if err != nil {
+	if err := r.cleanupPods(danglingPods, rackState); err != nil {
 		return fmt.Errorf("failed dangling pod cleanup: %v", err)
 	}
 
@@ -510,6 +592,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1beta1.R
 	return ignorablePods, nil
 }
 
+// nolint:unused
 // getPodIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
 // Note: the IPs returned from here should match the IPs generated in the pod initialization script for the init container.
 func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
@@ -541,6 +624,7 @@ func (r *SingleClusterReconciler) getPodIPs(pod *corev1.Pod) (
 	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
+// nolint:unused
 func (r *SingleClusterReconciler) getServiceForPod(pod *corev1.Pod) (
 	*corev1.Service, error,
 ) {
@@ -596,20 +680,17 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) isAnyPodInFailedState(podList []corev1.Pod) bool {
+func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod) bool {
 
 	for _, p := range podList {
-		for _, ps := range p.Status.ContainerStatuses {
-			// TODO: Should we use checkPodFailed or CheckPodImageFailed?
-			// scaleDown, rollingRestart should work even if node is crashed
-			// If node was crashed due to wrong config then only rollingRestart can bring it back.
-			if err := utils.CheckPodImageFailed(&p); err != nil {
-				r.Log.Info(
-					"AerospikeCluster Pod is in failed state", "currentImage",
-					ps.Image, "podName", p.Name, "err", err,
-				)
-				return true
-			}
+		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
+		// scaleDown, rollingRestart should work even if node is crashed
+		// If node was crashed due to wrong config then only rollingRestart can bring it back.
+		if err := utils.CheckPodImageFailed(&p); err != nil {
+			r.Log.Info(
+				"AerospikeCluster Pod is in failed state", "podName", p.Name, "err", err,
+			)
+			return true
 		}
 	}
 	return false
@@ -628,7 +709,7 @@ func getFQDNForPod(
 //
 // E.g. addressName are access, alternate-access
 func GetEndpointsFromInfo(
-	addressName string, endpointsMap map[string]interface{},
+	addressName string, endpointsMap map[string]string,
 ) []string {
 	var endpoints []string
 
@@ -656,4 +737,293 @@ func GetEndpointsFromInfo(
 		)
 	}
 	return endpoints
+}
+
+func getPodNames(pods []*corev1.Pod) []string {
+	var podNames []string
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
+	}
+	return podNames
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, podsToRestart []*corev1.Pod) error {
+	var rackStatus asdbv1beta1.Rack
+	var removedDevices []string
+	var removedFiles []string
+
+	rackFound := false
+	for _, rackStatus = range r.aeroCluster.Status.RackConfig.Racks {
+		if rackStatus.ID == rackState.Rack.ID {
+			rackFound = true
+			break
+		}
+	}
+
+	if !rackFound {
+		r.Log.Info("Could not find rack status, skipping namespace device handling", "ID", rackState.Rack.ID)
+		return nil
+	}
+
+	for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		namespaceFound := false
+		for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] == statusNamespace.(map[string]interface{})["name"] {
+				namespaceFound = true
+				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
+				statusDevices := sets.String{}
+				specDevices := sets.String{}
+				if statusStorage["devices"] != nil {
+					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+						statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
+					}
+				}
+				if specStorage["devices"] != nil {
+					for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+						specDevices.Insert(strings.Fields(specDeviceInterface.(string))...)
+					}
+				}
+
+				removedDevicesPerNS := statusDevices.Difference(specDevices).List()
+				for _, removedDevice := range removedDevicesPerNS {
+					deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, removedDevice)
+					r.Log.Info(
+						"Device is removed from namespace", "device", deviceName, "namespace", specNamespace.(map[string]interface{})["name"],
+					)
+					removedDevices = append(removedDevices, deviceName)
+				}
+
+				statusFiles := sets.String{}
+				specFiles := sets.String{}
+				if statusStorage["files"] != nil {
+					for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
+						statusFiles.Insert(strings.Fields(statusFileInterface.(string))...)
+					}
+				}
+				if specStorage["files"] != nil {
+					for _, specFileInterface := range specStorage["files"].([]interface{}) {
+						specFiles.Insert(strings.Fields(specFileInterface.(string))...)
+					}
+				}
+
+				removedFilesPerNS := statusFiles.Difference(specFiles).List()
+				if len(removedFilesPerNS) > 0 {
+					removedFiles = append(removedFiles, removedFilesPerNS...)
+				}
+				break
+			}
+		}
+		if !namespaceFound {
+			r.Log.Info(
+				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})["name"],
+			)
+			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
+			if statusStorage["devices"] != nil {
+				var statusDevices []string
+				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+					statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
+				}
+				for _, statusDevice := range statusDevices {
+					deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
+					removedDevices = append(removedDevices, deviceName)
+				}
+			}
+			if statusStorage["files"] != nil {
+				var statusFiles []string
+				for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
+					statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
+				}
+				removedFiles = append(removedFiles, statusFiles...)
+			}
+		}
+	}
+
+	for _, pod := range podsToRestart {
+		r.Log.Info("handleNSOrDeviceRemovalPerPod call", "pod", pod.Name)
+		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, pod)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(removedDevices []string, removedFiles []string, pod *corev1.Pod) error {
+
+	podStatus := r.aeroCluster.Status.Pods[pod.Name]
+
+	for _, file := range removedFiles {
+		err := r.deleteFileStorage(pod, file)
+		if err != nil {
+			return err
+		}
+	}
+	if len(removedDevices) > 0 {
+		dirtyVolumes := sets.String{}
+		dirtyVolumes.Insert(removedDevices...)
+		dirtyVolumes.Insert(podStatus.DirtyVolumes...)
+		var patches []jsonpatch.JsonPatchOperation
+
+		patch1 := jsonpatch.JsonPatchOperation{
+			Operation: "replace",
+			Path:      "/status/pods/" + pod.Name + "/dirtyVolumes",
+			Value:     dirtyVolumes.List(),
+		}
+
+		patches = append(patches, patch1)
+
+		jsonPatchJSON, err := json.Marshal(patches)
+		if err != nil {
+			return err
+		}
+		constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
+
+		// Since the pod status is updated from pod init container,
+		//set the field owner to "pod" for pod status updates.
+		if err = r.Client.Status().Patch(
+			context.TODO(), r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+		); err != nil {
+			return fmt.Errorf("error updating status: %v", err)
+		}
+	}
+	return nil
+}
+
+func (r *SingleClusterReconciler) getNSAddedDevices(rackState RackState) ([]string, error) {
+	var rackStatus asdbv1beta1.Rack
+	var err error
+	var volumes []string
+
+	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	err = r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rackFound := false
+	for _, rackStatus = range newAeroCluster.Status.RackConfig.Racks {
+		if rackStatus.ID == rackState.Rack.ID {
+			rackFound = true
+			break
+		}
+	}
+
+	if !rackFound {
+		r.Log.Info("Could not find rack status, skipping namespace device handling", "ID", rackState.Rack.ID)
+		return nil, nil
+	}
+
+	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		namespaceFound := false
+		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] == statusNamespace.(map[string]interface{})["name"] {
+				namespaceFound = true
+				specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+				statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+
+				var specDevices []string
+				statusDevices := sets.String{}
+				if specStorage["devices"] != nil {
+					for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+						specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
+					}
+				}
+				if statusStorage["devices"] != nil {
+					for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
+						statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
+					}
+				}
+				for _, specDevice := range specDevices {
+					if !statusDevices.Has(specDevice) {
+						r.Log.Info(
+							"Device is added in namespace",
+						)
+						deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+						volumes = append(volumes, deviceName)
+					}
+				}
+				break
+			}
+		}
+		if !namespaceFound {
+			r.Log.Info(
+				"Namespace added",
+			)
+			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			if specStorage["type"] == "device" && specStorage["devices"] != nil {
+				var specDevices []string
+				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
+					specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
+				}
+				for _, specDevice := range specDevices {
+					deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+					volumes = append(volumes, deviceName)
+				}
+			}
+		}
+	}
+	return volumes, nil
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceAddition(volumes []string, podName string) (RestartType, error) {
+	podStatus := r.aeroCluster.Status.Pods[podName]
+	for _, volume := range volumes {
+		r.Log.Info(
+			"Checking dirty volumes list", "device", volume, "podname", podName,
+		)
+		if utils.ContainsString(podStatus.DirtyVolumes, volume) {
+			return PodRestart, nil
+		}
+	}
+
+	return QuickRestart, nil
+}
+
+func getVolumeNameFromDevicePath(volumes []asdbv1beta1.VolumeSpec, s string) string {
+	for _, volume := range volumes {
+		if volume.Aerospike.Path == s {
+			return volume.Name
+		}
+	}
+	return ""
+}
+
+func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName string) error {
+
+	cmd := []string{
+		"bash", "-c", fmt.Sprintf(
+			"rm -rf %s",
+			fileName,
+		),
+	}
+	r.Log.Info(
+		"Deleting file", "file", fileName, "cmd", cmd, "podname", pod.Name,
+	)
+	stdout, stderr, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+
+	if err != nil {
+		r.Log.V(1).Info(
+			"File deletion failed", "err", err, "podName", pod.Name, "stdout",
+			stdout, "stderr", stderr,
+		)
+		return fmt.Errorf("error deleting file %v", err)
+	}
+	return nil
+}
+
+func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
+	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackID)
+	confMap := &corev1.ConfigMap{}
+	err := r.Client.Get(context.TODO(), cmName, confMap)
+	if err != nil {
+		return nil, err
+	}
+	return confMap, nil
 }

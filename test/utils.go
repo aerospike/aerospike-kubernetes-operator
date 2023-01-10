@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -51,7 +51,7 @@ var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDele
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
 
-	fileInfo, err := ioutil.ReadDir(secretDir)
+	fileInfo, err := os.ReadDir(secretDir)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func initConfigSecret(secretDir string) error {
 			continue
 		}
 
-		secret, err := ioutil.ReadFile(filepath.Join(secretDir, file.Name()))
+		secret, err := os.ReadFile(filepath.Join(secretDir, file.Name()))
 		if err != nil {
 			return fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
 		}
@@ -666,4 +666,13 @@ func getAerospikeStorageConfig(
 			},
 		},
 	}
+}
+
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

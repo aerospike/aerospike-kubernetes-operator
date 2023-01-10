@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
@@ -69,6 +70,8 @@ type AerospikeClusterSpec struct {
 	// clients to discover Aerospike cluster nodes.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -315,6 +318,9 @@ type RackConfig struct {
 	// Racks is the list of all racks
 	// +nullable
 	Racks []Rack `json:"racks,omitempty"`
+	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
+	// +optional
+	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -432,6 +438,10 @@ const (
 	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
 	//should be initialized by deleting files.
 	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
+
+	// AerospikeVolumeSingleCleanupThread specifies the single thread
+	//for disks cleanup in init container.
+	AerospikeVolumeSingleCleanupThread int = 1
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
@@ -600,6 +610,9 @@ type AerospikeStorageSpec struct {
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
+	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
+	CleanupThreads int `json:"cleanupThreads,omitempty"`
+
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
 	// +patchStrategy=merge
@@ -655,6 +668,8 @@ type AerospikeClusterStatusSpec struct {
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -777,6 +792,11 @@ type AerospikePodStatus struct {
 	// initialized.
 	InitializedVolumes []string `json:"initializedVolumes,omitempty"`
 
+	// DirtyVolumes is the list of volume names that are removed
+	// from aerospike namespaces and will be cleaned during init
+	// if they are reused in any namespace.
+	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
+
 	// InitializedVolumePaths is deprecated version of InitializedVolumes.
 	// +optional
 	// +nullable
@@ -796,7 +816,7 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
-//+operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
+// +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
 type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -830,82 +850,74 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 
 	// Storage
 	statusStorage := AerospikeStorageSpec{}
-	if err := lib.DeepCopy(&statusStorage, &spec.Storage); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusStorage, &spec.Storage)
+
 	status.Storage = statusStorage
 
 	if spec.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
 		statusAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			statusAerospikeAccessControl, spec.AerospikeAccessControl,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.AerospikeAccessControl = statusAerospikeAccessControl
 	}
 
 	// AerospikeConfig
 	statusAerospikeConfig := &AerospikeConfigSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		statusAerospikeConfig, spec.AerospikeConfig,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.AerospikeConfig = statusAerospikeConfig
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
 		statusValidationPolicy := &ValidationPolicySpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			statusValidationPolicy, spec.ValidationPolicy,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.ValidationPolicy = statusValidationPolicy
 	}
 
 	// RackConfig
 	statusRackConfig := RackConfig{}
-	if err := lib.DeepCopy(&statusRackConfig, &spec.RackConfig); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusRackConfig, &spec.RackConfig)
 	status.RackConfig = statusRackConfig
 
 	// AerospikeNetworkPolicy
 	statusAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
 
 	if spec.OperatorClientCertSpec != nil {
 		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			clientCertSpec, spec.OperatorClientCertSpec,
-		); err != nil {
-			return nil, err
-		}
+		)
 		status.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
 	statusPodSpec := AerospikePodSpec{}
-	if err := lib.DeepCopy(&statusPodSpec, &spec.PodSpec); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&statusPodSpec, &spec.PodSpec)
 	status.PodSpec = statusPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&seedsFinderServices, &spec.SeedsFinderServices,
-	); err != nil {
-		return nil, err
-	}
+	)
 	status.SeedsFinderServices = seedsFinderServices
+
+	// RosterNodeBlockList
+	if len(spec.RosterNodeBlockList) != 0 {
+		var rosterNodeBlockList []string
+		lib.DeepCopy(
+			&rosterNodeBlockList, &spec.RosterNodeBlockList,
+		)
+		status.RosterNodeBlockList = rosterNodeBlockList
+	}
 
 	return &status, nil
 }
@@ -922,82 +934,73 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 
 	// Storage
 	specStorage := AerospikeStorageSpec{}
-	if err := lib.DeepCopy(&specStorage, &status.Storage); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specStorage, &status.Storage)
 	spec.Storage = specStorage
 
 	if status.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
 		specAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			specAerospikeAccessControl, status.AerospikeAccessControl,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.AerospikeAccessControl = specAerospikeAccessControl
 	}
 
 	// AerospikeConfig
 	specAerospikeConfig := &AerospikeConfigSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		specAerospikeConfig, status.AerospikeConfig,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.AerospikeConfig = specAerospikeConfig
 
 	if status.ValidationPolicy != nil {
 		// ValidationPolicy
 		specValidationPolicy := &ValidationPolicySpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			specValidationPolicy, status.ValidationPolicy,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.ValidationPolicy = specValidationPolicy
 	}
 
 	// RackConfig
 	specRackConfig := RackConfig{}
-	if err := lib.DeepCopy(&specRackConfig, &status.RackConfig); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specRackConfig, &status.RackConfig)
 	spec.RackConfig = specRackConfig
 
 	// AerospikeNetworkPolicy
 	specAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
 
 	if status.OperatorClientCertSpec != nil {
 		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		if err := lib.DeepCopy(
+		lib.DeepCopy(
 			clientCertSpec, status.OperatorClientCertSpec,
-		); err != nil {
-			return nil, err
-		}
+		)
 		spec.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
 	specPodSpec := AerospikePodSpec{}
-	if err := lib.DeepCopy(&specPodSpec, &status.PodSpec); err != nil {
-		return nil, err
-	}
+	lib.DeepCopy(&specPodSpec, &status.PodSpec)
 	spec.PodSpec = specPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&seedsFinderServices, &status.SeedsFinderServices,
-	); err != nil {
-		return nil, err
-	}
+	)
 	spec.SeedsFinderServices = seedsFinderServices
+
+	// RosterNodeBlockList
+	if len(status.RosterNodeBlockList) != 0 {
+		var rosterNodeBlockList []string
+		lib.DeepCopy(
+			&rosterNodeBlockList, &status.RosterNodeBlockList,
+		)
+		spec.RosterNodeBlockList = rosterNodeBlockList
+	}
 
 	return &spec, nil
 }

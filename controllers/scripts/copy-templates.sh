@@ -29,7 +29,7 @@ then
 	exit 1
 fi
 
-if [ -z "$1" ]
+if [ -z "$2" ]
 then
     echo "Error: Template destination volume not specified"
 	exit 1
@@ -38,5 +38,5 @@ fi
 source=$1
 destination=$2
 echo installing aerospike.conf into "${destination}"
-cp "${source}/aerospike.template.conf" "${destination}"/
-cp "${source}/peers" "${destination}"/
+\cp -L "${source}/aerospike.template.conf" "${destination}"/
+\cp -L "${source}/peers" "${destination}"/

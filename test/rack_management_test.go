@@ -369,6 +369,34 @@ var _ = Describe(
 						)
 					},
 				)
+
+				Context(
+					"When using valid rack storage config", func() {
+
+						clusterName := "rack-specific-storage"
+						clusterNamespacedName := getClusterNamespacedName(
+							clusterName, namespace,
+						)
+						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+
+						It(
+							"Should validate empty common storage if per rack storage is provided",
+							func() {
+
+								err := deployCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackEnabledCluster(
+									k8sClient, ctx,
+									clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
+					},
+				)
 			},
 		)
 
@@ -441,6 +469,27 @@ var _ = Describe(
 						)
 
 						Context(
+							"When using invalid rack storage config", func() {
+
+								It(
+									"Should fail for empty common storage if per rack storage is not provided",
+									func() {
+
+										aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+											clusterNamespacedName, 2,
+										)
+
+										aeroCluster.Spec.RackConfig.Racks[0].InputStorage = nil
+
+										err := deployCluster(k8sClient, ctx, aeroCluster)
+										Expect(err).Should(HaveOccurred())
+
+									},
+								)
+							},
+						)
+
+						Context(
 							"When using invalid rack aerospikeConfig to deploy cluster",
 							func() {
 
@@ -466,31 +515,6 @@ var _ = Describe(
 								Context(
 									"When using invalid rack.AerospikeConfig.namespace config",
 									func() {
-
-										It(
-											"should fail for replication-factor greater than node sz",
-											func() {
-												aeroCluster := createDummyRackAwareAerospikeCluster(
-													clusterNamespacedName, 2,
-												)
-												aeroConfig := asdbv1beta1.AerospikeConfigSpec{
-													Value: map[string]interface{}{
-														"namespaces": []interface{}{
-															map[string]interface{}{
-																"name":               "test",
-																"replication-factor": 3,
-															},
-														},
-													},
-												}
-												aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
-											},
-										)
-
 										// Should we test for overridden fields
 										Context(
 											"When using invalid rack.AerospikeConfig.namespace.storage config",

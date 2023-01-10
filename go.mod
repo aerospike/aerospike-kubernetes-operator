@@ -1,9 +1,9 @@
 module github.com/aerospike/aerospike-kubernetes-operator
 
-go 1.17
+go 1.18
 
 require (
-	github.com/aerospike/aerospike-management-lib v0.0.0-20220907084954-555b898340bb
+	github.com/aerospike/aerospike-management-lib v0.0.0-20230110074021-953bfb0a06f5
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/ashishshinde/aerospike-client-go/v6 v6.0.1-0.20220606044039-77304169d3a4
 	github.com/evanphx/json-patch v4.11.0+incompatible
@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.20.2
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/oauth2 v0.0.0-20210201163806-010130855d6c // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	golang.org/x/term v0.3.0 // indirect
 	k8s.io/api v0.21.2
 	k8s.io/apimachinery v0.21.2
 	k8s.io/client-go v0.21.2
@@ -20,7 +20,10 @@ require (
 	sigs.k8s.io/controller-runtime v0.9.2
 )
 
-require golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+require (
+	github.com/sirupsen/logrus v1.7.0
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+)
 
 require (
 	cloud.google.com/go v0.76.0 // indirect
@@ -68,10 +71,10 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
+	golang.org/x/net v0.4.0 // indirect
 	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde // indirect
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20210611083556-38a9dc6acbc6 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect

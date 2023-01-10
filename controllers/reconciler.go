@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 				r.aeroCluster.Namespace, r.aeroCluster.Name,
 			)
 		}
-		return res.result, res.err
+		return res.getResult()
 	}
 
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
@@ -129,6 +129,19 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
 			r.aeroCluster.Name,
 		)
+		return reconcile.Result{}, err
+	}
+
+	// Use policy from spec after setting up access control
+	policy := r.getClientPolicyFromSpec()
+
+	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+		return res.result, res.err
+	}
+
+	// Setup roster
+	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster")
 		return reconcile.Result{}, err
 	}
 
@@ -448,7 +461,8 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.Aerosp
 	// FIXME: Json unmarshal used by above client.Status(),Patch()  does not convert empty lists in the new JSON to empty lists in the target. Seems like a bug in encoding/json/Unmarshall.
 	//
 	// Workaround by force copying new object's status to old object's status.
-	return lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	return nil
 }
 
 // recoverFailedCreate deletes the stateful sets for every rack and retries creating the cluster again when the first cluster create has failed.
@@ -501,8 +515,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 			newPodNames = append(newPodNames, pods.Items[i].Name)
 		}
 
-		err = r.cleanupPods(newPodNames, state)
-		if err != nil {
+		if err := r.cleanupPods(newPodNames, state); err != nil {
 			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 	}
@@ -644,4 +657,30 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 		}
 	}
 	return nil
+}
+
+func (r *SingleClusterReconciler) removedNamespaces() ([]string, error) {
+
+	var ns []string
+	statusNamespaces := make(map[string]bool)
+	specNamespaces := make(map[string]bool)
+
+	for _, rackStatus := range r.aeroCluster.Status.RackConfig.Racks {
+		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			statusNamespaces[statusNamespace.(map[string]interface{})["name"].(string)] = true
+		}
+	}
+
+	for _, rackSpec := range r.aeroCluster.Spec.RackConfig.Racks {
+		for _, specNamespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			specNamespaces[specNamespace.(map[string]interface{})["name"].(string)] = true
+		}
+	}
+
+	for statusNamespace := range statusNamespaces {
+		if !specNamespaces[statusNamespace] {
+			ns = append(ns, statusNamespace)
+		}
+	}
+	return ns, nil
 }
