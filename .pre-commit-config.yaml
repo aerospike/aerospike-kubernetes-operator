@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/tekwizely/pre-commit-golang
+    rev: v1.0.0-rc.1 # change this to the latest version
+    hooks:
+      - id: go-mod-tidy
+      - id: golangci-lint
+        args:
+          - --config=.golangci.yml
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace

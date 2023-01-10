@@ -15,12 +15,12 @@ package controllers
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -28,94 +28,52 @@ import (
 // Aerospike helper
 //------------------------------------------------------------------------------------
 
-// nolint:unused
-func (r *SingleClusterReconciler) getAerospikeServerVersionFromPod(pod *corev1.Pod) (
-	string, error,
-) {
-	asConn, err := r.newAsConn(pod)
-	if err != nil {
-		return "", err
-	}
-
-	res, err := asConn.RunInfo(
-		r.getClientPolicy(), "build",
-	)
-	if err != nil {
-		return "", err
-	}
-	version, ok := res["build"]
-	if !ok {
-		return "", fmt.Errorf(
-			"failed to get aerospike version from pod %v", pod.Name,
-		)
-	}
-	return version, nil
-}
-
-// waitForMultipleNodesSafeStopReady waits util the input pods are safe to stop, skipping pods that are not running and present in ignorablePods for stability check. The ignorablePods list should be a list of failed or pending pods that are going to be deleted eventually and are safe to ignore in stability checks.
+// waitForMultipleNodesSafeStopReady waits util the input pods is safe to stop,
+// skipping pods that are not running and present in ignorablePods for stability check.
+// The ignorablePods list should be a list of failed or pending pods that are going to be
+// deleted eventually and are safe to ignore in stability checks.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
-	// TODO: Check post quiesce recluster conditions first.
-	// If they pass the node is safe to remove and cluster is stable ignoring migration this node is safe to shut down.
-
 	if len(pods) == 0 {
 		return reconcileSuccess()
 	}
+
 	// Remove a node only if cluster is stable
-	err := r.waitForAllSTSToBeReady()
-	if err != nil {
-		return reconcileError(
-			fmt.Errorf(
-				"failed to wait for cluster to be ready: %v", err,
-			),
-		)
+	if err := r.waitForAllSTSToBeReady(); err != nil {
+		return reconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {
-		return reconcileError(
-			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes: %v", err,
-			),
-		)
+		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
+
+	policy := r.getClientPolicy()
+
 	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIdLabel])
 
-	const maxRetry = 6
-	const retryInterval = time.Second * 10
-
-	var isStable bool
-	// Wait for migration to finish. Wait for some time...
-	for idx := 1; idx <= maxRetry; idx++ {
-		r.Log.V(1).Info("Waiting for migrations to be zero before stopping pods", "pods", getPodNames(pods))
-
-		time.Sleep(retryInterval)
-
-		// This should fail if cold start is going on.
-		// Info command in cold starting node should give error, is it? confirm
-		//.
-
-		isStable, err = deployment.IsClusterAndStable(
-			r.Log, r.getClientPolicy(), allHostConns,
-		)
-		if err != nil {
-			return reconcileError(err)
-		}
-		if isStable {
-			break
-		}
-	}
-	// TODO: Requeue after how much time. 1 min for now
-	if !isStable {
-		return reconcileRequeueAfter(60)
+	// Check for cluster stability
+	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+		return res
 	}
 
+	if err := r.validateSCClusterState(policy); err != nil {
+		return reconcileError(err)
+	}
+
+	if err := r.quiescePods(policy, allHostConns, pods); err != nil {
+		return reconcileError(err)
+	}
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod) error {
 	removedNSes, err := r.removedNamespaces()
 	if err != nil {
-		return reconcileError(err)
+		return err
 	}
 
 	var selectedHostConns []*deployment.HostConn
@@ -123,20 +81,49 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		// Quiesce node
 		hostConn, err := r.newHostConn(pod)
 		if err != nil {
-			return reconcileError(
-				fmt.Errorf(
-					"failed to get hostConn for aerospike cluster nodes %v: %v",
-					pod.Name, err,
-				),
-			)
+			return fmt.Errorf("failed to get hostConn for aerospike cluster nodes %v: %v",
+				pod.Name, err)
 		}
 		selectedHostConns = append(selectedHostConns, hostConn)
 	}
 
 	if err := deployment.InfoQuiesce(
-		r.Log, r.getClientPolicy(), allHostConns, selectedHostConns, removedNSes,
+		r.Log, policy, allHostConns, selectedHostConns, removedNSes,
 	); err != nil {
-		return reconcileError(err)
+		return err
+	}
+
+	return nil
+}
+
+// TODO: Check only for migration
+func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolicy, allHostConns []*deployment.HostConn) reconcileResult {
+	const maxRetry = 6
+	const retryInterval = time.Second * 10
+
+	var isStable bool
+	var err error
+	// Wait for migration to finish. Wait for some time...
+	for idx := 1; idx <= maxRetry; idx++ {
+		r.Log.V(1).Info("Waiting for migrations to be zero")
+		time.Sleep(retryInterval)
+
+		// This should fail if coldstart is going on.
+		// Info command in coldstarting node should give error, is it? confirm.
+
+		isStable, err = deployment.IsClusterAndStable(
+			r.Log, policy, allHostConns,
+		)
+		if err != nil {
+			return reconcileError(err)
+		}
+		if isStable {
+			r.Log.V(1).Info("Cluster is now stable")
+			break
+		}
+	}
+	if !isStable {
+		return reconcileRequeueAfter(60)
 	}
 
 	return reconcileSuccess()
@@ -268,8 +255,8 @@ func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 	if err != nil {
 		return nil, err
 	}
-	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
-	return deployment.NewHostConn(r.Log, host, asConn), nil
+	host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
+	return deployment.NewHostConn(asConn.Log, host, asConn), nil
 }
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
@@ -286,33 +273,55 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 		AerospikeHostName: host,
 		AerospikePort:     *port,
 		AerospikeTLSName:  tlsName,
-		Log:               r.Log,
+		Log:               r.Log.WithValues("host", pod.Name),
 	}
 
 	return asConn, nil
 }
 
-// ParseInfoIntoMap parses info string into a map.
-// TODO adapted from management lib. Should be made public there.
-func ParseInfoIntoMap(
-	str string, del string, sep string,
-) (map[string]interface{}, error) {
-	m := make(map[string]interface{})
-	if str == "" {
-		return m, nil
-	}
-	items := strings.Split(str, del)
-	for _, item := range items {
-		if item == "" {
-			continue
-		}
-		kv := strings.Split(item, sep)
-		if len(kv) < 2 {
-			return nil, fmt.Errorf("error parsing info item %s", item)
-		}
+func hostID(hostName string, hostPort int) string {
+	return fmt.Sprintf("%s:%d", hostName, hostPort)
+}
 
-		m[kv[0]] = strings.Join(kv[1:], sep)
+func (r *SingleClusterReconciler) setMigrateFillDelay(policy *as.ClientPolicy,
+	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
+	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
+	if err != nil {
+		reconcileError(err)
 	}
 
-	return m, nil
+	var oldMigrateFillDelay int
+
+	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
+		oldMigrateFillDelay, err = asdbv1beta1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
+		if err != nil {
+			reconcileError(err)
+		}
+	}
+
+	if migrateFillDelay == 0 && oldMigrateFillDelay == 0 {
+		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
+		return reconcileSuccess()
+	}
+
+	// Set migrate-fill-delay to 0 if setToZero flag is set
+	if setToZero {
+		migrateFillDelay = 0
+	}
+
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
+		return reconcileError(err)
+	}
+
+	return reconcileSuccess()
 }

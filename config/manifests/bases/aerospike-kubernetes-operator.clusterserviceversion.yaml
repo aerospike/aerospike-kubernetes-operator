@@ -10,6 +10,10 @@ metadata:
     description: The Aerospike Kubernetes Operator automates the deployment and management
       of Aerospike enterprise clusters on Kubernetes.
     repository: https://github.com/aerospike/aerospike-kubernetes-operator/
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.arm64: supported
+    operatorframework.io/os.linux: supported
   name: aerospike-kubernetes-operator.v0.0.0
   namespace: placeholder
 spec:

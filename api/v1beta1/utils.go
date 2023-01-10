@@ -34,7 +34,7 @@ const baseVersion = "4.9.0.3"
 // ContainsString check whether list contains given string
 func ContainsString(list []string, ele string) bool {
 	for _, listEle := range list {
-		if ele == listEle {
+		if strings.EqualFold(ele, listEle) {
 			return true
 		}
 	}
@@ -87,7 +87,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.17"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.18"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
@@ -400,4 +400,35 @@ func GetPortFromConfig(
 		}
 	}
 	return nil
+}
+
+// GetIntType typecasts the numeric value to the supported type
+func GetIntType(value interface{}) (int, error) {
+	switch val := value.(type) {
+	case int64:
+		return int(val), nil
+	case int:
+		return val, nil
+	case float64:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("value %v not valid int, int64 or float64", val)
+	}
+}
+
+// GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
+func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
+	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+
+	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
+	if !exists {
+		return 0, nil
+	}
+
+	fillDelay, err := GetIntType(fillDelayIFace)
+	if err != nil {
+		return 0, fmt.Errorf("migrate-fill-delay %v", err)
+	}
+
+	return fillDelay, nil
 }

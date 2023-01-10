@@ -524,7 +524,7 @@ func getEnvVar(envVar string) string {
 	return envVarVal
 }
 
-func validateImageRegistry(k8sClient client.Client, ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string) {
+func validateImageRegistry(k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string) {
 	stsList, err := getSTSList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
 
