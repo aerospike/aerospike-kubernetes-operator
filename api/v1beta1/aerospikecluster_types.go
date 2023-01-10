@@ -70,6 +70,8 @@ type AerospikeClusterSpec struct {
 	// clients to discover Aerospike cluster nodes.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -666,6 +668,8 @@ type AerospikeClusterStatusSpec struct {
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices describes services which are used for seeding Aerospike nodes.
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -906,6 +910,15 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	)
 	status.SeedsFinderServices = seedsFinderServices
 
+	// RosterNodeBlockList
+	if len(spec.RosterNodeBlockList) != 0 {
+		var rosterNodeBlockList []string
+		lib.DeepCopy(
+			&rosterNodeBlockList, &spec.RosterNodeBlockList,
+		)
+		status.RosterNodeBlockList = rosterNodeBlockList
+	}
+
 	return &status, nil
 }
 
@@ -979,6 +992,15 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		&seedsFinderServices, &status.SeedsFinderServices,
 	)
 	spec.SeedsFinderServices = seedsFinderServices
+
+	// RosterNodeBlockList
+	if len(status.RosterNodeBlockList) != 0 {
+		var rosterNodeBlockList []string
+		lib.DeepCopy(
+			&rosterNodeBlockList, &status.RosterNodeBlockList,
+		)
+		spec.RosterNodeBlockList = rosterNodeBlockList
+	}
 
 	return &spec, nil
 }

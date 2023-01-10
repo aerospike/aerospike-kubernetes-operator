@@ -132,6 +132,19 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	// Use policy from spec after setting up access control
+	policy := r.getClientPolicyFromSpec()
+
+	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+		return res.result, res.err
+	}
+
+	// Setup roster
+	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster")
+		return reconcile.Result{}, err
+	}
+
 	// Update the AerospikeCluster status.
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")

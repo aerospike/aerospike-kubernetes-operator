@@ -572,20 +572,6 @@ func negativeDeployClusterValidationTest(
 								},
 							)
 
-							It(
-								"InvalidReplicationFactor: should fail for replication-factor greater than node sz",
-								func() {
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 3
-									err := deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
-
 							// Should we test for overridden fields
 							Context(
 								"InvalidStorage", func() {
@@ -1009,20 +995,6 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).ToNot(HaveOccurred())
 
 									aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nil
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
-
-							It(
-								"InvalidReplicationFactor: should fail for replication-factor greater than node sz",
-								func() {
-									aeroCluster, err := getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 30
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},

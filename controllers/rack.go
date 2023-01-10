@@ -610,6 +610,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	var pod *corev1.Pod
 
+	policy := r.getClientPolicy()
+
 	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
 
 	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
@@ -619,10 +621,15 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	// Ignore safe stop check on pod not in running state.
 	if utils.IsPodRunningAndReady(pod) {
-		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{
-			pod}, ignorablePods); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
+		}
+
+		// Setup roster after migration.
+		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return found, reconcileRequeueAfter(0)
 		}
 	}
 
@@ -644,6 +651,31 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	if err := r.waitForSTSToBeReady(found); err != nil {
 		r.Log.Error(err, "Failed to wait for statefulset to be ready")
 		return found, reconcileRequeueAfter(1)
+	}
+
+	// This check is added only in scale down but not in rolling restart.
+	// If scale down leads to unavailable or dead partition then we should scale up the cluster,
+	// This can be left to the user but if we would do it here on our own then we can reuse
+	// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
+	// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
+	if err := r.validateSCClusterState(policy); err != nil {
+		// reset cluster size
+		newSize := *found.Spec.Replicas + 1
+		found.Spec.Replicas = &newSize
+
+		r.Log.Error(err, "Cluster validation failed, re-setting AerospikeCluster statefulset to previous size", "size", newSize)
+
+		if err := r.Client.Update(
+			context.TODO(), found, updateOption,
+		); err != nil {
+			return found, reconcileError(
+				fmt.Errorf(
+					"failed to update pod size %d StatefulSet pods: %v",
+					newSize, err,
+				),
+			)
+		}
+		return found, reconcileRequeueAfter(0)
 	}
 
 	// Fetch new object
