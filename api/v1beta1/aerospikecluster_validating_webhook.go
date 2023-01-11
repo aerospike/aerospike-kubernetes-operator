@@ -1369,7 +1369,7 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 				device := d.(string)
 				if deviceList[device] != "" && deviceList[device] != namespace {
 					return fmt.Errorf(
-						"device %s can not be re-used until complete cleanup namespace= %s, oldNamespace= %s",
+						"device %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
 						device, deviceList[device], namespace,
 					)
 				}
@@ -1381,7 +1381,7 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 				file := d.(string)
 				if fileList[file] != "" && fileList[file] != namespace {
 					return fmt.Errorf(
-						"file %s can not be re-used until complete cleanup namespace= %s, oldNamespace= %s",
+						"file %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
 						file, fileList[file], namespace,
 					)
 				}

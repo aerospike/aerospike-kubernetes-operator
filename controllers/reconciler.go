@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
 	"strings"
 
@@ -141,6 +142,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			"Failed to update AerospikeCluster access control status %s/%s",
 			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
+
 		return reconcile.Result{}, err
 	}
 
@@ -161,7 +163,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		// Setup roster
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, nil); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return reconcile.Result{}, err
 		}
@@ -717,28 +719,25 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) removedNamespaces() ([]string, error) {
-
-	var ns []string
-	statusNamespaces := make(map[string]bool)
-	specNamespaces := make(map[string]bool)
-
-	for _, rackStatus := range r.aeroCluster.Status.RackConfig.Racks {
-		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			statusNamespaces[statusNamespace.(map[string]interface{})["name"].(string)] = true
-		}
+func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	if err != nil {
+		return nil, err
 	}
 
+	statusNamespaces := sets.NewString()
+	for _, namespaces := range nodesNamespaces {
+		statusNamespaces.Insert(namespaces...)
+	}
+
+	specNamespaces := sets.NewString()
 	for _, rackSpec := range r.aeroCluster.Spec.RackConfig.Racks {
-		for _, specNamespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			specNamespaces[specNamespace.(map[string]interface{})["name"].(string)] = true
+		for _, namespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			specNamespaces.Insert(namespace.(map[string]interface{})["name"].(string))
 		}
 	}
 
-	for statusNamespace := range statusNamespaces {
-		if !specNamespaces[statusNamespace] {
-			ns = append(ns, statusNamespace)
-		}
-	}
-	return ns, nil
+	removedNamespaces := statusNamespaces.Difference(specNamespaces)
+
+	return removedNamespaces.List(), nil
 }
