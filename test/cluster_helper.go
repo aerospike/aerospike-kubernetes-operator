@@ -85,7 +85,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		}
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -110,7 +110,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -171,7 +171,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -196,7 +196,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -1007,18 +1007,10 @@ func createDummyAerospikeCluster(
 							"name":               "test",
 							"memory-size":        1000955200,
 							"replication-factor": 2,
+							"strong-consistency": true,
 							"storage-engine": map[string]interface{}{
 								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
-						map[string]interface{}{
-							"name":               "bar",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type": "memory",
 							},
 						},
 					},
