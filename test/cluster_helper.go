@@ -1007,18 +1007,10 @@ func createDummyAerospikeCluster(
 							"name":               "test",
 							"memory-size":        1000955200,
 							"replication-factor": 2,
+							"strong-consistency": true,
 							"storage-engine": map[string]interface{}{
 								"type":    "device",
 								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
-						map[string]interface{}{
-							"name":               "bar",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type": "memory",
 							},
 						},
 					},

@@ -887,9 +887,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
 					}
 					for index := range statusMounts {
-						statusMounts[index] = statusMounts[index] + "/*"
+						removedFiles = append(removedFiles, statusMounts[index]+"/*")
 					}
-					removedFiles = append(removedFiles, statusMounts...)
 				}
 			}
 		}
