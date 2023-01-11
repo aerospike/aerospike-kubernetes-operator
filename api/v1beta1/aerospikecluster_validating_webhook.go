@@ -272,12 +272,13 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 		for _, nsConfInterface := range nsList {
 			nsConf := nsConfInterface.(map[string]interface{})
 
-			isEnabled, err := isNSSCEnabled(nsConf)
-			if err != nil {
-				return err
-			}
+			isEnabled := isNSSCEnabled(nsConf)
 			if isEnabled {
 				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
+
+				if isInMemoryNamespace(nsConf) {
+					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf["name"])
+				}
 			}
 		}
 
@@ -1073,10 +1074,7 @@ func validateNamespaceReplicationFactor(
 		return err
 	}
 
-	scEnabled, err := isNSSCEnabled(nsConf)
-	if err != nil {
-		return err
-	}
+	scEnabled := isNSSCEnabled(nsConf)
 
 	// clSize < rf is allowed in AP mode but not in sc mode
 	if scEnabled && (clSize < rf) {
@@ -1085,13 +1083,13 @@ func validateNamespaceReplicationFactor(
 
 	return nil
 }
-func isNSSCEnabled(nsConf map[string]interface{}) (bool, error) {
+func isNSSCEnabled(nsConf map[string]interface{}) bool {
 	scEnabled, ok := nsConf["strong-consistency"]
 	if !ok {
-		return false, nil
+		return false
 	}
 
-	return scEnabled.(bool), nil
+	return scEnabled.(bool)
 }
 
 func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
