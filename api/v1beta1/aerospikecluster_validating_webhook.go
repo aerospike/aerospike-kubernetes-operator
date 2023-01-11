@@ -113,6 +113,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+		c.Status.AerospikeConfig,
 	); err != nil {
 		return err
 	}
@@ -372,10 +373,18 @@ func (c *AerospikeCluster) validateRackUpdate(
 				}
 
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
+					var rackStatusConfig *AerospikeConfigSpec
+					for _, statusRack := range c.Status.RackConfig.Racks {
+						if statusRack.ID == newRack.ID {
+							rackStatusConfig = &statusRack.AerospikeConfig
+							break
+						}
+					}
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -1004,7 +1013,7 @@ func validateNamespaceConfig(
 		}
 	}
 
-	err = validateStorageEngineDeviceList(nsConfInterfaceList, nil)
+	_, _, err = validateStorageEngineDeviceList(nsConfInterfaceList)
 	if err != nil {
 		return err
 	}
@@ -1185,7 +1194,7 @@ func validateSecurityContext(
 
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger, incomingVersion, outgoingVersion string,
-	incomingSpec, outgoingSpec *AerospikeConfigSpec,
+	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 	if err := validateSecurityConfigUpdate(
@@ -1214,7 +1223,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(incomingSpec, outgoingSpec); err != nil {
+	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus); err != nil {
 		return err
 	}
 
@@ -1236,9 +1245,14 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
+	var statusNsConfList []interface{}
+	if currentStatus != nil && len(currentStatus.Value) != 0 {
+		statusConf := currentStatus.Value
+		statusNsConfList = statusConf["namespaces"].([]interface{})
+	}
 
 	newNsConfList := newConf["namespaces"].([]interface{})
 	oldNsConfList := oldConf["namespaces"].([]interface{})
@@ -1288,7 +1302,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 		}
 	}
 
-	err := validateStorageEngineDeviceList(newNsConfList, oldNsConfList)
+	err := validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
 	if err != nil {
 		return err
 	}
@@ -1297,49 +1311,80 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	return nil
 }
 
-func validateStorageEngineDeviceList(nsConfList []interface{}, oldNsConfList []interface{}) error {
+func validateStorageEngineDeviceList(nsConfList []interface{}) (map[string]string, map[string]string, error) {
 	deviceList := map[string]string{}
+	fileList := map[string]string{}
 
 	// build a map device -> namespace
 	for _, nsConfInterface := range nsConfList {
 		nsConf := nsConfInterface.(map[string]interface{})
 		namespace := nsConf["name"].(string)
 		storage := nsConf["storage-engine"].(map[string]interface{})
-		devices, ok := storage["devices"]
-		if !ok {
-			continue
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				previousNamespace, exists := deviceList[device]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"device %s is already being referenced in multiple namespaces (%s, %s)",
+						device, previousNamespace, namespace,
+					)
+				} else {
+					deviceList[device] = namespace
+				}
+			}
 		}
 
-		for _, d := range devices.([]interface{}) {
-			device := d.(string)
-			previousNamespace, exists := deviceList[device]
-			if exists {
-				return fmt.Errorf(
-					"device %s is already being referenced in multiple namespaces (%s, %s)",
-					device, previousNamespace, namespace,
-				)
-			} else {
-				deviceList[device] = namespace
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				previousNamespace, exists := fileList[file]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"file %s is already being referenced in multiple namespaces (%s, %s)",
+						file, previousNamespace, namespace,
+					)
+				} else {
+					fileList[file] = namespace
+				}
 			}
 		}
 	}
+	return deviceList, fileList, nil
+}
 
-	for _, oldNsConfInterface := range oldNsConfList {
-		nsConf := oldNsConfInterface.(map[string]interface{})
+func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interface{}) error {
+
+	deviceList, fileList, err := validateStorageEngineDeviceList(nsConfList)
+	if err != nil {
+		return err
+	}
+
+	for _, statusNsConfInterface := range statusNsConfList {
+		nsConf := statusNsConfInterface.(map[string]interface{})
 		namespace := nsConf["name"].(string)
 		storage := nsConf["storage-engine"].(map[string]interface{})
-		devices, ok := storage["devices"]
-		if !ok {
-			continue
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				if deviceList[device] != "" && deviceList[device] != namespace {
+					return fmt.Errorf(
+						"device %s can not be re-used until complete cleanup namespace= %s, oldNamespace= %s",
+						device, deviceList[device], namespace,
+					)
+				}
+			}
 		}
 
-		for _, d := range devices.([]interface{}) {
-			device := d.(string)
-			if deviceList[device] != "" && deviceList[device] != namespace {
-				return fmt.Errorf(
-					"device %s can not be re-used in single CR update namespace= %s, oldNamespace= %s",
-					device, deviceList[device], namespace,
-				)
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				if fileList[file] != "" && fileList[file] != namespace {
+					return fmt.Errorf(
+						"file %s can not be re-used until complete cleanup namespace= %s, oldNamespace= %s",
+						file, fileList[file], namespace,
+					)
+				}
 			}
 		}
 	}
