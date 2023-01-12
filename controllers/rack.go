@@ -538,6 +538,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
+		r.Log.Info("Calculated batch for doing rolling upgrade",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+
 		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
@@ -779,6 +785,12 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	if len(podsBatchList) > 0 {
 		// Handle one batch
 		podsBatch := podsBatchList[0]
+
+		r.Log.Info("Calculated batch for doing rolling restart",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
 
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
