@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
 	"strings"
 
@@ -113,6 +114,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
 		return reconcile.Result{}, e
 	}
+
 	if err := deployment.InfoQuiesceUndo(
 		r.Log,
 		r.getClientPolicy(), allHostConns,
@@ -132,17 +134,39 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	// Use policy from spec after setting up access control
-	policy := r.getClientPolicyFromSpec()
+	// Update the AerospikeCluster status.
+	if err := r.updateAccessControlStatus(); err != nil {
+		r.Log.Error(err, "Failed to update AerospikeCluster access control status")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
+			"Failed to update AerospikeCluster access control status %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
 
-	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
-		return res.result, res.err
+		return reconcile.Result{}, err
 	}
 
-	// Setup roster
-	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster")
-		return reconcile.Result{}, err
+	// Use policy from spec after setting up access control
+	policy := r.getClientPolicy()
+
+	// revert migrate-fill-delay to original value if it was set to 0 during scale down
+	// Passing first rack from the list as all the racks will have same migrate-fill-delay
+	if res := r.setMigrateFillDelay(policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
+		false, nil); !res.isSuccess {
+		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
+		return reconcile.Result{}, res.err
+	}
+
+	if asdbv1beta1.IsClusterSCEnabled(r.aeroCluster) {
+		if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+			return res.result, res.err
+		}
+
+		// Setup roster
+		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, nil); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Update the AerospikeCluster status.
@@ -281,6 +305,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl() error {
 			r.aeroCluster.Name,
 		)
 	}
+
 	return err
 }
 
@@ -320,6 +345,41 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
+	return nil
+}
+
+func (r *SingleClusterReconciler) updateAccessControlStatus() error {
+	if r.aeroCluster.Spec.AerospikeAccessControl == nil {
+		return nil
+	}
+
+	r.Log.Info("Update access control status for AerospikeCluster")
+
+	// Get the old object, it may have been updated in between.
+	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	if err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	); err != nil {
+		return err
+	}
+
+	// AerospikeAccessControl
+	statusAerospikeAccessControl := &asdbv1beta1.AerospikeAccessControlSpec{}
+	lib.DeepCopy(
+		statusAerospikeAccessControl, r.aeroCluster.Spec.AerospikeAccessControl,
+	)
+
+	newAeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
+
+	if err := r.patchStatus(newAeroCluster); err != nil {
+		return fmt.Errorf("error updating status: %w", err)
+	}
+
+	r.aeroCluster = newAeroCluster
+	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
+
 	return nil
 }
 
@@ -659,28 +719,25 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) removedNamespaces() ([]string, error) {
-
-	var ns []string
-	statusNamespaces := make(map[string]bool)
-	specNamespaces := make(map[string]bool)
-
-	for _, rackStatus := range r.aeroCluster.Status.RackConfig.Racks {
-		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			statusNamespaces[statusNamespace.(map[string]interface{})["name"].(string)] = true
-		}
+func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	if err != nil {
+		return nil, err
 	}
 
+	statusNamespaces := sets.NewString()
+	for _, namespaces := range nodesNamespaces {
+		statusNamespaces.Insert(namespaces...)
+	}
+
+	specNamespaces := sets.NewString()
 	for _, rackSpec := range r.aeroCluster.Spec.RackConfig.Racks {
-		for _, specNamespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			specNamespaces[specNamespace.(map[string]interface{})["name"].(string)] = true
+		for _, namespace := range rackSpec.AerospikeConfig.Value["namespaces"].([]interface{}) {
+			specNamespaces.Insert(namespace.(map[string]interface{})["name"].(string))
 		}
 	}
 
-	for statusNamespace := range statusNamespaces {
-		if !specNamespaces[statusNamespace] {
-			ns = append(ns, statusNamespace)
-		}
-	}
-	return ns, nil
+	removedNamespaces := statusNamespaces.Difference(specNamespaces)
+
+	return removedNamespaces.List(), nil
 }

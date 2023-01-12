@@ -60,7 +60,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return res
 	}
 
-	if err := r.validateSCClusterState(policy); err != nil {
+	if err := r.validateSCClusterState(policy, ignorablePods); err != nil {
 		return reconcileError(err)
 	}
 
@@ -71,7 +71,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod) error {
-	removedNSes, err := r.removedNamespaces()
+	removedNSes, err := r.removedNamespaces(allHostConns)
 	if err != nil {
 		return err
 	}
@@ -281,4 +281,47 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 
 func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
+}
+
+func (r *SingleClusterReconciler) setMigrateFillDelay(policy *as.ClientPolicy,
+	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
+	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
+	if err != nil {
+		reconcileError(err)
+	}
+
+	var oldMigrateFillDelay int
+
+	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
+		oldMigrateFillDelay, err = asdbv1beta1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
+		if err != nil {
+			reconcileError(err)
+		}
+	}
+
+	if migrateFillDelay == 0 && oldMigrateFillDelay == 0 {
+		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
+		return reconcileSuccess()
+	}
+
+	// Set migrate-fill-delay to 0 if setToZero flag is set
+	if setToZero {
+		migrateFillDelay = 0
+	}
+
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
+		return reconcileError(err)
+	}
+
+	return reconcileSuccess()
 }

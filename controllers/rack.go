@@ -538,6 +538,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
+		r.Log.Info("Calculated batch for doing rolling upgrade",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+
 		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
@@ -551,15 +557,9 @@ func (r *SingleClusterReconciler) upgradeRack(
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			"[rack-%d] Updated Containers on Pods %v", rackState.Rack.ID, podNames)
 
-		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
-		// For each file removed from a namespace, it is deleted right away.
-		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
-			return statefulSet, reconcileError(err)
-		}
-
 		// Handle the next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
-			return statefulSet, reconcileRequeueAfter(0)
+			return statefulSet, reconcileRequeueAfter(1)
 		}
 
 		// If it's last batch then go ahead
@@ -608,13 +608,13 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, reconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
+	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
+
+	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
 	var pod *corev1.Pod
 
 	policy := r.getClientPolicy()
 
-	// code flow will reach this stage only when found.Spec.Replicas > desiredSize
-
-	// maintain list of removed pods. It will be used for alumni-reset and tip-clear
 	podName := getSTSPodName(found.Name, *found.Spec.Replicas-1)
 
 	pod = utils.GetPod(podName, oldPodList.Items)
@@ -627,10 +627,17 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		// Setup roster after migration.
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
-			return found, reconcileRequeueAfter(0)
+			return found, reconcileRequeueAfter(1)
 		}
+	}
+
+	// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
+	// temporarily add the pod to be deleted in ignorablePods slice to avoid setting migrate-fill-delay to pod when pod is not ready
+	if res := r.setMigrateFillDelay(policy, &rackState.Rack.AerospikeConfig, true,
+		append(ignorablePods, *pod)); !res.isSuccess {
+		return found, res
 	}
 
 	// Update new object with new size
@@ -658,7 +665,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// This can be left to the user but if we would do it here on our own then we can reuse
 	// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
 	// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
-	if err := r.validateSCClusterState(policy); err != nil {
+	if err = r.validateSCClusterState(policy, ignorablePods); err != nil {
 		// reset cluster size
 		newSize := *found.Spec.Replicas + 1
 		found.Spec.Replicas = &newSize
@@ -675,7 +682,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				),
 			)
 		}
-		return found, reconcileRequeueAfter(0)
+		return found, reconcileRequeueAfter(1)
 	}
 
 	// Fetch new object
@@ -709,7 +716,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas,
 		desiredSize,
 	)
-	return found, reconcileRequeueAfter(0)
+	return found, reconcileRequeueAfter(1)
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
@@ -779,19 +786,20 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
+		r.Log.Info("Calculated batch for doing rolling restart",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
 			return found, res
 		}
 
-		// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
-		// For each file removed from a namespace, it is deleted right away.
-		if err := r.handleNSOrDeviceRemoval(rackState, podsBatch); err != nil {
-			return found, reconcileError(err)
-		}
 		// Handle next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
-			return found, reconcileRequeueAfter(0)
+			return found, reconcileRequeueAfter(1)
 		}
 
 		// If it's last batch then go ahead
