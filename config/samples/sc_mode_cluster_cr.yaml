@@ -8,7 +8,7 @@ spec:
   size: 4
   image: aerospike/aerospike-server-enterprise:6.1.0.1
 
-  rosterBlockList:
+  rosterNodeBlockList:
     - 1A0
   rackConfig:
     namespaces:
