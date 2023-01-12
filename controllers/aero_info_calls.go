@@ -60,7 +60,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return res
 	}
 
-	if err := r.validateSCClusterState(policy); err != nil {
+	if err := r.validateSCClusterState(policy, ignorablePods); err != nil {
 		return reconcileError(err)
 	}
 
@@ -71,7 +71,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod) error {
-	removedNSes, err := r.removedNamespaces()
+	removedNSes, err := r.removedNamespaces(allHostConns)
 	if err != nil {
 		return err
 	}

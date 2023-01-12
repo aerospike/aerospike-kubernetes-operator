@@ -538,6 +538,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
+		r.Log.Info("Calculated batch for doing rolling upgrade",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+
 		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
@@ -553,7 +559,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 		// Handle the next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
-			return statefulSet, reconcileRequeueAfter(0)
+			return statefulSet, reconcileRequeueAfter(1)
 		}
 
 		// If it's last batch then go ahead
@@ -621,9 +627,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		// Setup roster after migration.
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList); err != nil {
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
-			return found, reconcileRequeueAfter(0)
+			return found, reconcileRequeueAfter(1)
 		}
 	}
 
@@ -659,7 +665,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// This can be left to the user but if we would do it here on our own then we can reuse
 	// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
 	// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
-	if err := r.validateSCClusterState(policy); err != nil {
+	if err = r.validateSCClusterState(policy, ignorablePods); err != nil {
 		// reset cluster size
 		newSize := *found.Spec.Replicas + 1
 		found.Spec.Replicas = &newSize
@@ -676,7 +682,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				),
 			)
 		}
-		return found, reconcileRequeueAfter(0)
+		return found, reconcileRequeueAfter(1)
 	}
 
 	// Fetch new object
@@ -710,7 +716,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		rackState.Rack.ID, found.Namespace, found.Name, *found.Spec.Replicas,
 		desiredSize,
 	)
-	return found, reconcileRequeueAfter(0)
+	return found, reconcileRequeueAfter(1)
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
@@ -780,6 +786,12 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		// Handle one batch
 		podsBatch := podsBatchList[0]
 
+		r.Log.Info("Calculated batch for doing rolling restart",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(rearrangedPods),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
 			return found, res
@@ -787,7 +799,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 
 		// Handle next batch in subsequent Reconcile.
 		if len(podsBatchList) > 1 {
-			return found, reconcileRequeueAfter(0)
+			return found, reconcileRequeueAfter(1)
 		}
 
 		// If it's last batch then go ahead

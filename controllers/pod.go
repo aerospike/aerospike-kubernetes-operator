@@ -332,7 +332,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	}
 
 	if len(activePods) != 0 {
-		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(failedPods))
+		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}

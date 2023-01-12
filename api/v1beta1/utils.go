@@ -432,3 +432,19 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 
 	return fillDelay, nil
 }
+
+// IsClusterSCEnabled returns true if cluster has a sc namespace
+func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
+	// Look inside only 1st rack. SC namespaces should be same across all the racks
+	rack := aeroCluster.Spec.RackConfig.Racks[0]
+
+	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+	for _, nsConfInterface := range nsList {
+		isEnabled := isNSSCEnabled(nsConfInterface.(map[string]interface{}))
+		if isEnabled {
+			return true
+		}
+	}
+
+	return false
+}
