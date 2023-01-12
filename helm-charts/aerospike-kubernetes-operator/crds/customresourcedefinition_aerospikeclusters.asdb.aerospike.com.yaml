@@ -3696,6 +3696,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -4827,6 +4831,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -5257,7 +5265,20 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
                   that allow c
@@ -5352,6 +5373,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -8781,6 +8806,12 @@ spec:
                       description: 'AerospikeConfigHash is ripemd160 hash of aerospikeConfig
                         used by this '
                       type: string
+                    dirtyVolumes:
+                      description: DirtyVolumes is the list of volume names that are
+                        removed from aerospi
+                      items:
+                        type: string
+                      type: array
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -9557,6 +9588,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -10688,6 +10723,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -11118,6 +11157,13 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
               resources:
                 description: Define resources requests and limits for Aerospike Server
@@ -11144,6 +11190,12 @@ spec:
                       resources required.
                     type: object
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aero
@@ -11238,6 +11290,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
