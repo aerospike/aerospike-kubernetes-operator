@@ -238,7 +238,7 @@ var _ = Describe("SCMode", func() {
 			racks := getDummyRackConf(1, 2)
 
 			sc1Name := "sc1"
-			sc1Path := "test/dev/" + sc1Name
+			sc1Path := "/test/dev/" + sc1Name
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
 
@@ -251,7 +251,7 @@ var _ = Describe("SCMode", func() {
 			}
 
 			sc2Name := "sc2"
-			sc2Path := "test/dev/" + sc2Name
+			sc2Path := "/test/dev/" + sc2Name
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc2Name, sc2Path))
 
@@ -273,7 +273,7 @@ var _ = Describe("SCMode", func() {
 			racks := getDummyRackConf(1)
 
 			sc1Name := "sc1"
-			sc1Path := "test/dev/" + sc1Name
+			sc1Path := "/test/dev/" + sc1Name
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
 
