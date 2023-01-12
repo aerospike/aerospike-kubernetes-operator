@@ -105,6 +105,11 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := "test"
 
+			addedSCNs := "newscns"
+			path := "/test/dev/" + addedSCNs
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(addedSCNs, path))
+
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
@@ -113,16 +118,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			addedSCNs := "newscns"
-			SCConf := map[string]interface{}{
-				"name":               addedSCNs,
-				"memory-size":        1000955200,
-				"replication-factor": 2,
-				"strong-consistency": true,
-				"storage-engine": map[string]interface{}{
-					"type": "memory",
-				},
-			}
+			SCConf := getSCNamespaceConfig(addedSCNs, path)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
 
 			err = updateAndWait(k8sClient, ctx, aeroCluster)
@@ -240,39 +236,34 @@ var _ = Describe("SCMode", func() {
 		It("Should not allow different sc namespaces in different racks", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1, 2)
+
+			sc1Name := "sc1"
+			sc1Path := "test/dev/" + sc1Name
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
+
 			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "sc1",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type": "memory",
-							},
-						},
+						getSCNamespaceConfig(sc1Name, sc1Path),
 					},
 				},
 			}
+
+			sc2Name := "sc2"
+			sc2Path := "test/dev/" + sc2Name
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc2Name, sc2Path))
+
 			racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "sc2",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type": "memory",
-							},
-						},
+						getSCNamespaceConfig(sc2Name, sc2Path),
 					},
 				},
 			}
 
 			aeroCluster.Spec.RackConfig.Racks = racks
-
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
@@ -280,13 +271,38 @@ var _ = Describe("SCMode", func() {
 		It("Should not allow cluster size < replication factor for sc namespace", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
+
+			sc1Name := "sc1"
+			sc1Path := "test/dev/" + sc1Name
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
+
+			conf := getSCNamespaceConfig(sc1Name, sc1Path)
+			conf["replication-factor"] = 5
+			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{conf},
+				},
+			}
+
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should not allow in-memory sc namespace", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			racks := getDummyRackConf(1)
+
+			sc1Name := "sc1"
 			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
 						map[string]interface{}{
-							"name":               "sc1",
+							"name":               sc1Name,
 							"memory-size":        1000955200,
-							"replication-factor": 5,
+							"replication-factor": 2,
 							"strong-consistency": true,
 							"storage-engine": map[string]interface{}{
 								"type": "memory",
@@ -297,10 +313,10 @@ var _ = Describe("SCMode", func() {
 			}
 
 			aeroCluster.Spec.RackConfig.Racks = racks
-
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
+
 	})
 })
 
@@ -439,16 +455,7 @@ func getSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 			"security": map[string]interface{}{},
 			"network":  getNetworkConfig(),
 			"namespaces": []interface{}{
-				map[string]interface{}{
-					"name":               "test",
-					"memory-size":        1000955200,
-					"replication-factor": 2,
-					"strong-consistency": true,
-					"storage-engine": map[string]interface{}{
-						"type":    "device",
-						"devices": []interface{}{"/test/dev/xvdf"},
-					},
-				},
+				getSCNamespaceConfig("test", "/test/dev/xvdf"),
 			},
 		},
 	}

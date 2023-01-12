@@ -22,11 +22,12 @@ var _ = Describe(
 
 		Context(
 			"WarmRestart", func() {
-				It(
-					"Should work with tini", func() {
-						WarmRestart(ctx)
-					},
-				)
+				// TODO: Uncomment this test when aerospike server images start supporting warm restart
+				//It(
+				//	"Should work with tini", func() {
+				//		WarmRestart(ctx)
+				//	},
+				//)
 				It(
 					"Should cold start without tini", func() {
 						PodRestart(ctx)

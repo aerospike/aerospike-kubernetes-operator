@@ -305,16 +305,7 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	// Change namespace storage-engine
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
 
-	dynamicNs1 := map[string]interface{}{
-		"name":               "dynamicns1",
-		"memory-size":        1000955200,
-		"replication-factor": 2,
-		"storage-engine": map[string]interface{}{
-			"type":    "device",
-			"devices": []interface{}{"/test/dev/dynamicns1"},
-		},
-	}
-
+	dynamicNs1 := getNonSCNamespaceConfig("dynamicns1", "/test/dev/dynamicns1")
 	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 	nsList = append(nsList, dynamicNs1)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
@@ -740,15 +731,7 @@ func createAerospikeClusterPost460(
 					},
 					"network": getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -809,15 +792,7 @@ func createAerospikeClusterPost560(
 					"security": map[string]interface{}{},
 					"network":  getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -919,15 +894,7 @@ func createDummyAerospikeClusterWithRFAndStorage(
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": rf,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", rf),
 					},
 				},
 			},
@@ -944,15 +911,7 @@ func createNonSCDummyAerospikeCluster(
 ) *asdbv1beta1.AerospikeCluster {
 	aerospikeCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 	aerospikeCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
-		map[string]interface{}{
-			"name":               "test",
-			"memory-size":        1000955200,
-			"replication-factor": 2,
-			"storage-engine": map[string]interface{}{
-				"type":    "device",
-				"devices": []interface{}{"/test/dev/xvdf"},
-			},
-		},
+		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 	}
 
 	return aerospikeCluster
@@ -1003,16 +962,7 @@ func createDummyAerospikeCluster(
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -1196,15 +1146,7 @@ func createSSDStorageCluster(
 	)
 
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
-		map[string]interface{}{
-			"name":               "test",
-			"memory-size":        2000955200,
-			"replication-factor": repFact,
-			"storage-engine": map[string]interface{}{
-				"type":    "device",
-				"devices": []interface{}{"/test/dev/xvdf"},
-			},
-		},
+		getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", int(repFact)),
 	}
 	return aeroCluster
 }
@@ -1426,4 +1368,49 @@ func getBasicStorageSpecObject() asdbv1beta1.AerospikeStorageSpec {
 		},
 	}
 	return storage
+}
+
+func getStorageVolumeForAerospike(name, path string) asdbv1beta1.VolumeSpec {
+	return asdbv1beta1.VolumeSpec{
+		Name: name,
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: path,
+		},
+	}
+}
+
+func getSCNamespaceConfig(name, path string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getNonSCNamespaceConfig(name, path string) map[string]interface{} {
+	return getNonSCNamespaceConfigWithRF(name, path, 2)
+}
+
+func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"memory-size":        1000955200,
+		"replication-factor": rf,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+	}
 }
