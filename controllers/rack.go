@@ -621,15 +621,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	// Ignore safe stop check on pod not in running state.
 	if utils.IsPodRunningAndReady(pod) {
-		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods, true); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
-		}
-
-		// Setup roster after migration.
-		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
-			r.Log.Error(err, "Failed to set roster for cluster")
-			return found, reconcileRequeueAfter(1)
 		}
 	}
 
