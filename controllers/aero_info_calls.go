@@ -33,7 +33,7 @@ import (
 // The ignorablePods list should be a list of failed or pending pods that are going to be
 // deleted eventually and are safe to ignore in stability checks.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePods []corev1.Pod,
+	pods []*corev1.Pod, ignorablePods []corev1.Pod, setRoster bool,
 ) reconcileResult {
 	if len(pods) == 0 {
 		return reconcileSuccess()
@@ -60,8 +60,16 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return res
 	}
 
-	if err := r.validateSCClusterState(policy, ignorablePods); err != nil {
-		return reconcileError(err)
+	if setRoster {
+		// Setup roster after migration.
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster")
+			return reconcileRequeueAfter(1)
+		}
+	} else {
+		if err := r.validateSCClusterState(policy, ignorablePods); err != nil {
+			return reconcileError(err)
+		}
 	}
 
 	if err := r.quiescePods(policy, allHostConns, pods); err != nil {

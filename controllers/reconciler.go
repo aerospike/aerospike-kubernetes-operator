@@ -158,8 +158,10 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if asdbv1beta1.IsClusterSCEnabled(r.aeroCluster) {
-		if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
-			return res.result, res.err
+		if r.aeroCluster.Status.AerospikeConfig != nil {
+			if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
+				return res.result, res.err
+			}
 		}
 
 		// Setup roster
