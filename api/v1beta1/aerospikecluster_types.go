@@ -70,6 +70,8 @@ type AerospikeClusterSpec struct {
 	// clients to discover Aerospike cluster nodes.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
+
+	UpdateConfigMapOnly bool `json:"updateConfigMapOnly,omitempty"`
 }
 
 type SeedsFinderServices struct {

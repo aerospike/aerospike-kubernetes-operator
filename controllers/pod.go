@@ -138,6 +138,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
+	if restartType == QuickRestart && r.aeroCluster.Spec.UpdateConfigMapOnly {
+		return NoRestart, nil
+	}
 	return restartType, nil
 }
 

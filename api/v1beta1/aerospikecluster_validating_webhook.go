@@ -1159,7 +1159,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(incomingSpec, outgoingSpec); err != nil {
+	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, incomingVersion); err != nil {
 		return err
 	}
 
@@ -1181,7 +1181,7 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec, incomingVersion string) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1211,7 +1211,12 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 			if singleConf["name"] == oldSingleConf["name"] {
 
 				// replication-factor update not allowed
-				if isValueUpdated(
+
+				val, err := asconfig.CompareVersions(incomingVersion, "6.0.0.0")
+				if err != nil {
+					return fmt.Errorf("failed to check image version: %v", err)
+				}
+				if (singleConf["strong-consistency"] == true || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(

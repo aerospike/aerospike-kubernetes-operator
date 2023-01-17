@@ -5773,6 +5773,8 @@ spec:
                     - name
                     x-kubernetes-list-type: map
                 type: object
+              updateConfigMapOnly:
+                type: boolean
               validationPolicy:
                 description: ValidationPolicy controls validation of the Aerospike
                   cluster resource
