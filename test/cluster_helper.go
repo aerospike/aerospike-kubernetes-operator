@@ -618,21 +618,6 @@ func deployClusterWithTO(
 	)
 }
 
-func updateCluster(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1beta1.AerospikeCluster,
-) error {
-	err := k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	return waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-}
-
 func updateSTS(
 	k8sClient client.Client, ctx goctx.Context,
 	sts *appsv1.StatefulSet,
@@ -642,7 +627,7 @@ func updateSTS(
 }
 
 // TODO: remove it
-func updateAndWait(
+func updateCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
@@ -650,11 +635,13 @@ func updateAndWait(
 	if err != nil {
 		return err
 	}
-	// Currently waitForAerospikeCluster doesn't check for config update
-	// How to validate if its old cluster or new cluster with new config
-	// Hence sleep.
-	// TODO: find another way or validate config also
-	time.Sleep(5 * time.Second)
+
+	aeroCluster, err = getCluster(
+		k8sClient, ctx, getClusterNamespacedName(aeroCluster.Name, aeroCluster.Namespace),
+	)
+	if err != nil {
+		return err
+	}
 
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,

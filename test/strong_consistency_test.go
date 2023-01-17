@@ -121,7 +121,7 @@ var _ = Describe("SCMode", func() {
 			SCConf := getSCNamespaceConfig(addedSCNs, path)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
@@ -141,7 +141,7 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
@@ -153,7 +153,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace = "test"
 
-			err = updateAndWait(k8sClient, ctx, aeroCluster)
+			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})

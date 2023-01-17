@@ -52,7 +52,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = true
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, true)
 
@@ -63,7 +63,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = false
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
 

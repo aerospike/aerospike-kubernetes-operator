@@ -43,7 +43,7 @@ func addRack(
 	)
 	// Size shouldn't make any difference in working. Still put different size to check if it create any issue.
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
-	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
+	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
 	return nil
@@ -67,7 +67,7 @@ func removeLastRack(
 	// This will also indirectl check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
 
-	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
+	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
 	return nil
@@ -223,6 +223,7 @@ func validateRackEnabledCluster(
 	}
 	// Validate cluster
 	rackStateList := getConfiguredRackStateList(aeroCluster)
+	pkgLog.Info("Rack list for cluster", "racks", rackStateList)
 	for _, rackState := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForStatefulSet(
@@ -246,11 +247,13 @@ func validateRackEnabledCluster(
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
+		pkgLog.Info("Match sts and rack's scheduling policy")
 		err = validateSTSForRack(found, rackState)
 		if err != nil {
 			return err
 		}
 
+		pkgLog.Info("Check if rack's pod is scheduled in right node or not")
 		// Match Pod's Node
 		err = validateSTSPodsForRack(k8sClient, ctx, found, rackState)
 		if err != nil {
@@ -364,7 +367,7 @@ func validateSTSPodsForRack(
 			return err
 		}
 
-		// t.Logf("Pod's node %s and labels %v", pod.Spec.NodeName, node.Labels)
+		pkgLog.Info("Pod's node info", "node", pod.Spec.NodeName, "labels", node.Labels)
 
 		for k, v1 := range rackSelectorMap {
 			if v2, ok := node.Labels[k]; !ok {

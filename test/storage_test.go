@@ -421,7 +421,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes = append(
 									aeroCluster.Spec.Storage.Volumes, volume,
 								)
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
@@ -435,7 +435,7 @@ var _ = Describe(
 								)
 								aeroCluster.Spec = newAeroCluster.Spec
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 							},
 						)
@@ -495,7 +495,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes = append(
 									aeroCluster.Spec.Storage.Volumes, volume,
 								)
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
@@ -511,7 +511,7 @@ var _ = Describe(
 									},
 								}
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 							},
 						)
@@ -541,7 +541,7 @@ var _ = Describe(
 									},
 								}
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster, err = getCluster(
@@ -557,7 +557,7 @@ var _ = Describe(
 									aeroCluster.Spec.Storage.Volumes[0].Sidecars,
 									va,
 								)
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
@@ -567,7 +567,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
@@ -577,7 +577,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{}
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 							},
 						)

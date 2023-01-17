@@ -190,7 +190,7 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig = rackConf
 
 						// All pods should move to node with nodeName
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Verify if all the pods are moved to given node
