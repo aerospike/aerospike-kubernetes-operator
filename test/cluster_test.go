@@ -43,6 +43,55 @@ var _ = Describe(
 				UpdateClusterTest(ctx)
 			},
 		)
+		Context(
+			"ScaleDownWithMigrateFillDelay", func() {
+				clusterNamespacedName := getClusterNamespacedName(
+					"migrate-fill-delay-cluster", namespace)
+				migrateFillDelay := int64(120)
+				BeforeEach(
+					func() {
+						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] = migrateFillDelay
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					},
+				)
+
+				It("Should ignore migrate-fill-delay while scaling down", func() {
+
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.Size = aeroCluster.Spec.Size - 2
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					// verify that migrate-fill-delay is set to 0 while scaling down
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = waitForAerospikeCluster(
+						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+						getTimeout(2),
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					// verify that migrate-fill-delay is reverted to original value after scaling down
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
 	},
 )
 
@@ -572,20 +621,6 @@ func negativeDeployClusterValidationTest(
 								},
 							)
 
-							It(
-								"InvalidReplicationFactor: should fail for replication-factor greater than node sz",
-								func() {
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 3
-									err := deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
-
 							// Should we test for overridden fields
 							Context(
 								"InvalidStorage", func() {
@@ -1009,20 +1044,6 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).ToNot(HaveOccurred())
 
 									aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nil
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
-
-							It(
-								"InvalidReplicationFactor: should fail for replication-factor greater than node sz",
-								func() {
-									aeroCluster, err := getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 30
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},

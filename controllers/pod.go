@@ -160,7 +160,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
 			return res
 		}
 		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.isSuccess {
@@ -205,6 +205,13 @@ func (r *SingleClusterReconciler) restartASDInPod(
 
 func (r *SingleClusterReconciler) restartPods(rackState RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) reconcileResult {
 	var restartedPods []*corev1.Pod
+
+	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+	// For each file removed from a namespace, it is deleted right away.
+	if err := r.handleNSOrDeviceRemoval(rackState, podsToRestart); err != nil {
+		return reconcileError(err)
+	}
+
 	for i := range podsToRestart {
 		pod := podsToRestart[i]
 		// Check if this pod needs restart
@@ -328,8 +335,8 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	}
 
 	if len(activePods) != 0 {
-		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(failedPods))
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
 			return res
 		}
 		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.isSuccess {
@@ -343,6 +350,11 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	rackState RackState, podsToUpdate []*corev1.Pod) reconcileResult {
 
+	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
+	// For each file removed from a namespace, it is deleted right away.
+	if err := r.handleNSOrDeviceRemoval(rackState, podsToUpdate); err != nil {
+		return reconcileError(err)
+	}
 	// Delete pods
 	for _, p := range podsToUpdate {
 		if err := r.Client.Delete(context.TODO(), p); err != nil {
@@ -712,7 +724,7 @@ func getFQDNForPod(
 //
 // E.g. addressName are access, alternate-access
 func GetEndpointsFromInfo(
-	addressName string, endpointsMap map[string]interface{},
+	addressName string, endpointsMap map[string]string,
 ) []string {
 	var endpoints []string
 
@@ -815,6 +827,35 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 				if len(removedFilesPerNS) > 0 {
 					removedFiles = append(removedFiles, removedFilesPerNS...)
 				}
+				var statusMounts []string
+				specMounts := sets.String{}
+				if statusNamespace.(map[string]interface{})["index-type"] != nil {
+					statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if statusIndex["mounts"] != nil {
+						for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
+							statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+						}
+					}
+				}
+				if specNamespace.(map[string]interface{})["index-type"] != nil {
+					specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+					if specIndex["mounts"] != nil {
+						for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
+							specMounts.Insert(strings.Fields(specMountInterface.(string))...)
+						}
+					}
+				}
+
+				indexMountRemoved := false
+				for index, statusMount := range statusMounts {
+					statusMounts[index] = statusMounts[index] + "/*"
+					if !specMounts.Has(statusMount) {
+						indexMountRemoved = true
+					}
+				}
+				if indexMountRemoved {
+					removedFiles = append(removedFiles, statusMounts...)
+				}
 				break
 			}
 		}
@@ -841,11 +882,22 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState RackState, p
 				}
 				removedFiles = append(removedFiles, statusFiles...)
 			}
+			if statusNamespace.(map[string]interface{})["index-type"] != nil {
+				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+				if statusIndex["mounts"] != nil {
+					var statusMounts []string
+					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
+						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+					}
+					for index := range statusMounts {
+						removedFiles = append(removedFiles, statusMounts[index]+"/*")
+					}
+				}
+			}
 		}
 	}
 
 	for _, pod := range podsToRestart {
-		r.Log.Info("handleNSOrDeviceRemovalPerPod call", "pod", pod.Name)
 		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, pod)
 		if err != nil {
 			return err

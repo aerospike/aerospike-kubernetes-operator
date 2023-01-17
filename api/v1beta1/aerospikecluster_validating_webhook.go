@@ -21,7 +21,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,6 +28,8 @@ import (
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -103,7 +104,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
-	// MultiPodPerHost can not be updated
+	// MultiPodPerHost cannot be updated
 	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
@@ -112,6 +113,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+		c.Status.AerospikeConfig,
 	); err != nil {
 		return err
 	}
@@ -254,6 +256,41 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	if err := c.validateSCNamespaces(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateSCNamespaces() error {
+	scNamespaceSet := sets.NewString()
+
+	for i, rack := range c.Spec.RackConfig.Racks {
+		tmpSCNamespaceSet := sets.NewString()
+
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		for _, nsConfInterface := range nsList {
+			nsConf := nsConfInterface.(map[string]interface{})
+
+			isEnabled := isNSSCEnabled(nsConf)
+			if isEnabled {
+				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
+
+				if isInMemoryNamespace(nsConf) {
+					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf["name"])
+				}
+			}
+		}
+
+		if i == 0 {
+			scNamespaceSet = tmpSCNamespaceSet
+			continue
+		}
+		if !scNamespaceSet.Equal(tmpSCNamespaceSet) {
+			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
+		}
+	}
 	return nil
 }
 
@@ -316,7 +353,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 	if err != nil {
 		return err
 	}
-	// Old racks can not be updated
+	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
 	for _, oldRack := range old.Spec.RackConfig.Racks {
@@ -330,16 +367,24 @@ func (c *AerospikeCluster) validateRackUpdate(
 					oldRack.Zone != newRack.Zone {
 
 					return fmt.Errorf(
-						"old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v",
+						"old RackConfig (NodeName, RackLabel, Region, Zone) cannot be updated. Old rack %v, new rack %v",
 						oldRack, newRack,
 					)
 				}
 
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
+					var rackStatusConfig *AerospikeConfigSpec
+					for _, statusRack := range c.Status.RackConfig.Racks {
+						if statusRack.ID == newRack.ID {
+							rackStatusConfig = &statusRack.AerospikeConfig
+							break
+						}
+					}
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -436,6 +481,8 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
+	migrateFillDelaySet := sets.Int{}
+
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
@@ -471,6 +518,18 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 				)
 			}
 		}
+
+		migrateFillDelay, err := GetMigrateFillDelay(&rack.AerospikeConfig)
+		if err != nil {
+			return err
+		}
+
+		migrateFillDelaySet.Insert(migrateFillDelay)
+	}
+
+	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
+	if migrateFillDelaySet.Len() > 1 {
+		return fmt.Errorf("migrate-fill-delay value should be same across all racks")
 	}
 
 	// Validate batch upgrade/restart param
@@ -954,7 +1013,7 @@ func validateNamespaceConfig(
 		}
 	}
 
-	err = validateStorageEngineDeviceList(nsConfInterfaceList, nil)
+	_, _, err = validateStorageEngineDeviceList(nsConfInterfaceList)
 	if err != nil {
 		return err
 	}
@@ -1023,11 +1082,23 @@ func validateNamespaceReplicationFactor(
 	if err != nil {
 		return err
 	}
-	if clSize < rf {
-		return fmt.Errorf("namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
+
+	scEnabled := isNSSCEnabled(nsConf)
+
+	// clSize < rf is allowed in AP mode but not in sc mode
+	if scEnabled && (clSize < rf) {
+		return fmt.Errorf("strong-consistency namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
 	}
 
 	return nil
+}
+func isNSSCEnabled(nsConf map[string]interface{}) bool {
+	scEnabled, ok := nsConf["strong-consistency"]
+	if !ok {
+		return false
+	}
+
+	return scEnabled.(bool)
 }
 
 func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
@@ -1036,19 +1107,12 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 		rfInterface = 2 // default replication-factor
 	}
 
-	switch rf := rfInterface.(type) {
-	case int64:
-		return int(rf), nil
-	case int:
-		return rf, nil
-	case float64:
-		return int(rf), nil
-	default:
-		return 0, fmt.Errorf(
-			"namespace replication-factor %v not valid int, int64 or float64",
-			rf,
-		)
+	rf, err := GetIntType(rfInterface)
+	if err != nil {
+		return 0, fmt.Errorf("namespace replication-factor %v", err)
 	}
+
+	return rf, nil
 }
 
 func validateLoadBalancerUpdate(
@@ -1084,7 +1148,7 @@ func validateSecurityConfigUpdate(
 func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	// Security can not be updated dynamically
+	// Security cannot be updated dynamically
 	// TODO: How to enable dynamic security update, need to pass policy for individual nodes.
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, oldSecConfFound := oldConf["security"]
@@ -1130,7 +1194,7 @@ func validateSecurityContext(
 
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger, incomingVersion, outgoingVersion string,
-	incomingSpec, outgoingSpec *AerospikeConfigSpec,
+	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 	if err := validateSecurityConfigUpdate(
@@ -1142,7 +1206,7 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS can not be updated dynamically
+	// TLS cannot be updated dynamically
 	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
 	oldtls, ok11 := oldConf["network"].(map[string]interface{})["tls"]
 	newtls, ok22 := newConf["network"].(map[string]interface{})["tls"]
@@ -1159,7 +1223,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, incomingVersion); err != nil {
+	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus, incomingVersion); err != nil {
 		return err
 	}
 
@@ -1181,9 +1245,14 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec, incomingVersion string) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec, incomingVersion string) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
+	var statusNsConfList []interface{}
+	if currentStatus != nil && len(currentStatus.Value) != 0 {
+		statusConf := currentStatus.Value
+		statusNsConfList = statusConf["namespaces"].([]interface{})
+	}
 
 	newNsConfList := newConf["namespaces"].([]interface{})
 	oldNsConfList := oldConf["namespaces"].([]interface{})
@@ -1216,11 +1285,21 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec, incomin
 				if err != nil {
 					return fmt.Errorf("failed to check image version: %v", err)
 				}
-				if (singleConf["strong-consistency"] == true || val < 0) && isValueUpdated(
+				if (isNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(
-						"replication-factor cannot be update. old nsconf %v, new nsconf %v",
+						"replication-factor cannot be updated. old nsconf %v, new nsconf %v",
+						oldSingleConf, singleConf,
+					)
+				}
+
+				// strong-consistency update not allowed
+				if isValueUpdated(
+					oldSingleConf, singleConf, "strong-consistency",
+				) {
+					return fmt.Errorf(
+						"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",
 						oldSingleConf, singleConf,
 					)
 				}
@@ -1228,7 +1307,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec, incomin
 		}
 	}
 
-	err := validateStorageEngineDeviceList(newNsConfList, oldNsConfList)
+	err := validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
 	if err != nil {
 		return err
 	}
@@ -1237,49 +1316,80 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec *AerospikeConfigSpec, incomin
 	return nil
 }
 
-func validateStorageEngineDeviceList(nsConfList []interface{}, oldNsConfList []interface{}) error {
+func validateStorageEngineDeviceList(nsConfList []interface{}) (map[string]string, map[string]string, error) {
 	deviceList := map[string]string{}
+	fileList := map[string]string{}
 
 	// build a map device -> namespace
 	for _, nsConfInterface := range nsConfList {
 		nsConf := nsConfInterface.(map[string]interface{})
 		namespace := nsConf["name"].(string)
 		storage := nsConf["storage-engine"].(map[string]interface{})
-		devices, ok := storage["devices"]
-		if !ok {
-			continue
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				previousNamespace, exists := deviceList[device]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"device %s is already being referenced in multiple namespaces (%s, %s)",
+						device, previousNamespace, namespace,
+					)
+				} else {
+					deviceList[device] = namespace
+				}
+			}
 		}
 
-		for _, d := range devices.([]interface{}) {
-			device := d.(string)
-			previousNamespace, exists := deviceList[device]
-			if exists {
-				return fmt.Errorf(
-					"device %s is already being referenced in multiple namespaces (%s, %s)",
-					device, previousNamespace, namespace,
-				)
-			} else {
-				deviceList[device] = namespace
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				previousNamespace, exists := fileList[file]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"file %s is already being referenced in multiple namespaces (%s, %s)",
+						file, previousNamespace, namespace,
+					)
+				} else {
+					fileList[file] = namespace
+				}
 			}
 		}
 	}
+	return deviceList, fileList, nil
+}
 
-	for _, oldNsConfInterface := range oldNsConfList {
-		nsConf := oldNsConfInterface.(map[string]interface{})
+func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interface{}) error {
+
+	deviceList, fileList, err := validateStorageEngineDeviceList(nsConfList)
+	if err != nil {
+		return err
+	}
+
+	for _, statusNsConfInterface := range statusNsConfList {
+		nsConf := statusNsConfInterface.(map[string]interface{})
 		namespace := nsConf["name"].(string)
 		storage := nsConf["storage-engine"].(map[string]interface{})
-		devices, ok := storage["devices"]
-		if !ok {
-			continue
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				if deviceList[device] != "" && deviceList[device] != namespace {
+					return fmt.Errorf(
+						"device %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
+						device, deviceList[device], namespace,
+					)
+				}
+			}
 		}
 
-		for _, d := range devices.([]interface{}) {
-			device := d.(string)
-			if deviceList[device] != "" && deviceList[device] != namespace {
-				return fmt.Errorf(
-					"device %s can not be re-used in single CR update namespace= %s, oldNamespace= %s",
-					device, deviceList[device], namespace,
-				)
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				if fileList[file] != "" && fileList[file] != namespace {
+					return fmt.Errorf(
+						"file %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
+						file, fileList[file], namespace,
+					)
+				}
 			}
 		}
 	}

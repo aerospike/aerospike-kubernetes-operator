@@ -8,6 +8,7 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 	"net"
 	"reflect"
 
@@ -172,7 +173,7 @@ func validateNetworkPolicy(
 			)
 		}
 
-		endpointsMap, err := aerospikecluster.ParseInfoIntoMap(
+		endpointsMap, err := deployment.ParseInfoIntoMap(
 			endpointsStr, ";", "=",
 		)
 		if err != nil {

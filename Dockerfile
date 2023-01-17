@@ -1,5 +1,9 @@
 # Build the manager binary
-FROM golang:1.18 as builder
+FROM --platform=$BUILDPLATFORM golang:1.18 as builder
+
+# OS and Arch args
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -17,13 +21,13 @@ COPY pkg/ pkg/
 COPY errors/ errors/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o manager main.go
 
 # Base image
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 # Version of Operator (build arg)
-ARG VERSION="2.2.1"
+ARG VERSION="2.4.0"
 
 # User to run container as
 ARG USER="root"

@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -21,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -83,7 +85,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 		}
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -108,7 +110,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -169,7 +171,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if !contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"removed volume dynamicns missing from dirtyVolumes %v", podStatus.DirtyVolumes,
+				"removed volume dynamicns1 missing from dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -194,7 +196,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	for _, podStatus := range aeroCluster.Status.Pods {
 		if contains(podStatus.DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
-				"in-use volume dynamicns is present in dirtyVolumes %v", podStatus.DirtyVolumes,
+				"in-use volume dynamicns1 is present in dirtyVolumes %v", podStatus.DirtyVolumes,
 			)
 		}
 	}
@@ -303,16 +305,7 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	// Change namespace storage-engine
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
 
-	dynamicNs1 := map[string]interface{}{
-		"name":               "dynamicns1",
-		"memory-size":        1000955200,
-		"replication-factor": 2,
-		"storage-engine": map[string]interface{}{
-			"type":    "device",
-			"devices": []interface{}{"/test/dev/dynamicns1"},
-		},
-	}
-
+	dynamicNs1 := getNonSCNamespaceConfig("dynamicns1", "/test/dev/dynamicns1")
 	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 	nsList = append(nsList, dynamicNs1)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
@@ -434,6 +427,53 @@ func validateAerospikeConfigServiceClusterUpdate(
 	}
 
 	return nil
+}
+
+func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log logr.Logger,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64) error {
+
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Use any pod for confirmation. Using first pod for the confirmation
+	firstPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-" + strconv.Itoa(0)
+	firstPod, exists := aeroCluster.Status.Pods[firstPodName]
+	if !exists {
+		return fmt.Errorf("pod %s missing from the status", firstPodName)
+	}
+
+	host, err := createHost(firstPod)
+	if err != nil {
+		return err
+	}
+	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+
+	err = wait.Poll(
+		retryInterval, getTimeout(1), func() (done bool, err error) {
+
+			confs, err := getAsConfig(asinfo, "service")
+			if err != nil {
+				return false, err
+			}
+			svcConfs := confs["service"].(lib.Stats)
+			current, exists := svcConfs["migrate-fill-delay"]
+			if !exists {
+				return false, fmt.Errorf("migrate-fill-delay missing from the Aerospike Service config")
+			}
+
+			if current.(int64) != expectedMigFillDelay {
+				pkgLog.Info("Waiting for migrate-fill-delay to be", "value", expectedMigFillDelay)
+				return false, nil
+			}
+
+			pkgLog.Info("Found expected migrate-fill-delay", "value", expectedMigFillDelay)
+
+			return true, nil
+		})
+
+	return err
 }
 
 func upgradeClusterTest(
@@ -691,15 +731,7 @@ func createAerospikeClusterPost460(
 					},
 					"network": getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -760,15 +792,7 @@ func createAerospikeClusterPost560(
 					"security": map[string]interface{}{},
 					"network":  getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -870,15 +894,7 @@ func createDummyAerospikeClusterWithRFAndStorage(
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"memory-size":        1000955200,
-							"replication-factor": rf,
-							"storage-engine": map[string]interface{}{
-								"type":    "device",
-								"devices": []interface{}{"/test/dev/xvdf"},
-							},
-						},
+						getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", rf),
 					},
 				},
 			},
@@ -890,10 +906,70 @@ func createDummyAerospikeClusterWithRFAndStorage(
 	return aeroCluster
 }
 
+func createNonSCDummyAerospikeCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1beta1.AerospikeCluster {
+	aerospikeCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	aerospikeCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
+	}
+
+	return aerospikeCluster
+}
+
 func createDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
-	return createDummyAerospikeClusterWithRF(clusterNamespacedName, size, 1)
+	// create Aerospike custom resource
+	aeroCluster := &asdbv1beta1.AerospikeCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "asdb.aerospike.com/v1beta1",
+			Kind:       "AerospikeCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
+		},
+		Spec: asdbv1beta1.AerospikeClusterSpec{
+			Size:  size,
+			Image: latestImage,
+			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
+				Users: []asdbv1beta1.AerospikeUserSpec{
+					{
+						Name:       "admin",
+						SecretName: authSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+							"read-write",
+						},
+					},
+				},
+			},
+
+			PodSpec: asdbv1beta1.AerospikePodSpec{
+				MultiPodPerHost: true,
+				AerospikeInitContainerSpec: &asdbv1beta1.
+					AerospikeInitContainerSpec{},
+			},
+
+			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"service": map[string]interface{}{
+						"feature-key-file": "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":     defaultProtofdmax,
+					},
+					"security": map[string]interface{}{},
+					"network":  getNetworkConfig(),
+					"namespaces": []interface{}{
+						getSCNamespaceConfig("test", "/test/dev/xvdf"),
+					},
+				},
+			},
+		},
+	}
+	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+	return aeroCluster
 }
 
 func UpdateClusterImage(
@@ -1070,15 +1146,7 @@ func createSSDStorageCluster(
 	)
 
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
-		map[string]interface{}{
-			"name":               "test",
-			"memory-size":        2000955200,
-			"replication-factor": repFact,
-			"storage-engine": map[string]interface{}{
-				"type":    "device",
-				"devices": []interface{}{"/test/dev/xvdf"},
-			},
-		},
+		getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", int(repFact)),
 	}
 	return aeroCluster
 }
@@ -1300,4 +1368,49 @@ func getBasicStorageSpecObject() asdbv1beta1.AerospikeStorageSpec {
 		},
 	}
 	return storage
+}
+
+func getStorageVolumeForAerospike(name, path string) asdbv1beta1.VolumeSpec {
+	return asdbv1beta1.VolumeSpec{
+		Name: name,
+		Source: asdbv1beta1.VolumeSource{
+			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: storageClass,
+				VolumeMode:   v1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+			Path: path,
+		},
+	}
+}
+
+func getSCNamespaceConfig(name, path string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getNonSCNamespaceConfig(name, path string) map[string]interface{} {
+	return getNonSCNamespaceConfigWithRF(name, path, 2)
+}
+
+func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"memory-size":        1000955200,
+		"replication-factor": rf,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+	}
 }

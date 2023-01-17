@@ -1,0 +1,80 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  size: 4
+  image: aerospike/aerospike-server-enterprise:6.1.0.1
+
+  rosterNodeBlockList:
+    - 1A0
+  rackConfig:
+    namespaces:
+      - test
+    racks:
+      - id: 1
+      - id: 2
+
+  storage:
+    filesystemVolumePolicy:
+      initMethod: deleteFiles
+      cascadeDelete: true
+    blockVolumePolicy:
+      cascadeDelete: true
+    volumes:
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: ns
+        aerospike:
+          path: /test/dev/xvdf
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Block
+            size: 5Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
+
+  podSpec:
+    multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        secretName: auth-secret
+        roles:
+          - sys-admin
+          - user-admin
+
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security: {}
+    network:
+      service:
+        port: 3000
+      fabric:
+        port: 3001
+      heartbeat:
+        port: 3002
+    namespaces:
+      - name: test
+        memory-size: 3000000000
+        replication-factor: 2
+        strong-consistency: true
+        storage-engine:
+          type: device
+          devices:
+            - /test/dev/xvdf
