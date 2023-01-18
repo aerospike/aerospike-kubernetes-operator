@@ -5780,6 +5780,8 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               updateConfigMapOnly:
+                description: UpdateConfigMapOnly flag indicates updating config map
+                  only without ro
                 type: boolean
               validationPolicy:
                 description: ValidationPolicy controls validation of the Aerospike

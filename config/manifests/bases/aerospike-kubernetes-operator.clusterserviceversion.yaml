@@ -70,6 +70,10 @@ spec:
       - description: Storage specify persistent storage to use for the Aerospike pods
         displayName: Storage
         path: storage
+      - description: UpdateConfigMapOnly flag indicates updating config map only without
+          rolling restart.
+        displayName: Update ConfigMap Only
+        path: updateConfigMapOnly
       - description: ValidationPolicy controls validation of the Aerospike cluster
           resource.
         displayName: Validation Policy

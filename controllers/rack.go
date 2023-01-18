@@ -364,6 +364,16 @@ func (r *SingleClusterReconciler) reconcileRack(
 				}
 				return res
 			}
+		} else {
+			if r.aeroCluster.Spec.UpdateConfigMapOnly {
+				podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+				if err != nil {
+					return reconcileError(fmt.Errorf("failed to list pods: %v", err))
+				}
+				if err = r.handleNSOrDeviceRemoval(rackState, podList); err != nil {
+					return reconcileError(err)
+				}
+			}
 		}
 	}
 
