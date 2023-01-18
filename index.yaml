@@ -2,6 +2,22 @@ apiVersion: v1
 entries:
   aerospike-cluster:
   - apiVersion: v2
+    appVersion: 2.4.0
+    created: "2023-01-18T16:18:37.927940957+05:30"
+    description: A Helm chart for Aerospike Cluster Custom Resource
+    digest: 75313c1b8a4bb3c0488f29fd9c62f0b75720cdfc49dbf1cc72a0de2fcc973a3f
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-cluster
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-2.4.0.tgz
+    version: 2.4.0
+  - apiVersion: v2
     appVersion: 2.3.0
     created: "2022-11-29T18:04:03.67310356+05:30"
     description: A Helm chart for Aerospike Cluster Custom Resource
@@ -114,6 +130,22 @@ entries:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-1.0.0.tgz
     version: 1.0.0
   aerospike-kubernetes-operator:
+  - apiVersion: v2
+    appVersion: 2.4.0
+    created: "2023-01-18T16:18:37.946625014+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 5d6799ee3771b6ff8b32cb51f36c56e75f6f8a322704591ac53684fb7d705834
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-2.4.0.tgz
+    version: 2.4.0
   - apiVersion: v2
     appVersion: 2.3.0
     created: "2022-11-29T18:04:03.688558983+05:30"
