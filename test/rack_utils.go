@@ -64,7 +64,7 @@ func removeLastRack(
 
 	aeroCluster.Spec.RackConfig.Racks = racks
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
-	// This will also indirectl check if older rack is removed or not.
+	// This will also indirectly check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
 
 	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
