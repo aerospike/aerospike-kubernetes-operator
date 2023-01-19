@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -350,7 +351,7 @@ func validateSTSPodsForRack(
 	if rackState.Rack.NodeName != "" {
 		rackSelectorMap[hostKey] = rackState.Rack.NodeName
 	}
-
+	time.Sleep(10 * time.Second)
 	rackPodList, err := getRackPodList(k8sClient, ctx, found)
 	if err != nil {
 		return err
