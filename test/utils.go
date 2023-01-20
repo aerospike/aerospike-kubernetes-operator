@@ -261,7 +261,7 @@ func isClusterStateValid(
 		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
-
+	pkgLog.Info("status spec matched", "status", *statusToSpec, "spec", aeroCluster.Spec)
 	// Validate pods
 	if len(newCluster.Status.Pods) != replicas {
 		pkgLog.Info("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
