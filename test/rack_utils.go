@@ -3,11 +3,6 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"reflect"
-	"strconv"
-	"strings"
-	"time"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
@@ -17,7 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
+	"strings"
 )
 
 type RackState struct {
@@ -351,7 +349,7 @@ func validateSTSPodsForRack(
 	if rackState.Rack.NodeName != "" {
 		rackSelectorMap[hostKey] = rackState.Rack.NodeName
 	}
-	time.Sleep(10 * time.Second)
+	//time.Sleep(10 * time.Second)
 	rackPodList, err := getRackPodList(k8sClient, ctx, found)
 	if err != nil {
 		return err
