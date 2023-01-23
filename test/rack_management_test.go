@@ -17,7 +17,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 
-				FIt(
+				It(
 					"Should validate rack management flow", func() {
 						clusterName := "rack-management1"
 						clusterNamespacedName := getClusterNamespacedName(
