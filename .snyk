@@ -1,1 +1,5 @@
 ignore:
+  SNYK-RHEL8-LIBKSBA-3232176:
+      - '*':
+          reason: fix not available
+          expires: 2023-02-18T11:38:28.614Z
