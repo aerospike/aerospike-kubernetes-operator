@@ -636,13 +636,6 @@ func updateCluster(
 		return err
 	}
 
-	aeroCluster, err = getCluster(
-		k8sClient, ctx, getClusterNamespacedName(aeroCluster.Name, aeroCluster.Namespace),
-	)
-	if err != nil {
-		return err
-	}
-
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		getTimeout(aeroCluster.Spec.Size),

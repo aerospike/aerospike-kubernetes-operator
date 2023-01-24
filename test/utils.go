@@ -232,9 +232,7 @@ func waitForAerospikeCluster(
 	if err != nil {
 		return err
 	}
-	if !isValid {
-		return fmt.Errorf("cluster state not matching with desired state")
-	}
+
 	pkgLog.Info("AerospikeCluster available\n")
 
 	// make info call
@@ -257,7 +255,7 @@ func isClusterStateValid(
 		return false
 	}
 
-	if !reflect.DeepEqual(statusToSpec, &aeroCluster.Spec) {
+	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
 		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
