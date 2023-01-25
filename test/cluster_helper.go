@@ -626,7 +626,6 @@ func updateSTS(
 	return err
 }
 
-// TODO: remove it
 func updateCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
