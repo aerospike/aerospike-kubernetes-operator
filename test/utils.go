@@ -232,9 +232,7 @@ func waitForAerospikeCluster(
 	if err != nil {
 		return err
 	}
-	if !isValid {
-		return fmt.Errorf("cluster state not matching with desired state")
-	}
+
 	pkgLog.Info("AerospikeCluster available\n")
 
 	// make info call
@@ -250,16 +248,19 @@ func isClusterStateValid(
 		return false
 	}
 
+	// Validate status
 	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
 	}
+
 	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
 		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
 
+	// Validate pods
 	if len(newCluster.Status.Pods) != replicas {
 		pkgLog.Info("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
 		return false

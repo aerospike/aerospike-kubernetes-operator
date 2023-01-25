@@ -225,7 +225,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
@@ -233,7 +233,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("1%")
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -259,7 +259,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
@@ -276,7 +276,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -294,7 +294,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
@@ -309,7 +309,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -340,7 +340,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -373,7 +373,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
@@ -381,7 +381,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("1%")
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -407,7 +407,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
@@ -424,7 +424,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -442,7 +442,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
@@ -457,7 +457,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -488,7 +488,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.Image = availableImage1
-		err = updateAndWait(k8sClient, ctx, aeroCluster)
+		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

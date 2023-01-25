@@ -203,7 +203,7 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.Volumes = append(
 							aeroCluster.Spec.Storage.Volumes, volume,
 						)
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
@@ -229,7 +229,7 @@ var _ = Describe(
 						)
 						aeroCluster.Spec = newAeroCluster.Spec
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)
@@ -265,7 +265,7 @@ var _ = Describe(
 							aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
 						)
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						sts, err := getSTSFromRackID(aeroCluster, 0)
@@ -360,7 +360,7 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.Volumes = append(
 							aeroCluster.Spec.Storage.Volumes, volume,
 						)
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						isPresent, err = validateExternalVolumeInContainer(sts, 0, false)

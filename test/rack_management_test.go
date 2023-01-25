@@ -71,7 +71,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.RackConfig.Namespaces = []string{nsName}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -94,7 +94,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.RackConfig.Namespaces = []string{}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -132,7 +132,7 @@ var _ = Describe(
 
 						// This will also indirectly check if older rack is removed or not.
 						// If older node is not deleted then cluster sz will not be as expected
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -177,7 +177,7 @@ var _ = Describe(
 						racks = getDummyRackConf(1, 2, 3, 4, 5, 6)
 						aeroCluster.Spec.RackConfig.Racks = racks
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -195,7 +195,7 @@ var _ = Describe(
 						racks = getDummyRackConf(1, 2, 3, 4, 5)
 						aeroCluster.Spec.RackConfig.Racks = racks
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -297,7 +297,7 @@ var _ = Describe(
 
 								aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								err = validateRackEnabledCluster(
@@ -331,7 +331,7 @@ var _ = Describe(
 								// Increase size also so that below wait func wait for new cluster
 								aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								err = validateRackEnabledCluster(
@@ -729,7 +729,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.RackConfig.Racks[0].Region = "randomValue"
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
 							},
 						)
@@ -748,7 +748,7 @@ var _ = Describe(
 											aeroCluster.Spec.RackConfig.Racks,
 											aeroCluster.Spec.RackConfig.Racks...,
 										)
-										err = updateAndWait(
+										err = updateCluster(
 											k8sClient, ctx, aeroCluster,
 										)
 										Expect(err).Should(HaveOccurred())
@@ -766,7 +766,7 @@ var _ = Describe(
 											aeroCluster.Spec.RackConfig.Racks,
 											asdbv1beta1.Rack{ID: 20000000000},
 										)
-										err = updateAndWait(
+										err = updateCluster(
 											k8sClient, ctx, aeroCluster,
 										)
 										Expect(err).Should(HaveOccurred())

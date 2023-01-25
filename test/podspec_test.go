@@ -168,7 +168,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
 					)
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Adding the container2")
@@ -182,7 +182,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.Sidecars, sidecar2,
 					)
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating the container2")
@@ -196,7 +196,7 @@ var _ = Describe(
 						"sh", "-c", "sleep 3600",
 					}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Removing all the containers")
@@ -208,7 +208,7 @@ var _ = Describe(
 
 					aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				},
 				)
@@ -233,7 +233,7 @@ var _ = Describe(
 						},
 					}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					// validate
@@ -253,7 +253,7 @@ var _ = Describe(
 
 					// aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont2)
 
-					// err = updateAndWait(k8sClient, ctx, aeroCluster)
+					// err = updateCluster(k8sClient, ctx, aeroCluster)
 					// Expect(err).ToNot(HaveOccurred())
 
 					By("Updating the container2")
@@ -267,7 +267,7 @@ var _ = Describe(
 						"sh", "-c", "echo The app is running; sleep 5",
 					}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Removing all the containers")
@@ -280,7 +280,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
 					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				},
 				)
@@ -320,7 +320,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.Affinity = affinity
 
 					// All pods should move to node with nodeName
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Verify if all the pods are moved to given node
@@ -352,7 +352,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
 					)
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating container image and affinity together")
@@ -389,7 +389,7 @@ var _ = Describe(
 					}
 					aeroCluster.Spec.PodSpec.Affinity = &desiredAffinity
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					// validate
@@ -435,7 +435,7 @@ var _ = Describe(
 						},
 					}
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Using registry in CR")
@@ -443,7 +443,7 @@ var _ = Describe(
 					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					validateImageRegistry(k8sClient, ctx, aeroCluster, customRegistry)
@@ -454,7 +454,7 @@ var _ = Describe(
 
 					// Empty imageRegistry, should use operator envVar docker.io
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					validateImageRegistry(k8sClient, ctx, aeroCluster, operatorEnvVarRegistry)

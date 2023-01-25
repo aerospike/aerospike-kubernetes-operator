@@ -43,7 +43,7 @@ func addRack(
 	)
 	// Size shouldn't make any difference in working. Still put different size to check if it create any issue.
 	aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
-	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
+	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
 	return nil
@@ -67,7 +67,7 @@ func removeLastRack(
 	// This will also indirectly check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
 
-	if err := updateAndWait(k8sClient, ctx, aeroCluster); err != nil {
+	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
 	return nil
