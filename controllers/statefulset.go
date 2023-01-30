@@ -1133,9 +1133,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st.Spec.Template.ObjectMeta.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
 
 	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
-	if r.aeroCluster.Spec.PodSpec.DNSConfig != nil {
-		st.Spec.Template.Spec.DNSConfig = r.aeroCluster.Spec.PodSpec.DNSConfig
-	}
+	st.Spec.Template.Spec.DNSConfig = r.aeroCluster.Spec.PodSpec.DNSConfig
 
 	st.Spec.Template.Spec.SecurityContext = r.aeroCluster.Spec.PodSpec.SecurityContext
 	st.Spec.Template.Spec.ImagePullSecrets = r.aeroCluster.Spec.PodSpec.ImagePullSecrets

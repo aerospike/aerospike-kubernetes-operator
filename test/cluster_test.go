@@ -34,6 +34,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"DeployClusterWithDNSConfiguration", func() {
+				DeployClusterWithDNSConfiguration(ctx)
+			},
+		)
+		Context(
 			"CommonNegativeClusterValidationTest", func() {
 				NegativeClusterValidationTest(ctx)
 			},
@@ -235,6 +240,53 @@ func DeployClusterForDiffStorageTest(
 
 		},
 	)
+}
+
+func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
+	var aeroCluster *asdbv1beta1.AerospikeCluster
+
+	It(
+		"deploy with dnsPolicy 'None' and dnsConfig given",
+		func() {
+			clusterNamespacedName := getClusterNamespacedName(
+				"dns-config-cluster", namespace,
+			)
+			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			noneDNS := v1.DNSNone
+			aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
+
+			var kubeDNSSvc v1.Service
+
+			// fetch kube-dns service to get the DNS server IP for DNS lookup
+			// This service name is same for both kube-dns and coreDNS DNS servers
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: "kube-system",
+				Name:      "kube-dns",
+			}, &kubeDNSSvc)).ShouldNot(HaveOccurred())
+
+			dnsConfig := &v1.PodDNSConfig{
+				Nameservers: kubeDNSSvc.Spec.ClusterIPs,
+				Searches:    []string{"svc.cluster.local", "cluster.local"},
+				Options: []v1.PodDNSConfigOption{
+					{
+						Name:  "ndots",
+						Value: func(input string) *string { return &input }("5"),
+					}},
+			}
+			aeroCluster.Spec.PodSpec.DNSConfig = dnsConfig
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			sts, err := getSTSFromRackID(aeroCluster, 0)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(sts.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
+		},
+	)
+
+	AfterEach(func() {
+		_ = deleteCluster(k8sClient, ctx, aeroCluster)
+	})
 }
 
 // Test cluster cr updation
@@ -935,9 +987,11 @@ func negativeDeployClusterValidationTest(
 					It(
 						"InvalidDnsPolicy: should fail when dnsPolicy is set to 'Default'",
 						func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSDefault
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+							defaultDNS := v1.DNSDefault
+							aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
 							err := deployCluster(k8sClient, ctx, aeroCluster)
+
 							Expect(err).Should(HaveOccurred())
 						},
 					)
@@ -945,8 +999,9 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingDnsConfig: should fail when dnsPolicy is set to 'None' and no dnsConfig given",
 						func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSNone
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+							noneDNS := v1.DNSNone
+							aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
 							err := deployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 						},
@@ -1035,8 +1090,9 @@ func negativeUpdateClusterValidationTest(
 								k8sClient, ctx, clusterNamespacedName,
 							)
 							Expect(err).ToNot(HaveOccurred())
-							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSDefault
-							err = deployCluster(k8sClient, ctx, aeroCluster)
+							defaultDNS := v1.DNSDefault
+							aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
+							err = updateCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 						},
 					)
@@ -1048,8 +1104,9 @@ func negativeUpdateClusterValidationTest(
 								k8sClient, ctx, clusterNamespacedName,
 							)
 							Expect(err).ToNot(HaveOccurred())
-							aeroCluster.Spec.PodSpec.DNSPolicy = v1.DNSNone
-							err = deployCluster(k8sClient, ctx, aeroCluster)
+							noneDNS := v1.DNSNone
+							aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
+							err = updateCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 						},
 					)
