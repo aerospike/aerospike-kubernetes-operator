@@ -3,22 +3,20 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"strconv"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	lib "github.com/aerospike/aerospike-management-lib"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
@@ -297,6 +295,16 @@ func (r *SingleClusterReconciler) reconcileRack(
 					desiredSize, res.err,
 				)
 			}
+			return res
+		}
+	}
+
+	// revert migrate-fill-delay to original value if it was set to 0 during scale down
+	// Reset will be done only in case of Scale down
+	if r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size {
+		if res := r.setMigrateFillDelay(r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
+			nil); !res.isSuccess {
+			r.Log.Error(res.err, "Failed to revert migrate-fill-delay after scale down")
 			return res
 		}
 	}
