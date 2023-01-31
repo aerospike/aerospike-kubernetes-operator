@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -277,7 +278,7 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 
 func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 
-	podNameMap := make(map[string]bool)
+	podNameSet := sets.NewString()
 
 	// The default rack is not listed in config during switchover to rack aware state.
 	// Use current pod names as well.
@@ -288,10 +289,9 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 
 	for _, pod := range pods.Items {
 		fqdn := getFQDNForPod(r.aeroCluster, pod.Name)
-		podNameMap[fqdn] = true
+		podNameSet.Insert(fqdn)
 	}
 
-	podNames := make([]string, 0)
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
@@ -299,19 +299,12 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
 		for i := 0; i < size; i++ {
-			fqdn := getFQDNForPod(
-				r.aeroCluster,
-				getSTSPodName(stsName.Name, int32(i)),
-			)
-			podNameMap[fqdn] = true
+			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))
+			podNameSet.Insert(fqdn)
 		}
 	}
 
-	for fqdn := range podNameMap {
-		podNames = append(podNames, fqdn)
-	}
-
-	return podNames, nil
+	return podNameSet.List(), nil
 }
 
 func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.NamespacedName) error {

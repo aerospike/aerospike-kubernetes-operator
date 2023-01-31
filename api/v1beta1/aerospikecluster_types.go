@@ -229,6 +229,10 @@ type AerospikePodSpec struct {
 	// Effective value of the DNSPolicy
 	DNSPolicy corev1.DNSPolicy `json:"effectiveDNSPolicy,omitempty"`
 
+	// DNSConfig defines the DNS parameters of a pod in addition to those generated from DNSPolicy.
+	// This is required field when dnsPolicy is set to `None`
+	DNSConfig *corev1.PodDNSConfig `json:"dnsConfig,omitempty"`
+
 	// SecurityContext holds pod-level security attributes and common container settings.
 	// Optional: Defaults to empty.  See type description for default values of each field.
 	// +optional
