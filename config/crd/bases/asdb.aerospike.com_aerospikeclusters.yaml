@@ -209,6 +209,23 @@ spec:
                         description: Define resources requests and limits for Aerospike
                           Server Container.
                         properties:
+                          claims:
+                            description: Claims lists the names of resources, defined
+                              in spec.
+                            items:
+                              description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                              properties:
+                                name:
+                                  description: Name must match the name of one entry
+                                    in pod.spec.
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
                           limits:
                             additionalProperties:
                               anyOf:
@@ -329,6 +346,10 @@ spec:
                                 description: GMSACredentialSpecName is the name of
                                   the GMSA credential spec to use.
                                 type: string
+                              hostProcess:
+                                description: HostProcess determines if a container
+                                  should be run as a 'Host Process
+                                type: boolean
                               runAsUserName:
                                 description: The UserName in Windows to run the entrypoint
                                   of the container process
@@ -348,6 +369,23 @@ spec:
                         description: Define resources requests and limits for Aerospike
                           init Container.
                         properties:
+                          claims:
+                            description: Claims lists the names of resources, defined
+                              in spec.
+                            items:
+                              description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                              properties:
+                                name:
+                                  description: Name must match the name of one entry
+                                    in pod.spec.
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
                           limits:
                             additionalProperties:
                               anyOf:
@@ -468,6 +506,10 @@ spec:
                                 description: GMSACredentialSpecName is the name of
                                   the GMSA credential spec to use.
                                 type: string
+                              hostProcess:
+                                description: HostProcess determines if a container
+                                  should be run as a 'Host Process
+                                type: boolean
                               runAsUserName:
                                 description: The UserName in Windows to run the entrypoint
                                   of the container process
@@ -1089,7 +1131,7 @@ spec:
                                 type: string
                               value:
                                 description: Variable references $(VAR_NAME) are expanded
-                                  using the previous define
+                                  using the previously defi
                                 type: string
                               valueFrom:
                                 description: Source for the environment variable's
@@ -1211,7 +1253,7 @@ spec:
                             type: object
                           type: array
                         image:
-                          description: 'Docker image name. More info: https://kubernetes.'
+                          description: 'Container image name. More info: https://kubernetes.'
                           type: string
                         imagePullPolicy:
                           description: Image pull policy. One of Always, Never, IfNotPresent.
@@ -1225,8 +1267,7 @@ spec:
                                 container is created.
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -1279,8 +1320,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -1302,8 +1342,7 @@ spec:
                                 container is terminated due to '
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -1356,8 +1395,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -1379,8 +1417,7 @@ spec:
                           description: Periodic probe of container liveness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -1394,6 +1431,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -1523,8 +1575,7 @@ spec:
                           description: Periodic probe of container service readiness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -1538,6 +1589,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -1628,6 +1694,24 @@ spec:
                           description: Compute Resources required by this container.
                             Cannot be updated.
                           properties:
+                            claims:
+                              description: Claims lists the names of resources, defined
+                                in spec.
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: Name must match the name of one entry
+                                      in pod.spec.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             limits:
                               additionalProperties:
                                 anyOf:
@@ -1650,7 +1734,8 @@ spec:
                               type: object
                           type: object
                         securityContext:
-                          description: Security options the pod should run with.
+                          description: SecurityContext defines the security options
+                            the container should be r
                           properties:
                             allowPrivilegeEscalation:
                               description: AllowPrivilegeEscalation controls whether
@@ -1747,6 +1832,10 @@ spec:
                                   description: GMSACredentialSpecName is the name
                                     of the GMSA credential spec to use.
                                   type: string
+                                hostProcess:
+                                  description: HostProcess determines if a container
+                                    should be run as a 'Host Process
+                                  type: boolean
                                 runAsUserName:
                                   description: The UserName in Windows to run the
                                     entrypoint of the container process
@@ -1758,8 +1847,7 @@ spec:
                             initialized.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -1773,6 +1861,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -2063,6 +2166,10 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process
@@ -2098,7 +2205,7 @@ spec:
                                 type: string
                               value:
                                 description: Variable references $(VAR_NAME) are expanded
-                                  using the previous define
+                                  using the previously defi
                                 type: string
                               valueFrom:
                                 description: Source for the environment variable's
@@ -2220,7 +2327,7 @@ spec:
                             type: object
                           type: array
                         image:
-                          description: 'Docker image name. More info: https://kubernetes.'
+                          description: 'Container image name. More info: https://kubernetes.'
                           type: string
                         imagePullPolicy:
                           description: Image pull policy. One of Always, Never, IfNotPresent.
@@ -2234,8 +2341,7 @@ spec:
                                 container is created.
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -2288,8 +2394,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -2311,8 +2416,7 @@ spec:
                                 container is terminated due to '
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -2365,8 +2469,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -2388,8 +2491,7 @@ spec:
                           description: Periodic probe of container liveness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -2403,6 +2505,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -2532,8 +2649,7 @@ spec:
                           description: Periodic probe of container service readiness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -2547,6 +2663,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -2637,6 +2768,24 @@ spec:
                           description: Compute Resources required by this container.
                             Cannot be updated.
                           properties:
+                            claims:
+                              description: Claims lists the names of resources, defined
+                                in spec.
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: Name must match the name of one entry
+                                      in pod.spec.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             limits:
                               additionalProperties:
                                 anyOf:
@@ -2659,7 +2808,8 @@ spec:
                               type: object
                           type: object
                         securityContext:
-                          description: Security options the pod should run with.
+                          description: SecurityContext defines the security options
+                            the container should be r
                           properties:
                             allowPrivilegeEscalation:
                               description: AllowPrivilegeEscalation controls whether
@@ -2756,6 +2906,10 @@ spec:
                                   description: GMSACredentialSpecName is the name
                                     of the GMSA credential spec to use.
                                   type: string
+                                hostProcess:
+                                  description: HostProcess determines if a container
+                                    should be run as a 'Host Process
+                                  type: boolean
                                 runAsUserName:
                                   description: The UserName in Windows to run the
                                     entrypoint of the container process
@@ -2767,8 +2921,7 @@ spec:
                             initialized.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -2782,6 +2935,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -3919,30 +4087,32 @@ spec:
                                           that should populate this volume
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items if unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -3954,8 +4124,8 @@ spec:
                                               info: https://kubernetes.'
                                             type: string
                                           optional:
-                                            description: Specify whether the ConfigMap
-                                              or its keys must be defined
+                                            description: optional specify whether
+                                              the ConfigMap or its keys must be defined
                                             type: boolean
                                         type: object
                                       emptyDir:
@@ -3963,15 +4133,15 @@ spec:
                                           directory that shares a pod's lifetime
                                         properties:
                                           medium:
-                                            description: What type of storage medium
-                                              should back this directory.
+                                            description: medium represents what type
+                                              of storage medium should back this directo
                                             type: string
                                           sizeLimit:
                                             anyOf:
                                             - type: integer
                                             - type: string
-                                            description: Total amount of local storage
-                                              required for this EmptyDir volume.
+                                            description: sizeLimit is the total amount
+                                              of local storage required for this Empty
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
@@ -4067,30 +4237,32 @@ spec:
                                         description: Adapts a Secret into a volume.
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is Optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items If unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -4098,12 +4270,13 @@ spec:
                                               type: object
                                             type: array
                                           optional:
-                                            description: Specify whether the Secret
-                                              or its keys must be defined
+                                            description: optional field specify whether
+                                              the Secret or its keys must be defined
                                             type: boolean
                                           secretName:
-                                            description: Name of the secret in the
-                                              pod's namespace to use.
+                                            description: secretName is the name of
+                                              the secret in the pod's namespace to
+                                              use.
                                             type: string
                                         type: object
                                     type: object
@@ -5054,30 +5227,32 @@ spec:
                                           that should populate this volume
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items if unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -5089,8 +5264,8 @@ spec:
                                               info: https://kubernetes.'
                                             type: string
                                           optional:
-                                            description: Specify whether the ConfigMap
-                                              or its keys must be defined
+                                            description: optional specify whether
+                                              the ConfigMap or its keys must be defined
                                             type: boolean
                                         type: object
                                       emptyDir:
@@ -5098,15 +5273,15 @@ spec:
                                           directory that shares a pod's lifetime
                                         properties:
                                           medium:
-                                            description: What type of storage medium
-                                              should back this directory.
+                                            description: medium represents what type
+                                              of storage medium should back this directo
                                             type: string
                                           sizeLimit:
                                             anyOf:
                                             - type: integer
                                             - type: string
-                                            description: Total amount of local storage
-                                              required for this EmptyDir volume.
+                                            description: sizeLimit is the total amount
+                                              of local storage required for this Empty
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
@@ -5202,30 +5377,32 @@ spec:
                                         description: Adapts a Secret into a volume.
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is Optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items If unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -5233,12 +5410,13 @@ spec:
                                               type: object
                                             type: array
                                           optional:
-                                            description: Specify whether the Secret
-                                              or its keys must be defined
+                                            description: optional field specify whether
+                                              the Secret or its keys must be defined
                                             type: boolean
                                           secretName:
-                                            description: Name of the secret in the
-                                              pod's namespace to use.
+                                            description: secretName is the name of
+                                              the secret in the pod's namespace to
+                                              use.
                                             type: string
                                         type: object
                                     type: object
@@ -5294,7 +5472,8 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: Service External Traffic Policy Type string
+                        description: ServiceExternalTrafficPolicyType describes how
+                          nodes distribute servic
                         enum:
                         - Local
                         - Cluster
@@ -5585,28 +5764,28 @@ spec:
                                 populate this volume
                               properties:
                                 defaultMode:
-                                  description: 'Optional: mode bits used to set permissions
-                                    on created files by defaul'
+                                  description: 'defaultMode is optional: mode bits
+                                    used to set permissions on created '
                                   format: int32
                                   type: integer
                                 items:
-                                  description: If unspecified, each key-value pair
-                                    in the Data field of the reference
+                                  description: items if unspecified, each key-value
+                                    pair in the Data field of the ref
                                   items:
                                     description: Maps a string key to a path within
                                       a volume.
                                     properties:
                                       key:
-                                        description: The key to project.
+                                        description: key is the key to project.
                                         type: string
                                       mode:
-                                        description: 'Optional: mode bits used to
-                                          set permissions on this file.'
+                                        description: 'mode is Optional: mode bits
+                                          used to set permissions on this file.'
                                         format: int32
                                         type: integer
                                       path:
-                                        description: The relative path of the file
-                                          to map the key to.
+                                        description: path is the relative path of
+                                          the file to map the key to.
                                         type: string
                                     required:
                                     - key
@@ -5617,8 +5796,8 @@ spec:
                                   description: 'Name of the referent. More info: https://kubernetes.'
                                   type: string
                                 optional:
-                                  description: Specify whether the ConfigMap or its
-                                    keys must be defined
+                                  description: optional specify whether the ConfigMap
+                                    or its keys must be defined
                                   type: boolean
                               type: object
                             emptyDir:
@@ -5626,15 +5805,15 @@ spec:
                                 that shares a pod's lifetime
                               properties:
                                 medium:
-                                  description: What type of storage medium should
-                                    back this directory.
+                                  description: medium represents what type of storage
+                                    medium should back this directo
                                   type: string
                                 sizeLimit:
                                   anyOf:
                                   - type: integer
                                   - type: string
-                                  description: Total amount of local storage required
-                                    for this EmptyDir volume.
+                                  description: sizeLimit is the total amount of local
+                                    storage required for this Empty
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
                               type: object
@@ -5724,28 +5903,28 @@ spec:
                               description: Adapts a Secret into a volume.
                               properties:
                                 defaultMode:
-                                  description: 'Optional: mode bits used to set permissions
-                                    on created files by defaul'
+                                  description: 'defaultMode is Optional: mode bits
+                                    used to set permissions on created '
                                   format: int32
                                   type: integer
                                 items:
-                                  description: If unspecified, each key-value pair
-                                    in the Data field of the reference
+                                  description: items If unspecified, each key-value
+                                    pair in the Data field of the ref
                                   items:
                                     description: Maps a string key to a path within
                                       a volume.
                                     properties:
                                       key:
-                                        description: The key to project.
+                                        description: key is the key to project.
                                         type: string
                                       mode:
-                                        description: 'Optional: mode bits used to
-                                          set permissions on this file.'
+                                        description: 'mode is Optional: mode bits
+                                          used to set permissions on this file.'
                                         format: int32
                                         type: integer
                                       path:
-                                        description: The relative path of the file
-                                          to map the key to.
+                                        description: path is the relative path of
+                                          the file to map the key to.
                                         type: string
                                     required:
                                     - key
@@ -5753,12 +5932,12 @@ spec:
                                     type: object
                                   type: array
                                 optional:
-                                  description: Specify whether the Secret or its keys
-                                    must be defined
+                                  description: optional field specify whether the
+                                    Secret or its keys must be defined
                                   type: boolean
                                 secretName:
-                                  description: Name of the secret in the pod's namespace
-                                    to use.
+                                  description: secretName is the name of the secret
+                                    in the pod's namespace to use.
                                   type: string
                               type: object
                           type: object
@@ -5984,6 +6163,23 @@ spec:
                         description: Define resources requests and limits for Aerospike
                           Server Container.
                         properties:
+                          claims:
+                            description: Claims lists the names of resources, defined
+                              in spec.
+                            items:
+                              description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                              properties:
+                                name:
+                                  description: Name must match the name of one entry
+                                    in pod.spec.
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
                           limits:
                             additionalProperties:
                               anyOf:
@@ -6104,6 +6300,10 @@ spec:
                                 description: GMSACredentialSpecName is the name of
                                   the GMSA credential spec to use.
                                 type: string
+                              hostProcess:
+                                description: HostProcess determines if a container
+                                  should be run as a 'Host Process
+                                type: boolean
                               runAsUserName:
                                 description: The UserName in Windows to run the entrypoint
                                   of the container process
@@ -6123,6 +6323,23 @@ spec:
                         description: Define resources requests and limits for Aerospike
                           init Container.
                         properties:
+                          claims:
+                            description: Claims lists the names of resources, defined
+                              in spec.
+                            items:
+                              description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                              properties:
+                                name:
+                                  description: Name must match the name of one entry
+                                    in pod.spec.
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
                           limits:
                             additionalProperties:
                               anyOf:
@@ -6243,6 +6460,10 @@ spec:
                                 description: GMSACredentialSpecName is the name of
                                   the GMSA credential spec to use.
                                 type: string
+                              hostProcess:
+                                description: HostProcess determines if a container
+                                  should be run as a 'Host Process
+                                type: boolean
                               runAsUserName:
                                 description: The UserName in Windows to run the entrypoint
                                   of the container process
@@ -6864,7 +7085,7 @@ spec:
                                 type: string
                               value:
                                 description: Variable references $(VAR_NAME) are expanded
-                                  using the previous define
+                                  using the previously defi
                                 type: string
                               valueFrom:
                                 description: Source for the environment variable's
@@ -6986,7 +7207,7 @@ spec:
                             type: object
                           type: array
                         image:
-                          description: 'Docker image name. More info: https://kubernetes.'
+                          description: 'Container image name. More info: https://kubernetes.'
                           type: string
                         imagePullPolicy:
                           description: Image pull policy. One of Always, Never, IfNotPresent.
@@ -7000,8 +7221,7 @@ spec:
                                 container is created.
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -7054,8 +7274,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -7077,8 +7296,7 @@ spec:
                                 container is terminated due to '
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -7131,8 +7349,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -7154,8 +7371,7 @@ spec:
                           description: Periodic probe of container liveness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -7169,6 +7385,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -7298,8 +7529,7 @@ spec:
                           description: Periodic probe of container service readiness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -7313,6 +7543,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -7403,6 +7648,24 @@ spec:
                           description: Compute Resources required by this container.
                             Cannot be updated.
                           properties:
+                            claims:
+                              description: Claims lists the names of resources, defined
+                                in spec.
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: Name must match the name of one entry
+                                      in pod.spec.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             limits:
                               additionalProperties:
                                 anyOf:
@@ -7425,7 +7688,8 @@ spec:
                               type: object
                           type: object
                         securityContext:
-                          description: Security options the pod should run with.
+                          description: SecurityContext defines the security options
+                            the container should be r
                           properties:
                             allowPrivilegeEscalation:
                               description: AllowPrivilegeEscalation controls whether
@@ -7522,6 +7786,10 @@ spec:
                                   description: GMSACredentialSpecName is the name
                                     of the GMSA credential spec to use.
                                   type: string
+                                hostProcess:
+                                  description: HostProcess determines if a container
+                                    should be run as a 'Host Process
+                                  type: boolean
                                 runAsUserName:
                                   description: The UserName in Windows to run the
                                     entrypoint of the container process
@@ -7533,8 +7801,7 @@ spec:
                             initialized.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -7548,6 +7815,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -7838,6 +8120,10 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process
@@ -7873,7 +8159,7 @@ spec:
                                 type: string
                               value:
                                 description: Variable references $(VAR_NAME) are expanded
-                                  using the previous define
+                                  using the previously defi
                                 type: string
                               valueFrom:
                                 description: Source for the environment variable's
@@ -7995,7 +8281,7 @@ spec:
                             type: object
                           type: array
                         image:
-                          description: 'Docker image name. More info: https://kubernetes.'
+                          description: 'Container image name. More info: https://kubernetes.'
                           type: string
                         imagePullPolicy:
                           description: Image pull policy. One of Always, Never, IfNotPresent.
@@ -8009,8 +8295,7 @@ spec:
                                 container is created.
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -8063,8 +8348,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -8086,8 +8370,7 @@ spec:
                                 container is terminated due to '
                               properties:
                                 exec:
-                                  description: One and only one of the following should
-                                    be specified.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: Command is the command line to
@@ -8140,8 +8423,7 @@ spec:
                                   - port
                                   type: object
                                 tcpSocket:
-                                  description: TCPSocket specifies an action involving
-                                    a TCP port.
+                                  description: Deprecated.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -8163,8 +8445,7 @@ spec:
                           description: Periodic probe of container liveness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -8178,6 +8459,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -8307,8 +8603,7 @@ spec:
                           description: Periodic probe of container service readiness.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -8322,6 +8617,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -8412,6 +8722,24 @@ spec:
                           description: Compute Resources required by this container.
                             Cannot be updated.
                           properties:
+                            claims:
+                              description: Claims lists the names of resources, defined
+                                in spec.
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: Name must match the name of one entry
+                                      in pod.spec.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             limits:
                               additionalProperties:
                                 anyOf:
@@ -8434,7 +8762,8 @@ spec:
                               type: object
                           type: object
                         securityContext:
-                          description: Security options the pod should run with.
+                          description: SecurityContext defines the security options
+                            the container should be r
                           properties:
                             allowPrivilegeEscalation:
                               description: AllowPrivilegeEscalation controls whether
@@ -8531,6 +8860,10 @@ spec:
                                   description: GMSACredentialSpecName is the name
                                     of the GMSA credential spec to use.
                                   type: string
+                                hostProcess:
+                                  description: HostProcess determines if a container
+                                    should be run as a 'Host Process
+                                  type: boolean
                                 runAsUserName:
                                   description: The UserName in Windows to run the
                                     entrypoint of the container process
@@ -8542,8 +8875,7 @@ spec:
                             initialized.
                           properties:
                             exec:
-                              description: One and only one of the following should
-                                be specified.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: Command is the command line to execute
@@ -8557,6 +8889,21 @@ spec:
                                 to be considered failed aft
                               format: int32
                               type: integer
+                            grpc:
+                              description: GRPC specifies an action involving a GRPC
+                                port.
+                              properties:
+                                port:
+                                  description: Port number of the gRPC service.
+                                  format: int32
+                                  type: integer
+                                service:
+                                  description: Service is the name of the service
+                                    to place in the gRPC HealthCheckReq
+                                  type: string
+                              required:
+                              - port
+                              type: object
                             httpGet:
                               description: HTTPGet specifies the http request to perform.
                               properties:
@@ -9811,30 +10158,32 @@ spec:
                                           that should populate this volume
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items if unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -9846,8 +10195,8 @@ spec:
                                               info: https://kubernetes.'
                                             type: string
                                           optional:
-                                            description: Specify whether the ConfigMap
-                                              or its keys must be defined
+                                            description: optional specify whether
+                                              the ConfigMap or its keys must be defined
                                             type: boolean
                                         type: object
                                       emptyDir:
@@ -9855,15 +10204,15 @@ spec:
                                           directory that shares a pod's lifetime
                                         properties:
                                           medium:
-                                            description: What type of storage medium
-                                              should back this directory.
+                                            description: medium represents what type
+                                              of storage medium should back this directo
                                             type: string
                                           sizeLimit:
                                             anyOf:
                                             - type: integer
                                             - type: string
-                                            description: Total amount of local storage
-                                              required for this EmptyDir volume.
+                                            description: sizeLimit is the total amount
+                                              of local storage required for this Empty
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
@@ -9959,30 +10308,32 @@ spec:
                                         description: Adapts a Secret into a volume.
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is Optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items If unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -9990,12 +10341,13 @@ spec:
                                               type: object
                                             type: array
                                           optional:
-                                            description: Specify whether the Secret
-                                              or its keys must be defined
+                                            description: optional field specify whether
+                                              the Secret or its keys must be defined
                                             type: boolean
                                           secretName:
-                                            description: Name of the secret in the
-                                              pod's namespace to use.
+                                            description: secretName is the name of
+                                              the secret in the pod's namespace to
+                                              use.
                                             type: string
                                         type: object
                                     type: object
@@ -10946,30 +11298,32 @@ spec:
                                           that should populate this volume
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items if unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -10981,8 +11335,8 @@ spec:
                                               info: https://kubernetes.'
                                             type: string
                                           optional:
-                                            description: Specify whether the ConfigMap
-                                              or its keys must be defined
+                                            description: optional specify whether
+                                              the ConfigMap or its keys must be defined
                                             type: boolean
                                         type: object
                                       emptyDir:
@@ -10990,15 +11344,15 @@ spec:
                                           directory that shares a pod's lifetime
                                         properties:
                                           medium:
-                                            description: What type of storage medium
-                                              should back this directory.
+                                            description: medium represents what type
+                                              of storage medium should back this directo
                                             type: string
                                           sizeLimit:
                                             anyOf:
                                             - type: integer
                                             - type: string
-                                            description: Total amount of local storage
-                                              required for this EmptyDir volume.
+                                            description: sizeLimit is the total amount
+                                              of local storage required for this Empty
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
@@ -11094,30 +11448,32 @@ spec:
                                         description: Adapts a Secret into a volume.
                                         properties:
                                           defaultMode:
-                                            description: 'Optional: mode bits used
-                                              to set permissions on created files
-                                              by defaul'
+                                            description: 'defaultMode is Optional:
+                                              mode bits used to set permissions on
+                                              created '
                                             format: int32
                                             type: integer
                                           items:
-                                            description: If unspecified, each key-value
-                                              pair in the Data field of the reference
+                                            description: items If unspecified, each
+                                              key-value pair in the Data field of
+                                              the ref
                                             items:
                                               description: Maps a string key to a
                                                 path within a volume.
                                               properties:
                                                 key:
-                                                  description: The key to project.
+                                                  description: key is the key to project.
                                                   type: string
                                                 mode:
-                                                  description: 'Optional: mode bits
-                                                    used to set permissions on this
-                                                    file.'
+                                                  description: 'mode is Optional:
+                                                    mode bits used to set permissions
+                                                    on this file.'
                                                   format: int32
                                                   type: integer
                                                 path:
-                                                  description: The relative path of
-                                                    the file to map the key to.
+                                                  description: path is the relative
+                                                    path of the file to map the key
+                                                    to.
                                                   type: string
                                               required:
                                               - key
@@ -11125,12 +11481,13 @@ spec:
                                               type: object
                                             type: array
                                           optional:
-                                            description: Specify whether the Secret
-                                              or its keys must be defined
+                                            description: optional field specify whether
+                                              the Secret or its keys must be defined
                                             type: boolean
                                           secretName:
-                                            description: Name of the secret in the
-                                              pod's namespace to use.
+                                            description: secretName is the name of
+                                              the secret in the pod's namespace to
+                                              use.
                                             type: string
                                         type: object
                                     type: object
@@ -11171,6 +11528,21 @@ spec:
                 description: Define resources requests and limits for Aerospike Server
                   Container.
                 properties:
+                  claims:
+                    description: Claims lists the names of resources, defined in spec.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: Name must match the name of one entry in pod.spec.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
                   limits:
                     additionalProperties:
                       anyOf:
@@ -11211,7 +11583,8 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: Service External Traffic Policy Type string
+                        description: ServiceExternalTrafficPolicyType describes how
+                          nodes distribute servic
                         enum:
                         - Local
                         - Cluster
@@ -11502,28 +11875,28 @@ spec:
                                 populate this volume
                               properties:
                                 defaultMode:
-                                  description: 'Optional: mode bits used to set permissions
-                                    on created files by defaul'
+                                  description: 'defaultMode is optional: mode bits
+                                    used to set permissions on created '
                                   format: int32
                                   type: integer
                                 items:
-                                  description: If unspecified, each key-value pair
-                                    in the Data field of the reference
+                                  description: items if unspecified, each key-value
+                                    pair in the Data field of the ref
                                   items:
                                     description: Maps a string key to a path within
                                       a volume.
                                     properties:
                                       key:
-                                        description: The key to project.
+                                        description: key is the key to project.
                                         type: string
                                       mode:
-                                        description: 'Optional: mode bits used to
-                                          set permissions on this file.'
+                                        description: 'mode is Optional: mode bits
+                                          used to set permissions on this file.'
                                         format: int32
                                         type: integer
                                       path:
-                                        description: The relative path of the file
-                                          to map the key to.
+                                        description: path is the relative path of
+                                          the file to map the key to.
                                         type: string
                                     required:
                                     - key
@@ -11534,8 +11907,8 @@ spec:
                                   description: 'Name of the referent. More info: https://kubernetes.'
                                   type: string
                                 optional:
-                                  description: Specify whether the ConfigMap or its
-                                    keys must be defined
+                                  description: optional specify whether the ConfigMap
+                                    or its keys must be defined
                                   type: boolean
                               type: object
                             emptyDir:
@@ -11543,15 +11916,15 @@ spec:
                                 that shares a pod's lifetime
                               properties:
                                 medium:
-                                  description: What type of storage medium should
-                                    back this directory.
+                                  description: medium represents what type of storage
+                                    medium should back this directo
                                   type: string
                                 sizeLimit:
                                   anyOf:
                                   - type: integer
                                   - type: string
-                                  description: Total amount of local storage required
-                                    for this EmptyDir volume.
+                                  description: sizeLimit is the total amount of local
+                                    storage required for this Empty
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
                               type: object
@@ -11641,28 +12014,28 @@ spec:
                               description: Adapts a Secret into a volume.
                               properties:
                                 defaultMode:
-                                  description: 'Optional: mode bits used to set permissions
-                                    on created files by defaul'
+                                  description: 'defaultMode is Optional: mode bits
+                                    used to set permissions on created '
                                   format: int32
                                   type: integer
                                 items:
-                                  description: If unspecified, each key-value pair
-                                    in the Data field of the reference
+                                  description: items If unspecified, each key-value
+                                    pair in the Data field of the ref
                                   items:
                                     description: Maps a string key to a path within
                                       a volume.
                                     properties:
                                       key:
-                                        description: The key to project.
+                                        description: key is the key to project.
                                         type: string
                                       mode:
-                                        description: 'Optional: mode bits used to
-                                          set permissions on this file.'
+                                        description: 'mode is Optional: mode bits
+                                          used to set permissions on this file.'
                                         format: int32
                                         type: integer
                                       path:
-                                        description: The relative path of the file
-                                          to map the key to.
+                                        description: path is the relative path of
+                                          the file to map the key to.
                                         type: string
                                     required:
                                     - key
@@ -11670,12 +12043,12 @@ spec:
                                     type: object
                                   type: array
                                 optional:
-                                  description: Specify whether the Secret or its keys
-                                    must be defined
+                                  description: optional field specify whether the
+                                    Secret or its keys must be defined
                                   type: boolean
                                 secretName:
-                                  description: Name of the secret in the pod's namespace
-                                    to use.
+                                  description: secretName is the name of the secret
+                                    in the pod's namespace to use.
                                   type: string
                               type: object
                           type: object
