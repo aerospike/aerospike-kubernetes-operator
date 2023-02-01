@@ -1665,6 +1665,10 @@ func (c *AerospikeCluster) validatePodSpec() error {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
 	}
 
+	if err := validateDNS(c.Spec.PodSpec.DNSPolicy, c.Spec.PodSpec.DNSConfig); err != nil {
+		return err
+	}
+
 	var allContainers []v1.Container
 	allContainers = append(allContainers, c.Spec.PodSpec.Sidecars...)
 	allContainers = append(allContainers, c.Spec.PodSpec.InitContainers...)
@@ -1690,7 +1694,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 		// Check for duplicate names
 		if _, ok := containerNames[container.Name]; ok {
 			return fmt.Errorf(
-				"connot have duplicate names of containers: %v", container.Name,
+				"cannot have duplicate names of containers: %v", container.Name,
 			)
 		}
 		containerNames[container.Name] = 1
@@ -1715,5 +1719,17 @@ func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error
 		}
 
 	}
+	return nil
+}
+
+func validateDNS(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSConfig) error {
+	if dnsPolicy == v1.DNSDefault {
+		return fmt.Errorf("dnsPolicy: Default is not supported")
+	}
+
+	if dnsPolicy == v1.DNSNone && dnsConfig == nil {
+		return fmt.Errorf("dnsConfig is required field when dnsPolicy is set to None")
+	}
+
 	return nil
 }
