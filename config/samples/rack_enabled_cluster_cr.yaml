@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.7.0.8
+  image: aerospike/aerospike-server-enterprise:6.1.0.1
   rackConfig:
     namespaces:
       - test
@@ -22,6 +22,8 @@ spec:
     filesystemVolumePolicy:
       cascadeDelete: true
       initMethod: deleteFiles
+    blockVolumePolicy:
+      cascadeDelete: true
     volumes:
       - name: workdir
         aerospike:

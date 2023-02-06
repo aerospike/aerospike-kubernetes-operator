@@ -4,7 +4,7 @@
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 # Openshift platform supported version
-OPENSHIFT_VERSION="v4.6-v4.9"
+OPENSHIFT_VERSION="v4.6"
 
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
@@ -12,7 +12,10 @@ OPENSHIFT_VERSION="v4.6-v4.9"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.0.0
+VERSION ?= 2.4.0
+
+# Platforms supported
+PLATFORMS ?= linux/amd64,linux/arm64
 
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
@@ -46,8 +49,15 @@ IMAGE_TAG_BASE ?= aerospike/aerospike-kubernetes-operator-nightly
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
-# Image URL to use all building/pushing image targets
+# Image URL to use all building/pushing operator manager image targets
 IMG ?= controller:latest
+IMG_TAGS ?= ""
+
+
+INIT_VERSION ?= 0.0.18
+# Image URL to use all building/pushing operator-init image targets
+INIT_IMG ?= aerospike/aerospike-kubernetes-init-nightly:${INIT_VERSION}
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false,maxDescLen=70"
 
@@ -99,6 +109,17 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+GOLANGCI_LINT_VERSION ?= v1.50.1
+
+.PHONY: golanci-lint
+golanci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
+$(GOLANGCI_LINT): $(LOCALBIN)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
+
+go-lint: golanci-lint ## Run golangci-lint against code.
+	$(GOLANGCI_LINT) run
+
 test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -progress -v -timeout=12h0m0s -focus=${FOCUS} --junit-report="junit.xml"  -- ${ARGS}
@@ -111,13 +132,38 @@ build: generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
-# docker-build: test ## Build docker image with the manager.
-docker-build: ## Build docker image with the manager.
-	docker build -t ${IMG} --build-arg VERSION=$(VERSION) .
+.PHONY: docker-buildx
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) .
+	- docker buildx rm project-v3-builder
 
+.PHONY: docker-buildx-openshift
+docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	- docker buildx rm project-v3-builder
+
+.PHONY: docker-init-buildx
+docker-init-buildx: ## Build and push docker image for the init container for cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	cd init
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(INIT_VERSION) -f init/Dockerfile init/
+	- docker buildx rm project-v3-builder
+
+.PHONY: docker-init-buildx-openshift
+docker-init-buildx-openshift: ## Build and push docker image for the init container for openshift cross-platform support
+	- docker buildx create --name project-v3-builder
+	docker buildx use project-v3-builder
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(INIT_VERSION) --build-arg USER=1001 -f init/Dockerfile init/
+	- docker buildx rm project-v3-builder
+
+.PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
-
 ##@ Deployment
 
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -148,36 +194,41 @@ test-undeploy: kustomize
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl delete -f -
 
+##@ Build Dependencies
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1)
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
-kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.2.0)
+## Tool Binaries
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+ENVTEST ?= $(LOCALBIN)/setup-envtest
 
-ENVTEST = $(shell pwd)/bin/setup-envtest
-envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+## Tool Versions
+KUSTOMIZE_VERSION ?= v4.2.0
+CONTROLLER_TOOLS_VERSION ?= v0.6.1
 
-# go-get-tool will 'go get' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-get-tool
-@[ -f $(1) ] || { \
-set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
-echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
-rm -rf $$TMP_DIR ;\
-}
-endef
+KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE): $(LOCALBIN)
+	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)
+
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN): $(LOCALBIN)
+	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.0.0-5-dev make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.4.0-5-dev make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf bundle.Dockerfile bundle/
@@ -193,6 +244,7 @@ bundle: manifests kustomize
 	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" bundle/metadata/annotations.yaml; \
 	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" bundle/metadata/annotations.yaml; \
+	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" bundle/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 
 
 # Remove generated bundle
@@ -201,9 +253,10 @@ bundle-clean:
 	rm -rf bundle bundle.Dockerfile
 
 # Build the bundle image.
+# Bundle images are not architecture-specific. They contain only plaintext kubernetes manifests and operator metadata.
 .PHONY: bundle-build
 bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	docker build --pull --no-cache -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
@@ -249,3 +302,4 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+

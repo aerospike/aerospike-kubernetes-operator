@@ -15,7 +15,7 @@ Release Name - {{ .Release.Name }}.
 
 Run the following commands to get more information about deployment:
 
-$ helm status {{ .Release.Name }}
-$ helm get all {{ .Release.Name }}
+$ helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+$ helm get all {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 
 $ kubectl get all --namespace {{ .Release.Namespace }} -l "release={{ .Release.Name }}, chart={{ $.Chart.Name }}"

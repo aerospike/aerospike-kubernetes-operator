@@ -70,7 +70,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeEach(func() {
-	By(fmt.Sprintf("Cleaning up all Aerospike clusters."))
+	By("Cleaning up all Aerospike clusters.")
 	deleteAllClusters(namespace)
 	deleteAllClusters(multiClusterNs1)
 	deleteAllClusters(multiClusterNs2)
@@ -138,7 +138,7 @@ var _ = BeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
-		pkgLog.Info(fmt.Sprintf("Client will connect throug '%s' network to Aerospike Clusters.", *defaultNetworkType))
+		pkgLog.Info(fmt.Sprintf("Client will connect through '%s' network to Aerospike Clusters.", *defaultNetworkType))
 		t := true
 		testEnv = &envtest.Environment{
 			UseExistingCluster: &t,

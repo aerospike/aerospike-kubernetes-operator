@@ -9,8 +9,11 @@ metadata:
     createdAt: dateplaceholder
     description: The Aerospike Kubernetes Operator automates the deployment and management
       of Aerospike enterprise clusters on Kubernetes.
-    operatorframework.io/suggested-namespace: aerospike
     repository: https://github.com/aerospike/aerospike-kubernetes-operator/
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.arm64: supported
+    operatorframework.io/os.linux: supported
   name: aerospike-kubernetes-operator.v0.0.0
   namespace: placeholder
 spec:
@@ -40,18 +43,37 @@ spec:
           default
         displayName: Aerospike Server Configuration
         path: aerospikeConfig
+      - description: AerospikeNetworkPolicy specifies how clients and tools access
+          the Aerospike cluster.
+        displayName: Aerospike Network Policy
+        path: aerospikeNetworkPolicy
       - description: Aerospike server image
         displayName: Server Image
         path: image
+      - description: Certificates to connect to Aerospike.
+        displayName: Operator Client Cert
+        path: operatorClientCert
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec
+      - description: RackConfig Configures the operator to deploy rack aware Aerospike
+          cluster. Pods will be deployed in given racks based on given configuration
+        displayName: Rack Config
+        path: rackConfig
+      - description: SeedsFinderServices creates additional Kubernetes service that
+          allow clients to discover Aerospike cluster nodes.
+        displayName: Seeds Finder Services
+        path: seedsFinderServices
       - description: Aerospike cluster size
         displayName: Cluster Size
         path: size
       - description: Storage specify persistent storage to use for the Aerospike pods
         displayName: Storage
         path: storage
+      - description: ValidationPolicy controls validation of the Aerospike cluster
+          resource.
+        displayName: Validation Policy
+        path: validationPolicy
       statusDescriptors:
       - description: Aerospike cluster size
         displayName: Cluster Size
@@ -89,7 +111,7 @@ spec:
   - Aerospike
   links:
   - name: Documentation
-    url: https://docs.aerospike.com/docs/cloud/kubernetes/operator/index.html
+    url: https://docs.aerospike.com/cloud/kubernetes/operator
   - name: Aerospike
     url: https://aerospike.com
   maintainers:

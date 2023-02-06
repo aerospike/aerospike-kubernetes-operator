@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	operatorutils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -46,12 +46,12 @@ const multiClusterNs2 string = "test2"
 
 const aerospikeConfigSecret string = "aerospike-config-secret"
 
-var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
+var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
 func initConfigSecret(secretDir string) error {
 	secrets = make(map[string][]byte)
 
-	fileInfo, err := ioutil.ReadDir(secretDir)
+	fileInfo, err := os.ReadDir(secretDir)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func initConfigSecret(secretDir string) error {
 			continue
 		}
 
-		secret, err := ioutil.ReadFile(filepath.Join(secretDir, file.Name()))
+		secret, err := os.ReadFile(filepath.Join(secretDir, file.Name()))
 		if err != nil {
 			return fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
 		}
@@ -161,7 +161,8 @@ func createConfigSecret(
 		Type: v1.SecretTypeOpaque,
 		Data: secrets,
 	}
-	// use TestCtx's create helper to create the object and add a cleanup function for the new object
+	// use test context's create helper to create the object and add a cleanup
+	//function for the new object
 	err := k8sClient.Create(ctx, s)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
@@ -186,7 +187,7 @@ func createAuthSecret(
 			"password": []byte(pass),
 		},
 	}
-	// use TestCtx's create helper to create the object and add a cleanup function for the new object
+	// use test context's create helper to create the object and add a cleanup function for the new object
 	err := k8sClient.Create(ctx, as)
 	if !errors.IsAlreadyExists(err) {
 		return err
@@ -231,9 +232,7 @@ func waitForAerospikeCluster(
 	if err != nil {
 		return err
 	}
-	if !isValid {
-		return fmt.Errorf("cluster state not matching with desired state")
-	}
+
 	pkgLog.Info("AerospikeCluster available\n")
 
 	// make info call
@@ -249,16 +248,19 @@ func isClusterStateValid(
 		return false
 	}
 
+	// Validate status
 	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
 	}
+
 	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
 		pkgLog.Info("Cluster status is not matching the spec")
 		return false
 	}
 
+	// Validate pods
 	if len(newCluster.Status.Pods) != replicas {
 		pkgLog.Info("Cluster status doesn't have pod status for all nodes. Cluster status may not have fully updated")
 		return false
@@ -269,7 +271,7 @@ func isClusterStateValid(
 			pkgLog.Info("Cluster pod's nodeID is empty")
 			return false
 		}
-		if operatorutils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
+		if operatorUtils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
 			break
 		}
 
@@ -516,18 +518,22 @@ func getAeroClusterConfig(
 }
 
 func getAerospikeStorageConfig(
-	containerName string, inputCascadeDelete bool, cloudProvider CloudProvider) *asdbv1beta1.AerospikeStorageSpec {
+	containerName string, inputCascadeDelete bool,
+	storageSize string,
+	cloudProvider CloudProvider,
+) *asdbv1beta1.AerospikeStorageSpec {
 
-	// Create pods and strorge devices write data to the devices.
+	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.
-	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDeleteFiles
-	// TODO
-	ddInitMethod := asdbv1beta1.AerospikeVolumeInitMethodDD
-	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
+	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
+	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+	blkDiscardWipeMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
 	if cloudProvider == CloudProviderAWS {
-		// Blkdiscard methood is not supported in AWS so it is initialized as DD Method
-		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
+		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
+		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeMethodDD
+		blkDiscardWipeMethod = asdbv1beta1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1beta1.AerospikeStorageSpec{
@@ -542,7 +548,7 @@ func getAerospikeStorageConfig(
 				Name: "file-noinit",
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeFilesystem,
 					},
@@ -558,7 +564,7 @@ func getAerospikeStorageConfig(
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeFilesystem,
 					},
@@ -571,7 +577,7 @@ func getAerospikeStorageConfig(
 				Name: "device-noinit",
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeBlock,
 					},
@@ -587,7 +593,7 @@ func getAerospikeStorageConfig(
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeBlock,
 					},
@@ -600,10 +606,11 @@ func getAerospikeStorageConfig(
 				Name: "device-blkdiscard",
 				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod: &blkDiscardInitMethod,
+					InputWipeMethod: &blkDiscardWipeMethod,
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeBlock,
 					},
@@ -616,7 +623,7 @@ func getAerospikeStorageConfig(
 				Name: "file-noinit-1",
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeFilesystem,
 					},
@@ -628,41 +635,6 @@ func getAerospikeStorageConfig(
 					},
 				},
 			},
-			// {
-			// 	Name: "file-init-1",
-			// 	AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-			// 		InputInitMethod: &fileDeleteInitMethod,
-			// 	},
-			// 	Source: asdbv1beta1.VolumeSource{
-			// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-			// 			Size:         resource.MustParse("1Gi"),
-			// 			StorageClass: storageClass,
-			// 			VolumeMode:   corev1.PersistentVolumeFilesystem,
-			// 		},
-			// 	},
-			// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-			// 		{
-			// 			ContainerName: containerName,
-			// 			Path:          "/opt/aerospike/filesystem-init",
-			// 		},
-			// 	},
-			// },
-			// {
-			// 	Name: "device-noinit-1",
-			// 	Source: asdbv1beta1.VolumeSource{
-			// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-			// 			Size:         resource.MustParse("1Gi"),
-			// 			StorageClass: storageClass,
-			// 			VolumeMode:   corev1.PersistentVolumeBlock,
-			// 		},
-			// 	},
-			// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-			// 		{
-			// 			ContainerName: containerName,
-			// 			Path:          "/opt/aerospike/blockdevice-noinit",
-			// 		},
-			// 	},
-			// },
 			{
 				Name: "device-dd-1",
 				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
@@ -670,7 +642,7 @@ func getAerospikeStorageConfig(
 				},
 				Source: asdbv1beta1.VolumeSource{
 					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
+						Size:         resource.MustParse(storageSize),
 						StorageClass: storageClass,
 						VolumeMode:   corev1.PersistentVolumeBlock,
 					},
@@ -682,25 +654,6 @@ func getAerospikeStorageConfig(
 					},
 				},
 			},
-			// {
-			// 	Name: "device-blkdiscard-1",
-			// 	AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
-			// 		InputInitMethod: &blkDiscardInitMethod,
-			// 	},
-			// 	Source: asdbv1beta1.VolumeSource{
-			// 		PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
-			// 			Size:         resource.MustParse("1Gi"),
-			// 			StorageClass: storageClass,
-			// 			VolumeMode:   corev1.PersistentVolumeBlock,
-			// 		},
-			// 	},
-			// 	Sidecars: []asdbv1beta1.VolumeAttachment{
-			// 		{
-			// 			ContainerName: containerName,
-			// 			Path:          "/opt/aerospike/blockdevice-init-blkdiscard",
-			// 		},
-			// 	},
-			// },
 			{
 				Name: aerospikeConfigSecret,
 				Source: asdbv1beta1.VolumeSource{
@@ -714,4 +667,13 @@ func getAerospikeStorageConfig(
 			},
 		},
 	}
+}
+
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }

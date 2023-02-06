@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,11 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -118,7 +124,7 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	confData[NetworkPolicyHashFileName] = policyHash
 
 	// Add podSpec hash
-	podSpec, err := creatPodSpecForRack(r.aeroCluster, rack)
+	podSpec, err := createPodSpecForRack(r.aeroCluster, rack)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +132,14 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	if err != nil {
 		return nil, err
 	}
+
+	// This is a newly introduced field in 2.1.0.
+	// Ignore empty value from hash computation so that on upgrade clusters are
+	// not rolling restarted.
+	podSpecStr = []byte(strings.ReplaceAll(
+		string(podSpecStr), "\"aerospikeInitContainer\":{},", "",
+	))
+
 	podSpecHash, err := utils.GetHash(string(podSpecStr))
 	if err != nil {
 		return nil, err
@@ -135,25 +149,18 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	return confData, nil
 }
 
-func creatPodSpecForRack(
+func createPodSpecForRack(
 	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
 ) (*asdbv1beta1.AerospikePodSpec, error) {
 	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}
-	if err := lib.DeepCopy(
+	lib.DeepCopy(
 		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
-	); err != nil {
-		return nil, err
-	}
+	)
 
-	if rack.PodSpec.Affinity != nil {
-		rackFullPodSpec.Affinity = rack.PodSpec.Affinity
-	}
-	if rack.PodSpec.Tolerations != nil {
-		rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
-	}
-	if rack.PodSpec.NodeSelector != nil {
-		rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
-	}
+	rackFullPodSpec.Affinity = rack.PodSpec.Affinity
+	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
+	rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
+
 	return &rackFullPodSpec, nil
 }
 
@@ -271,7 +278,7 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 
 func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 
-	podNameMap := make(map[string]bool)
+	podNameSet := sets.NewString()
 
 	// The default rack is not listed in config during switchover to rack aware state.
 	// Use current pod names as well.
@@ -282,10 +289,9 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 
 	for _, pod := range pods.Items {
 		fqdn := getFQDNForPod(r.aeroCluster, pod.Name)
-		podNameMap[fqdn] = true
+		podNameSet.Insert(fqdn)
 	}
 
-	podNames := make([]string, 0)
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
@@ -293,17 +299,32 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
 		for i := 0; i < size; i++ {
-			fqdn := getFQDNForPod(
-				r.aeroCluster,
-				getSTSPodName(stsName.Name, int32(i)),
-			)
-			podNameMap[fqdn] = true
+			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))
+			podNameSet.Insert(fqdn)
 		}
 	}
 
-	for fqdn := range podNameMap {
-		podNames = append(podNames, fqdn)
+	return podNameSet.List(), nil
+}
+
+func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.NamespacedName) error {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namespacedName.Name,
+			Namespace: namespacedName.Namespace,
+		},
 	}
 
-	return podNames, nil
+	if err := r.Client.Delete(context.TODO(), configMap); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info(
+				"Can't find rack configmap while trying to delete it. Skipping...",
+				"configmap", namespacedName.Name,
+			)
+			return nil
+		}
+		return fmt.Errorf("failed to delete rack configmap for pod %s: %v", namespacedName.Name, err)
+	}
+
+	return nil
 }

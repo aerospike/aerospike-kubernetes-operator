@@ -21,13 +21,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	//"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -46,7 +48,7 @@ var immutableNetworkParams = []string{
 	"tls-alternate-access-port",
 }
 
-var versionPrefixRegex = regexp.MustCompile("^.*-")
+var versionRegex = regexp.MustCompile(`([0-9]+(\.[0-9]+)+)`)
 
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
@@ -74,7 +76,7 @@ func (c *AerospikeCluster) ValidateDelete() error {
 func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
-	aslog.Info("validate update")
+	aslog.Info("Validate update")
 
 	old := oldObj.(*AerospikeCluster)
 	if err := c.validate(aslog); err != nil {
@@ -102,7 +104,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
-	// MultiPodPerHost can not be updated
+	// MultiPodPerHost cannot be updated
 	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
@@ -111,6 +113,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+		c.Status.AerospikeConfig,
 	); err != nil {
 		return err
 	}
@@ -167,8 +170,6 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
-	configMap := c.Spec.AerospikeConfig
-
 	// Validate Image version
 	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
@@ -196,40 +197,41 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	// Validate if passed aerospikeConfig
-	if err := validateAerospikeConfigSchema(
-		aslog, version, *configMap,
-	); err != nil {
-		return fmt.Errorf("aerospikeConfig not valid: %v", err)
-	}
+	for _, rack := range c.Spec.RackConfig.Racks {
+		// Storage should be validated before validating aerospikeConfig and fileStorage
+		if err := validateStorage(&rack.Storage, &c.Spec.PodSpec); err != nil {
+			return err
+		}
 
-	// Validate common aerospike config
-	if err := c.validateAerospikeConfig(
-		aslog, configMap, &c.Spec.Storage, int(c.Spec.Size),
-	); err != nil {
-		return err
-	}
+		// Validate if passed aerospikeConfig
+		if err := validateAerospikeConfigSchema(
+			aslog, version, rack.AerospikeConfig,
+		); err != nil {
+			return fmt.Errorf("aerospikeConfig not valid: %v", err)
+		}
 
-	if err := validateClientCertSpec(
-		c.Spec.OperatorClientCertSpec, configMap,
-	); err != nil {
-		return err
-	}
+		// Validate common aerospike config
+		if err := c.validateAerospikeConfig(
+			&rack.AerospikeConfig, &rack.Storage, int(c.Spec.Size),
+		); err != nil {
+			return err
+		}
 
-	if err := validateRequiredFileStorageForMetadata(
-		aslog, *configMap, &c.Spec.Storage, c.Spec.ValidationPolicy, version,
-	); err != nil {
-		return err
-	}
+		if err := validateRequiredFileStorageForMetadata(
+			rack.AerospikeConfig, &rack.Storage, c.Spec.ValidationPolicy, version,
+		); err != nil {
+			return err
+		}
 
-	if err := validateRequiredFileStorageForFeatureConf(
-		aslog, *configMap, &c.Spec.Storage,
-	); err != nil {
-		return err
+		if err := validateRequiredFileStorageForFeatureConf(
+			rack.AerospikeConfig, &rack.Storage,
+		); err != nil {
+			return err
+		}
 	}
 
 	// Validate resource and limit
-	if err := c.validateResourceAndLimits(aslog); err != nil {
+	if err := c.validatePodSpecResourceAndLimits(aslog); err != nil {
 		return err
 	}
 
@@ -243,11 +245,52 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	// Validate Sidecars
-	if err := c.validatePodSpec(aslog); err != nil {
+	if err := validateClientCertSpec(
+		c.Spec.OperatorClientCertSpec, c.Spec.AerospikeConfig,
+	); err != nil {
 		return err
 	}
 
+	// Validate Sidecars
+	if err := c.validatePodSpec(); err != nil {
+		return err
+	}
+
+	if err := c.validateSCNamespaces(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateSCNamespaces() error {
+	scNamespaceSet := sets.NewString()
+
+	for i, rack := range c.Spec.RackConfig.Racks {
+		tmpSCNamespaceSet := sets.NewString()
+
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		for _, nsConfInterface := range nsList {
+			nsConf := nsConfInterface.(map[string]interface{})
+
+			isEnabled := isNSSCEnabled(nsConf)
+			if isEnabled {
+				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
+
+				if isInMemoryNamespace(nsConf) {
+					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf["name"])
+				}
+			}
+		}
+
+		if i == 0 {
+			scNamespaceSet = tmpSCNamespaceSet
+			continue
+		}
+		if !scNamespaceSet.Equal(tmpSCNamespaceSet) {
+			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
+		}
+	}
 	return nil
 }
 
@@ -310,7 +353,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 	if err != nil {
 		return err
 	}
-	// Old racks can not be updated
+	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here, user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
 	for _, oldRack := range old.Spec.RackConfig.Racks {
@@ -324,16 +367,24 @@ func (c *AerospikeCluster) validateRackUpdate(
 					oldRack.Zone != newRack.Zone {
 
 					return fmt.Errorf(
-						"old RackConfig (NodeName, RackLabel, Region, Zone) can not be updated. Old rack %v, new rack %v",
+						"old RackConfig (NodeName, RackLabel, Region, Zone) cannot be updated. Old rack %v, new rack %v",
 						oldRack, newRack,
 					)
 				}
 
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
+					var rackStatusConfig *AerospikeConfigSpec
+					for _, statusRack := range c.Status.RackConfig.Racks {
+						if statusRack.ID == newRack.ID {
+							rackStatusConfig = &statusRack.AerospikeConfig
+							break
+						}
+					}
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -367,26 +418,57 @@ func (c *AerospikeCluster) validateAccessControl(_ logr.Logger) error {
 	return err
 }
 
-func (c *AerospikeCluster) validateResourceAndLimits(_ logr.Logger) error {
-	res := c.Spec.PodSpec.AerospikeContainerSpec.Resources
+func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error {
 
-	if res == nil {
+	checkResourcesLimits := false
+
+	if err := c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeContainerSpec.Resources, checkResourcesLimits); err != nil {
+		return err
+	}
+
+	for _, rack := range c.Spec.RackConfig.Racks {
+		if rack.Storage.CleanupThreads != AerospikeVolumeSingleCleanupThread {
+			checkResourcesLimits = true
+			break
+		}
+	}
+
+	if checkResourcesLimits && c.Spec.PodSpec.AerospikeInitContainerSpec == nil {
+		return fmt.Errorf(
+			"init container spec should have resources.Limits set if CleanupThreads is more than 1",
+		)
+	}
+	if c.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		return c.validateResourceAndLimits(c.Spec.PodSpec.AerospikeInitContainerSpec.Resources, checkResourcesLimits)
+	}
+	return nil
+}
+
+func (c *AerospikeCluster) validateResourceAndLimits(resources *v1.ResourceRequirements, checkResourcesLimits bool) error {
+
+	if checkResourcesLimits {
+		if resources == nil || resources.Limits == nil {
+			return fmt.Errorf(
+				"resources.Limits for init container cannot be empty if CleanupThreads is being set more than 1",
+			)
+		}
+	} else if resources == nil {
 		return nil
 	}
 
-	if res.Limits != nil && res.Requests != nil &&
-		((res.Limits.Cpu().Cmp(*res.Requests.Cpu()) < 0) ||
-			(res.Limits.Memory().Cmp(*res.Requests.Memory()) < 0)) {
+	if resources.Limits != nil && resources.Requests != nil &&
+		((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
+			(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
 		return fmt.Errorf(
 			"resources.Limits cannot be less than resource.Requests. Resources %v",
-			res,
+			resources,
 		)
 	}
 
 	return nil
 }
 
-func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
+func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range c.Spec.RackConfig.Namespaces {
@@ -398,12 +480,9 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		}
 	}
 
-	version, err := GetImageVersion(c.Spec.Image)
-	if err != nil {
-		return err
-	}
-
 	rackMap := map[int]bool{}
+	migrateFillDelaySet := sets.Int{}
+
 	for _, rack := range c.Spec.RackConfig.Racks {
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
@@ -424,7 +503,9 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 		}
 
 		if rack.InputAerospikeConfig != nil {
-			if _, ok := rack.InputAerospikeConfig.Value["network"]; ok {
+			_, inputRackNetwork := rack.InputAerospikeConfig.Value["network"]
+			_, inputRackSecurity := rack.InputAerospikeConfig.Value["security"]
+			if inputRackNetwork || inputRackSecurity {
 				// Aerospike K8s Operator doesn't support different network configurations for different racks.
 				// I.e.
 				//    - the same heartbeat port (taken from current node) is used for all peers regardless to racks.
@@ -432,36 +513,89 @@ func (c *AerospikeCluster) validateRackConfig(aslog logr.Logger) error {
 				//    - we need to refactor how connection is created to AS to take into account rack's network config.
 				// So, just reject rack specific network connections for now.
 				return fmt.Errorf(
-					"you can't specify network configuration for rack %d (network should be the same for all racks)",
+					"you can't specify network or security configuration for rack %d (network and security should be the same for all racks)",
 					rack.ID,
 				)
 			}
 		}
 
-		config := rack.AerospikeConfig
-
-		if len(rack.AerospikeConfig.Value) != 0 || len(rack.Storage.Volumes) != 0 {
-			// TODO:
-			// Replication-factor in rack and commonConfig can not be different
-			storage := rack.Storage
-			if err := c.validateAerospikeConfig(
-				aslog, &config, &storage, int(c.Spec.Size),
-			); err != nil {
-				return err
-			}
+		migrateFillDelay, err := GetMigrateFillDelay(&rack.AerospikeConfig)
+		if err != nil {
+			return err
 		}
 
-		// Validate rack aerospike config
-		if len(rack.AerospikeConfig.Value) != 0 {
-			if err := validateAerospikeConfigSchema(
-				aslog, version, config,
-			); err != nil {
-				return fmt.Errorf("aerospikeConfig not valid for rack %v", rack)
+		migrateFillDelaySet.Insert(migrateFillDelay)
+	}
+
+	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
+	if migrateFillDelaySet.Len() > 1 {
+		return fmt.Errorf("migrate-fill-delay value should be same across all racks")
+	}
+
+	// Validate batch upgrade/restart param
+	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
+
+		// Just validate if RollingUpdateBatchSize is valid number or string.
+		randomNumber := 100
+		count, err := intstr.GetScaledValueFromIntOrPercent(c.Spec.RackConfig.RollingUpdateBatchSize, randomNumber, false)
+		if err != nil {
+			return err
+		}
+		// Only negative is not allowed. Any big number can be given.
+		if count < 0 {
+			return fmt.Errorf("can not use negative rackConfig.RollingUpdateBatchSize  %s", c.Spec.RackConfig.RollingUpdateBatchSize.String())
+		}
+
+		if len(c.Spec.RackConfig.Racks) < 2 {
+			return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when number of racks is less than two")
+		}
+
+		nsConfsNamespaces := c.getNsConfsForNamespaces()
+		for ns, nsConf := range nsConfsNamespaces {
+			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when there is any non-rack enabled namespace %s", ns)
+			}
+
+			if nsConf.noOfRacksForNamespaces <= 1 {
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured in only one rack", ns)
+			}
+			if nsConf.replicationFactor <= 1 {
+				return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured with replication-factor 1", ns)
 			}
 		}
 	}
 
+	// TODO: should not use batch if racks are less than replication-factor
 	return nil
+}
+
+type nsConf struct {
+	noOfRacksForNamespaces int
+	replicationFactor      int
+}
+
+func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
+	nsConfs := map[string]nsConf{}
+	for _, rack := range c.Spec.RackConfig.Racks {
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		for _, nsInterface := range nsList {
+			nsName := nsInterface.(map[string]interface{})["name"].(string)
+
+			var noOfRacksForNamespaces int
+			if _, ok := nsConfs[nsName]; !ok {
+				noOfRacksForNamespaces = 1
+			} else {
+				noOfRacksForNamespaces = nsConfs[nsName].noOfRacksForNamespaces + 1
+			}
+
+			rf, _ := getNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+			nsConfs[nsName] = nsConf{
+				noOfRacksForNamespaces: noOfRacksForNamespaces,
+				replicationFactor:      rf,
+			}
+		}
+	}
+	return nsConfs
 }
 
 //******************************************************************************
@@ -498,8 +632,7 @@ func validateClusterSize(_ logr.Logger, version string, sz int) error {
 }
 
 func (c *AerospikeCluster) validateAerospikeConfig(
-	aslog logr.Logger, configSpec *AerospikeConfigSpec,
-	storage *AerospikeStorageSpec, clSize int,
+	configSpec *AerospikeConfigSpec, storage *AerospikeStorageSpec, clSize int,
 ) error {
 	config := configSpec.Value
 
@@ -545,7 +678,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 			nsListInterface,
 		)
 	} else if err := validateNamespaceConfig(
-		aslog, nsList, storage, clSize,
+		nsList, storage, clSize,
 	); err != nil {
 		return err
 	}
@@ -592,6 +725,7 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 	return nil
 }
 
+// ValidateTLSAuthenticateClient validate the tls-authenticate-client field in the service configuration.
 func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 	[]string, error,
 ) {
@@ -608,7 +742,7 @@ func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 			"tls-authenticate-client contains invalid value: %s", value,
 		)
 	case bool:
-		if value == false {
+		if !value {
 			return []string{}, nil
 		}
 		return nil, fmt.Errorf(
@@ -683,7 +817,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 	if clientCertSpec == nil || clientCertSpec.CertPathInOperator == nil || clientCertSpec.CertPathInOperator.ClientCertPath == "" {
 		return result, nil
 	}
-	r, err := ioutil.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
+	r, err := os.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
 	if err != nil {
 		return result, err
 	}
@@ -726,8 +860,8 @@ func validateNetworkConnection(
 }
 
 func validateNamespaceConfig(
-	aslog logr.Logger, nsConfInterfaceList []interface{},
-	storage *AerospikeStorageSpec, clSize int,
+	nsConfInterfaceList []interface{}, storage *AerospikeStorageSpec,
+	clSize int,
 ) error {
 	if len(nsConfInterfaceList) == 0 {
 		return fmt.Errorf("aerospikeConfig.namespace list cannot be empty")
@@ -749,7 +883,7 @@ func validateNamespaceConfig(
 		}
 
 		if err := validateNamespaceReplicationFactor(
-			aslog, nsConf, clSize,
+			nsConf, clSize,
 		); err != nil {
 			return err
 		}
@@ -766,14 +900,12 @@ func validateNamespaceConfig(
 				continue
 			}
 
-			if !isDeviceNamespace(nsConf) {
-				// storage-engine pmem
+			if !isDeviceOrPmemNamespace(nsConf) {
 				return fmt.Errorf(
 					"storage-engine not supported for namespace %v", nsConf,
 				)
 			}
 
-			// TODO: worry about pmem.
 			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				if devices == nil {
 					return fmt.Errorf(
@@ -802,7 +934,9 @@ func validateNamespaceConfig(
 						)
 					}
 
-					// device list Fields cannot be more that 2 in single line. Two in shadow device case. validate.
+					device = strings.TrimSpace(device.(string))
+
+					// device list Fields cannot be more that 2 in single line. Two in shadow device case. Validate.
 					if len(strings.Fields(device.(string))) > 2 {
 						return fmt.Errorf(
 							"invalid device name %v. Max 2 device can be mentioned in single line (Shadow device config)",
@@ -850,14 +984,27 @@ func validateNamespaceConfig(
 						)
 					}
 
-					dirPath := filepath.Dir(file.(string))
-					if !isFileStorageConfiguredForDir(
-						fileStorageList, dirPath,
-					) {
+					file = strings.TrimSpace(file.(string))
+
+					// File list Fields cannot be more than 2 in single line. Two in shadow device case. Validate.
+					if len(strings.Fields(file.(string))) > 2 {
 						return fmt.Errorf(
-							"namespace storage file related mountPath %v not found in storage config %v",
-							dirPath, storage,
+							"invalid file name %v. Max 2 file can be mentioned in single line (Shadow file config)",
+							file,
 						)
+					}
+
+					fList := strings.Fields(file.(string))
+					for _, f := range fList {
+						dirPath := filepath.Dir(f)
+						if !isFileStorageConfiguredForDir(
+							fileStorageList, dirPath,
+						) {
+							return fmt.Errorf(
+								"namespace storage file related mountPath %v not found in storage config %v",
+								dirPath, storage,
+							)
+						}
 					}
 				}
 			}
@@ -866,7 +1013,12 @@ func validateNamespaceConfig(
 		}
 	}
 
-	// Vaidate index-type
+	_, _, err = validateStorageEngineDeviceList(nsConfInterfaceList)
+	if err != nil {
+		return err
+	}
+
+	// Validate index-type
 	for _, nsConfInterface := range nsConfInterfaceList {
 		nsConf, ok := nsConfInterface.(map[string]interface{})
 		if !ok {
@@ -924,44 +1076,43 @@ func validateNamespaceConfig(
 }
 
 func validateNamespaceReplicationFactor(
-	aslog logr.Logger, nsConf map[string]interface{}, clSize int,
+	nsConf map[string]interface{}, clSize int,
 ) error {
-	// Validate replication-factor with cluster size only at the time of deployment
+	rf, err := getNamespaceReplicationFactor(nsConf)
+	if err != nil {
+		return err
+	}
+
+	scEnabled := isNSSCEnabled(nsConf)
+
+	// clSize < rf is allowed in AP mode but not in sc mode
+	if scEnabled && (clSize < rf) {
+		return fmt.Errorf("strong-consistency namespace replication-factor %v cannot be more than cluster size %d", rf, clSize)
+	}
+
+	return nil
+}
+func isNSSCEnabled(nsConf map[string]interface{}) bool {
+	scEnabled, ok := nsConf["strong-consistency"]
+	if !ok {
+		return false
+	}
+
+	return scEnabled.(bool)
+}
+
+func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	rfInterface, ok := nsConf["replication-factor"]
 	if !ok {
 		rfInterface = 2 // default replication-factor
 	}
 
-	if rf, ok := rfInterface.(int64); ok {
-		if int64(clSize) < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else if rf, ok := rfInterface.(int); ok {
-		if clSize < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else if rf, ok := rfInterface.(float64); ok {
-		// Values of yaml are getting parsed in float64 in the new scheme
-		if float64(clSize) < rf {
-			return fmt.Errorf(
-				"namespace replication-factor %v cannot be more than cluster size %d",
-				rf, clSize,
-			)
-		}
-	} else {
-		return fmt.Errorf(
-			"namespace replication-factor %v not valid int or int64",
-			rfInterface,
-		)
+	rf, err := GetIntType(rfInterface)
+	if err != nil {
+		return 0, fmt.Errorf("namespace replication-factor %v", err)
 	}
 
-	return nil
+	return rf, nil
 }
 
 func validateLoadBalancerUpdate(
@@ -997,14 +1148,12 @@ func validateSecurityConfigUpdate(
 func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	// Security can not be updated dynamically
+	// Security cannot be updated dynamically
 	// TODO: How to enable dynamic security update, need to pass policy for individual nodes.
 	// auth-enabled and auth-disabled node can co-exist
 	oldSec, oldSecConfFound := oldConf["security"]
 	newSec, newSecConfFound := newConf["security"]
-	if oldSecConfFound != oldSecConfFound {
-		return fmt.Errorf("cannot update cluster security config")
-	}
+
 	if oldSecConfFound && newSecConfFound {
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
@@ -1045,7 +1194,7 @@ func validateSecurityContext(
 
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger, incomingVersion, outgoingVersion string,
-	incomingSpec, outgoingSpec *AerospikeConfigSpec,
+	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 	if err := validateSecurityConfigUpdate(
@@ -1057,7 +1206,7 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS can not be updated dynamically
+	// TLS cannot be updated dynamically
 	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
 	oldtls, ok11 := oldConf["network"].(map[string]interface{})["tls"]
 	newtls, ok22 := newConf["network"].(map[string]interface{})["tls"]
@@ -1074,9 +1223,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(
-		aslog, incomingSpec, outgoingSpec,
-	); err != nil {
+	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus); err != nil {
 		return err
 	}
 
@@ -1098,16 +1245,20 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateNsConfUpdate(
-	aslog logr.Logger, newConfSpec, oldConfSpec *AerospikeConfigSpec,
-) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
+	var statusNsConfList []interface{}
+	if currentStatus != nil && len(currentStatus.Value) != 0 {
+		statusConf := currentStatus.Value
+		statusNsConfList = statusConf["namespaces"].([]interface{})
+	}
 
 	newNsConfList := newConf["namespaces"].([]interface{})
+	oldNsConfList := oldConf["namespaces"].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
-		// Validate new namespaceonf
+		// Validate new namespaceconf
 		singleConf, ok := singleConfInterface.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf(
@@ -1115,9 +1266,7 @@ func validateNsConfUpdate(
 			)
 		}
 
-		// Validate new namespace conf from old namespace conf. Few filds cannot be updated
-		oldNsConfList := oldConf["namespaces"].([]interface{})
-
+		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
 		for _, oldSingleConfInterface := range oldNsConfList {
 
 			oldSingleConf, ok := oldSingleConfInterface.(map[string]interface{})
@@ -1135,15 +1284,111 @@ func validateNsConfUpdate(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(
-						"replication-factor cannot be update. old nsconf %v, new nsconf %v",
+						"replication-factor cannot be updated. old nsconf %v, new nsconf %v",
+						oldSingleConf, singleConf,
+					)
+				}
+
+				// strong-consistency update not allowed
+				if isValueUpdated(
+					oldSingleConf, singleConf, "strong-consistency",
+				) {
+					return fmt.Errorf(
+						"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",
 						oldSingleConf, singleConf,
 					)
 				}
 			}
 		}
-
 	}
+
+	err := validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
+	if err != nil {
+		return err
+	}
+
 	// Check for namespace name len
+	return nil
+}
+
+func validateStorageEngineDeviceList(nsConfList []interface{}) (map[string]string, map[string]string, error) {
+	deviceList := map[string]string{}
+	fileList := map[string]string{}
+
+	// build a map device -> namespace
+	for _, nsConfInterface := range nsConfList {
+		nsConf := nsConfInterface.(map[string]interface{})
+		namespace := nsConf["name"].(string)
+		storage := nsConf["storage-engine"].(map[string]interface{})
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				previousNamespace, exists := deviceList[device]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"device %s is already being referenced in multiple namespaces (%s, %s)",
+						device, previousNamespace, namespace,
+					)
+				} else {
+					deviceList[device] = namespace
+				}
+			}
+		}
+
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				previousNamespace, exists := fileList[file]
+				if exists {
+					return nil, nil, fmt.Errorf(
+						"file %s is already being referenced in multiple namespaces (%s, %s)",
+						file, previousNamespace, namespace,
+					)
+				} else {
+					fileList[file] = namespace
+				}
+			}
+		}
+	}
+	return deviceList, fileList, nil
+}
+
+func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interface{}) error {
+
+	deviceList, fileList, err := validateStorageEngineDeviceList(nsConfList)
+	if err != nil {
+		return err
+	}
+
+	for _, statusNsConfInterface := range statusNsConfList {
+		nsConf := statusNsConfInterface.(map[string]interface{})
+		namespace := nsConf["name"].(string)
+		storage := nsConf["storage-engine"].(map[string]interface{})
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+				if deviceList[device] != "" && deviceList[device] != namespace {
+					return fmt.Errorf(
+						"device %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
+						device, deviceList[device], namespace,
+					)
+				}
+			}
+		}
+
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+				if fileList[file] != "" && fileList[file] != namespace {
+					return fmt.Errorf(
+						"file %s can not be removed and re-used in a different namespace at the same time. It has to be removed first. currentNamespace `%s`, oldNamespace `%s`",
+						file, fileList[file], namespace,
+					)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1181,9 +1426,8 @@ func validateAerospikeConfigSchema(
 }
 
 func validateRequiredFileStorageForMetadata(
-	aslog logr.Logger, configSpec AerospikeConfigSpec,
-	storage *AerospikeStorageSpec, validationPolicy *ValidationPolicySpec,
-	version string,
+	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
+	validationPolicy *ValidationPolicySpec, version string,
 ) error {
 
 	_, fileStorageList, err := storage.GetAerospikeStorageList()
@@ -1248,8 +1492,7 @@ func validateRequiredFileStorageForMetadata(
 }
 
 func validateRequiredFileStorageForFeatureConf(
-	aslog logr.Logger, configSpec AerospikeConfigSpec,
-	storage *AerospikeStorageSpec,
+	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 ) error {
 	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
@@ -1270,6 +1513,11 @@ func validateRequiredFileStorageForFeatureConf(
 	return nil
 }
 
+// GetImageVersion extracts the Aerospike version from a container image.
+// The implementation extracts the image tag and find the longest string from
+// it that is a version string.
+// Note: The behaviour should match the operator's python implementation in
+// init container extracting version.
 func GetImageVersion(imageStr string) (string, error) {
 	_, _, version := ParseDockerImageTag(imageStr)
 
@@ -1279,10 +1527,22 @@ func GetImageVersion(imageStr string) (string, error) {
 		)
 	}
 
-	// Ignore special prefixes.
-	version = string(versionPrefixRegex.ReplaceAll([]byte(version), []byte("")))
+	// Ignore special prefixes and suffixes.
+	matches := versionRegex.FindAllString(version, -1)
+	if matches == nil || len(matches) < 1 {
+		return "", fmt.Errorf(
+			"invalid image version format: %v", version,
+		)
+	}
 
-	return version, nil
+	longest := 0
+	for i := range matches {
+		if len(matches[i]) >= len(matches[longest]) {
+			longest = i
+		}
+	}
+
+	return matches[longest], nil
 }
 
 // isInMemoryNamespace returns true if this namespace config uses memory for storage.
@@ -1298,8 +1558,8 @@ func isInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return ok && typeStr == "memory"
 }
 
-// isDeviceNamespace returns true if this namespace config uses device for storage.
-func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
+// isDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
+func isDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf["storage-engine"]
 	if !ok {
 		return false
@@ -1308,7 +1568,7 @@ func isDeviceNamespace(namespaceConf map[string]interface{}) bool {
 	storageConf := storage.(map[string]interface{})
 	typeStr, ok := storageConf["type"]
 
-	return ok && typeStr == "device"
+	return ok && (typeStr == "device" || typeStr == "pmem")
 }
 
 // isShmemIndexTypeNamespace returns true if this namespace index type is shmem.
@@ -1400,9 +1660,13 @@ func isPathParentOrSame(dir1 string, dir2 string) bool {
 	return false
 }
 
-func (c *AerospikeCluster) validatePodSpec(aslog logr.Logger) error {
+func (c *AerospikeCluster) validatePodSpec() error {
 	if c.Spec.PodSpec.HostNetwork && c.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
+	}
+
+	if err := validateDNS(c.Spec.PodSpec.DNSPolicy, c.Spec.PodSpec.DNSConfig); err != nil {
+		return err
 	}
 
 	var allContainers []v1.Container
@@ -1421,7 +1685,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 
 	for _, container := range containers {
 		// Check for reserved container name
-		if container.Name == AerospikeServerContainerName || container.Name == AerospikeServerInitContainerName {
+		if container.Name == AerospikeServerContainerName || container.Name == AerospikeInitContainerName {
 			return fmt.Errorf(
 				"cannot use reserved container name: %v", container.Name,
 			)
@@ -1430,7 +1694,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 		// Check for duplicate names
 		if _, ok := containerNames[container.Name]; ok {
 			return fmt.Errorf(
-				"connot have duplicate names of containers: %v", container.Name,
+				"cannot have duplicate names of containers: %v", container.Name,
 			)
 		}
 		containerNames[container.Name] = 1
@@ -1455,5 +1719,17 @@ func ValidateAerospikeObjectMeta(aerospikeObjectMeta *AerospikeObjectMeta) error
 		}
 
 	}
+	return nil
+}
+
+func validateDNS(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSConfig) error {
+	if dnsPolicy == v1.DNSDefault {
+		return fmt.Errorf("dnsPolicy: Default is not supported")
+	}
+
+	if dnsPolicy == v1.DNSNone && dnsConfig == nil {
+		return fmt.Errorf("dnsConfig is required field when dnsPolicy is set to None")
+	}
+
 	return nil
 }

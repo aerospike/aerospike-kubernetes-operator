@@ -3,12 +3,20 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+var (
+	customInitRegistryEnvVar  = "CUSTOM_INIT_REGISTRY"
+	imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME"
 )
 
 var _ = Describe(
@@ -147,192 +155,189 @@ var _ = Describe(
 					)
 				})
 
-				It(
-					"Should validate the sidecar workflow", func() {
+				It("Should validate the sidecar workflow", func() {
 
-						By("Adding the container1")
+					By("Adding the container1")
 
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.Sidecars = append(
-							aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
-						)
+					aeroCluster.Spec.PodSpec.Sidecars = append(
+						aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
+					)
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Adding the container2")
+					By("Adding the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.Sidecars = append(
-							aeroCluster.Spec.PodSpec.Sidecars, sidecar2,
-						)
+					aeroCluster.Spec.PodSpec.Sidecars = append(
+						aeroCluster.Spec.PodSpec.Sidecars, sidecar2,
+					)
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Updating the container2")
+					By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{
-							"sh", "-c", "sleep 3600",
-						}
+					aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{
+						"sh", "-c", "sleep 3600",
+					}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Removing all the containers")
+					By("Removing all the containers")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
+					aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
 				)
 
-				It(
-					"Should validate the initcontainer workflow", func() {
+				It("Should validate the initcontainer workflow", func() {
 
-						By("Adding the container1")
+					By("Adding the container1")
 
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers = append(
-							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
-						)
+					aeroCluster.Spec.PodSpec.InitContainers = append(
+						aeroCluster.Spec.PodSpec.InitContainers, initCont1,
+					)
 
-						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
-							{
-								ContainerName: "init-myservice",
-								Path:          "/workdir",
-							},
-						}
+					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
+						{
+							ContainerName: "init-myservice",
+							Path:          "/workdir",
+						},
+					}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						// validate
-						stsList, err := getSTSList(aeroCluster, k8sClient)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeZero())
+					// validate
+					stsList, err := getSTSList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(stsList.Items)).ToNot(BeZero())
 
-						for _, sts := range stsList.Items {
-							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
-							Expect(stsInitMountPath).To(Equal("/workdir"))
-						}
+					for _, sts := range stsList.Items {
+						stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
+						Expect(stsInitMountPath).To(Equal("/workdir"))
+					}
 
-						// By("Adding the container2")
+					// By("Adding the container2")
 
-						// aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						// Expect(err).ToNot(HaveOccurred())
+					// aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					// Expect(err).ToNot(HaveOccurred())
 
-						// aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont2)
+					// aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont2)
 
-						// err = updateAndWait(k8sClient, ctx, aeroCluster)
-						// Expect(err).ToNot(HaveOccurred())
+					// err = updateCluster(k8sClient, ctx, aeroCluster)
+					// Expect(err).ToNot(HaveOccurred())
 
-						By("Updating the container2")
+					By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
-							"sh", "-c", "echo The app is running; sleep 5",
-						}
+					aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
+						"sh", "-c", "echo The app is running; sleep 5",
+					}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						By("Removing all the containers")
+					By("Removing all the containers")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
-						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
+					aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
+					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
 				)
 
 				// Test affinity
 				// try deploying in specific hosts
-				It(
-					"Should validate affinity", func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+				It("Should validate affinity", func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						pods, err := getPodList(aeroCluster, k8sClient)
-						Expect(err).ToNot(HaveOccurred())
+					pods, err := getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
 
-						// All pods will be moved to this node
-						nodeName := pods.Items[0].Spec.NodeName
+					// All pods will be moved to this node
+					nodeName := pods.Items[0].Spec.NodeName
 
-						affinity := &corev1.Affinity{}
-						ns := &corev1.NodeSelector{
-							NodeSelectorTerms: []corev1.NodeSelectorTerm{
-								{
-									MatchExpressions: []corev1.NodeSelectorRequirement{
-										{
-											Key:      "kubernetes.io/hostname",
-											Operator: corev1.NodeSelectorOpIn,
-											Values:   []string{nodeName},
-										},
+					affinity := &corev1.Affinity{}
+					ns := &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "kubernetes.io/hostname",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{nodeName},
 									},
 								},
 							},
-						}
+						},
+					}
 
-						affinity.NodeAffinity = &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: ns,
-						}
-						aeroCluster.Spec.PodSpec.Affinity = affinity
+					affinity.NodeAffinity = &corev1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: ns,
+					}
+					aeroCluster.Spec.PodSpec.Affinity = affinity
 
-						// All pods should move to node with nodeName
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+					// All pods should move to node with nodeName
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-						// Verify if all the pods are moved to given node
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+					// Verify if all the pods are moved to given node
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						pods, err = getPodList(aeroCluster, k8sClient)
-						Expect(err).ToNot(HaveOccurred())
+					pods, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
 
-						for _, pod := range pods.Items {
-							Expect(pod.Spec.NodeName).Should(Equal(nodeName))
-						}
-						// Test toleration
-						// Test nodeSelector
-					},
+					for _, pod := range pods.Items {
+						Expect(pod.Spec.NodeName).Should(Equal(nodeName))
+					}
+					// Test toleration
+					// Test nodeSelector
+				},
 				)
 
 				It("Should be able to update container image and other fields together", func() {
@@ -347,7 +352,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.Sidecars, sidecar1,
 					)
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating container image and affinity together")
@@ -384,7 +389,7 @@ var _ = Describe(
 					}
 					aeroCluster.Spec.PodSpec.Affinity = &desiredAffinity
 
-					err = updateAndWait(k8sClient, ctx, aeroCluster)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					// validate
@@ -413,6 +418,46 @@ var _ = Describe(
 						// 1st is aerospike-server image, 2nd is 1st sidecare
 						Expect(sts.Spec.Template.Spec.Containers[1].Image).To(Equal(newImage))
 					}
+				})
+
+				It("Should be able to set/update aerospike-init custom registry", func() {
+					operatorEnvVarRegistry := "docker.io"
+					customRegistry := getEnvVar(customInitRegistryEnvVar)
+					imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
+
+					By("Updating imagePullSecret")
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
+						{
+							Name: imagePullSecret,
+						},
+					}
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Using registry in CR")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					validateImageRegistry(k8sClient, ctx, aeroCluster, customRegistry)
+
+					By("Using envVar registry")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Empty imageRegistry, should use operator envVar docker.io
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					validateImageRegistry(k8sClient, ctx, aeroCluster, operatorEnvVarRegistry)
 				})
 			})
 		Context(
@@ -472,3 +517,20 @@ var _ = Describe(
 
 	},
 )
+
+func getEnvVar(envVar string) string {
+	envVarVal, found := os.LookupEnv(envVar)
+	Expect(found).To(BeTrue())
+	return envVarVal
+}
+
+func validateImageRegistry(k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string) {
+	stsList, err := getSTSList(aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+
+	for _, sts := range stsList.Items {
+		image := sts.Spec.Template.Spec.InitContainers[0].Image
+		hasPrefix := strings.HasPrefix(image, registry)
+		Expect(hasPrefix).To(BeTrue(), fmt.Sprintf("expected registry %s, found image %s", registry, image))
+	}
+}

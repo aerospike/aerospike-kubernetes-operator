@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	//nolint:staticcheck
+	// this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -71,8 +73,8 @@ func GetDesiredImage(
 	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
-	if containerName == asdbv1beta1.AerospikeServerInitContainerName {
-		return asdbv1beta1.AerospikeServerInitContainerImage, nil
+	if containerName == asdbv1beta1.AerospikeInitContainerName {
+		return asdbv1beta1.GetAerospikeInitContainerImage(aeroCluster), nil
 	}
 
 	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {
@@ -155,8 +157,7 @@ func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 	return &rackID, nil
 }
 
-// Helper functions to check and remove string from a slice of strings.
-
+// ContainsString returns true if a string exists in a slice of strings.
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -166,6 +167,7 @@ func ContainsString(slice []string, s string) bool {
 	return false
 }
 
+// RemoveString removes a string from a slice of strings.
 func RemoveString(slice []string, s string) (result []string) {
 	for _, item := range slice {
 		if item == s {

@@ -9,12 +9,6 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ## Usage
 
-<!-- ### Add Aerospike Helm Repository
-
-```sh
-helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operator
-``` -->
-
 ### Clone this repository
 
 ```sh
@@ -24,22 +18,18 @@ cd aerospike-kubernetes-operator/helm-charts
 
 ### Deploy Aerospike Cluster
 
-Create a secret containing aerospike feature key file - `features.conf`,
+#### Create a secret containing aerospike feature key file - `features.conf`
 
 ```sh
-kubectl create secret generic aerospike-license --from-file=<path-to-features.conf-file>
+kubectl create secret generic aerospike-license --from-file=<path-to-features.conf-file> --namespace <namespace>
 ```
 
-Install the chart,
-
-<!-- ```sh
-helm install aerospike aerospike/aerospike-cluster \
-    --set devMode=true
-``` -->
+#### Install the chart
+`<namespace>` used to install aerospike chart must be included in `watchNamespaces` value of aerospike-kubernetes-operator's `values.yaml`
 
 ```sh
-helm install aerospike ./aerospike-cluster \
-    --set devMode=true
+# helm install <chartName> <chartPath> --namespace <namespace>
+helm install aerospike ./aerospike-cluster --set devMode=true
 ```
 
 
@@ -49,7 +39,7 @@ with `helm install`.*
 
 ```sh
 helm install aerospike ./aerospike-cluster/ \
-    -f <customized-values-yaml-file>`
+    -f <customized-values-yaml-file>
 ```
 
 ## Configurations
@@ -58,7 +48,7 @@ helm install aerospike ./aerospike-cluster/ \
 | ---------- | ----------- | --------- |
 | `replicas` | Aerospike cluster size | `3` |
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
-| `image.tag` | Aerospike server container image tag | `5.5.0.9` |
+| `image.tag` | Aerospike server container image tag | `6.1.0.1` |
 | `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry | `{}` (nil) |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
@@ -118,4 +108,4 @@ validationPolicy:
 
 ### Configurations Explained
 
-Refer [AerospikeCluster Customer Resource Spec](https://aerospike.github.io/kubernetes-operator/next/Cluster-configuration-settings/#spec) for details on above [configuration fields](#Configurations)
+Refer to [AerospikeCluster Customer Resource Spec](https://docs.aerospike.com/cloud/kubernetes/operator/cluster-configuration-settings#spec) for details on above [configuration fields](#Configurations)

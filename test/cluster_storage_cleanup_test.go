@@ -91,7 +91,7 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &remove
 						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &remove
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster, err = getCluster(
@@ -108,7 +108,7 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
 						aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						newPVCList, err := getAeroClusterPVCList(
@@ -143,7 +143,7 @@ var _ = Describe(
 						vRemove := false
 						aeroCluster.Spec.Storage.Volumes[0].InputCascadeDelete = &vRemove
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster, err = getCluster(
@@ -166,7 +166,7 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
 						aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						newPVCList, err := getAeroClusterPVCList(
@@ -471,7 +471,7 @@ var _ = Describe(
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
-									clusterNamespacedName, 1,
+									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
 								// Rack is completely replaced
@@ -509,7 +509,7 @@ var _ = Describe(
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
-									clusterNamespacedName, 1,
+									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
 								aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racks}
@@ -562,7 +562,7 @@ var _ = Describe(
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
-									clusterNamespacedName, 1,
+									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
 								// Rack is completely replaced
@@ -617,7 +617,7 @@ var _ = Describe(
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
-									clusterNamespacedName, 1,
+									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
 								// Rack is completely replaced

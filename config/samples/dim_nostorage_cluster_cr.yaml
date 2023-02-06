@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:5.7.0.8
+  image: aerospike/aerospike-server-enterprise:6.1.0.1
 
   podSpec:
     multiPodPerHost: true
@@ -39,10 +39,6 @@ spec:
           - user-admin
 
   aerospikeConfig:
-    logging:
-      - name: /var/log/aerospike/aerospike.log
-        any: info
-        clustering: debug
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
     security: {}

@@ -71,7 +71,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.RackConfig.Namespaces = []string{nsName}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -94,7 +94,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.RackConfig.Namespaces = []string{}
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -132,7 +132,7 @@ var _ = Describe(
 
 						// This will also indirectly check if older rack is removed or not.
 						// If older node is not deleted then cluster sz will not be as expected
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -177,7 +177,7 @@ var _ = Describe(
 						racks = getDummyRackConf(1, 2, 3, 4, 5, 6)
 						aeroCluster.Spec.RackConfig.Racks = racks
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -195,7 +195,7 @@ var _ = Describe(
 						racks = getDummyRackConf(1, 2, 3, 4, 5)
 						aeroCluster.Spec.RackConfig.Racks = racks
 
-						err = updateAndWait(k8sClient, ctx, aeroCluster)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
@@ -233,14 +233,16 @@ var _ = Describe(
 								racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
-											"proto-fd-max": 10000,
+											"proto-fd-max":       10000,
+											"migrate-fill-delay": 30,
 										},
 									},
 								}
 								racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
-											"proto-fd-max": 12000,
+											"proto-fd-max":       12000,
+											"migrate-fill-delay": 30,
 										},
 									},
 								}
@@ -295,7 +297,7 @@ var _ = Describe(
 
 								aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								err = validateRackEnabledCluster(
@@ -329,7 +331,7 @@ var _ = Describe(
 								// Increase size also so that below wait func wait for new cluster
 								aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
 
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								err = validateRackEnabledCluster(
@@ -364,6 +366,34 @@ var _ = Describe(
 								By("Cleaning up the cluster")
 
 								err = deleteCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
+					},
+				)
+
+				Context(
+					"When using valid rack storage config", func() {
+
+						clusterName := "rack-specific-storage"
+						clusterNamespacedName := getClusterNamespacedName(
+							clusterName, namespace,
+						)
+						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+
+						It(
+							"Should validate empty common storage if per rack storage is provided",
+							func() {
+
+								err := deployCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackEnabledCluster(
+									k8sClient, ctx,
+									clusterNamespacedName,
+								)
 								Expect(err).ToNot(HaveOccurred())
 							},
 						)
@@ -441,6 +471,27 @@ var _ = Describe(
 						)
 
 						Context(
+							"When using invalid rack storage config", func() {
+
+								It(
+									"Should fail for empty common storage if per rack storage is not provided",
+									func() {
+
+										aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+											clusterNamespacedName, 2,
+										)
+
+										aeroCluster.Spec.RackConfig.Racks[0].InputStorage = nil
+
+										err := deployCluster(k8sClient, ctx, aeroCluster)
+										Expect(err).Should(HaveOccurred())
+
+									},
+								)
+							},
+						)
+
+						Context(
 							"When using invalid rack aerospikeConfig to deploy cluster",
 							func() {
 
@@ -463,34 +514,34 @@ var _ = Describe(
 									},
 								)
 
+								It(
+									"should fail for different aerospikeConfig.service.migrate-fill-delay value across racks",
+									func() {
+										aeroCluster := createDummyRackAwareAerospikeCluster(
+											clusterNamespacedName, 2,
+										)
+
+										RackASConfig := &asdbv1beta1.AerospikeConfigSpec{
+											Value: map[string]interface{}{
+												"service": map[string]interface{}{
+													"migrate-fill-delay": 200,
+												},
+											},
+										}
+										// set migrate-fill-delay only in rack 2
+										aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks,
+											asdbv1beta1.Rack{ID: 2, InputAerospikeConfig: RackASConfig})
+
+										err := deployCluster(
+											k8sClient, ctx, aeroCluster,
+										)
+										Expect(err).Should(HaveOccurred())
+									},
+								)
+
 								Context(
 									"When using invalid rack.AerospikeConfig.namespace config",
 									func() {
-
-										It(
-											"should fail for replication-factor greater than node sz",
-											func() {
-												aeroCluster := createDummyRackAwareAerospikeCluster(
-													clusterNamespacedName, 2,
-												)
-												aeroConfig := asdbv1beta1.AerospikeConfigSpec{
-													Value: map[string]interface{}{
-														"namespaces": []interface{}{
-															map[string]interface{}{
-																"name":               "test",
-																"replication-factor": 3,
-															},
-														},
-													},
-												}
-												aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
-											},
-										)
-
 										// Should we test for overridden fields
 										Context(
 											"When using invalid rack.AerospikeConfig.namespace.storage config",
@@ -678,7 +729,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.RackConfig.Racks[0].Region = "randomValue"
-								err = updateAndWait(k8sClient, ctx, aeroCluster)
+								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
 							},
 						)
@@ -697,7 +748,7 @@ var _ = Describe(
 											aeroCluster.Spec.RackConfig.Racks,
 											aeroCluster.Spec.RackConfig.Racks...,
 										)
-										err = updateAndWait(
+										err = updateCluster(
 											k8sClient, ctx, aeroCluster,
 										)
 										Expect(err).Should(HaveOccurred())
@@ -715,7 +766,7 @@ var _ = Describe(
 											aeroCluster.Spec.RackConfig.Racks,
 											asdbv1beta1.Rack{ID: 20000000000},
 										)
-										err = updateAndWait(
+										err = updateCluster(
 											k8sClient, ctx, aeroCluster,
 										)
 										Expect(err).Should(HaveOccurred())

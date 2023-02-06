@@ -33,8 +33,7 @@ spec:
             description: AerospikeClusterSpec defines the desired state of AerospikeCluster
             properties:
               aerospikeAccessControl:
-                description: AerospikeAccessControl has the Aerospike roles and users
-                  definitions.
+                description: Has the Aerospike roles and users definitions.
                 properties:
                   adminPolicy:
                     description: AerospikeClientAdminPolicy specify the aerospike
@@ -119,7 +118,8 @@ spec:
                 - users
                 type: object
               aerospikeConfig:
-                description: AerospikeConfig sets config in aerospike.conf file.
+                description: Sets config in aerospike.conf file. Other configs are
+                  taken as default
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               aerospikeNetworkPolicy:
@@ -197,7 +197,7 @@ spec:
                     type: string
                 type: object
               podSpec:
-                description: Additional configuration for create Aerospike pods.
+                description: Specify additional configuration for the Aerospike pods
                 properties:
                   aerospikeContainer:
                     description: AerospikeContainerSpec configures the aerospike-server
@@ -231,6 +231,145 @@ spec:
                       securityContext:
                         description: SecurityContext that will be added to aerospike-server
                           container creat
+                        properties:
+                          allowPrivilegeEscalation:
+                            description: AllowPrivilegeEscalation controls whether
+                              a process can gain more priv
+                            type: boolean
+                          capabilities:
+                            description: The capabilities to add/drop when running
+                              containers.
+                            properties:
+                              add:
+                                description: Added capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                              drop:
+                                description: Removed capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                            type: object
+                          privileged:
+                            description: Run container in privileged mode.
+                            type: boolean
+                          procMount:
+                            description: procMount denotes the type of proc mount
+                              to use for the containers.
+                            type: string
+                          readOnlyRootFilesystem:
+                            description: Whether this container has a read-only root
+                              filesystem.
+                            type: boolean
+                          runAsGroup:
+                            description: The GID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            description: Indicates that the container must run as
+                              a non-root user.
+                            type: boolean
+                          runAsUser:
+                            description: The UID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            description: The SELinux context to be applied to the
+                              container.
+                            properties:
+                              level:
+                                description: Level is SELinux level label that applies
+                                  to the container.
+                                type: string
+                              role:
+                                description: Role is a SELinux role label that applies
+                                  to the container.
+                                type: string
+                              type:
+                                description: Type is a SELinux type label that applies
+                                  to the container.
+                                type: string
+                              user:
+                                description: User is a SELinux user label that applies
+                                  to the container.
+                                type: string
+                            type: object
+                          seccompProfile:
+                            description: The seccomp options to use by this container.
+                            properties:
+                              localhostProfile:
+                                description: localhostProfile indicates a profile
+                                  defined in a file on the node sho
+                                type: string
+                              type:
+                                description: type indicates which kind of seccomp
+                                  profile will be applied.
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            description: The Windows specific settings applied to
+                              all containers.
+                            properties:
+                              gmsaCredentialSpec:
+                                description: GMSACredentialSpec is where the GMSA
+                                  admission webhook (https://github
+                                type: string
+                              gmsaCredentialSpecName:
+                                description: GMSACredentialSpecName is the name of
+                                  the GMSA credential spec to use.
+                                type: string
+                              runAsUserName:
+                                description: The UserName in Windows to run the entrypoint
+                                  of the container process
+                                type: string
+                            type: object
+                        type: object
+                    type: object
+                  aerospikeInitContainer:
+                    description: AerospikeInitContainerSpec configures the aerospike-init
+                      container cre
+                    properties:
+                      imageRegistry:
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
+                        type: string
+                      resources:
+                        description: Define resources requests and limits for Aerospike
+                          init Container.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Limits describes the maximum amount of compute
+                              resources allowed.
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Requests describes the minimum amount of
+                              compute resources required.
+                            type: object
+                        type: object
+                      securityContext:
+                        description: SecurityContext that will be added to aerospike-init
+                          container created
                         properties:
                           allowPrivilegeEscalation:
                             description: AllowPrivilegeEscalation controls whether
@@ -907,6 +1046,18 @@ spec:
                   hostNetwork:
                     description: HostNetwork enables host networking for the pod.
                     type: boolean
+                  imagePullSecrets:
+                    description: ImagePullSecrets is an optional list of references
+                      to secrets in the s
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.'
+                          type: string
+                      type: object
+                    type: array
                   initContainers:
                     description: InitContainers to add to the pods.
                     items:
@@ -1788,7 +1939,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -1812,8 +1963,112 @@ spec:
                       type: string
                     description: NodeSelector constraints for this pod.
                     type: object
+                  securityContext:
+                    description: SecurityContext holds pod-level security attributes
+                      and common contain
+                    properties:
+                      fsGroup:
+                        description: A special supplemental group that applies to
+                          all containers in a pod.
+                        format: int64
+                        type: integer
+                      fsGroupChangePolicy:
+                        description: fsGroupChangePolicy defines behavior of changing
+                          ownership and permiss
+                        type: string
+                      runAsGroup:
+                        description: The GID to run the entrypoint of the container
+                          process.
+                        format: int64
+                        type: integer
+                      runAsNonRoot:
+                        description: Indicates that the container must run as a non-root
+                          user.
+                        type: boolean
+                      runAsUser:
+                        description: The UID to run the entrypoint of the container
+                          process.
+                        format: int64
+                        type: integer
+                      seLinuxOptions:
+                        description: The SELinux context to be applied to all containers.
+                        properties:
+                          level:
+                            description: Level is SELinux level label that applies
+                              to the container.
+                            type: string
+                          role:
+                            description: Role is a SELinux role label that applies
+                              to the container.
+                            type: string
+                          type:
+                            description: Type is a SELinux type label that applies
+                              to the container.
+                            type: string
+                          user:
+                            description: User is a SELinux user label that applies
+                              to the container.
+                            type: string
+                        type: object
+                      seccompProfile:
+                        description: The seccomp options to use by the containers
+                          in this pod.
+                        properties:
+                          localhostProfile:
+                            description: localhostProfile indicates a profile defined
+                              in a file on the node sho
+                            type: string
+                          type:
+                            description: type indicates which kind of seccomp profile
+                              will be applied.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      supplementalGroups:
+                        description: A list of groups applied to the first process
+                          run in each container, i
+                        items:
+                          format: int64
+                          type: integer
+                        type: array
+                      sysctls:
+                        description: Sysctls hold a list of namespaced sysctls used
+                          for the pod.
+                        items:
+                          description: Sysctl defines a kernel parameter to be set
+                          properties:
+                            name:
+                              description: Name of a property to set
+                              type: string
+                            value:
+                              description: Value of a property to set
+                              type: string
+                          required:
+                          - name
+                          - value
+                          type: object
+                        type: array
+                      windowsOptions:
+                        description: The Windows specific settings applied to all
+                          containers.
+                        properties:
+                          gmsaCredentialSpec:
+                            description: GMSACredentialSpec is where the GMSA admission
+                              webhook (https://github
+                            type: string
+                          gmsaCredentialSpecName:
+                            description: GMSACredentialSpecName is the name of the
+                              GMSA credential spec to use.
+                            type: string
+                          runAsUserName:
+                            description: The UserName in Windows to run the entrypoint
+                              of the container process
+                            type: string
+                        type: object
+                    type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -3413,6 +3668,15 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -3422,7 +3686,20 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -3444,8 +3721,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -3508,6 +3803,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -3542,8 +3846,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -3597,8 +3901,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -3816,6 +4120,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -4505,6 +4818,15 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -4514,7 +4836,20 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -4536,8 +4871,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -4600,6 +4953,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -4634,8 +4996,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -4689,8 +5051,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -4908,6 +5270,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -4924,7 +5295,20 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices creates additional Kubernetes service
                   that allow c
@@ -4968,7 +5352,7 @@ spec:
                 type: integer
               storage:
                 description: Storage specify persistent storage to use for the Aerospike
-                  pods.
+                  pods
                 properties:
                   blockVolumePolicy:
                     description: BlockVolumePolicy contains default policies for block
@@ -4991,6 +5375,15 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -5000,7 +5393,20 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -5022,8 +5428,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -5083,6 +5507,15 @@ spec:
                           - blkdiscard
                           - deleteFiles
                           type: string
+                        effectiveWipeMethod:
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                         initContainers:
                           description: InitContainers are additional init containers
                             where this volume will b
@@ -5114,7 +5547,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -5165,7 +5598,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -5370,6 +5803,15 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                       required:
                       - name
                       type: object
@@ -5607,6 +6049,145 @@ spec:
                       securityContext:
                         description: SecurityContext that will be added to aerospike-server
                           container creat
+                        properties:
+                          allowPrivilegeEscalation:
+                            description: AllowPrivilegeEscalation controls whether
+                              a process can gain more priv
+                            type: boolean
+                          capabilities:
+                            description: The capabilities to add/drop when running
+                              containers.
+                            properties:
+                              add:
+                                description: Added capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                              drop:
+                                description: Removed capabilities
+                                items:
+                                  description: Capability represent POSIX capabilities
+                                    type
+                                  type: string
+                                type: array
+                            type: object
+                          privileged:
+                            description: Run container in privileged mode.
+                            type: boolean
+                          procMount:
+                            description: procMount denotes the type of proc mount
+                              to use for the containers.
+                            type: string
+                          readOnlyRootFilesystem:
+                            description: Whether this container has a read-only root
+                              filesystem.
+                            type: boolean
+                          runAsGroup:
+                            description: The GID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            description: Indicates that the container must run as
+                              a non-root user.
+                            type: boolean
+                          runAsUser:
+                            description: The UID to run the entrypoint of the container
+                              process.
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            description: The SELinux context to be applied to the
+                              container.
+                            properties:
+                              level:
+                                description: Level is SELinux level label that applies
+                                  to the container.
+                                type: string
+                              role:
+                                description: Role is a SELinux role label that applies
+                                  to the container.
+                                type: string
+                              type:
+                                description: Type is a SELinux type label that applies
+                                  to the container.
+                                type: string
+                              user:
+                                description: User is a SELinux user label that applies
+                                  to the container.
+                                type: string
+                            type: object
+                          seccompProfile:
+                            description: The seccomp options to use by this container.
+                            properties:
+                              localhostProfile:
+                                description: localhostProfile indicates a profile
+                                  defined in a file on the node sho
+                                type: string
+                              type:
+                                description: type indicates which kind of seccomp
+                                  profile will be applied.
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            description: The Windows specific settings applied to
+                              all containers.
+                            properties:
+                              gmsaCredentialSpec:
+                                description: GMSACredentialSpec is where the GMSA
+                                  admission webhook (https://github
+                                type: string
+                              gmsaCredentialSpecName:
+                                description: GMSACredentialSpecName is the name of
+                                  the GMSA credential spec to use.
+                                type: string
+                              runAsUserName:
+                                description: The UserName in Windows to run the entrypoint
+                                  of the container process
+                                type: string
+                            type: object
+                        type: object
+                    type: object
+                  aerospikeInitContainer:
+                    description: AerospikeInitContainerSpec configures the aerospike-init
+                      container cre
+                    properties:
+                      imageRegistry:
+                        description: ImageRegistry is the name of image registry for
+                          aerospike-init contain
+                        type: string
+                      resources:
+                        description: Define resources requests and limits for Aerospike
+                          init Container.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Limits describes the maximum amount of compute
+                              resources allowed.
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Requests describes the minimum amount of
+                              compute resources required.
+                            type: object
+                        type: object
+                      securityContext:
+                        description: SecurityContext that will be added to aerospike-init
+                          container created
                         properties:
                           allowPrivilegeEscalation:
                             description: AllowPrivilegeEscalation controls whether
@@ -6283,6 +6864,18 @@ spec:
                   hostNetwork:
                     description: HostNetwork enables host networking for the pod.
                     type: boolean
+                  imagePullSecrets:
+                    description: ImagePullSecrets is an optional list of references
+                      to secrets in the s
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.'
+                          type: string
+                      type: object
+                    type: array
                   initContainers:
                     description: InitContainers to add to the pods.
                     items:
@@ -7164,7 +7757,7 @@ spec:
                       type: object
                     type: array
                   metadata:
-                    description: MetaData to add to pods.
+                    description: MetaData to add to the pod.
                     properties:
                       annotations:
                         additionalProperties:
@@ -7188,8 +7781,112 @@ spec:
                       type: string
                     description: NodeSelector constraints for this pod.
                     type: object
+                  securityContext:
+                    description: SecurityContext holds pod-level security attributes
+                      and common contain
+                    properties:
+                      fsGroup:
+                        description: A special supplemental group that applies to
+                          all containers in a pod.
+                        format: int64
+                        type: integer
+                      fsGroupChangePolicy:
+                        description: fsGroupChangePolicy defines behavior of changing
+                          ownership and permiss
+                        type: string
+                      runAsGroup:
+                        description: The GID to run the entrypoint of the container
+                          process.
+                        format: int64
+                        type: integer
+                      runAsNonRoot:
+                        description: Indicates that the container must run as a non-root
+                          user.
+                        type: boolean
+                      runAsUser:
+                        description: The UID to run the entrypoint of the container
+                          process.
+                        format: int64
+                        type: integer
+                      seLinuxOptions:
+                        description: The SELinux context to be applied to all containers.
+                        properties:
+                          level:
+                            description: Level is SELinux level label that applies
+                              to the container.
+                            type: string
+                          role:
+                            description: Role is a SELinux role label that applies
+                              to the container.
+                            type: string
+                          type:
+                            description: Type is a SELinux type label that applies
+                              to the container.
+                            type: string
+                          user:
+                            description: User is a SELinux user label that applies
+                              to the container.
+                            type: string
+                        type: object
+                      seccompProfile:
+                        description: The seccomp options to use by the containers
+                          in this pod.
+                        properties:
+                          localhostProfile:
+                            description: localhostProfile indicates a profile defined
+                              in a file on the node sho
+                            type: string
+                          type:
+                            description: type indicates which kind of seccomp profile
+                              will be applied.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      supplementalGroups:
+                        description: A list of groups applied to the first process
+                          run in each container, i
+                        items:
+                          format: int64
+                          type: integer
+                        type: array
+                      sysctls:
+                        description: Sysctls hold a list of namespaced sysctls used
+                          for the pod.
+                        items:
+                          description: Sysctl defines a kernel parameter to be set
+                          properties:
+                            name:
+                              description: Name of a property to set
+                              type: string
+                            value:
+                              description: Value of a property to set
+                              type: string
+                          required:
+                          - name
+                          - value
+                          type: object
+                        type: array
+                      windowsOptions:
+                        description: The Windows specific settings applied to all
+                          containers.
+                        properties:
+                          gmsaCredentialSpec:
+                            description: GMSACredentialSpec is where the GMSA admission
+                              webhook (https://github
+                            type: string
+                          gmsaCredentialSpecName:
+                            description: GMSACredentialSpecName is the name of the
+                              GMSA credential spec to use.
+                            type: string
+                          runAsUserName:
+                            description: The UserName in Windows to run the entrypoint
+                              of the container process
+                            type: string
+                        type: object
+                    type: object
                   sidecars:
-                    description: Sidecars to add to pods.
+                    description: Sidecars to add to the pod.
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -8152,6 +8849,12 @@ spec:
                       description: 'AerospikeConfigHash is ripemd160 hash of aerospikeConfig
                         used by this '
                       type: string
+                    dirtyVolumes:
+                      description: DirtyVolumes is the list of volume names that are
+                        removed from aerospi
+                      items:
+                        type: string
+                      type: array
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -8900,6 +9603,15 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -8909,7 +9621,20 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -8931,8 +9656,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -8995,6 +9738,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -9029,8 +9781,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -9084,8 +9836,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -9303,6 +10055,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -9992,6 +10753,15 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
                                     to Aerospike server pods ar
@@ -10001,7 +10771,20 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                               type: object
+                            cleanupThreads:
+                              description: CleanupThreads contains maximum number
+                                of cleanup threads(dd or blkdis
+                              type: integer
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volume
@@ -10023,8 +10806,26 @@ spec:
                                   - blkdiscard
                                   - deleteFiles
                                   type: string
+                                effectiveWipeMethod:
+                                  description: Effective/operative value to use as
+                                    the volume wipe method after apply
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
                                 initMethod:
                                   description: InitMethod determines how volumes attached
+                                    to Aerospike server pods ar
+                                  enum:
+                                  - none
+                                  - dd
+                                  - blkdiscard
+                                  - deleteFiles
+                                  type: string
+                                wipeMethod:
+                                  description: WipeMethod determines how volumes attached
                                     to Aerospike server pods ar
                                   enum:
                                   - none
@@ -10087,6 +10888,15 @@ spec:
                                     - blkdiscard
                                     - deleteFiles
                                     type: string
+                                  effectiveWipeMethod:
+                                    description: Effective/operative value to use
+                                      as the volume wipe method after apply
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                   initContainers:
                                     description: InitContainers are additional init
                                       containers where this volume will b
@@ -10121,8 +10931,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10176,8 +10986,8 @@ spec:
                                               type: string
                                           type: object
                                         path:
-                                          description: Path to attache the volume
-                                            on the container.
+                                          description: Path to attach the volume on
+                                            the container.
                                           type: string
                                       required:
                                       - containerName
@@ -10395,6 +11205,15 @@ spec:
                                             type: string
                                         type: object
                                     type: object
+                                  wipeMethod:
+                                    description: WipeMethod determines how volumes
+                                      attached to Aerospike server pods ar
+                                    enum:
+                                    - none
+                                    - dd
+                                    - blkdiscard
+                                    - deleteFiles
+                                    type: string
                                 required:
                                 - name
                                 type: object
@@ -10411,6 +11230,13 @@ spec:
                       type: object
                     nullable: true
                     type: array
+                  rollingUpdateBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: RollingUpdateBatchSize is the percentage/number of
+                      rack pods that will
+                    x-kubernetes-int-or-string: true
                 type: object
               resources:
                 description: Define resources requests and limits for Aerospike Server
@@ -10437,6 +11263,12 @@ spec:
                       resources required.
                     type: object
                 type: object
+              rosterNodeBlockList:
+                description: RosterNodeBlockList is a list of blocked nodeIDs from
+                  roster in a stro
+                items:
+                  type: string
+                type: array
               seedsFinderServices:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aero
@@ -10503,6 +11335,15 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
                           Aerospike server pods ar
@@ -10512,7 +11353,20 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                     type: object
+                  cleanupThreads:
+                    description: CleanupThreads contains maximum number of cleanup
+                      threads(dd or blkdis
+                    type: integer
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volume
@@ -10534,8 +11388,26 @@ spec:
                         - blkdiscard
                         - deleteFiles
                         type: string
+                      effectiveWipeMethod:
+                        description: Effective/operative value to use as the volume
+                          wipe method after apply
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
                       initMethod:
                         description: InitMethod determines how volumes attached to
+                          Aerospike server pods ar
+                        enum:
+                        - none
+                        - dd
+                        - blkdiscard
+                        - deleteFiles
+                        type: string
+                      wipeMethod:
+                        description: WipeMethod determines how volumes attached to
                           Aerospike server pods ar
                         enum:
                         - none
@@ -10595,6 +11467,15 @@ spec:
                           - blkdiscard
                           - deleteFiles
                           type: string
+                        effectiveWipeMethod:
+                          description: Effective/operative value to use as the volume
+                            wipe method after apply
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                         initContainers:
                           description: InitContainers are additional init containers
                             where this volume will b
@@ -10626,7 +11507,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -10677,7 +11558,7 @@ spec:
                                     type: string
                                 type: object
                               path:
-                                description: Path to attache the volume on the container.
+                                description: Path to attach the volume on the container.
                                 type: string
                             required:
                             - containerName
@@ -10882,6 +11763,15 @@ spec:
                                   type: string
                               type: object
                           type: object
+                        wipeMethod:
+                          description: WipeMethod determines how volumes attached
+                            to Aerospike server pods ar
+                          enum:
+                          - none
+                          - dd
+                          - blkdiscard
+                          - deleteFiles
+                          type: string
                       required:
                       - name
                       type: object

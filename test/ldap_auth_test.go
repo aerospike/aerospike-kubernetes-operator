@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"time"
 )
 
 var _ = Describe(
@@ -73,7 +74,19 @@ func validateTransactions(
 	binMap := map[string]interface{}{
 		"testBin": "binValue",
 	}
-	return client.Put(nil, key, binMap)
+
+	// The k8s services take time to come up so the timeouts are on the
+	// higher side. Try a few times
+	for j := 0; j < 100; j++ {
+		err = client.Put(nil, key, binMap)
+		if err == nil {
+			break
+		}
+
+		time.Sleep(time.Second * 1)
+	}
+
+	return err
 }
 
 // getAerospikeClusterSpecWithLDAP create a spec with LDAP security
@@ -160,11 +173,12 @@ func getAerospikeClusterSpecWithLDAP(
 							"query-user-dn": "cn=admin,dc=example,dc=org",
 							"query-user-password-file": "/etc/aerospike/secret" +
 								"/ldap-passwd.txt",
-							"user-dn-pattern": "cn=$${DNE}{un},ou=users," +
+							"user-dn-pattern": "cn=${un},ou=users," +
 								"dc=example,dc=org",
 							"role-query-search-ou": true,
 							"role-query-patterns": []string{
-								"(&(objectClass=groupOfNames)(member=cn=$${DNE}{un},ou=users,dc=example,dc=org))",
+								"(&(objectClass=groupOfNames)(member=cn=${un},ou=users,dc=example,dc=org))",
+								"(&(ou=db_groups)(uniqueMember=${dn}))",
 							},
 							"polling-period": 10,
 						},

@@ -3,6 +3,7 @@ package v1beta1
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -33,7 +34,7 @@ const baseVersion = "4.9.0.3"
 // ContainsString check whether list contains given string
 func ContainsString(list []string, ele string) bool {
 	for _, listEle := range list {
-		if ele == listEle {
+		if strings.EqualFold(ele, listEle) {
 			return true
 		}
 	}
@@ -81,14 +82,45 @@ const (
 	defaultWorkDirectory = "/opt/aerospike"
 )
 const (
-	AerospikeServerContainerName      string = "aerospike-server"
-	AerospikeServerInitContainerName  string = "aerospike-init"
-	AerospikeServerInitContainerImage string = "aerospike/aerospike-kubernetes-init:0.0.15"
+	AerospikeServerContainerName                   string = "aerospike-server"
+	AerospikeInitContainerName                     string = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry          string = "docker.io"
+	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.18"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIdLabel         = "aerospike.com/rack-id"
 )
+
+func getInitContainerImage(registry string) string {
+	return fmt.Sprintf(
+		"%s/%s/%s", strings.TrimSuffix(registry, "/"),
+		strings.TrimSuffix(AerospikeInitContainerDefaultRegistryNamespace, "/"),
+		AerospikeInitContainerDefaultRepoAndTag,
+	)
+}
+
+func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
+	// Given in CR
+	registry := ""
+	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		registry = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
+	}
+	if registry != "" {
+		return getInitContainerImage(registry)
+	}
+
+	// Given in EnvVar
+	registry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
+	if found {
+		return getInitContainerImage(registry)
+	}
+
+	// Use default
+	return getInitContainerImage(AerospikeInitContainerDefaultRegistry)
+}
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
@@ -108,6 +140,11 @@ func ParseDockerImageTag(tag string) (
 	}
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
+
+	if matches == nil {
+		return "", "", ""
+	}
+
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
@@ -131,7 +168,9 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(version string, aerospikeConfig *AerospikeConfigSpec) (bool, error) {
+func IsSecurityEnabled(
+	version string, aerospikeConfig *AerospikeConfigSpec,
+) (bool, error) {
 
 	retval, err := asconfig.CompareVersions(version, "5.7.0")
 	if err != nil {
@@ -188,10 +227,14 @@ func GetConfigContext(
 			return validConfigMap, nil
 		}
 		return nil, fmt.Errorf(
-			"invalid aerospike.%s conf. %w", context, internalerrors.InvalidOrEmptyError)
+			"invalid aerospike.%s conf. %w", context,
+			internalerrors.InvalidOrEmptyError,
+		)
 
 	}
-	return nil, fmt.Errorf("context %s was %w", context, internalerrors.NotFoundError)
+	return nil, fmt.Errorf(
+		"context %s was %w", context, internalerrors.NotFoundError,
+	)
 }
 
 func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
@@ -357,4 +400,51 @@ func GetPortFromConfig(
 		}
 	}
 	return nil
+}
+
+// GetIntType typecasts the numeric value to the supported type
+func GetIntType(value interface{}) (int, error) {
+	switch val := value.(type) {
+	case int64:
+		return int(val), nil
+	case int:
+		return val, nil
+	case float64:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("value %v not valid int, int64 or float64", val)
+	}
+}
+
+// GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
+func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
+	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+
+	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
+	if !exists {
+		return 0, nil
+	}
+
+	fillDelay, err := GetIntType(fillDelayIFace)
+	if err != nil {
+		return 0, fmt.Errorf("migrate-fill-delay %v", err)
+	}
+
+	return fillDelay, nil
+}
+
+// IsClusterSCEnabled returns true if cluster has a sc namespace
+func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
+	// Look inside only 1st rack. SC namespaces should be same across all the racks
+	rack := aeroCluster.Spec.RackConfig.Racks[0]
+
+	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+	for _, nsConfInterface := range nsList {
+		isEnabled := isNSSCEnabled(nsConfInterface.(map[string]interface{}))
+		if isEnabled {
+			return true
+		}
+	}
+
+	return false
 }

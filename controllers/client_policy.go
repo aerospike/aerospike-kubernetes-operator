@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -131,6 +131,22 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	return policy
 }
 
+// This should be called only after access-control is reconciled.
+// This uses password from password-secret given in CR spec
+func (r *SingleClusterReconciler) getClientPolicyFromSpec() *as.ClientPolicy {
+
+	adminUserSpec := asdbv1beta1.GetUsersFromSpec(&r.aeroCluster.Spec)[asdbv1beta1.AdminUsername]
+	password, err := r.getPasswordProvider().Get(asdbv1beta1.AdminUsername, &adminUserSpec)
+	if err != nil {
+		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
+	}
+
+	policy := r.getClientPolicy()
+	policy.Password = password
+
+	return policy
+}
+
 func (r *SingleClusterReconciler) getClusterServerCAPool(
 	clientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec,
 	clusterNamespace string,
@@ -170,7 +186,7 @@ func (r *SingleClusterReconciler) appendCACertFromFile(
 ) *x509.CertPool {
 	if caPath == "" {
 		r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
-	} else if caData, err := ioutil.ReadFile(caPath); err != nil {
+	} else if caData, err := os.ReadFile(caPath); err != nil {
 		r.Log.Error(
 			err, "Failed to load CA certs from file.", "ca-path", caPath,
 		)
@@ -296,11 +312,11 @@ func namespacedSecret(
 func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 	certPath string, keyPath string,
 ) (*tls.Certificate, error) {
-	certData, certErr := ioutil.ReadFile(certPath)
+	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
 		return nil, certErr
 	}
-	keyData, keyErr := ioutil.ReadFile(keyPath)
+	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
 		return nil, keyErr
 	}

@@ -1,12 +1,13 @@
 package test
 
 // Tests storage initialization works as expected.
-// If specifed devices should be initialized only on first use.
+// If specified devices should be initialized only on first use.
 import (
 	goctx "context"
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,6 +28,8 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				trueVar := true
+				cleanupThreads := 3
+				updatedCleanupThreads := 5
 
 				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
@@ -41,6 +44,8 @@ var _ = Describe(
 							},
 						},
 					},
+					AerospikeInitContainerSpec: &asdbv1beta1.
+						AerospikeInitContainerSpec{},
 				}
 
 				clusterName := "storage-init"
@@ -49,18 +54,115 @@ var _ = Describe(
 				)
 
 				It(
+					"Should work for large device with long init and multithreading", func() {
 
-					"Should validate all storage-init policies", func() {
+						ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
 
-						var rackStorageConfig asdbv1beta1.AerospikeStorageSpec
-						rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodBlkdiscard
-						if cloudProvider == CloudProviderAWS {
-							rackStorageConfig.BlockVolumePolicy.InitMethod = asdbv1beta1.AerospikeVolumeInitMethodDD
-						}
 						racks := []asdbv1beta1.Rack{
 							{
-								ID:      1,
-								Storage: rackStorageConfig,
+								ID: 1,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "10Gi", cloudProvider,
+						)
+						storageConfig.CleanupThreads = cleanupThreads
+
+						storageConfig.Volumes = append(
+							storageConfig.Volumes, asdbv1beta1.VolumeSpec{
+								Name: "device-dd1",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd1",
+								},
+							},
+							asdbv1beta1.VolumeSpec{
+								Name: "device-dd2",
+								AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+									InputInitMethod: &ddInitMethod,
+								},
+								Source: asdbv1beta1.VolumeSource{
+									PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+										Size:         resource.MustParse("10Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   corev1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Path: "/opt/aerospike/blockdevice-init-dd2",
+								},
+							},
+						)
+
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
+
+						// It should be greater than given in cluster namespace
+						resourceMem := resource.MustParse("2Gi")
+						resourceCPU := resource.MustParse("500m")
+						limitMem := resource.MustParse("2Gi")
+						limitCPU := resource.MustParse("500m")
+
+						resources := &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resourceCPU,
+								corev1.ResourceMemory: resourceMem,
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    limitCPU,
+								corev1.ResourceMemory: limitMem,
+							},
+						}
+
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Storage.CleanupThreads = updatedCleanupThreads
+
+						By("Updating the cluster")
+
+						err = k8sClient.Update(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should validate all storage-init policies", func() {
+
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
 							},
 							{
 								ID: 2,
@@ -68,9 +170,11 @@ var _ = Describe(
 						}
 
 						storageConfig := getAerospikeStorageConfig(
-							containerName, false, cloudProvider)
+							containerName, false, "1Gi", cloudProvider,
+						)
 						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
 						)
 
 						aeroCluster.Spec.PodSpec = podSpec
@@ -85,14 +189,18 @@ var _ = Describe(
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, false, false)
+						err = checkData(
+							aeroCluster, false, false, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
-						By("Writing some data to the all volumes")
+						By("Writing some data to all volumes")
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
@@ -103,7 +211,9 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = checkData(aeroCluster, true, true)
+						err = checkData(
+							aeroCluster, true, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
@@ -113,6 +223,7 @@ var _ = Describe(
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
 							clusterNamespacedName, *storageConfig, racks,
+							prevImage,
 						)
 						aeroCluster.Spec.PodSpec = podSpec
 						err = aerospikeClusterCreateUpdate(
@@ -121,31 +232,106 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking volumes that need initialization, they should not have data")
-						err = checkData(aeroCluster, false, true)
+						err = checkData(
+							aeroCluster, false, true, map[string]struct{}{},
+						)
 						Expect(err).ToNot(HaveOccurred())
 
-						if aeroCluster != nil {
+						By("Updating the volumes to cascade delete so that volumes are cleaned up")
+						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
+						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
+						err = aerospikeClusterCreateUpdate(
+							k8sClient, aeroCluster, ctx,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-							By("Updating the volumes to cascade delete so that volumes are cleaned up")
-							aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
-							aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
-							err := aerospikeClusterCreateUpdate(
-								k8sClient, aeroCluster, ctx,
-							)
-							Expect(err).ToNot(HaveOccurred())
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-							err = deleteCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).ToNot(HaveOccurred())
+						pvcs, err := getAeroClusterPVCList(
+							aeroCluster, k8sClient,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-							pvcs, err := getAeroClusterPVCList(
-								aeroCluster, k8sClient,
-							)
-							Expect(err).ToNot(HaveOccurred())
+						Expect(len(pvcs)).Should(
+							Equal(0), "PVCs not deleted",
+						)
+					},
+				)
 
-							Expect(len(pvcs)).Should(
-								Equal(0), "PVCs not deleted",
-							)
+				It(
+					"Should work for large device with long init", func() {
+
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
+							},
 						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						aeroCluster.Spec.PodSpec = podSpec
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
+
+		Context(
+			"When doing invalid operations", func() {
+
+				threeVar := 3
+
+				clusterName := "storage-init"
+				clusterNamespacedName := getClusterNamespacedName(
+					clusterName, namespace,
+				)
+
+				It(
+					"Should fail multithreading in init container if resource limit is not set", func() {
+
+						racks := []asdbv1beta1.Rack{
+							{
+								ID: 1,
+							},
+						}
+
+						storageConfig := getLongInitStorageConfig(
+							false, "50Gi", cloudProvider,
+						)
+						storageConfig.CleanupThreads = threeVar
+						aeroCluster := getStorageInitAerospikeCluster(
+							clusterNamespacedName, *storageConfig, racks,
+							latestImage,
+						)
+
+						By("Cleaning up previous pvc")
+
+						err := cleanupPVC(k8sClient, namespace)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Deploying the cluster")
+
+						err = deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
 					},
 				)
 			},
@@ -155,7 +341,7 @@ var _ = Describe(
 
 func checkData(
 	aeroCluster *asdbv1beta1.AerospikeCluster, assertHasData bool,
-	wasDataWritten bool,
+	wasDataWritten bool, skip map[string]struct{},
 ) error {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	if err != nil {
@@ -182,6 +368,9 @@ func checkData(
 			if volume.Source.PersistentVolume == nil {
 				continue
 			}
+			if _, ok := skip[volume.Name]; ok {
+				continue
+			}
 			// t.Logf("Check data for volume %v", volume.Path)
 			var volumeHasData bool
 			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
@@ -191,7 +380,7 @@ func checkData(
 			}
 
 			var expectedHasData = assertHasData && wasDataWritten
-			if volume.InitMethod == asdbv1beta1.AerospikeVolumeInitMethodNone {
+			if volume.InitMethod == asdbv1beta1.AerospikeVolumeMethodNone {
 				expectedHasData = wasDataWritten
 			}
 
@@ -204,7 +393,7 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not.", volume.Name,
+					"expected volume %s %s but is not", volume.Name,
 					expectedStr,
 				)
 			}
@@ -220,12 +409,27 @@ func writeDataToVolumes(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 	}
 
 	for _, pod := range podList.Items {
-		// TODO: check rack as well.
+
+		rackID, err := getRackID(&pod)
+		if err != nil {
+			return fmt.Errorf("failed to get rackID pods: %v", err)
+		}
+
 		storage := aeroCluster.Spec.Storage
-		err := writeDataToPodVolumes(storage, &pod)
+
+		if rackID != 0 {
+			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
+				if rack.ID == rackID {
+					storage = rack.Storage
+				}
+			}
+		}
+
+		err = writeDataToPodVolumes(storage, &pod)
 		if err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -318,6 +522,7 @@ func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
 	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
+	image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
@@ -327,7 +532,7 @@ func getStorageInitAerospikeCluster(
 		},
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
-			Image:   latestImage,
+			Image:   image,
 			Storage: storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},
@@ -371,6 +576,73 @@ func getStorageInitAerospikeCluster(
 							},
 						},
 					},
+				},
+			},
+		},
+	}
+}
+
+func getLongInitStorageConfig(
+	inputCascadeDelete bool, storageSize string, cloudProvider CloudProvider,
+) *asdbv1beta1.AerospikeStorageSpec {
+
+	// Create pods and storage devices write data to the devices.
+	// - deletes cluster without cascade delete of volumes.
+	// - recreate and check if volumes are reinitialized correctly.
+	fileDeleteInitMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
+	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
+
+	// Note: Blkdiscard method is not supported in AWS, so it is initialized as DD Method
+
+	return &asdbv1beta1.AerospikeStorageSpec{
+		BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputCascadeDelete: &inputCascadeDelete,
+		},
+		FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			InputCascadeDelete: &inputCascadeDelete,
+		},
+		Volumes: []asdbv1beta1.VolumeSpec{
+			{
+				Name: "file-init",
+				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &fileDeleteInitMethod,
+				},
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeFilesystem,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/filesystem-init",
+				},
+			},
+			{
+				Name: "device-dd",
+				AerospikePersistentVolumePolicySpec: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &ddInitMethod,
+				},
+				Source: asdbv1beta1.VolumeSource{
+					PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/blockdevice-init-dd",
+				},
+			},
+			{
+				Name: aerospikeConfigSecret,
+				Source: asdbv1beta1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: tlsSecretName,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/etc/aerospike/secret",
 				},
 			},
 		},
