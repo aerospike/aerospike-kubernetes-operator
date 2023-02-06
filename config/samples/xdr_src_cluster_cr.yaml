@@ -57,10 +57,6 @@ spec:
           - read-write
 
   aerospikeConfig:
-    logging:
-      - name: /var/log/aerospike/aerospike.log
-        any: info
-
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
 
