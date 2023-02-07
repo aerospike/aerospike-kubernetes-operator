@@ -474,7 +474,7 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 
 		// Validate InitMethod
 		if *source.HostPath.Type == v1.HostPathBlockDev {
-			if volume.InitMethod == AerospikeVolumeInitMethodDeleteFiles {
+			if volume.InitMethod == AerospikeVolumeMethodDeleteFiles {
 				return fmt.Errorf(
 					"invalid init method %v for block volume: %v",
 					volume.InitMethod, volume,
@@ -482,7 +482,7 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 			}
 			// Note: Add validation for invalid initMethod if new get added.
 		} else if *source.HostPath.Type == v1.HostPathDirectory || *source.HostPath.Type == v1.HostPathDirectoryOrCreate {
-			if volume.InitMethod != AerospikeVolumeInitMethodNone && volume.InitMethod != AerospikeVolumeInitMethodDeleteFiles {
+			if volume.InitMethod != AerospikeVolumeMethodNone && volume.InitMethod != AerospikeVolumeMethodDeleteFiles {
 				return fmt.Errorf(
 					"invalid init method %v for filesystem volume: %v2",
 					volume.InitMethod, volume,

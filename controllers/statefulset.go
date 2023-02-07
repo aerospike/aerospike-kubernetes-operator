@@ -3,12 +3,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -155,7 +156,6 @@ func (r *SingleClusterReconciler) createSTS(
 							Image: asdbv1beta1.GetAerospikeInitContainerImage(r.aeroCluster),
 							// Change to PullAlways for image testing.
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							SecurityContext: r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{
