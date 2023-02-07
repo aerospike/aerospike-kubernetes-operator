@@ -30,7 +30,10 @@ class Volume(object):
 
     def __init__(self, pod_name, volume):
         self.pod_name = pod_name
-        self.volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
+        if "hostPath" in volume["source"]:
+            self.volume_mode = volume["source"]["hostPath"]["type"]
+        else:
+            self.volume_mode = volume["source"]["persistentVolume"]["volumeMode"]
         self.volume_name = volume["name"]
 
         self.effective_wipe_method = volume["effectiveWipeMethod"]
@@ -57,7 +60,7 @@ class Volume(object):
             self.volume_path = ""
 
     def get_mount_point(self):
-        if self.volume_mode == "Block":
+        if self.volume_mode == "Block" or volume.volume_mode == "BlockDevice":
             point = os.path.join(BLOCK_MOUNT_POINT, self.volume_name)
             return point
 
@@ -337,7 +340,7 @@ def get_attached_volumes(pod_name, config):
 
 
 def get_persistent_volumes(volumes):
-    for volume in filter(lambda x: True if "persistentVolume" in x["source"] else False, volumes):
+    for volume in filter(lambda x: True if "persistentVolume" in x["source"] or "hostPath" in x["source"] else False, volumes):
         yield volume
 
 
@@ -465,7 +468,7 @@ def init_volumes(pod_name, config):
             volume = Volume(pod_name=pod_name, volume=vol)
 
             logging.debug(f"Starting initialization: {volume}")
-            if volume.volume_mode == "Block":
+            if volume.volume_mode == "Block" or volume.volume_mode == "BlockDevice":
 
                 if not os.path.exists(volume.get_mount_point()):
                     logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
@@ -493,7 +496,7 @@ def init_volumes(pod_name, config):
                     logging.error(f"{volume} - Has invalid effective method")
                     raise ValueError(f"{volume} - Has invalid effective method")
 
-            elif volume.volume_mode == "Filesystem":
+            elif volume.volume_mode == "Filesystem" or volume.volume_mode == "Directory" or volume.volume_mode == "DirectoryOrCreate":
                 logging.debug(f"In Filesystem initialization: {volume}")
                 if not os.path.exists(volume.get_mount_point()):
                     logging.error(f"pod-name: {pod_name} volume-name: {volume.volume_name} - Mounting point "
@@ -554,7 +557,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
 
             volume = Volume(pod_name=pod_name, volume=vol)
 
-            if volume.volume_mode == "Block":
+            if volume.volume_mode == "Block" or volume.volume_mode == "BlockDevice":
 
                 if volume.volume_path in ns_device_paths:
                     logging.info(f"Wiping - {volume}")
@@ -580,7 +583,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
 
                     else:
                         raise ValueError(f"{volume} - Has invalid effective method")
-            elif volume.volume_mode == "Filesystem":
+            elif volume.volume_mode == "Filesystem" or volume.volume_mode == "Directory" or volume.volume_mode == "DirectoryOrCreate":
                 if volume.effective_wipe_method == "deleteFiles":
 
                     if not os.path.exists(volume.get_mount_point()):
