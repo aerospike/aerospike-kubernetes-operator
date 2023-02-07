@@ -56,7 +56,7 @@ func newAsConn(
 	k8sClient client.Client,
 ) (*deployment.ASConn, error) {
 	// Use the Kubernetes service port and IP since the test might run outside
-	//the Kubernetes cluster network.
+	// the Kubernetes cluster network.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
@@ -155,8 +155,13 @@ func getEndpointIP(
 			"failed to find %s address in the node %s for pod %s: nodes addresses are %v",
 			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses,
 		)
+
+	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
+		return "", fmt.Errorf(
+			"network type cannot be unspecified",
+		)
 	}
-	return "", fmt.Errorf("anknown network type: %s", networkType)
+	return "", fmt.Errorf("unknown network type: %s", networkType)
 }
 
 func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
@@ -255,7 +260,7 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	for _, node := range nodes.Items {
 		unqZones[node.Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
 	}
-	var zones []string
+	zones := make([]string, 0, len(unqZones))
 	for zone := range unqZones {
 		zones = append(zones, zone)
 	}
@@ -291,12 +296,12 @@ func getCloudProvider(
 			}
 			labelKeys[labelKey] = struct{}{}
 		}
-		provider := determineByProviderId(&node)
+		provider := determineByProviderID(&node)
 		if provider != CloudProviderUnknown {
 			return provider, nil
 		}
 	}
-	var labelKeysSlice []string
+	labelKeysSlice := make([]string, 0, len(labelKeys))
 	for labelKey := range labelKeys {
 		labelKeysSlice = append(labelKeysSlice, labelKey)
 	}
@@ -305,7 +310,7 @@ func getCloudProvider(
 	)
 }
 
-func determineByProviderId(node *corev1.Node) CloudProvider {
+func determineByProviderID(node *corev1.Node) CloudProvider {
 	if strings.Contains(node.Spec.ProviderID, "gce") {
 		return CloudProviderGCP
 	} else if strings.Contains(node.Spec.ProviderID, "aws") {
@@ -327,13 +332,13 @@ func newAllHostConn(
 		return nil, fmt.Errorf("pod list empty")
 	}
 
-	var hostConns []*deployment.HostConn
-	for _, pod := range podList.Items {
-		hostConn, err := newHostConn(log, aeroCluster, &pod, k8sClient)
+	hostConns := make([]*deployment.HostConn, len(podList.Items))
+	for index := range podList.Items {
+		hostConn, err := newHostConn(log, aeroCluster, &podList.Items[index], k8sClient)
 		if err != nil {
 			return nil, err
 		}
-		hostConns = append(hostConns, hostConn)
+		hostConns[index] = hostConn
 	}
 	return hostConns, nil
 }

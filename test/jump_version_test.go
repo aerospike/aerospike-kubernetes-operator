@@ -1,20 +1,19 @@
 //go:build !noac
-// +build !noac
 
 package test
 
 import (
 	goctx "context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"strings"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -352,7 +351,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(
 							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
+								VolumeMode:   corev1.PersistentVolumeFilesystem,
 							},
 						},
 						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -365,7 +364,7 @@ func getAerospikeClusterSpecWithAerospikeConfig(
 							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
+								VolumeMode:   corev1.PersistentVolumeFilesystem,
 							},
 						},
 						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -423,13 +422,11 @@ func waitForVersion(
 				}, aeroCluster,
 			)
 			if err != nil {
-				// t.Logf("Could not read cluster state: %v", err)
 				return false, nil
 			}
 
-			for _, pod := range aeroCluster.Status.Pods {
-				if !strings.HasSuffix(pod.Image, image) {
-					// t.Logf("Node : %s expected image: %s status reported image: %s", pod.Aerospike.NodeID, image, pod.Image)
+			for podIndex := range aeroCluster.Status.Pods {
+				if !strings.HasSuffix(aeroCluster.Status.Pods[podIndex].Image, image) {
 					return false, nil
 				}
 			}

@@ -26,7 +26,7 @@ type RackState struct {
 
 func addRack(
 	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+	clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -39,13 +39,14 @@ func addRack(
 	}
 
 	aeroCluster.Spec.RackConfig.Racks = append(
-		aeroCluster.Spec.RackConfig.Racks, rack,
+		aeroCluster.Spec.RackConfig.Racks, *rack,
 	)
 	// Size shouldn't make any difference in working. Still put different size to check if it create any issue.
-	aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
+	aeroCluster.Spec.Size++
 	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -57,24 +58,26 @@ func removeLastRack(
 	if err != nil {
 		return err
 	}
+
 	racks := aeroCluster.Spec.RackConfig.Racks
 	if len(racks) > 0 {
 		racks = racks[:len(racks)-1]
 	}
 
 	aeroCluster.Spec.RackConfig.Racks = racks
-	aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
+	aeroCluster.Spec.Size--
 	// This will also indirectly check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
 
 	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func validateAerospikeConfigServiceUpdate(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -82,53 +85,60 @@ func validateAerospikeConfigServiceUpdate(
 	}
 
 	var found bool
-	for _, pod := range aeroCluster.Status.Pods {
 
-		if isNodePartOfRack(pod.Aerospike.NodeID, strconv.Itoa(rack.ID)) {
-			found = true
-			// TODO:
-			// We may need to check for all keys in aerospikeConfig in rack
-			// but we know that we are changing for service only for now
-			host, err := createHost(pod)
-			if err != nil {
-				return err
+	for podIndex := range aeroCluster.Status.Pods {
+		if !isNodePartOfRack(aeroCluster.Status.Pods[podIndex].Aerospike.NodeID, strconv.Itoa(rack.ID)) {
+			continue
+		}
+
+		found = true
+		// TODO:
+		// We may need to check for all keys in aerospikeConfig in rack
+		// but we know that we are changing for service only for now
+		host, err := createHost(aeroCluster.Status.Pods[podIndex])
+		if err != nil {
+			return err
+		}
+
+		asinfo := info.NewAsInfo(
+			log, host, getClientPolicy(aeroCluster, k8sClient),
+		)
+
+		confs, err := getAsConfig(asinfo, "service")
+		if err != nil {
+			return err
+		}
+
+		svcConfs := confs["service"].(lib.Stats)
+
+		for k, v := range rack.InputAerospikeConfig.Value["service"].(map[string]interface{}) {
+			if vint, ok := v.(int); ok {
+				v = int64(vint)
 			}
-			asinfo := info.NewAsInfo(
-				log, host, getClientPolicy(aeroCluster, k8sClient),
-			)
-			confs, err := getAsConfig(asinfo, "service")
-			if err != nil {
-				return err
+
+			cv, ok := svcConfs[k]
+			if !ok {
+				return fmt.Errorf(
+					"config %s missing in aerospikeConfig %v", k, svcConfs,
+				)
 			}
-			svcConfs := confs["service"].(lib.Stats)
 
-			for k, v := range rack.InputAerospikeConfig.Value["service"].(map[string]interface{}) {
-				if vint, ok := v.(int); ok {
-					v = int64(vint)
-				}
-				// t.Logf("Matching rack key %s, value %v", k, v)
-				cv, ok := svcConfs[k]
-				if !ok {
-					return fmt.Errorf(
-						"config %s missing in aerospikeConfig %v", k, svcConfs,
-					)
-				}
-				if !reflect.DeepEqual(cv, v) {
-					return fmt.Errorf(
-						"config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v",
-						k, cv, cv, v, v, svcConfs,
-					)
-				}
-
+			if !reflect.DeepEqual(cv, v) {
+				return fmt.Errorf(
+					"config %s mismatch with config. got %v:%T, want %v:%T, aerospikeConfig %v",
+					k, cv, cv, v, v, svcConfs,
+				)
 			}
 		}
 	}
+
 	if !found {
 		return fmt.Errorf(
 			"no pod found in for rack. Pods %v, Rack %v",
-			aeroCluster.Status.Pods, rack,
+			aeroCluster.Status.Pods, *rack,
 		)
 	}
+
 	return nil
 }
 
@@ -145,19 +155,22 @@ func isNamespaceRackEnabled(
 	}
 
 	var pod asdbv1beta1.AerospikePodStatus
-	for _, p := range aeroCluster.Status.Pods {
-		pod = p
+	for podIndex := range aeroCluster.Status.Pods {
+		pod = aeroCluster.Status.Pods[podIndex]
 	}
+
 	host, err := createHost(pod)
 	if err != nil {
 		return false, err
 	}
+
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 
 	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {
 		return false, err
 	}
+
 	for _, rackConf := range confs["racks"].([]lib.Stats) {
 		// rack_0 is form non-rack namespace. So if rack_0 is present then it's not rack enabled
 		_, ok := rackConf["rack_0"]
@@ -174,42 +187,53 @@ func isNamespaceRackEnabled(
 func getPodSpecAnnotations(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
 	annotations := make([]map[string]string, 0)
+
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
 	}
+
 	rackStateList := getConfiguredRackStateList(aeroCluster)
-	for _, rackState := range rackStateList {
+
+	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
 			// statefulset should exist
 			return nil, err
 		}
+
 		annotations = append(annotations, found.Spec.Template.ObjectMeta.Annotations)
 	}
+
 	return annotations, nil
 }
 
 func getPodSpecLabels(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
 	ls := make([]map[string]string, 0)
+
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
 	}
+
 	rackStateList := getConfiguredRackStateList(aeroCluster)
-	for _, rackState := range rackStateList {
+	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackState.Rack.ID)
+		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
 			// statefulset should exist
 			return nil, err
 		}
+
 		ls = append(ls, found.Spec.Template.ObjectMeta.Labels)
 	}
+
 	return ls, nil
 }
 
@@ -223,51 +247,51 @@ func validateRackEnabledCluster(
 	}
 	// Validate cluster
 	rackStateList := getConfiguredRackStateList(aeroCluster)
-	for _, rackState := range rackStateList {
+	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForStatefulSet(
-			aeroCluster, rackState.Rack.ID,
+			aeroCluster, rackStateList[rackStateIndex].Rack.ID,
 		)
+
 		err := k8sClient.Get(ctx, stsName, found)
+
 		if errors.IsNotFound(err) {
 			// statefulset should exist
 			return err
 		}
 
 		// Match size
-		if int(*found.Spec.Replicas) != rackState.Size {
+		if int(*found.Spec.Replicas) != rackStateList[rackStateIndex].Size {
 			return fmt.Errorf(
 				"statefulset replica size %d, want %d",
-				int(*found.Spec.Replicas), rackState.Size,
+				int(*found.Spec.Replicas), rackStateList[rackStateIndex].Size,
 			)
 		}
-		// t.Logf("matched statefulset replica size with required rack size %d", rackState.Size)
-
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
-		err = validateSTSForRack(found, rackState)
+		err = validateSTSForRack(found, &rackStateList[rackStateIndex])
 		if err != nil {
 			return err
 		}
 
 		// Match Pod's Node
-		err = validateSTSPodsForRack(k8sClient, ctx, found, rackState)
+		err = validateSTSPodsForRack(k8sClient, ctx, found, &rackStateList[rackStateIndex])
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
-
+func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 	zoneKey := "failure-domain.beta.kubernetes.io/zone"
 	regionKey := "failure-domain.beta.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
-
 	rackSelectorMap := map[string]string{}
+
 	if rackState.Rack.Zone != "" {
 		val := corev1.NodeSelectorRequirement{
 			Key:      zoneKey,
@@ -276,6 +300,7 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 		}
 		rackSelectorMap[zoneKey] = val.String()
 	}
+
 	if rackState.Rack.Region != "" {
 		val := corev1.NodeSelectorRequirement{
 			Key:      regionKey,
@@ -284,6 +309,7 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 		}
 		rackSelectorMap[regionKey] = val.String()
 	}
+
 	if rackState.Rack.RackLabel != "" {
 		val := corev1.NodeSelectorRequirement{
 			Key:      rackLabelKey,
@@ -292,6 +318,7 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 		}
 		rackSelectorMap[rackLabelKey] = val.String()
 	}
+
 	if rackState.Rack.NodeName != "" {
 		val := corev1.NodeSelectorRequirement{
 			Key:      hostKey,
@@ -308,30 +335,32 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 	terms := found.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 
 	var matched bool
+
 	for _, term := range terms {
 		expMap := map[string]string{}
 		for _, exp := range term.MatchExpressions {
 			expMap[exp.Key] = exp.String()
 		}
+
 		matched = reflect.DeepEqual(rackSelectorMap, expMap)
 		if matched {
 			break
 		}
 	}
+
 	if !matched {
 		return fmt.Errorf(
 			"statefulset doesn't have required match strings. terms %v", terms,
 		)
 	}
+
 	return nil
-	// t.Logf("matched statefulset selector terms %v", terms)
 }
 
 func validateSTSPodsForRack(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
-	rackState RackState,
+	rackState *RackState,
 ) error {
-
 	zoneKey := "failure-domain.beta.kubernetes.io/zone"
 	regionKey := "failure-domain.beta.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
@@ -341,12 +370,15 @@ func validateSTSPodsForRack(
 	if rackState.Rack.Zone != "" {
 		rackSelectorMap[zoneKey] = rackState.Rack.Zone
 	}
+
 	if rackState.Rack.Region != "" {
 		rackSelectorMap[regionKey] = rackState.Rack.Region
 	}
+
 	if rackState.Rack.RackLabel != "" {
 		rackSelectorMap[rackLabelKey] = rackState.Rack.RackLabel
 	}
+
 	if rackState.Rack.NodeName != "" {
 		rackSelectorMap[hostKey] = rackState.Rack.NodeName
 	}
@@ -355,16 +387,16 @@ func validateSTSPodsForRack(
 	if err != nil {
 		return err
 	}
-	for _, pod := range rackPodList.Items {
+
+	for podIndex := range rackPodList.Items {
 		node := &corev1.Node{}
 		err := k8sClient.Get(
-			ctx, types.NamespacedName{Name: pod.Spec.NodeName}, node,
+			ctx, types.NamespacedName{Name: rackPodList.Items[podIndex].Spec.NodeName}, node,
 		)
+
 		if err != nil {
 			return err
 		}
-
-		// t.Logf("Pod's node %s and labels %v", pod.Spec.NodeName, node.Labels)
 
 		for k, v1 := range rackSelectorMap {
 			if v2, ok := node.Labels[k]; !ok {
@@ -382,6 +414,7 @@ func validateSTSPodsForRack(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -389,19 +422,14 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 	topology := splitRacks(
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
-	var rackStateList []RackState
-	for idx, rack := range aeroCluster.Spec.RackConfig.Racks {
-		if topology[idx] == 0 {
-			// Skip the rack, if it's size is 0
-			continue
-		}
-		rackStateList = append(
-			rackStateList, RackState{
-				Rack: rack,
-				Size: topology[idx],
-			},
-		)
+
+	rackStateList := make([]RackState, len(topology))
+
+	for idx := range topology {
+		rackStateList[idx].Rack = aeroCluster.Spec.RackConfig.Racks[idx]
+		rackStateList[idx].Size = topology[idx]
 	}
+
 	return rackStateList
 }
 
@@ -416,7 +444,10 @@ func splitRacks(nodeCount, rackCount int) []int {
 		if rackIdx < extraNodes {
 			nodesForThisRack++
 		}
-		topology = append(topology, nodesForThisRack)
+
+		if nodesForThisRack != 0 {
+			topology = append(topology, nodesForThisRack)
+		}
 	}
 
 	return topology
@@ -451,10 +482,11 @@ func getRackPodList(
 	if err := k8sClient.List(ctx, podList, listOps); err != nil {
 		return nil, err
 	}
+
 	return podList, nil
 }
 
-func isNodePartOfRack(nodeID string, rackID string) bool {
+func isNodePartOfRack(nodeID, rackID string) bool {
 	// NODE_ID="$RACK_ID$NODE_ID",  NODE_ID -> aINT
 	lNodeID := strings.ToLower(nodeID)
 	tokens := strings.Split(lNodeID, "a")
@@ -463,9 +495,10 @@ func isNodePartOfRack(nodeID string, rackID string) bool {
 }
 
 func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
-	var racks []asdbv1beta1.Rack
-	for _, rID := range rackIDs {
-		racks = append(racks, asdbv1beta1.Rack{ID: rID})
+	racks := make([]asdbv1beta1.Rack, len(rackIDs))
+	for index, rID := range rackIDs {
+		racks[index].ID = rID
 	}
+
 	return racks
 }

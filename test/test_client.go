@@ -72,15 +72,13 @@ func getClient(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
-	var hosts []*as.Host
-	for _, conn := range conns {
-		hosts = append(
-			hosts, &as.Host{
-				Name:    conn.ASConn.AerospikeHostName,
-				TLSName: conn.ASConn.AerospikeTLSName,
-				Port:    conn.ASConn.AerospikePort,
-			},
-		)
+	hosts := make([]*as.Host, len(conns))
+	for connIndex := range conns {
+		hosts[connIndex] = &as.Host{
+			Name:    conns[connIndex].ASConn.AerospikeHostName,
+			TLSName: conns[connIndex].ASConn.AerospikeTLSName,
+			Port:    conns[connIndex].ASConn.AerospikePort,
+		}
 	}
 	// Create policy using status, status has current connection info
 	policy := getClientPolicy(
@@ -109,15 +107,13 @@ func getClientExternalAuth(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
-	var hosts []*as.Host
-	for _, conn := range conns {
-		hosts = append(
-			hosts, &as.Host{
-				Name:    conn.ASConn.AerospikeHostName,
-				TLSName: conn.ASConn.AerospikeTLSName,
-				Port:    conn.ASConn.AerospikePort,
-			},
-		)
+	hosts := make([]*as.Host, len(conns))
+	for connIndex := range conns {
+		hosts[connIndex] = &as.Host{
+			Name:    conns[connIndex].ASConn.AerospikeHostName,
+			TLSName: conns[connIndex].ASConn.AerospikeTLSName,
+			Port:    conns[connIndex].ASConn.AerospikePort,
+		}
 	}
 	// Create policy using status, status has current connection info
 	policy := getClientPolicy(
@@ -156,7 +152,6 @@ func getServiceTLSName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 func getClientPolicy(
 	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
 ) *as.ClientPolicy {
-
 	policy := as.NewClientPolicy()
 
 	policy.SeedOnlyCluster = true
@@ -191,11 +186,12 @@ func getClientPolicy(
 			),
 			Certificates:             []tls.Certificate{},
 			PreferServerCipherSuites: true,
+			MinVersion:               tls.VersionTLS12,
 			// used only in testing
 			// InsecureSkipVerify: true,
 		}
 		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
-			//This is possible when tls-authenticate-client = false
+			// This is possible when tls-authenticate-client = false
 			// r.Log.Info("Operator's client cert is not configured. Skip using client certs.", "clientCertSpec", clientCertSpec)
 		} else if cert, err := getClientCertificate(
 			clientCertSpec, aeroCluster.Namespace, k8sClient,

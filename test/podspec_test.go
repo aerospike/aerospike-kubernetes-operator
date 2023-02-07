@@ -135,7 +135,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations["annotation-test-2"] = "test-2"
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels["label-test-2"] = "test-2"
 					err = addRack(
-						k8sClient, ctx, clusterNamespacedName, asdbv1beta1.Rack{ID: 2, Zone: zone})
+						k8sClient, ctx, clusterNamespacedName, &asdbv1beta1.Rack{ID: 2, Zone: zone})
 					Expect(err).ToNot(HaveOccurred())
 					By("Validating Added Annotations")
 					actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)

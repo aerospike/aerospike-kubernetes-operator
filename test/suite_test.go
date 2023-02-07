@@ -20,11 +20,12 @@ import (
 	goctx "context"
 	"flag"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -90,16 +91,14 @@ func deleteAllClusters(namespace string) {
 	err := k8sClient.List(ctx, list, listOps)
 	Expect(err).NotTo(HaveOccurred())
 
-	for _, cluster := range list.Items {
-		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", cluster.Namespace, cluster.Name))
-		err := deleteCluster(k8sClient, ctx, &cluster)
+	for clusterIndex := range list.Items {
+		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", list.Items[clusterIndex].Namespace, list.Items[clusterIndex].Name))
+		err := deleteCluster(k8sClient, ctx, &list.Items[clusterIndex])
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
 
 func cleanupPVC(k8sClient client.Client, ns string) error {
-	// t.Log("Cleanup old pvc")
-
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	clLabels := map[string]string{"app": "aerospike-cluster"}
@@ -110,21 +109,21 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		return err
 	}
 
-	for _, pvc := range pvcList.Items {
-		pkgLog.Info("Found pvc, deleting it", "pvcName", pvc.Name, "namespace", pvc.Namespace)
+	for pvcIndex := range pvcList.Items {
+		pkgLog.Info("Found pvc, deleting it", "pvcName", pvcList.Items[pvcIndex].Name, "namespace", pvcList.Items[pvcIndex].Namespace)
 
-		if utils.IsPVCTerminating(&pvc) {
+		if utils.IsPVCTerminating(&pvcList.Items[pvcIndex]) {
 			continue
 		}
-		//if utils.ContainsString(pvc.Finalizers, "kubernetes.io/pvc-protection") {
+		// if utils.ContainsString(pvc.Finalizers, "kubernetes.io/pvc-protection") {
 		//	pvc.Finalizers = utils.RemoveString(pvc.Finalizers, "kubernetes.io/pvc-protection")
 		//	if err := k8sClient.Patch(goctx.TODO(), &pvc, client.Merge); err != nil {
 		//		return fmt.Errorf("could not patch %s finalizer from following pvc: %s: %w",
 		//			"kubernetes.io/pvc-protection", pvc.Name, err)
 		//	}
 		//}
-		if err := k8sClient.Delete(goctx.TODO(), &pvc); err != nil {
-			return fmt.Errorf("could not delete pvc %s: %w", pvc.Name, err)
+		if err := k8sClient.Delete(goctx.TODO(), &pvcList.Items[pvcIndex]); err != nil {
+			return fmt.Errorf("could not delete pvc %s: %w", pvcList.Items[pvcIndex].Name, err)
 		}
 	}
 	return nil

@@ -3,9 +3,10 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"strings"
+
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -15,6 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	sc1Name     = "sc1"
+	scNamespace = "test"
 )
 
 var _ = Describe("SCMode", func() {
@@ -43,7 +49,7 @@ var _ = Describe("SCMode", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
-			scNamespace := "test"
+			scNamespace := scNamespace
 			racks := []asdbv1beta1.Rack{
 				{ID: 1},
 				{ID: 2},
@@ -66,7 +72,7 @@ var _ = Describe("SCMode", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
-			scNamespace := "test"
+			scNamespace := scNamespace
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -80,7 +86,7 @@ var _ = Describe("SCMode", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
-			scNamespace := "test"
+			scNamespace := scNamespace
 			racks := []asdbv1beta1.Rack{
 				{ID: 1},
 				{ID: 2},
@@ -103,7 +109,6 @@ var _ = Describe("SCMode", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
-			scNamespace := "test"
 
 			addedSCNs := "newscns"
 			path := "/test/dev/" + addedSCNs
@@ -151,7 +156,6 @@ var _ = Describe("SCMode", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
-			scNamespace = "test"
 
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -161,7 +165,6 @@ var _ = Describe("SCMode", func() {
 		It("Should allow batch restart in the SC setup", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
-			scNamespace := "test"
 			nonSCNamespace := "bar"
 			racks := []asdbv1beta1.Rack{
 				{ID: 1},
@@ -237,7 +240,6 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1, 2)
 
-			sc1Name := "sc1"
 			sc1Path := "/test/dev/" + sc1Name
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
@@ -272,7 +274,6 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
-			sc1Name := "sc1"
 			sc1Path := "/test/dev/" + sc1Name
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
@@ -295,7 +296,6 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
-			sc1Name := "sc1"
 			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
@@ -326,12 +326,14 @@ func validateLifecycleOperationInSCCluster(
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName, scNamespace string,
 ) {
 	By("Scaleup")
+
 	err := scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 3)
 	Expect(err).ToNot(HaveOccurred())
 
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("Set roster blockList")
+
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 	// Keep IDs in lowercase
@@ -343,12 +345,14 @@ func validateLifecycleOperationInSCCluster(
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("ScaleDown")
+
 	err = scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
 	Expect(err).ToNot(HaveOccurred())
 
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("RollingRestart")
+
 	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -386,9 +390,10 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
 	podNodeIDSet := sets.NewString()
-	for _, pod := range aeroCluster.Status.Pods {
+
+	for podName := range aeroCluster.Status.Pods {
 		// Remove 0 from start of nodeID (we add this dummy rack)
-		podNodeIDSet.Insert(strings.ToUpper(strings.TrimLeft(pod.Aerospike.NodeID, "0")))
+		podNodeIDSet.Insert(strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0")))
 	}
 
 	for _, rosterNode := range rosterList {
@@ -401,16 +406,18 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 	rosterListSet := sets.NewString(rosterList...)
 	// Check3 Scaleup: pod should be in roster or in blockList
-	for podName, pod := range aeroCluster.Status.Pods {
-		nodeID := strings.ToUpper(strings.TrimLeft(pod.Aerospike.NodeID, "0"))
+	for podName := range aeroCluster.Status.Pods {
+		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
 		rackIDPtr, err := utils.GetRackIDFromPodName(podName)
 		Expect(err).ToNot(HaveOccurred())
+
 		rackID := *rackIDPtr
 
 		nodeRoster := nodeID
 		if rackID != 0 {
 			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
 		}
+
 		if !rosterNodeBlockListSet.Has(nodeID) &&
 			!rosterListSet.Has(nodeRoster) {
 			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod roster %v, rackID %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
@@ -421,6 +428,7 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, namespace string) (map[string]string, error) {
 	cmd := fmt.Sprintf("roster:namespace=%s", namespace)
+
 	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
 	if err != nil {
 		return nil, err
@@ -442,6 +450,7 @@ func getSCAndNonSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 		},
 	}
 	conf.Value["namespaces"] = append(conf.Value["namespaces"].([]interface{}), nonSCConf)
+
 	return conf
 }
 
@@ -455,7 +464,7 @@ func getSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 			"security": map[string]interface{}{},
 			"network":  getNetworkConfig(),
 			"namespaces": []interface{}{
-				getSCNamespaceConfig("test", "/test/dev/xvdf"),
+				getSCNamespaceConfig(scNamespace, "/test/dev/xvdf"),
 			},
 		},
 	}

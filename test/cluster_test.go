@@ -78,7 +78,7 @@ var _ = Describe(
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.Size = aeroCluster.Spec.Size - 2
+					aeroCluster.Spec.Size -= 2
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -102,7 +102,6 @@ var _ = Describe(
 
 // Test cluster deployment with all image post 4.9.0
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
-
 	// post 4.9.0, need feature-key file
 	versions := []string{
 		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17",
@@ -111,7 +110,6 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 	}
 
 	for _, v := range versions {
-
 		It(
 			fmt.Sprintf("Deploy-%s", v), func() {
 				clusterName := "deploy-cluster"
@@ -144,6 +142,7 @@ func DeployClusterForDiffStorageTest(
 	if multiPodPerHost {
 		clusterSz++
 	}
+
 	repFact := nHosts
 
 	Context(
@@ -237,7 +236,6 @@ func DeployClusterForDiffStorageTest(
 			// })
 
 			// Persistent Memory (pmem) Storage Engine
-
 		},
 	)
 }
@@ -291,7 +289,6 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 // Test cluster cr updation
 func UpdateClusterTest(ctx goctx.Context) {
-
 	clusterName := "update-cluster"
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
@@ -443,7 +440,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	Context(
 		"When doing invalid operations", func() {
-
 			Context(
 				"ValidateUpdate", func() {
 					// TODO: No jump version yet but will be used
@@ -555,7 +551,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 // Test cluster validation Common for deployment and update both
 func NegativeClusterValidationTest(ctx goctx.Context) {
-
 	clusterName := "invalid-cluster"
 	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
 
@@ -577,7 +572,6 @@ func negativeDeployClusterValidationTest(
 ) {
 	Context(
 		"Validation", func() {
-
 			It(
 				"EmptyClusterName: should fail for EmptyClusterName", func() {
 					cName := getClusterNamespacedName(
@@ -623,10 +617,6 @@ func negativeDeployClusterValidationTest(
 					)
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
-
-					// aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 9)
-					// err = deployCluster(k8sClient, ctx, aeroCluster)
-					// validateError(err, "should fail for community eidition having more than 8 nodes")
 				},
 			)
 
@@ -653,7 +643,6 @@ func negativeDeployClusterValidationTest(
 							}
 							err = deployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
-
 						},
 					)
 
@@ -1016,7 +1005,6 @@ func negativeUpdateClusterValidationTest(
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 ) {
 	// Will be used in Update
-
 	Context(
 		"Validation", func() {
 			BeforeEach(
@@ -1140,7 +1128,6 @@ func negativeUpdateClusterValidationTest(
 							}
 							err = k8sClient.Update(ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
-
 						},
 					)
 
@@ -1298,7 +1285,6 @@ func negativeUpdateClusterValidationTest(
 
 					Context(
 						"ChangeDefaultConfig", func() {
-
 							It(
 								"ServiceConf: should fail for setting node-id, should fail for setting cluster-name",
 								func() {

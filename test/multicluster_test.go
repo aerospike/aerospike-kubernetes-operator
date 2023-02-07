@@ -2,6 +2,7 @@ package test
 
 import (
 	goctx "context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
@@ -200,6 +201,7 @@ func validateLifecycleOperationInRackCluster(
 	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 ) {
 	By("Scaleup")
+
 	err := scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -207,6 +209,7 @@ func validateLifecycleOperationInRackCluster(
 	Expect(err).ToNot(HaveOccurred())
 
 	By("ScaleDown")
+
 	err = scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -214,6 +217,7 @@ func validateLifecycleOperationInRackCluster(
 	Expect(err).ToNot(HaveOccurred())
 
 	By("RollingRestart")
+
 	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 

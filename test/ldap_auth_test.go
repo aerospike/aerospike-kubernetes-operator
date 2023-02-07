@@ -1,5 +1,4 @@
 //go:build !noac
-// +build !noac
 
 // Tests Aerospike ldap external authentication.
 
@@ -7,6 +6,8 @@ package test
 
 import (
 	goctx "context"
+	"time"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
@@ -15,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"time"
 )
 
 var _ = Describe(
@@ -71,6 +71,7 @@ func validateTransactions(
 	if err != nil {
 		return err
 	}
+
 	binMap := map[string]interface{}{
 		"testBin": "binValue",
 	}
