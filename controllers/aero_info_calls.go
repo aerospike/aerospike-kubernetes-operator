@@ -24,9 +24,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-//------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
 // Aerospike helper
-//------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
 
 // waitForMultipleNodesSafeStopReady waits util the input pods is safe to stop,
 // skipping pods that are not running and present in ignorablePods for stability check.
@@ -52,8 +52,10 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	policy := r.getClientPolicy()
 
-	r.Recorder.Eventf(r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
-		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIdLabel])
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIDLabel],
+	)
 
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
@@ -75,23 +77,30 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if err := r.quiescePods(policy, allHostConns, pods); err != nil {
 		return reconcileError(err)
 	}
+
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod) error {
+func (r *SingleClusterReconciler) quiescePods(
+	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod,
+) error {
 	removedNSes, err := r.removedNamespaces(allHostConns)
 	if err != nil {
 		return err
 	}
 
-	var selectedHostConns []*deployment.HostConn
+	selectedHostConns := make([]*deployment.HostConn, 0, len(pods))
+
 	for _, pod := range pods {
 		// Quiesce node
 		hostConn, err := r.newHostConn(pod)
 		if err != nil {
-			return fmt.Errorf("failed to get hostConn for aerospike cluster nodes %v: %v",
-				pod.Name, err)
+			return fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes %v: %v",
+				pod.Name, err,
+			)
 		}
+
 		selectedHostConns = append(selectedHostConns, hostConn)
 	}
 
@@ -105,19 +114,26 @@ func (r *SingleClusterReconciler) quiescePods(policy *as.ClientPolicy, allHostCo
 }
 
 // TODO: Check only for migration
-func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolicy, allHostConns []*deployment.HostConn) reconcileResult {
-	const maxRetry = 6
-	const retryInterval = time.Second * 10
+func (r *SingleClusterReconciler) waitForClusterStability(
+	policy *as.ClientPolicy, allHostConns []*deployment.HostConn,
+) reconcileResult {
+	const (
+		maxRetry      = 6
+		retryInterval = time.Second * 10
+	)
 
-	var isStable bool
-	var err error
+	var (
+		isStable bool
+		err      error
+	)
+
 	// Wait for migration to finish. Wait for some time...
 	for idx := 1; idx <= maxRetry; idx++ {
 		r.Log.V(1).Info("Waiting for migrations to be zero")
 		time.Sleep(retryInterval)
 
 		// This should fail if coldstart is going on.
-		// Info command in coldstarting node should give error, is it? confirm.
+		// Info command in cold-starting node should give error, is it? confirm.
 
 		isStable, err = deployment.IsClusterAndStable(
 			r.Log, policy, allHostConns,
@@ -125,11 +141,13 @@ func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolic
 		if err != nil {
 			return reconcileError(err)
 		}
+
 		if isStable {
 			r.Log.V(1).Info("Cluster is now stable")
 			break
 		}
 	}
+
 	if !isStable {
 		return reconcileRequeueAfter(60)
 	}
@@ -140,16 +158,13 @@ func (r *SingleClusterReconciler) waitForClusterStability(policy *as.ClientPolic
 func (r *SingleClusterReconciler) tipClearHostname(
 	pod *corev1.Pod, clearPodName string,
 ) error {
-	asConn, err := r.newAsConn(pod)
-	if err != nil {
-		return err
-	}
+	asConn := r.newAsConn(pod)
 
-	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	if heartbeatTlsPort != nil {
-		if err = asConn.TipClearHostname(
+	_, heartbeatTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if heartbeatTLSPort != nil {
+		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
-			*heartbeatTlsPort,
+			*heartbeatTLSPort,
 		); err != nil {
 			return err
 		}
@@ -157,40 +172,8 @@ func (r *SingleClusterReconciler) tipClearHostname(
 
 	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatPort != nil {
-		if err = asConn.TipClearHostname(
+		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
-			*heartbeatPort,
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// nolint:unused
-func (r *SingleClusterReconciler) tipHostname(
-	pod *corev1.Pod, clearPod *corev1.Pod,
-) error {
-	asConn, err := r.newAsConn(pod)
-	if err != nil {
-		return err
-	}
-
-	_, heartbeatTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	if heartbeatTlsPort != nil {
-		if err = asConn.TipHostname(
-			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
-			*heartbeatTlsPort,
-		); err != nil {
-			return err
-		}
-	}
-
-	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
-	if heartbeatPort != nil {
-		if err = asConn.TipHostname(
-			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPod.Name),
 			*heartbeatPort,
 		); err != nil {
 			return err
@@ -201,10 +184,7 @@ func (r *SingleClusterReconciler) tipHostname(
 }
 
 func (r *SingleClusterReconciler) alumniReset(pod *corev1.Pod) error {
-	asConn, err := r.newAsConn(pod)
-	if err != nil {
-		return err
-	}
+	asConn := r.newAsConn(pod)
 	return asConn.AlumniReset(r.getClientPolicy())
 }
 
@@ -214,7 +194,8 @@ func (r *SingleClusterReconciler) newAllHostConn() (
 	return r.newAllHostConnWithOption(nil)
 }
 
-// newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and present in ignorablePods.
+// newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and
+// present in ignorablePods.
 func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev1.Pod) (
 	[]*deployment.HostConn, error,
 ) {
@@ -227,8 +208,10 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 		return nil, fmt.Errorf("pod list empty")
 	}
 
-	var hostConns []*deployment.HostConn
-	for _, pod := range podList.Items {
+	hostConns := make([]*deployment.HostConn, 0, len(podList.Items))
+
+	for i := range podList.Items {
+		pod := podList.Items[i]
 		if utils.IsPodTerminating(&pod) {
 			continue
 		}
@@ -241,8 +224,10 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 				r.Log.Info(
 					"Ignoring info call on non-running pod ", "pod", pod.Name,
 				)
+
 				continue
 			}
+
 			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
 		}
 
@@ -250,26 +235,24 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 		if err != nil {
 			return nil, err
 		}
+
 		hostConns = append(hostConns, hostConn)
 	}
 
 	return hostConns, nil
 }
 
+//nolint:unparam // todo: add error
 func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
 	*deployment.HostConn, error,
 ) {
-	asConn, err := r.newAsConn(pod)
-	if err != nil {
-		return nil, err
-	}
+	asConn := r.newAsConn(pod)
 	host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
+
 	return deployment.NewHostConn(asConn.Log, host, asConn), nil
 }
 
-func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
-	*deployment.ASConn, error,
-) {
+func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn {
 	// Use pod IP and direct service port from within the operator for info calls.
 	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if tlsName == "" || port == nil {
@@ -284,15 +267,17 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) (
 		Log:               r.Log.WithValues("host", pod.Name),
 	}
 
-	return asConn, nil
+	return asConn
 }
 
 func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
 }
 
-func (r *SingleClusterReconciler) setMigrateFillDelay(policy *as.ClientPolicy,
-	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod) reconcileResult {
+func (r *SingleClusterReconciler) setMigrateFillDelay(
+	policy *as.ClientPolicy,
+	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod,
+) reconcileResult {
 	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
 	if err != nil {
 		reconcileError(err)

@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"k8s.io/client-go/tools/record"
 	"os"
 	"strconv"
 	"strings"
+
+	"k8s.io/client-go/tools/record"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -36,15 +37,19 @@ var (
 )
 
 func init() {
+	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
 	utilRuntime.Must(asdbv1beta1.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
+	var (
+		metricsAddr          string
+		enableLeaderElection bool
+		probeAddr            string
+		err                  error
+	)
+
 	flag.StringVar(
 		&metricsAddr, "metrics-bind-address", ":8080",
 		"The address the metric endpoint binds to.",
@@ -58,6 +63,7 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.",
 	)
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -76,11 +82,13 @@ func main() {
 
 	legacyOlmCertDir := "/apiserver.local.config/certificates"
 	// If legacy directory is present then OLM < 0.17 is used and webhook server should be configured as follows
-	if info, err := os.Stat(legacyOlmCertDir); err == nil && info.IsDir() {
+	info, err := os.Stat(legacyOlmCertDir)
+	if err == nil && info.IsDir() {
 		setupLog.Info(
 			"legacy OLM < 0.17 directory is present - initializing webhook" +
 				" server ",
 		)
+
 		webhookServer = &webhook.Server{
 			CertDir:  "/apiserver.local.config/certificates",
 			CertName: "apiserver.crt",
@@ -96,7 +104,8 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "96242fdf.aerospike.com",
-		// if webhookServer is nil, which will be the case of OLM >= 0.17, the manager will create a server for you using Host, Port,
+		// if webhookServer is nil, which will be the case of OLM >= 0.17,
+		// the manager will create a server for you using Host, Port
 		// and the default CertDir, KeyName, and CertName.
 		WebhookServer: webhookServer,
 	}
@@ -126,30 +135,35 @@ func main() {
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
 	setupLog.Info("Init aerospike-server config schemas")
+
 	schemaMap, err := configschema.NewSchemaMap()
 	if err != nil {
 		setupLog.Error(err, "Unable to Load SchemaMap")
 		os.Exit(1)
 	}
+
 	schemaMapLogger := ctrl.Log.WithName("schema-map")
 	asconfig.InitFromMap(schemaMapLogger, schemaMap)
 
-	eventBroadcaster := record.NewBroadcasterWithCorrelatorOptions(record.CorrelatorOptions{
-		BurstSize: getEventBurstSize(),
-		QPS:       1,
-	})
+	eventBroadcaster := record.NewBroadcasterWithCorrelatorOptions(
+		record.CorrelatorOptions{
+			BurstSize: getEventBurstSize(),
+			QPS:       1,
+		},
+	)
 	// Start events processing pipeline.
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
-	defer eventBroadcaster.Shutdown()
 
-	if err := (&aerospikecluster.AerospikeClusterReconciler{
+	if err = (&aerospikecluster.AerospikeClusterReconciler{
 		Client:     mgr.GetClient(),
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
 		Scheme:     mgr.GetScheme(),
-		Recorder:   eventBroadcaster.NewRecorder(mgr.GetScheme(), v1.EventSource{Component: "aerospikeCluster-controller"}),
+		Recorder: eventBroadcaster.NewRecorder(
+			mgr.GetScheme(), v1.EventSource{Component: "aerospikeCluster-controller"},
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(
 			err, "unable to create controller", "controller",
@@ -157,7 +171,8 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	if err = (&asdbv1beta1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
+
+	if err := (&asdbv1beta1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(
 			err, "unable to create webhook", "webhook", "AerospikeCluster",
 		)
@@ -169,16 +184,20 @@ func main() {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
+
 	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
 	setupLog.Info("Starting manager")
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+
+	eventBroadcaster.Shutdown()
 }
 
 // getWatchNamespace returns the Namespace the operator should be watching for changes
@@ -192,6 +211,7 @@ func getWatchNamespace() (string, error) {
 	if !found {
 		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
 	}
+
 	return ns, nil
 }
 
@@ -199,8 +219,11 @@ func getWatchNamespace() (string, error) {
 func getEventBurstSize() int {
 	// EventBurstSizeEnvVar is the constant for env variable EVENT_BURST_SIZE
 	// An empty value means the default burst size which is 150.
-	var eventBurstSizeEnvVar = "EVENT_BURST_SIZE"
-	var eventBurstSize = 150
+	var (
+		eventBurstSizeEnvVar = "EVENT_BURST_SIZE"
+		eventBurstSize       = 150
+	)
+
 	burstSize, found := os.LookupEnv(eventBurstSizeEnvVar)
 	if found {
 		eventBurstSizeInt, err := strconv.Atoi(burstSize)
@@ -210,6 +233,7 @@ func getEventBurstSize() int {
 			eventBurstSize = eventBurstSizeInt
 		}
 	}
+
 	return eventBurstSize
 }
 

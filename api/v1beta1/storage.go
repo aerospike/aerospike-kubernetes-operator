@@ -9,36 +9,44 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// ValidateStorageSpecChange indicates if a change to storage spec is safe to apply.
-func (s *AerospikeStorageSpec) ValidateStorageSpecChange(new AerospikeStorageSpec) error {
-	for _, newVolume := range new.Volumes {
-		for _, oldVolume := range s.Volumes {
+// validateStorageSpecChange indicates if a change to storage spec is safe to apply.
+func (s *AerospikeStorageSpec) validateStorageSpecChange(newStorage *AerospikeStorageSpec) error {
+	for i := range newStorage.Volumes {
+		newVolume := &newStorage.Volumes[i]
+
+		for j := range s.Volumes {
+			oldVolume := s.Volumes[j]
 			if oldVolume.Name == newVolume.Name {
-				if !oldVolume.IsSafeChange(newVolume) {
+				if !oldVolume.isSafeChange(newVolume) {
 					// Validate same volumes
 					return fmt.Errorf(
-						"cannot change volumes old: %v new %v", oldVolume,
+						"cannot change volumes old: %v newStorage %v", oldVolume,
 						newVolume,
 					)
 				}
+
 				break
 			}
 		}
 	}
 
-	_, _, err := s.validateAddedOrRemovedVolumes(new)
+	_, _, err := s.validateAddedOrRemovedVolumes(newStorage)
+
 	return err
 }
 
 // validateAddedOrRemovedVolumes returns volumes that were added or removed.
 // Currently, only configMap volume is allowed to be added or removed dynamically
-func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorageSpec) (
+func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *AerospikeStorageSpec) (
 	addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error,
 ) {
 	// Validate Persistent volume
-	for _, newVolume := range new.Volumes {
+	for i := range newStorage.Volumes {
+		newVolume := newStorage.Volumes[i]
 		matched := false
-		for _, oldVolume := range s.Volumes {
+
+		for j := range s.Volumes {
+			oldVolume := s.Volumes[j]
 			if oldVolume.Name == newVolume.Name {
 				matched = true
 				break
@@ -51,13 +59,17 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 					"cannot add persistent volume: %v", newVolume,
 				)
 			}
+
 			addedVolumes = append(addedVolumes, newVolume)
 		}
 	}
 
-	for _, oldVolume := range s.Volumes {
+	for i := range s.Volumes {
+		oldVolume := s.Volumes[i]
 		matched := false
-		for _, newVolume := range new.Volumes {
+
+		for j := range newStorage.Volumes {
+			newVolume := newStorage.Volumes[j]
 			if oldVolume.Name == newVolume.Name {
 				matched = true
 			}
@@ -69,6 +81,7 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(new AerospikeStorag
 					"cannot remove persistent volume: %v", oldVolume,
 				)
 			}
+
 			removedVolumes = append(removedVolumes, oldVolume)
 		}
 	}
@@ -94,71 +107,66 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
+
 	if s.CleanupThreads == 0 {
 		s.CleanupThreads = defaultCleanupThreads
 	}
 
 	for i := range s.Volumes {
-		if s.Volumes[i].Source.PersistentVolume == nil {
+		switch {
+		case s.Volumes[i].Source.PersistentVolume == nil:
 			// All other sources are considered to be mounted, for now.
 			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
-		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
+		case s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock:
 			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
-		} else if s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+		case s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
 			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
 		}
 	}
-}
-
-// GetConfigMaps returns the config map volumes from the storage spec.
-func (s *AerospikeStorageSpec) GetConfigMaps() (configMaps []VolumeSpec) {
-	for _, volume := range s.Volumes {
-		if volume.Source.ConfigMap != nil {
-			configMaps = append(configMaps, volume)
-		}
-	}
-	return configMaps
 }
 
 // GetPVs returns the PV volumes from the storage spec.
-func (s *AerospikeStorageSpec) GetPVs() (PVs []VolumeSpec) {
-	for _, volume := range s.Volumes {
+func (s *AerospikeStorageSpec) GetPVs() (pVs []VolumeSpec) {
+	for i := range s.Volumes {
+		volume := s.Volumes[i]
 		if volume.Source.PersistentVolume != nil {
-			PVs = append(PVs, volume)
+			pVs = append(pVs, volume)
 		}
 	}
-	return PVs
+
+	return pVs
 }
 
 // GetNonPVs returns the non PV volumes from the storage spec.
 func (s *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
-	for _, volume := range s.Volumes {
+	for i := range s.Volumes {
+		volume := s.Volumes[i]
 		if volume.Source.PersistentVolume == nil {
 			nonPVs = append(nonPVs, volume)
 		}
 	}
+
 	return nonPVs
 }
 
-// GetAerospikeStorageList gives blockStorageDeviceList and fileStorageList
-func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
+// getAerospikeStorageList gives blockStorageDeviceList and fileStorageList
+func (s *AerospikeStorageSpec) getAerospikeStorageList() (
 	blockStorageDeviceList []string, fileStorageList []string, err error,
 ) {
-
-	for _, volume := range s.Volumes {
-
+	for i := range s.Volumes {
+		volume := s.Volumes[i]
 		if volume.Aerospike != nil {
 			// TODO: Do we need to check for other type of sources
 			if volume.Source.PersistentVolume == nil {
 				continue
 			}
-			if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-				blockStorageDeviceList = append(
-					blockStorageDeviceList, volume.Aerospike.Path,
-				)
-			} else if volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
+
+			switch {
+			case volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock:
+				blockStorageDeviceList = append(blockStorageDeviceList, volume.Aerospike.Path)
+			case volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
 				fileStorageList = append(fileStorageList, volume.Aerospike.Path)
-			} else {
+			default:
 				return nil, nil, fmt.Errorf(
 					"invalid volumemode %s, valid volumemods %s, %s",
 					volume.Source.PersistentVolume.VolumeMode,
@@ -167,17 +175,20 @@ func (s *AerospikeStorageSpec) GetAerospikeStorageList() (
 			}
 		}
 	}
+
 	return blockStorageDeviceList, fileStorageList, nil
 }
 
-// IsVolumePresentForAerospikePath checks if configuration has a volume defined for given path for Aerospike server container.
-func (s *AerospikeStorageSpec) IsVolumePresentForAerospikePath(path string) bool {
+// isVolumePresentForAerospikePath checks if configuration has a volume defined for given path for Aerospike server
+// container.
+func (s *AerospikeStorageSpec) isVolumePresentForAerospikePath(path string) bool {
 	return s.GetVolumeForAerospikePath(path) != nil
 }
 
 // GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
 func (s *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
 	var matchedVolume *VolumeSpec
+
 	for i := range s.Volumes {
 		volume := &s.Volumes[i]
 		if volume.Aerospike != nil && isPathParentOrSame(
@@ -188,6 +199,7 @@ func (s *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpe
 			}
 		}
 	}
+
 	return matchedVolume
 }
 
@@ -205,7 +217,9 @@ func validateStorage(
 	sidecarAttachmentPaths := map[string]map[string]int{}
 	initContainerAttachmentPaths := map[string]map[string]int{}
 
-	for _, volume := range storage.Volumes {
+	for i := range storage.Volumes {
+		volume := &storage.Volumes[i]
+
 		errors := validation.IsDNS1123Label(volume.Name)
 		if len(errors) > 0 {
 			return fmt.Errorf(
@@ -222,7 +236,9 @@ func validateStorage(
 
 		if volume.Aerospike == nil && len(volume.Sidecars) == 0 && len(volume.InitContainers) == 0 {
 			return fmt.Errorf(
-				"invalid volume, no container provided to attach the volume. At least one of the following must be provided: volume.Aerospike, volume.Sidecars, volume.InitContainers, volume %v",
+				"invalid volume, no container provided to attach the volume. "+
+					"At least one of the following must be provided: volume.Aerospike, volume.Sidecars, "+
+					"volume.InitContainers, volume %v",
 				volume,
 			)
 		}
@@ -246,6 +262,7 @@ func validateStorage(
 					"duplicate volume path %s", volume.Aerospike.Path,
 				)
 			}
+
 			storagePaths[volume.Aerospike.Path] = 1
 		}
 
@@ -255,6 +272,7 @@ func validateStorage(
 		); err != nil {
 			return fmt.Errorf("sidecar volumeMount validation failed, %v", err)
 		}
+
 		// Validate initContainer attachments
 		if err := validateAttachment(
 			volume.InitContainers, getContainerNames(podSpec.InitContainers),
@@ -270,12 +288,14 @@ func validateStorage(
 		); err != nil {
 			return err
 		}
+
 		if err := validateContainerAttachmentPaths(
 			volume.InitContainers, initContainerAttachmentPaths,
 		); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -295,8 +315,10 @@ func validateContainerAttachmentPaths(
 				attachment.Path, volumeAttachments, attachment.ContainerName,
 			)
 		}
+
 		containerAttachmentPaths[attachment.ContainerName][attachment.Path] = 1
 	}
+
 	return nil
 }
 
@@ -333,10 +355,12 @@ func validateAttachment(
 				attachment.ContainerName, volumeAttachments,
 			)
 		}
+
 		attachmentContainers[attachment.ContainerName] = 1
 
 		// Check container name, should be valid.
 		var found bool
+
 		for _, name := range containerNames {
 			if attachment.ContainerName == name {
 				found = true
@@ -351,53 +375,62 @@ func validateAttachment(
 			)
 		}
 	}
+
 	return nil
 }
 
 func getContainerNames(containers []v1.Container) []string {
-	var containerNames []string
-	for _, container := range containers {
-		containerNames = append(containerNames, container.Name)
+	containerNames := make([]string, 0, len(containers))
+
+	for i := range containers {
+		containerNames = append(containerNames, containers[i].Name)
 	}
+
 	return containerNames
 }
 
-// IsSafeChange indicates if a change to a volume is safe to allow.
-func (v *VolumeSpec) IsSafeChange(new VolumeSpec) bool {
+// isSafeChange indicates if a change to a volume is safe to allow.
+func (v *VolumeSpec) isSafeChange(newVolume *VolumeSpec) bool {
 	// Allow all type of sources, except pv
-	if v.Source.PersistentVolume == nil && new.Source.PersistentVolume == nil {
+	if v.Source.PersistentVolume == nil && newVolume.Source.PersistentVolume == nil {
 		return true
 	}
 
-	if (v.Source.PersistentVolume != nil && new.Source.PersistentVolume == nil) ||
-		(v.Source.PersistentVolume == nil && new.Source.PersistentVolume != nil) {
+	if (v.Source.PersistentVolume != nil && newVolume.Source.PersistentVolume == nil) ||
+		(v.Source.PersistentVolume == nil && newVolume.Source.PersistentVolume != nil) {
 		return false
 	}
 
 	oldPV := v.Source.PersistentVolume
-	newPV := new.Source.PersistentVolume
+	newPV := newVolume.Source.PersistentVolume
+
 	return reflect.DeepEqual(oldPV, newPV)
 }
 
-func validateStorageVolumeSource(volume VolumeSpec) error {
+func validateStorageVolumeSource(volume *VolumeSpec) error {
 	source := volume.Source
 
 	var sourceFound bool
 	if source.EmptyDir != nil {
 		sourceFound = true
 	}
+
 	if source.Secret != nil {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		}
+
 		sourceFound = true
 	}
+
 	if source.ConfigMap != nil {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		}
+
 		sourceFound = true
 	}
+
 	if source.PersistentVolume != nil {
 		// Validate InitMethod
 		if source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
@@ -407,10 +440,10 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 					volume.InitMethod, volume,
 				)
 			}
+
 			if volume.WipeMethod != AerospikeVolumeMethodBlkdiscard && volume.WipeMethod != AerospikeVolumeMethodDD {
 				return fmt.Errorf("invalid wipe method: %s for block volume: %s", volume.WipeMethod, volume.Name)
 			}
-			// Note: Add validation for invalid initMethod if new get added.
 		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
 			if volume.InitMethod != AerospikeVolumeMethodNone && volume.InitMethod != AerospikeVolumeMethodDeleteFiles {
 				return fmt.Errorf(
@@ -418,9 +451,12 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 					volume.InitMethod, volume,
 				)
 			}
+
 			if volume.WipeMethod != AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf("invalid wipe method %s for filesystem volume: %s",
-					volume.WipeMethod, volume.Name)
+				return fmt.Errorf(
+					"invalid wipe method %s for filesystem volume: %s",
+					volume.WipeMethod, volume.Name,
+				)
 			}
 		}
 
@@ -450,6 +486,7 @@ func validateStorageVolumeSource(volume VolumeSpec) error {
 		if sourceFound {
 			return fmt.Errorf("can not specify more than 1 source")
 		}
+
 		sourceFound = true
 	}
 

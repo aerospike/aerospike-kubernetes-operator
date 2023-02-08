@@ -28,11 +28,10 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 	storage *asdbv1beta1.AerospikeStorageSpec,
 	pvcItems []corev1.PersistentVolumeClaim,
 ) ([]corev1.PersistentVolumeClaim, error) {
-	// aeroClusterNamespacedName := getNamespacedNameForCluster(r.aeroCluster)
-
 	var deletedPVCs []corev1.PersistentVolumeClaim
 
-	for _, pvc := range pvcItems {
+	for i := range pvcItems {
+		pvc := pvcItems[i]
 		if utils.IsPVCTerminating(&pvc) {
 			continue
 		}
@@ -45,6 +44,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 			// Try legacy annotation name.
 			pvcStorageVolName, ok = pvc.Annotations[storageVolumeLegacyAnnotationKey]
 		}
+
 		if !ok {
 			err := fmt.Errorf(
 				"PVC can not be removed, " +
@@ -54,10 +54,12 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 				err, "Failed to remove PVC", "PVC", pvc.Name, "annotations",
 				pvc.Annotations,
 			)
+
 			continue
 		}
 
 		var cascadeDelete bool
+
 		v := getPVCVolumeConfig(storage, pvcStorageVolName)
 		if v == nil {
 			if *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock {
@@ -65,24 +67,26 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 			} else {
 				cascadeDelete = storage.FileSystemVolumePolicy.CascadeDelete
 			}
+
 			r.Log.Info(
 				"PVC's volume not found in configured storage volumes. "+
 					"Use storage level cascadeDelete policy",
 				"PVC", pvc.Name, "volume", pvcStorageVolName, "cascadeDelete",
 				cascadeDelete,
 			)
-
 		} else {
 			cascadeDelete = v.CascadeDelete
 		}
 
 		if cascadeDelete {
 			deletedPVCs = append(deletedPVCs, pvc)
+
 			if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
 				return nil, fmt.Errorf(
 					"could not delete pvc %s: %v", pvc.Name, err,
 				)
 			}
+
 			r.Log.Info(
 				"PVC removed", "PVC", pvc.Name, "PVCCascadeDelete",
 				cascadeDelete,
@@ -103,8 +107,6 @@ func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.Per
 		return nil
 	}
 
-	// aeroClusterNamespacedName := getNamespacedNameForCluster(r.aeroCluster)
-
 	// Wait for the PVCs to actually be deleted.
 	pollAttempts := 15
 	sleepInterval := time.Second * 20
@@ -112,17 +114,22 @@ func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.Per
 	pending := false
 	for i := 0; i < pollAttempts; i++ {
 		pending = false
+
 		existingPVCs, err := r.getClusterPVCList()
 		if err != nil {
 			return err
 		}
 
-		for _, pvc := range deletedPVCs {
+		for i := range deletedPVCs {
+			pvc := deletedPVCs[i]
 			found := false
-			for _, existing := range existingPVCs {
-				if existing.Name == pvc.Name {
+
+			for i := range existingPVCs {
+				if existingPVCs[i].Name == pvc.Name {
 					r.Log.Info("Waiting for PVC termination", "PVC", pvc.Name)
+
 					found = true
+
 					break
 				}
 			}
@@ -162,6 +169,7 @@ func (r *SingleClusterReconciler) getClusterPVCList() (
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
+
 	return pvcList.Items, nil
 }
 
@@ -182,6 +190,7 @@ func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
+
 	return pvcList.Items, nil
 }
 
@@ -189,10 +198,12 @@ func getPVCVolumeConfig(
 	storage *asdbv1beta1.AerospikeStorageSpec, pvcStorageVolName string,
 ) *asdbv1beta1.VolumeSpec {
 	volumes := storage.Volumes
-	for _, v := range volumes {
+	for i := range volumes {
+		v := volumes[i]
 		if pvcStorageVolName == v.Name {
 			return &v
 		}
 	}
+
 	return nil
 }

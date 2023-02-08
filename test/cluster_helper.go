@@ -429,8 +429,10 @@ func validateAerospikeConfigServiceClusterUpdate(
 	return nil
 }
 
-func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log logr.Logger,
-	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64) error {
+func validateMigrateFillDelay(
+	ctx goctx.Context, k8sClient client.Client, log logr.Logger,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64,
+) error {
 
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -471,7 +473,8 @@ func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log lo
 			pkgLog.Info("Found expected migrate-fill-delay", "value", expectedMigFillDelay)
 
 			return true, nil
-		})
+		},
+	)
 
 	return err
 }
@@ -537,7 +540,7 @@ func deleteCluster(
 
 	// Wait for all pod to get deleted.
 	// TODO: Maybe add these checks in cluster delete itself.
-	//time.Sleep(time.Second * 12)
+	// time.Sleep(time.Second * 12)
 
 	clusterNamespacedName := getClusterNamespacedName(
 		aeroCluster.Name, aeroCluster.Namespace,
@@ -550,8 +553,8 @@ func deleteCluster(
 		if err != nil {
 			return err
 		}
-		//Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
-		//tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
+		// Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
+		// tests which use the same cluster name and run one after another. Thus, waiting pods to disappear.
 		allClustersPods, err := getClusterPodList(
 			k8sClient, ctx, aeroCluster,
 		)
@@ -982,7 +985,7 @@ func UpdateClusterImage(
 		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(
 			outgoingVersion, aerocluster.Spec.AerospikeConfig,
 		)
-		if err != nil && !errors.Is(err, internalerrors.NotFoundError) {
+		if err != nil && !errors.Is(err, internalerrors.ErrNotFound) {
 			return err
 		}
 		aerocluster.Spec.Image = image

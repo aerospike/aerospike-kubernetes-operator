@@ -26,29 +26,29 @@ import (
 var pkgLog = ctrl.Log.WithName("lib.asconfig")
 
 const (
-	// AerospikeTemplateConfFileName is the name of the aerospike conf template
-	AerospikeTemplateConfFileName = "aerospike.template.conf"
+	// aerospikeTemplateConfFileName is the name of the aerospike conf template
+	aerospikeTemplateConfFileName = "aerospike.template.conf"
 
-	// NetworkPolicyHashFileName stores the network policy hash
-	NetworkPolicyHashFileName = "networkPolicyHash"
+	// networkPolicyHashFileName stores the network policy hash
+	networkPolicyHashFileName = "networkPolicyHash"
 
-	// PodSpecHashFileName stores the pod spec hash
-	PodSpecHashFileName = "podSpecHash"
+	// podSpecHashFileName stores the pod spec hash
+	podSpecHashFileName = "podSpecHash"
 
-	// AerospikeConfHashFileName stores the Aerospike config hash
-	AerospikeConfHashFileName = "aerospikeConfHash"
+	// aerospikeConfHashFileName stores the Aerospike config hash
+	aerospikeConfHashFileName = "aerospikeConfHash"
 )
 
 type initializeTemplateInput struct {
-	WorkDir          string
-	MultiPodPerHost  bool
 	NetworkPolicy    asdbv1beta1.AerospikeNetworkPolicy
+	WorkDir          string
+	FabricPort       int32
 	PodPort          int32
 	PodTLSPort       int32
 	HeartBeatPort    int32
-	HeartBeatTlsPort int32
-	FabricPort       int32
-	FabricTlsPort    int32
+	HeartBeatTLSPort int32
+	FabricTLSPort    int32
+	MultiPodPerHost  bool
 	HostNetwork      bool
 }
 
@@ -87,8 +87,8 @@ func init() {
 	}
 }
 
-// CreateConfigMapData create configMap data
-func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
+// createConfigMapData create configMap data
+func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1beta1.Rack) (
 	map[string]string, error,
 ) {
 	// Add config template
@@ -102,32 +102,35 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config template: %v", err)
 	}
-	confData[AerospikeTemplateConfFileName] = confTemp
+
+	confData[aerospikeTemplateConfFileName] = confTemp
 
 	// Add conf hash
 	confHash, err := utils.GetHash(confTemp)
 	if err != nil {
 		return nil, err
 	}
-	confData[AerospikeConfHashFileName] = confHash
+
+	confData[aerospikeConfHashFileName] = confHash
 
 	// Add networkPolicy hash
 	policy := r.aeroCluster.Spec.AerospikeNetworkPolicy
+
 	policyStr, err := json.Marshal(policy)
 	if err != nil {
 		return nil, err
 	}
+
 	policyHash, err := utils.GetHash(string(policyStr))
 	if err != nil {
 		return nil, err
 	}
-	confData[NetworkPolicyHashFileName] = policyHash
+
+	confData[networkPolicyHashFileName] = policyHash
 
 	// Add podSpec hash
-	podSpec, err := createPodSpecForRack(r.aeroCluster, rack)
-	if err != nil {
-		return nil, err
-	}
+	podSpec := createPodSpecForRack(r.aeroCluster, rack)
+
 	podSpecStr, err := json.Marshal(podSpec)
 	if err != nil {
 		return nil, err
@@ -144,14 +147,15 @@ func (r *SingleClusterReconciler) CreateConfigMapData(rack asdbv1beta1.Rack) (
 	if err != nil {
 		return nil, err
 	}
-	confData[PodSpecHashFileName] = podSpecHash
+
+	confData[podSpecHashFileName] = podSpecHash
 
 	return confData, nil
 }
 
 func createPodSpecForRack(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rack asdbv1beta1.Rack,
-) (*asdbv1beta1.AerospikePodSpec, error) {
+	aeroCluster *asdbv1beta1.AerospikeCluster, rack *asdbv1beta1.Rack,
+) *asdbv1beta1.AerospikePodSpec {
 	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}
 	lib.DeepCopy(
 		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
@@ -161,10 +165,10 @@ func createPodSpecForRack(
 	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
 	rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
 
-	return &rackFullPodSpec, nil
+	return &rackFullPodSpec
 }
 
-func (r *SingleClusterReconciler) buildConfigTemplate(rack asdbv1beta1.Rack) (
+func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1beta1.Rack) (
 	string, error,
 ) {
 	log := pkgLog.WithValues(
@@ -193,9 +197,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack asdbv1beta1.Rack) (
 }
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
-	map[string]string, error,
-) {
+func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1beta1.Rack) (map[string]string, error) {
 	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
 	volume := rack.Storage.GetVolumeForAerospikePath(workDir)
 
@@ -212,9 +214,10 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 	}
 
 	asConfig := r.aeroCluster.Spec.AerospikeConfig
-	var serviceTlsPortParam int32
-	if _, serviceTlsPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTlsPort != nil {
-		serviceTlsPortParam = int32(*serviceTlsPort)
+
+	var serviceTLSPortParam int32
+	if _, serviceTLSPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
+		serviceTLSPortParam = int32(*serviceTLSPort)
 	}
 
 	var servicePortParam int32
@@ -222,9 +225,9 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		servicePortParam = int32(*servicePort)
 	}
 
-	var hbTlsPortParam int32
-	if _, hbTlsPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTlsPort != nil {
-		hbTlsPortParam = int32(*hbTlsPort)
+	var hbTLSPortParam int32
+	if _, hbTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
+		hbTLSPortParam = int32(*hbTLSPort)
 	}
 
 	var hbPortParam int32
@@ -232,9 +235,9 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		hbPortParam = int32(*hbPort)
 	}
 
-	var fabricTlsPortParam int32
-	if _, fabricTlsPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTlsPort != nil {
-		fabricTlsPortParam = int32(*fabricTlsPort)
+	var fabricTLSPortParam int32
+	if _, fabricTLSPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
+		fabricTLSPortParam = int32(*fabricTLSPort)
 	}
 
 	var fabricPortParam int32
@@ -242,24 +245,25 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 		fabricPortParam = int32(*fabricPort)
 	}
 
-	initializeTemplateInput := initializeTemplateInput{
+	initTemplateInput := initializeTemplateInput{
 		WorkDir:          workDir,
 		MultiPodPerHost:  r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
 		NetworkPolicy:    r.aeroCluster.Spec.AerospikeNetworkPolicy,
 		PodPort:          servicePortParam,
-		PodTLSPort:       serviceTlsPortParam,
+		PodTLSPort:       serviceTLSPortParam,
 		HeartBeatPort:    hbPortParam,
-		HeartBeatTlsPort: hbTlsPortParam,
+		HeartBeatTLSPort: hbTLSPortParam,
 		FabricPort:       fabricPortParam,
-		FabricTlsPort:    fabricTlsPortParam,
+		FabricTLSPort:    fabricTLSPortParam,
 		HostNetwork:      r.aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
 	baseConfData := map[string]string{}
+
 	for path, scriptTemplate := range scriptTemplates {
 		var script bytes.Buffer
-		err := scriptTemplate.Execute(&script, initializeTemplateInput)
-		if err != nil {
+
+		if err := scriptTemplate.Execute(&script, initTemplateInput); err != nil {
 			return nil, err
 		}
 
@@ -273,11 +277,11 @@ func (r *SingleClusterReconciler) getBaseConfData(rack asdbv1beta1.Rack) (
 	}
 
 	baseConfData["peers"] = strings.Join(peers, "\n")
+
 	return baseConfData, nil
 }
 
 func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
-
 	podNameSet := sets.NewString()
 
 	// The default rack is not listed in config during switchover to rack aware state.
@@ -287,17 +291,19 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		return nil, err
 	}
 
-	for _, pod := range pods.Items {
-		fqdn := getFQDNForPod(r.aeroCluster, pod.Name)
+	for i := range pods.Items {
+		fqdn := getFQDNForPod(r.aeroCluster, pods.Items[i].Name)
 		podNameSet.Insert(fqdn)
 	}
 
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
-	for _, rackState := range rackStateList {
+	for i := range rackStateList {
+		rackState := &rackStateList[i]
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
+
 		for i := 0; i < size; i++ {
 			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))
 			podNameSet.Insert(fqdn)
@@ -321,8 +327,10 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.Names
 				"Can't find rack configmap while trying to delete it. Skipping...",
 				"configmap", namespacedName.Name,
 			)
+
 			return nil
 		}
+
 		return fmt.Errorf("failed to delete rack configmap for pod %s: %v", namespacedName.Name, err)
 	}
 

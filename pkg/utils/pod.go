@@ -34,13 +34,15 @@ func CheckPodFailed(pod *corev1.Pod) error {
 	if pod.Status.Phase == corev1.PodPending && isPodReasonUnschedulable(pod) {
 		return fmt.Errorf("pod %s is in unschedulable state", pod.Name)
 	}
+
 	// grab the status of every container in the pod (including its init containers)
-	containerStatus := append(
-		pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...,
-	)
+	var containerStatus []corev1.ContainerStatus
+	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
+	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
 	// inspect the status of each individual container for common failure states
-	for _, container := range containerStatus {
+	for i := range containerStatus {
+		container := &containerStatus[i]
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
@@ -60,7 +62,8 @@ func CheckPodFailed(pod *corev1.Pod) error {
 	return nil
 }
 
-// CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an image related error.
+// CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an
+// image related error.
 func CheckPodImageFailed(pod *corev1.Pod) error {
 	if IsPodTerminating(pod) {
 		return nil
@@ -72,12 +75,13 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 	}
 
 	// grab the status of every container in the pod (including its init containers)
-	containerStatus := append(
-		pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...,
-	)
+	var containerStatus []corev1.ContainerStatus
+	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
+	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
 	// inspect the status of each individual container for common failure states
-	for _, container := range containerStatus {
+	for i := range containerStatus {
+		container := &containerStatus[i]
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
@@ -98,11 +102,13 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 
 // isPodReady return true if all the container of the pod are in ready state
 func isPodReady(pod *corev1.Pod) bool {
-	for _, status := range pod.Status.ContainerStatuses {
-		if !status.Ready {
+	statuses := pod.Status.ContainerStatuses
+	for i := range statuses {
+		if !statuses[i].Ready {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -113,11 +119,12 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 
 // GetPod get pod from pod list by name
 func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
-	for _, p := range pods {
-		if podName == p.Name {
-			return &p
+	for i := range pods {
+		if podName == pods[i].Name {
+			return &pods[i]
 		}
 	}
+
 	return nil
 }
 
@@ -130,10 +137,12 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 	// Podname format stsname-ordinal
 	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-2]
+
 	rackID, err := strconv.Atoi(rackStr)
 	if err != nil {
 		return nil, err
 	}
+
 	return &rackID, nil
 }
 
@@ -141,7 +150,7 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 func Exec(
 	pod *corev1.Pod, container string, cmd []string,
 	kubeClient *kubernetes.Clientset, kubeConfig *rest.Config,
-) (string, string, error) {
+) (stdoutStr, stderrStr string, err error) {
 	request := kubeClient.
 		CoreV1().
 		RESTClient().
@@ -168,18 +177,21 @@ func Exec(
 	}
 
 	var stdout, stderr bytes.Buffer
+
 	err = exec.Stream(
 		remotecommand.StreamOptions{
 			Stdout: &stdout, Stderr: &stderr,
 		},
 	)
+
 	return stdout.String(), stderr.String(), err
 }
 
-// isPodImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a container
-// image.
+// isPodImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a
+// container image.
 func isPodImageError(reason string) bool {
-	return reason == ReasonErrImagePull || reason == ReasonImageInspectError || reason == ReasonImagePullBackOff || reason == ReasonRegistryUnavailable
+	return reason == ReasonErrImagePull || reason == ReasonImageInspectError ||
+		reason == ReasonImagePullBackOff || reason == ReasonRegistryUnavailable
 }
 
 // isPodCrashError indicates whether the specified reason corresponds to a crash of the container.
@@ -187,8 +199,10 @@ func isPodCrashError(reason string) bool {
 	return strings.HasPrefix(reason, "Crash")
 }
 
-// isPodError indicates whether the specified reason corresponds to a generic error like CreateContainerConfigError in the container.
-// https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
+// isPodError indicates whether the specified reason corresponds to a generic error like CreateContainerConfigError
+// in the container.
+//
+//nolint:lll    // https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
 func isPodError(reason string) bool {
 	return strings.HasSuffix(reason, "Error")
 }
@@ -199,5 +213,6 @@ func isPodReasonUnschedulable(pod *corev1.Pod) bool {
 			return true
 		}
 	}
+
 	return false
 }

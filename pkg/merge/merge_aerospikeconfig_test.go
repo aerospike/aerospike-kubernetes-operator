@@ -328,6 +328,8 @@ func TestConfigMerge(t *testing.T) {
 }
 
 func mergeAndCheck(t *testing.T, baseM, patchM, mergedM map[string]interface{}) {
+	t.Helper()
+
 	m, err := Merge(baseM, patchM)
 	if err != nil {
 		t.Fatalf("failed to merge aerospike config baseMap and patchMap: %v", err)
@@ -336,5 +338,4 @@ func mergeAndCheck(t *testing.T, baseM, patchM, mergedM map[string]interface{}) 
 	if !reflect.DeepEqual(m, mergedM) {
 		t.Fatalf("Merge failed, \nexpected %v, \ngot %v", mergedM, m)
 	}
-	// t.Logf("AerospikeConfig merged successfully %v", m)
 }

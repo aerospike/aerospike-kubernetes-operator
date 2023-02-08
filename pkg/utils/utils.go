@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	//nolint:staticcheck
-	// this ripemd160 legacy hash is only used for diff comparison not for security purpose
+	//nolint:staticcheck // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -38,7 +37,7 @@ func NamespacedName(namespace, name string) string {
 }
 
 // IsImageEqual returns true if image name image1 is equal to image name image2.
-func IsImageEqual(image1 string, image2 string) bool {
+func IsImageEqual(image1, image2 string) bool {
 	desiredImageWithVersion := strings.TrimPrefix(image1, DockerHubImagePrefix)
 	actualImageWithVersion := strings.TrimPrefix(image2, DockerHubImagePrefix)
 
@@ -46,7 +45,9 @@ func IsImageEqual(image1 string, image2 string) bool {
 	actualRegistry, actualName, actualVersion := ParseDockerImageTag(actualImageWithVersion)
 
 	// registry name, image name and version should match.
-	return desiredRegistry == actualRegistry && desiredName == actualName && (desiredVersion == actualVersion || (desiredVersion == ":latest" && actualVersion == "") || (actualVersion == ":latest" && desiredVersion == ""))
+	return desiredRegistry == actualRegistry && desiredName == actualName && (desiredVersion == actualVersion ||
+		(desiredVersion == ":latest" && actualVersion == "") ||
+		(actualVersion == ":latest" && desiredVersion == ""))
 }
 
 // ParseDockerImageTag parses input tag into registry, name and version.
@@ -56,8 +57,10 @@ func ParseDockerImageTag(tag string) (
 	if tag == "" {
 		return "", "", ""
 	}
+
 	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
 	matches := r.FindStringSubmatch(tag)
+
 	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
 }
 
@@ -73,18 +76,22 @@ func GetDesiredImage(
 	if containerName == asdbv1beta1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
+
 	if containerName == asdbv1beta1.AerospikeInitContainerName {
 		return asdbv1beta1.GetAerospikeInitContainerImage(aeroCluster), nil
 	}
 
-	for _, sidecar := range aeroCluster.Spec.PodSpec.Sidecars {
-		if sidecar.Name == containerName {
-			return sidecar.Image, nil
+	sidecars := aeroCluster.Spec.PodSpec.Sidecars
+	for i := range sidecars {
+		if sidecars[i].Name == containerName {
+			return sidecars[i].Image, nil
 		}
 	}
-	for _, initSidecar := range aeroCluster.Spec.PodSpec.InitContainers {
-		if initSidecar.Name == containerName {
-			return initSidecar.Image, nil
+
+	initSidecars := aeroCluster.Spec.PodSpec.InitContainers
+	for i := range initSidecars {
+		if initSidecars[i].Name == containerName {
+			return initSidecars[i].Image, nil
 		}
 	}
 
@@ -105,7 +112,8 @@ func LabelsForAerospikeClusterRack(
 	clName string, rackID int,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
-	labels[asdbv1beta1.AerospikeRackIdLabel] = strconv.Itoa(rackID)
+	labels[asdbv1beta1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
+
 	return labels
 }
 
@@ -126,18 +134,23 @@ func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string
 	for label, value := range operatorLabels {
 		mergedMap[label] = value
 	}
+
 	return mergedMap
 }
 
 // GetHash return ripemd160 hash for given string
 func GetHash(str string) (string, error) {
 	var digest []byte
+
 	hash := ripemd160.New()
 	hash.Reset()
+
 	if _, err := hash.Write([]byte(str)); err != nil {
 		return "", err
 	}
+
 	res := hash.Sum(digest)
+
 	return hex.EncodeToString(res), nil
 }
 
@@ -148,12 +161,15 @@ func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
 			"failed to get rackID from statefulSetName %s", statefulSetName,
 		)
 	}
+
 	// stsname ==> clustername-rackid
 	rackStr := parts[len(parts)-1]
+
 	rackID, err := strconv.Atoi(rackStr)
 	if err != nil {
 		return nil, err
 	}
+
 	return &rackID, nil
 }
 
@@ -164,6 +180,7 @@ func ContainsString(slice []string, s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -173,7 +190,9 @@ func RemoveString(slice []string, s string) (result []string) {
 		if item == s {
 			continue
 		}
+
 		result = append(result, item)
 	}
+
 	return
 }
