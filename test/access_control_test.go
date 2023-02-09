@@ -2332,8 +2332,8 @@ func validateUsers(
 
 	currentUserNames := make([]string, len(asUsers))
 
-	for _, user := range asUsers {
-		currentUserNames = append(currentUserNames, user.User)
+	for userIndex := range asUsers {
+		currentUserNames[userIndex] = asUsers[userIndex].User
 	}
 
 	accessControl := clusterSpec.AerospikeAccessControl
