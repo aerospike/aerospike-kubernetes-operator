@@ -2,8 +2,6 @@
 # used to generate the 'manifests/' directory in a bundle.
 resources:
   - bases/aerospike-kubernetes-operator.clusterserviceversion.yaml
-  - bases/role.yaml
-  - bases/role_binding.yaml
   - ../default
   - ../samples
   - ../scorecard

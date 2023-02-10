@@ -15,5 +15,5 @@ spec:
   issuerRef:
     kind: Issuer
     name: aerospike-operator-selfsigned-issuer
-  secretName: {{ .Values.certs.webhookServerCertSecretName | default "webhook-server-cert" }}
+  secretName: {{ .Values.certs.webhookServerCertSecretName }}
 {{- end }}

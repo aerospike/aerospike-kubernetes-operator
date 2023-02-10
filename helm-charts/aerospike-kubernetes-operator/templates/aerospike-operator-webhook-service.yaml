@@ -12,7 +12,7 @@ metadata:
   annotations: {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.webhookService.type | default "ClusterIP" | quote }}
+  type: {{ .Values.webhookService.type | quote }}
   selector:
     # Specified by the deployment/pod
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -23,5 +23,5 @@ spec:
   ports:
     - port: {{ .Values.webhookService.port | default 443 }}
       # Can be the name of port 9443 of the container
-      targetPort: {{ .Values.webhookServicePort | default 9443 }}
+      targetPort: {{ .Values.webhookService.targetPort  }}
       protocol: TCP
