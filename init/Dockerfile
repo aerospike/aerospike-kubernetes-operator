@@ -40,7 +40,7 @@ RUN microdnf update -y \
     && curl -L https://github.com/ashishshinde/kubernetes-configmap-exporter/releases/download/1.0.0/kubernetes-configmap-exporter -o /workdir/bin/kubernetes-configmap-exporter \
     # Update permissions
     && chgrp -R 0 /workdir \
-    && chmod -R g=u+x /workdir \
+    && chmod -R g=u+x,o=o+x /workdir \
     # Cleanup
     && microdnf clean all
 
