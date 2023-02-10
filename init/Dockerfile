@@ -10,7 +10,7 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 # Maintainer
 LABEL maintainer="Aerospike, Inc. <developers@aerospike.com>"
 
-ARG VERSION=0.0.18
+ARG VERSION=0.0.19
 ARG USER=root
 ARG DESCRIPTION="Initializes Aerospike pods created but the Aerospike Kubernetes Operator. Initialization includes setting up devices."
 
@@ -34,12 +34,13 @@ COPY LICENSE /licenses/
 
 # Install dependencies and configmap exporter
 RUN microdnf update -y \
-    && microdnf install wget python3 curl findutils util-linux procps -y \
+    && microdnf install wget python3 python3-pip curl findutils util-linux procps -y \
+    && pip3 install Werkzeug \
     && mkdir -p /workdir/bin \
     && curl -L https://github.com/ashishshinde/kubernetes-configmap-exporter/releases/download/1.0.0/kubernetes-configmap-exporter -o /workdir/bin/kubernetes-configmap-exporter \
     # Update permissions
     && chgrp -R 0 /workdir \
-    && chmod -R g=u+x /workdir \
+    && chmod -R g=u+x,o=o+x /workdir \
     # Cleanup
     && microdnf clean all
 

@@ -10,7 +10,9 @@ import subprocess
 import urllib.error
 import urllib.request
 import concurrent.futures
+from shlex import quote
 from pprint import pprint
+from werkzeug.utils import secure_filename
 
 # Constants
 FILE_SYSTEM_MOUNT_POINT = "/workdir/filesystem-volumes"
@@ -58,10 +60,10 @@ class Volume(object):
 
     def get_mount_point(self):
         if self.volume_mode == "Block":
-            point = os.path.join(BLOCK_MOUNT_POINT, self.volume_name)
+            point = os.path.join(BLOCK_MOUNT_POINT, secure_filename(self.volume_name))
             return point
 
-        point = os.path.join(FILE_SYSTEM_MOUNT_POINT, self.volume_name)
+        point = os.path.join(FILE_SYSTEM_MOUNT_POINT, secure_filename(self.volume_name))
         return point
 
     def get_attachment_path(self):
@@ -410,14 +412,14 @@ def clean_dirty_volumes(pod_name, config, dirty_volumes):
 
                     dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
                          '/tmp/init-stderr'.format(
-                        volume_path=volume.get_mount_point())
+                        volume_path=quote(volume.get_mount_point()))
                     futures[executor.submit(lambda: execute(cmd=dd))] = dd
                     logging.info(f"{volume} - Submitted")
 
                 elif volume.effective_wipe_method == "blkdiscard":
 
                     blkdiskard = "blkdiscard {volume_path}".format(
-                        volume_path=volume.get_mount_point())
+                        volume_path=quote(volume.get_mount_point()))
                     futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                     logging.info(f"{volume} - Submitted")
 
@@ -476,14 +478,14 @@ def init_volumes(pod_name, config):
 
                     dd = 'dd if=/dev/zero of={volume_path} bs=1M 2> /tmp/init-stderr || grep -q "No space left on device" ' \
                          '/tmp/init-stderr'.format(
-                        volume_path=volume.get_mount_point())
+                        volume_path=quote(volume.get_mount_point()))
                     futures[executor.submit(lambda: execute(cmd=dd))] = dd
                     logging.info(f"{volume} - Submitted")
 
                 elif volume.effective_init_method == "blkdiscard":
 
                     blkdiskard = "blkdiscard {volume_path}".format(
-                        volume_path=volume.get_mount_point())
+                        volume_path=quote(volume.get_mount_point()))
                     futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                     logging.info(f"{volume} - Submitted")
 
@@ -503,7 +505,7 @@ def init_volumes(pod_name, config):
                 if volume.effective_init_method == "deleteFiles":
 
                     find = "find {volume_path} -type f -delete".format(
-                        volume_path=volume.get_mount_point())
+                        volume_path=quote(volume.get_mount_point()))
                     execute(find)
                     logging.info(f"{volume} - Initialized")
 
@@ -564,7 +566,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
                         raise FileNotFoundError(f"{volume} - Volume path not found")
 
                     if volume.effective_wipe_method == "dd":
-                        dd = "dd if=/dev/zero of={volume_path} bs=1M".format(volume_path=volume.get_mount_point())
+                        dd = "dd if=/dev/zero of={volume_path} bs=1M".format(volume_path=quote(volume.get_mount_point()))
                         futures[executor.submit(lambda: execute(cmd=dd))] = dd
                         logging.info(f"Submitted - {volume}")
                         if volume.volume_name in dirty_volumes:
@@ -572,7 +574,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
 
                     elif volume.effective_wipe_method == "blkdiscard":
 
-                        blkdiskard = "blkdiscard {volume_path}".format(volume_path=volume.get_mount_point())
+                        blkdiskard = "blkdiscard {volume_path}".format(volume_path=quote(volume.get_mount_point()))
                         futures[executor.submit(lambda: execute(cmd=blkdiskard))] = blkdiskard
                         logging.info(f"Submitted - {volume}")
                         if volume.volume_name in dirty_volumes:
@@ -590,7 +592,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
 
                     for ns_file_path in filter(lambda x: x.startswith(volume.get_attachment_path()), ns_file_paths):
                         _, filename = os.path.split(ns_file_path)
-                        file_path = os.path.join(volume.get_mount_point(), filename)
+                        file_path = os.path.join(volume.get_mount_point(), secure_filename(filename))
                         if os.path.exists(file_path):
                             logging.info(f"Deleting file - {file_path}")
                             os.remove(file_path)
