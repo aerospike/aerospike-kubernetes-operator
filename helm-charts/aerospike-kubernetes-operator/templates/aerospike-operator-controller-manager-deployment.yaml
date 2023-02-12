@@ -45,9 +45,7 @@ spec:
         command:
         - "/manager"
         args:
-        - --health-probe-bind-address=:{{ .Values.healthPort }}
-        - --metrics-bind-address=127.0.0.1:{{ .Values.metricsPort }}
-        - --leader-elect
+          - --config=controller_manager_config.yaml
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
@@ -73,6 +71,9 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
+        - mountPath: /controller_manager_config.yaml
+          name: manager-config
+          subPath: controller_manager_config.yaml
         {{- with .Values.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -113,8 +114,11 @@ spec:
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
       volumes:
-      # TODO: Make adding volumes configurable.
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: {{ .Values.certs.webhookServerCertSecretName }}
+        - configMap:
+            name: {{ template "aerospike-kubernetes-operator.fullname" . }}
+          name: manager-config
+        # TODO: Make adding volumes configurable.
+        - name: cert
+          secret:
+            defaultMode: 420
+            secretName: {{ .Values.certs.webhookServerCertSecretName }}
