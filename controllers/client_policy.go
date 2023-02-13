@@ -8,11 +8,12 @@ import (
 	"os"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // fromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.

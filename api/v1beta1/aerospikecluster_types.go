@@ -19,11 +19,12 @@ package v1beta1
 import (
 	"fmt"
 
-	lib "github.com/aerospike/aerospike-management-lib"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.

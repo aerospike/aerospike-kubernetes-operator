@@ -27,9 +27,6 @@ import (
 	"regexp"
 	"strings"
 
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -38,6 +35,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
