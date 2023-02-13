@@ -754,8 +754,8 @@ func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
 	aeroCluster *asdbv1beta1.AerospikeCluster, podName string,
 	containers []corev1.Container, logChanges bool,
 ) bool {
-	for i := range containers {
-		container := &containers[i]
+	for idx := range containers {
+		container := &containers[idx]
 
 		desiredImage, err := utils.GetDesiredImage(aeroCluster, container.Name)
 		if err != nil {
@@ -838,16 +838,16 @@ func (r *SingleClusterReconciler) updateSTSStorage(
 }
 
 func sortContainerVolumeAttachments(containers []corev1.Container) {
-	for i := range containers {
+	for idx := range containers {
 		sort.Slice(
-			containers[i].VolumeMounts, func(p, q int) bool {
-				return containers[i].VolumeMounts[p].MountPath < containers[i].VolumeMounts[q].MountPath
+			containers[idx].VolumeMounts, func(p, q int) bool {
+				return containers[idx].VolumeMounts[p].MountPath < containers[idx].VolumeMounts[q].MountPath
 			},
 		)
 
 		sort.Slice(
-			containers[i].VolumeDevices, func(p, q int) bool {
-				return containers[i].VolumeDevices[p].DevicePath < containers[i].VolumeDevices[q].DevicePath
+			containers[idx].VolumeDevices, func(p, q int) bool {
+				return containers[idx].VolumeDevices[p].DevicePath < containers[idx].VolumeDevices[q].DevicePath
 			},
 		)
 	}
@@ -911,8 +911,8 @@ func (r *SingleClusterReconciler) getExternalStorageDevices(
 		if volumeInSpec == nil && volumeInStatus == nil {
 			externalDevices = append(externalDevices, volumeDevice)
 
-			for i := range stSpecVolumes {
-				volume := stSpecVolumes[i]
+			for idx := range stSpecVolumes {
+				volume := stSpecVolumes[idx]
 				if volume.Name == volumeDevice.Name {
 					volumesForDevice = append(volumesForDevice, volume)
 				}
@@ -946,8 +946,8 @@ func (r *SingleClusterReconciler) getExternalStorageMounts(
 		if volumeInSpec == nil && volumeInStatus == nil && volumeInDefault == nil {
 			externalMounts = append(externalMounts, volumeMount)
 
-			for i := range stSpecVolumes {
-				volume := stSpecVolumes[i]
+			for idx := range stSpecVolumes {
+				volume := stSpecVolumes[idx]
 				if volume.Name == volumeMount.Name {
 					volumesForMounts = append(volumesForMounts, volume)
 				}
@@ -963,8 +963,8 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 ) {
 	volumes := rackState.Rack.Storage.GetPVs()
 
-	for i := range volumes {
-		volume := &volumes[i]
+	for idx := range volumes {
+		volume := &volumes[idx]
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		switch {
@@ -1014,8 +1014,8 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 }
 
 func containsElement(claims []corev1.PersistentVolumeClaim, query *corev1.PersistentVolumeClaim) bool {
-	for i := range claims {
-		if claims[i].Name == query.Name {
+	for idx := range claims {
+		if claims[idx].Name == query.Name {
 			return true
 		}
 	}
@@ -1028,8 +1028,8 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 ) {
 	volumes := rackState.Rack.Storage.GetNonPVs()
 
-	for i := range volumes {
-		volume := &volumes[i]
+	for idx := range volumes {
+		volume := &volumes[idx]
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		r.Log.V(1).Info(
@@ -1155,9 +1155,9 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 			}
 			affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = ns
 		} else {
-			for i := range selector.NodeSelectorTerms {
-				selector.NodeSelectorTerms[i].MatchExpressions = append(
-					selector.NodeSelectorTerms[i].MatchExpressions,
+			for idx := range selector.NodeSelectorTerms {
+				selector.NodeSelectorTerms[idx].MatchExpressions = append(
+					selector.NodeSelectorTerms[idx].MatchExpressions,
 					matchExpressions...,
 				)
 			}
@@ -1223,8 +1223,8 @@ func updateStatefulSetContainers(
 	stsContainers []corev1.Container, specContainers []corev1.Container,
 ) []corev1.Container {
 	// Add new sidecars.
-	for i := range specContainers {
-		specContainer := specContainers[i]
+	for specIdx := range specContainers {
+		specContainer := specContainers[specIdx]
 		found := false
 
 		// Create a copy because updating stateful sets defaults
@@ -1232,15 +1232,15 @@ func updateStatefulSetContainers(
 		specContainerCopy := corev1.Container{}
 		lib.DeepCopy(&specContainerCopy, &specContainer)
 
-		for i := range stsContainers {
-			if specContainer.Name != stsContainers[i].Name {
+		for stsIdx := range stsContainers {
+			if specContainer.Name != stsContainers[stsIdx].Name {
 				continue
 			}
 			// Update the sidecar in case something has changed.
 			// Retain volume mounts and devices to make sure external storage will not lose.
-			specContainerCopy.VolumeMounts = stsContainers[i].VolumeMounts
-			specContainerCopy.VolumeDevices = stsContainers[i].VolumeDevices
-			stsContainers[i] = specContainerCopy
+			specContainerCopy.VolumeMounts = stsContainers[stsIdx].VolumeMounts
+			specContainerCopy.VolumeDevices = stsContainers[stsIdx].VolumeDevices
+			stsContainers[stsIdx] = specContainerCopy
 			found = true
 
 			break
@@ -1253,14 +1253,14 @@ func updateStatefulSetContainers(
 	}
 
 	// Remove deleted sidecars.
-	j := 0
+	idx := 0
 
-	for i := range stsContainers {
-		stsContainer := stsContainers[i]
-		found := i == 0
+	for stsIdx := range stsContainers {
+		stsContainer := stsContainers[stsIdx]
+		found := stsIdx == 0
 
-		for k := range specContainers {
-			if specContainers[k].Name == stsContainer.Name {
+		for specIdx := range specContainers {
+			if specContainers[specIdx].Name == stsContainer.Name {
 				found = true
 				break
 			}
@@ -1268,12 +1268,12 @@ func updateStatefulSetContainers(
 
 		if found {
 			// Retain main aerospike container or a matched sidecar.
-			stsContainers[j] = stsContainer
-			j++
+			stsContainers[idx] = stsContainer
+			idx++
 		}
 	}
 
-	return stsContainers[:j]
+	return stsContainers[:idx]
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
@@ -1282,14 +1282,14 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
 	allRackIDs := sets.NewInt()
 
 	statusRacks := r.aeroCluster.Status.RackConfig.Racks
-	for i := range statusRacks {
-		allRackIDs.Insert(statusRacks[i].ID)
+	for idx := range statusRacks {
+		allRackIDs.Insert(statusRacks[idx].ID)
 	}
 
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	specRacks := r.aeroCluster.Spec.RackConfig.Racks
-	for i := range specRacks {
-		allRackIDs.Insert(specRacks[i].ID)
+	for idx := range specRacks {
+		allRackIDs.Insert(specRacks[idx].ID)
 	}
 
 	for rackID := range allRackIDs {
@@ -1336,8 +1336,8 @@ func (r *SingleClusterReconciler) getClusterSTSList() (
 // Cluster Spec.
 func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.StatefulSet) {
 	updateImage := func(containers []corev1.Container) {
-		for i := range containers {
-			container := &containers[i]
+		for idx := range containers {
+			container := &containers[idx]
 			desiredImage, err := utils.GetDesiredImage(
 				r.aeroCluster, container.Name,
 			)
@@ -1355,7 +1355,7 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 					container.Image,
 				)
 
-				containers[i].Image = desiredImage
+				containers[idx].Image = desiredImage
 			}
 		}
 	}
@@ -1460,68 +1460,68 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	var specVolumes []corev1.Volume
 
 	//nolint:dupl // not duplicate
-	for i := range st.Spec.Template.Spec.InitContainers {
+	for idx := range st.Spec.Template.Spec.InitContainers {
 		externalMounts, volumesForMount := r.getExternalStorageMounts(
-			&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes,
+			&st.Spec.Template.Spec.InitContainers[idx], rackState, st.Spec.Template.Spec.Volumes,
 		)
 
 		specVolumes = append(specVolumes, volumesForMount...)
 
-		if i == 0 {
-			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
+		if idx == 0 {
+			st.Spec.Template.Spec.InitContainers[idx].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
 		} else {
-			st.Spec.Template.Spec.InitContainers[i].VolumeMounts = []corev1.VolumeMount{}
+			st.Spec.Template.Spec.InitContainers[idx].VolumeMounts = []corev1.VolumeMount{}
 		}
 
 		// Appending external volume mounts back to the corresponding container.
-		st.Spec.Template.Spec.InitContainers[i].VolumeMounts = append(
-			st.Spec.Template.Spec.InitContainers[i].VolumeMounts, externalMounts...,
+		st.Spec.Template.Spec.InitContainers[idx].VolumeMounts = append(
+			st.Spec.Template.Spec.InitContainers[idx].VolumeMounts, externalMounts...,
 		)
 
 		externalDevices, volumesForDevice := r.getExternalStorageDevices(
-			&st.Spec.Template.Spec.InitContainers[i], rackState, st.Spec.Template.Spec.Volumes,
+			&st.Spec.Template.Spec.InitContainers[idx], rackState, st.Spec.Template.Spec.Volumes,
 		)
 
 		specVolumes = append(specVolumes, volumesForDevice...)
 
-		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = []corev1.VolumeDevice{}
+		st.Spec.Template.Spec.InitContainers[idx].VolumeDevices = []corev1.VolumeDevice{}
 
 		// Appending external devices back to the corresponding container.
-		st.Spec.Template.Spec.InitContainers[i].VolumeDevices = append(
-			st.Spec.Template.Spec.InitContainers[i].VolumeDevices, externalDevices...,
+		st.Spec.Template.Spec.InitContainers[idx].VolumeDevices = append(
+			st.Spec.Template.Spec.InitContainers[idx].VolumeDevices, externalDevices...,
 		)
 	}
 
 	//nolint:dupl // not duplicate
-	for i := range st.Spec.Template.Spec.Containers {
+	for idx := range st.Spec.Template.Spec.Containers {
 		externalMounts, volumesForMount := r.getExternalStorageMounts(
-			&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes,
+			&st.Spec.Template.Spec.Containers[idx], rackState, st.Spec.Template.Spec.Volumes,
 		)
 
 		specVolumes = append(specVolumes, volumesForMount...)
 
-		if i == 0 {
-			st.Spec.Template.Spec.Containers[i].VolumeMounts = getDefaultAerospikeContainerVolumeMounts()
+		if idx == 0 {
+			st.Spec.Template.Spec.Containers[idx].VolumeMounts = getDefaultAerospikeContainerVolumeMounts()
 		} else {
-			st.Spec.Template.Spec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
+			st.Spec.Template.Spec.Containers[idx].VolumeMounts = []corev1.VolumeMount{}
 		}
 
 		// Appending external volume mounts back to the corresponding container.
-		st.Spec.Template.Spec.Containers[i].VolumeMounts = append(
-			st.Spec.Template.Spec.Containers[i].VolumeMounts, externalMounts...,
+		st.Spec.Template.Spec.Containers[idx].VolumeMounts = append(
+			st.Spec.Template.Spec.Containers[idx].VolumeMounts, externalMounts...,
 		)
 
 		externalDevices, volumesForDevice := r.getExternalStorageDevices(
-			&st.Spec.Template.Spec.Containers[i], rackState, st.Spec.Template.Spec.Volumes,
+			&st.Spec.Template.Spec.Containers[idx], rackState, st.Spec.Template.Spec.Volumes,
 		)
 
 		specVolumes = append(specVolumes, volumesForDevice...)
 
-		st.Spec.Template.Spec.Containers[i].VolumeDevices = []corev1.VolumeDevice{}
+		st.Spec.Template.Spec.Containers[idx].VolumeDevices = []corev1.VolumeDevice{}
 
 		// Appending external devices back to the corresponding container.
-		st.Spec.Template.Spec.Containers[i].VolumeDevices = append(
-			st.Spec.Template.Spec.Containers[i].VolumeDevices, externalDevices...,
+		st.Spec.Template.Spec.Containers[idx].VolumeDevices = append(
+			st.Spec.Template.Spec.Containers[idx].VolumeDevices, externalDevices...,
 		)
 	}
 
@@ -1626,8 +1626,8 @@ func addVolumeMountInContainer(
 	var volumeMount corev1.VolumeMount
 
 	for _, volumeAttachment := range volumeAttachments {
-		for i := range containers {
-			container := &containers[i]
+		for idx := range containers {
+			container := &containers[idx]
 
 			if container.Name == volumeAttachment.ContainerName {
 				if container.Name == asdbv1beta1.AerospikeInitContainerName {
@@ -1659,8 +1659,8 @@ func addVolumeDeviceInContainer(
 	var volumeDevice corev1.VolumeDevice
 
 	for _, volumeAttachment := range volumeAttachments {
-		for i := range containers {
-			container := &containers[i]
+		for idx := range containers {
+			container := &containers[idx]
 
 			if container.Name == volumeAttachment.ContainerName {
 				if container.Name == asdbv1beta1.AerospikeInitContainerName {
@@ -1779,9 +1779,9 @@ func newSTSEnvVarStatic(name, value string) corev1.EnvVar {
 func getVolume(
 	volumes []corev1.Volume, name string,
 ) *corev1.Volume {
-	for i := range volumes {
-		if volumes[i].Name == name {
-			return &volumes[i]
+	for idx := range volumes {
+		if volumes[idx].Name == name {
+			return &volumes[idx]
 		}
 	}
 
@@ -1792,9 +1792,9 @@ func getVolume(
 func (r *SingleClusterReconciler) appendUniqueVolume(
 	stSpecVolumes []corev1.Volume, externalSpecVolumes []corev1.Volume,
 ) []corev1.Volume {
-	for i := range externalSpecVolumes {
-		if getVolume(stSpecVolumes, externalSpecVolumes[i].Name) == nil {
-			stSpecVolumes = append(stSpecVolumes, externalSpecVolumes[i])
+	for idx := range externalSpecVolumes {
+		if getVolume(stSpecVolumes, externalSpecVolumes[idx].Name) == nil {
+			stSpecVolumes = append(stSpecVolumes, externalSpecVolumes[idx])
 		}
 	}
 

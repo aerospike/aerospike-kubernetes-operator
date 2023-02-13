@@ -30,8 +30,8 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 ) ([]corev1.PersistentVolumeClaim, error) {
 	var deletedPVCs []corev1.PersistentVolumeClaim
 
-	for i := range pvcItems {
-		pvc := pvcItems[i]
+	for idx := range pvcItems {
+		pvc := pvcItems[idx]
 		if utils.IsPVCTerminating(&pvc) {
 			continue
 		}
@@ -120,12 +120,12 @@ func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.Per
 			return err
 		}
 
-		for i := range deletedPVCs {
-			pvc := deletedPVCs[i]
+		for deletedIdx := range deletedPVCs {
+			pvc := deletedPVCs[deletedIdx]
 			found := false
 
-			for i := range existingPVCs {
-				if existingPVCs[i].Name == pvc.Name {
+			for existingIdx := range existingPVCs {
+				if existingPVCs[existingIdx].Name == pvc.Name {
 					r.Log.Info("Waiting for PVC termination", "PVC", pvc.Name)
 
 					found = true
@@ -198,10 +198,10 @@ func getPVCVolumeConfig(
 	storage *asdbv1beta1.AerospikeStorageSpec, pvcStorageVolName string,
 ) *asdbv1beta1.VolumeSpec {
 	volumes := storage.Volumes
-	for i := range volumes {
-		v := volumes[i]
+	for idx := range volumes {
+		v := &volumes[idx]
 		if pvcStorageVolName == v.Name {
-			return &v
+			return v
 		}
 	}
 

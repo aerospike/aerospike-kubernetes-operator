@@ -44,8 +44,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	}
 
 	rackIDsToDelete := make([]int, 0, len(racksToDelete))
-	for i := range racksToDelete {
-		rackIDsToDelete = append(rackIDsToDelete, racksToDelete[i].ID)
+	for idx := range racksToDelete {
+		rackIDsToDelete = append(rackIDsToDelete, racksToDelete[idx].ID)
 	}
 
 	ignorablePods, err := r.getIgnorablePods(racksToDelete)
@@ -54,8 +54,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	}
 
 	ignorablePodNames := make([]string, 0, len(ignorablePods))
-	for i := range ignorablePods {
-		ignorablePodNames = append(ignorablePodNames, ignorablePods[i].Name)
+	for idx := range ignorablePods {
+		ignorablePodNames = append(ignorablePodNames, ignorablePods[idx].Name)
 	}
 
 	r.Log.Info(
@@ -63,8 +63,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		ignorablePodNames,
 	)
 
-	for i := range rackStateList {
-		state := &rackStateList[i]
+	for idx := range rackStateList {
+		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
 
@@ -123,8 +123,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	// reconcile for the racks. The STS may be correctly updated but the pods
 	// might not be ready if they are running long-running init scripts or
 	// aerospike index load.
-	for i := range rackStateList {
-		state := &rackStateList[i]
+	for idx := range rackStateList {
+		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
 
@@ -178,7 +178,7 @@ func (r *SingleClusterReconciler) createRack(rackState *RackState) (
 
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
-	if err := r.buildSTSConfigMap(cmName, &rackState.Rack); err != nil {
+	if err := r.buildSTSConfigMap(cmName, rackState.Rack); err != nil {
 		r.Log.Error(err, "Failed to create configMap from AerospikeConfig")
 		return nil, reconcileError(err)
 	}
@@ -216,18 +216,18 @@ func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
 
 	var toDelete []asdbv1beta1.Rack
 
-	for i := range oldRacks {
+	for oldRackIdx := range oldRacks {
 		var rackFound bool
 
-		for j := range rackStateList {
-			if oldRacks[i].ID == rackStateList[j].Rack.ID {
+		for rackStateIdx := range rackStateList {
+			if oldRacks[oldRackIdx].ID == rackStateList[rackStateIdx].Rack.ID {
 				rackFound = true
 				break
 			}
 		}
 
 		if !rackFound {
-			toDelete = append(toDelete, oldRacks[i])
+			toDelete = append(toDelete, oldRacks[oldRackIdx])
 		}
 	}
 
@@ -237,8 +237,8 @@ func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
 func (r *SingleClusterReconciler) deleteRacks(
 	racksToDelete []asdbv1beta1.Rack, ignorablePods []corev1.Pod,
 ) reconcileResult {
-	for i := range racksToDelete {
-		rack := racksToDelete[i]
+	for idx := range racksToDelete {
+		rack := &racksToDelete[idx]
 		found := &appsv1.StatefulSet{}
 		stsName := getNamespacedNameForSTS(r.aeroCluster, rack.ID)
 
@@ -342,7 +342,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	if err := r.updateSTSConfigMap(
 		getNamespacedNameForSTSConfigMap(
 			r.aeroCluster, rackState.Rack.ID,
-		), &rackState.Rack,
+		), rackState.Rack,
 	); err != nil {
 		r.Log.Error(
 			err, "Failed to update configMap from AerospikeConfig", "stsName",
@@ -467,8 +467,8 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 
 	// Ensure none of the to be launched pods are active.
 	for _, newPodName := range newPodNames {
-		for i := range podList.Items {
-			if podList.Items[i].Name == newPodName {
+		for idx := range podList.Items {
+			if podList.Items[idx].Name == newPodName {
 				return found, reconcileError(
 					fmt.Errorf(
 						"pod %s yet to be launched is still present",
@@ -557,8 +557,8 @@ func (r *SingleClusterReconciler) upgradeRack(
 	// Find pods which needs to be updated
 	podsToUpgrade := make([]*corev1.Pod, 0, len(podList))
 
-	for i := range podList {
-		pod := podList[i]
+	for idx := range podList {
+		pod := podList[idx]
 		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
 
 		if r.isPodUpgraded(pod) {
@@ -790,8 +790,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	}
 
 	pods := make([]corev1.Pod, 0, len(podList))
-	for i := range podList {
-		pods = append(pods, *podList[i])
+	for idx := range podList {
+		pods = append(pods, *podList[idx])
 	}
 
 	if r.isAnyPodInImageFailedState(pods) {
@@ -818,8 +818,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	// Find pods which needs restart
 	podsToRestart := make([]*corev1.Pod, 0, len(podList))
 
-	for i := range podList {
-		pod := podList[i]
+	for idx := range podList {
+		pod := podList[idx]
 
 		restartType := restartTypeMap[pod.Name]
 		if restartType == noRestart {
@@ -908,10 +908,10 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 		return true, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	for i := range podList.Items {
-		p := podList.Items[i]
-		if !r.isPodOnDesiredImage(&p, true) {
-			r.Log.Info("Pod needs upgrade/downgrade", "podName", p.Name)
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if !r.isPodOnDesiredImage(pod, true) {
+			r.Log.Info("Pod needs upgrade/downgrade", "podName", pod.Name)
 			return true, nil
 		}
 	}
@@ -924,8 +924,8 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 ) bool {
 	volumes := rackState.Rack.Storage.Volumes
 
-	for i := range volumes {
-		volume := &volumes[i]
+	for idx := range volumes {
+		volume := &volumes[idx]
 		// Check for Updated volumeSource
 		if r.isStorageVolumeSourceUpdated(volume, pod) {
 			r.Log.Info(
@@ -971,13 +971,13 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	}
 	allConfiguredContainers := []string{asdbv1beta1.AerospikeServerContainerName}
 
-	for i := range r.aeroCluster.Spec.PodSpec.Sidecars {
-		allConfiguredContainers = append(allConfiguredContainers, r.aeroCluster.Spec.PodSpec.Sidecars[i].Name)
+	for idx := range r.aeroCluster.Spec.PodSpec.Sidecars {
+		allConfiguredContainers = append(allConfiguredContainers, r.aeroCluster.Spec.PodSpec.Sidecars[idx].Name)
 	}
 
-	for i := range r.aeroCluster.Spec.PodSpec.InitContainers {
+	for idx := range r.aeroCluster.Spec.PodSpec.InitContainers {
 		allConfiguredInitContainers = append(
-			allConfiguredInitContainers, r.aeroCluster.Spec.PodSpec.InitContainers[i].Name,
+			allConfiguredInitContainers, r.aeroCluster.Spec.PodSpec.InitContainers[idx].Name,
 		)
 	}
 
@@ -1003,8 +1003,8 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 }
 
 func (r *SingleClusterReconciler) getRackStatusVolumes(rackState *RackState) []asdbv1beta1.VolumeSpec {
-	for i := range r.aeroCluster.Status.RackConfig.Racks {
-		rack := &r.aeroCluster.Status.RackConfig.Racks[i]
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
 		if rack.ID == rackState.Rack.ID {
 			return rack.Storage.Volumes
 		}
@@ -1138,8 +1138,8 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 	isInitContainers bool,
 ) bool {
 	// TODO: Deal with injected volumes later.
-	for i := range podContainers {
-		container := &podContainers[i]
+	for idx := range podContainers {
+		container := &podContainers[idx]
 		if isInitContainers && container.Name == asdbv1beta1.AerospikeInitContainerName {
 			// InitContainer has all the volumes mounted, there is no specific entry in storage for initContainer
 			continue
@@ -1293,8 +1293,8 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 
 	sortedList := make([]*corev1.Pod, len(podList.Items))
 
-	for i := range podList.Items {
-		indexStr := strings.Split(podList.Items[i].Name, "-")
+	for idx := range podList.Items {
+		indexStr := strings.Split(podList.Items[idx].Name, "-")
 		// Index is last, [1] can be rackID
 		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
 
@@ -1303,7 +1303,7 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 			return nil, fmt.Errorf("error get pod list for rack:%v", rackID)
 		}
 
-		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[i]
+		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[idx]
 	}
 
 	return sortedList, nil
@@ -1322,8 +1322,8 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 		return nil, err
 	}
 
-	for i := range statefulSetList.Items {
-		rackID, err := utils.GetRackIDFromSTSName(statefulSetList.Items[i].Name)
+	for stsIdx := range statefulSetList.Items {
+		rackID, err := utils.GetRackIDFromSTSName(statefulSetList.Items[stsIdx].Name)
 		if err != nil {
 			return nil, err
 		}
@@ -1331,8 +1331,8 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 		found := false
 
 		racks := r.aeroCluster.Status.RackConfig.Racks
-		for j := range racks {
-			if racks[j].ID == *rackID {
+		for rackIdx := range racks {
+			if racks[rackIdx].ID == *rackID {
 				found = true
 				break
 			}
@@ -1399,7 +1399,7 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 
 		rackStateList = append(
 			rackStateList, RackState{
-				Rack: racks[idx],
+				Rack: &racks[idx],
 				Size: topology[idx],
 			},
 		)
@@ -1449,9 +1449,9 @@ func getContainerVolumeMounts(
 
 func getPodVolume(pod *corev1.Pod, name string) *corev1.Volume {
 	volumes := pod.Spec.Volumes
-	for i := range volumes {
-		if volumes[i].Name == name {
-			return &volumes[i]
+	for idx := range volumes {
+		if volumes[idx].Name == name {
+			return &volumes[idx]
 		}
 	}
 
@@ -1461,9 +1461,9 @@ func getPodVolume(pod *corev1.Pod, name string) *corev1.Volume {
 func getStorageVolume(
 	volumes []asdbv1beta1.VolumeSpec, name string,
 ) *asdbv1beta1.VolumeSpec {
-	for i := range volumes {
-		if name == volumes[i].Name {
-			return &volumes[i]
+	for idx := range volumes {
+		if name == volumes[idx].Name {
+			return &volumes[idx]
 		}
 	}
 
@@ -1473,9 +1473,9 @@ func getStorageVolume(
 func getContainer(
 	podContainers []corev1.Container, name string,
 ) *corev1.Container {
-	for i := range podContainers {
-		if name == podContainers[i].Name {
-			return &podContainers[i]
+	for idx := range podContainers {
+		if name == podContainers[idx].Name {
+			return &podContainers[idx]
 		}
 	}
 

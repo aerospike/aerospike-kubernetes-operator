@@ -124,8 +124,8 @@ func (c *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
 			c.Spec.RackConfig, "DefaultRackID", DefaultRackID,
 		)
 	} else {
-		for i := range c.Spec.RackConfig.Racks {
-			rack := c.Spec.RackConfig.Racks[i]
+		for idx := range c.Spec.RackConfig.Racks {
+			rack := &c.Spec.RackConfig.Racks[idx]
 			if rack.ID == DefaultRackID {
 				// User has modified defaultRackConfig or used defaultRackID
 				if len(c.Spec.RackConfig.Racks) > 1 ||
@@ -156,8 +156,8 @@ func (c *AerospikeCluster) updateRacks(asLog logr.Logger) error {
 }
 
 func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) {
-	for i := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 
 		if rack.InputStorage == nil {
 			rack.Storage = c.Spec.Storage
@@ -176,8 +176,8 @@ func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) {
 }
 
 func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) {
-	for i := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 
 		if rack.InputPodSpec == nil {
 			rack.PodSpec.SchedulingPolicy = c.Spec.PodSpec.SchedulingPolicy
@@ -193,8 +193,8 @@ func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) {
 }
 
 func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logger) error {
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 
 		var (
 			m   map[string]interface{}
@@ -234,7 +234,7 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 			return err
 		}
 
-		c.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
+		c.Spec.RackConfig.Racks[idx].AerospikeConfig.Value = m
 	}
 
 	return nil

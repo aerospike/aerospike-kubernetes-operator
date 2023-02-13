@@ -41,8 +41,8 @@ func CheckPodFailed(pod *corev1.Pod) error {
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
 	// inspect the status of each individual container for common failure states
-	for i := range containerStatus {
-		container := &containerStatus[i]
+	for idx := range containerStatus {
+		container := &containerStatus[idx]
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
@@ -80,8 +80,8 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
 	// inspect the status of each individual container for common failure states
-	for i := range containerStatus {
-		container := &containerStatus[i]
+	for idx := range containerStatus {
+		container := &containerStatus[idx]
 		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
 		// a container that has terminated successfully (such as an init container)
 		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
@@ -103,8 +103,8 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 // isPodReady return true if all the container of the pod are in ready state
 func isPodReady(pod *corev1.Pod) bool {
 	statuses := pod.Status.ContainerStatuses
-	for i := range statuses {
-		if !statuses[i].Ready {
+	for idx := range statuses {
+		if !statuses[idx].Ready {
 			return false
 		}
 	}
@@ -119,9 +119,9 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 
 // GetPod get pod from pod list by name
 func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
-	for i := range pods {
-		if podName == pods[i].Name {
-			return &pods[i]
+	for idx := range pods {
+		if podName == pods[idx].Name {
+			return &pods[idx]
 		}
 	}
 

@@ -11,8 +11,8 @@ import (
 
 // validateStorageSpecChange indicates if a change to storage spec is safe to apply.
 func (s *AerospikeStorageSpec) validateStorageSpecChange(newStorage *AerospikeStorageSpec) error {
-	for i := range newStorage.Volumes {
-		newVolume := &newStorage.Volumes[i]
+	for idx := range newStorage.Volumes {
+		newVolume := &newStorage.Volumes[idx]
 
 		for j := range s.Volumes {
 			oldVolume := s.Volumes[j]
@@ -41,8 +41,8 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *Aerospi
 	addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error,
 ) {
 	// Validate Persistent volume
-	for i := range newStorage.Volumes {
-		newVolume := newStorage.Volumes[i]
+	for idx := range newStorage.Volumes {
+		newVolume := newStorage.Volumes[idx]
 		matched := false
 
 		for j := range s.Volumes {
@@ -64,8 +64,8 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *Aerospi
 		}
 	}
 
-	for i := range s.Volumes {
-		oldVolume := s.Volumes[i]
+	for idx := range s.Volumes {
+		oldVolume := s.Volumes[idx]
 		matched := false
 
 		for j := range newStorage.Volumes {
@@ -112,23 +112,23 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 		s.CleanupThreads = defaultCleanupThreads
 	}
 
-	for i := range s.Volumes {
+	for idx := range s.Volumes {
 		switch {
-		case s.Volumes[i].Source.PersistentVolume == nil:
+		case s.Volumes[idx].Source.PersistentVolume == nil:
 			// All other sources are considered to be mounted, for now.
-			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
-		case s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock:
-			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
-		case s.Volumes[i].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
-			s.Volumes[i].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
+			s.Volumes[idx].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
+		case s.Volumes[idx].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock:
+			s.Volumes[idx].AerospikePersistentVolumePolicySpec.SetDefaults(&s.BlockVolumePolicy)
+		case s.Volumes[idx].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
+			s.Volumes[idx].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
 		}
 	}
 }
 
 // GetPVs returns the PV volumes from the storage spec.
 func (s *AerospikeStorageSpec) GetPVs() (pVs []VolumeSpec) {
-	for i := range s.Volumes {
-		volume := s.Volumes[i]
+	for idx := range s.Volumes {
+		volume := s.Volumes[idx]
 		if volume.Source.PersistentVolume != nil {
 			pVs = append(pVs, volume)
 		}
@@ -139,8 +139,8 @@ func (s *AerospikeStorageSpec) GetPVs() (pVs []VolumeSpec) {
 
 // GetNonPVs returns the non PV volumes from the storage spec.
 func (s *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
-	for i := range s.Volumes {
-		volume := s.Volumes[i]
+	for idx := range s.Volumes {
+		volume := s.Volumes[idx]
 		if volume.Source.PersistentVolume == nil {
 			nonPVs = append(nonPVs, volume)
 		}
@@ -153,8 +153,8 @@ func (s *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
 func (s *AerospikeStorageSpec) getAerospikeStorageList() (
 	blockStorageDeviceList []string, fileStorageList []string, err error,
 ) {
-	for i := range s.Volumes {
-		volume := s.Volumes[i]
+	for idx := range s.Volumes {
+		volume := &s.Volumes[idx]
 		if volume.Aerospike != nil {
 			// TODO: Do we need to check for other type of sources
 			if volume.Source.PersistentVolume == nil {
@@ -189,8 +189,8 @@ func (s *AerospikeStorageSpec) isVolumePresentForAerospikePath(path string) bool
 func (s *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
 	var matchedVolume *VolumeSpec
 
-	for i := range s.Volumes {
-		volume := &s.Volumes[i]
+	for idx := range s.Volumes {
+		volume := &s.Volumes[idx]
 		if volume.Aerospike != nil && isPathParentOrSame(
 			volume.Aerospike.Path, path,
 		) {
@@ -217,8 +217,8 @@ func validateStorage(
 	sidecarAttachmentPaths := map[string]map[string]int{}
 	initContainerAttachmentPaths := map[string]map[string]int{}
 
-	for i := range storage.Volumes {
-		volume := &storage.Volumes[i]
+	for idx := range storage.Volumes {
+		volume := &storage.Volumes[idx]
 
 		errors := validation.IsDNS1123Label(volume.Name)
 		if len(errors) > 0 {
@@ -382,8 +382,8 @@ func validateAttachment(
 func getContainerNames(containers []v1.Container) []string {
 	containerNames := make([]string, 0, len(containers))
 
-	for i := range containers {
-		containerNames = append(containerNames, containers[i].Name)
+	for idx := range containers {
+		containerNames = append(containerNames, containers[idx].Name)
 	}
 
 	return containerNames

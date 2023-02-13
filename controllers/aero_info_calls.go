@@ -210,14 +210,14 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 
 	hostConns := make([]*deployment.HostConn, 0, len(podList.Items))
 
-	for i := range podList.Items {
-		pod := podList.Items[i]
-		if utils.IsPodTerminating(&pod) {
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if utils.IsPodTerminating(pod) {
 			continue
 		}
 
 		// Checking if all the container in the pod are ready or not
-		if !utils.IsPodRunningAndReady(&pod) {
+		if !utils.IsPodRunningAndReady(pod) {
 			ignorablePod := utils.GetPod(pod.Name, ignorablePods)
 			if ignorablePod != nil {
 				// This pod is not running and ignorable.
@@ -231,7 +231,7 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
 		}
 
-		hostConn, err := r.newHostConn(&pod)
+		hostConn, err := r.newHostConn(pod)
 		if err != nil {
 			return nil, err
 		}

@@ -213,8 +213,8 @@ func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
 		svcActFound   bool
 	)
 
-	for i := range CRBs.Items {
-		crb := &CRBs.Items[i]
+	for idx := range CRBs.Items {
+		crb := &CRBs.Items[idx]
 		_, aerospikeLabelExists := crb.Labels["aerospike.com/default-ns.kind"]
 		_, olmLabelExists := crb.Labels["olm.owner"]
 
@@ -463,9 +463,9 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 		return false, err
 	}
 
-	for i := range pods.Items {
-		pod := pods.Items[i]
-		if err := utils.CheckPodFailed(&pod); err == nil {
+	for idx := range pods.Items {
+		pod := &pods.Items[idx]
+		if err := utils.CheckPodFailed(pod); err == nil {
 			// There is at least one pod that has not yet failed.
 			// It's possible that the containers are stuck doing a long disk
 			// initialization.
@@ -572,9 +572,9 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 		len(statefulSetList.Items),
 	)
 
-	for i := range statefulSetList.Items {
-		statefulset := statefulSetList.Items[i]
-		if err := r.deleteSTS(&statefulset); err != nil {
+	for idx := range statefulSetList.Items {
+		statefulset := &statefulSetList.Items[idx]
+		if err := r.deleteSTS(statefulset); err != nil {
 			return fmt.Errorf(
 				"error deleting statefulset while forcing recreate of the cluster as status is nil: %v",
 				err,
@@ -586,8 +586,8 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 	// This is not necessary since scale-up would clean dangling pod status. However, done here for general
 	// cleanliness.
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
-	for i := range rackStateList {
-		state := rackStateList[i]
+	for rackIdx := range rackStateList {
+		state := rackStateList[rackIdx]
 
 		pods, err := r.getRackPodList(state.Rack.ID)
 		if err != nil {
@@ -595,8 +595,8 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 		}
 
 		newPodNames := make([]string, 0)
-		for i := 0; i < len(pods.Items); i++ {
-			newPodNames = append(newPodNames, pods.Items[i].Name)
+		for podIdx := 0; podIdx < len(pods.Items); podIdx++ {
+			newPodNames = append(newPodNames, pods.Items[podIdx].Name)
 		}
 
 		if err := r.cleanupPods(newPodNames, &state); err != nil {
@@ -657,8 +657,8 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	r.Log.Info("Removing pvc for removed cluster")
 
 	// Delete pvc for all rack storage
-	for i := range r.aeroCluster.Spec.RackConfig.Racks {
-		rack := &r.aeroCluster.Spec.RackConfig.Racks[i]
+	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
+		rack := &r.aeroCluster.Spec.RackConfig.Racks[idx]
 
 		rackPVCItems, err := r.getRackPVCList(rack.ID)
 		if err != nil {
@@ -681,13 +681,13 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	// cascadeDelete
 	var filteredPVCItems []corev1.PersistentVolumeClaim
 
-	for i := range pvcItems {
-		pvc := pvcItems[i]
+	for pvcIdx := range pvcItems {
+		pvc := pvcItems[pvcIdx]
 
 		var found bool
 
-		for j := range r.aeroCluster.Spec.RackConfig.Racks {
-			rack := &r.aeroCluster.Spec.RackConfig.Racks[j]
+		for rackIdx := range r.aeroCluster.Spec.RackConfig.Racks {
+			rack := &r.aeroCluster.Spec.RackConfig.Racks[rackIdx]
 			rackLabels := utils.LabelsForAerospikeClusterRack(
 				r.aeroCluster.Name, rack.ID,
 			)
@@ -772,8 +772,8 @@ func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.H
 	specNamespaces := sets.NewString()
 
 	racks := r.aeroCluster.Spec.RackConfig.Racks
-	for i := range racks {
-		for _, namespace := range racks[i].AerospikeConfig.Value["namespaces"].([]interface{}) {
+	for idx := range racks {
+		for _, namespace := range racks[idx].AerospikeConfig.Value["namespaces"].([]interface{}) {
 			specNamespaces.Insert(namespace.(map[string]interface{})["name"].(string))
 		}
 	}

@@ -201,8 +201,8 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
 		if err := validateStorage(&rack.Storage, &c.Spec.PodSpec); err != nil {
 			return err
@@ -271,8 +271,8 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 func (c *AerospikeCluster) validateSCNamespaces() error {
 	scNamespaceSet := sets.NewString()
 
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 		tmpSCNamespaceSet := sets.NewString()
 
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
@@ -289,7 +289,7 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 			}
 		}
 
-		if i == 0 {
+		if idx == 0 {
 			scNamespaceSet = tmpSCNamespaceSet
 			continue
 		}
@@ -372,11 +372,11 @@ func (c *AerospikeCluster) validateRackUpdate(
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
-	for i := range old.Spec.RackConfig.Racks {
-		oldRack := old.Spec.RackConfig.Racks[i]
+	for rackIdx := range old.Spec.RackConfig.Racks {
+		oldRack := old.Spec.RackConfig.Racks[rackIdx]
 
-		for j := range c.Spec.RackConfig.Racks {
-			newRack := c.Spec.RackConfig.Racks[j]
+		for specIdx := range c.Spec.RackConfig.Racks {
+			newRack := c.Spec.RackConfig.Racks[specIdx]
 			if oldRack.ID == newRack.ID {
 				if oldRack.NodeName != newRack.NodeName ||
 					oldRack.RackLabel != newRack.RackLabel ||
@@ -391,8 +391,8 @@ func (c *AerospikeCluster) validateRackUpdate(
 				if len(oldRack.AerospikeConfig.Value) != 0 || len(newRack.AerospikeConfig.Value) != 0 {
 					var rackStatusConfig *AerospikeConfigSpec
 
-					for i := range c.Status.RackConfig.Racks {
-						statusRack := c.Status.RackConfig.Racks[i]
+					for statusIdx := range c.Status.RackConfig.Racks {
+						statusRack := c.Status.RackConfig.Racks[statusIdx]
 						if statusRack.ID == newRack.ID {
 							rackStatusConfig = &statusRack.AerospikeConfig
 							break
@@ -448,8 +448,8 @@ func (c *AerospikeCluster) validatePodSpecResourceAndLimits(_ logr.Logger) error
 		return err
 	}
 
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 		if rack.Storage.CleanupThreads != AerospikeVolumeSingleCleanupThread {
 			checkResourcesLimits = true
 			break
@@ -509,8 +509,8 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Int{}
 
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
 			return fmt.Errorf(
@@ -622,8 +622,8 @@ type nsConf struct {
 func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for i := range c.Spec.RackConfig.Racks {
-		rack := c.Spec.RackConfig.Racks[i]
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -810,10 +810,10 @@ func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 			"tls-authenticate-client contains invalid value: %t", value,
 		)
 	case []interface{}:
-		dnsnames := make([]string, len(value))
+		dnsNames := make([]string, len(value))
 
 		for i := 0; i < len(value); i++ {
-			dnsname, ok := value[i].(string)
+			dnsName, ok := value[i].(string)
 			if !ok {
 				return nil, fmt.Errorf(
 					"tls-authenticate-client contains invalid type value: %v",
@@ -821,17 +821,17 @@ func ValidateTLSAuthenticateClient(serviceConf map[string]interface{}) (
 				)
 			}
 
-			if !validate.IsDNSName(dnsname) {
+			if !validate.IsDNSName(dnsName) {
 				return nil, fmt.Errorf(
 					"tls-authenticate-client contains invalid dns-name: %v",
-					dnsname,
+					dnsName,
 				)
 			}
 
-			dnsnames[i] = dnsname
+			dnsNames[i] = dnsName
 		}
 
-		return dnsnames, nil
+		return dnsNames, nil
 	}
 
 	return nil, fmt.Errorf(
@@ -1298,11 +1298,11 @@ func validateAerospikeConfigUpdate(
 
 	// TLS cannot be updated dynamically
 	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
-	oldtls, ok11 := oldConf["network"].(map[string]interface{})["tls"]
-	newtls, ok22 := newConf["network"].(map[string]interface{})["tls"]
+	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
+	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
 
 	if ok11 != ok22 ||
-		ok11 && ok22 && (!reflect.DeepEqual(oldtls, newtls)) {
+		ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
 		return fmt.Errorf("cannot update cluster network.tls config")
 	}
 
@@ -1791,8 +1791,8 @@ func (c *AerospikeCluster) validatePodSpec() error {
 func validatePodSpecContainer(containers []v1.Container) error {
 	containerNames := map[string]int{}
 
-	for i := range containers {
-		container := containers[i]
+	for idx := range containers {
+		container := &containers[idx]
 		// Check for reserved container name
 		if container.Name == AerospikeServerContainerName || container.Name == AerospikeInitContainerName {
 			return fmt.Errorf(

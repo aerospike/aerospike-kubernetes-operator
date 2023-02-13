@@ -291,16 +291,16 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		return nil, err
 	}
 
-	for i := range pods.Items {
-		fqdn := getFQDNForPod(r.aeroCluster, pods.Items[i].Name)
+	for idx := range pods.Items {
+		fqdn := getFQDNForPod(r.aeroCluster, pods.Items[idx].Name)
 		podNameSet.Insert(fqdn)
 	}
 
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 
 	// Use all pods running or to be launched for each rack.
-	for i := range rackStateList {
-		rackState := &rackStateList[i]
+	for idx := range rackStateList {
+		rackState := &rackStateList[idx]
 		size := rackState.Size
 		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
 

@@ -73,7 +73,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // RackState contains the rack configuration and rack size.
 type RackState struct {
-	Rack asdbv1beta1.Rack
+	Rack *asdbv1beta1.Rack
 	Size int
 }
 

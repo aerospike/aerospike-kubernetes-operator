@@ -82,16 +82,16 @@ func GetDesiredImage(
 	}
 
 	sidecars := aeroCluster.Spec.PodSpec.Sidecars
-	for i := range sidecars {
-		if sidecars[i].Name == containerName {
-			return sidecars[i].Image, nil
+	for idx := range sidecars {
+		if sidecars[idx].Name == containerName {
+			return sidecars[idx].Image, nil
 		}
 	}
 
 	initSidecars := aeroCluster.Spec.PodSpec.InitContainers
-	for i := range initSidecars {
-		if initSidecars[i].Name == containerName {
-			return initSidecars[i].Image, nil
+	for idx := range initSidecars {
+		if initSidecars[idx].Name == containerName {
+			return initSidecars[idx].Image, nil
 		}
 	}
 
