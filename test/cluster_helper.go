@@ -1301,7 +1301,7 @@ func aerospikeClusterCreateUpdateWithTO(
 	if err != nil {
 		// Deploy the cluster.
 		// t.Logf("Deploying cluster at %v", time.Now().Format(time.RFC850))
-		if err := deployClusterWithTO(
+		if err = deployClusterWithTO(
 			k8sClient, ctx, desired, retryInterval, timeout,
 		); err != nil {
 			return err
