@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 const batchClusterName = "batch-restart"
@@ -509,11 +510,8 @@ func batchRollingRestartTest(
 	aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
 	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func batchUpgradeTest(
@@ -530,11 +528,8 @@ func batchUpgradeTest(
 	aeroCluster.Spec.Image = unavailableImage
 
 	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func rollingRestartTest(
@@ -556,11 +551,8 @@ func rollingRestartTest(
 	}
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func upgradeTest(
@@ -577,9 +569,6 @@ func upgradeTest(
 	aeroCluster.Spec.Image = image
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }

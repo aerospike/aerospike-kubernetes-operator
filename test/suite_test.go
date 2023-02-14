@@ -23,18 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	k8Runtime "k8s.io/apimachinery/pkg/runtime"
-
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -43,7 +38,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	// +kubebuilder:scaffold:imports
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -63,7 +62,11 @@ var (
 	scheme = k8Runtime.NewScheme()
 )
 
-var defaultNetworkType = flag.String("connect-through-network-type", "hostExternal", "Network type is used to determine an appropriate access type. Can be 'pod', 'hostInternal' or 'hostExternal'. AS client in the test will choose access type witch matches expected network type. See details in https://docs.aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings.html#network-policy")
+var defaultNetworkType = flag.String("connect-through-network-type", "hostExternal",
+	"Network type is used to determine an appropriate access type. Can be 'pod',"+
+		" 'hostInternal' or 'hostExternal'. AS client in the test will choose access type"+
+		" which matches expected network type. See details in"+
+		" https://docs.aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings.html#network-policy")
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -110,7 +113,8 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 	}
 
 	for pvcIndex := range pvcList.Items {
-		pkgLog.Info("Found pvc, deleting it", "pvcName", pvcList.Items[pvcIndex].Name, "namespace", pvcList.Items[pvcIndex].Namespace)
+		pkgLog.Info("Found pvc, deleting it", "pvcName",
+			pvcList.Items[pvcIndex].Name, "namespace", pvcList.Items[pvcIndex].Namespace)
 
 		if utils.IsPVCTerminating(&pvcList.Items[pvcIndex]) {
 			continue
@@ -126,6 +130,7 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 			return fmt.Errorf("could not delete pvc %s: %w", pvcList.Items[pvcIndex].Name, err)
 		}
 	}
+
 	return nil
 }
 

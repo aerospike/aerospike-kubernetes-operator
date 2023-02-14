@@ -11,14 +11,15 @@ import (
 	"os"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -72,13 +73,15 @@ func getClient(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
-	hosts := make([]*as.Host, len(conns))
+	hosts := make([]*as.Host, 0, len(conns))
 	for connIndex := range conns {
-		hosts[connIndex] = &as.Host{
-			Name:    conns[connIndex].ASConn.AerospikeHostName,
-			TLSName: conns[connIndex].ASConn.AerospikeTLSName,
-			Port:    conns[connIndex].ASConn.AerospikePort,
-		}
+		hosts = append(
+			hosts, &as.Host{
+				Name:    conns[connIndex].ASConn.AerospikeHostName,
+				TLSName: conns[connIndex].ASConn.AerospikeTLSName,
+				Port:    conns[connIndex].ASConn.AerospikePort,
+			},
+		)
 	}
 	// Create policy using status, status has current connection info
 	policy := getClientPolicy(
@@ -107,13 +110,15 @@ func getClientExternalAuth(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
-	hosts := make([]*as.Host, len(conns))
+	hosts := make([]*as.Host, 0, len(conns))
 	for connIndex := range conns {
-		hosts[connIndex] = &as.Host{
-			Name:    conns[connIndex].ASConn.AerospikeHostName,
-			TLSName: conns[connIndex].ASConn.AerospikeTLSName,
-			Port:    conns[connIndex].ASConn.AerospikePort,
-		}
+		hosts = append(
+			hosts, &as.Host{
+				Name:    conns[connIndex].ASConn.AerospikeHostName,
+				TLSName: conns[connIndex].ASConn.AerospikeTLSName,
+				Port:    conns[connIndex].ASConn.AerospikePort,
+			},
+		)
 	}
 	// Create policy using status, status has current connection info
 	policy := getClientPolicy(

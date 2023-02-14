@@ -4,12 +4,13 @@ import (
 	goctx "context"
 	"fmt"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -56,7 +57,8 @@ var _ = Describe(
 				BeforeEach(
 					func() {
 						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] = migrateFillDelay
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
+							migrateFillDelay
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
@@ -531,7 +533,10 @@ func UpdateClusterTest(ctx goctx.Context) {
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["replication-factor"] = 5
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											namespaceConfig["replication-factor"] = 5
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
 											err = k8sClient.Update(
 												ctx, aeroCluster,
@@ -671,7 +676,10 @@ func negativeDeployClusterValidationTest(
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											namespaceConfig["storage-engine"] = nil
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 											err := deployCluster(
 												k8sClient, ctx, aeroCluster,
 											)
@@ -685,8 +693,12 @@ func negativeDeployClusterValidationTest(
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok :=
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err := deployCluster(
 													k8sClient, ctx, aeroCluster,
 												)
@@ -696,12 +708,16 @@ func negativeDeployClusterValidationTest(
 									)
 
 									It(
-										"InvalidStorageEngineDevice: should fail for invalid storage-engine.device, cannot have 3 devices in single device string",
+										"InvalidStorageEngineDevice: should fail for invalid storage-engine.device,"+
+											" cannot have 3 devices in single device string",
 										func() {
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok :=
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{
 													{
 														Name: "nsvol1",
@@ -744,7 +760,11 @@ func negativeDeployClusterValidationTest(
 													},
 												}
 
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
+												namespaceConfig :=
+													aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
+													[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err := deployCluster(
 													k8sClient, ctx, aeroCluster,
 												)
@@ -759,8 +779,11 @@ func negativeDeployClusterValidationTest(
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
+												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err := deployCluster(
 													k8sClient, ctx, aeroCluster,
 												)
@@ -770,17 +793,21 @@ func negativeDeployClusterValidationTest(
 									)
 
 									It(
-										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which doesn't exist in storage",
+										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device,"+
+											" cannot use a device which doesn't exist in storage",
 										func() {
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-												devList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"].([]interface{})
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 												devList = append(
 													devList, "andRandomDevice",
 												)
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = devList
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err := deployCluster(
 													k8sClient, ctx, aeroCluster,
 												)
@@ -790,7 +817,8 @@ func negativeDeployClusterValidationTest(
 									)
 
 									It(
-										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot use a device which already exist in another namespace",
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device,"+
+											" cannot use a device which already exist in another namespace",
 										func() {
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
@@ -821,7 +849,9 @@ func negativeDeployClusterValidationTest(
 											aeroCluster := createDummyAerospikeCluster(
 												clusterNamespacedName, 1,
 											)
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
 												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 													"enable-xdr":         false,
@@ -846,7 +876,8 @@ func negativeDeployClusterValidationTest(
 									// Ns conf
 									// Rack-id
 									// aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-									// aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["rack-id"] = 1
+									// aeroCluster.Spec.AerospikeConfig.Value["namespaces"].
+									// ([]interface{})[0].(map[string]interface{})["rack-id"] = 1
 									// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 									// err := deployCluster(k8sClient, ctx, aeroCluster)
 									// validateError(err, "should fail for setting rack-id")
@@ -1062,10 +1093,6 @@ func negativeUpdateClusterValidationTest(
 					aeroCluster.Spec.Size = 0
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
-
-					// aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 9)
-					// err = deployCluster(k8sClient, ctx, aeroCluster)
-					// validateError(err, "should fail for community eidition having more than 8 nodes")
 				},
 			)
 
@@ -1159,7 +1186,11 @@ func negativeUpdateClusterValidationTest(
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											namespaceConfig["storage-engine"] = nil
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] =
+												namespaceConfig
 											err = k8sClient.Update(
 												ctx, aeroCluster,
 											)
@@ -1176,8 +1207,11 @@ func negativeUpdateClusterValidationTest(
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -1195,8 +1229,11 @@ func negativeUpdateClusterValidationTest(
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["files"] = nil
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
+												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -1206,7 +1243,8 @@ func negativeUpdateClusterValidationTest(
 									)
 
 									It(
-										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device, cannot add a device which doesn't exist in BlockStorage",
+										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device,"+
+											" cannot add a device which doesn't exist in BlockStorage",
 										func() {
 											aeroCluster, err := getCluster(
 												k8sClient, ctx,
@@ -1214,12 +1252,15 @@ func negativeUpdateClusterValidationTest(
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
-												devList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"].([]interface{})
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 												devList = append(
 													devList, "andRandomDevice",
 												)
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = devList
+												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -1229,7 +1270,8 @@ func negativeUpdateClusterValidationTest(
 									)
 
 									It(
-										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device, cannot add a device which already exist in another namespace",
+										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device,"+
+											" cannot add a device which already exist in another namespace",
 										func() {
 											aeroCluster, err := getCluster(
 												k8sClient, ctx,
@@ -1266,7 +1308,9 @@ func negativeUpdateClusterValidationTest(
 											)
 											Expect(err).ToNot(HaveOccurred())
 
-											if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+											namespaceConfig :=
+												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 													"enable-xdr":         false,
 													"xdr-digestlog-path": "randomPath 100G",

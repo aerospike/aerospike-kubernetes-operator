@@ -2,15 +2,15 @@ package test
 
 import (
 	"bufio"
+	goctx "context"
 	"regexp"
 	"strings"
 
-	goctx "context"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -102,8 +102,11 @@ func intraClusterAdvertisesNodeIP(ctx goctx.Context, pod *corev1.Pod) bool {
 	fabricAdvertisesNodeID := false
 
 	// Account for Cleartext and TLS  endpoints.
-	var hbPublishPattern = regexp.MustCompile(".*updated heartbeat published address list to {" + podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
-	var fabricPublishPattern = regexp.MustCompile(".*updated fabric published address list to {" + podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
+	var hbPublishPattern = regexp.MustCompile(".*updated heartbeat published address list to {" +
+		podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
+
+	var fabricPublishPattern = regexp.MustCompile(".*updated fabric published address list to {" +
+		podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
 
 	for scanner.Scan() {
 		logLine := scanner.Text()

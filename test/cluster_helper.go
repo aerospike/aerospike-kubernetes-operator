@@ -7,12 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +17,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 const (
@@ -58,8 +59,10 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size += increaseBy
-	oldDeviceList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
+	oldDeviceList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]
+	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
@@ -93,9 +96,10 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size += increaseBy
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
-	err = k8sClient.Update(ctx, aeroCluster)
+	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
+	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -157,8 +161,10 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size -= decreaseBy
-	oldDeviceList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
+	oldDeviceList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]
+	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
@@ -187,7 +193,8 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size -= decreaseBy
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
@@ -287,8 +294,10 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 	}
 
 	// Change namespace storage-engine
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["data-in-memory"] = true
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+	namespaceConfig["storage-engine"].(map[string]interface{})["data-in-memory"] = true
+	namespaceConfig["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
 	err = k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
@@ -320,7 +329,9 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	}
 
 	// Change namespace storage-engine
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
+	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
 	dynamicNs1 := getNonSCNamespaceConfig("dynamicns1", "/test/dev/dynamicns1")
 	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
@@ -525,8 +536,8 @@ func getCluster(
 	clusterNamespacedName types.NamespacedName,
 ) (*asdbv1beta1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -539,8 +550,8 @@ func getClusterIfExists(
 	clusterNamespacedName types.NamespacedName,
 ) (*asdbv1beta1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, nil
@@ -830,6 +841,7 @@ func createDummyRackAwareWithStorageAerospikeCluster(
 	return aeroCluster
 }
 
+//nolint:unparam // generic function
 func createDummyRackAwareAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
@@ -1301,10 +1313,10 @@ func aerospikeClusterCreateUpdateWithTO(
 	if err != nil {
 		// Deploy the cluster.
 		// t.Logf("Deploying cluster at %v", time.Now().Format(time.RFC850))
-		if err = deployClusterWithTO(
+		if deployErr := deployClusterWithTO(
 			k8sClient, ctx, desired, retryInterval, timeout,
-		); err != nil {
-			return err
+		); deployErr != nil {
+			return deployErr
 		}
 
 		return nil

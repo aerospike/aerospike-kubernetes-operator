@@ -3,10 +3,11 @@ package test
 import (
 	goctx "context"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -141,7 +142,9 @@ func validateSecurityContext(
 		aeroCluster,
 	)
 	Expect(err).ToNot(HaveOccurred())
+
 	Expect(len(pods.Items)).ToNot(BeZero())
+
 	for podIndex := range pods.Items {
 		// TODO: get pod.Spec container by name.
 		// var podSpecSecCtx corev1.PodSecurityContext
@@ -152,12 +155,18 @@ func validateSecurityContext(
 		}
 
 		if aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext != nil {
-			Expect(pods.Items[podIndex].Spec.Containers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext))
+			Expect(pods.Items[podIndex].Spec.Containers[0].SecurityContext).To(Equal(
+				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
+			),
+			)
 		}
 
 		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil &&
 			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
-			Expect(pods.Items[podIndex].Spec.InitContainers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext))
+			Expect(pods.Items[podIndex].Spec.InitContainers[0].SecurityContext).To(Equal(
+				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext,
+			),
+			)
 		}
 	}
 }

@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -408,6 +406,8 @@ func getAerospikeClusterSpecWithAerospikeConfig(
 }
 
 // waitForVersion waits for the cluster to have all nodes at input Aerospike version.
+//
+//nolint:unparam // generic function
 func waitForVersion(
 	log logr.Logger, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster, image string,
@@ -425,8 +425,8 @@ func waitForVersion(
 				return false, nil
 			}
 
-			for podIndex := range aeroCluster.Status.Pods {
-				if !strings.HasSuffix(aeroCluster.Status.Pods[podIndex].Image, image) {
+			for podName := range aeroCluster.Status.Pods {
+				if !strings.HasSuffix(aeroCluster.Status.Pods[podName].Image, image) {
 					return false, nil
 				}
 			}

@@ -1,18 +1,18 @@
 package test
 
 import (
+	goctx "context"
 	"strconv"
 	"time"
 
-	goctx "context"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 var _ = Describe(
@@ -389,6 +389,7 @@ var _ = Describe(
 	},
 )
 
+//nolint:unparam // generic function
 func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
 	*appsv1.StatefulSet, error,
 ) {
@@ -413,6 +414,7 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isIni
 	if err != nil {
 		return false, err
 	}
+
 	for podIndex := range rackPodList.Items {
 		var container v1.Container
 		if isInit {
@@ -420,9 +422,11 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isIni
 		} else {
 			container = rackPodList.Items[podIndex].Spec.Containers[index]
 		}
+
 		volumeMounts := container.VolumeMounts
 		for _, volumeMount := range volumeMounts {
 			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", container.Name)
+
 			if volumeMount.Name == "tzdata" {
 				return true, nil
 			}
@@ -461,6 +465,7 @@ func waitForPod(pod *v1.Pod) bool {
 			time.Sleep(time.Second * 5)
 			continue
 		}
+
 		started = true
 
 		break

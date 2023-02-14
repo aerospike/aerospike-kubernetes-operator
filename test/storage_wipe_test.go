@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 const (
@@ -217,8 +218,8 @@ func writeDataToCluster(
 	policy.LimitConnectionsToQueueSize = true
 	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
-	for podIndex := range aeroCluster.Status.Pods {
-		host, err := createHost(aeroCluster.Status.Pods[podIndex])
+	for podName := range aeroCluster.Status.Pods {
+		host, err := createHost(aeroCluster.Status.Pods[podName])
 		if err != nil {
 			return err
 		}
@@ -277,8 +278,8 @@ func checkDataInCluster(
 	policy.LimitConnectionsToQueueSize = true
 	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
-	for podIndex := range aeroCluster.Status.Pods {
-		host, err := createHost(aeroCluster.Status.Pods[podIndex])
+	for podName := range aeroCluster.Status.Pods {
+		host, err := createHost(aeroCluster.Status.Pods[podName])
 		if err != nil {
 			return nil, err
 		}

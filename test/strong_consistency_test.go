@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"k8s.io/apimachinery/pkg/util/intstr"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/deployment"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 const (
@@ -124,7 +124,8 @@ var _ = Describe("SCMode", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			SCConf := getSCNamespaceConfig(addedSCNs, path)
-			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
+				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
 
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -144,7 +145,8 @@ var _ = Describe("SCMode", func() {
 					"type": "memory",
 				},
 			}
-			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
+				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
 
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -224,13 +226,16 @@ var _ = Describe("SCMode", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			scFlag := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"]
+			namespaceConfig :=
+				aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+			scFlag := namespaceConfig["strong-consistency"]
 
 			var scFlagBool bool
 			if scFlag != nil {
 				scFlagBool = scFlag.(bool)
 			}
-			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["strong-consistency"] = !scFlagBool
+			namespaceConfig["strong-consistency"] = !scFlagBool
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
@@ -368,7 +373,8 @@ func validateLifecycleOperationInSCCluster(
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 }
 
-func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+func validateRoster(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -384,7 +390,8 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 	// Check2 roster+blockList >= len(pods)
 	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
+		err := fmt.Errorf("roster len not matching pods list. "+
+			"roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
 		Expect(err).ToNot(HaveOccurred())
 	}
 
@@ -399,9 +406,12 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	for _, rosterNode := range rosterList {
 		nodeID := strings.Split(rosterNode, "@")[0]
 		// Check1 roster should not have blocked pod
-		Expect(rosterNodeBlockListSet.Has(nodeID)).To(BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v", rosterNode, aeroCluster.Spec.RosterNodeBlockList))
+		Expect(rosterNodeBlockListSet.Has(nodeID)).To(
+			BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v",
+				rosterNode, aeroCluster.Spec.RosterNodeBlockList))
 		// Check4 Scaledown: all the roster should be in pod list
-		Expect(podNodeIDSet.Has(nodeID)).To(BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
+		Expect(podNodeIDSet.Has(nodeID)).To(
+			BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
 	}
 
 	rosterListSet := sets.NewString(rosterList...)
@@ -420,13 +430,16 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 
 		if !rosterNodeBlockListSet.Has(nodeID) &&
 			!rosterListSet.Has(nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v, blockList %v, missing pod roster %v, rackID %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
+			err := fmt.Errorf("pod not found in roster or blockList. roster %v,"+
+				" blockList %v, missing pod roster %v, rackID %v",
+				rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
 			Expect(err).ToNot(HaveOccurred())
 		}
 	}
 }
 
-func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy, namespace string) (map[string]string, error) {
+func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
+	namespace string) (map[string]string, error) {
 	cmd := fmt.Sprintf("roster:namespace=%s", namespace)
 
 	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)

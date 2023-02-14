@@ -8,12 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 // Test cluster cr updation
@@ -466,7 +465,8 @@ var _ = Describe(
 
 						// Add test while rack using common aeroConfig but local storage, fail for mismatch
 						It(
-							"CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn't have namespace related volumes",
+							"CommonConfigLocalStorage: should fail for deploying with wrong Storage. "+
+								"Storage doesn't have namespace related volumes",
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(

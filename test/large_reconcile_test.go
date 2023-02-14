@@ -7,15 +7,15 @@ import (
 	"strconv"
 	"time"
 
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -202,8 +202,8 @@ func loadDataInCluster(
 
 	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
-	for podIndex := range aeroCluster.Status.Pods {
-		host, err := createHost(aeroCluster.Status.Pods[podIndex])
+	for podName := range aeroCluster.Status.Pods {
+		host, err := createHost(aeroCluster.Status.Pods[podName])
 		if err != nil {
 			return err
 		}
@@ -298,7 +298,8 @@ func waitForClusterScaleDown(
 			}
 
 			if int(newCluster.Status.Size) < replicas {
-				err = fmt.Errorf("cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
+				err = fmt.Errorf("cluster size can not go below temp size," +
+					" it should have only final value, as this is the new reconcile flow")
 				return false, err
 			}
 
@@ -344,13 +345,13 @@ func waitForClusterRollingRestart(
 			protofdmax := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"].(float64)
 			if int(protofdmax) == tempConf {
 				err := fmt.Errorf(
-					"cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow",
+					"cluster status can not be updated with intermediate conf value %d,"+
+						" it should have only final value, as this is the new reconcile flow",
 					tempConf,
 				)
-				// t.Logf(err.Error())
+
 				return false, err
 			}
-			// t.Logf("conf value to check proto-fd-max %d", protofdmax)
 
 			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
 		},
@@ -358,7 +359,6 @@ func waitForClusterRollingRestart(
 	if err != nil {
 		return err
 	}
-	// t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 
 	return nil
 }
@@ -378,19 +378,19 @@ func waitForClusterUpgrade(
 			)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
 					return false, nil
 				}
+
 				return false, err
 			}
-			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 			if newCluster.Status.Image == tempImage {
 				err := fmt.Errorf(
-					"cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow",
+					"cluster status can not be updated with intermediate image value %s,"+
+						" it should have only final value, as this is the new reconcile flow",
 					tempImage,
 				)
-				// t.Logf(err.Error())
+
 				return false, err
 			}
 
@@ -400,7 +400,6 @@ func waitForClusterUpgrade(
 	if err != nil {
 		return err
 	}
-	// t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 
 	return nil
 }

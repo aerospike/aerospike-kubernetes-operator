@@ -9,9 +9,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -19,10 +18,10 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-const storageInitTestClusterSize = 2
 const (
-	magicBytes           = "aero"
-	sidecarContainerName = "tomcat"
+	storageInitTestClusterSize = 2
+	magicBytes                 = "aero"
+	sidecarContainerName       = "tomcat"
 )
 
 var _ = Describe(
@@ -527,7 +526,8 @@ func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1beta1.VolumeSpec) bool {
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
-// getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage. None of the  storage volumes are used by Aerospike and are free to be used for testing.
+// getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage.
+// None of the storage volumes are used by Aerospike and are free to be used for testing.
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
 	storageConfig *asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,

@@ -7,11 +7,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe(
@@ -160,7 +159,10 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 	)
 }
 
-func validUpdateResourceTest(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, checkAeroServer, checkAeroInit bool) {
+func validUpdateResourceTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, checkAeroServer, checkAeroInit bool,
+) {
 	res := &corev1.ResourceRequirements{}
 
 	By("UpdateClusterResourceLimitMemory")
@@ -189,7 +191,10 @@ func validUpdateResourceTest(k8sClient client.Client, ctx goctx.Context, cluster
 	updateResource(k8sClient, ctx, clusterNamespacedName, nil, checkAeroServer, checkAeroInit)
 }
 
-func updateResource(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool) {
+func updateResource(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool,
+) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -208,7 +213,10 @@ func updateResource(k8sClient client.Client, ctx goctx.Context, clusterNamespace
 	Expect(err).ToNot(HaveOccurred())
 }
 
-func validateClusterResource(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool) error {
+func validateClusterResource(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -223,6 +231,7 @@ func validateClusterResource(k8sClient client.Client, ctx goctx.Context, cluster
 	if res == nil {
 		res = &corev1.ResourceRequirements{}
 	}
+
 	for stsIndex := range stsList.Items {
 		// aerospike container is 1st container
 		var cnt corev1.Container
@@ -232,6 +241,7 @@ func validateClusterResource(k8sClient client.Client, ctx goctx.Context, cluster
 				return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)
 			}
 		}
+
 		if checkAeroInit {
 			cnt = stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0]
 			if !reflect.DeepEqual(&cnt.Resources, res) {

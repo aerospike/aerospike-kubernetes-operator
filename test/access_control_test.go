@@ -9,15 +9,16 @@ import (
 	"reflect"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 const (
@@ -2221,10 +2222,10 @@ func validateRoles(
 	}
 
 	accessControl := clusterSpec.AerospikeAccessControl
-	expectedRoleNames := make([]string, len(accessControl.Roles))
+	expectedRoleNames := make([]string, 0, len(accessControl.Roles))
 
 	for roleIndex := range accessControl.Roles {
-		expectedRoleNames[roleIndex] = accessControl.Roles[roleIndex].Name
+		expectedRoleNames = append(expectedRoleNames, accessControl.Roles[roleIndex].Name)
 	}
 
 	if len(currentRoleNames) != len(expectedRoleNames) {
@@ -2330,17 +2331,17 @@ func validateUsers(
 		return fmt.Errorf("error querying users: %v", err)
 	}
 
-	currentUserNames := make([]string, len(asUsers))
+	currentUserNames := make([]string, 0, len(asUsers))
 
 	for userIndex := range asUsers {
-		currentUserNames[userIndex] = asUsers[userIndex].User
+		currentUserNames = append(currentUserNames, asUsers[userIndex].User)
 	}
 
 	accessControl := clusterSpec.AerospikeAccessControl
-	expectedUserNames := make([]string, len(accessControl.Users))
+	expectedUserNames := make([]string, 0, len(accessControl.Users))
 
 	for userIndex := range accessControl.Users {
-		expectedUserNames[userIndex] = accessControl.Users[userIndex].Name
+		expectedUserNames = append(expectedUserNames, accessControl.Users[userIndex].Name)
 	}
 
 	if len(currentUserNames) != len(expectedUserNames) {
@@ -2412,7 +2413,7 @@ const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 func randString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))] //nolint:gosec // for testing
 	}
 
 	return string(b)

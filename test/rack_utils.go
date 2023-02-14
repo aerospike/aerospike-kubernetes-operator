@@ -7,9 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/info"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 type RackState struct {
@@ -77,7 +78,8 @@ func removeLastRack(
 }
 
 func validateAerospikeConfigServiceUpdate(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -86,8 +88,8 @@ func validateAerospikeConfigServiceUpdate(
 
 	var found bool
 
-	for podIndex := range aeroCluster.Status.Pods {
-		if !isNodePartOfRack(aeroCluster.Status.Pods[podIndex].Aerospike.NodeID, strconv.Itoa(rack.ID)) {
+	for podName := range aeroCluster.Status.Pods {
+		if !isNodePartOfRack(aeroCluster.Status.Pods[podName].Aerospike.NodeID, strconv.Itoa(rack.ID)) {
 			continue
 		}
 
@@ -95,7 +97,7 @@ func validateAerospikeConfigServiceUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(aeroCluster.Status.Pods[podIndex])
+		host, err := createHost(aeroCluster.Status.Pods[podName])
 		if err != nil {
 			return err
 		}
@@ -155,8 +157,8 @@ func isNamespaceRackEnabled(
 	}
 
 	var pod asdbv1beta1.AerospikePodStatus
-	for podIndex := range aeroCluster.Status.Pods {
-		pod = aeroCluster.Status.Pods[podIndex]
+	for podName := range aeroCluster.Status.Pods {
+		pod = aeroCluster.Status.Pods[podName]
 	}
 
 	host, err := createHost(pod)
@@ -332,7 +334,8 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 		return nil
 	}
 
-	terms := found.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+	terms := found.Spec.Template.Spec.Affinity.NodeAffinity.
+		RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
 
 	var matched bool
 
@@ -423,11 +426,20 @@ func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []Rac
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
 
-	rackStateList := make([]RackState, len(topology))
+	rackStateList := make([]RackState, 0, len(topology))
 
-	for idx := range topology {
-		rackStateList[idx].Rack = aeroCluster.Spec.RackConfig.Racks[idx]
-		rackStateList[idx].Size = topology[idx]
+	for idx := range aeroCluster.Spec.RackConfig.Racks {
+		if topology[idx] == 0 {
+			// Skip the rack, if it's size is 0
+			continue
+		}
+
+		rackStateList = append(
+			rackStateList, RackState{
+				Rack: aeroCluster.Spec.RackConfig.Racks[idx],
+				Size: topology[idx],
+			},
+		)
 	}
 
 	return rackStateList
@@ -445,9 +457,7 @@ func splitRacks(nodeCount, rackCount int) []int {
 			nodesForThisRack++
 		}
 
-		if nodesForThisRack != 0 {
-			topology = append(topology, nodesForThisRack)
-		}
+		topology = append(topology, nodesForThisRack)
 	}
 
 	return topology
@@ -495,9 +505,9 @@ func isNodePartOfRack(nodeID, rackID string) bool {
 }
 
 func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
-	racks := make([]asdbv1beta1.Rack, len(rackIDs))
-	for index, rID := range rackIDs {
-		racks[index].ID = rID
+	racks := make([]asdbv1beta1.Rack, 0, len(rackIDs))
+	for _, rID := range rackIDs {
+		racks = append(racks, asdbv1beta1.Rack{ID: rID})
 	}
 
 	return racks

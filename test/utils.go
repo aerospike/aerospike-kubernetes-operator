@@ -12,9 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -24,6 +21,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 var (
@@ -34,7 +35,7 @@ var (
 
 var secrets map[string][]byte
 
-const secretDir = "../config/samples/secrets"
+const secretDir = "../config/samples/secrets" //nolint:gosec // for testing
 
 const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"
@@ -43,7 +44,7 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
-const aerospikeConfigSecret string = "aerospike-config-secret"
+const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
@@ -270,18 +271,18 @@ func isClusterStateValid(
 		return false
 	}
 
-	for podIndex := range newCluster.Status.Pods {
-		if newCluster.Status.Pods[podIndex].Aerospike.NodeID == "" {
+	for podName := range newCluster.Status.Pods {
+		if newCluster.Status.Pods[podName].Aerospike.NodeID == "" {
 			pkgLog.Info("Cluster pod's nodeID is empty")
 			return false
 		}
 
-		if operatorUtils.IsImageEqual(newCluster.Status.Pods[podIndex].Image, aeroCluster.Spec.Image) {
+		if operatorUtils.IsImageEqual(newCluster.Status.Pods[podName].Image, aeroCluster.Spec.Image) {
 			break
 		}
 
 		pkgLog.Info(
-			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podIndex].Image,
+			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
 			aeroCluster.Spec.Image,
 		)
 	}
@@ -695,6 +696,7 @@ func getAerospikeStorageConfig(
 	}
 }
 
+//nolint:unparam // generic function
 func contains(elems []string, v string) bool {
 	for _, s := range elems {
 		if v == s {

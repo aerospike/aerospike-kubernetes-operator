@@ -7,16 +7,17 @@ import (
 	"reflect"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var (
 	customInitRegistryEnvVar  = "CUSTOM_INIT_REGISTRY"
-	imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME"
+	imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
 )
 
 var _ = Describe(
@@ -56,7 +57,9 @@ var _ = Describe(
 		// initCont2 := corev1.Container{
 		// 	Name:    "init-mydb",
 		// 	Image:   "busybox:1.28",
-		// 	Command: []string{"sh", "-c", "until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done"},
+		// 	Command: []string{"sh", "-c",
+		//	"until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local;
+		//	do echo waiting for mydb; sleep 2; done"},
 		// }
 
 		Context(
@@ -403,7 +406,11 @@ var _ = Describe(
 						for _, ns := range actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
 							for _, me := range ns.MatchExpressions {
 								if me.Key == "topology.kubernetes.io/region" {
-									isEqual := reflect.DeepEqual(me, desiredAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0])
+									isEqual := reflect.DeepEqual(
+										me,
+										desiredAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.
+											NodeSelectorTerms[0].MatchExpressions[0],
+									)
 									msg := fmt.Sprintf("node affinity actual: %v, desired: %v", actualNodeAffinity, desiredAffinity.NodeAffinity)
 									Expect(isEqual).To(BeTrue(), msg)
 
@@ -521,15 +528,18 @@ var _ = Describe(
 func getEnvVar(envVar string) string {
 	envVarVal, found := os.LookupEnv(envVar)
 	Expect(found).To(BeTrue())
+
 	return envVarVal
 }
 
-func validateImageRegistry(k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string) {
+func validateImageRegistry(
+	k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string,
+) {
 	stsList, err := getSTSList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
 
-	for _, sts := range stsList.Items {
-		image := sts.Spec.Template.Spec.InitContainers[0].Image
+	for stsIndex := range stsList.Items {
+		image := stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0].Image
 		hasPrefix := strings.HasPrefix(image, registry)
 		Expect(hasPrefix).To(BeTrue(), fmt.Sprintf("expected registry %s, found image %s", registry, image))
 	}

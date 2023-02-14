@@ -10,16 +10,16 @@ import (
 	"net"
 	"reflect"
 
-	"github.com/aerospike/aerospike-management-lib/deployment"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 const (
@@ -170,7 +170,7 @@ func validateNetworkPolicy(
 		endpointsStr, ok := res["endpoints"]
 		if !ok {
 			return fmt.Errorf(
-				"failed to get aerospike endpoints from pod %v", &podList.Items[podIndex].Name,
+				"failed to get aerospike endpoints from pod %v", podList.Items[podIndex].Name,
 			)
 		}
 
@@ -179,7 +179,7 @@ func validateNetworkPolicy(
 		)
 		if err != nil {
 			return fmt.Errorf(
-				"failed to parse aerospike endpoints from pod %v: %v", &podList.Items[podIndex].Name,
+				"failed to parse aerospike endpoints from pod %v: %v", podList.Items[podIndex].Name,
 				err,
 			)
 		}

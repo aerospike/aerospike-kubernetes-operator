@@ -3,12 +3,12 @@ package test
 import (
 	goctx "context"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -187,27 +187,27 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Op2: RemoveRack
-						/*					By("Removing single rack")
-											aeroCluster, err = getCluster(
-												k8sClient, ctx, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
+						By("Removing single rack")
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-											racks = getDummyRackConf(1, 2, 3, 4, 5)
-											aeroCluster.Spec.RackConfig.Racks = racks
+						racks = getDummyRackConf(1, 2, 3, 4, 5)
+						aeroCluster.Spec.RackConfig.Racks = racks
 
-											err = updateCluster(k8sClient, ctx, aeroCluster)
-											Expect(err).ToNot(HaveOccurred())
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-											err = validateRackEnabledCluster(
-												k8sClient, ctx, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-											// cleanup: Remove the cluster
-											By("Cleaning up the cluster")
+						err = validateRackEnabledCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+						// cleanup: Remove the cluster
+						By("Cleaning up the cluster")
 
-											err = deleteCluster(k8sClient, ctx, aeroCluster)
-											Expect(err).ToNot(HaveOccurred())*/
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
@@ -554,7 +554,10 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
-														if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+														namespaceConfig :=
+															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+														if _, ok :=
+															namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 															vd := []asdbv1beta1.VolumeSpec{
 																{
 																	Name: "nsvol1",
@@ -631,7 +634,10 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
-														if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+														namespaceConfig :=
+															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+														if _, ok :=
+															namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 															aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 																Value: map[string]interface{}{
 																	"namespaces": []interface{}{
@@ -663,7 +669,10 @@ var _ = Describe(
 												aeroCluster := createDummyRackAwareAerospikeCluster(
 													clusterNamespacedName, 2,
 												)
-												if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+												namespaceConfig :=
+													aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												if _, ok :=
+													namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 													aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
 													aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 														Value: map[string]interface{}{
