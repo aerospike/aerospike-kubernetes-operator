@@ -18,6 +18,10 @@ rbac:
   create: true
   # serviceAccountName: "default"
 
+## Create RBAC in watched namespace
+watchedNamespaceRbac:
+  create: true
+
 ## Ports
 # healthPort: 8081
 # metricsPort: 8080
