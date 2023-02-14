@@ -110,3 +110,7 @@ operatorClientCert: {}
 
 ## Dev Mode
 devMode: false
+
+## Create RBAC resources
+rbac:
+  create: true

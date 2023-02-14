@@ -30,7 +30,8 @@ certs:
   webhookServerCertSecretName: "webhook-server-cert"
 
 ##  Operator configurations
-watchNamespaces: "default"
+## Empty value means the operator is running with cluster scope.
+watchNamespaces: ""
 
 # Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io"
