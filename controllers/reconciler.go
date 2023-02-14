@@ -159,7 +159,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if asdbv1beta1.IsClusterSCEnabled(r.aeroCluster) {
-		if r.aeroCluster.Status.AerospikeConfig != nil {
+		if !r.IsStatusEmpty() {
 			if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 				return res.result, res.err
 			}
@@ -415,7 +415,7 @@ func (r *SingleClusterReconciler) createStatus() error {
 }
 
 func (r *SingleClusterReconciler) isNewCluster() (bool, error) {
-	if r.aeroCluster.Status.AerospikeConfig != nil {
+	if !r.IsStatusEmpty() {
 		// We have valid status, cluster cannot be new.
 		return false, nil
 	}
@@ -463,7 +463,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 		}
 	}
 
-	return r.aeroCluster.Status.AerospikeConfig == nil, nil
+	return r.IsStatusEmpty(), nil
 }
 
 func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.AerospikeCluster) error {
@@ -743,4 +743,8 @@ func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.H
 	removedNamespaces := statusNamespaces.Difference(specNamespaces)
 
 	return removedNamespaces.List(), nil
+}
+
+func (r *SingleClusterReconciler) IsStatusEmpty() bool {
+	return r.aeroCluster.Status.AerospikeConfig == nil
 }

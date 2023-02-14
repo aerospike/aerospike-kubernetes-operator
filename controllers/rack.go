@@ -301,8 +301,10 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// revert migrate-fill-delay to original value if it was set to 0 during scale down
 	// Reset will be done if there is Scale down or Rack redistribution
+	// This check won't cover scenario where scale down operation was done and then reverted back to previous value
+	// before the scale down could complete.
 	if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
-		(len(r.aeroCluster.Status.RackConfig.Racks) > 0 && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
+		(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
 		if res := r.setMigrateFillDelay(r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
 			nil); !res.isSuccess {
 			r.Log.Error(res.err, "Failed to revert migrate-fill-delay after scale down")
