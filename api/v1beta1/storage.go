@@ -11,11 +11,11 @@ import (
 
 // validateStorageSpecChange indicates if a change to storage spec is safe to apply.
 func (s *AerospikeStorageSpec) validateStorageSpecChange(newStorage *AerospikeStorageSpec) error {
-	for idx := range newStorage.Volumes {
-		newVolume := &newStorage.Volumes[idx]
+	for newVolIdx := range newStorage.Volumes {
+		newVolume := &newStorage.Volumes[newVolIdx]
 
-		for j := range s.Volumes {
-			oldVolume := s.Volumes[j]
+		for oldVolIdx := range s.Volumes {
+			oldVolume := &s.Volumes[oldVolIdx]
 			if oldVolume.Name == newVolume.Name {
 				if !oldVolume.isSafeChange(newVolume) {
 					// Validate same volumes
@@ -41,12 +41,12 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *Aerospi
 	addedVolumes []VolumeSpec, removedVolumes []VolumeSpec, err error,
 ) {
 	// Validate Persistent volume
-	for idx := range newStorage.Volumes {
-		newVolume := newStorage.Volumes[idx]
+	for newVolIdx := range newStorage.Volumes {
+		newVolume := &newStorage.Volumes[newVolIdx]
 		matched := false
 
-		for j := range s.Volumes {
-			oldVolume := s.Volumes[j]
+		for oldVolIdx := range s.Volumes {
+			oldVolume := &s.Volumes[oldVolIdx]
 			if oldVolume.Name == newVolume.Name {
 				matched = true
 				break
@@ -60,16 +60,16 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *Aerospi
 				)
 			}
 
-			addedVolumes = append(addedVolumes, newVolume)
+			addedVolumes = append(addedVolumes, *newVolume)
 		}
 	}
 
-	for idx := range s.Volumes {
-		oldVolume := s.Volumes[idx]
+	for oldVolIdx := range s.Volumes {
+		oldVolume := &s.Volumes[oldVolIdx]
 		matched := false
 
-		for j := range newStorage.Volumes {
-			newVolume := newStorage.Volumes[j]
+		for newVolIdx := range newStorage.Volumes {
+			newVolume := &newStorage.Volumes[newVolIdx]
 			if oldVolume.Name == newVolume.Name {
 				matched = true
 			}
@@ -82,7 +82,7 @@ func (s *AerospikeStorageSpec) validateAddedOrRemovedVolumes(newStorage *Aerospi
 				)
 			}
 
-			removedVolumes = append(removedVolumes, oldVolume)
+			removedVolumes = append(removedVolumes, *oldVolume)
 		}
 	}
 

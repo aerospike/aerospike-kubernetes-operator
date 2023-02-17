@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	patchApply "github.com/evanphx/json-patch"
+	"github.com/stretchr/testify/assert"
 )
 
 var hyperComplexBase = `

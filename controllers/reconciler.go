@@ -682,7 +682,7 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	var filteredPVCItems []corev1.PersistentVolumeClaim
 
 	for pvcIdx := range pvcItems {
-		pvc := pvcItems[pvcIdx]
+		pvc := &pvcItems[pvcIdx]
 
 		var found bool
 
@@ -699,7 +699,7 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 		}
 
 		if !found {
-			filteredPVCItems = append(filteredPVCItems, pvc)
+			filteredPVCItems = append(filteredPVCItems, *pvc)
 		}
 	}
 

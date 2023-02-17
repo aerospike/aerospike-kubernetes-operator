@@ -55,7 +55,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 ) (map[string]RestartType, error) {
 	var addedNSDevices []string
 
-	var restartTypeMap = make(map[string]RestartType)
+	restartTypeMap := make(map[string]RestartType)
 
 	confMap, err := r.getConfigMap(rackState.Rack.ID)
 	if err != nil {

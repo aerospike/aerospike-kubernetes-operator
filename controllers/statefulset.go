@@ -318,12 +318,10 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) er
 
 		r.Log.V(1).Info("Check statefulSet status is updated or not")
 
-		err := r.Client.Get(
+		if err := r.Client.Get(
 			context.TODO(),
 			types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, st,
-		)
-
-		if err != nil {
+		); err != nil {
 			return err
 		}
 
@@ -562,13 +560,11 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 
 	serviceName := r.aeroCluster.Name + "-lb"
 	service := &corev1.Service{}
-	err := r.Client.Get(
+	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
-	)
-
-	if err != nil {
+	); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Creating LoadBalancer service for cluster")
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
@@ -1223,13 +1219,13 @@ func updateStatefulSetContainers(
 ) []corev1.Container {
 	// Add new sidecars.
 	for specIdx := range specContainers {
-		specContainer := specContainers[specIdx]
+		specContainer := &specContainers[specIdx]
 		found := false
 
 		// Create a copy because updating stateful sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		specContainerCopy := corev1.Container{}
-		lib.DeepCopy(&specContainerCopy, &specContainer)
+		specContainerCopy := &corev1.Container{}
+		lib.DeepCopy(specContainerCopy, specContainer)
 
 		for stsIdx := range stsContainers {
 			if specContainer.Name != stsContainers[stsIdx].Name {
@@ -1239,7 +1235,7 @@ func updateStatefulSetContainers(
 			// Retain volume mounts and devices to make sure external storage will not lose.
 			specContainerCopy.VolumeMounts = stsContainers[stsIdx].VolumeMounts
 			specContainerCopy.VolumeDevices = stsContainers[stsIdx].VolumeDevices
-			stsContainers[stsIdx] = specContainerCopy
+			stsContainers[stsIdx] = *specContainerCopy
 			found = true
 
 			break
@@ -1247,7 +1243,7 @@ func updateStatefulSetContainers(
 
 		if !found {
 			// Add to stateful set containers.
-			stsContainers = append(stsContainers, specContainerCopy)
+			stsContainers = append(stsContainers, *specContainerCopy)
 		}
 	}
 

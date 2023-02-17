@@ -297,12 +297,6 @@ type SchedulingPolicy struct { //nolint:govet // for readability
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
-// ValidatePodSpecChange indicates if a change to pod spec is safe to apply.
-func (p *AerospikePodSpec) ValidatePodSpecChange(_ *AerospikePodSpec) error {
-	// All changes are valid for now.
-	return nil
-}
-
 // SetDefaults applies defaults to the pod spec.
 func (p *AerospikePodSpec) SetDefaults() error {
 	var groupID int64
@@ -351,8 +345,8 @@ type Rack struct { //nolint:govet // for readability
 	Zone string `json:"zone,omitempty"`
 	// Region name for setting rack affinity. Rack pods will be deployed to given Region
 	Region string `json:"region,omitempty"`
-	// RackLabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLabel {aerospike.
-	// com/rack-label: <rack-label>}
+	// RackLabel for setting rack affinity.
+	// Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
 	NodeName string `json:"nodeName,omitempty"`

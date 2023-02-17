@@ -184,9 +184,9 @@ func (r *SingleClusterReconciler) reconcileRoles(
 		)
 	}
 
-	// Execute all commands.
+	// execute all commands.
 	for _, cmd := range roleReconcileCmds {
-		if err := cmd.Execute(client, &adminPolicy, r.Log, r.Recorder, r.aeroCluster); err != nil {
+		if err := cmd.execute(client, &adminPolicy, r.Log, r.Recorder, r.aeroCluster); err != nil {
 			return err
 		}
 	}
@@ -251,7 +251,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 	}
 
 	for _, cmd := range userReconcileCmds {
-		if err := cmd.Execute(client, &adminPolicy, r.Log, r.Recorder, r.aeroCluster); err != nil {
+		if err := cmd.execute(client, &adminPolicy, r.Log, r.Recorder, r.aeroCluster); err != nil {
 			return err
 		}
 	}
@@ -406,7 +406,7 @@ type AerospikeUserPasswordProvider interface {
 // for example a role or a user.
 type aerospikeAccessControlReconcileCmd interface {
 	// Execute executes the command. The implementation should be idempotent.
-	Execute(
+	execute(
 		client *as.Client, adminPolicy *as.AdminPolicy, logger logger, recorder record.EventRecorder,
 		aeroCluster *asdbv1beta1.AerospikeCluster,
 	) error
@@ -433,7 +433,7 @@ type aerospikeRoleCreateUpdate struct {
 }
 
 // Execute creates a new Aerospike role or updates an existing one.
-func (roleCreate aerospikeRoleCreateUpdate) Execute(
+func (roleCreate aerospikeRoleCreateUpdate) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
 	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
@@ -462,15 +462,18 @@ func (roleCreate aerospikeRoleCreateUpdate) Execute(
 		return err
 	}
 
-	errorUpdate := roleCreate.updateRole(client, adminPolicy, role, logger, recorder, aeroCluster)
-	if errorUpdate != nil {
+	if errorUpdate := roleCreate.updateRole(
+		client, adminPolicy, role, logger, recorder, aeroCluster,
+	); errorUpdate != nil {
 		recorder.Eventf(
 			aeroCluster, corev1.EventTypeWarning, "RoleUpdateFailed",
 			"Failed to Update Role %s", roleCreate.name,
 		)
+
+		return errorUpdate
 	}
 
-	return errorUpdate
+	return nil
 }
 
 // createRole creates a new Aerospike role.
@@ -599,7 +602,7 @@ type aerospikeUserCreateUpdate struct {
 }
 
 // Execute creates a new Aerospike user or updates an existing one.
-func (userCreate aerospikeUserCreateUpdate) Execute(
+func (userCreate aerospikeUserCreateUpdate) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
 	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
@@ -629,15 +632,18 @@ func (userCreate aerospikeUserCreateUpdate) Execute(
 		return err
 	}
 
-	errorUpdate := userCreate.updateUser(client, adminPolicy, user, logger, recorder, aeroCluster)
-	if errorUpdate != nil {
+	if errorUpdate := userCreate.updateUser(
+		client, adminPolicy, user, logger, recorder, aeroCluster,
+	); errorUpdate != nil {
 		recorder.Eventf(
 			aeroCluster, corev1.EventTypeWarning, "UserUpdateFailed",
 			"Failed to Update User %s", userCreate.name,
 		)
+
+		return errorUpdate
 	}
 
-	return errorUpdate
+	return nil
 }
 
 // createUser creates a new Aerospike user.
@@ -738,7 +744,7 @@ type aerospikeUserDrop struct {
 }
 
 // Execute implements dropping the user.
-func (userDrop aerospikeUserDrop) Execute(
+func (userDrop aerospikeUserDrop) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
 	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
@@ -767,7 +773,7 @@ type aerospikeRoleDrop struct {
 }
 
 // Execute implements dropping the role.
-func (roleDrop aerospikeRoleDrop) Execute(
+func (roleDrop aerospikeRoleDrop) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
 	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {

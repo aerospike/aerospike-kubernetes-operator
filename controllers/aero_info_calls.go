@@ -75,7 +75,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		}
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, ignorablePods); err != nil {
 		return reconcileError(err)
 	}
 
@@ -83,35 +83,25 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 func (r *SingleClusterReconciler) quiescePods(
-	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod,
+	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) error {
 	removedNSes, err := r.removedNamespaces(allHostConns)
 	if err != nil {
 		return err
 	}
 
-	selectedHostConns := make([]*deployment.HostConn, 0, len(pods))
+	podList := make([]corev1.Pod, 0, len(pods))
 
-	for _, pod := range pods {
-		// Quiesce node
-		hostConn, err := r.newHostConn(pod)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes %v: %v",
-				pod.Name, err,
-			)
-		}
-
-		selectedHostConns = append(selectedHostConns, hostConn)
+	for idx := range pods {
+		podList = append(podList, *pods[idx])
 	}
 
-	if err := deployment.InfoQuiesce(
-		r.Log, policy, allHostConns, selectedHostConns, removedNSes,
-	); err != nil {
+	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePods)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, removedNSes)
 }
 
 // TODO: Check only for migration
@@ -209,10 +199,18 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 		return nil, fmt.Errorf("pod list empty")
 	}
 
-	hostConns := make([]*deployment.HostConn, 0, len(podList.Items))
+	return r.newPodsHostConnWithOption(podList.Items, ignorablePods)
+}
 
-	for idx := range podList.Items {
-		pod := &podList.Items[idx]
+// newPodsHostConnWithOption returns connections to all pods given skipping pods that are not running and
+// present in ignorablePods.
+func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods, ignorablePods []corev1.Pod) (
+	[]*deployment.HostConn, error,
+) {
+	hostConns := make([]*deployment.HostConn, 0, len(pods))
+
+	for idx := range pods {
+		pod := &pods[idx]
 		if utils.IsPodTerminating(pod) {
 			continue
 		}
@@ -232,25 +230,14 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
 		}
 
-		hostConn, err := r.newHostConn(pod)
-		if err != nil {
-			return nil, err
-		}
+		asConn := r.newAsConn(pod)
+		host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
 
+		hostConn := deployment.NewHostConn(asConn.Log, host, asConn)
 		hostConns = append(hostConns, hostConn)
 	}
 
 	return hostConns, nil
-}
-
-//nolint:unparam // todo: add error
-func (r *SingleClusterReconciler) newHostConn(pod *corev1.Pod) (
-	*deployment.HostConn, error,
-) {
-	asConn := r.newAsConn(pod)
-	host := hostID(asConn.AerospikeHostName, asConn.AerospikePort)
-
-	return deployment.NewHostConn(asConn.Log, host, asConn), nil
 }
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn {

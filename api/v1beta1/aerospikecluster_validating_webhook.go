@@ -133,11 +133,6 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return err
 	}
 
-	// Validate changes to pod spec
-	if err := old.Spec.PodSpec.ValidatePodSpecChange(&c.Spec.PodSpec); err != nil {
-		return err
-	}
-
 	return nil
 }
 
