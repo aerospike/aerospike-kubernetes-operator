@@ -3,10 +3,10 @@ package jsonpatch
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
 	patchApply "github.com/evanphx/json-patch"
+	"github.com/stretchr/testify/assert"
 )
 
 var hyperComplexBase = `
@@ -169,7 +169,7 @@ func TestHyperComplexBoolReplace(t *testing.T) {
 	assert.NoError(t, e)
 
 	for i, op := range patch {
-		fmt.Printf("Operation %d :%v\n", i, op.Json())
+		fmt.Printf("Operation %d :%v\n", i, op.JSON())
 	}
 
 	patchJSON, e := json.Marshal(patch)

@@ -195,7 +195,7 @@ func getClientPolicy(
 			// InsecureSkipVerify: true,
 		}
 		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
-			//This is possible when tls-authenticate-client = false
+			// This is possible when tls-authenticate-client = false
 			// r.Log.Info("Operator's client cert is not configured. Skip using client certs.", "clientCertSpec", clientCertSpec)
 		} else if cert, err := getClientCertificate(
 			clientCertSpec, aeroCluster.Namespace, k8sClient,
@@ -208,7 +208,7 @@ func getClientPolicy(
 		policy.TlsConfig = &tlsConf
 	}
 
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		logrus.Error("Failed to copy spec in status", "err: ", err)
 	}
@@ -309,8 +309,10 @@ func appendCACertFromSecret(
 		logrus.Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
 		serverPool.AppendCertsFromPEM(caData)
 	} else {
-		logrus.Info("WARN: Can't find ca-file in the secret. using default certPool.",
-			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename)
+		logrus.Info(
+			"WARN: Can't find ca-file in the secret. using default certPool.",
+			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename,
+		)
 	}
 	return serverPool
 }

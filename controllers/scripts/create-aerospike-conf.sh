@@ -106,8 +106,8 @@ cat $PEERS | while read PEER || [ -n "$PEER" ]; do
 	sed -i -e "/heartbeat {/a \\        mesh-seed-address-port ${PEER} {{.HeartBeatPort}}" ${CFG}
 	{{- end}}
 
-	{{- if ne .HeartBeatTlsPort 0}}
-  sed -i -e "/heartbeat {/a \\        tls-mesh-seed-address-port ${PEER} {{.HeartBeatTlsPort}}" ${CFG}
+	{{- if ne .HeartBeatTLSPort 0}}
+  sed -i -e "/heartbeat {/a \\        tls-mesh-seed-address-port ${PEER} {{.HeartBeatTLSPort}}" ${CFG}
   {{- end}}
 done
 
@@ -122,13 +122,13 @@ done
 {{- if ne .HeartBeatPort  0}}
 sed -i -e "/heartbeat {/a \\        address ${MY_POD_IP}" ${CFG}
 {{- end}}
-{{- if ne .HeartBeatTlsPort 0}}
+{{- if ne .HeartBeatTLSPort 0}}
 sed -i -e "/heartbeat {/a \\        tls-address ${MY_POD_IP}" ${CFG}
 {{- end}}
 {{- if ne .FabricPort 0}}
 sed -i -e "/fabric {/a \\        address ${MY_POD_IP}" ${CFG}
 {{- end}}
-{{- if ne .FabricTlsPort 0}}
+{{- if ne .FabricTLSPort 0}}
 sed -i -e "/fabric {/a \\        tls-address ${MY_POD_IP}" ${CFG}
 {{- end}}
 {{- end}}

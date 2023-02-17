@@ -87,7 +87,7 @@ func getTlsAuthenticateClient(config *asdbv1beta1.AerospikeCluster) (
 	if !ok {
 		return nil, fmt.Errorf("service configuration not found")
 	}
-	tlsAuthenticateClient, err := asdbv1beta1.ReadTlsAuthenticateClient(serviceConf)
+	tlsAuthenticateClient, err := asdbv1beta1.ReadTLSAuthenticateClient(serviceConf)
 	if err != nil {
 		return nil, err
 	}
