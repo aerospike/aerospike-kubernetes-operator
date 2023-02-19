@@ -23,12 +23,12 @@ import (
 )
 
 // log is for logging in this package.
-var aerospikeclusterlog = logf.Log.WithName("aerospikecluster-resource")
+var aerospikeClusterLog = logf.Log.WithName("aerospikecluster-resource")
 
 func (c *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 
-	aerospikeclusterlog.Info(
+	aerospikeClusterLog.Info(
 		"Registering mutating webhook to the webhook" +
 			" server",
 	)

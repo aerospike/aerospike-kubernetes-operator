@@ -4,7 +4,6 @@ package test
 //
 // TODO refactor the code in aero_helper.go anc controller_helper.go so that it can be used here.
 import (
-	"context"
 	goctx "context"
 	"fmt"
 	"strings"
@@ -38,14 +37,16 @@ func getServiceForPod(
 ) (*corev1.Service, error) {
 	service := &corev1.Service{}
 	err := k8sClient.Get(
-		context.TODO(),
+		goctx.TODO(),
 		types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service,
 	)
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get service for pod %s: %v", pod.Name, err,
 		)
 	}
+
 	return service, nil
 }
 
@@ -65,6 +66,7 @@ func newAsConn(
 		if err != nil {
 			return nil, err
 		}
+
 		if tlsName == "" {
 			port = svc.Spec.Ports[0].NodePort
 		} else {
@@ -119,6 +121,7 @@ func getEndpointIP(
 				"pod ip is not assigned yet for the pod %s", pod.Name,
 			)
 		}
+
 		return pod.Status.PodIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if pod.Status.HostIP == "" {
@@ -126,12 +129,14 @@ func getEndpointIP(
 				"host ip is not assigned yet for the pod %s", pod.Name,
 			)
 		}
+
 		return pod.Status.HostIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
 		err := k8sClient.Get(
 			goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
 		)
+
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName,
@@ -156,7 +161,6 @@ func getEndpointIP(
 		)
 
 	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
-
 		return "", fmt.Errorf(
 			"unknown network type: %s", networkType,
 		)
@@ -165,7 +169,7 @@ func getEndpointIP(
 	return "", fmt.Errorf("unknown network type: %s", networkType)
 }
 
-func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
+func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 	var host string
 
 	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
@@ -197,9 +201,10 @@ func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 
 		host = pod.HostExternalIP
 	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
-		fallthrough
+		return nil, fmt.Errorf(
+			"unknown network type: %s", networkType,
+		)
 	default:
-
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
 
@@ -231,7 +236,7 @@ func getPodList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), podList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -247,9 +252,10 @@ func getSTSList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), stsList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), stsList, listOps); err != nil {
 		return nil, err
 	}
+
 	return stsList, nil
 }
 
@@ -272,8 +278,8 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 		return nil, err
 	}
 
-	for _, node := range nodes.Items {
-		unqZones[node.Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
+	for idx := range nodes.Items {
+		unqZones[nodes.Items[idx].Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
 	}
 
 	zones := make([]string, 0, len(unqZones))
@@ -308,17 +314,20 @@ func getCloudProvider(
 		return CloudProviderUnknown, err
 	}
 
-	for _, node := range nodes.Items {
-		for labelKey := range node.Labels {
+	for idx := range nodes.Items {
+		for labelKey := range nodes.Items[idx].Labels {
 			if strings.Contains(labelKey, "cloud.google.com") {
 				return CloudProviderGCP, nil
 			}
+
 			if strings.Contains(labelKey, "eks.amazonaws.com") {
 				return CloudProviderAWS, nil
 			}
+
 			labelKeys[labelKey] = struct{}{}
 		}
-		provider := determineByProviderID(&node)
+
+		provider := determineByProviderID(&nodes.Items[idx])
 		if provider != CloudProviderUnknown {
 			return provider, nil
 		}
@@ -382,7 +391,7 @@ func getAeroClusterPVCList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -390,8 +399,10 @@ func getAeroClusterPVCList(
 }
 
 func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
-	var confs lib.Stats
-	var err error
+	var (
+		confs lib.Stats
+		err   error
+	)
 
 	for i := 0; i < 10; i++ {
 		confs, err = asinfo.GetAsConfig(cmd)
@@ -406,8 +417,10 @@ func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
 func runInfo(
 	cp *as.ClientPolicy, asConn *deployment.ASConn, cmd string,
 ) (map[string]string, error) {
-	var res map[string]string
-	var err error
+	var (
+		res map[string]string
+		err error
+	)
 
 	for i := 0; i < 10; i++ {
 		res, err = asConn.RunInfo(cp, cmd)

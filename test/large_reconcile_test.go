@@ -203,7 +203,9 @@ func loadDataInCluster(
 	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
 	for podName := range aeroCluster.Status.Pods {
-		host, err := createHost(aeroCluster.Status.Pods[podName])
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
 		if err != nil {
 			return err
 		}

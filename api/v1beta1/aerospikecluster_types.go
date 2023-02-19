@@ -18,57 +18,60 @@ package v1beta1
 
 import (
 	"fmt"
-	lib "github.com/aerospike/aerospike-management-lib"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
 // +k8s:openapi-gen=true
-type AerospikeClusterSpec struct {
+type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Adds custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 
 	// Aerospike cluster size
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
 	Size int32 `json:"size"`
 	// Aerospike server image
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
 	// Storage specify persistent storage to use for the Aerospike pods
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// Has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Access Control"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Access Control"
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// Sets config in aerospike.conf file. Other configs are taken as default
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
-	// RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Rack Config"
+	// RackConfig Configures the operator to deploy rack aware Aerospike cluster.
+	// Pods will be deployed in given racks based on given configuration
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Rack Config"
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
 	// AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Network Policy"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Network Policy"
 	AerospikeNetworkPolicy AerospikeNetworkPolicy `json:"aerospikeNetworkPolicy,omitempty"`
 	// Certificates to connect to Aerospike.
 	// +optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operator Client Cert"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operator Client Cert"
 	OperatorClientCertSpec *AerospikeOperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 	// Specify additional configuration for the Aerospike pods
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
 	PodSpec AerospikePodSpec `json:"podSpec,omitempty"`
 	// SeedsFinderServices creates additional Kubernetes service that allow
 	// clients to discover Aerospike cluster nodes.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
@@ -76,13 +79,13 @@ type AerospikeClusterSpec struct {
 
 type SeedsFinderServices struct {
 	// LoadBalancer created to discover Aerospike Cluster nodes from outside of
-	//Kubernetes cluster.
+	// Kubernetes cluster.
 	LoadBalancer *LoadBalancerSpec `json:"loadBalancer,omitempty"`
 }
 
 // LoadBalancerSpec contains specification for Service with type LoadBalancer.
 // +k8s:openapi-gen=true
-type LoadBalancerSpec struct {
+type LoadBalancerSpec struct { //nolint:govet // for readability
 	// +kubebuilder:validation:Enum=Local;Cluster
 	// +optional
 	ExternalTrafficPolicy corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
@@ -108,7 +111,7 @@ type LoadBalancerSpec struct {
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" patchStrategy:"merge"`
 }
 
-type AerospikeOperatorClientCertSpec struct {
+type AerospikeOperatorClientCertSpec struct { //nolint:govet // for readability
 	// If specified, this name will be added to tls-authenticate-client list by the operator
 	// +optional
 	TLSClientName               string `json:"tlsClientName,omitempty"`
@@ -136,7 +139,8 @@ type AerospikeSecretCertSource struct {
 	ClientKeyFilename string `json:"clientKeyFilename,omitempty"`
 }
 
-// AerospikeCertPathInOperatorSource contain configuration for certificates used by operator to connect to aerospike cluster.
+// AerospikeCertPathInOperatorSource contain configuration for certificates used by operator to connect to aerospike
+// cluster.
 // All paths are on operator's filesystem.
 type AerospikeCertPathInOperatorSource struct {
 	// +optional
@@ -155,28 +159,37 @@ func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
 func (c *AerospikeOperatorClientCertSpec) validate() error {
 	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
 		return fmt.Errorf(
-			"either \"secretCertSource\" or \"certPathInOperator\" must be set in \"operatorClientCertSpec\" but not both: %+v",
+			"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not"+
+				" both: %+v",
 			c,
 		)
 	}
-	if c.SecretCertSource != nil && (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+
+	if c.SecretCertSource != nil &&
+		(c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
 		return fmt.Errorf(
-			"both \"clientCertFilename\" and \"clientKeyFilename\" should be either set or not set in \"secretCertSource\": %+v",
+			"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
+				" `secretCertSource`: %+v",
 			c.SecretCertSource,
 		)
 	}
-	if c.CertPathInOperator != nil && (c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
+
+	if c.CertPathInOperator != nil &&
+		(c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
 		return fmt.Errorf(
-			"both \"clientCertPath\" and \"clientKeyPath\" should be either set or not set in \"certPathInOperator\": %+v",
+			"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator"+
+				"`: %+v",
 			c.CertPathInOperator,
 		)
 	}
+
 	if c.TLSClientName != "" && !c.IsClientCertConfigured() {
 		return fmt.Errorf(
 			"tlsClientName is provided but client certificate is not: secretCertSource=%+v, certPathInOperator=%v+v",
 			c.SecretCertSource, c.CertPathInOperator,
 		)
 	}
+
 	return nil
 }
 
@@ -188,7 +201,7 @@ type AerospikeObjectMeta struct {
 }
 
 // AerospikePodSpec contain configuration for created Aerospike cluster pods.
-type AerospikePodSpec struct {
+type AerospikePodSpec struct { //nolint:govet // for readability
 	// AerospikeContainerSpec configures the aerospike-server container
 	// created by the operator.
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
@@ -223,7 +236,8 @@ type AerospikePodSpec struct {
 	// To enable hostNetwork multiPodPerHost must be false.
 	HostNetwork bool `json:"hostNetwork,omitempty"`
 
-	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy. If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
+	// If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
 	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
 
 	// Effective value of the DNSPolicy
@@ -238,7 +252,8 @@ type AerospikePodSpec struct {
 	// +optional
 	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
 
-	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
+	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of
+	// the images used by this PodSpec.
 	// More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
@@ -247,13 +262,14 @@ type AerospikePodSpec struct {
 type AerospikeContainerSpec struct {
 	// SecurityContext that will be added to aerospike-server container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
-	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
+	// Define resources requests and limits for Aerospike Server Container.
+	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	// Resources.Limits should be more than Resources.Requests.
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
-type AerospikeInitContainerSpec struct {
+type AerospikeInitContainerSpec struct { //nolint:govet // for readability
 	// ImageRegistry is the name of image registry for aerospike-init container image
 	// ImageRegistry, e.g. docker.io, redhat.access.com
 	ImageRegistry string `json:"imageRegistry,omitempty"`
@@ -272,7 +288,7 @@ type RackPodSpec struct {
 }
 
 // SchedulingPolicy controls pod placement on Kubernetes nodes.
-type SchedulingPolicy struct {
+type SchedulingPolicy struct { //nolint:govet // for readability
 	// Affinity rules for pod placement.
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 	// Tolerations for this pod.
@@ -281,15 +297,9 @@ type SchedulingPolicy struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
-// ValidatePodSpecChange indicates if a change to pod spec is safe to apply.
-func (p *AerospikePodSpec) ValidatePodSpecChange(_ AerospikePodSpec) error {
-	// All changes are valid for now.
-	return nil
-}
-
 // SetDefaults applies defaults to the pod spec.
 func (p *AerospikePodSpec) SetDefaults() error {
-	var groupID int64 = 0
+	var groupID int64
 
 	if p.InputDNSPolicy == nil {
 		if p.HostNetwork {
@@ -316,7 +326,7 @@ func (p *AerospikePodSpec) SetDefaults() error {
 }
 
 // RackConfig specifies all racks and related policies
-type RackConfig struct {
+type RackConfig struct { //nolint:govet // for readability
 	// List of Aerospike namespaces for which rack feature will be enabled
 	Namespaces []string `json:"namespaces,omitempty"`
 	// Racks is the list of all racks
@@ -328,21 +338,23 @@ type RackConfig struct {
 }
 
 // Rack specifies single rack config
-type Rack struct {
+type Rack struct { //nolint:govet // for readability
 	// Identifier for the rack
 	ID int `json:"id"`
 	// Zone name for setting rack affinity. Rack pods will be deployed to given Zone
 	Zone string `json:"zone,omitempty"`
 	// Region name for setting rack affinity. Rack pods will be deployed to given Region
 	Region string `json:"region,omitempty"`
-	// RackLabel for setting rack affinity. Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
+	// RackLabel for setting rack affinity.
+	// Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
 	RackLabel string `json:"rackLabel,omitempty"`
 	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
 	NodeName string `json:"nodeName,omitempty"`
 	// AerospikeConfig overrides the common AerospikeConfig for this Rack. This is merged with global Aerospike config.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	InputAerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
-	// Effective/operative Aerospike config. The resultant is a merge of rack Aerospike config and the global Aerospike config
+	// Effective/operative Aerospike config. The resultant is a merge of rack Aerospike config and the global
+	// Aerospike config
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig AerospikeConfigSpec `json:"effectiveAerospikeConfig,omitempty"`
 	// Storage specify persistent storage to use for the pods in this rack. This value overwrites the global storage config
@@ -357,10 +369,12 @@ type Rack struct {
 
 // ValidationPolicySpec controls validation of the Aerospike cluster resource.
 type ValidationPolicySpec struct {
-	// skipWorkDirValidate validates that Aerospike work directory is mounted on a persistent file storage. Defaults to false.
+	// skipWorkDirValidate validates that Aerospike work directory is mounted on a persistent file storage.
+	// Defaults to false.
 	SkipWorkDirValidate bool `json:"skipWorkDirValidate"`
 
-	// ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage. Defaults to false.
+	// ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
+	// Defaults to false.
 	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
 }
 
@@ -440,24 +454,27 @@ const (
 	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
 
 	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
-	//should be initialized by deleting files.
+	// should be initialized by deleting files.
 	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
 
 	// AerospikeVolumeSingleCleanupThread specifies the single thread
-	//for disks cleanup in init container.
+	// for disks cleanup in init container.
 	AerospikeVolumeSingleCleanupThread int = 1
 )
 
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 
-	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the first time. Defaults to "none".
+	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the
+	// first time. Defaults to "none".
 	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
 
-	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format changes.
+	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
+	// changes.
 	InputWipeMethod *AerospikeVolumeMethod `json:"wipeMethod,omitempty"`
 
-	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is terminated and removed from the cluster.
+	// CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is
+	// terminated and removed from the cluster.
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
@@ -516,7 +533,7 @@ type AttachmentOptions struct {
 	// DeviceOptions
 }
 
-type MountOptions struct {
+type MountOptions struct { //nolint:govet // for readability
 	// Mounted read-only if true, read-write otherwise (false or unspecified).
 	// Defaults to false.
 	// +optional
@@ -532,7 +549,8 @@ type MountOptions struct {
 	// +optional
 	MountPropagation *corev1.MountPropagationMode `json:"mountPropagation,omitempty"`
 	// Expanded path within the volume from which the container's volume should be mounted.
-	// Behaves similarly to SubPath but environment variable references $(VAR_NAME) are expanded using the container's environment.
+	// Behaves similarly to SubPath but environment variable references $(
+	// VAR_NAME) are expanded using the container's environment.
 	// Defaults to "" (volume's root).
 	// SubPathExpr and SubPath are mutually exclusive.
 	// +optional
@@ -541,7 +559,7 @@ type MountOptions struct {
 
 // PersistentVolumeSpec describes a persistent volume to claim and attach to Aerospike pods.
 // +k8s:openapi-gen=true
-type PersistentVolumeSpec struct {
+type PersistentVolumeSpec struct { //nolint:govet // for readability
 	AerospikeObjectMeta `json:"metadata,omitempty"`
 
 	// StorageClass should be pre-created by user.
@@ -555,7 +573,7 @@ type PersistentVolumeSpec struct {
 
 	// Name for creating PVC for this volume, Name or path should be given
 	// Name string `json:"name"`
-	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"`
+	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
 	// A label query over volumes to consider for binding.
 	// +optional
@@ -607,7 +625,7 @@ type VolumeSpec struct {
 
 // AerospikeStorageSpec lists persistent volumes to claim and attach to Aerospike pods and persistence policies.
 // +k8s:openapi-gen=true
-type AerospikeStorageSpec struct {
+type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// FileSystemVolumePolicy contains default policies for filesystem volumes.
 	FileSystemVolumePolicy AerospikePersistentVolumePolicySpec `json:"filesystemVolumePolicy,omitempty"`
 
@@ -626,9 +644,9 @@ type AerospikeStorageSpec struct {
 }
 
 // AerospikeClusterStatusSpec captures the current status of the cluster.
-type AerospikeClusterStatusSpec struct {
+type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Aerospike cluster size
-	//+operator-sdk:csv:customresourcedefinitions:type=status,displayName="Cluster Size"
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Cluster Size"
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
@@ -647,19 +665,22 @@ type AerospikeClusterStatusSpec struct {
 	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
-	// AerospikeAccessControl has the Aerospike roles and users definitions. Required if aerospike cluster security is enabled.
+	// AerospikeAccessControl has the Aerospike roles and users definitions.
+	// Required if aerospike cluster security is enabled.
 	AerospikeAccessControl *AerospikeAccessControlSpec `json:"aerospikeAccessControl,omitempty"`
 	// AerospikeConfig sets config in aerospike.conf file. Other configs are taken as default
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +nullable
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
-	// Define resources requests and limits for Aerospike Server Container. Please contact aerospike for proper sizing exercise
+	// Define resources requests and limits for Aerospike Server Container.
+	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
 	// Deprecated: Resources field is now part of containerSpec
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
-	// RackConfig Configures the operator to deploy rack aware Aerospike cluster. Pods will be deployed in given racks based on given configuration
+	// RackConfig Configures the operator to deploy rack aware Aerospike cluster.
+	// Pods will be deployed in given racks based on given configuration
 	// +nullable
 	// +optional
 	RackConfig RackConfig `json:"rackConfig,omitempty"`
@@ -678,17 +699,20 @@ type AerospikeClusterStatusSpec struct {
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
 // +k8s:openapi-gen=true
-type AerospikeClusterStatus struct {
+type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	// Add custom validation
+	// using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +nullable
 	// The current state of Aerospike cluster.
 	AerospikeClusterStatusSpec `json:",inline"`
 
 	// Details about the current condition of the AerospikeCluster resource.
-	//Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	// Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 
-	// Pods has Aerospike specific status of the pods. This is map instead of the conventional map as list convention to allow each pod to patch update its own status. The map key is the name of the pod.
+	// Pods has Aerospike specific status of the pods.
+	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
+	// status. The map key is the name of the pod.
 	// +patchStrategy=strategic
 	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
 }
@@ -705,10 +729,14 @@ const (
 	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
 	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
 
-	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP.
+	// If the cluster runs single pod per Kubernetes host,
+	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
 
-	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP. If the cluster runs single pod per Kubernetes host, the access port will the actual aerospike port else it will be a mapped port.
+	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP.
+	// If the cluster runs single pod per Kubernetes host,
+	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 )
 
@@ -752,7 +780,7 @@ func (n *AerospikeNetworkPolicy) SetDefaults() {
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.
 // +k8s:openapi-gen=true
-type AerospikeInstanceSummary struct {
+type AerospikeInstanceSummary struct { //nolint:govet // for readability
 	// ClusterName is the name of the Aerospike cluster this pod belongs to.
 	ClusterName string `json:"clusterName"`
 	// NodeID is the unique Aerospike ID for this pod.
@@ -775,7 +803,7 @@ type AerospikeInstanceSummary struct {
 // AerospikePodStatus contains the Aerospike specific status of the Aerospike
 // server pods.
 // +k8s:openapi-gen=true
-type AerospikePodStatus struct {
+type AerospikePodStatus struct { //nolint:govet // for readability
 	// Image is the Aerospike image this pod is running.
 	Image string `json:"image"`
 	// PodIP in the K8s network.
@@ -820,8 +848,9 @@ type AerospikePodStatus struct {
 // +kubebuilder:subresource:status
 
 // AerospikeCluster is the schema for the AerospikeCluster API
-// +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-type AerospikeCluster struct {
+//
+//nolint:lll // for readability  // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
+type AerospikeCluster struct { //nolint:govet // for readability
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -843,10 +872,7 @@ func init() {
 }
 
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
-func CopySpecToStatus(spec AerospikeClusterSpec) (
-	*AerospikeClusterStatusSpec, error,
-) {
-
+func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) { //nolint:dupl // not duplicate
 	status := AerospikeClusterStatusSpec{}
 
 	status.Size = spec.Size
@@ -864,6 +890,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 		lib.DeepCopy(
 			statusAerospikeAccessControl, spec.AerospikeAccessControl,
 		)
+
 		status.AerospikeAccessControl = statusAerospikeAccessControl
 	}
 
@@ -872,6 +899,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	lib.DeepCopy(
 		statusAerospikeConfig, spec.AerospikeConfig,
 	)
+
 	status.AerospikeConfig = statusAerospikeConfig
 
 	if spec.ValidationPolicy != nil {
@@ -880,6 +908,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 		lib.DeepCopy(
 			statusValidationPolicy, spec.ValidationPolicy,
 		)
+
 		status.ValidationPolicy = statusValidationPolicy
 	}
 
@@ -893,6 +922,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	lib.DeepCopy(
 		&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy,
 	)
+
 	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
 
 	if spec.OperatorClientCertSpec != nil {
@@ -900,6 +930,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 		lib.DeepCopy(
 			clientCertSpec, spec.OperatorClientCertSpec,
 		)
+
 		status.OperatorClientCertSpec = clientCertSpec
 	}
 
@@ -912,14 +943,17 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 	lib.DeepCopy(
 		&seedsFinderServices, &spec.SeedsFinderServices,
 	)
+
 	status.SeedsFinderServices = seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(spec.RosterNodeBlockList) != 0 {
 		var rosterNodeBlockList []string
+
 		lib.DeepCopy(
 			&rosterNodeBlockList, &spec.RosterNodeBlockList,
 		)
+
 		status.RosterNodeBlockList = rosterNodeBlockList
 	}
 
@@ -927,10 +961,7 @@ func CopySpecToStatus(spec AerospikeClusterSpec) (
 }
 
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
-	*AerospikeClusterSpec, error,
-) {
-
+func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) { //nolint:dupl // no need
 	spec := AerospikeClusterSpec{}
 
 	spec.Size = status.Size
@@ -947,6 +978,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		lib.DeepCopy(
 			specAerospikeAccessControl, status.AerospikeAccessControl,
 		)
+
 		spec.AerospikeAccessControl = specAerospikeAccessControl
 	}
 
@@ -955,6 +987,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 	lib.DeepCopy(
 		specAerospikeConfig, status.AerospikeConfig,
 	)
+
 	spec.AerospikeConfig = specAerospikeConfig
 
 	if status.ValidationPolicy != nil {
@@ -963,12 +996,14 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		lib.DeepCopy(
 			specValidationPolicy, status.ValidationPolicy,
 		)
+
 		spec.ValidationPolicy = specValidationPolicy
 	}
 
 	// RackConfig
 	specRackConfig := RackConfig{}
 	lib.DeepCopy(&specRackConfig, &status.RackConfig)
+
 	spec.RackConfig = specRackConfig
 
 	// AerospikeNetworkPolicy
@@ -976,6 +1011,7 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 	lib.DeepCopy(
 		&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy,
 	)
+
 	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
 
 	if status.OperatorClientCertSpec != nil {
@@ -983,26 +1019,31 @@ func CopyStatusToSpec(status AerospikeClusterStatusSpec) (
 		lib.DeepCopy(
 			clientCertSpec, status.OperatorClientCertSpec,
 		)
+
 		spec.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
 	specPodSpec := AerospikePodSpec{}
 	lib.DeepCopy(&specPodSpec, &status.PodSpec)
+
 	spec.PodSpec = specPodSpec
 
 	seedsFinderServices := SeedsFinderServices{}
 	lib.DeepCopy(
 		&seedsFinderServices, &status.SeedsFinderServices,
 	)
+
 	spec.SeedsFinderServices = seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(status.RosterNodeBlockList) != 0 {
 		var rosterNodeBlockList []string
+
 		lib.DeepCopy(
 			&rosterNodeBlockList, &status.RosterNodeBlockList,
 		)
+
 		spec.RosterNodeBlockList = rosterNodeBlockList
 	}
 

@@ -411,10 +411,11 @@ func validateAerospikeConfigServiceClusterUpdate(
 	}
 
 	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(aeroCluster.Status.Pods[podName])
+		host, err := createHost(&pod)
 		if err != nil {
 			return err
 		}
@@ -462,8 +463,10 @@ func validateAerospikeConfigServiceClusterUpdate(
 	return nil
 }
 
-func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log logr.Logger,
-	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64) error {
+func validateMigrateFillDelay(
+	ctx goctx.Context, k8sClient client.Client, log logr.Logger,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -477,7 +480,7 @@ func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log lo
 		return fmt.Errorf("pod %s missing from the status", firstPodName)
 	}
 
-	host, err := createHost(firstPod)
+	host, err := createHost(&firstPod)
 	if err != nil {
 		return err
 	}
@@ -503,7 +506,8 @@ func validateMigrateFillDelay(ctx goctx.Context, k8sClient client.Client, log lo
 			pkgLog.Info("Found expected migrate-fill-delay", "value", expectedMigFillDelay)
 
 			return true, nil
-		})
+		},
+	)
 
 	return err
 }
@@ -1026,7 +1030,7 @@ func UpdateClusterImage(
 		enableSecurityFlag, err := asdbv1beta1.IsSecurityEnabled(
 			outgoingVersion, aerocluster.Spec.AerospikeConfig,
 		)
-		if err != nil && !errors.Is(err, internalerrors.NotFoundError) {
+		if err != nil && !errors.Is(err, internalerrors.ErrNotFound) {
 			return err
 		}
 

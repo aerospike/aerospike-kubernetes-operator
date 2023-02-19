@@ -254,7 +254,7 @@ func isClusterStateValid(
 	}
 
 	// Validate status
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false

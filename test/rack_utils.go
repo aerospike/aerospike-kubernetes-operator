@@ -89,7 +89,8 @@ func validateAerospikeConfigServiceUpdate(
 	var found bool
 
 	for podName := range aeroCluster.Status.Pods {
-		if !isNodePartOfRack(aeroCluster.Status.Pods[podName].Aerospike.NodeID, strconv.Itoa(rack.ID)) {
+		pod := aeroCluster.Status.Pods[podName]
+		if !isNodePartOfRack(pod.Aerospike.NodeID, strconv.Itoa(rack.ID)) {
 			continue
 		}
 
@@ -97,7 +98,7 @@ func validateAerospikeConfigServiceUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(aeroCluster.Status.Pods[podName])
+		host, err := createHost(&pod)
 		if err != nil {
 			return err
 		}
@@ -145,7 +146,8 @@ func validateAerospikeConfigServiceUpdate(
 }
 
 func isNamespaceRackEnabled(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	nsName string,
 ) (bool, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -161,7 +163,7 @@ func isNamespaceRackEnabled(
 		pod = aeroCluster.Status.Pods[podName]
 	}
 
-	host, err := createHost(pod)
+	host, err := createHost(&pod)
 	if err != nil {
 		return false, err
 	}
@@ -187,7 +189,8 @@ func isNamespaceRackEnabled(
 }
 
 func getPodSpecAnnotations(
-	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+) ([]map[string]string, error) {
 	annotations := make([]map[string]string, 0)
 
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -214,7 +217,8 @@ func getPodSpecAnnotations(
 }
 
 func getPodSpecLabels(
-	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+) ([]map[string]string, error) {
 	ls := make([]map[string]string, 0)
 
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)

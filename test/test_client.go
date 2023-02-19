@@ -54,6 +54,7 @@ func (pp FromSecretPasswordProvider) Get(
 			secretName,
 		)
 	}
+
 	return string(passbyte), nil
 }
 
@@ -73,6 +74,7 @@ func getClient(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
+
 	hosts := make([]*as.Host, 0, len(conns))
 	for connIndex := range conns {
 		hosts = append(
@@ -110,6 +112,7 @@ func getClientExternalAuth(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host info: %v", err)
 	}
+
 	hosts := make([]*as.Host, 0, len(conns))
 	for connIndex := range conns {
 		hosts = append(
@@ -147,10 +150,12 @@ func getServiceTLSName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 			// Service section will be missing if the spec is not obtained from server but is generated locally from test code.
 			return ""
 		}
+
 		if tlsName, ok := networkConf["service"].(map[string]interface{})["tls-name"]; ok {
 			return tlsName.(string)
 		}
 	}
+
 	return ""
 }
 
@@ -172,11 +177,13 @@ func getClientPolicy(
 
 	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
 	if tlsName != "" {
-		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != networkType && aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == networkType {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType != networkType &&
+			aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType == networkType {
 			policy.UseServicesAlternate = true
 		}
 	} else {
-		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != networkType && aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == networkType {
+		if aeroCluster.Spec.AerospikeNetworkPolicy.AccessType != networkType &&
+			aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType == networkType {
 			policy.UseServicesAlternate = true
 		}
 	}
@@ -184,6 +191,7 @@ func getClientPolicy(
 	// tls config
 	if tlsName != "" {
 		logrus.Info("Set tls config in aerospike client policy")
+
 		clientCertSpec := aeroCluster.Spec.OperatorClientCertSpec
 		tlsConf := tls.Config{
 			RootCAs: getClusterServerPool(
@@ -195,6 +203,7 @@ func getClientPolicy(
 			// used only in testing
 			// InsecureSkipVerify: true,
 		}
+
 		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
 			// This is possible when tls-authenticate-client = false
 			// r.Log.Info("Operator's client cert is not configured. Skip using client certs.", "clientCertSpec", clientCertSpec)
@@ -209,7 +218,7 @@ func getClientPolicy(
 		policy.TlsConfig = &tlsConf
 	}
 
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		logrus.Error("Failed to copy spec in status", "err: ", err)
 	}
@@ -225,6 +234,7 @@ func getClientPolicy(
 	policy.Timeout = time.Minute * 1
 	policy.User = user
 	policy.Password = pass
+
 	return policy
 }
 
@@ -235,27 +245,27 @@ func getClusterServerPool(
 	// Try to load system CA certs, otherwise just make an empty pool
 	serverPool, err := x509.SystemCertPool()
 	if err != nil {
-		// r.Log.Info("Warn: Failed to add system certificates to the pool", "err", err)
 		serverPool = x509.NewCertPool()
 	}
+
 	if clientCertSpec == nil {
-		// r.Log.Info("OperatorClientCertSpec is not configured. Using default system CA certs...")
 		return serverPool
 	}
 
-	if clientCertSpec.CertPathInOperator != nil {
-		return appendCACertFromFile(
-			clientCertSpec.CertPathInOperator.CaCertsPath, serverPool,
-		)
-	} else if clientCertSpec.SecretCertSource != nil {
+	if clientCertSpec.CertPathInOperator != nil || clientCertSpec.SecretCertSource != nil {
+		if clientCertSpec.CertPathInOperator != nil {
+			return appendCACertFromFile(
+				clientCertSpec.CertPathInOperator.CaCertsPath, serverPool,
+			)
+		}
+
 		return appendCACertFromSecret(
 			clientCertSpec.SecretCertSource, clusterNamespace, serverPool,
 			k8sClient,
 		)
-	} else {
-		// r.Log.Error(fmt.Errorf("both SecrtenName and CertPathInOperator are not set"), "Returning empty certPool.")
-		return serverPool
 	}
+
+	return serverPool
 }
 
 func getClientCertificate(
@@ -271,22 +281,20 @@ func getClientCertificate(
 		return loadCertAndKeyFromSecret(
 			clientCertSpec.SecretCertSource, clusterNamespace, k8sClient,
 		)
-	} else {
-		return nil, fmt.Errorf("both SecrtenName and CertPathInOperator are not set")
 	}
+
+	return nil, fmt.Errorf("both SecrtenName and CertPathInOperator are not set")
 }
 
 func appendCACertFromFile(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
 	if caPath == "" {
-		// r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
 	} else if caData, err := os.ReadFile(caPath); err != nil {
-		// r.Log.Error(err, "Failed to load CA certs from file.", "ca-path", caPath)
 	} else {
 		serverPool.AppendCertsFromPEM(caData)
-		// r.Log.Info("Loaded CA root certs from file.", "ca-path", caPath)
 	}
+
 	return serverPool
 }
 
@@ -295,24 +303,28 @@ func appendCACertFromSecret(
 	defaultNamespace string, serverPool *x509.CertPool, k8sClient client.Client,
 ) *x509.CertPool {
 	if secretSource.CaCertsFilename == "" {
-		// r.Log.Info("CaCertsFilename is not specified. Using default CA certs...", "secret", secretSource)
 		return serverPool
 	}
 	// get the tls info from secret
 	logrus.Info("Trying to find an appropriate CA cert from the secret...", "secret: ", secretSource)
+
 	found := &v1.Secret{}
 	secretName := namespacedSecret(secretSource, defaultNamespace)
+
 	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
-		// r.Log.Error(err, "Failed to get secret certificates to the pool, returning empty certPool", "secret", secretName)
 		return serverPool
 	}
+
 	if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
 		logrus.Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
 		serverPool.AppendCertsFromPEM(caData)
 	} else {
-		logrus.Info("WARN: Can't find ca-file in the secret. using default certPool.",
-			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename)
+		logrus.Info(
+			"WARN: Can't find ca-file in the secret. using default certPool.",
+			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename,
+		)
 	}
+
 	return serverPool
 }
 
@@ -323,10 +335,11 @@ func loadCertAndKeyFromSecret(
 	// get the tls info from secret
 	found := &v1.Secret{}
 	secretName := namespacedSecret(secretSource, defaultNamespace)
+
 	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
-		// r.Log.Info("Warn: Failed to get secret certificates to the pool", "err", err)
 		return nil, err
 	}
+
 	if crtData, crtExists := found.Data[secretSource.ClientCertFilename]; !crtExists {
 		return nil, fmt.Errorf(
 			"can't find certificate \"%s\" in secret %+v",
@@ -343,7 +356,6 @@ func loadCertAndKeyFromSecret(
 			secretName, err,
 		)
 	} else {
-		// r.Log.Info("Loading Aerospike Cluster client cert from secret", "secret", secretName)
 		return &cert, nil
 	}
 }
@@ -356,25 +368,27 @@ func namespacedSecret(
 		return types.NamespacedName{
 			Name: secretSource.SecretName, Namespace: defaultNamespace,
 		}
-	} else {
-		return types.NamespacedName{
-			Name:      secretSource.SecretName,
-			Namespace: secretSource.SecretNamespace,
-		}
+	}
+
+	return types.NamespacedName{
+		Name:      secretSource.SecretName,
+		Namespace: secretSource.SecretNamespace,
 	}
 }
 
-func loadCertAndKeyFromFiles(certPath string, keyPath string) (
+func loadCertAndKeyFromFiles(certPath, keyPath string) (
 	*tls.Certificate, error,
 ) {
 	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
 		return nil, certErr
 	}
+
 	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
 		return nil, keyErr
 	}
+
 	cert, err := tls.X509KeyPair(certData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -382,6 +396,6 @@ func loadCertAndKeyFromFiles(certPath string, keyPath string) (
 			certPath, keyPath, err,
 		)
 	}
-	// r.Log.Info("Loading Aerospike Cluster client cert from files.", "cert-path", certPath, "key-path", keyPath)
+
 	return &cert, nil
 }
