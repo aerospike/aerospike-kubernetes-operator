@@ -162,7 +162,7 @@ func createConfigSecret(
 		Data: secrets,
 	}
 	// use test context's create helper to create the object and add a cleanup
-	//function for the new object
+	// function for the new object
 	err := k8sClient.Create(ctx, s)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
@@ -249,7 +249,7 @@ func isClusterStateValid(
 	}
 
 	// Validate status
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false

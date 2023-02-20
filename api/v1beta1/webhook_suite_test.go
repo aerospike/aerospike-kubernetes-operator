@@ -122,7 +122,7 @@ var _ = BeforeSuite(
 			func() error {
 				conn, err := tls.DialWithDialer(
 					dialer, "tcp", addrPort,
-					&tls.Config{InsecureSkipVerify: true},
+					&tls.Config{InsecureSkipVerify: true}, //nolint:gosec // for testing
 				)
 				if err != nil {
 					return err
@@ -132,7 +132,8 @@ var _ = BeforeSuite(
 			},
 		).Should(Succeed())
 
-	})
+	},
+)
 
 var _ = AfterSuite(
 	func() {

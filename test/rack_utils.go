@@ -74,7 +74,8 @@ func removeLastRack(
 }
 
 func validateAerospikeConfigServiceUpdate(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, rack asdbv1beta1.Rack,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	rack asdbv1beta1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -133,7 +134,8 @@ func validateAerospikeConfigServiceUpdate(
 }
 
 func isNamespaceRackEnabled(
-	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, nsName string,
+	log logr.Logger, k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	nsName string,
 ) (bool, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -172,7 +174,8 @@ func isNamespaceRackEnabled(
 }
 
 func getPodSpecAnnotations(
-	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+) ([]map[string]string, error) {
 	annotations := make([]map[string]string, 0)
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -193,7 +196,8 @@ func getPodSpecAnnotations(
 }
 
 func getPodSpecLabels(
-	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) ([]map[string]string, error) {
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+) ([]map[string]string, error) {
 	ls := make([]map[string]string, 0)
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -246,13 +250,13 @@ func validateRackEnabledCluster(
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
-		err = validateSTSForRack(found, rackState)
+		err = validateSTSForRack(found, &rackState)
 		if err != nil {
 			return err
 		}
 
 		// Match Pod's Node
-		err = validateSTSPodsForRack(k8sClient, ctx, found, rackState)
+		err = validateSTSPodsForRack(k8sClient, ctx, found, &rackState)
 		if err != nil {
 			return err
 		}
@@ -260,7 +264,7 @@ func validateRackEnabledCluster(
 	return nil
 }
 
-func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
+func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 
 	zoneKey := "failure-domain.beta.kubernetes.io/zone"
 	regionKey := "failure-domain.beta.kubernetes.io/region"
@@ -329,7 +333,7 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState RackState) error {
 
 func validateSTSPodsForRack(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
-	rackState RackState,
+	rackState *RackState,
 ) error {
 
 	zoneKey := "failure-domain.beta.kubernetes.io/zone"
