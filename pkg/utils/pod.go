@@ -201,8 +201,9 @@ func isPodCrashError(reason string) bool {
 
 // isPodError indicates whether the specified reason corresponds to a generic error like CreateContainerConfigError
 // in the container.
+// https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
 //
-//nolint:lll    // https://github.com/kubernetes/kubernetes/blob/bad4c8c464d7f92db561de9a0073aab89bbd61c8/pkg/kubelet/kuberuntime/kuberuntime_container.go
+//nolint:lll // URL
 func isPodError(reason string) bool {
 	return strings.HasSuffix(reason, "Error")
 }

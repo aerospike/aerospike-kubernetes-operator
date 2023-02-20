@@ -290,8 +290,11 @@ func appendCACertFromFile(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
 	if caPath == "" {
-	} else if caData, err := os.ReadFile(caPath); err != nil {
-	} else {
+		return serverPool
+	}
+
+	caData, err := os.ReadFile(caPath)
+	if err == nil {
 		serverPool.AppendCertsFromPEM(caData)
 	}
 
