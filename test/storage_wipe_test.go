@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 const (
@@ -71,7 +72,7 @@ var _ = Describe(
 							},
 						}
 						aeroCluster := getStorageWipeAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							latestImage, getAerospikeClusterConfig(),
 						)
 
@@ -209,20 +210,22 @@ func writeDataToCluster(
 	k8sClient client.Client,
 	namespaces []string,
 ) error {
-
 	policy := getClientPolicy(aeroCluster, k8sClient)
 	policy.FailIfNotConnected = false
 	policy.Timeout = time.Minute * 2
 	policy.UseServicesAlternate = true
 	policy.ConnectionQueueSize = 100
 	policy.LimitConnectionsToQueueSize = true
+	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
-	var hostList []*as.Host
-	for _, pod := range aeroCluster.Status.Pods {
-		host, err := createHost(pod)
+	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
 		if err != nil {
 			return err
 		}
+
 		hostList = append(hostList, host)
 	}
 
@@ -245,13 +248,12 @@ func writeDataToCluster(
 	wp := as.NewWritePolicy(0, 0)
 
 	for _, ns := range namespaces {
-
 		newKey, err := as.NewKey(ns, setName, key)
 		if err != nil {
 			return err
 		}
 
-		if err = asClient.Put(
+		if err := asClient.Put(
 			wp, newKey, as.BinMap{
 				binName: binValue,
 			},
@@ -268,7 +270,6 @@ func checkDataInCluster(
 	k8sClient client.Client,
 	namespaces []string,
 ) (map[string]bool, error) {
-
 	data := make(map[string]bool)
 
 	policy := getClientPolicy(aeroCluster, k8sClient)
@@ -277,13 +278,16 @@ func checkDataInCluster(
 	policy.UseServicesAlternate = true
 	policy.ConnectionQueueSize = 100
 	policy.LimitConnectionsToQueueSize = true
+	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
 
-	var hostList []*as.Host
-	for _, pod := range aeroCluster.Status.Pods {
-		host, err := createHost(pod)
+	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
 		if err != nil {
 			return nil, err
 		}
+
 		hostList = append(hostList, host)
 	}
 
@@ -303,10 +307,6 @@ func checkDataInCluster(
 		return nil, err
 	}
 
-	//if _, err = clusterClient.WarmUp(-1); err != nil {
-	//	return nil, err
-	//}
-
 	for _, ns := range namespaces {
 		newKey, err := as.NewKey(ns, setName, key)
 		if err != nil {
@@ -317,9 +317,10 @@ func checkDataInCluster(
 		if err != nil {
 			return nil, nil
 		}
-		if bin, ok := record.Bins[binName]; ok {
 
+		if bin, ok := record.Bins[binName]; ok {
 			value := bin.(string)
+
 			if !ok {
 				return nil, fmt.Errorf(
 					"Bin-Name: %s - conversion to bin value failed", binName,
@@ -333,18 +334,15 @@ func checkDataInCluster(
 					"bin: %s exsists but the value is changed", binName,
 				)
 			}
-
 		} else {
 			data[ns] = false
 		}
 	}
 
 	return data, nil
-
 }
 
 func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
-
 	return &asdbv1beta1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
 			"service": map[string]interface{}{
@@ -388,16 +386,15 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 func getAerospikeWipeStorageConfig(
 	containerName string, inputCascadeDelete bool, cloudProvider CloudProvider,
 ) *asdbv1beta1.AerospikeStorageSpec {
-
 	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteMethod := asdbv1beta1.AerospikeVolumeMethodDeleteFiles
-	// TODO
 	ddMethod := asdbv1beta1.AerospikeVolumeMethodDD
 	blkDiscardMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+
 	if cloudProvider == CloudProviderAWS {
-		// Blkdiscard methood is not supported in AWS so it is initialized as DD Method
+		// Blkdiscard methood is not supported in AWS, so it is initialized as DD Method
 		blkDiscardMethod = asdbv1beta1.AerospikeVolumeMethodDD
 	}
 
@@ -589,7 +586,7 @@ func getAerospikeWipeStorageConfig(
 			//			Path:          "/opt/aerospike/newpath",
 			//		},
 			//	},
-			//},
+			// },
 			{
 				Name: aerospikeConfigSecret,
 				Source: asdbv1beta1.VolumeSource{
@@ -614,17 +611,17 @@ func getAerospikeWipeRackStorageConfig(
 	aerospikeStorageSpec.Volumes[0].Name = "test-wipe-device-dd-2"
 	aerospikeStorageSpec.Volumes[1].Name = "test-wipe-device-blkdiscard-2"
 	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-files-deletefiles-2"
+
 	return aerospikeStorageSpec
 }
 
 func getStorageWipeAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
-	storageConfig asdbv1beta1.AerospikeStorageSpec,
+	storageConfig *asdbv1beta1.AerospikeStorageSpec,
 	racks []asdbv1beta1.Rack,
 	image string,
 	aerospikeConfigSpec *asdbv1beta1.AerospikeConfigSpec,
 ) *asdbv1beta1.AerospikeCluster {
-
 	// create Aerospike custom resource
 	return &asdbv1beta1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -634,7 +631,7 @@ func getStorageWipeAerospikeCluster(
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
 			Image:   image,
-			Storage: storageConfig,
+			Storage: *storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: namespaces,
 				Racks:      racks,

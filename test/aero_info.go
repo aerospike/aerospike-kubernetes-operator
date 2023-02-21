@@ -4,14 +4,12 @@ package test
 //
 // TODO refactor the code in aero_helper.go anc controller_helper.go so that it can be used here.
 import (
-	"context"
 	goctx "context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -19,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -40,14 +37,16 @@ func getServiceForPod(
 ) (*corev1.Service, error) {
 	service := &corev1.Service{}
 	err := k8sClient.Get(
-		context.TODO(),
+		goctx.TODO(),
 		types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service,
 	)
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get service for pod %s: %v", pod.Name, err,
 		)
 	}
+
 	return service, nil
 }
 
@@ -56,7 +55,7 @@ func newAsConn(
 	k8sClient client.Client,
 ) (*deployment.ASConn, error) {
 	// Use the Kubernetes service port and IP since the test might run outside
-	//the Kubernetes cluster network.
+	// the Kubernetes cluster network.
 	var port int32
 
 	tlsName := getServiceTLSName(aeroCluster)
@@ -67,6 +66,7 @@ func newAsConn(
 		if err != nil {
 			return nil, err
 		}
+
 		if tlsName == "" {
 			port = svc.Spec.Ports[0].NodePort
 		} else {
@@ -121,6 +121,7 @@ func getEndpointIP(
 				"pod ip is not assigned yet for the pod %s", pod.Name,
 			)
 		}
+
 		return pod.Status.PodIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if pod.Status.HostIP == "" {
@@ -128,12 +129,14 @@ func getEndpointIP(
 				"host ip is not assigned yet for the pod %s", pod.Name,
 			)
 		}
+
 		return pod.Status.HostIP, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
 		err := k8sClient.Get(
 			goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
 		)
+
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName,
@@ -151,16 +154,24 @@ func getEndpointIP(
 				return add.Address, nil
 			}
 		}
+
 		return "", fmt.Errorf(
 			"failed to find %s address in the node %s for pod %s: nodes addresses are %v",
 			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses,
 		)
+
+	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
+		return "", fmt.Errorf(
+			"unknown network type: %s", networkType,
+		)
 	}
-	return "", fmt.Errorf("anknown network type: %s", networkType)
+
+	return "", fmt.Errorf("unknown network type: %s", networkType)
 }
 
-func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
+func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 	var host string
+
 	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
 	switch networkType {
 	case asdbv1beta1.AerospikeNetworkTypePod:
@@ -169,6 +180,7 @@ func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 				"pod ip is not defined in pod status yet: %+v", pod,
 			)
 		}
+
 		return &as.Host{
 			Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName,
 		}, nil
@@ -178,6 +190,7 @@ func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 				"internal host ip is not defined in pod status yet: %+v", pod,
 			)
 		}
+
 		host = pod.HostInternalIP
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		if pod.HostExternalIP == "" {
@@ -185,10 +198,16 @@ func createHost(pod asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 				"external host ip is not defined in pod status yet: %+v", pod,
 			)
 		}
+
 		host = pod.HostExternalIP
+	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
+		return nil, fmt.Errorf(
+			"unknown network type: %s", networkType,
+		)
 	default:
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
+
 	return &as.Host{
 		Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName,
 	}, nil
@@ -202,7 +221,9 @@ func newHostConn(
 	if err != nil {
 		return nil, err
 	}
+
 	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
+
 	return deployment.NewHostConn(log, host, asConn), nil
 }
 
@@ -215,9 +236,10 @@ func getPodList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), podList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
+
 	return podList, nil
 }
 
@@ -230,9 +252,10 @@ func getSTSList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), stsList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), stsList, listOps); err != nil {
 		return nil, err
 	}
+
 	return stsList, nil
 }
 
@@ -243,22 +266,28 @@ func getNodeList(ctx goctx.Context, k8sClient client.Client) (
 	if err := k8sClient.List(ctx, nodeList); err != nil {
 		return nil, err
 	}
+
 	return nodeList, nil
 }
 
 func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
+
 	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return nil, err
 	}
-	for _, node := range nodes.Items {
-		unqZones[node.Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
+
+	for idx := range nodes.Items {
+		unqZones[nodes.Items[idx].Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
 	}
-	var zones []string
+
+	zones := make([]string, 0, len(unqZones))
+
 	for zone := range unqZones {
 		zones = append(zones, zone)
 	}
+
 	return zones, nil
 }
 
@@ -267,9 +296,11 @@ func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if len(nodes.Items) == 0 {
 		return "", fmt.Errorf("node list empty: %v", nodes.Items)
 	}
+
 	return nodes.Items[0].Labels["failure-domain.beta.kubernetes.io/region"], nil
 }
 
@@ -277,35 +308,43 @@ func getCloudProvider(
 	ctx goctx.Context, k8sClient client.Client,
 ) (CloudProvider, error) {
 	labelKeys := map[string]struct{}{}
+
 	nodes, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return CloudProviderUnknown, err
 	}
-	for _, node := range nodes.Items {
-		for labelKey := range node.Labels {
+
+	for idx := range nodes.Items {
+		for labelKey := range nodes.Items[idx].Labels {
 			if strings.Contains(labelKey, "cloud.google.com") {
 				return CloudProviderGCP, nil
 			}
+
 			if strings.Contains(labelKey, "eks.amazonaws.com") {
 				return CloudProviderAWS, nil
 			}
+
 			labelKeys[labelKey] = struct{}{}
 		}
-		provider := determineByProviderId(&node)
+
+		provider := determineByProviderID(&nodes.Items[idx])
 		if provider != CloudProviderUnknown {
 			return provider, nil
 		}
 	}
-	var labelKeysSlice []string
+
+	labelKeysSlice := make([]string, 0, len(labelKeys))
+
 	for labelKey := range labelKeys {
 		labelKeysSlice = append(labelKeysSlice, labelKey)
 	}
+
 	return CloudProviderUnknown, fmt.Errorf(
 		"can't determin cloud platform by node's labels: %v", labelKeysSlice,
 	)
 }
 
-func determineByProviderId(node *corev1.Node) CloudProvider {
+func determineByProviderID(node *corev1.Node) CloudProvider {
 	if strings.Contains(node.Spec.ProviderID, "gce") {
 		return CloudProviderGCP
 	} else if strings.Contains(node.Spec.ProviderID, "aws") {
@@ -323,18 +362,22 @@ func newAllHostConn(
 	if err != nil {
 		return nil, err
 	}
+
 	if len(podList.Items) == 0 {
 		return nil, fmt.Errorf("pod list empty")
 	}
 
-	var hostConns []*deployment.HostConn
-	for _, pod := range podList.Items {
-		hostConn, err := newHostConn(log, aeroCluster, &pod, k8sClient)
+	hostConns := make([]*deployment.HostConn, 0, len(podList.Items))
+
+	for index := range podList.Items {
+		hostConn, err := newHostConn(log, aeroCluster, &podList.Items[index], k8sClient)
 		if err != nil {
 			return nil, err
 		}
+
 		hostConns = append(hostConns, hostConn)
 	}
+
 	return hostConns, nil
 }
 
@@ -348,15 +391,19 @@ func getAeroClusterPVCList(
 		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
+
 	return pvcList.Items, nil
 }
 
 func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
-	var confs lib.Stats
-	var err error
+	var (
+		confs lib.Stats
+		err   error
+	)
+
 	for i := 0; i < 10; i++ {
 		confs, err = asinfo.GetAsConfig(cmd)
 		if err == nil {
@@ -370,8 +417,11 @@ func getAsConfig(asinfo *info.AsInfo, cmd string) (lib.Stats, error) {
 func runInfo(
 	cp *as.ClientPolicy, asConn *deployment.ASConn, cmd string,
 ) (map[string]string, error) {
-	var res map[string]string
-	var err error
+	var (
+		res map[string]string
+		err error
+	)
+
 	for i := 0; i < 10; i++ {
 		res, err = asConn.RunInfo(cp, cmd)
 		if err == nil {
@@ -380,5 +430,6 @@ func runInfo(
 
 		time.Sleep(time.Second)
 	}
+
 	return nil, err
 }
