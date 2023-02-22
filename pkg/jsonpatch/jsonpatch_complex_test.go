@@ -1,15 +1,18 @@
 package jsonpatch
 
 import (
-	"github.com/stretchr/testify/assert"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var complexBase = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}}`
-var complexA = `{"a":100, "b":[{"c1":"goodbye", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}}`
-var complexB = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":100, "g":"h", "i":"j"}}`
-var complexC = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}, "k":[{"l":"m"}, {"l":"o"}]}`
+var (
+	complexBase = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}}`                             //nolint:lll // for readability
+	complexA    = `{"a":100, "b":[{"c1":"goodbye", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}}`                           //nolint:lll // for readability
+	complexB    = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":100, "g":"h", "i":"j"}}`                             //nolint:lll // for readability
+	complexC    = `{"a":100, "b":[{"c1":"hello", "d1":"foo"},{"c2":"hello2", "d2":"foo2"} ], "e":{"f":200, "g":"h", "i":"j"}, "k":[{"l":"m"}, {"l":"o"}]}` //nolint:lll // for readability
+)
 
 func TestComplexSame(t *testing.T) {
 	patch, e := CreatePatch([]byte(complexBase), []byte(complexBase))
@@ -33,7 +36,9 @@ func TestComplexOneIntReplace(t *testing.T) {
 	change := patch[0]
 	assert.Equal(t, "replace", change.Operation, "they should be equal")
 	assert.Equal(t, "/e/f", change.Path, "they should be equal")
+
 	var expected float64 = 100
+
 	assert.Equal(t, expected, change.Value, "they should be equal")
 }
 
@@ -44,8 +49,10 @@ func TestComplexOneAdd(t *testing.T) {
 	change := patch[0]
 	assert.Equal(t, "add", change.Operation, "they should be equal")
 	assert.Equal(t, "/k", change.Path, "they should be equal")
+
 	a := make(map[string]interface{})
 	b := make(map[string]interface{})
+
 	a["l"] = "m"
 	b["l"] = "o"
 	expected := []interface{}{a, b}
@@ -59,10 +66,13 @@ func TestComplexOneAddToArray(t *testing.T) {
 	change := patch[0]
 	assert.Equal(t, "add", change.Operation, "they should be equal")
 	assert.Equal(t, "/k", change.Path, "they should be equal")
+
 	a := make(map[string]interface{})
 	b := make(map[string]interface{})
+
 	a["l"] = "m"
 	b["l"] = "o"
+
 	expected := []interface{}{a, b}
 	assert.Equal(t, expected, change.Value, "they should be equal")
 }

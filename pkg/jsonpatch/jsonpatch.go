@@ -10,43 +10,48 @@ import (
 
 var errBadJSONDoc = fmt.Errorf("invalid JSON Document")
 
-type JsonPatchOperation struct {
+type PatchOperation struct {
+	Value     interface{} `json:"value,omitempty"`
 	Operation string      `json:"op"`
 	Path      string      `json:"path"`
-	Value     interface{} `json:"value,omitempty"`
 }
 
-func (j *JsonPatchOperation) Json() string {
+func (j *PatchOperation) JSON() string {
 	b, _ := json.Marshal(j)
 	return string(b)
 }
 
-func (j *JsonPatchOperation) MarshalJSON() ([]byte, error) {
+func (j *PatchOperation) MarshalJSON() ([]byte, error) {
 	var b bytes.Buffer
+
 	b.WriteString("{")
-	b.WriteString(fmt.Sprintf(`"op":"%s"`, j.Operation))
-	b.WriteString(fmt.Sprintf(`,"path":"%s"`, j.Path))
+	b.WriteString(fmt.Sprintf(`"op":%q`, j.Operation))
+	b.WriteString(fmt.Sprintf(`,"path":%q`, j.Path))
+
 	// Consider omitting Value for non-nullable operations.
 	if j.Value != nil || j.Operation == "replace" || j.Operation == "add" {
 		v, err := json.Marshal(j.Value)
 		if err != nil {
 			return nil, err
 		}
+
 		b.WriteString(`,"value":`)
 		b.Write(v)
 	}
+
 	b.WriteString("}")
+
 	return b.Bytes(), nil
 }
 
-type ByPath []JsonPatchOperation
+type ByPath []PatchOperation
 
 func (a ByPath) Len() int           { return len(a) }
 func (a ByPath) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByPath) Less(i, j int) bool { return a[i].Path < a[j].Path }
 
-func NewPatch(operation, path string, value interface{}) JsonPatchOperation {
-	return JsonPatchOperation{Operation: operation, Path: path, Value: value}
+func NewPatch(operation, path string, value interface{}) PatchOperation {
+	return PatchOperation{Operation: operation, Path: path, Value: value}
 }
 
 // CreatePatch creates a patch as specified in http://jsonpatch.com/
@@ -55,18 +60,21 @@ func NewPatch(operation, path string, value interface{}) JsonPatchOperation {
 // The function will return an array of JsonPatchOperations
 //
 // An error will be returned if any of the two documents are invalid.
-func CreatePatch(a, b []byte) ([]JsonPatchOperation, error) {
+func CreatePatch(a, b []byte) ([]PatchOperation, error) {
 	aI := map[string]interface{}{}
 	bI := map[string]interface{}{}
+
 	err := json.Unmarshal(a, &aI)
 	if err != nil {
 		return nil, errBadJSONDoc
 	}
+
 	err = json.Unmarshal(b, &bI)
 	if err != nil {
 		return nil, errBadJSONDoc
 	}
-	return diff(aI, bI, "", []JsonPatchOperation{})
+
+	return diff(aI, bI, "", []PatchOperation{})
 }
 
 // Returns true if the values matches (must be json types)
@@ -76,6 +84,7 @@ func matchesValue(av, bv interface{}) bool {
 	if reflect.TypeOf(av) != reflect.TypeOf(bv) {
 		return false
 	}
+
 	switch at := av.(type) {
 	case string:
 		bt := bv.(string)
@@ -94,34 +103,41 @@ func matchesValue(av, bv interface{}) bool {
 		}
 	case map[string]interface{}:
 		bt := bv.(map[string]interface{})
+
 		for key := range at {
 			if !matchesValue(at[key], bt[key]) {
 				return false
 			}
 		}
+
 		for key := range bt {
 			if !matchesValue(at[key], bt[key]) {
 				return false
 			}
 		}
+
 		return true
 	case []interface{}:
 		bt := bv.([]interface{})
 		if len(bt) != len(at) {
 			return false
 		}
+
 		for key := range at {
 			if !matchesValue(at[key], bt[key]) {
 				return false
 			}
 		}
+
 		for key := range bt {
 			if !matchesValue(at[key], bt[key]) {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return false
 }
 
@@ -141,31 +157,37 @@ func makePath(path string, newPart interface{}) string {
 	if path == "" {
 		return "/" + key
 	}
+
 	if strings.HasSuffix(path, "/") {
 		return path + key
 	}
+
 	return path + "/" + key
 }
 
 // diff returns the (recursive) difference between a and b as an array of JsonPatchOperations.
 func diff(
-	a, b map[string]interface{}, path string, patch []JsonPatchOperation,
-) ([]JsonPatchOperation, error) {
+	a, b map[string]interface{}, path string, patch []PatchOperation,
+) ([]PatchOperation, error) {
 	for key, bv := range b {
 		p := makePath(path, key)
+
 		av, ok := a[key]
 		// value was added
 		if !ok {
 			patch = append(patch, NewPatch("add", p, bv))
 			continue
 		}
+
 		// If types have changed, replace completely
 		if reflect.TypeOf(av) != reflect.TypeOf(bv) {
 			patch = append(patch, NewPatch("replace", p, bv))
 			continue
 		}
+
 		// Types are the same, compare values
 		var err error
+
 		patch, err = handleValues(av, bv, p, patch)
 		if err != nil {
 			return nil, err
@@ -180,16 +202,19 @@ func diff(
 			patch = append(patch, NewPatch("remove", p, nil))
 		}
 	}
+
 	return patch, nil
 }
 
 func handleValues(
-	av, bv interface{}, p string, patch []JsonPatchOperation,
-) ([]JsonPatchOperation, error) {
+	av, bv interface{}, p string, patch []PatchOperation,
+) ([]PatchOperation, error) {
 	var err error
+
 	switch at := av.(type) {
 	case map[string]interface{}:
 		bt := bv.(map[string]interface{})
+
 		patch, err = diff(at, bt, p, patch)
 		if err != nil {
 			return nil, err
@@ -234,20 +259,23 @@ func handleValues(
 	default:
 		panic(fmt.Sprintf("Unknown type:%T ", av))
 	}
+
 	return patch, nil
 }
 
-func compareArray(av, bv []interface{}, p string) []JsonPatchOperation {
-	var retVal []JsonPatchOperation
-	//	var err error
+func compareArray(av, bv []interface{}, p string) []PatchOperation { //nolint:unparam // external lib
+	var retVal []PatchOperation
+
 	for i, v := range av {
 		found := false
+
 		for _, v2 := range bv {
 			if reflect.DeepEqual(v, v2) {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			retVal = append(retVal, NewPatch("remove", makePath(p, i), nil))
 		}
@@ -255,12 +283,14 @@ func compareArray(av, bv []interface{}, p string) []JsonPatchOperation {
 
 	for i, v := range bv {
 		found := false
+
 		for _, v2 := range av {
 			if reflect.DeepEqual(v, v2) {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			retVal = append(retVal, NewPatch("add", makePath(p, i), v))
 		}
@@ -273,5 +303,6 @@ func min(x, y int) int {
 	if x < y {
 		return x
 	}
+
 	return y
 }

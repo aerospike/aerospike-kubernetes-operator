@@ -2,20 +2,20 @@ package test
 
 import (
 	goctx "context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"time"
 
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -163,7 +163,7 @@ var _ = Describe(
 						// Add some data to make migration time taking
 						// Change build to build1
 						// Change build to build2
-						// Only a single pod may have build1 at max in whole upgrade..ultimately all should reach build2
+						// Only a single pod may have build1 at max in whole upgrade. Ultimately all should reach build2
 
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					},
@@ -193,7 +193,6 @@ var _ = Describe(
 func loadDataInCluster(
 	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
-
 	policy := getClientPolicy(aeroCluster, k8sClient)
 	policy.FailIfNotConnected = false
 	policy.Timeout = time.Minute * 2
@@ -201,12 +200,16 @@ func loadDataInCluster(
 	policy.ConnectionQueueSize = 100
 	policy.LimitConnectionsToQueueSize = true
 
-	var hostList []*as.Host
-	for _, pod := range aeroCluster.Status.Pods {
-		host, err := createHost(pod)
+	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
+
+	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
 		if err != nil {
 			return err
 		}
+
 		hostList = append(hostList, host)
 	}
 
@@ -230,7 +233,12 @@ func loadDataInCluster(
 	size := 100
 	bufferSize := 10000
 	token := make([]byte, bufferSize)
-	rand.Read(token)
+
+	_, readErr := rand.Read(token)
+	if readErr != nil {
+		fmt.Println("error:", readErr)
+		return readErr
+	}
 
 	fmt.Printf("Loading record, isClusterConnected %v\n", clientP.IsConnected())
 	fmt.Println(asClient.GetNodes())
@@ -245,6 +253,7 @@ func loadDataInCluster(
 		if err != nil {
 			return err
 		}
+
 		binMap := map[string]interface{}{
 			"testbin": token,
 		}
@@ -285,16 +294,14 @@ func waitForClusterScaleDown(
 			)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
 					return false, nil
 				}
 				return false, err
 			}
-			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 			if int(newCluster.Status.Size) < replicas {
-				err := fmt.Errorf("cluster size can not go below temp size, it should have only final value, as this is the new reconcile flow")
-				// t.Logf(err.Error())
+				err = fmt.Errorf("cluster size can not go below temp size," +
+					" it should have only final value, as this is the new reconcile flow")
 				return false, err
 			}
 
@@ -304,7 +311,6 @@ func waitForClusterScaleDown(
 			}
 			if len(podList.Items) < replicas {
 				err := fmt.Errorf("cluster pods number can not go below replica size")
-				// t.Logf(err.Error())
 				return false, err
 			}
 
@@ -314,7 +320,6 @@ func waitForClusterScaleDown(
 	if err != nil {
 		return err
 	}
-	// t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 
 	return nil
 }
@@ -334,23 +339,21 @@ func waitForClusterRollingRestart(
 			)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
 					return false, nil
 				}
 				return false, err
 			}
-			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 			protofdmax := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"].(float64)
 			if int(protofdmax) == tempConf {
 				err := fmt.Errorf(
-					"cluster status can not be updated with intermediate conf value %d, it should have only final value, as this is the new reconcile flow",
+					"cluster status can not be updated with intermediate conf value %d,"+
+						" it should have only final value, as this is the new reconcile flow",
 					tempConf,
 				)
-				// t.Logf(err.Error())
+
 				return false, err
 			}
-			// t.Logf("conf value to check proto-fd-max %d", protofdmax)
 
 			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
 		},
@@ -358,7 +361,6 @@ func waitForClusterRollingRestart(
 	if err != nil {
 		return err
 	}
-	// t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 
 	return nil
 }
@@ -378,19 +380,19 @@ func waitForClusterUpgrade(
 			)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					// t.Logf("Waiting for availability of %s AerospikeCluster\n", aeroCluster.Name)
 					return false, nil
 				}
+
 				return false, err
 			}
-			// t.Logf("Waiting for full availability of %s AerospikeCluster (%d/%d)\n", aeroCluster.Name, aeroCluster.Status.Size, replicas)
 
 			if newCluster.Status.Image == tempImage {
 				err := fmt.Errorf(
-					"cluster status can not be updated with intermediate image value %s, it should have only final value, as this is the new reconcile flow",
+					"cluster status can not be updated with intermediate image value %s,"+
+						" it should have only final value, as this is the new reconcile flow",
 					tempImage,
 				)
-				// t.Logf(err.Error())
+
 				return false, err
 			}
 
@@ -400,7 +402,6 @@ func waitForClusterUpgrade(
 	if err != nil {
 		return err
 	}
-	// t.Logf("AerospikeCluster available (%d/%d)\n", replicas, replicas)
 
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	// "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -21,11 +20,11 @@ func (h *mutatingHandler) InjectDecoder(d *admission.Decoder) error {
 
 // Handle handles admission requests.
 func (h *mutatingHandler) Handle(
-	_ context.Context, req admission.Request,
+	_ context.Context, req admission.Request, //nolint:gocritic // used by external lib
 ) admission.Response {
 	obj := &AerospikeCluster{}
-	err := h.decoder.Decode(req, obj)
-	if err != nil {
+
+	if err := h.decoder.Decode(req, obj); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 

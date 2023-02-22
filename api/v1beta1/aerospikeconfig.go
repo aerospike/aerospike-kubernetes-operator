@@ -12,13 +12,13 @@ type AerospikeConfigSpec struct {
 }
 
 // MarshalJSON ensures that the unstructured object produces proper
-// JSON when passed to Go's standard JSON library.
+// Json when passed to Go's standard Json library.
 func (c *AerospikeConfigSpec) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.Value)
 }
 
 // UnmarshalJSON ensures that the unstructured object properly decodes
-// JSON when passed to Go's standard JSON library.
+// Json when passed to Go's standard Json library.
 func (c *AerospikeConfigSpec) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, &c.Value)
 }

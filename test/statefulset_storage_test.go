@@ -1,17 +1,18 @@
 package test
 
 import (
+	goctx "context"
 	"strconv"
 	"time"
 
-	goctx "context"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 var _ = Describe(
@@ -87,10 +88,10 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// restart pod
-						for _, pod := range rackPodList.Items {
-							err := k8sClient.Delete(ctx, &pod)
+						for podIndex := range rackPodList.Items {
+							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&pod)
+							started := waitForPod(&rackPodList.Items[podIndex])
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -102,7 +103,7 @@ var _ = Describe(
 							BeTrue(), "Unable to find volume",
 						)
 
-						//>>>>>>>>>>  perform resize op.
+						// >>>>>>>>>>  perform resize op.
 						err = scaleUpClusterTest(
 							k8sClient, ctx, clusterNamespacedName, 2,
 						)
@@ -164,10 +165,10 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// restart pod
-						for _, pod := range rackPodList.Items {
-							err := k8sClient.Delete(ctx, &pod)
+						for podIndex := range rackPodList.Items {
+							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&pod)
+							started := waitForPod(&rackPodList.Items[podIndex])
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -316,10 +317,10 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// restart pod
-						for _, pod := range rackPodList.Items {
-							err := k8sClient.Delete(ctx, &pod)
+						for podIndex := range rackPodList.Items {
+							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&pod)
+							started := waitForPod(&rackPodList.Items[podIndex])
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -388,6 +389,7 @@ var _ = Describe(
 	},
 )
 
+//nolint:unparam // generic function
 func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
 	*appsv1.StatefulSet, error,
 ) {
@@ -397,9 +399,11 @@ func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
 		getNamespacedNameForSTS(aeroCluster, rackID),
 		found,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return found, nil
 }
 
@@ -410,21 +414,25 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isIni
 	if err != nil {
 		return false, err
 	}
-	for _, pod := range rackPodList.Items {
+
+	for podIndex := range rackPodList.Items {
 		var container v1.Container
 		if isInit {
-			container = pod.Spec.InitContainers[index]
+			container = rackPodList.Items[podIndex].Spec.InitContainers[index]
 		} else {
-			container = pod.Spec.Containers[index]
+			container = rackPodList.Items[podIndex].Spec.Containers[index]
 		}
+
 		volumeMounts := container.VolumeMounts
 		for _, volumeMount := range volumeMounts {
 			pkgLog.Info("Checking for pod", "volumeName", volumeMount.Name, "in container", container.Name)
+
 			if volumeMount.Name == "tzdata" {
 				return true, nil
 			}
 		}
 	}
+
 	return false, nil
 }
 
@@ -439,9 +447,10 @@ func getNamespacedNameForSTS(
 
 func waitForPod(pod *v1.Pod) bool {
 	var started bool
-	for i := 0; i < 20; i++ {
 
+	for i := 0; i < 20; i++ {
 		updatedPod := &v1.Pod{}
+
 		err := k8sClient.Get(
 			goctx.TODO(),
 			types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
@@ -458,7 +467,9 @@ func waitForPod(pod *v1.Pod) bool {
 		}
 
 		started = true
+
 		break
 	}
+
 	return started
 }

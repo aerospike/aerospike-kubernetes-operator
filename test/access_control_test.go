@@ -1,5 +1,4 @@
 //go:build !noac
-// +build !noac
 
 package test
 
@@ -10,15 +9,16 @@ import (
 	"reflect"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 const (
@@ -1401,7 +1401,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1486,7 +1486,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1644,7 +1644,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1702,7 +1702,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1798,7 +1798,7 @@ var _ = Describe(
 									)
 								}
 
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1856,7 +1856,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -1879,7 +1879,7 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(false); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1958,10 +1958,10 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
-								if err := aerospikeConfigSpec.setEnableQuotas(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableQuotas(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -2036,10 +2036,10 @@ var _ = Describe(
 										),
 									)
 								}
-								if err := aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
-								if err := aerospikeConfigSpec.setEnableQuotas(false); err != nil {
+								if err = aerospikeConfigSpec.setEnableQuotas(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -2086,6 +2086,7 @@ func testAccessControlReconcile(
 		types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace},
 		current,
 	)
+
 	if err != nil {
 		return err
 	}
@@ -2170,6 +2171,7 @@ func validateAccessControl(
 	}
 
 	err = validateUsers(clientP, aeroCluster)
+
 	return err
 }
 
@@ -2201,9 +2203,9 @@ func getUser(
 func validateRoles(
 	clientP *as.Client, clusterSpec *asdbv1beta1.AerospikeClusterSpec,
 ) error {
-
 	client := *clientP
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
+
 	asRoles, err := client.QueryRoles(&adminPolicy)
 	if err != nil {
 		return fmt.Errorf("error querying roles: %v", err)
@@ -2213,17 +2215,17 @@ func validateRoles(
 
 	for _, role := range asRoles {
 		if _, isPredefined := asdbv1beta1.PredefinedRoles[role.Name]; !isPredefined {
-
 			if _, isPredefined = asdbv1beta1.Post6PredefinedRoles[role.Name]; !isPredefined {
 				currentRoleNames = append(currentRoleNames, role.Name)
 			}
 		}
 	}
 
-	var expectedRoleNames []string
 	accessControl := clusterSpec.AerospikeAccessControl
-	for _, role := range accessControl.Roles {
-		expectedRoleNames = append(expectedRoleNames, role.Name)
+	expectedRoleNames := make([]string, 0, len(accessControl.Roles))
+
+	for roleIndex := range accessControl.Roles {
+		expectedRoleNames = append(expectedRoleNames, accessControl.Roles[roleIndex].Name)
 	}
 
 	if len(currentRoleNames) != len(expectedRoleNames) {
@@ -2259,6 +2261,7 @@ func validateRoles(
 		expectedPrivilegeNames := expectedRoleSpec.Privileges
 
 		var currentPrivilegeNames []string
+
 		for _, privilege := range asRole.Privileges {
 			temp, _ := aerospikecluster.AerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
 			currentPrivilegeNames = append(currentPrivilegeNames, temp[0])
@@ -2322,21 +2325,23 @@ func validateUsers(
 	client := *clientP
 
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
+
 	asUsers, err := client.QueryUsers(&adminPolicy)
 	if err != nil {
 		return fmt.Errorf("error querying users: %v", err)
 	}
 
-	var currentUserNames []string
+	currentUserNames := make([]string, 0, len(asUsers))
 
-	for _, user := range asUsers {
-		currentUserNames = append(currentUserNames, user.User)
+	for userIndex := range asUsers {
+		currentUserNames = append(currentUserNames, asUsers[userIndex].User)
 	}
 
-	var expectedUserNames []string
 	accessControl := clusterSpec.AerospikeAccessControl
-	for _, user := range accessControl.Users {
-		expectedUserNames = append(expectedUserNames, user.Name)
+	expectedUserNames := make([]string, 0, len(accessControl.Users))
+
+	for userIndex := range accessControl.Users {
+		expectedUserNames = append(expectedUserNames, accessControl.Users[userIndex].Name)
 	}
 
 	if len(currentUserNames) != len(expectedUserNames) {
@@ -2371,10 +2376,13 @@ func validateUsers(
 				asUser.User, err,
 			)
 		}
+
 		(*userClient).Close()
 
 		expectedRoleNames := expectedUserSpec.Roles
+
 		var currentRoleNames []string
+
 		currentRoleNames = append(currentRoleNames, asUser.Roles...)
 
 		if len(currentRoleNames) != len(expectedRoleNames) {
@@ -2396,6 +2404,7 @@ func validateUsers(
 			)
 		}
 	}
+
 	return nil
 }
 
@@ -2404,7 +2413,8 @@ const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 func randString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))] //nolint:gosec // for testing
 	}
+
 	return string(b)
 }

@@ -12,11 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +21,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 
 var secrets map[string][]byte
 
-const secretDir = "../config/samples/secrets"
+const secretDir = "../config/samples/secrets" //nolint:gosec // for testing
 
 const tlsSecretName = "aerospike-secret"
 const authSecretName = "auth"
@@ -44,7 +44,7 @@ const authSecretNameForUpdate = "auth-update"
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 
-const aerospikeConfigSecret string = "aerospike-config-secret"
+const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
@@ -78,7 +78,6 @@ func initConfigSecret(secretDir string) error {
 }
 
 func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
-
 	labels := getLabels()
 
 	// Create configSecret
@@ -112,12 +111,15 @@ func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
 	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs1); err != nil {
 		return err
 	}
+
 	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs2); err != nil {
 		return err
 	}
+
 	if err := createClusterRBAC(k8sClient, ctx); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -152,21 +154,22 @@ func createConfigSecret(
 	labels map[string]string,
 ) error {
 	// Create configSecret
-	s := &v1.Secret{
+	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      tlsSecretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
-		Type: v1.SecretTypeOpaque,
+		Type: corev1.SecretTypeOpaque,
 		Data: secrets,
 	}
 	// use test context's create helper to create the object and add a cleanup
-	//function for the new object
+	// function for the new object
 	err := k8sClient.Create(ctx, s)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -174,15 +177,14 @@ func createAuthSecret(
 	k8sClient client.Client, ctx goctx.Context, namespace string,
 	labels map[string]string, secretName, pass string,
 ) error {
-
 	// Create authSecret
-	as := &v1.Secret{
+	as := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
-		Type: v1.SecretTypeOpaque,
+		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"password": []byte(pass),
 		},
@@ -192,6 +194,7 @@ func createAuthSecret(
 	if !errors.IsAlreadyExists(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -205,6 +208,7 @@ func waitForAerospikeCluster(
 	retryInterval, timeout time.Duration,
 ) error {
 	var isValid bool
+
 	err := wait.Poll(
 		retryInterval, timeout, func() (done bool, err error) {
 			// Fetch the AerospikeCluster instance
@@ -229,6 +233,7 @@ func waitForAerospikeCluster(
 			return isValid, nil
 		},
 	)
+
 	if err != nil {
 		return err
 	}
@@ -249,7 +254,7 @@ func isClusterStateValid(
 	}
 
 	// Validate status
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(newCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
 		return false
@@ -266,20 +271,22 @@ func isClusterStateValid(
 		return false
 	}
 
-	for _, pod := range newCluster.Status.Pods {
-		if pod.Aerospike.NodeID == "" {
+	for podName := range newCluster.Status.Pods {
+		if newCluster.Status.Pods[podName].Aerospike.NodeID == "" {
 			pkgLog.Info("Cluster pod's nodeID is empty")
 			return false
 		}
-		if operatorUtils.IsImageEqual(pod.Image, aeroCluster.Spec.Image) {
+
+		if operatorUtils.IsImageEqual(newCluster.Status.Pods[podName].Image, aeroCluster.Spec.Image) {
 			break
 		}
 
 		pkgLog.Info(
-			"Cluster pod's image %s not same as spec %s", pod.Image,
+			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
 			aeroCluster.Spec.Image,
 		)
 	}
+
 	return true
 }
 
@@ -288,31 +295,35 @@ func getTimeout(nodes int32) time.Duration {
 }
 
 func getPodLogs(
-	k8sClientset *kubernetes.Clientset, ctx goctx.Context, pod *v1.Pod,
+	k8sClientset *kubernetes.Clientset, ctx goctx.Context, pod *corev1.Pod,
 ) string {
-	podLogOpts := v1.PodLogOptions{}
+	podLogOpts := corev1.PodLogOptions{}
 	req := k8sClientset.CoreV1().Pods(pod.Namespace).GetLogs(
 		pod.Name, &podLogOpts,
 	)
+
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return "error in opening stream"
 	}
+
 	defer func(podLogs io.ReadCloser) {
 		_ = podLogs.Close()
 	}(podLogs)
 
 	buf := new(bytes.Buffer)
+
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
 		return "error in copy information from podLogs to buf"
 	}
+
 	str := buf.String()
 
 	return str
 }
 
-func getRackID(pod *v1.Pod) (int, error) {
+func getRackID(pod *corev1.Pod) (int, error) {
 	rack, ok := pod.ObjectMeta.Labels["aerospike.com/rack-id"]
 	if !ok {
 		return 0, nil
@@ -322,21 +333,25 @@ func getRackID(pod *v1.Pod) (int, error) {
 }
 
 // Copy makes a deep copy from src into dst.
-func Copy(dst interface{}, src interface{}) error {
+func Copy(dst, src interface{}) error {
 	if dst == nil {
 		return fmt.Errorf("dst cannot be nil")
 	}
+
 	if src == nil {
 		return fmt.Errorf("src cannot be nil")
 	}
+
 	jsonBytes, err := json.Marshal(src)
 	if err != nil {
 		return fmt.Errorf("unable to marshal src: %s", err)
 	}
+
 	err = json.Unmarshal(jsonBytes, dst)
 	if err != nil {
 		return fmt.Errorf("unable to unmarshal into dst: %s", err)
 	}
+
 	return nil
 }
 
@@ -404,11 +419,11 @@ func getNetworkConfig() map[string]interface{} {
 	}
 }
 func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
-
 	ver, err := asdbv1beta1.GetImageVersion(image)
 	if err != nil {
 		return nil, err
 	}
+
 	service := map[string]interface{}{
 		"feature-key-file": "/etc/aerospike/secret/features.conf",
 	}
@@ -442,15 +457,19 @@ func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) error {
 	if err != nil {
 		return err
 	}
+
 	if cmpVal >= 0 {
 		if enableSecurity {
 			security := map[string]interface{}{}
 			acs.security = security
 		}
+
 		return nil
 	}
+
 	acs.security = map[string]interface{}{}
 	acs.security["enable-security"] = enableSecurity
+
 	return nil
 }
 
@@ -459,12 +478,15 @@ func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) error {
 	if err != nil {
 		return err
 	}
+
 	if cmpVal >= 0 {
 		if acs.security == nil {
 			acs.security = map[string]interface{}{}
 		}
+
 		acs.security["enable-quotas"] = enableQuotas
 	}
+
 	return nil
 }
 
@@ -477,6 +499,7 @@ func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
 	if acs.security != nil {
 		spec["security"] = acs.security
 	}
+
 	return spec
 }
 
@@ -486,12 +509,14 @@ func ValidateAttributes(
 	for key, val := range expected {
 		for i := 0; i < len(actual); i++ {
 			m := actual[i]
+
 			v, ok := m[key]
 			if ok && v == val {
 				return true
 			}
 		}
 	}
+
 	return false
 }
 
@@ -502,19 +527,21 @@ func getAeroClusterConfig(
 	if err != nil {
 		return nil, err
 	}
+
 	cmpVal, err := asconfig.CompareVersions(version, "5.7.0")
 	if err != nil {
 		return nil, err
 	}
+
 	if cmpVal >= 0 {
 		return createAerospikeClusterPost560(
 			namespace, 2, image,
 		), nil
-	} else {
-		return createAerospikeClusterPost460(
-			namespace, 2, image,
-		), nil
 	}
+
+	return createAerospikeClusterPost460(
+		namespace, 2, image,
+	), nil
 }
 
 func getAerospikeStorageConfig(
@@ -522,7 +549,6 @@ func getAerospikeStorageConfig(
 	storageSize string,
 	cloudProvider CloudProvider,
 ) *asdbv1beta1.AerospikeStorageSpec {
-
 	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.
@@ -530,6 +556,7 @@ func getAerospikeStorageConfig(
 	ddInitMethod := asdbv1beta1.AerospikeVolumeMethodDD
 	blkDiscardInitMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
 	blkDiscardWipeMethod := asdbv1beta1.AerospikeVolumeMethodBlkdiscard
+
 	if cloudProvider == CloudProviderAWS {
 		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
 		blkDiscardInitMethod = asdbv1beta1.AerospikeVolumeMethodDD
@@ -669,11 +696,13 @@ func getAerospikeStorageConfig(
 	}
 }
 
+//nolint:unparam // generic function
 func contains(elems []string, v string) bool {
 	for _, s := range elems {
 		if v == s {
 			return true
 		}
 	}
+
 	return false
 }

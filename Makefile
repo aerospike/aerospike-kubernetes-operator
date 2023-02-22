@@ -221,6 +221,11 @@ controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessar
 $(CONTROLLER_GEN): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
+.PHONY: enable-pre-commit
+enable-pre-commit:
+	pip3 install pre-commit
+	pre-commit install
+
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
@@ -301,7 +306,7 @@ catalog-dockerfile: opm ## Generate a catalog dockerfile.
 
 # Build and push multi-arch catalog image.
 .PHONY: docker-buildx-catalog
-docker-buildx-catalog:
+docker-buildx-catalog: catalog-dockerfile
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
 	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${CATALOG_IMG} -f index.Dockerfile .

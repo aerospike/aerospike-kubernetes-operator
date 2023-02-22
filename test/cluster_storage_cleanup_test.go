@@ -8,13 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 // Test cluster cr updation
@@ -106,7 +104,7 @@ var _ = Describe(
 
 						// remove Rack should remove all rack's pvc
 						aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
-						aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
+						aeroCluster.Spec.Size--
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -164,7 +162,7 @@ var _ = Describe(
 
 						// remove Rack should remove all rack's pvc
 						aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
-						aeroCluster.Spec.Size = aeroCluster.Spec.Size - 1
+						aeroCluster.Spec.Size--
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -176,21 +174,21 @@ var _ = Describe(
 
 						// Check for pvc
 						var found bool
-						for _, pvc := range newPVCList {
-							if strings.HasPrefix(pvc.Name, pvcNamePrefix) {
+						for pvcIndex := range newPVCList {
+							if strings.HasPrefix(newPVCList[pvcIndex].Name, pvcNamePrefix) {
 								found = true
 								continue
 							}
 
-							if utils.IsPVCTerminating(&pvc) {
+							if utils.IsPVCTerminating(&newPVCList[pvcIndex]) {
 								// Ignore PVC that are being terminated.
 								continue
 							}
 
-							if strings.Contains(pvc.Name, stsName) {
+							if strings.Contains(newPVCList[pvcIndex].Name, stsName) {
 								err := fmt.Errorf(
 									"PVC %s not removed for cluster sts %s",
-									pvc.Name, stsName,
+									newPVCList[pvcIndex].Name, stsName,
 								)
 								Expect(err).ToNot(HaveOccurred())
 							}
@@ -271,7 +269,7 @@ var _ = Describe(
 								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 									Size:         resource.MustParse("1Gi"),
 									StorageClass: storageClass,
-									VolumeMode:   v1.PersistentVolumeBlock,
+									VolumeMode:   corev1.PersistentVolumeBlock,
 								},
 							},
 							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -284,7 +282,7 @@ var _ = Describe(
 								PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 									Size:         resource.MustParse("1Gi"),
 									StorageClass: storageClass,
-									VolumeMode:   v1.PersistentVolumeFilesystem,
+									VolumeMode:   corev1.PersistentVolumeFilesystem,
 								},
 							},
 							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -448,7 +446,7 @@ var _ = Describe(
 												PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 													Size:         resource.MustParse("1Gi"),
 													StorageClass: storageClass,
-													VolumeMode:   v1.PersistentVolumeFilesystem,
+													VolumeMode:   corev1.PersistentVolumeFilesystem,
 												},
 											},
 											Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -467,7 +465,8 @@ var _ = Describe(
 
 						// Add test while rack using common aeroConfig but local storage, fail for mismatch
 						It(
-							"CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn't have namespace related volumes",
+							"CommonConfigLocalStorage: should fail for deploying with wrong Storage. "+
+								"Storage doesn't have namespace related volumes",
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
@@ -482,7 +481,7 @@ var _ = Describe(
 											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),
 												StorageClass: storageClass,
-												VolumeMode:   v1.PersistentVolumeFilesystem,
+												VolumeMode:   corev1.PersistentVolumeFilesystem,
 											},
 										},
 										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -533,7 +532,7 @@ var _ = Describe(
 											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),
 												StorageClass: storageClass,
-												VolumeMode:   v1.PersistentVolumeFilesystem,
+												VolumeMode:   corev1.PersistentVolumeFilesystem,
 											},
 										},
 										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -573,7 +572,7 @@ var _ = Describe(
 											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),
 												StorageClass: storageClass,
-												VolumeMode:   v1.PersistentVolumeFilesystem,
+												VolumeMode:   corev1.PersistentVolumeFilesystem,
 											},
 										},
 										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -628,7 +627,7 @@ var _ = Describe(
 											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),
 												StorageClass: storageClass,
-												VolumeMode:   v1.PersistentVolumeFilesystem,
+												VolumeMode:   corev1.PersistentVolumeFilesystem,
 											},
 										},
 										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -663,7 +662,7 @@ var _ = Describe(
 											PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),
 												StorageClass: storageClass,
-												VolumeMode:   v1.PersistentVolumeFilesystem,
+												VolumeMode:   corev1.PersistentVolumeFilesystem,
 											},
 										},
 										Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
@@ -706,23 +705,27 @@ func getStorage(volumes []asdbv1beta1.VolumeSpec) *asdbv1beta1.AerospikeStorageS
 		},
 		Volumes: volumes,
 	}
+
 	return &storage
 }
 
 func matchPVCList(oldPVCList, newPVCList []corev1.PersistentVolumeClaim) error {
-	for _, oldPVC := range oldPVCList {
+	for oldPVCIndex := range oldPVCList {
 		var found bool
-		for _, newPVC := range newPVCList {
-			if oldPVC.Name == newPVC.Name {
+
+		for newPVCIndex := range newPVCList {
+			if oldPVCList[oldPVCIndex].Name == newPVCList[newPVCIndex].Name {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			return fmt.Errorf(
-				"PVC %s not found in new PVCList %v", oldPVC.Name, newPVCList,
+				"PVC %s not found in new PVCList %v", oldPVCList[oldPVCIndex].Name, newPVCList,
 			)
 		}
 	}
+
 	return nil
 }

@@ -3,12 +3,13 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 const (
@@ -24,6 +25,7 @@ func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	); err != nil {
 		return err
 	}
+
 	if err := createServiceAccount(
 		k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs2,
 	); err != nil {
@@ -59,16 +61,18 @@ func getClusterRoleBinding(
 	if err := k8sClient.List(ctx, crbs); err != nil {
 		return nil, err
 	}
-	for _, crb := range crbs.Items {
-		value, ok := crb.Labels["olm.owner"]
+
+	for crbIndex := range crbs.Items {
+		value, ok := crbs.Items[crbIndex].Labels["olm.owner"]
 		if !ok {
 			continue
 		}
 
 		if strings.HasPrefix(value, "aerospike-kubernetes-operator") {
-			return &crb, nil
+			return &crbs.Items[crbIndex], nil
 		}
 	}
+
 	return nil, fmt.Errorf("could not find cluster role binding for operator")
 }
 
@@ -87,6 +91,7 @@ func updateRoleBinding(
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -98,10 +103,12 @@ func createNamespace(
 			Name: name,
 		},
 	}
+
 	err := k8sClient.Create(ctx, ns)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -114,9 +121,11 @@ func createServiceAccount(
 			Namespace: namespace,
 		},
 	}
+
 	err := k8sClient.Create(ctx, svcAct)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
+
 	return nil
 }
