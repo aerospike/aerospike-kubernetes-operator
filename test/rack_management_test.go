@@ -3,11 +3,12 @@ package test
 import (
 	goctx "context"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -36,7 +37,7 @@ var _ = Describe(
 						By("Adding 1st rack in the cluster")
 						err = addRack(
 							k8sClient, ctx, clusterNamespacedName,
-							asdbv1beta1.Rack{ID: 1},
+							&asdbv1beta1.Rack{ID: 1},
 						)
 						Expect(err).ToNot(HaveOccurred())
 						err = validateRackEnabledCluster(
@@ -48,7 +49,7 @@ var _ = Describe(
 						By("Adding rack in existing racks list")
 						err = addRack(
 							k8sClient, ctx, clusterNamespacedName,
-							asdbv1beta1.Rack{ID: 2},
+							&asdbv1beta1.Rack{ID: 2},
 						)
 						Expect(err).ToNot(HaveOccurred())
 						err = validateRackEnabledCluster(
@@ -260,9 +261,9 @@ var _ = Describe(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
-								for _, rack := range racks {
+								for rackIndex := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										logger, k8sClient, ctx, clusterNamespacedName, rack,
+										logger, k8sClient, ctx, clusterNamespacedName, &racks[rackIndex],
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
@@ -304,9 +305,9 @@ var _ = Describe(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
-								for _, rack := range racks {
+								for rackIndex := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										logger, k8sClient, ctx, clusterNamespacedName, rack,
+										logger, k8sClient, ctx, clusterNamespacedName, &racks[rackIndex],
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
@@ -329,7 +330,7 @@ var _ = Describe(
 
 								aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: racksCopy}
 								// Increase size also so that below wait func wait for new cluster
-								aeroCluster.Spec.Size = aeroCluster.Spec.Size + 1
+								aeroCluster.Spec.Size++
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
@@ -355,9 +356,9 @@ var _ = Describe(
 										},
 									},
 								}
-								for _, rack := range racks {
+								for rackIndex := range racks {
 									err = validateAerospikeConfigServiceUpdate(
-										logger, k8sClient, ctx, clusterNamespacedName, rack,
+										logger, k8sClient, ctx, clusterNamespacedName, &racks[rackIndex],
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
@@ -553,7 +554,10 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
-														if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+														namespaceConfig :=
+															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+														if _, ok :=
+															namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 															vd := []asdbv1beta1.VolumeSpec{
 																{
 																	Name: "nsvol1",
@@ -630,7 +634,10 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
-														if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+														namespaceConfig :=
+															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+														if _, ok :=
+															namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 															aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 																Value: map[string]interface{}{
 																	"namespaces": []interface{}{
@@ -662,7 +669,10 @@ var _ = Describe(
 												aeroCluster := createDummyRackAwareAerospikeCluster(
 													clusterNamespacedName, 2,
 												)
-												if _, ok := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})["storage-engine"].(map[string]interface{})["devices"]; ok {
+												namespaceConfig :=
+													aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												if _, ok :=
+													namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 													aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
 													aeroConfig := asdbv1beta1.AerospikeConfigSpec{
 														Value: map[string]interface{}{

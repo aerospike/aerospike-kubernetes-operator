@@ -2,15 +2,15 @@ package test
 
 import (
 	"bufio"
+	goctx "context"
 	"regexp"
 	"strings"
 
-	goctx "context"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -79,41 +79,45 @@ var _ = Describe(
 
 func checkAdvertisedAddress(
 	ctx goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster,
-	expectNodIp bool,
+	expectNodIP bool,
 ) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
-	for _, pod := range podList.Items {
-		if expectNodIp {
-			Expect(intraClusterAdvertisesNodeIp(ctx, &pod)).To(Equal(true))
+	for podIndex := range podList.Items {
+		if expectNodIP {
+			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).To(Equal(true))
 		} else {
-			Expect(intraClusterAdvertisesNodeIp(ctx, &pod)).ToNot(Equal(true))
+			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).ToNot(Equal(true))
 		}
 	}
 }
 
 // intraClusterAdvertisesNodeIp indicates if the pod advertises k8s node IP.
-func intraClusterAdvertisesNodeIp(ctx goctx.Context, pod *corev1.Pod) bool {
-	podNodeIp := pod.Status.HostIP
+func intraClusterAdvertisesNodeIP(ctx goctx.Context, pod *corev1.Pod) bool {
+	podNodeIP := pod.Status.HostIP
 	logs := getPodLogs(k8sClientset, ctx, pod)
 	scanner := bufio.NewScanner(strings.NewReader(logs))
-	hbAdvertisesNodeId := false
-	fabricAdvertisesNodeId := false
+	hbAdvertisesNodeID := false
+	fabricAdvertisesNodeID := false
 
 	// Account for Cleartext and TLS  endpoints.
-	var hbPublishPattern = regexp.MustCompile(".*updated heartbeat published address list to {" + podNodeIp + ":[0-9]+," + podNodeIp + ":[0-9]+}.*")
-	var fabricPublishPattern = regexp.MustCompile(".*updated fabric published address list to {" + podNodeIp + ":[0-9]+," + podNodeIp + ":[0-9]+}.*")
+	var hbPublishPattern = regexp.MustCompile(".*updated heartbeat published address list to {" +
+		podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
+
+	var fabricPublishPattern = regexp.MustCompile(".*updated fabric published address list to {" +
+		podNodeIP + ":[0-9]+," + podNodeIP + ":[0-9]+}.*")
 
 	for scanner.Scan() {
 		logLine := scanner.Text()
 		if hbPublishPattern.MatchString(logLine) {
-			hbAdvertisesNodeId = true
+			hbAdvertisesNodeID = true
 		}
+
 		if fabricPublishPattern.MatchString(logLine) {
-			fabricAdvertisesNodeId = true
+			fabricAdvertisesNodeID = true
 		}
 	}
 
-	return hbAdvertisesNodeId && fabricAdvertisesNodeId
+	return hbAdvertisesNodeID && fabricAdvertisesNodeID
 }

@@ -19,7 +19,8 @@ import (
 // 		- if values are of map type then they will be recursively merged
 // 		- if values are list of primitive type then key/value from the patch map will be added in result map
 // 		- if values are list of map then a new list will be created
-// 			where New entries in patch will be appended to base list. corresponding entries will be merged using the same merge algorithm
+// 			where New entries in patch will be appended to base list.
+// 			corresponding entries will be merged using the same merge algorithm
 //      	here order of elements in base will be maintained. This list will be added in result map
 // 			(corresponding maps are found by matching special `name` key in maps.
 // 			Here this list of map is actually a map of map and main map keys
@@ -40,11 +41,13 @@ func Merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 			res[key] = patchValue
 			continue
 		}
+
 		// If types have changed, replace completely
 		if reflect.TypeOf(baseValue) != reflect.TypeOf(patchValue) {
 			res[key] = patchValue
 			continue
 		}
+
 		// Special check for key "storage-engine"
 		// Check value type and replace if it's type has changed
 		if key == "storage-engine" && isStorageEngineTypeChanged(
@@ -53,25 +56,27 @@ func Merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 			res[key] = patchValue
 			continue
 		}
+
 		// Types are the same, compare values
 		val, err := handleValues(baseValue, patchValue)
 		if err != nil {
 			return nil, err
 		}
+
 		res[key] = val
 	}
+
 	// Now add other values
 	for k, v := range base {
 		if _, found := patch[k]; !found {
 			res[k] = v
 		}
 	}
-	return res, nil
 
+	return res, nil
 }
 
 func isStorageEngineTypeChanged(base, patch interface{}) bool {
-	// storage-engine = "memory"
 	_, ok1 := base.(string)
 	_, ok2 := patch.(string)
 
@@ -93,6 +98,7 @@ func isStorageEngineTypeChanged(base, patch interface{}) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -118,6 +124,7 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 			if !ok {
 				return "", fmt.Errorf("object %v should be map", bEleInt)
 			}
+
 			// get namespace name in base
 			bName, ok := bEle["name"]
 			if !ok {
@@ -125,11 +132,13 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 			}
 
 			var found bool
+
 			for _, pEleInt := range patchValue.([]interface{}) {
 				pEle, ok := pEleInt.(map[string]interface{})
 				if !ok {
 					return "", fmt.Errorf("object %v should be map", pEleInt)
 				}
+
 				// get namespace name in patch
 				pName, ok := pEle["name"]
 				if !ok {
@@ -143,11 +152,15 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 					if err != nil {
 						return nil, err
 					}
+
 					found = true
+
 					patchedList = append(patchedList, mMap)
+
 					break
 				}
 			}
+
 			if !found {
 				patchedList = append(patchedList, bEle)
 			}
@@ -157,6 +170,7 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 			pName := pEleInt.(map[string]interface{})["name"]
 
 			var found bool
+
 			for _, bEleInt := range baseValue.([]interface{}) {
 				bName := bEleInt.(map[string]interface{})["name"]
 
@@ -185,5 +199,6 @@ func isPrimList(list []interface{}) bool {
 			return false
 		}
 	}
+
 	return true
 }

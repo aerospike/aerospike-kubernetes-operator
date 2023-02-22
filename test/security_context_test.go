@@ -3,10 +3,11 @@ package test
 import (
 	goctx "context"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var _ = Describe(
@@ -61,7 +62,7 @@ func securityContextTest(
 
 			By("Validate")
 			validateSecurityContext(
-				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+				aeroCluster,
 			)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -103,7 +104,7 @@ func securityContextTest(
 
 			By("Validate")
 			validateSecurityContext(
-				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+				aeroCluster,
 			)
 
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -124,7 +125,7 @@ func securityContextTest(
 
 			By("Validate")
 			validateSecurityContext(
-				aeroCluster, checkPodSpec, checkAeroServer, checkAeroInit,
+				aeroCluster,
 			)
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -134,35 +135,38 @@ func securityContextTest(
 }
 
 func validateSecurityContext(
-	aeroCluster *asdbv1beta1.AerospikeCluster, checkPodSpec bool,
-	checkAeroServer bool, checkAeroInit bool,
+	aeroCluster *asdbv1beta1.AerospikeCluster,
 ) {
 	pods, err := getClusterPodList(
 		k8sClient, goctx.TODO(),
 		aeroCluster,
 	)
 	Expect(err).ToNot(HaveOccurred())
+
 	Expect(len(pods.Items)).ToNot(BeZero())
-	for _, pod := range pods.Items {
+
+	for podIndex := range pods.Items {
 		// TODO: get pod.Spec container by name.
 		// var podSpecSecCtx corev1.PodSecurityContext
 		// var serverSecCtx corev1.SecurityContext
 		// var initSecCtx corev1.SecurityContext
-
 		if aeroCluster.Spec.PodSpec.SecurityContext != nil {
-			// podSpecSecCtx = *aeroCluster.Spec.PodSpec.SecurityContext
-			Expect(pod.Spec.SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.SecurityContext))
+			Expect(pods.Items[podIndex].Spec.SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.SecurityContext))
 		}
 
 		if aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext != nil {
-			// serverSecCtx = *aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
-			Expect(pod.Spec.Containers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext))
+			Expect(pods.Items[podIndex].Spec.Containers[0].SecurityContext).To(Equal(
+				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext,
+			),
+			)
 		}
 
 		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil &&
 			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
-			// initSecCtx = *aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext
-			Expect(pod.Spec.InitContainers[0].SecurityContext).To(Equal(aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext))
+			Expect(pods.Items[podIndex].Spec.InitContainers[0].SecurityContext).To(Equal(
+				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext,
+			),
+			)
 		}
 	}
 }

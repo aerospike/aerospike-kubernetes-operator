@@ -4,7 +4,6 @@ import (
 	"context"
 	"runtime"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 const patchFieldOwner = "aerospike-kuberneter-operator"
@@ -35,6 +36,16 @@ var (
 		FieldManager: "aerospike-operator",
 	}
 )
+
+// AerospikeClusterReconciler reconciles AerospikeClusters
+type AerospikeClusterReconciler struct {
+	client.Client
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Log        logr.Logger
+	Scheme     *k8sRuntime.Scheme
+	Recorder   record.EventRecorder
+}
 
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -61,19 +72,9 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// AerospikeClusterReconciler reconciles AerospikeClusters
-type AerospikeClusterReconciler struct {
-	client.Client
-	KubeClient *kubernetes.Clientset
-	KubeConfig *rest.Config
-	Log        logr.Logger
-	Scheme     *k8sRuntime.Scheme
-	Recorder   record.EventRecorder
-}
-
 // RackState contains the rack configuration and rack size.
 type RackState struct {
-	Rack asdbv1beta1.Rack
+	Rack *asdbv1beta1.Rack
 	Size int
 }
 
@@ -87,6 +88,7 @@ type RackState struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+//nolint:lll // marker
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikeclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikeclusters/finalizers,verbs=update
@@ -101,8 +103,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 
 	// Fetch the AerospikeCluster instance
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
-	err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster)
-	if err != nil {
+	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil

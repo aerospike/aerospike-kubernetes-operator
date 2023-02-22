@@ -3,11 +3,12 @@ package test
 import (
 	goctx "context"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 // * Test
@@ -123,7 +124,8 @@ var _ = Describe(
 								)
 
 								accessMode := v1.PersistentVolumeAccessMode("invalid")
-								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.AccessModes = []v1.PersistentVolumeAccessMode{accessMode}
+								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.AccessModes =
+									[]v1.PersistentVolumeAccessMode{accessMode}
 
 								err := deployCluster(
 									k8sClient, ctx, aeroCluster,

@@ -4,12 +4,13 @@ import (
 	goCtx "context"
 	"fmt"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 const tempTestDir = "/tmp/test"
@@ -23,7 +24,7 @@ var _ = Describe(
 		Context(
 			"WarmRestart", func() {
 				// TODO: Uncomment this test when aerospike server images start supporting warm restart
-				//It(
+				// It(
 				//	"Should work with tini", func() {
 				//		WarmRestart(ctx)
 				//	},
@@ -39,10 +40,13 @@ var _ = Describe(
 	},
 )
 
-func WarmRestart(ctx goCtx.Context) {
-	rollCluster(ctx, latestImage, true)
-}
+/*
+TODO: Uncomment this test when aerospike server images start supporting warm restart
 
+	func WarmRestart(ctx goCtx.Context) {
+		rollCluster(ctx, latestImage, true)
+	}
+*/
 func PodRestart(ctx goCtx.Context) {
 	image := fmt.Sprintf(
 		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
@@ -105,7 +109,7 @@ func createMarkerFile(
 		return err
 	}
 
-	for _, pod := range podList.Items {
+	for podIndex := range podList.Items {
 		cmd := []string{
 			"bash",
 			"-c",
@@ -113,16 +117,17 @@ func createMarkerFile(
 		}
 
 		_, _, err := utils.Exec(
-			&pod, asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
+			&podList.Items[podIndex], asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
 		if err != nil {
 			return fmt.Errorf(
-				"error reading ASD Pid from pod %s - %v", pod.Name, err,
+				"error reading ASD Pid from pod %s - %v", podList.Items[podIndex].Name, err,
 			)
 		}
 	}
+
 	return nil
 }
 
@@ -136,7 +141,8 @@ func isMarkerPresent(
 	}
 
 	podToMarkerPresent := make(map[string]bool)
-	for _, pod := range podList.Items {
+
+	for podIndex := range podList.Items {
 		cmd := []string{
 			"bash",
 			"-c",
@@ -144,12 +150,11 @@ func isMarkerPresent(
 		}
 
 		_, _, err := utils.Exec(
-			&pod, asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
+			&podList.Items[podIndex], asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
-		podToMarkerPresent[pod.Name] = err == nil
-
+		podToMarkerPresent[podList.Items[podIndex].Name] = err == nil
 	}
 
 	return podToMarkerPresent, nil

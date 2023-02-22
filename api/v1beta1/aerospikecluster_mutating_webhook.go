@@ -21,14 +21,15 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/go-logr/logr"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
-	"github.com/go-logr/logr"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+//nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
@@ -100,6 +101,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 			"Set default validation policy", "validationPolicy",
 			validationPolicy,
 		)
+
 		c.Spec.ValidationPolicy = &validationPolicy
 	}
 
@@ -122,7 +124,8 @@ func (c *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
 			c.Spec.RackConfig, "DefaultRackID", DefaultRackID,
 		)
 	} else {
-		for _, rack := range c.Spec.RackConfig.Racks {
+		for idx := range c.Spec.RackConfig.Racks {
+			rack := &c.Spec.RackConfig.Racks[idx]
 			if rack.ID == DefaultRackID {
 				// User has modified defaultRackConfig or used defaultRackID
 				if len(c.Spec.RackConfig.Racks) > 1 ||
@@ -136,31 +139,29 @@ func (c *AerospikeCluster) setDefaultRackConf(asLog logr.Logger) error {
 			}
 		}
 	}
+
 	return nil
 }
 
 func (c *AerospikeCluster) updateRacks(asLog logr.Logger) error {
-	if err := c.updateRacksStorageFromGlobal(asLog); err != nil {
-		return fmt.Errorf("error updating rack storage: %v", err)
-	}
+	c.updateRacksStorageFromGlobal(asLog)
 
 	if err := c.updateRacksAerospikeConfigFromGlobal(asLog); err != nil {
 		return fmt.Errorf("error updating rack aerospike config: %v", err)
 	}
 
-	if err := c.updateRacksPodSpecFromGlobal(asLog); err != nil {
-		return fmt.Errorf("error updating rack podSpec: %v", err)
-	}
+	c.updateRacksPodSpecFromGlobal(asLog)
 
 	return nil
 }
 
-func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error {
-	for i := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[i]
+func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) {
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 
 		if rack.InputStorage == nil {
 			rack.Storage = c.Spec.Storage
+
 			asLog.V(1).Info(
 				"Updated rack storage with global storage", "rack id", rack.ID,
 				"storage", rack.Storage,
@@ -172,15 +173,15 @@ func (c *AerospikeCluster) updateRacksStorageFromGlobal(asLog logr.Logger) error
 		// Set storage defaults if rack has storage section
 		rack.Storage.SetDefaults()
 	}
-	return nil
 }
 
-func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) error {
-	for i := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[i]
+func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) {
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
 
 		if rack.InputPodSpec == nil {
 			rack.PodSpec.SchedulingPolicy = c.Spec.PodSpec.SchedulingPolicy
+
 			asLog.V(1).Info(
 				"Updated rack podSpec with global podSpec", "rack id", rack.ID,
 				"podSpec", rack.PodSpec,
@@ -189,23 +190,29 @@ func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) error
 			rack.PodSpec = *rack.InputPodSpec
 		}
 	}
-	return nil
 }
 
 func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logger) error {
-	for i, rack := range c.Spec.RackConfig.Racks {
-		var m map[string]interface{}
-		var err error
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
+
+		var (
+			m   map[string]interface{}
+			err error
+		)
+
 		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
 			m, err = merge.Merge(
 				c.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value,
 			)
+
 			asLog.V(1).Info(
 				"Merged rack config from global aerospikeConfig", "rack id",
 				rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig",
 				c.Spec.AerospikeConfig,
 			)
+
 			if err != nil {
 				return err
 			}
@@ -218,6 +225,7 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 			"Update rack aerospikeConfig from default aerospikeConfig",
 			"rackAerospikeConfig", m,
 		)
+
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
 		if err := c.setDefaultAerospikeConfigs(
@@ -225,8 +233,10 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 		); err != nil {
 			return err
 		}
-		c.Spec.RackConfig.Racks[i].AerospikeConfig.Value = m
+
+		c.Spec.RackConfig.Racks[idx].AerospikeConfig.Value = m
 	}
+
 	return nil
 }
 
@@ -274,9 +284,9 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 	return nil
 }
 
-//*****************************************************************************
+// *****************************************************************************
 // Helper
-//*****************************************************************************
+// *****************************************************************************
 
 func setDefaultNsConf(
 	asLog logr.Logger, configSpec AerospikeConfigSpec,
@@ -317,6 +327,7 @@ func setDefaultNsConf(
 
 		// Add dummy rack-id only for rackEnabled namespaces
 		defaultConfs := map[string]interface{}{"rack-id": DefaultRackID}
+
 		if nsName, ok := nsMap["name"]; ok {
 			if _, ok := nsName.(string); ok {
 				if isNameExist(rackEnabledNsList, nsName.(string)) {
@@ -334,7 +345,8 @@ func setDefaultNsConf(
 					// but left namespace defaults. This key should be removed then only controller will detect
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
 					asLog.Info(
-						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. Namespace will not have defaultRackID",
+						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. "+
+							"Namespace will not have defaultRackID",
 						"nsName", nsName, "rackEnabledNamespaces",
 						rackEnabledNsList,
 					)
@@ -343,8 +355,8 @@ func setDefaultNsConf(
 				}
 			}
 		}
-		// If namespace map doesn't have valid name, it will fail in validation layer
 	}
+
 	asLog.Info("Set default template values in aerospikeConfig.namespace")
 
 	return nil
@@ -358,6 +370,7 @@ func setDefaultServiceConf(
 	if _, ok := config["service"]; !ok {
 		config["service"] = map[string]interface{}{}
 	}
+
 	serviceConf, ok := config["service"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
@@ -396,6 +409,7 @@ func setDefaultNetworkConf(
 	if _, ok := config["network"]; !ok {
 		config["network"] = map[string]interface{}{}
 	}
+
 	networkConf, ok := config["network"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
@@ -404,9 +418,10 @@ func setDefaultNetworkConf(
 	}
 
 	// Service section
-	if _, ok := networkConf["service"]; !ok {
+	if _, ok = networkConf["service"]; !ok {
 		networkConf["service"] = map[string]interface{}{}
 	}
+
 	serviceConf, ok := networkConf["service"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
@@ -451,9 +466,10 @@ func setDefaultNetworkConf(
 	)
 
 	// Heartbeat section
-	if _, ok := networkConf["heartbeat"]; !ok {
+	if _, ok = networkConf["heartbeat"]; !ok {
 		networkConf["heartbeat"] = map[string]interface{}{}
 	}
+
 	heartbeatConf, ok := networkConf["heartbeat"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
@@ -464,6 +480,7 @@ func setDefaultNetworkConf(
 
 	hbDefaults := map[string]interface{}{}
 	hbDefaults["mode"] = "mesh"
+
 	if err := setDefaultsInConfigMap(
 		asLog, heartbeatConf, hbDefaults,
 	); err != nil {
@@ -503,6 +520,7 @@ func addOperatorClientNameIfNeeded(
 		if IsServiceTLSEnabled(configSpec) {
 			serviceConf["tls-authenticate-client"] = "any"
 		}
+
 		return nil
 	}
 
@@ -511,6 +529,7 @@ func addOperatorClientNameIfNeeded(
 			"OperatorClientCertSpec or its TLSClientName is not" +
 				" configured. Skipping setting tls-authenticate-client.",
 		)
+
 		return nil
 	}
 
@@ -533,6 +552,7 @@ func addOperatorClientNameIfNeeded(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -544,6 +564,7 @@ func setDefaultLoggingConf(
 	if _, ok := config["logging"]; !ok {
 		config["logging"] = []interface{}{}
 	}
+
 	loggingConfList, ok := config["logging"].([]interface{})
 	if !ok {
 		return fmt.Errorf(
@@ -552,6 +573,7 @@ func setDefaultLoggingConf(
 	}
 
 	var found bool
+
 	for _, conf := range loggingConfList {
 		logConf, ok := conf.(map[string]interface{})
 		if !ok {
@@ -559,11 +581,13 @@ func setDefaultLoggingConf(
 				"aerospikeConfig.logging not a list of valid map %v", logConf,
 			)
 		}
+
 		if logConf["name"] == "console" {
 			found = true
 			break
 		}
 	}
+
 	if !found {
 		loggingConfList = append(
 			loggingConfList, map[string]interface{}{
@@ -615,25 +639,31 @@ func setDefaultsInConfigMap(
 				k, bv, bv, v, v,
 			)
 		}
+
 		baseConfigs[k] = v
 	}
+
 	return nil
 }
 
 func toInterfaceList(list []string) []interface{} {
-	var iList []interface{}
+	iList := make([]interface{}, 0, len(list))
+
 	for _, e := range list {
 		iList = append(iList, e)
 	}
+
 	return iList
 }
 
 func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 	val1, ok1 := m1[key]
 	val2, ok2 := m2[key]
+
 	if ok1 != ok2 {
 		return true
 	}
+
 	return !reflect.DeepEqual(val1, val2)
 }
 
@@ -643,6 +673,7 @@ func isNameExist(names []string, name string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -674,27 +705,35 @@ func escapeValue(valueGeneric interface{}) interface{} {
 		return escapeString(value)
 	case []interface{}:
 		var modifiedSlice []interface{}
+
 		for _, item := range value {
 			modifiedSlice = append(modifiedSlice, escapeValue(item))
 		}
+
 		return modifiedSlice
 	case []string:
 		var modifiedSlice []string
+
 		for _, item := range value {
 			modifiedSlice = append(modifiedSlice, escapeString(item))
 		}
+
 		return modifiedSlice
 	case map[string]interface{}:
 		modifiedMap := map[string]interface{}{}
+
 		for key, mapValue := range value {
 			modifiedMap[escapeString(key)] = escapeValue(mapValue)
 		}
+
 		return modifiedMap
 	case map[string]string:
 		modifiedMap := map[string]string{}
+
 		for key, mapValue := range value {
 			modifiedMap[escapeString(key)] = escapeString(mapValue)
 		}
+
 		return modifiedMap
 	default:
 		return value
@@ -704,5 +743,6 @@ func escapeValue(valueGeneric interface{}) interface{} {
 func escapeString(str string) string {
 	str = strings.ReplaceAll(str, "${un}", "$${_DNE}{un}")
 	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
+
 	return str
 }
