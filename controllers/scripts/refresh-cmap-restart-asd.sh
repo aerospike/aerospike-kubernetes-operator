@@ -46,4 +46,5 @@ chmod +x ./kubernetes-configmap-exporter
 ./kubernetes-configmap-exporter "$1" "$2" configmap
 
 # Run the Aerospike warm restart script from the fetched configmap
+chmod +x ./initlib
 bash configmap/restart-asd.sh

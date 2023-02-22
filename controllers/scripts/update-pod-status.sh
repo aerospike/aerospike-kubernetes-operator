@@ -15,8 +15,12 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 # ------------------------------------------------------------------------------
-set -e
 set -x
+
+python3 --version 2> /dev/null
+is_python3=$?
+
+set -e
 
 script_dir="$(dirname $(realpath $0))"
 cd $script_dir
@@ -35,23 +39,38 @@ source ./common-env.sh
 AERO_CLUSTER_NAME=${MY_POD_NAME%-*}
 AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
-python3 create_pod_status_patch.py \
---pod-name $MY_POD_NAME \
---cluster-name $AERO_CLUSTER_NAME \
---namespace $NAMESPACE \
---api-server $KUBE_API_SERVER \
---token $TOKEN \
---ca-cert $CA_CERT \
---restart-type $1
-
-if [ $? -ne 0 ]
+if [ $is_python3 -ne 0 ]
 then
-   echo "ERROR: failed to initialize and update pod status"
-   exit 1
-fi
+  /etc/aerospike/initlib updatePodStatus \
+  --pod-name $MY_POD_NAME \
+  --cluster-name $AERO_CLUSTER_NAME \
+  --namespace $NAMESPACE \
+  --restart-type $1
 
-# Patch the pod status.
-cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
-     -H 'Accept: application/json' \
-     -H 'Content-Type: application/json-patch+json' \
-     "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1beta1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
+  if [ $? -ne 0 ]
+  then
+     echo "ERROR: failed to initialize and update pod status"
+     exit 1
+  fi
+else
+  python3 create_pod_status_patch.py \
+  --pod-name $MY_POD_NAME \
+  --cluster-name $AERO_CLUSTER_NAME \
+  --namespace $NAMESPACE \
+  --api-server $KUBE_API_SERVER \
+  --token $TOKEN \
+  --ca-cert $CA_CERT \
+  --restart-type $1
+
+  if [ $? -ne 0 ]
+    then
+       echo "ERROR: failed to initialize and update pod status"
+       exit 1
+    fi
+
+  # Patch the pod status.
+  cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
+       -H 'Accept: application/json' \
+       -H 'Content-Type: application/json-patch+json' \
+       "$KUBE_API_SERVER/apis/asdb.aerospike.com/v1beta1/namespaces/$NAMESPACE/aerospikeclusters/$AERO_CLUSTER_NAME/status?fieldManager=pod"
+fi

@@ -15,8 +15,12 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 # ------------------------------------------------------------------------------
-set -e
 set -x
+
+python3 --version 2> /dev/null
+is_python3=$?
+
+set -e
 
 script_dir="$(dirname $(realpath $0))"
 cd $script_dir

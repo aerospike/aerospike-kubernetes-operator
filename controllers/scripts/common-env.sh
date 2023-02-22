@@ -15,8 +15,6 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 # ------------------------------------------------------------------------------
-set -e
-set -x
 
 # Kubernetes API details.
 CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -24,9 +22,24 @@ TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 KUBE_API_SERVER=https://kubernetes.default.svc
 NAMESPACE=$MY_POD_NAMESPACE
 
+# Get IPs
+export PODIP="$MY_POD_IP"
+
+# Sets up port related variables.
+export POD_PORT="{{.PodPort}}"
+export POD_TLSPORT="{{.PodTLSPort}}"
+
 # Get tls, info port
-SVC="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/services")"
-PORTSTRING="$(echo $SVC | python3 -c "import sys, json
+
+if [ $is_python3 -ne 0 ]
+then
+  eval $(/etc/aerospike/initlib setIpEnv \
+  --pod-name $MY_POD_NAME \
+  --namespace $MY_POD_NAMESPACE \
+  --host-ip ${MY_HOST_IP})
+else
+  SVC="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/services")"
+  PORTSTRING="$(echo $SVC | python3 -c "import sys, json
 data = json.load(sys.stdin);
 podname = '${MY_POD_NAME}';
 def getport(data, podname):
@@ -42,15 +55,14 @@ def getport(data, podname):
             return infoport, tlsport
 print(getport(data, podname))")"
 
-# Get IPs
-export PODIP="$MY_POD_IP"
-INTERNALIP="$MY_HOST_IP"
+  export infoport="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $2}')"
+  export tlsport="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
 
-# Get External IP
-DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes")"
+  # Get External IP
+  DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes")"
 
-# Note: the IPs returned from here should match the IPs used in the node summary.
-HOSTIPS="$(echo $DATA | python3 -c "import sys, json
+  # Note: the IPs returned from here should match the IPs used in the node summary.
+  HOSTIPS="$(echo $DATA | python3 -c "import sys, json
 data = json.load(sys.stdin);
 host = '${MY_HOST_IP}';
 def gethost(data, host):
@@ -85,18 +97,15 @@ def gethost(data, host):
 
 print(gethost(data, host))")"
 
-export INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
-export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
-
-# Sets up port related variables.
-export POD_PORT="{{.PodPort}}"
-export POD_TLSPORT="{{.PodTLSPort}}"
+  export INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
+  export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
+fi
 
 # Compute the mapped access ports based on config.
 {{- if .MultiPodPerHost}}
 # Use mapped service ports.
-export MAPPED_PORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $2}')"
-export MAPPED_TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
+export MAPPED_PORT="${infoport}"
+export MAPPED_TLSPORT="${tlsport}"
 {{- else}}
 # Use the actual ports.
 export MAPPED_PORT="$POD_PORT"

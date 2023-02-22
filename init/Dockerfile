@@ -28,14 +28,14 @@ LABEL name="aerospike-kubernetes-init" \
 
 # Add entrypoint script
 ADD entrypoint.sh /workdir/bin/entrypoint.sh
+ADD initlib /workdir/bin/initlib
 
 # License file
 COPY LICENSE /licenses/
 
 # Install dependencies and configmap exporter
 RUN microdnf update -y \
-    && microdnf install wget python3 python3-pip curl findutils util-linux procps -y \
-    && pip3 install Werkzeug \
+    && microdnf install wget curl findutils util-linux procps -y \
     && mkdir -p /workdir/bin \
     && curl -L https://github.com/ashishshinde/kubernetes-configmap-exporter/releases/download/1.0.0/kubernetes-configmap-exporter -o /workdir/bin/kubernetes-configmap-exporter \
     # Update permissions
