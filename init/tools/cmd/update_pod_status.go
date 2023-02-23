@@ -21,12 +21,7 @@ import (
 	"create-podstatus/pkg"
 )
 
-var (
-	podName     *string
-	namespace   *string
-	clusterName *string
-	restartType *string
-)
+var restartType *string
 
 // updatePodStatus represents the updatePodStatus command
 var updatePodStatus = &cobra.Command{
@@ -45,8 +40,6 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(updatePodStatus)
-	podName = updatePodStatus.Flags().String("pod-name", "", "pod name")
-	namespace = updatePodStatus.Flags().String("namespace", "", "namespace")
-	clusterName = updatePodStatus.Flags().String("cluster-name", "", "cluster name")
+
 	restartType = updatePodStatus.Flags().String("restart-type", "", "restart type")
 }

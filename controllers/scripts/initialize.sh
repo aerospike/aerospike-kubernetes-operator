@@ -56,7 +56,6 @@ bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
 
 # Copy scripts and binaries needed for warm restart.
 \cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
-\cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
 \cp /workdir/bin/initlib "${CONFIG_VOLUME}"/
 \cp ./refresh-cmap-restart-asd.sh "${CONFIG_VOLUME}"/
 

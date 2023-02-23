@@ -21,13 +21,9 @@ import (
 	"create-podstatus/pkg"
 )
 
-var (
-	pod    *string
-	ns     *string
-	hostIP *string
-)
+var hostIP *string
 
-// updatePodStatus represents the updatePodStatus command
+// setIpEnv represents the setIpEnv command
 var setIpEnv = &cobra.Command{
 	Use:   "setIpEnv",
 	Short: "A brief description of your command",
@@ -38,13 +34,12 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return pkg.SetHostPortEnv(pod, ns, hostIP)
+		return pkg.SetHostPortEnv(podName, namespace, hostIP)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(setIpEnv)
-	pod = setIpEnv.Flags().String("pod-name", "", "name of pod")
-	ns = setIpEnv.Flags().String("namespace", "", "namespace")
+
 	hostIP = setIpEnv.Flags().String("host-ip", "", "host ip")
 }

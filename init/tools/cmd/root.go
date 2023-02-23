@@ -21,6 +21,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	podName     string
+	namespace   string
+	clusterName string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "initlib",
 	Short: "A library for init container",
@@ -32,4 +38,10 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&podName, "pod-name", "p", "", "pod name")
+	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "namespace")
+	rootCmd.PersistentFlags().StringVarP(&clusterName, "cluster-name", "c", "", "cluster name")
 }

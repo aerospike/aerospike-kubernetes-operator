@@ -13,7 +13,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
-func SetHostPortEnv(podName, namespace, hostIP *string) error {
+func SetHostPortEnv(podName, namespace string, hostIP *string) error {
 	cfg := ctrl.GetConfigOrDie()
 
 	err := clientgoscheme.AddToScheme(clientgoscheme.Scheme)
@@ -34,7 +34,7 @@ func SetHostPortEnv(podName, namespace, hostIP *string) error {
 		return err
 	}
 
-	infoport, tlsport, err := getPortString(k8sClient, goctx.TODO(), *namespace, *podName)
+	infoport, tlsport, err := getPortString(k8sClient, goctx.TODO(), namespace, podName)
 	if err != nil {
 		return err
 	}
