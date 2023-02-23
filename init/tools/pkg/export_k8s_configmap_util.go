@@ -52,5 +52,6 @@ func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
 		f.Sync()
 		f.Close()
 	}
+
 	return nil
 }

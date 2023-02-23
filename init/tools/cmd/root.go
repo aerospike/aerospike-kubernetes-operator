@@ -41,7 +41,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&podName, "pod-name", "p", "", "pod name")
-	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "namespace")
-	rootCmd.PersistentFlags().StringVarP(&clusterName, "cluster-name", "c", "", "cluster name")
+	rootCmd.PersistentFlags().StringVarP(&podName, "pod-name", "p", "", "Current pod name")
+	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Namespace under which cluster is running")
+	rootCmd.PersistentFlags().StringVarP(&clusterName, "cluster-name", "c", "", "Aerospike cluster name")
 }

@@ -26,13 +26,10 @@ var hostIP *string
 // setIpEnv represents the setIpEnv command
 var setIpEnv = &cobra.Command{
 	Use:   "setIpEnv",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "This gets port and IP address info from cluster",
+	Long: `This command fetch tls and info ports from services and
+fetch internal and external IP from host and export to the desired
+environment variables.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return pkg.SetHostPortEnv(podName, namespace, hostIP)
 	},
@@ -41,5 +38,5 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(setIpEnv)
 
-	hostIP = setIpEnv.Flags().String("host-ip", "", "host ip")
+	hostIP = setIpEnv.Flags().String("host-ip", "", "Host ip on which current pod is running")
 }

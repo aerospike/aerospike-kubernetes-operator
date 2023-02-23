@@ -51,11 +51,10 @@ type Volume struct {
 
 func (v *Volume) getMountPoint() string {
 	if v.volumeMode == "Block" {
-		point := filepath.Join(BlockMountPoint, v.volumeName)
-		return point
+		return filepath.Join(BlockMountPoint, v.volumeName)
 	}
-	point := filepath.Join(FileSystemMountPoint, v.volumeName)
-	return point
+
+	return filepath.Join(FileSystemMountPoint, v.volumeName)
 }
 
 func (v *Volume) getAttachmentPath() string {
@@ -67,11 +66,14 @@ func getImageVersion(image string) (version int, err error) {
 	if err != nil {
 		return 0, err
 	}
+
 	res := strings.Split(ver, ".")
+
 	version, err = strconv.Atoi(res[0])
 	if err != nil {
 		return 0, err
 	}
+
 	return version, err
 }
 
@@ -95,6 +97,7 @@ func execute(cmd []string, stderr *os.File) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -106,10 +109,10 @@ func getNamespacedName(name, namespace string) types.NamespacedName {
 }
 
 func getCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName) (*asdbv1beta1.AerospikeCluster, error) {
-	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 	log.Println("INFO: Get aerospike cluster", "cluster-name", clusterNamespacedName)
-	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
-	if err != nil {
+
+	aeroCluster := &asdbv1beta1.AerospikeCluster{}
+	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
 		return nil, err
 	}
 
@@ -117,10 +120,10 @@ func getCluster(k8sClient client.Client, ctx goctx.Context, clusterNamespacedNam
 }
 
 func getPodImage(k8sClient client.Client, ctx goctx.Context, podNamespacedName types.NamespacedName) (string, error) {
-	pod := &corev1.Pod{}
 	log.Println("INFO: Get pod image", "pod-name", podNamespacedName)
-	err := k8sClient.Get(ctx, podNamespacedName, pod)
-	if err != nil {
+
+	pod := &corev1.Pod{}
+	if err := k8sClient.Get(ctx, podNamespacedName, pod); err != nil {
 		return "", err
 	}
 
@@ -131,6 +134,7 @@ func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
 	}
+
 	return fallback
 }
 
@@ -142,6 +146,7 @@ func getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 		podPort = os.Getenv("POD_TLSPORT")
 		servicePort = os.Getenv("MAPPED_TLSPORT")
 	}
+
 	podPortInt, _ := strconv.Atoi(podPort)
 	servicePortInt, _ := strconv.Atoi(servicePort)
 	metadata := asdbv1beta1.AerospikePodStatus{
@@ -156,6 +161,7 @@ func getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 			TLSName:     getEnv("MY_POD_TLS_NAME", ""),
 		},
 	}
+
 	return &metadata
 }
 
@@ -181,11 +187,14 @@ func getAttachedVolumes(rack *asdbv1beta1.Rack, aeroCluster *asdbv1beta1.Aerospi
 
 func getPersistentVolumes(volumes []asdbv1beta1.VolumeSpec) []asdbv1beta1.VolumeSpec {
 	var volumeList []asdbv1beta1.VolumeSpec
-	for _, volume := range volumes {
+
+	for idx := range volumes {
+		volume := &volumes[idx]
 		if volume.Source.PersistentVolume != nil {
-			volumeList = append(volumeList, volume)
+			volumeList = append(volumeList, *volume)
 		}
 	}
+
 	return volumeList
 }
 
@@ -205,6 +214,7 @@ func newVolume(podName string, vol *asdbv1beta1.VolumeSpec) Volume {
 		volume.attachmentType = ""
 		volume.volumePath = ""
 	}
+
 	return volume
 }
 
@@ -542,17 +552,22 @@ func ManageVolumesAndUpdateStatus(podName, namespace, clusterName string, restar
 	if err != nil {
 		return err
 	}
+
 	k8sClient, err := client.New(
 		cfg, client.Options{Scheme: clientgoscheme.Scheme},
 	)
 
-	clusterNamespacedName := getNamespacedName(clusterName, namespace)
-	aeroCluster, err := getCluster(k8sClient, goctx.TODO(), clusterNamespacedName)
 	if err != nil {
 		return err
 	}
 
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 	podNamespacedName := getNamespacedName(podName, namespace)
+
+	aeroCluster, err := getCluster(k8sClient, goctx.TODO(), clusterNamespacedName)
+	if err != nil {
+		return err
+	}
 
 	podImage, err := getPodImage(k8sClient, goctx.TODO(), podNamespacedName)
 	if err != nil {
@@ -567,11 +582,6 @@ func ManageVolumesAndUpdateStatus(podName, namespace, clusterName string, restar
 	} else {
 		log.Println("INFO: Initializing", "podname", podName)
 	}
-	nextMajorVer, err := getImageVersion(podImage)
-	if err != nil {
-		return err
-	}
-	metadata := getNodeMetadata()
 
 	volumes := getInitializedVolumes(podName, aeroCluster)
 	dirtyVolumes := getDirtyVolumes(podName, aeroCluster)
@@ -582,9 +592,14 @@ func ManageVolumesAndUpdateStatus(podName, namespace, clusterName string, restar
 		if err != nil {
 			return err
 		}
+
 		log.Println("INFO: Checking if volumes should be wiped", "podname", podName)
 		if prevImage != "" {
 			prevMajorVer, err := getImageVersion(prevImage)
+			if err != nil {
+				return err
+			}
+			nextMajorVer, err := getImageVersion(podImage)
 			if err != nil {
 				return err
 			}
@@ -594,16 +609,19 @@ func ManageVolumesAndUpdateStatus(podName, namespace, clusterName string, restar
 					return err
 				}
 			} else {
-				log.Println("INFO: Volumes should not be wiped")
+				log.Println("INFO: Volumes should not be wiped", "nextMajorVer", nextMajorVer, "prevMajorVer", prevMajorVer)
 			}
 		} else {
 			log.Println("INFO: Volumes should not be wiped")
 		}
+
 		dirtyVolumes, err = cleanDirtyVolumes(podName, aeroCluster, dirtyVolumes)
 		if err != nil {
 			return err
 		}
 	}
+
+	metadata := getNodeMetadata()
 	log.Println("INFO: Updating pod status", "podname", podName)
 	if err := updateStatus(k8sClient, goctx.TODO(), aeroCluster, podName, podImage, metadata, volumes, dirtyVolumes); err != nil {
 		return err

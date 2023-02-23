@@ -26,13 +26,9 @@ var restartType *string
 // updatePodStatus represents the updatePodStatus command
 var updatePodStatus = &cobra.Command{
 	Use:   "updatePodStatus",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Handle volume operations and update pod status in aerospike cluster",
+	Long: `This command initialize, wipe and cleaan the dirty volumes
+based on the use case and update pod status in aerospike cluster`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return pkg.ManageVolumesAndUpdateStatus(podName, namespace, clusterName, restartType)
 	},
@@ -41,5 +37,5 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(updatePodStatus)
 
-	restartType = updatePodStatus.Flags().String("restart-type", "", "restart type")
+	restartType = updatePodStatus.Flags().String("restart-type", "", "Can either be quickRestart or podRestart")
 }

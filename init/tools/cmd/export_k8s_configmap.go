@@ -22,22 +22,18 @@ import (
 )
 
 var (
-	//	pod    *string
-	//	ns     *string
 	toDir  *string
 	cmName *string
 )
 
-// updatePodStatus represents the updatePodStatus command
+// exportK8sConfigmap represents the exportK8sConfigmap command
 var exportK8sConfigmap = &cobra.Command{
 	Use:   "exportK8sConfigmap",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Exports Kubernetes configmap to a directory",
+	Long: `Exports Kubernetes configmap to a directory from
+within a Kubernetes container to a directory as files.
+The config map keys are the filenames with corresponding
+values as the file content.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return pkg.ExportK8sConfigmap(namespace, toDir, cmName)
 	},
@@ -45,8 +41,6 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(exportK8sConfigmap)
-	//	pod = setIpEnv.Flags().String("pod-name", "", "name of pod")
-	//	ns = setIpEnv.Flags().String("namespace", "", "namespace")
-	toDir = exportK8sConfigmap.Flags().String("toDir", "", "toDir")
-	cmName = exportK8sConfigmap.Flags().String("cmName", "", "cmName")
+	toDir = exportK8sConfigmap.Flags().String("toDir", "", "Directory to which configmap is exported")
+	cmName = exportK8sConfigmap.Flags().String("cmName", "", "Configmap name that needs to be exported")
 }

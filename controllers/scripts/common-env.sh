@@ -30,7 +30,6 @@ export POD_PORT="{{.PodPort}}"
 export POD_TLSPORT="{{.PodTLSPort}}"
 
 # Get tls, info port
-
 if [ $is_python3 -ne 0 ]
 then
   eval $(/etc/aerospike/initlib setIpEnv \
