@@ -3,8 +3,8 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -12,8 +12,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
+
+const batchClusterName = "batch-restart"
 
 var (
 	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "6.0.0.99")
@@ -35,7 +39,7 @@ var _ = Describe("BatchRestart", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid operations", func() {
-		clusterName := "batch-restart"
+		clusterName := batchClusterName
 		clusterNamespacedName := getClusterNamespacedName(
 			clusterName, namespace,
 		)
@@ -52,7 +56,7 @@ var _ = Describe("BatchRestart", func() {
 	})
 
 	Context("When doing invalid operations", func() {
-		clusterName := "batch-restart"
+		clusterName := batchClusterName
 		clusterNamespacedName := getClusterNamespacedName(
 			clusterName, namespace,
 		)
@@ -76,7 +80,8 @@ var _ = Describe("BatchRestart", func() {
 			},
 		)
 
-		It("Should fail if number of racks is less than 2 and RollingUpdateBatchSize PCT or RollingUpdateBatchSize Count is given", func() {
+		It("Should fail if number of racks is less than 2 and RollingUpdateBatchSize "+
+			"PCT or RollingUpdateBatchSize Count is given", func() {
 			// During deployment
 			// During update. User should not be allowed to remove rack if above condition is met.
 			By("Using RollingUpdateBatchSize PCT")
@@ -119,7 +124,7 @@ var _ = Describe("BatchRestart", func() {
 	})
 
 	Context("When doing namespace related operations", func() {
-		clusterName := "batch-restart"
+		clusterName := batchClusterName
 		clusterNamespacedName := getClusterNamespacedName(
 			clusterName, namespace,
 		)
@@ -239,77 +244,45 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 	// Test steps
 	// 1: update cluster to demand huge resources. It will unschedule batch of pods
-	// 2: verify if more than 1 pods are in unscheduled state. In default mode, there can not be more than 1 unscheduled pods
-	// 3: update cluster to demand limited resources. It will schedule old unschedulable pods
+	// 2: verify if more than 1 pods are in unscheduled state.
+	//    In default mode, there can not be more than 1 unscheduled pods
+	// 3: update cluster to demand limited resources. It will schedule old unscheduled pods
 
 	// Restart full rack at a time
 	It("Should restart full rack in one go", func() {
-
 		By("Using RollingUpdateBatchSize PCT as 100")
 		// Unschedule batch of pods
-		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err := batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"))
 		Expect(err).ToNot(HaveOccurred())
 
 		// schedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), "1Gi")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
 		// Unschedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err = batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Schedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10), "2Gi")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	// Restart batch of nodes
 	It("Should do BatchRollingRestart", func() {
 		By("Use RollingUpdateBatchSize PCT")
-		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err := batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), "1Gi")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err = batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("2Gi")
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "2Gi")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -336,15 +309,9 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "1Gi")
 		Expect(err).ToNot(HaveOccurred())
 	})
-
-	// Should be able to deal with failed nodes
 }
 
 func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
@@ -377,87 +344,51 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("1%")
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, percent("1%"), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	// Test steps
-	// 1: update cluster to demand huge resources. It will unschedule batch of pods
-	// 2: verify if more than 1 pods are in unscheduled state. In default mode, there can not be more than 1 unscheduled pods
-	// 3: update cluster to demand limited resources. It will schedule old unschedulable pods
+	// 1: update cluster with unavailable image. It will unschedule batch of pods
+	// 2: verify if more than 1 pods are in unscheduled state.
+	//    In default mode, there can not be more than 1 unscheduled pods
+	// 3: update cluster to demand limited resources. It will schedule old unscheduled pods
 
 	// Restart full rack at a time
 	It("Should upgrade full rack in one go", func() {
-
 		By("Using RollingUpdateBatchSize PCT as 100")
 		// Unschedule batch of pods
-		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
-		aeroCluster.Spec.Image = unavailableImage
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err := batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, percent("100%"))
 		Expect(err).ToNot(HaveOccurred())
 
 		// schedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
 		// Unschedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
-		aeroCluster.Spec.Image = unavailableImage
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err = batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, count(10))
 		Expect(err).ToNot(HaveOccurred())
 
 		// Schedule batch of pods
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, count(10), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	// Restart batch of nodes
 	It("Should do BatchUpgrade", func() {
 		By("Use RollingUpdateBatchSize PCT")
-		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
-		aeroCluster.Spec.Image = unavailableImage
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err := batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("90%")
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.Image = unavailableImage
-		err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+		err = batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, count(3), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -484,32 +415,28 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.Image = availableImage1
-		err = updateCluster(k8sClient, ctx, aeroCluster)
+		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, count(3), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})
-
-	// Should be able to deal with failed nodes
 }
 
 func isBatchRestart(aeroCluster *v1beta1.AerospikeCluster) bool {
 	// Wait for starting the pod restart process
 	for {
 		readyPods := getReadyPods(aeroCluster)
+
 		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
 		if unreadyPods > 0 {
 			break
 		}
 	}
 
-	//Operator should restart batch of pods which will make multiple pods unready
+	// Operator should restart batch of pods which will make multiple pods unready
 	for i := 0; i < 100; i++ {
 		readyPods := getReadyPods(aeroCluster)
 		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
 		fmt.Printf("unreadyPods %d\n", unreadyPods)
+
 		if unreadyPods > 1 {
 			return true
 		}
@@ -523,11 +450,13 @@ func getReadyPods(aeroCluster *v1beta1.AerospikeCluster) []string {
 	Expect(err).ToNot(HaveOccurred())
 
 	var readyPods []string
-	for _, pod := range podList.Items {
-		if utils.IsPodRunningAndReady(&pod) {
-			readyPods = append(readyPods, pod.Name)
+
+	for podIndex := range podList.Items {
+		if utils.IsPodRunningAndReady(&podList.Items[podIndex]) {
+			readyPods = append(readyPods, podList.Items[podIndex].Name)
 		}
 	}
+
 	return readyPods
 }
 
@@ -543,6 +472,7 @@ func updateClusterForBatchRestart(
 	if !isBatchRestart(aeroCluster) {
 		return fmt.Errorf("looks like pods are not restarting in batch")
 	}
+
 	return nil
 }
 
@@ -564,4 +494,81 @@ func schedulableResource(mem string) *corev1.ResourceRequirements {
 			corev1.ResourceMemory: resourceMem,
 		},
 	}
+}
+
+func batchRollingRestartTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	batchSize *intstr.IntOrString,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
+	aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+
+	return err
+}
+
+func batchUpgradeTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	batchSize *intstr.IntOrString,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
+	aeroCluster.Spec.Image = unavailableImage
+
+	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
+
+	return err
+}
+
+func rollingRestartTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	batchSize *intstr.IntOrString, mem string,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
+
+	if mem != "" {
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource(mem)
+	} else {
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+	}
+
+	err = updateCluster(k8sClient, ctx, aeroCluster)
+
+	return err
+}
+
+func upgradeTest(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	batchSize *intstr.IntOrString, image string,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
+	aeroCluster.Spec.Image = image
+
+	err = updateCluster(k8sClient, ctx, aeroCluster)
+
+	return err
 }

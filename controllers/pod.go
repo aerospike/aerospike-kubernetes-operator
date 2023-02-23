@@ -88,7 +88,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	restartType := noRestart
 
 	// AerospikeConfig nil means status not updated yet
-	if r.aeroCluster.Status.AerospikeConfig == nil {
+	if r.IsStatusEmpty() {
 		return restartType
 	}
 

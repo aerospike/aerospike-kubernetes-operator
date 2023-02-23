@@ -5,12 +5,12 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -18,8 +18,11 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-const storageInitTestClusterSize = 2
-const magicBytes = "aero"
+const (
+	storageInitTestClusterSize = 2
+	magicBytes                 = "aero"
+	sidecarContainerName       = "tomcat"
+)
 
 var _ = Describe(
 	"StorageInit", func() {
@@ -31,11 +34,10 @@ var _ = Describe(
 				cleanupThreads := 3
 				updatedCleanupThreads := 5
 
-				containerName := "tomcat"
 				podSpec := asdbv1beta1.AerospikePodSpec{
 					Sidecars: []corev1.Container{
 						{
-							Name:  containerName,
+							Name:  sidecarContainerName,
 							Image: "tomcat:8.0",
 							Ports: []corev1.ContainerPort{
 								{
@@ -65,7 +67,7 @@ var _ = Describe(
 						}
 
 						storageConfig := getLongInitStorageConfig(
-							false, "10Gi", cloudProvider,
+							false, "10Gi",
 						)
 						storageConfig.CleanupThreads = cleanupThreads
 
@@ -105,7 +107,7 @@ var _ = Describe(
 						)
 
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
 
@@ -170,10 +172,10 @@ var _ = Describe(
 						}
 
 						storageConfig := getAerospikeStorageConfig(
-							containerName, false, "1Gi", cloudProvider,
+							sidecarContainerName, false, "1Gi", cloudProvider,
 						)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
 
@@ -222,7 +224,7 @@ var _ = Describe(
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							prevImage,
 						)
 						aeroCluster.Spec.PodSpec = podSpec
@@ -269,10 +271,10 @@ var _ = Describe(
 						}
 
 						storageConfig := getLongInitStorageConfig(
-							false, "50Gi", cloudProvider,
+							false, "50Gi",
 						)
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
 
@@ -315,11 +317,11 @@ var _ = Describe(
 						}
 
 						storageConfig := getLongInitStorageConfig(
-							false, "50Gi", cloudProvider,
+							false, "50Gi",
 						)
 						storageConfig.CleanupThreads = threeVar
 						aeroCluster := getStorageInitAerospikeCluster(
-							clusterNamespacedName, *storageConfig, racks,
+							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
 
@@ -348,39 +350,41 @@ func checkData(
 		return fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	for _, pod := range podList.Items {
-		// t.Logf("Check data for pod %v", pod.Name)
-
-		rackID, err := getRackID(&pod)
+	for podIndex := range podList.Items {
+		rackID, err := getRackID(&podList.Items[podIndex])
 		if err != nil {
 			return fmt.Errorf("failed to get rackID pods: %v", err)
 		}
 
 		storage := aeroCluster.Spec.Storage
+
 		if rackID != 0 {
-			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
-				if rack.ID == rackID {
-					storage = rack.Storage
+			for rackIndex := range aeroCluster.Spec.RackConfig.Racks {
+				if aeroCluster.Spec.RackConfig.Racks[rackIndex].ID == rackID {
+					storage = aeroCluster.Spec.RackConfig.Racks[rackIndex].Storage
 				}
 			}
 		}
-		for _, volume := range storage.Volumes {
-			if volume.Source.PersistentVolume == nil {
+
+		for volumeIndex := range storage.Volumes {
+			if storage.Volumes[volumeIndex].Source.PersistentVolume == nil {
 				continue
 			}
-			if _, ok := skip[volume.Name]; ok {
+
+			if _, ok := skip[storage.Volumes[volumeIndex].Name]; ok {
 				continue
 			}
-			// t.Logf("Check data for volume %v", volume.Path)
+
 			var volumeHasData bool
-			if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-				volumeHasData = hasDataBlock(&pod, volume)
+
+			if storage.Volumes[volumeIndex].Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
+				volumeHasData = hasDataBlock(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
 			} else {
-				volumeHasData = hasDataFilesystem(&pod, volume)
+				volumeHasData = hasDataFilesystem(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
 			}
 
 			var expectedHasData = assertHasData && wasDataWritten
-			if volume.InitMethod == asdbv1beta1.AerospikeVolumeMethodNone {
+			if storage.Volumes[volumeIndex].InitMethod == asdbv1beta1.AerospikeVolumeMethodNone {
 				expectedHasData = wasDataWritten
 			}
 
@@ -393,12 +397,13 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not", volume.Name,
+					"expected volume %s %s but is not", storage.Volumes[volumeIndex].Name,
 					expectedStr,
 				)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -408,9 +413,8 @@ func writeDataToVolumes(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 		return fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	for _, pod := range podList.Items {
-
-		rackID, err := getRackID(&pod)
+	for podIndex := range podList.Items {
+		rackID, err := getRackID(&podList.Items[podIndex])
 		if err != nil {
 			return fmt.Errorf("failed to get rackID pods: %v", err)
 		}
@@ -418,44 +422,46 @@ func writeDataToVolumes(aeroCluster *asdbv1beta1.AerospikeCluster) error {
 		storage := aeroCluster.Spec.Storage
 
 		if rackID != 0 {
-			for _, rack := range aeroCluster.Spec.RackConfig.Racks {
-				if rack.ID == rackID {
-					storage = rack.Storage
+			for rackIndex := range aeroCluster.Spec.RackConfig.Racks {
+				if aeroCluster.Spec.RackConfig.Racks[rackIndex].ID == rackID {
+					storage = aeroCluster.Spec.RackConfig.Racks[rackIndex].Storage
 				}
 			}
 		}
 
-		err = writeDataToPodVolumes(storage, &pod)
+		err = writeDataToPodVolumes(&storage, &podList.Items[podIndex])
 		if err != nil {
 			return err
 		}
-
 	}
+
 	return nil
 }
 
 func writeDataToPodVolumes(
-	storage asdbv1beta1.AerospikeStorageSpec, pod *corev1.Pod,
+	storage *asdbv1beta1.AerospikeStorageSpec, pod *corev1.Pod,
 ) error {
-	for _, volume := range storage.Volumes {
-		if volume.Source.PersistentVolume == nil {
+	for volumeIndex := range storage.Volumes {
+		if storage.Volumes[volumeIndex].Source.PersistentVolume == nil {
 			continue
 		}
-		if volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-			err := writeDataToVolumeBlock(pod, volume)
+
+		if storage.Volumes[volumeIndex].Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
+			err := writeDataToVolumeBlock(pod, &storage.Volumes[volumeIndex])
 			if err != nil {
 				return err
 			}
 		} else {
-			err := writeDataToVolumeFileSystem(pod, volume)
+			err := writeDataToVolumeFileSystem(pod, &storage.Volumes[volumeIndex])
 			if err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }
-func getContainerNameAndPath(volume asdbv1beta1.VolumeSpec) (string, string) {
+func getContainerNameAndPath(volume *asdbv1beta1.VolumeSpec) (containerName, path string) {
 	if volume.Aerospike != nil {
 		return asdbv1beta1.AerospikeServerContainerName, volume.Aerospike.Path
 	}
@@ -464,7 +470,7 @@ func getContainerNameAndPath(volume asdbv1beta1.VolumeSpec) (string, string) {
 }
 
 func writeDataToVolumeBlock(
-	pod *corev1.Pod, volume asdbv1beta1.VolumeSpec,
+	pod *corev1.Pod, volume *asdbv1beta1.VolumeSpec,
 ) error {
 	cName, path := getContainerNameAndPath(volume)
 
@@ -479,11 +485,12 @@ func writeDataToVolumeBlock(
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
 	}
+
 	return nil
 }
 
 func writeDataToVolumeFileSystem(
-	pod *corev1.Pod, volume asdbv1beta1.VolumeSpec,
+	pod *corev1.Pod, volume *asdbv1beta1.VolumeSpec,
 ) error {
 	cName, path := getContainerNameAndPath(volume)
 
@@ -495,10 +502,11 @@ func writeDataToVolumeFileSystem(
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
 	}
+
 	return nil
 }
 
-func hasDataBlock(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
+func hasDataBlock(pod *corev1.Pod, volume *asdbv1beta1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
 
 	cmd := []string{
@@ -509,7 +517,7 @@ func hasDataBlock(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
-func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
+func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1beta1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
 
 	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
@@ -518,10 +526,11 @@ func hasDataFilesystem(pod *corev1.Pod, volume asdbv1beta1.VolumeSpec) bool {
 	return strings.HasPrefix(stdout, magicBytes)
 }
 
-// getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage. None of the  storage volumes are used by Aerospike and are free to be used for testing.
+// getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage.
+// None of the storage volumes are used by Aerospike and are free to be used for testing.
 func getStorageInitAerospikeCluster(
 	clusterNamespacedName types.NamespacedName,
-	storageConfig asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
+	storageConfig *asdbv1beta1.AerospikeStorageSpec, racks []asdbv1beta1.Rack,
 	image string,
 ) *asdbv1beta1.AerospikeCluster {
 	// create Aerospike custom resource
@@ -533,7 +542,7 @@ func getStorageInitAerospikeCluster(
 		Spec: asdbv1beta1.AerospikeClusterSpec{
 			Size:    storageInitTestClusterSize,
 			Image:   image,
-			Storage: storageConfig,
+			Storage: *storageConfig,
 			RackConfig: asdbv1beta1.RackConfig{
 				Namespaces: []string{"test"},
 				Racks:      racks,
@@ -583,9 +592,8 @@ func getStorageInitAerospikeCluster(
 }
 
 func getLongInitStorageConfig(
-	inputCascadeDelete bool, storageSize string, cloudProvider CloudProvider,
+	inputCascadeDelete bool, storageSize string,
 ) *asdbv1beta1.AerospikeStorageSpec {
-
 	// Create pods and storage devices write data to the devices.
 	// - deletes cluster without cascade delete of volumes.
 	// - recreate and check if volumes are reinitialized correctly.

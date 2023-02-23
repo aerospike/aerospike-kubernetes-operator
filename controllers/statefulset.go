@@ -560,6 +560,7 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 
 	serviceName := r.aeroCluster.Name + "-lb"
 	service := &corev1.Service{}
+
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
