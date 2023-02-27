@@ -44,10 +44,16 @@ export PATH=$PATH:$script_dir
 mkdir -p configmap
 
 # Run the Aerospike warm restart script from the fetched configmap
-chmod +x ./initlib
-./initlib exportK8sConfigmap \
---namespace "$1" \
---cmName "$2" \
---toDir configmap
+if [ -f "./initlib" ]; then
+    chmod +x ./initlib
+    ./initlib export-configmap \
+    --namespace "$1" \
+    --cmName "$2" \
+    --toDir configmap
+else
+    chmod +x ./kubernetes-configmap-exporter
+    ./kubernetes-configmap-exporter "$1" "$2" configmap
+fi
+
 
 bash configmap/restart-asd.sh

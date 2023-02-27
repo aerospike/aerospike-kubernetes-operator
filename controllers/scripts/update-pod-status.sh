@@ -41,17 +41,11 @@ AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
 if [ $is_python3 -ne 0 ]
 then
-  /etc/aerospike/initlib updatePodStatus \
+  /etc/aerospike/initlib update-pod-status \
   --pod-name $MY_POD_NAME \
   --cluster-name $AERO_CLUSTER_NAME \
   --namespace $NAMESPACE \
   --restart-type $1
-
-  if [ $? -ne 0 ]
-  then
-     echo "ERROR: failed to initialize and update pod status"
-     exit 1
-  fi
 else
   python3 create_pod_status_patch.py \
   --pod-name $MY_POD_NAME \
@@ -61,12 +55,6 @@ else
   --token $TOKEN \
   --ca-cert $CA_CERT \
   --restart-type $1
-
-  if [ $? -ne 0 ]
-    then
-       echo "ERROR: failed to initialize and update pod status"
-       exit 1
-    fi
 
   # Patch the pod status.
   cat /tmp/patch.json | curl -f -X PATCH -d @- --cacert $CA_CERT -H "Authorization: Bearer $TOKEN"\
