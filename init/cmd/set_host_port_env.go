@@ -23,8 +23,8 @@ import (
 
 var hostIP *string
 
-// setIpEnv represents the setIpEnv command
-var setIpEnv = &cobra.Command{
+// setIPEnv represents the setIPEnv command
+var setIPEnv = &cobra.Command{
 	Use:   "set-ip-env",
 	Short: "This gets port and IP address info from cluster",
 	Long: `This command fetch tls and info ports from services and
@@ -36,7 +36,7 @@ environment variables.`,
 }
 
 func init() {
-	rootCmd.AddCommand(setIpEnv)
+	rootCmd.AddCommand(setIPEnv)
 
-	hostIP = setIpEnv.Flags().String("host-ip", "", "Host ip on which current pod is running")
+	hostIP = setIPEnv.Flags().String("host-ip", "", "Host ip on which current pod is running")
 }

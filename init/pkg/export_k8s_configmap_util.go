@@ -26,7 +26,7 @@ func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
 		return err
 	}
 
-	err = os.MkdirAll(*toDir, 0644)
+	err = os.MkdirAll(*toDir, 0644) //nolint:gocritic // file permission
 	if err != nil {
 		return err
 	}
@@ -37,9 +37,17 @@ func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
 			return err
 		}
 
-		f.WriteString(value)
-		f.Sync()
-		f.Close()
+		if _, err = f.WriteString(value); err != nil {
+			return err
+		}
+
+		if err := f.Sync(); err != nil {
+			return err
+		}
+
+		if err := f.Close(); err != nil {
+			return err
+		}
 	}
 
 	for key, value := range configMap.BinaryData {
@@ -48,9 +56,17 @@ func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
 			return err
 		}
 
-		f.Write(value)
-		f.Sync()
-		f.Close()
+		if _, err = f.Write(value); err != nil {
+			return err
+		}
+
+		if err := f.Sync(); err != nil {
+			return err
+		}
+
+		if err := f.Close(); err != nil {
+			return err
+		}
 	}
 
 	return nil

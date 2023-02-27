@@ -57,25 +57,24 @@ func SetHostPortEnv(podName, namespace string, hostIP *string) error {
 	return nil
 }
 
-func getPortString(k8sClient client.Client, ctx goctx.Context, namespace, podName string) (int32, int32, error) {
-	var (
-		infoport, tlsport int32
-	)
-
+func getPortString(k8sClient client.Client, ctx goctx.Context, namespace,
+	podName string) (infoport, tlsport int32, err error) {
 	serviceList := &corev1.ServiceList{}
 	listOps := &client.ListOptions{Namespace: namespace}
 
-	err := k8sClient.List(ctx, serviceList, listOps)
+	err = k8sClient.List(ctx, serviceList, listOps)
 	if err != nil {
 		return infoport, tlsport, err
 	}
 
-	for _, service := range serviceList.Items {
+	for idx := range serviceList.Items {
+		service := &serviceList.Items[idx]
 		if service.Name == podName {
 			for _, port := range service.Spec.Ports {
 				if port.Name == "service" {
 					infoport = port.NodePort
 				}
+
 				if port.Name == "tls-service" {
 					tlsport = port.NodePort
 				}
@@ -86,43 +85,47 @@ func getPortString(k8sClient client.Client, ctx goctx.Context, namespace, podNam
 	return infoport, tlsport, err
 }
 
-func getHostIPS(k8sClient client.Client, ctx goctx.Context, hostIP string) (string, string, error) {
-	var (
-		internalIP = hostIP
-		externalIP = hostIP
-	)
-
+func getHostIPS(k8sClient client.Client, ctx goctx.Context, hostIP string) (internalIP, externalIP string, err error) {
+	internalIP = hostIP
+	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
 
-	err := k8sClient.List(ctx, nodeList)
+	err = k8sClient.List(ctx, nodeList)
 	if err != nil {
 		return internalIP, externalIP, err
 	}
 
-	for _, node := range nodeList.Items {
+	for idx := range nodeList.Items {
+		node := &nodeList.Items[idx]
 		nodeInternalIP := ""
 		nodeExternalIP := ""
 		matchFound := false
+
 		for _, add := range node.Status.Addresses {
 			if add.Address == hostIP {
 				matchFound = true
 			}
+
 			if add.Type == "InternalIP" {
 				nodeInternalIP = add.Address
 				continue
 			}
+
 			if add.Type == "ExternalIP" {
 				nodeExternalIP = add.Address
 				continue
 			}
 		}
+
 		if matchFound {
 			if nodeInternalIP != "" {
 				internalIP = nodeInternalIP
 			}
+
 			if nodeExternalIP != "" {
 				externalIP = nodeExternalIP
 			}
+
 			break
 		}
 	}
