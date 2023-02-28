@@ -21,7 +21,10 @@ import (
 	"create-podstatus/pkg"
 )
 
-var restartType *string
+var (
+	restartType string
+	clusterName string
+)
 
 // updatePodStatus represents the updatePodStatus command
 var updatePodStatus = &cobra.Command{
@@ -30,12 +33,13 @@ var updatePodStatus = &cobra.Command{
 	Long: `This command initialize, wipe and clean the dirty volumes
 based on the use case and update pod status in aerospike cluster`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return pkg.ManageVolumesAndUpdateStatus(podName, namespace, clusterName, restartType)
+		return pkg.ManageVolumesAndUpdateStatus(k8sClient, podName, namespace, clusterName, restartType)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(updatePodStatus)
 
-	restartType = updatePodStatus.Flags().String("restart-type", "", "Can either be quickRestart or podRestart")
+	updatePodStatus.Flags().StringVar(&restartType, "restart-type", "podRestart", "Can either be quickRestart or podRestart")
+	updatePodStatus.Flags().StringVar(&clusterName, "cluster-name", "podRestart", "Aerospike cluster name")
 }

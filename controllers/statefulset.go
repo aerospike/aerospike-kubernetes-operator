@@ -767,18 +767,6 @@ func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
 		// 	return false
 		// }
 		if !utils.IsImageEqual(container.Image, desiredImage) {
-			if container.Name == asdbv1beta1.AerospikeInitContainerName {
-				if logChanges {
-					r.Log.Info(
-						"Ignoring change to Aerospike Init Image", "pod",
-						podName, "container", container.Name, "currentImage",
-						container.Image, "desiredImage", desiredImage,
-					)
-				}
-
-				continue
-			}
-
 			if logChanges {
 				r.Log.Info(
 					"Found container for upgrading/downgrading in pod", "pod",
@@ -1366,6 +1354,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 		if container.Name != asdbv1beta1.AerospikeInitContainerName {
 			continue
 		}
+
 		desiredImage, err := utils.GetDesiredImage(
 			r.aeroCluster, container.Name,
 		)
@@ -1396,6 +1385,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 				"Saved StatefulSet", "statefulSet", *statefulSet,
 			)
 		}
+
 		break
 	}
 

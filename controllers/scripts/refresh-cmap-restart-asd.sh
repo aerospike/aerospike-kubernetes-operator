@@ -44,9 +44,9 @@ export PATH=$PATH:$script_dir
 mkdir -p configmap
 
 # Run the Aerospike warm restart script from the fetched configmap
-if [ -f "./initlib" ]; then
-    chmod +x ./initlib
-    ./initlib export-configmap \
+if [ -f "./akoinit" ]; then
+    chmod +x ./akoinit
+    ./akoinit export-configmap \
     --namespace "$1" \
     --cmName "$2" \
     --toDir configmap

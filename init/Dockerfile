@@ -22,7 +22,7 @@ COPY cmd/ cmd/
 COPY pkg/ pkg/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o initlib main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o akoinit main.go
 # Note: Don't change /workdir/bin path. This path is being referenced in operator codebase.
 
 # Base image
@@ -49,14 +49,14 @@ LABEL name="aerospike-kubernetes-init" \
 
 # Add entrypoint script
 ADD entrypoint.sh /workdir/bin/entrypoint.sh
-COPY --from=builder /workspace/initlib /workdir/bin/
+COPY --from=builder /workspace/akoinit /workdir/bin/
 
 # License file
 COPY LICENSE /licenses/
 
 # Install dependencies and configmap exporter
 RUN microdnf update -y \
-    && microdnf install wget curl findutils util-linux procps -y \
+    && microdnf install wget findutils util-linux procps -y \
     && mkdir -p /workdir/bin \
     # Update permissions
     && chgrp -R 0 /workdir \

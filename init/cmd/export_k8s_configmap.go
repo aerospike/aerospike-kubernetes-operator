@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	toDir  *string
-	cmName *string
+	toDir  string
+	cmName string
 )
 
 // exportK8sConfigmap represents the exportK8sConfigmap command
@@ -35,12 +35,12 @@ within a Kubernetes container to a directory as files.
 The config map keys are the filenames with corresponding
 values as the file content.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return pkg.ExportK8sConfigmap(namespace, toDir, cmName)
+		return pkg.ExportK8sConfigmap(k8sClient, namespace, cmName, toDir)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(exportK8sConfigmap)
-	toDir = exportK8sConfigmap.Flags().String("toDir", "", "Directory to which configmap is exported")
-	cmName = exportK8sConfigmap.Flags().String("cmName", "", "Configmap name that needs to be exported")
+	exportK8sConfigmap.Flags().StringVar(&toDir, "toDir", "", "Directory to which configmap is exported")
+	exportK8sConfigmap.Flags().StringVar(&cmName, "cmName", "", "Configmap name that needs to be exported")
 }

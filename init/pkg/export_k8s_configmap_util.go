@@ -5,34 +5,24 @@ import (
 	"os"
 	"path/filepath"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
-	config, err := rest.InClusterConfig()
-	if err != nil {
+func ExportK8sConfigmap(k8sClient client.Client, namespace, cmName, toDir string) error {
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: cmName, Namespace: namespace,}, configMap); err != nil {
 		return err
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
-	configMap, err := clientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), *cmName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(*toDir, 0644) //nolint:gocritic // file permission
+	err := os.MkdirAll(toDir, 0644) //nolint:gocritic // file permission
 	if err != nil {
 		return err
 	}
 
 	for key, value := range configMap.Data {
-		f, err := os.Create(filepath.Join(*toDir, key))
+		f, err := os.Create(filepath.Join(toDir, key))
 		if err != nil {
 			return err
 		}
@@ -51,7 +41,7 @@ func ExportK8sConfigmap(namespace string, toDir, cmName *string) error {
 	}
 
 	for key, value := range configMap.BinaryData {
-		f, err := os.Create(filepath.Join(*toDir, key))
+		f, err := os.Create(filepath.Join(toDir, key))
 		if err != nil {
 			return err
 		}

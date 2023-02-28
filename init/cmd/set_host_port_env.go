@@ -21,7 +21,7 @@ import (
 	"create-podstatus/pkg"
 )
 
-var hostIP *string
+var hostIP string
 
 // setIPEnv represents the setIPEnv command
 var setIPEnv = &cobra.Command{
@@ -31,12 +31,12 @@ var setIPEnv = &cobra.Command{
 fetch internal and external IP from host and export to the desired
 environment variables.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return pkg.SetHostPortEnv(podName, namespace, hostIP)
+		return pkg.SetHostPortEnv(k8sClient, podName, namespace, hostIP)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(setIPEnv)
 
-	hostIP = setIPEnv.Flags().String("host-ip", "", "Host ip on which current pod is running")
+	setIPEnv.Flags().StringVar(&hostIP, "host-ip", "", "Host ip on which current pod is running")
 }

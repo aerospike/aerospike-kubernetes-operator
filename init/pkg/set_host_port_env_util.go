@@ -6,40 +6,16 @@ import (
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
-func SetHostPortEnv(podName, namespace string, hostIP *string) error {
-	cfg := ctrl.GetConfigOrDie()
-
-	err := clientgoscheme.AddToScheme(clientgoscheme.Scheme)
+func SetHostPortEnv(k8sClient client.Client, podName, namespace, hostIP string) error {
+	infoport, tlsport, err := getPortString(goctx.TODO(), k8sClient, namespace, podName)
 	if err != nil {
 		return err
 	}
 
-	err = asdbv1beta1.AddToScheme(clientgoscheme.Scheme)
-	if err != nil {
-		return err
-	}
-
-	k8sClient, err := client.New(
-		cfg, client.Options{Scheme: clientgoscheme.Scheme},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	infoport, tlsport, err := getPortString(k8sClient, goctx.TODO(), namespace, podName)
-	if err != nil {
-		return err
-	}
-
-	internalIP, externalIP, err := getHostIPS(k8sClient, goctx.TODO(), *hostIP)
+	internalIP, externalIP, err := getHostIPS(goctx.TODO(), k8sClient, hostIP)
 	if err != nil {
 		return err
 	}
@@ -57,8 +33,7 @@ func SetHostPortEnv(podName, namespace string, hostIP *string) error {
 	return nil
 }
 
-func getPortString(k8sClient client.Client, ctx goctx.Context, namespace,
-	podName string) (infoport, tlsport int32, err error) {
+func getPortString(ctx goctx.Context, k8sClient client.Client, namespace, podName string) (infoport, tlsport int32, err error) {
 	serviceList := &corev1.ServiceList{}
 	listOps := &client.ListOptions{Namespace: namespace}
 
@@ -79,13 +54,15 @@ func getPortString(k8sClient client.Client, ctx goctx.Context, namespace,
 					tlsport = port.NodePort
 				}
 			}
+
+			break
 		}
 	}
 
 	return infoport, tlsport, err
 }
 
-func getHostIPS(k8sClient client.Client, ctx goctx.Context, hostIP string) (internalIP, externalIP string, err error) {
+func getHostIPS(ctx goctx.Context, k8sClient client.Client, hostIP string) (internalIP, externalIP string, err error) {
 	internalIP = hostIP
 	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
@@ -108,12 +85,8 @@ func getHostIPS(k8sClient client.Client, ctx goctx.Context, hostIP string) (inte
 
 			if add.Type == "InternalIP" {
 				nodeInternalIP = add.Address
-				continue
-			}
-
-			if add.Type == "ExternalIP" {
+			} else if add.Type == "ExternalIP" {
 				nodeExternalIP = add.Address
-				continue
 			}
 		}
 

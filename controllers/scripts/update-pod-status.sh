@@ -41,7 +41,7 @@ AERO_CLUSTER_NAME=${AERO_CLUSTER_NAME%-*}
 
 if [ $is_python3 -ne 0 ]
 then
-  /etc/aerospike/initlib update-pod-status \
+  /etc/aerospike/akoinit update-pod-status \
   --pod-name $MY_POD_NAME \
   --cluster-name $AERO_CLUSTER_NAME \
   --namespace $NAMESPACE \
