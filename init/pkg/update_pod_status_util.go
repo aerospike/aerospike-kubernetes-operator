@@ -729,9 +729,13 @@ func getEndpoints(addressType string) []string {
 	addrType := strings.ReplaceAll(addressType, "-", "_")
 	globalAddr := "global_" + addrType + "_address"
 	globalPort := "global_" + addrType + "_port"
-	host := net.ParseIP(os.Getenv(globalAddr))
-
 	port := os.Getenv(globalPort)
+
+	host := net.ParseIP(os.Getenv(globalAddr))
+	if host == nil {
+		return endpoint
+	}
+
 	if host.To4() != nil {
 		accessPoint := string(host) + ":" + port
 		endpoint = append(endpoint, accessPoint)
