@@ -12,12 +12,12 @@ import (
 
 func ExportK8sConfigmap(k8sClient client.Client, namespace, cmName, toDir string) error {
 	configMap := &corev1.ConfigMap{}
-	if err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: cmName, Namespace: namespace,}, configMap); err != nil {
+	if err := k8sClient.Get(context.TODO(),
+		types.NamespacedName{Name: cmName, Namespace: namespace}, configMap); err != nil {
 		return err
 	}
 
-	err := os.MkdirAll(toDir, 0644) //nolint:gocritic // file permission
-	if err != nil {
+	if err := os.MkdirAll(toDir, 0644); err != nil { //nolint:gocritic // file permission
 		return err
 	}
 

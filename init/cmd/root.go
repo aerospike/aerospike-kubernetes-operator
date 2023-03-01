@@ -16,13 +16,14 @@ limitations under the License.
 package cmd
 
 import (
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"os"
+
+	"github.com/spf13/cobra"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/spf13/cobra"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 var (
@@ -62,11 +63,9 @@ func init() {
 		panic(err.Error())
 	}
 
-	k8sClient, err = client.New(
+	if k8sClient, err = client.New(
 		cfg, client.Options{Scheme: clientgoscheme.Scheme},
-	)
-
-	if err != nil {
+	); err != nil {
 		panic(err.Error())
 	}
 }

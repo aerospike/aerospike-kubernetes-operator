@@ -33,7 +33,8 @@ func SetHostPortEnv(k8sClient client.Client, podName, namespace, hostIP string) 
 	return nil
 }
 
-func getPortString(ctx goctx.Context, k8sClient client.Client, namespace, podName string) (infoport, tlsport int32, err error) {
+func getPortString(ctx goctx.Context, k8sClient client.Client, namespace,
+	podName string) (infoport, tlsport int32, err error) {
 	serviceList := &corev1.ServiceList{}
 	listOps := &client.ListOptions{Namespace: namespace}
 

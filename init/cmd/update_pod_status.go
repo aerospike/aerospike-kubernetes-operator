@@ -40,6 +40,7 @@ based on the use case and update pod status in aerospike cluster`,
 func init() {
 	rootCmd.AddCommand(updatePodStatus)
 
-	updatePodStatus.Flags().StringVar(&restartType, "restart-type", "podRestart", "Can either be quickRestart or podRestart")
-	updatePodStatus.Flags().StringVar(&clusterName, "cluster-name", "podRestart", "Aerospike cluster name")
+	updatePodStatus.Flags().StringVar(&restartType, "restart-type", "podRestart",
+		"Can either be quickRestart or podRestart")
+	updatePodStatus.Flags().StringVar(&clusterName, "cluster-name", "", "Aerospike cluster name")
 }
