@@ -29,7 +29,14 @@ if ! cat /proc/1/cmdline | tr '\000' ' ' | grep tini | grep -- "-r" > /dev/null;
 fi
 
 # Create new Aerospike configuration
-bash ./copy-templates.sh . /etc/aerospike
+if [ -f "/etc/aerospike/akoinit" ]; then
+    /etc/aerospike/akoinit copy-templates \
+    --source "." \
+    --destination "/etc/aerospike"
+else
+    bash ./copy-templates.sh . /etc/aerospike
+fi
+
 bash ./create-aerospike-conf.sh
 
 # Get current asd pid

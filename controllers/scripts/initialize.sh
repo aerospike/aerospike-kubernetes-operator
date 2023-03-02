@@ -52,14 +52,14 @@ done
 # Copy required files to config volume for initialization.
 mkdir -p "${CONFIG_VOLUME}"
 
-bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
-
 # Copy scripts and binaries needed for warm restart.
-\cp /usr/bin/curl "${CONFIG_VOLUME}"/curl
-
 if [ -f "/workdir/bin/akoinit" ]; then
+    /workdir/bin/akoinit copy-templates \
+    --source "/configs" \
+    --destination "${CONFIG_VOLUME}"
     \cp /workdir/bin/akoinit "${CONFIG_VOLUME}"/
 else
+    bash ./copy-templates.sh /configs "${CONFIG_VOLUME}"
     \cp /workdir/bin/kubernetes-configmap-exporter "${CONFIG_VOLUME}"/
 fi
 

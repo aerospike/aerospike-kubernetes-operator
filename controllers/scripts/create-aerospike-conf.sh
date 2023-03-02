@@ -75,7 +75,7 @@ substituteEndpoint() {
         ;;
     esac
 
-    # Pass on computed address to python script to update the status.
+    # Pass on computed address to go binary to update the status.
     varName=$(echo $addressType | sed -e 's/-/_/g')
 	echo export global_${varName}_address="$accessAddress" >> $GENERATED_ENV
 	echo export global_${varName}_port="$accessPort" >> $GENERATED_ENV

@@ -13,7 +13,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -557,7 +556,7 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 						if _, err := os.Stat(filePath); err == nil {
 							os.Remove(filePath)
 							logrus.Info("Deleted ", "filepath=", filePath)
-						} else if errors.IsNotFound(err) {
+						} else if os.IsNotExist(err) {
 							logrus.Info("Namespace file path does not exist ", "filepath=", filePath)
 						} else {
 							return dirtyVolumes, fmt.Errorf("failed to delete file %s %v", filePath, err)
