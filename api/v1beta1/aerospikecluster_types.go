@@ -718,7 +718,6 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
-// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal
 // +k8s:openapi-gen=true
 type AerospikeNetworkType string
 
@@ -738,25 +737,68 @@ const (
 	// If the cluster runs single pod per Kubernetes host,
 	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
+
+	// AerospikeNetworkTypeOthers specifies any other custom network type to be used with Aerospike
+	AerospikeNetworkTypeOthers AerospikeNetworkType = "others"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomAccessNetworkNames []string `json:"customAccessNetworkNames,omitempty"`
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomAlternateAccessNetworkNames []string `json:"customAlternateAccessNetworkNames,omitempty"`
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomTLSAccessNetworkNames []string `json:"customTLSAccessNetworkNames,omitempty"`
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
+
+	// +kubebuilder:validation:Enum:=others
+	HeartBeat AerospikeNetworkType `json:"heartBeat,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomHeartBeatNetworkNames []string `json:"customHeartBeatNetworkNames,omitempty"`
+
+	// +kubebuilder:validation:Enum:=others
+	TLSHeartBeat AerospikeNetworkType `json:"tlsHeartBeat,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomTLSHeartBeatNetworkNames []string `json:"customTLSHeartBeatNetworkNames,omitempty"`
+
+	// +kubebuilder:validation:Enum:=others
+	Fabric AerospikeNetworkType `json:"fabric,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomFabricNetworkNames []string `json:"customFabricNetworkNames,omitempty"`
+
+	// +kubebuilder:validation:Enum:=others
+	TLSFabric AerospikeNetworkType `json:"tlsFabric,omitempty"`
+
+	// +kubebuilder:validation:MinItems:=1
+	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
 }
 
 // SetDefaults applies default to unspecified fields on the network policy.

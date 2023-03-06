@@ -48,6 +48,7 @@ substituteEndpoint() {
     local externalIP=$5
     local podPort=$6
     local mappedPort=$7
+    local interfaceIP=$8
 
     case $networkType in
       pod)
@@ -62,6 +63,11 @@ substituteEndpoint() {
 
       hostExternal)
         accessAddress=$externalIP
+        accessPort=$mappedPort
+        ;;
+
+      others)
+        accessAddress=$interfaceIP
         accessPort=$mappedPort
         ;;
 
@@ -82,13 +88,29 @@ substituteEndpoint() {
     sed -i "s/^\(\s*\)${addressType}-port\s*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 
-substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
-substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
+substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CUSTOM_ACCESS_NETWORK_IPS
+substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS
 
 if [ "true" == "$MY_POD_TLS_ENABLED" ]; then
-  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
-  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
+  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CUSTOM_TLS_ACCESS_NETWORK_IPS
+  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS
 fi
+
+{{- if eq .NetworkPolicy.HeartBeat "others"}}
+sed -i -e "/heartbeat {/a \\        address ${CUSTOM_HEARTBEAT_NETWORK_IPS}" ${CFG}
+{{- end}}
+
+{{- if eq .NetworkPolicy.TLSHeartBeat "others"}}
+sed -i -e "/heartbeat {/a \\        tls-address ${CUSTOM_TLS_HEARTBEAT_NETWORK_IPS}" ${CFG}
+{{- end}}
+
+{{- if eq .NetworkPolicy.Fabric "others"}}
+sed -i -e "/fabric {/a \\        address ${CUSTOM_FABRIC_NETWORK_IPS}" ${CFG}
+{{- end}}
+
+{{- if eq .NetworkPolicy.TLSFabric "others"}}
+sed -i -e "/fabric {/a \\        address ${CUSTOM_TLS_FABRIC_NETWORK_IPS}" ${CFG}
+{{- end}}
 
 # ------------------------------------------------------------------------------
 # Update mesh seeds in the configuration file

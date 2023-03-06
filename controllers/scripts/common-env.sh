@@ -103,8 +103,72 @@ export MAPPED_PORT="$POD_PORT"
 export MAPPED_TLSPORT="$POD_TLSPORT"
 {{- end}}
 
+parseCustomNetworkIP() {
+  local network=$1
+  network="$(echo "${network}" | sed 's/\[//g'| sed 's/\]//g')"
+
+  DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$MY_POD_NAME")"
+
+  # Note: the IPs returned from here should match the IPs used in the node summary.
+  NETWORKIPS="$(echo $DATA | python3 -c "import sys, json
+data = json.load(sys.stdin);
+network = '${network}';
+network = network.strip().split(' ')
+def getNetworkIP(data, network):
+    annotations = data['metadata']['annotations']
+    key = 'k8s.v1.cni.cncf.io/network-status'
+    if key in annotations:
+      netIPs = []
+      for net in json.loads(annotations[key]):
+        if net['name'] in network:
+          netIPs.extend(net['ips'])
+      return ' '.join(netIPs)
+print(getNetworkIP(data, network))")"
+}
+
+{{- if eq .NetworkPolicy.AccessType "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomAccessNetworkNames}}"
+export CUSTOM_ACCESS_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+
+{{- if eq .NetworkPolicy.TLSAccessType "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAccessNetworkNames}}"
+export CUSTOM_TLS_ACCESS_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.AlternateAccessType "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomAlternateAccessNetworkNames}}"
+export CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.TLSAlternateAccessType "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
+export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.HeartBeat "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomHeartBeatNetworkNames}}"
+export CUSTOM_HEARTBEAT_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.TLSHeartBeat "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSHeartBeatNetworkNames}}"
+export CUSTOM_TLS_HEARTBEAT_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.Fabric "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomFabricNetworkNames}}"
+export CUSTOM_FABRIC_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
+{{- if eq .NetworkPolicy.TLSFabric "others"}}
+parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSFabricNetworkNames}}"
+export CUSTOM_TLS_FABRIC_NETWORK_IPS=${NETWORKIPS}
+{{- end}}
+
 # Parse out cluster name, formatted as: stsname-rackid-index
-IFS='-' read -ra ADDR <<< "${MY_POD_NAME}"
+IFS='-' read -ra ADDR <<<"${MY_POD_NAME}"
 
 POD_ORDINAL="${ADDR[-1]}"
 
@@ -114,5 +178,5 @@ export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
 
 GENERATED_ENV="/tmp/generate-env.sh"
 if [ -f $GENERATED_ENV ]; then
-	source $GENERATED_ENV
+  source $GENERATED_ENV
 fi

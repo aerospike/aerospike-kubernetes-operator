@@ -77,7 +77,7 @@ func doTestNetworkPolicy(
 			// Ensures that default network policy is applied.
 			defaultNetworkPolicy := asdbv1beta1.AerospikeNetworkPolicy{}
 			aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
-				clusterNamespacedName, defaultNetworkPolicy, multiPodPerHost,
+				clusterNamespacedName, &defaultNetworkPolicy, multiPodPerHost,
 				enableTLS,
 			)
 
@@ -106,7 +106,7 @@ func doTestNetworkPolicy(
 				TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeHostExternal,
 			}
 			aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
-				clusterNamespacedName, networkPolicy, multiPodPerHost,
+				clusterNamespacedName, &networkPolicy, multiPodPerHost,
 				enableTLS,
 			)
 
@@ -359,7 +359,7 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 // getAerospikeClusterSpecWithNetworkPolicy create a spec with input network policy.
 func getAerospikeClusterSpecWithNetworkPolicy(
 	clusterNamespacedName types.NamespacedName,
-	networkPolicy asdbv1beta1.AerospikeNetworkPolicy, multiPodPerHost bool,
+	networkPolicy *asdbv1beta1.AerospikeNetworkPolicy, multiPodPerHost bool,
 	enableTLS bool,
 ) *asdbv1beta1.AerospikeCluster {
 	cascadeDelete := true
@@ -473,7 +473,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 					},
 				},
 			},
-			AerospikeNetworkPolicy: networkPolicy,
+			AerospikeNetworkPolicy: *networkPolicy,
 		},
 	}
 }
