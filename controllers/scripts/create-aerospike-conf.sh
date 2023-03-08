@@ -96,14 +96,6 @@ if [ "true" == "$MY_POD_TLS_ENABLED" ]; then
   substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS
 fi
 
-{{- if eq .NetworkPolicy.HeartBeat "others"}}
-sed -i -e "/heartbeat {/a \\        address ${CUSTOM_HEARTBEAT_NETWORK_IPS}" ${CFG}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSHeartBeat "others"}}
-sed -i -e "/heartbeat {/a \\        tls-address ${CUSTOM_TLS_HEARTBEAT_NETWORK_IPS}" ${CFG}
-{{- end}}
-
 {{- if eq .NetworkPolicy.Fabric "others"}}
 sed -i -e "/fabric {/a \\        address ${CUSTOM_FABRIC_NETWORK_IPS}" ${CFG}
 {{- end}}

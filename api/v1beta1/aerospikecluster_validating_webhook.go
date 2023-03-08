@@ -1891,34 +1891,6 @@ func (c *AerospikeCluster) validateNetworkPolicy() error {
 	}
 
 	// TODO: Update the error msgs
-	if networkPolicy.HeartBeat != "" {
-		if networkPolicy.CustomHeartBeatNetworkNames == nil {
-			return fmt.Errorf("customHeartBeatNetworkNames is required with 'others' heartBeat network")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomHeartBeatNetworkNames...) {
-			return fmt.Errorf("required networks annotation is missing from pod metadata annotations")
-		}
-
-		if c.Spec.PodSpec.HostNetwork {
-			return fmt.Errorf("hostNetwork is not allowed with 'others' network type")
-		}
-	}
-
-	if networkPolicy.TLSHeartBeat != "" {
-		if networkPolicy.CustomTLSHeartBeatNetworkNames == nil {
-			return fmt.Errorf("customTLSHeartBeatNetworkNames is required with 'others' tlsHeartBeat network")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomTLSHeartBeatNetworkNames...) {
-			return fmt.Errorf("required networks annotation is missing from pod metadata annotations")
-		}
-
-		if c.Spec.PodSpec.HostNetwork {
-			return fmt.Errorf("hostNetwork is not allowed with 'others' network type")
-		}
-	}
-
 	if networkPolicy.Fabric != "" {
 		if networkPolicy.CustomFabricNetworkNames == nil {
 			return fmt.Errorf("customFabricNetworkNames is required with 'others' fabric network")

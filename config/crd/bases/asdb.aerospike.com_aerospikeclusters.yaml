@@ -161,11 +161,6 @@ spec:
                       type: string
                     minItems: 1
                     type: array
-                  customHeartBeatNetworkNames:
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
                   customTLSAccessNetworkNames:
                     items:
                       type: string
@@ -181,18 +176,7 @@ spec:
                       type: string
                     minItems: 1
                     type: array
-                  customTLSHeartBeatNetworkNames:
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
                   fabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
-                    enum:
-                    - others
-                    type: string
-                  heartBeat:
                     description: AerospikeNetworkType specifies the type of network
                       address to use.
                     enum:
@@ -217,12 +201,6 @@ spec:
                     - others
                     type: string
                   tlsFabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
-                    enum:
-                    - others
-                    type: string
-                  tlsHeartBeat:
                     description: AerospikeNetworkType specifies the type of network
                       address to use.
                     enum:
@@ -6028,11 +6006,6 @@ spec:
                       type: string
                     minItems: 1
                     type: array
-                  customHeartBeatNetworkNames:
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
                   customTLSAccessNetworkNames:
                     items:
                       type: string
@@ -6048,18 +6021,7 @@ spec:
                       type: string
                     minItems: 1
                     type: array
-                  customTLSHeartBeatNetworkNames:
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
                   fabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
-                    enum:
-                    - others
-                    type: string
-                  heartBeat:
                     description: AerospikeNetworkType specifies the type of network
                       address to use.
                     enum:
@@ -6084,12 +6046,6 @@ spec:
                     - others
                     type: string
                   tlsFabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
-                    enum:
-                    - others
-                    type: string
-                  tlsHeartBeat:
                     description: AerospikeNetworkType specifies the type of network
                       address to use.
                     enum:

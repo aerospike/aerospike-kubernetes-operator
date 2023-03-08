@@ -777,18 +777,6 @@ type AerospikeNetworkPolicy struct {
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
 
 	// +kubebuilder:validation:Enum:=others
-	HeartBeat AerospikeNetworkType `json:"heartBeat,omitempty"`
-
-	// +kubebuilder:validation:MinItems:=1
-	CustomHeartBeatNetworkNames []string `json:"customHeartBeatNetworkNames,omitempty"`
-
-	// +kubebuilder:validation:Enum:=others
-	TLSHeartBeat AerospikeNetworkType `json:"tlsHeartBeat,omitempty"`
-
-	// +kubebuilder:validation:MinItems:=1
-	CustomTLSHeartBeatNetworkNames []string `json:"customTLSHeartBeatNetworkNames,omitempty"`
-
-	// +kubebuilder:validation:Enum:=others
 	Fabric AerospikeNetworkType `json:"fabric,omitempty"`
 
 	// +kubebuilder:validation:MinItems:=1

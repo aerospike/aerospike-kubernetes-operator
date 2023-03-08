@@ -131,7 +131,6 @@ parseCustomNetworkIP "{{ .NetworkPolicy.CustomAccessNetworkNames}}"
 export CUSTOM_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-
 {{- if eq .NetworkPolicy.TLSAccessType "others"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAccessNetworkNames}}"
 export CUSTOM_TLS_ACCESS_NETWORK_IPS=${NETWORKIPS}
@@ -145,16 +144,6 @@ export CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- if eq .NetworkPolicy.TLSAlternateAccessType "others"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
 export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.HeartBeat "others"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomHeartBeatNetworkNames}}"
-export CUSTOM_HEARTBEAT_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSHeartBeat "others"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSHeartBeatNetworkNames}}"
-export CUSTOM_TLS_HEARTBEAT_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.Fabric "others"}}

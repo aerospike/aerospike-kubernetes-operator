@@ -381,16 +381,6 @@ func (in *AerospikeNetworkPolicy) DeepCopyInto(out *AerospikeNetworkPolicy) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.CustomHeartBeatNetworkNames != nil {
-		in, out := &in.CustomHeartBeatNetworkNames, &out.CustomHeartBeatNetworkNames
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-	if in.CustomTLSHeartBeatNetworkNames != nil {
-		in, out := &in.CustomTLSHeartBeatNetworkNames, &out.CustomTLSHeartBeatNetworkNames
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.CustomFabricNetworkNames != nil {
 		in, out := &in.CustomFabricNetworkNames, &out.CustomFabricNetworkNames
 		*out = make([]string, len(*in))
