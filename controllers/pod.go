@@ -179,11 +179,14 @@ func (r *SingleClusterReconciler) restartASDInPod(
 	rackState *RackState, pod *corev1.Pod,
 ) error {
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
+	initBinary := "/etc/aerospike/akoinit"
 	cmd := []string{
-		"bash",
-		"/etc/aerospike/refresh-cmap-restart-asd.sh",
-		cmName.Namespace,
+		initBinary,
+		"quick-restart",
+		"--cm-name",
 		cmName.Name,
+		"--cm-namespace",
+		cmName.Namespace,
 	}
 
 	// Quick restart attempt should not take significant time.
@@ -192,13 +195,39 @@ func (r *SingleClusterReconciler) restartASDInPod(
 		pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
 		r.KubeConfig,
 	)
-	if err != nil {
-		r.Log.V(1).Info(
-			"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
-			stdout, "stderr", stderr,
-		)
 
-		return err
+	if err != nil {
+		if strings.Contains(err.Error(), initBinary+": no such file or directory") {
+			cmd := []string{
+				"bash",
+				"/etc/aerospike/refresh-cmap-restart-asd.sh",
+				cmName.Namespace,
+				cmName.Name,
+			}
+
+			// Quick restart attempt should not take significant time.
+			// Therefore, it's ok to block the operator on the quick restart attempt.
+			stdout, stderr, err = utils.Exec(
+				pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
+				r.KubeConfig,
+			)
+
+			if err != nil {
+				r.Log.V(1).Info(
+					"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+					stdout, "stderr", stderr,
+				)
+
+				return err
+			}
+		} else {
+			r.Log.V(1).Info(
+				"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+				stdout, "stderr", stderr,
+			)
+
+			return err
+		}
 	}
 
 	r.Recorder.Eventf(

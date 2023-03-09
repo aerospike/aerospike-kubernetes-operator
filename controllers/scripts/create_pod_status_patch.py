@@ -12,7 +12,6 @@ import urllib.request
 import concurrent.futures
 from shlex import quote
 from pprint import pprint
-from werkzeug.utils import secure_filename
 
 # Constants
 FILE_SYSTEM_MOUNT_POINT = "/workdir/filesystem-volumes"
@@ -60,10 +59,10 @@ class Volume(object):
 
     def get_mount_point(self):
         if self.volume_mode == "Block":
-            point = os.path.join(BLOCK_MOUNT_POINT, secure_filename(self.volume_name))
+            point = os.path.join(BLOCK_MOUNT_POINT, self.volume_name)
             return point
 
-        point = os.path.join(FILE_SYSTEM_MOUNT_POINT, secure_filename(self.volume_name))
+        point = os.path.join(FILE_SYSTEM_MOUNT_POINT, self.volume_name)
         return point
 
     def get_attachment_path(self):
@@ -592,7 +591,7 @@ def wipe_volumes(pod_name, config, dirty_volumes):
 
                     for ns_file_path in filter(lambda x: x.startswith(volume.get_attachment_path()), ns_file_paths):
                         _, filename = os.path.split(ns_file_path)
-                        file_path = os.path.join(volume.get_mount_point(), secure_filename(filename))
+                        file_path = os.path.join(volume.get_mount_point(), filename)
                         if os.path.exists(file_path):
                             logging.info(f"Deleting file - {file_path}")
                             os.remove(file_path)

@@ -161,8 +161,8 @@ func validateNetworkPolicy(
 		}
 
 		cp := getClientPolicy(current, k8sClient)
-		res, err := runInfo(cp, asConn, "endpoints")
 
+		res, err := runInfo(cp, asConn, "endpoints")
 		if err != nil {
 			return fmt.Errorf("failed to run Aerospike info command: %v", err)
 		}
@@ -187,44 +187,39 @@ func validateNetworkPolicy(
 		networkPolicy := current.Spec.AerospikeNetworkPolicy
 
 		// Validate the returned endpoints.
-		err = validatePodEndpoint(
+		if err := validatePodEndpoint(
 			ctx, &podList.Items[podIndex], current, networkPolicy.AccessType, false,
 			aerospikecluster.GetEndpointsFromInfo("access", endpointsMap),
-		)
-		if err != nil {
+		); err != nil {
 			return err
 		}
 
-		err = validatePodEndpoint(
+		if err := validatePodEndpoint(
 			ctx, &podList.Items[podIndex], current, networkPolicy.AlternateAccessType, false,
 			aerospikecluster.GetEndpointsFromInfo(
 				"alternate-access", endpointsMap,
 			),
-		)
-		if err != nil {
+		); err != nil {
 			return err
 		}
 
 		tlsName := getServiceTLSName(current)
-
 		if tlsName != "" {
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo(
 					"tls-access", endpointsMap,
 				),
-			)
-			if err != nil {
+			); err != nil {
 				return err
 			}
 
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAlternateAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo(
 					"tls-alternate-access", endpointsMap,
 				),
-			)
-			if err != nil {
+			); err != nil {
 				return err
 			}
 		}
