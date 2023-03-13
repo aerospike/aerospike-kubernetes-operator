@@ -48,6 +48,7 @@ substituteEndpoint() {
     local externalIP=$5
     local podPort=$6
     local mappedPort=$7
+    local configuredIP=$8
 
     case $networkType in
       pod)
@@ -63,6 +64,17 @@ substituteEndpoint() {
       hostExternal)
         accessAddress=$externalIP
         accessPort=$mappedPort
+        ;;
+
+      configuredIP)
+        accessAddress=$configuredIP
+        accessPort=$mappedPort
+
+        if [ -z "$configuredIP" ]
+        then
+          echo "Please set '${CONFIGURED_ACCESSIP_LABEL}' and '${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}' node label to use NetworkPolicy configuredIP for access and alternateAccess addresses"
+          exit 1
+        fi
         ;;
 
       *)
@@ -82,12 +94,12 @@ substituteEndpoint() {
     sed -i "s/^\(\s*\)${addressType}-port\s*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 
-substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
-substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
+substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CONFIGURED_ACCESSIP
+substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CONFIGURED_ALTERNATE_ACCESSIP
 
 if [ "true" == "$MY_POD_TLS_ENABLED" ]; then
-  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
-  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
+  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CONFIGURED_ACCESSIP
+  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CONFIGURED_ALTERNATE_ACCESSIP
 fi
 
 # ------------------------------------------------------------------------------

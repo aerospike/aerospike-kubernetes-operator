@@ -46,6 +46,9 @@ print(getport(data, podname))")"
 export PODIP="$MY_POD_IP"
 INTERNALIP="$MY_HOST_IP"
 
+export CONFIGURED_ACCESSIP_LABEL="aerospike.com/configured-access-address"
+export CONFIGURED_ALTERNATE_ACCESSIP_LABEL="aerospike.com/configured-alternate-access-address"
+
 # Get External IP
 DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes")"
 
@@ -56,6 +59,8 @@ host = '${MY_HOST_IP}';
 def gethost(data, host):
     internalIP = host
     externalIP = host
+    configuredAccessIP = ''
+    configuredAlternateAccessIP = ''
 
     # Iterate over all nodes and find this pod's node IPs.
     for item in data['items']:
@@ -79,14 +84,25 @@ def gethost(data, host):
 
            if nodeExternalIP != '':
                externalIP = nodeExternalIP
+
+           labels = item['metadata']['labels']
+
+           if '${CONFIGURED_ACCESSIP_LABEL}' in labels:
+               configuredAccessIP = labels['${CONFIGURED_ACCESSIP_LABEL}']
+
+           if '${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}' in labels:
+               configuredAlternateAccessIP = labels['${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}']
+
            break
 
-    return internalIP + ' ' + externalIP
+    return internalIP + ' ' + externalIP + ' ' + configuredAccessIP + ' ' + configuredAlternateAccessIP
 
 print(gethost(data, host))")"
 
 export INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
 export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
+export CONFIGURED_ACCESSIP=$(echo $HOSTIPS | awk '{print $3}')
+export CONFIGURED_ALTERNATE_ACCESSIP=$(echo $HOSTIPS | awk '{print $4}')
 
 # Sets up port related variables.
 export POD_PORT="{{.PodPort}}"
