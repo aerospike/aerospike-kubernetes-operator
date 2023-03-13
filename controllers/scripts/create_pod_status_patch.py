@@ -389,8 +389,8 @@ def clean_dirty_volumes(pod_name, config, dirty_volumes):
     try:
         worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
-        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
-        raise e
+        logging.warning(f"pod-name: {pod_name} - Unable to find cleanupThreads, defaulting to 1")
+        worker_threads = 1
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
@@ -453,8 +453,8 @@ def init_volumes(pod_name, config):
     try:
         worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
-        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
-        raise e
+        logging.warning(f"pod-name: {pod_name} - Unable to find cleanupThreads, defaulting to 1")
+        worker_threads = 1
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
@@ -544,8 +544,8 @@ def wipe_volumes(pod_name, config, dirty_volumes):
     try:
         worker_threads = int(rack["effectiveStorage"]["cleanupThreads"])
     except KeyError as e:
-        logging.error(f"pod-name: {pod_name} - Unable to find cleanupThreads")
-        raise e
+        logging.warning(f"pod-name: {pod_name} - Unable to find cleanupThreads, defaulting to 1")
+        worker_threads = 1
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_threads) as executor:
 
