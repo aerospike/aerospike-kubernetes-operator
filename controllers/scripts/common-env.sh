@@ -59,8 +59,8 @@ host = '${MY_HOST_IP}';
 def gethost(data, host):
     internalIP = host
     externalIP = host
-    configuredAccessIP = ''
-    configuredAlternateAccessIP = ''
+    configuredAccessIP = 'NIL'
+    configuredAlternateAccessIP = 'NIL'
 
     # Iterate over all nodes and find this pod's node IPs.
     for item in data['items']:
@@ -103,6 +103,14 @@ export INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
 export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
 export CONFIGURED_ACCESSIP=$(echo $HOSTIPS | awk '{print $3}')
 export CONFIGURED_ALTERNATE_ACCESSIP=$(echo $HOSTIPS | awk '{print $4}')
+
+if [[ "$CONFIGURED_ACCESSIP" == "NIL" ]]; then
+  CONFIGURED_ACCESSIP=''
+fi
+
+if [[ "$CONFIGURED_ALTERNATE_ACCESSIP" == "NIL" ]]; then
+  CONFIGURED_ALTERNATE_ACCESSIP=''
+fi
 
 # Sets up port related variables.
 export POD_PORT="{{.PodPort}}"
