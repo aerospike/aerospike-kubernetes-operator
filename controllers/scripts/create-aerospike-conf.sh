@@ -96,11 +96,11 @@ if [ "true" == "$MY_POD_TLS_ENABLED" ]; then
   substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS
 fi
 
-{{- if eq .NetworkPolicy.Fabric "others"}}
+{{- if eq .NetworkPolicy.FabricType "others"}}
 sed -i -e "/fabric {/a \\        address ${CUSTOM_FABRIC_NETWORK_IPS}" ${CFG}
 {{- end}}
 
-{{- if eq .NetworkPolicy.TLSFabric "others"}}
+{{- if eq .NetworkPolicy.TLSFabricType "others"}}
 sed -i -e "/fabric {/a \\        address ${CUSTOM_TLS_FABRIC_NETWORK_IPS}" ${CFG}
 {{- end}}
 

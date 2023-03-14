@@ -60,7 +60,10 @@ func (c *AerospikeCluster) Default() admission.Response {
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set network defaults
-	c.Spec.AerospikeNetworkPolicy.SetDefaults()
+	c.Spec.AerospikeNetworkPolicy.setDefaults()
+
+	// Set network namespace if not present
+	c.Spec.AerospikeNetworkPolicy.setNetworkNamespace(c.ObjectMeta.Namespace)
 
 	// Set common storage defaults.
 	c.Spec.Storage.SetDefaults()
@@ -282,6 +285,51 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 	}
 
 	return nil
+}
+
+// setDefaults applies default to unspecified fields on the network policy.
+func (n *AerospikeNetworkPolicy) setDefaults() {
+	if n.AccessType == AerospikeNetworkTypeUnspecified {
+		n.AccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if n.AlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.AlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+
+	if n.TLSAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if n.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+}
+
+func (n *AerospikeNetworkPolicy) setNetworkNamespace(namespace string) {
+	if n.CustomAccessNetworkNames != nil {
+		setNamespaceDefault(n.CustomAccessNetworkNames, namespace)
+	}
+
+	if n.CustomAlternateAccessNetworkNames != nil {
+		setNamespaceDefault(n.CustomAlternateAccessNetworkNames, namespace)
+	}
+
+	if n.CustomTLSAccessNetworkNames != nil {
+		setNamespaceDefault(n.CustomTLSAccessNetworkNames, namespace)
+	}
+
+	if n.CustomTLSAlternateAccessNetworkNames != nil {
+		setNamespaceDefault(n.CustomTLSAlternateAccessNetworkNames, namespace)
+	}
+
+	if n.CustomFabricNetworkNames != nil {
+		setNamespaceDefault(n.CustomFabricNetworkNames, namespace)
+	}
+
+	if n.CustomTLSFabricNetworkNames != nil {
+		setNamespaceDefault(n.CustomTLSFabricNetworkNames, namespace)
+	}
 }
 
 // *****************************************************************************
@@ -745,4 +793,14 @@ func escapeString(str string) string {
 	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
 
 	return str
+}
+
+func setNamespaceDefault(networks []string, namespace string) {
+	for ind := range networks {
+		namespacedName := strings.Split(networks[ind], "/")
+
+		if len(namespacedName) == 1 {
+			networks[ind] = namespace + "/" + namespacedName[0]
+		}
+	}
 }

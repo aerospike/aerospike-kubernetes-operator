@@ -252,20 +252,22 @@ func validatePodEndpoint(
 		if podIP != host {
 			return fmt.Errorf("expected podIP %v got %v", podIP, host)
 		}
-
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if hostInternalIP != host {
 			return fmt.Errorf(
 				"expected host internal IP %v got %v", hostInternalIP, host,
 			)
 		}
-
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
 		if hostExternalIP != host {
 			return fmt.Errorf(
 				"expected host external IP %v got %v", hostExternalIP, host,
 			)
 		}
+	case asdbv1beta1.AerospikeNetworkTypeOthers:
+		return fmt.Errorf(
+			"%s not support yet", networkType,
+		)
 	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
 		return fmt.Errorf(
 			"network type cannot be unspecified",

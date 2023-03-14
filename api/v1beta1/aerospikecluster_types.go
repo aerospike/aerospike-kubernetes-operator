@@ -749,7 +749,10 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
+	// CustomAccessNetworkNames is the list of networks used to attach the pod for Aerospike access address.
+	// Required with 'others' access type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomAccessNetworkNames []string `json:"customAccessNetworkNames,omitempty"`
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
@@ -757,7 +760,11 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
+	// CustomAlternateAccessNetworkNames is the list of networks used to attach the pod for Aerospike alternate
+	// access address.
+	// Required with 'others' alternateAccess type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomAlternateAccessNetworkNames []string `json:"customAlternateAccessNetworkNames,omitempty"`
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
@@ -765,7 +772,10 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
+	// CustomTLSAccessNetworkNames is the list of networks used to attach the pod for Aerospike TLS access address.
+	// Required with 'others' tlsAccess type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAccessNetworkNames []string `json:"customTLSAccessNetworkNames,omitempty"`
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
@@ -773,39 +783,34 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
+	// CustomTLSAlternateAccessNetworkNames is the list of networks used to attach the pod for Aerospike TLS alternate
+	// access address.
+	// Required with 'others' tlsAlternateAccess type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
 
+	// FabricType is the type of network address to use for Aerospike fabric address.
+	// Defaults to 'any'.
 	// +kubebuilder:validation:Enum:=others
-	Fabric AerospikeNetworkType `json:"fabric,omitempty"`
+	FabricType AerospikeNetworkType `json:"fabric,omitempty"`
 
+	// CustomFabricNetworkNames is the list of networks used to attach the pod for Aerospike fabric address.
+	// Required with 'others' fabric type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomFabricNetworkNames []string `json:"customFabricNetworkNames,omitempty"`
 
+	// TLSFabricType is the type of network address to use for Aerospike TLS fabric address.
+	// Defaults to 'any'.
 	// +kubebuilder:validation:Enum:=others
-	TLSFabric AerospikeNetworkType `json:"tlsFabric,omitempty"`
+	TLSFabricType AerospikeNetworkType `json:"tlsFabric,omitempty"`
 
+	// CustomTLSFabricNetworkNames is the list of networks used to attach the pod for Aerospike TLS fabric address.
+	// Required with 'others' tlsFabric type
 	// +kubebuilder:validation:MinItems:=1
+	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
-}
-
-// SetDefaults applies default to unspecified fields on the network policy.
-func (n *AerospikeNetworkPolicy) SetDefaults() {
-	if n.AccessType == AerospikeNetworkTypeUnspecified {
-		n.AccessType = AerospikeNetworkTypeHostInternal
-	}
-
-	if n.AlternateAccessType == AerospikeNetworkTypeUnspecified {
-		n.AlternateAccessType = AerospikeNetworkTypeHostExternal
-	}
-
-	if n.TLSAccessType == AerospikeNetworkTypeUnspecified {
-		n.TLSAccessType = AerospikeNetworkTypeHostInternal
-	}
-
-	if n.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
-		n.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
-	}
 }
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.

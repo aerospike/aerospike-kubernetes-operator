@@ -104,26 +104,25 @@ export MAPPED_TLSPORT="$POD_TLSPORT"
 {{- end}}
 
 parseCustomNetworkIP() {
-  local network=$1
-  network="$(echo "${network}" | sed 's/\[//g'| sed 's/\]//g')"
+  local networks=$1
+  networks="$(echo "${networks}" | sed 's/\[//g'| sed 's/\]//g')"
 
   DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$MY_POD_NAME")"
 
-  # Note: the IPs returned from here should match the IPs used in the node summary.
   NETWORKIPS="$(echo $DATA | python3 -c "import sys, json
 data = json.load(sys.stdin);
-network = '${network}';
-network = network.strip().split(' ')
-def getNetworkIP(data, network):
+networks = '${networks}';
+networks = networks.strip().split(' ')
+def getNetworkIP(data, networks):
     annotations = data['metadata']['annotations']
     key = 'k8s.v1.cni.cncf.io/network-status'
     if key in annotations:
       netIPs = []
       for net in json.loads(annotations[key]):
-        if net['name'] in network:
+        if net['name'] in networks:
           netIPs.extend(net['ips'])
       return ' '.join(netIPs)
-print(getNetworkIP(data, network))")"
+print(getNetworkIP(data, networks))")"
 }
 
 {{- if eq .NetworkPolicy.AccessType "others"}}
@@ -146,12 +145,12 @@ parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
 export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.Fabric "others"}}
+{{- if eq .NetworkPolicy.FabricType "others"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomFabricNetworkNames}}"
 export CUSTOM_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.TLSFabric "others"}}
+{{- if eq .NetworkPolicy.TLSFabricType "others"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSFabricNetworkNames}}"
 export CUSTOM_TLS_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}

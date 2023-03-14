@@ -147,38 +147,56 @@ spec:
                     - others
                     type: string
                   customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of networks
+                      required to attach th
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customAlternateAccessNetworkNames:
+                    description: 'CustomAlternateAccessNetworkNames is the list of
+                      networks required to '
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of networks
+                      required to attach th
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of networks
+                      required to attach
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of networks required '
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of networks
+                      required to attach
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   fabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
                     enum:
                     - others
                     type: string
@@ -201,8 +219,8 @@ spec:
                     - others
                     type: string
                   tlsFabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
                     enum:
                     - others
                     type: string
@@ -5992,38 +6010,56 @@ spec:
                     - others
                     type: string
                   customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of networks
+                      required to attach th
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customAlternateAccessNetworkNames:
+                    description: 'CustomAlternateAccessNetworkNames is the list of
+                      networks required to '
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of networks
+                      required to attach th
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of networks
+                      required to attach
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of networks required '
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of networks
+                      required to attach
                     items:
                       type: string
+                    maxItems: 1
                     minItems: 1
                     type: array
                   fabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
                     enum:
                     - others
                     type: string
@@ -6046,8 +6082,8 @@ spec:
                     - others
                     type: string
                   tlsFabric:
-                    description: AerospikeNetworkType specifies the type of network
-                      address to use.
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
                     enum:
                     - others
                     type: string
