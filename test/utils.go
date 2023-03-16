@@ -163,10 +163,14 @@ func createConfigSecret(
 		Type: corev1.SecretTypeOpaque,
 		Data: secrets,
 	}
+
+	// Remove old object
+	_ = k8sClient.Delete(ctx, s)
+
 	// use test context's create helper to create the object and add a cleanup
 	// function for the new object
 	err := k8sClient.Create(ctx, s)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil {
 		return err
 	}
 

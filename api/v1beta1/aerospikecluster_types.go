@@ -718,7 +718,7 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
-// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal
+// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP
 // +k8s:openapi-gen=true
 type AerospikeNetworkType string
 
@@ -738,6 +738,11 @@ const (
 	// If the cluster runs single pod per Kubernetes host,
 	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
+
+	// AerospikeNetworkTypeConfigured specifies access/alternateAccess using the user configuredIP.
+	// label "aerospike.com/configured-access-address" in k8s node will be used as `accessAddress`
+	// label "aerospike.com/configured-alternate-access-address" in k8s node will be used as `alternateAccessAddress`
+	AerospikeNetworkTypeConfigured AerospikeNetworkType = "configuredIP"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.

@@ -135,6 +135,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -143,6 +144,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -151,6 +153,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -159,6 +162,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                 type: object
               image:
@@ -5934,6 +5938,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -5942,6 +5947,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -5950,6 +5956,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -5958,6 +5965,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     type: string
                 type: object
               image:
