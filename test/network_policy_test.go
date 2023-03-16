@@ -24,7 +24,7 @@ import (
 
 const (
 	// Use single node cluster so that developer machine tests run in single pod per k8s node configuration.
-	networkTestPolicyClusterSize = 1
+	networkTestPolicyClusterSize = 3
 	labelAccessAddress           = "aerospike.com/configured-access-address"
 	valueAccessAddress           = "192.168.1.1"
 	labelAlternateAccessAddress  = "aerospike.com/configured-alternate-access-address"
@@ -38,13 +38,13 @@ var _ = Describe(
 		Context(
 			"When using TLS", func() {
 				Context(
-					"When using MultiPodperhost", func() {
+					"When using MultiPodPerHost", func() {
 						doTestNetworkPolicy(true, true, ctx)
 					},
 				)
 
 				Context(
-					"When using SinglePodperhost", func() {
+					"When using SinglePodPerHost", func() {
 						doTestNetworkPolicy(false, true, ctx)
 					},
 				)
@@ -54,20 +54,111 @@ var _ = Describe(
 		Context(
 			"When using NonTLS", func() {
 				Context(
-					"When using MultiPodperhost", func() {
+					"When using MultiPodPerHost", func() {
 						doTestNetworkPolicy(true, false, ctx)
 					},
 				)
 
 				Context(
-					"When using SinglePodperhost", func() {
+					"When using SinglePodPerHost", func() {
 						doTestNetworkPolicy(false, false, ctx)
 					},
 				)
 			},
 		)
+
+		Context(
+			"Negative cases for the NetworkPolicy", func() {
+				doNegativeTestNetworkPolicy(true, true, ctx)
+			},
+		)
+
 	},
 )
+
+func doNegativeTestNetworkPolicy(
+	multiPodPerHost bool, enableTLS bool, ctx goctx.Context,
+) {
+	Context(
+		"Negative cases for the configuredIP", func() {
+			clusterNamespacedName := getClusterNamespacedName("np-configured-ip", multiClusterNs1)
+
+			BeforeEach(
+				func() {
+					err := deleteNodeLabels(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"setting configured access-address without right label", func() {
+					err := setNodeLabels(
+						ctx,
+						map[string]string{labelAlternateAccessAddress: valueAlternateAccessAddress},
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
+						AccessType:    asdbv1beta1.AerospikeNetworkTypeConfigured,
+						TLSAccessType: asdbv1beta1.AerospikeNetworkTypeConfigured,
+					}
+					aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
+						clusterNamespacedName, networkPolicy, multiPodPerHost,
+						enableTLS,
+					)
+
+					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					Expect(err).To(HaveOccurred())
+				},
+			)
+			It(
+				"setting configured alternate-access-address without right label", func() {
+					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
+					Expect(err).ToNot(HaveOccurred())
+
+					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
+						AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypeConfigured,
+						TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeConfigured,
+					}
+					aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
+						clusterNamespacedName, networkPolicy, multiPodPerHost,
+						enableTLS,
+					)
+
+					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					Expect(err).To(HaveOccurred())
+				},
+			)
+			It(
+				"setting configured access-address and alternate-access-address without label", func() {
+					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
+						AccessType:             asdbv1beta1.AerospikeNetworkTypeConfigured,
+						TLSAccessType:          asdbv1beta1.AerospikeNetworkTypeConfigured,
+						AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypeConfigured,
+						TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypeConfigured,
+					}
+					aeroCluster := getAerospikeClusterSpecWithNetworkPolicy(
+						clusterNamespacedName, networkPolicy, multiPodPerHost,
+						enableTLS,
+					)
+
+					err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					Expect(err).To(HaveOccurred())
+				},
+			)
+		},
+	)
+}
 
 func doTestNetworkPolicy(
 	multiPodPerHost bool, enableTLS bool, ctx goctx.Context,
@@ -131,7 +222,7 @@ func doTestNetworkPolicy(
 
 			BeforeEach(
 				func() {
-					err := removeCustomNodeLabel(ctx)
+					err := deleteNodeLabels(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -148,7 +239,7 @@ func doTestNetworkPolicy(
 
 			It(
 				"setting configured access-address", func() {
-					err := setNodeLabel(ctx, labelAccessAddress, valueAccessAddress)
+					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
@@ -169,7 +260,11 @@ func doTestNetworkPolicy(
 			)
 			It(
 				"setting configured alternate-access-address", func() {
-					err := setNodeLabel(ctx, labelAlternateAccessAddress, valueAlternateAccessAddress)
+					err := setNodeLabels(
+						ctx, map[string]string{
+							labelAlternateAccessAddress: valueAlternateAccessAddress,
+						},
+					)
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
@@ -190,10 +285,12 @@ func doTestNetworkPolicy(
 			)
 			It(
 				"setting configured access-address and alternate-access-address", func() {
-					err := setNodeLabel(ctx, labelAccessAddress, valueAccessAddress)
-					Expect(err).ToNot(HaveOccurred())
-
-					err = setNodeLabel(ctx, labelAlternateAccessAddress, valueAlternateAccessAddress)
+					err := setNodeLabels(
+						ctx, map[string]string{
+							labelAccessAddress:          valueAccessAddress,
+							labelAlternateAccessAddress: valueAlternateAccessAddress,
+						},
+					)
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
@@ -582,7 +679,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 	}
 }
 
-func setNodeLabel(ctx goctx.Context, key, val string) error {
+func setNodeLabels(ctx goctx.Context, labels map[string]string) error {
 	nodeList, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return err
@@ -590,7 +687,9 @@ func setNodeLabel(ctx goctx.Context, key, val string) error {
 
 	for idx := range nodeList.Items {
 		node := &nodeList.Items[idx]
-		node.Labels[key] = val
+		for key, val := range labels {
+			node.Labels[key] = val
+		}
 
 		if err := k8sClient.Update(ctx, node); err != nil {
 			return err
@@ -600,7 +699,7 @@ func setNodeLabel(ctx goctx.Context, key, val string) error {
 	return nil
 }
 
-func deleteNodeLabel(ctx goctx.Context, key string) error {
+func deleteNodeLabels(ctx goctx.Context, keys []string) error {
 	nodeList, err := getNodeList(ctx, k8sClient)
 	if err != nil {
 		return err
@@ -608,23 +707,13 @@ func deleteNodeLabel(ctx goctx.Context, key string) error {
 
 	for idx := range nodeList.Items {
 		node := &nodeList.Items[idx]
-		delete(node.Labels, key)
+		for _, key := range keys {
+			delete(node.Labels, key)
+		}
 
 		if err := k8sClient.Update(ctx, node); err != nil {
 			return err
 		}
-	}
-
-	return nil
-}
-
-func removeCustomNodeLabel(ctx goctx.Context) error {
-	if err := deleteNodeLabel(ctx, labelAccessAddress); err != nil {
-		return err
-	}
-
-	if err := deleteNodeLabel(ctx, labelAlternateAccessAddress); err != nil {
-		return err
 	}
 
 	return nil
