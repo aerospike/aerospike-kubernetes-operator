@@ -1032,7 +1032,7 @@ func negativeDeployClusterValidationTest(
 			Context(
 				"InvalidAerospikeNetworkPolicy", func() {
 					It(
-						"MissingCustomAccessNetworkNames: should fail when access is set to 'others' and"+
+						"MissingCustomAccessNetworkNames: should fail when access is set to 'others' and "+
 							"customAccessNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -1043,8 +1043,8 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to 'others' and"+
-							"customAlternateAccessNetworkNames is not given",
+						"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
+							"'others' and customAlternateAccessNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 							aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1beta1.AerospikeNetworkTypeOthers
@@ -1054,7 +1054,7 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'others' and"+
+						"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'others' and "+
 							"customTLSAccessNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -1065,8 +1065,8 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set to 'others' and"+
-							"customTLSAlternateAccessNetworkNames is not given",
+						"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set to"+
+							" 'others' and customTLSAlternateAccessNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 							aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1beta1.AerospikeNetworkTypeOthers
@@ -1076,7 +1076,7 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomFabricNetworkNames: should fail when fabric is set to 'others' and"+
+						"MissingCustomFabricNetworkNames: should fail when fabric is set to 'others' and "+
 							"customFabricNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -1087,7 +1087,7 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSFabricNetworkNames: should fail when tlsFabric is set to 'others' and"+
+						"MissingCustomTLSFabricNetworkNames: should fail when tlsFabric is set to 'others' and "+
 							"customTLSFabricNetworkNames is not given",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -1099,7 +1099,7 @@ func negativeDeployClusterValidationTest(
 
 					// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
 					It(
-						"MissingNetworkNameInPodAnnotations: should fail when access is set to 'others' and"+
+						"MissingNetworkNameInPodAnnotations: should fail when access is set to 'others' and "+
 							"customAccessNetworkNames is not present in pod annotations",
 						func() {
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -1216,10 +1216,10 @@ func negativeUpdateClusterValidationTest(
 				},
 			)
 
-			FContext(
+			Context(
 				"InvalidAerospikeNetworkPolicy", func() {
 					It(
-						"MissingCustomAccessNetworkNames: should fail when access is set to 'others' and"+
+						"MissingCustomAccessNetworkNames: should fail when access is set to 'others' and "+
 							"customAccessNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
@@ -1233,8 +1233,8 @@ func negativeUpdateClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to 'others' and"+
-							"customAlternateAccessNetworkNames is not given",
+						"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
+							"'others' and customAlternateAccessNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
 								k8sClient, ctx, clusterNamespacedName,
@@ -1247,7 +1247,7 @@ func negativeUpdateClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'others' and"+
+						"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'others' and "+
 							"customTLSAccessNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
@@ -1261,8 +1261,8 @@ func negativeUpdateClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set to 'others' and"+
-							"customTLSAlternateAccessNetworkNames is not given",
+						"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set "+
+							"to 'others' and customTLSAlternateAccessNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
 								k8sClient, ctx, clusterNamespacedName,
@@ -1275,7 +1275,7 @@ func negativeUpdateClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomFabricNetworkNames: should fail when fabric is set to 'others' and"+
+						"MissingCustomFabricNetworkNames: should fail when fabric is set to 'others' and "+
 							"customFabricNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
@@ -1289,7 +1289,7 @@ func negativeUpdateClusterValidationTest(
 					)
 
 					It(
-						"MissingCustomTLSFabricNetworkNames: should fail when tlsFabric is set to 'others' and"+
+						"MissingCustomTLSFabricNetworkNames: should fail when tlsFabric is set to 'others' and "+
 							"customTLSFabricNetworkNames is not given",
 						func() {
 							aeroCluster, err := getCluster(
@@ -1304,7 +1304,7 @@ func negativeUpdateClusterValidationTest(
 
 					// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
 					It(
-						"MissingNetworkNameInPodAnnotations: should fail when access is set to 'others' and"+
+						"MissingNetworkNameInPodAnnotations: should fail when access is set to 'others' and "+
 							"customAccessNetworkNames is not present in pod annotations",
 						func() {
 							aeroCluster, err := getCluster(

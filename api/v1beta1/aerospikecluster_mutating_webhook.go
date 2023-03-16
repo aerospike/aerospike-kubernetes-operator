@@ -796,11 +796,14 @@ func escapeString(str string) string {
 }
 
 func setNamespaceDefault(networks []string, namespace string) {
-	for ind := range networks {
-		namespacedName := strings.Split(networks[ind], "/")
+	for idx := range networks {
+		netName := strings.TrimSpace(networks[idx])
+		namespacedName := strings.Split(netName, "/")
 
 		if len(namespacedName) == 1 {
-			networks[ind] = namespace + "/" + namespacedName[0]
+			netName = namespace + "/" + netName
 		}
+
+		networks[idx] = netName
 	}
 }

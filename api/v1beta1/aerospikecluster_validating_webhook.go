@@ -1846,16 +1846,9 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	networkList := strings.Split(networks, ",")
 	networkSet := sets.NewString()
 
-	for ind := range networkList {
-		netName := strings.TrimSpace(networkList[ind])
-		namespacedName := strings.Split(netName, "/")
+	setNamespaceDefault(networkList, namespace)
 
-		if len(namespacedName) == 1 {
-			netName = namespace + "/" + netName
-		}
-
-		networkSet.Insert(netName)
-	}
+	networkSet.Insert(networkList...)
 
 	if networkPolicy.AccessType == AerospikeNetworkTypeOthers {
 		if networkPolicy.CustomAccessNetworkNames == nil {
