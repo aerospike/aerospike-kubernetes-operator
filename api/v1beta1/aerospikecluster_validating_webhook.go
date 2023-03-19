@@ -111,6 +111,12 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
+	if err := validateAerospikeNetPolicyUpdate(
+		&old.Spec.AerospikeNetworkPolicy, &c.Spec.AerospikeNetworkPolicy,
+	); err != nil {
+		return err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
@@ -1333,6 +1339,28 @@ func validateNetworkConnectionUpdate(
 				"cannot update %s for network.%s", param, connectionType,
 			)
 		}
+	}
+
+	return nil
+}
+
+func validateAerospikeNetPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) error {
+	if oldPolicy.FabricType != newPolicy.FabricType {
+		return fmt.Errorf("cannot update fabric type")
+	}
+
+	if oldPolicy.TLSFabricType != newPolicy.TLSFabricType {
+		return fmt.Errorf("cannot update tlsFabric type")
+	}
+
+	if newPolicy.FabricType == AerospikeNetworkTypeOthers &&
+		!reflect.DeepEqual(oldPolicy.CustomFabricNetworkNames, newPolicy.CustomFabricNetworkNames) {
+		return fmt.Errorf("cannot change/update customFabricNetworkNames")
+	}
+
+	if newPolicy.TLSFabricType == AerospikeNetworkTypeOthers &&
+		!reflect.DeepEqual(oldPolicy.CustomTLSFabricNetworkNames, newPolicy.CustomTLSFabricNetworkNames) {
+		return fmt.Errorf("cannot change/update customTLSFabricNetworkNames")
 	}
 
 	return nil

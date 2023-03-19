@@ -148,7 +148,7 @@ spec:
                     type: string
                   customAccessNetworkNames:
                     description: CustomAccessNetworkNames is the list of networks
-                      used to attach the po
+                      used to attach to the
                     items:
                       type: string
                     maxItems: 1
@@ -164,15 +164,15 @@ spec:
                     type: array
                   customFabricNetworkNames:
                     description: CustomFabricNetworkNames is the list of networks
-                      used to attach the po
+                      used to attach to the
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
-                    description: CustomTLSAccessNetworkNames is the list of networks
-                      used to attach the
+                    description: 'CustomTLSAccessNetworkNames is the list of networks
+                      used to attach to '
                     items:
                       type: string
                     maxItems: 1
@@ -187,8 +187,8 @@ spec:
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
-                    description: CustomTLSFabricNetworkNames is the list of networks
-                      used to attach the
+                    description: 'CustomTLSFabricNetworkNames is the list of networks
+                      used to attach to '
                     items:
                       type: string
                     maxItems: 1
@@ -6011,7 +6011,7 @@ spec:
                     type: string
                   customAccessNetworkNames:
                     description: CustomAccessNetworkNames is the list of networks
-                      used to attach the po
+                      used to attach to the
                     items:
                       type: string
                     maxItems: 1
@@ -6027,15 +6027,15 @@ spec:
                     type: array
                   customFabricNetworkNames:
                     description: CustomFabricNetworkNames is the list of networks
-                      used to attach the po
+                      used to attach to the
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
-                    description: CustomTLSAccessNetworkNames is the list of networks
-                      used to attach the
+                    description: 'CustomTLSAccessNetworkNames is the list of networks
+                      used to attach to '
                     items:
                       type: string
                     maxItems: 1
@@ -6050,8 +6050,8 @@ spec:
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
-                    description: CustomTLSFabricNetworkNames is the list of networks
-                      used to attach the
+                    description: 'CustomTLSFabricNetworkNames is the list of networks
+                      used to attach to '
                     items:
                       type: string
                     maxItems: 1

@@ -68,7 +68,7 @@ substituteEndpoint() {
 
       others)
         accessAddress=$interfaceIP
-        accessPort=$mappedPort
+        accessPort=$podPort
         ;;
 
       *)
