@@ -135,7 +135,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -144,7 +144,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   customAccessNetworkNames:
                     description: CustomAccessNetworkNames is the list of networks
@@ -198,7 +198,7 @@ spec:
                     description: 'FabricType is the type of network address to use
                       for Aerospike fabric '
                     enum:
-                    - others
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -207,7 +207,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -216,13 +216,13 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   tlsFabric:
                     description: 'TLSFabricType is the type of network address to
                       use for Aerospike TLS '
                     enum:
-                    - others
+                    - customInterface
                     type: string
                 type: object
               image:
@@ -5998,7 +5998,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -6007,7 +6007,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   customAccessNetworkNames:
                     description: CustomAccessNetworkNames is the list of networks
@@ -6061,7 +6061,7 @@ spec:
                     description: 'FabricType is the type of network address to use
                       for Aerospike fabric '
                     enum:
-                    - others
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -6070,7 +6070,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -6079,13 +6079,13 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
-                    - others
+                    - customInterface
                     type: string
                   tlsFabric:
                     description: 'TLSFabricType is the type of network address to
                       use for Aerospike TLS '
                     enum:
-                    - others
+                    - customInterface
                     type: string
                 type: object
               image:

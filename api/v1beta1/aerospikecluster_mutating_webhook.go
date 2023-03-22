@@ -60,10 +60,7 @@ func (c *AerospikeCluster) Default() admission.Response {
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set network defaults
-	c.Spec.AerospikeNetworkPolicy.setDefaults()
-
-	// Set network namespace if not present
-	c.Spec.AerospikeNetworkPolicy.setNetworkNamespace(c.ObjectMeta.Namespace)
+	c.Spec.AerospikeNetworkPolicy.setDefaults(c.ObjectMeta.Namespace)
 
 	// Set common storage defaults.
 	c.Spec.Storage.SetDefaults()
@@ -288,7 +285,7 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
-func (n *AerospikeNetworkPolicy) setDefaults() {
+func (n *AerospikeNetworkPolicy) setDefaults(namespace string) {
 	if n.AccessType == AerospikeNetworkTypeUnspecified {
 		n.AccessType = AerospikeNetworkTypeHostInternal
 	}
@@ -304,32 +301,18 @@ func (n *AerospikeNetworkPolicy) setDefaults() {
 	if n.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
 		n.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
 	}
+
+	// Set network namespace if not present
+	n.setNetworkNamespace(namespace)
 }
 
 func (n *AerospikeNetworkPolicy) setNetworkNamespace(namespace string) {
-	if n.CustomAccessNetworkNames != nil {
-		setNamespaceDefault(n.CustomAccessNetworkNames, namespace)
-	}
-
-	if n.CustomAlternateAccessNetworkNames != nil {
-		setNamespaceDefault(n.CustomAlternateAccessNetworkNames, namespace)
-	}
-
-	if n.CustomTLSAccessNetworkNames != nil {
-		setNamespaceDefault(n.CustomTLSAccessNetworkNames, namespace)
-	}
-
-	if n.CustomTLSAlternateAccessNetworkNames != nil {
-		setNamespaceDefault(n.CustomTLSAlternateAccessNetworkNames, namespace)
-	}
-
-	if n.CustomFabricNetworkNames != nil {
-		setNamespaceDefault(n.CustomFabricNetworkNames, namespace)
-	}
-
-	if n.CustomTLSFabricNetworkNames != nil {
-		setNamespaceDefault(n.CustomTLSFabricNetworkNames, namespace)
-	}
+	setNamespaceDefault(n.CustomAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomAlternateAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSAlternateAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomFabricNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSFabricNetworkNames, namespace)
 }
 
 // *****************************************************************************

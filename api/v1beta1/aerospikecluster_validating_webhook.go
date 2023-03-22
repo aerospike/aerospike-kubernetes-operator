@@ -1353,12 +1353,12 @@ func validateAerospikeNetPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPoli
 		return fmt.Errorf("cannot update tlsFabric type")
 	}
 
-	if newPolicy.FabricType == AerospikeNetworkTypeOthers &&
+	if newPolicy.FabricType == AerospikeNetworkTypeCustomInterface &&
 		!reflect.DeepEqual(oldPolicy.CustomFabricNetworkNames, newPolicy.CustomFabricNetworkNames) {
 		return fmt.Errorf("cannot change/update customFabricNetworkNames")
 	}
 
-	if newPolicy.TLSFabricType == AerospikeNetworkTypeOthers &&
+	if newPolicy.TLSFabricType == AerospikeNetworkTypeCustomInterface &&
 		!reflect.DeepEqual(oldPolicy.CustomTLSFabricNetworkNames, newPolicy.CustomTLSFabricNetworkNames) {
 		return fmt.Errorf("cannot change/update customTLSFabricNetworkNames")
 	}
@@ -1878,71 +1878,69 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 
 	networkSet.Insert(networkList...)
 
-	if networkPolicy.AccessType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomAccessNetworkNames == nil {
-			return fmt.Errorf("customAccessNetworkNames is required with 'others' access type")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomAccessNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
-		}
-	}
-
-	if networkPolicy.AlternateAccessType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomAlternateAccessNetworkNames == nil {
-			return fmt.Errorf("customAlternateAccessNetworkNames is required with 'others' alternateAccess type")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomAlternateAccessNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
-		}
-	}
-
-	if networkPolicy.TLSAccessType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomTLSAccessNetworkNames == nil {
-			return fmt.Errorf("customTLSAccessNetworkNames is required with 'others' tlsAccess type")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomTLSAccessNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
-		}
-	}
-
-	if networkPolicy.TLSAlternateAccessType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomTLSAlternateAccessNetworkNames == nil {
-			return fmt.Errorf("customTLSAlternateAccessNetworkNames is required with 'others' tlsAlternateAccess type")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomTLSAlternateAccessNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
-		}
-	}
-
-	if networkPolicy.FabricType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomFabricNetworkNames == nil {
-			return fmt.Errorf("customFabricNetworkNames is required with 'others' fabric type")
-		}
-
-		if !networkSet.HasAll(networkPolicy.CustomFabricNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
+	validateNetworkList := func(netList []string, addressType AerospikeNetworkType, listName string) error {
+		if netList == nil {
+			return fmt.Errorf("%s is required with 'customInterface' %s type", listName, addressType)
 		}
 
 		if c.Spec.PodSpec.HostNetwork {
-			return fmt.Errorf("hostNetwork is not allowed with 'others' network type")
+			return fmt.Errorf("hostNetwork is not allowed with 'customInterface' network type")
+		}
+
+		if !networkSet.HasAll(netList...) {
+			return fmt.Errorf(
+				"required networks %v not present in pod metadata annotations key \"k8s.v1.cni.cncf.io/networks\"",
+				netList)
+		}
+
+		return nil
+	}
+
+	if networkPolicy.AccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomAccessNetworkNames,
+			"access", "customAccessNetworkNames"); err != nil {
+			return err
 		}
 	}
 
-	if networkPolicy.TLSFabricType == AerospikeNetworkTypeOthers {
-		if networkPolicy.CustomTLSFabricNetworkNames == nil {
-			return fmt.Errorf("customTLSFabricNetworkNames is required with 'others' fabric type")
+	if networkPolicy.AlternateAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomAlternateAccessNetworkNames,
+			"alternateAccess", "customAlternateAccessNetworkNames"); err != nil {
+			return err
 		}
+	}
 
-		if !networkSet.HasAll(networkPolicy.CustomTLSFabricNetworkNames...) {
-			return fmt.Errorf("required networks not present in pod metadata annotations")
+	if networkPolicy.TLSAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSAccessNetworkNames,
+			"tlsAccess", "customTLSAccessNetworkNames"); err != nil {
+			return err
 		}
+	}
 
-		if c.Spec.PodSpec.HostNetwork {
-			return fmt.Errorf("hostNetwork is not allowed with 'others' network type")
+	if networkPolicy.TLSAlternateAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSAlternateAccessNetworkNames,
+			"tlsAlternateAccess", "customTLSAlternateAccessNetworkNames"); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.FabricType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomFabricNetworkNames,
+			"fabric", "customFabricNetworkNames"); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.TLSFabricType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSFabricNetworkNames,
+			"tlsFabric", "customTLSFabricNetworkNames"); err != nil {
+			return err
 		}
 	}
 

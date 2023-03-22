@@ -103,6 +103,8 @@ export MAPPED_PORT="$POD_PORT"
 export MAPPED_TLSPORT="$POD_TLSPORT"
 {{- end}}
 
+# parseCustomNetworkIP function parses the network IPs for the given list of network names
+# It parses network status information from pod annotations key `k8s.v1.cni.cncf.io/network-status` which is added by CNI
 parseCustomNetworkIP() {
   local networks=$1
   networks="$(echo "${networks}" | sed 's/\[//g'| sed 's/\]//g')"
@@ -125,32 +127,32 @@ def getNetworkIP(data, networks):
 print(getNetworkIP(data, networks))")"
 }
 
-{{- if eq .NetworkPolicy.AccessType "others"}}
+{{- if eq .NetworkPolicy.AccessType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomAccessNetworkNames}}"
 export CUSTOM_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.TLSAccessType "others"}}
+{{- if eq .NetworkPolicy.TLSAccessType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAccessNetworkNames}}"
 export CUSTOM_TLS_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.AlternateAccessType "others"}}
+{{- if eq .NetworkPolicy.AlternateAccessType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomAlternateAccessNetworkNames}}"
 export CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.TLSAlternateAccessType "others"}}
+{{- if eq .NetworkPolicy.TLSAlternateAccessType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
 export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.FabricType "others"}}
+{{- if eq .NetworkPolicy.FabricType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomFabricNetworkNames}}"
 export CUSTOM_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
-{{- if eq .NetworkPolicy.TLSFabricType "others"}}
+{{- if eq .NetworkPolicy.TLSFabricType "customInterface"}}
 parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSFabricNetworkNames}}"
 export CUSTOM_TLS_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}

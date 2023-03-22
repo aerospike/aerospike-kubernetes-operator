@@ -159,7 +159,7 @@ func getEndpointIP(
 			"failed to find %s address in the node %s for pod %s: nodes addresses are %v",
 			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeOthers:
+	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
 		return "", fmt.Errorf(
 			"%s not support yet", networkType,
 		)
@@ -203,7 +203,7 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 		}
 
 		host = pod.HostExternalIP
-	case asdbv1beta1.AerospikeNetworkTypeOthers:
+	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
 		return nil, fmt.Errorf(
 			"%s not support yet", networkType,
 		)

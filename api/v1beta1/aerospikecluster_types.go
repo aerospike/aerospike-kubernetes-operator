@@ -738,76 +738,76 @@ const (
 	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 
-	// AerospikeNetworkTypeOthers specifies any other custom network type to be used with Aerospike
-	AerospikeNetworkTypeOthers AerospikeNetworkType = "others"
+	// AerospikeNetworkTypeCustomInterface specifies any other custom network type to be used with Aerospike
+	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
-	// CustomAccessNetworkNames is the list of networks used to attach to the pod for Aerospike access address.
-	// Required with 'others' access type
+	// CustomAccessNetworkNames is the list of networks used to attach to the pod for Aerospike for access address.
+	// Required with 'customInterface' access type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomAccessNetworkNames []string `json:"customAccessNetworkNames,omitempty"`
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
 	// CustomAlternateAccessNetworkNames is the list of networks used to attach to the pod for Aerospike alternate
 	// access address.
-	// Required with 'others' alternateAccess type
+	// Required with 'customInterface' alternateAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomAlternateAccessNetworkNames []string `json:"customAlternateAccessNetworkNames,omitempty"`
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
 	// CustomTLSAccessNetworkNames is the list of networks used to attach to the pod for Aerospike TLS access address.
-	// Required with 'others' tlsAccess type
+	// Required with 'customInterface' tlsAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAccessNetworkNames []string `json:"customTLSAccessNetworkNames,omitempty"`
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;others
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
 	// CustomTLSAlternateAccessNetworkNames is the list of networks used to attach to the pod for Aerospike TLS alternate
 	// access address.
-	// Required with 'others' tlsAlternateAccess type
+	// Required with 'customInterface' tlsAlternateAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
 
 	// FabricType is the type of network address to use for Aerospike fabric address.
-	// Defaults to 'any'.
-	// +kubebuilder:validation:Enum:=others
+	// Defaults is empty meaning all interfaces 'any'.
+	// +kubebuilder:validation:Enum:=customInterface
 	FabricType AerospikeNetworkType `json:"fabric,omitempty"`
 
 	// CustomFabricNetworkNames is the list of networks used to attach to the pod for Aerospike fabric address.
-	// Required with 'others' fabric type
+	// Required with 'customInterface' fabric type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomFabricNetworkNames []string `json:"customFabricNetworkNames,omitempty"`
 
 	// TLSFabricType is the type of network address to use for Aerospike TLS fabric address.
-	// Defaults to 'any'.
-	// +kubebuilder:validation:Enum:=others
+	// Defaults is empty meaning all interfaces 'any'.
+	// +kubebuilder:validation:Enum:=customInterface
 	TLSFabricType AerospikeNetworkType `json:"tlsFabric,omitempty"`
 
 	// CustomTLSFabricNetworkNames is the list of networks used to attach to the pod for Aerospike TLS fabric address.
-	// Required with 'others' tlsFabric type
+	// Required with 'customInterface' tlsFabric type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
