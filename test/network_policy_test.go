@@ -482,7 +482,6 @@ func doTestNetworkPolicy(
 
 		It(
 			"Should add all custom interface IPs in aerospike.conf file", func() {
-
 				networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
 					AccessType:                           asdbv1beta1.AerospikeNetworkTypeCustomInterface,
 					CustomAccessNetworkNames:             []string{"ipvlan-conf-1"},
