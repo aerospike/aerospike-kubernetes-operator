@@ -1369,7 +1369,6 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 		desiredImage, err := utils.GetDesiredImage(
 			r.aeroCluster, container.Name,
 		)
-
 		if err != nil {
 			return err
 		}

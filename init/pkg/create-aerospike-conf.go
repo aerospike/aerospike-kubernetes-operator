@@ -8,20 +8,22 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 const (
-	CFG                = "/etc/aerospike/aerospike.template.conf"
-	PEERS              = "/etc/aerospike/peers"
-	Access             = "access"
-	AlternateAccess    = "alternate-access"
-	TLSAccess          = "tls-access"
-	TLSAlternateAccess = "tls-alternate-access"
+	cfg                = "/etc/aerospike/aerospike.template.conf"
+	peers              = "/etc/aerospike/peers"
+	access             = "access"
+	alternateAccess    = "alternate-access"
+	tlsAccess          = "tls-access"
+	tlsAlternateAccess = "tls-alternate-access"
 )
 
 func (initp *InitParams) createAerospikeConf() error {
-	data, err := os.ReadFile(CFG)
+	data, err := os.ReadFile(cfg)
 	if err != nil {
 		return err
 	}
@@ -34,15 +36,17 @@ func (initp *InitParams) createAerospikeConf() error {
 	}
 
 	confString = strings.ReplaceAll(confString, "ENV_NODE_ID", initp.nodeID)
-	confString = initp.substituteEndpoint(Access, confString)
-	confString = initp.substituteEndpoint(AlternateAccess, confString)
+	confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.AccessType, access, confString)
+	confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.AlternateAccessType, alternateAccess, confString)
 
 	if os.Getenv("MY_POD_TLS_ENABLED") == "true" {
-		confString = initp.substituteEndpoint(TLSAccess, confString)
-		confString = initp.substituteEndpoint(TLSAlternateAccess, confString)
+		confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.TLSAccessType,
+			tlsAccess, confString)
+		confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.TLSAlternateAccessType,
+			tlsAlternateAccess, confString)
 	}
 
-	readFile, err := os.Open(PEERS)
+	readFile, err := os.Open(peers)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -58,117 +62,107 @@ func (initp *InitParams) createAerospikeConf() error {
 			continue
 		}
 
-		if initp.initTemplateInput.HeartBeatPort != 0 {
+		if initp.networkInfo.HeartBeatPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.initTemplateInput.HeartBeatPort, strdataSplit[1])
+				strdataSplit[0], peer, initp.networkInfo.HeartBeatPort, strdataSplit[1])
 		}
 
-		if initp.initTemplateInput.HeartBeatTLSPort != 0 {
+		if initp.networkInfo.HeartBeatTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        tls-mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.initTemplateInput.HeartBeatTLSPort, strdataSplit[1])
+				strdataSplit[0], peer, initp.networkInfo.HeartBeatTLSPort, strdataSplit[1])
 		}
 	}
 
-	if initp.initTemplateInput.HostNetwork {
-		if initp.initTemplateInput.HeartBeatPort != 0 {
+	if initp.networkInfo.HostNetwork {
+		if initp.networkInfo.HeartBeatPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        address %s%s",
-				strdataSplit[0], os.Getenv("MY_POD_IP"), strdataSplit[1])
+				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.initTemplateInput.HeartBeatTLSPort != 0 {
+		if initp.networkInfo.HeartBeatTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        tls-address %s%s",
-				strdataSplit[0], os.Getenv("MY_POD_IP"), strdataSplit[1])
+				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.initTemplateInput.FabricPort != 0 {
+		if initp.networkInfo.FabricPort != 0 {
 			strdataSplit := strings.Split(confString, "fabric {")
 			confString = fmt.Sprintf("%sfabric {\n        address %s%s",
-				strdataSplit[0], os.Getenv("MY_POD_IP"), strdataSplit[1])
+				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.initTemplateInput.FabricTLSPort != 0 {
+		if initp.networkInfo.FabricTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "fabric {")
 			confString = fmt.Sprintf("%sfabric {\n        tls-address %s%s",
-				strdataSplit[0], os.Getenv("MY_POD_IP"), strdataSplit[1])
+				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 	}
 
-	if err = os.WriteFile(CFG, []byte(confString), 0644); err != nil { //nolint:gocritic,gosec // file permission
+	if err = os.WriteFile(cfg, []byte(confString), 0644); err != nil { //nolint:gocritic,gosec // file permission
 		return err
 	}
+
+	logrus.Info("aerospike.template.conf = ", confString)
 
 	return nil
 }
 
-func (initp *InitParams) substituteEndpoint(addressType, confString string) string {
+func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNetworkType,
+	addressType, confString string) string {
 	var (
 		accessAddress string
 		accessPort    int32
-		networkType   asdbv1beta1.AerospikeNetworkType
 		podPort       int32
 		mappedPort    int32
 	)
 
-	if addressType == Access || addressType == AlternateAccess {
-		if addressType == Access {
-			networkType = initp.initTemplateInput.NetworkPolicy.AccessType
-		} else {
-			networkType = initp.initTemplateInput.NetworkPolicy.AlternateAccessType
-		}
-
-		podPort = initp.initTemplateInput.PodPort
-		mappedPort = initp.mappedPort
+	if addressType == access || addressType == alternateAccess {
+		podPort = initp.networkInfo.PodPort
+		mappedPort = initp.networkInfo.mappedPort
 	}
 
-	if addressType == TLSAccess || addressType == TLSAlternateAccess {
-		if addressType == TLSAccess {
-			networkType = initp.initTemplateInput.NetworkPolicy.TLSAccessType
-		} else {
-			networkType = initp.initTemplateInput.NetworkPolicy.TLSAlternateAccessType
-		}
-
-		podPort = initp.initTemplateInput.PodTLSPort
-		mappedPort = initp.mappedTLSPort
+	if addressType == tlsAccess || addressType == tlsAlternateAccess {
+		podPort = initp.networkInfo.PodTLSPort
+		mappedPort = initp.networkInfo.mappedTLSPort
 	}
 
 	switch networkType { //nolint:exhaustive // fallback to default
 	case asdbv1beta1.AerospikeNetworkTypePod:
-		accessAddress = os.Getenv("MY_POD_IP")
+		accessAddress = initp.networkInfo.podIP
 		accessPort = podPort
 
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
-		accessAddress = initp.internalIP
+		accessAddress = initp.networkInfo.internalIP
 		accessPort = mappedPort
 
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
-		accessAddress = initp.externalIP
+		accessAddress = initp.networkInfo.externalIP
 		accessPort = mappedPort
 
 	default:
-		accessAddress = os.Getenv("MY_POD_IP")
+		accessAddress = initp.networkInfo.podIP
 		accessPort = podPort
 	}
 
 	switch addressType {
-	case Access:
-		initp.globalAddressesAndPorts.globalAccessAddress = accessAddress
-		initp.globalAddressesAndPorts.globalAccessPort = accessPort
+	case access:
+		initp.networkInfo.globalAddressesAndPorts.globalAccessAddress = accessAddress
+		initp.networkInfo.globalAddressesAndPorts.globalAccessPort = accessPort
 
-	case AlternateAccess:
-		initp.globalAddressesAndPorts.globalAlternateAccessAddress = accessAddress
-		initp.globalAddressesAndPorts.globalAlternateAccessPort = accessPort
+	case alternateAccess:
+		initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessAddress = accessAddress
+		initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessPort = accessPort
 
-	case TLSAccess:
-		initp.globalAddressesAndPorts.globalTLSAccessAddress = accessAddress
-		initp.globalAddressesAndPorts.globalTLSAccessPort = accessPort
+	case tlsAccess:
+		initp.networkInfo.globalAddressesAndPorts.globalTLSAccessAddress = accessAddress
+		initp.networkInfo.globalAddressesAndPorts.globalTLSAccessPort = accessPort
 
-	case TLSAlternateAccess:
-		initp.globalAddressesAndPorts.globalTLSAlternateAccessAddress = accessAddress
-		initp.globalAddressesAndPorts.globalTLSAlternateAccessPort = accessPort
+	case tlsAlternateAccess:
+		initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessAddress = accessAddress
+		initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessPort = accessPort
 	}
 
 	confString = strings.ReplaceAll(confString, fmt.Sprintf("<%s-address>", addressType), accessAddress)

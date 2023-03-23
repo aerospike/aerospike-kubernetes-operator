@@ -195,7 +195,6 @@ func (r *SingleClusterReconciler) restartASDInPod(
 		pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
 		r.KubeConfig,
 	)
-
 	if err != nil {
 		if strings.Contains(err.Error(), initBinary+": no such file or directory") {
 			cmd := []string{

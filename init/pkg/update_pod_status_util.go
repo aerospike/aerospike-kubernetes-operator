@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	FileSystemMountPoint = "/workdir/filesystem-volumes"
-	BlockMountPoint      = "/workdir/block-volumes"
-	BaseWipeVersion      = 6
+	fileSystemMountPoint = "/workdir/filesystem-volumes"
+	blockMountPoint      = "/workdir/block-volumes"
+	baseWipeVersion      = 6
 )
 
 type Volume struct {
@@ -40,10 +40,10 @@ type Volume struct {
 
 func (v *Volume) getMountPoint() string {
 	if v.volumeMode == string(corev1.PersistentVolumeBlock) {
-		return filepath.Join(BlockMountPoint, v.volumeName)
+		return filepath.Join(blockMountPoint, v.volumeName)
 	}
 
-	return filepath.Join(FileSystemMountPoint, v.volumeName)
+	return filepath.Join(fileSystemMountPoint, v.volumeName)
 }
 
 func getImageVersion(image string) (version int, err error) {
@@ -66,9 +66,9 @@ func execute(cmd []string, stderr *os.File) error {
 	if len(cmd) > 0 {
 		var command *exec.Cmd
 		if len(cmd) > 1 {
-			command = exec.Command(cmd[0], cmd[1:]...)
+			command = exec.Command(cmd[0], cmd[1:]...) //nolint:gosec // internal command array
 		} else {
-			command = exec.Command(cmd[0])
+			command = exec.Command(cmd[0]) //nolint:gosec // internal command array
 		}
 
 		if stderr != nil {
@@ -99,18 +99,18 @@ func getPodImage(ctx goctx.Context, k8sClient client.Client, podNamespacedName t
 }
 
 func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
-	podPort := initp.initTemplateInput.PodPort
-	servicePort := initp.mappedPort
+	podPort := initp.networkInfo.PodPort
+	servicePort := initp.networkInfo.mappedPort
 
 	if tlsEnabled, _ := strconv.ParseBool(os.Getenv("MY_POD_TLS_ENABLED")); tlsEnabled {
-		podPort = initp.initTemplateInput.PodTLSPort
-		servicePort = initp.mappedTLSPort
+		podPort = initp.networkInfo.PodTLSPort
+		servicePort = initp.networkInfo.mappedTLSPort
 	}
 
 	metadata := asdbv1beta1.AerospikePodStatus{
-		PodIP:          os.Getenv("MY_POD_IP"),
-		HostInternalIP: initp.internalIP,
-		HostExternalIP: initp.externalIP,
+		PodIP:          initp.networkInfo.podIP,
+		HostInternalIP: initp.networkInfo.internalIP,
+		HostExternalIP: initp.networkInfo.externalIP,
 		PodPort:        int(podPort),
 		ServicePort:    servicePort,
 		Aerospike: asdbv1beta1.AerospikeInstanceSummary{
@@ -485,14 +485,17 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 				for _, nsFilePath := range nsFilePaths {
 					if strings.HasPrefix(nsFilePath, volume.aerospikeVolumePath) {
 						_, fileName := filepath.Split(nsFilePath)
+
 						filePath := filepath.Join(volume.getMountPoint(), fileName)
-						if _, err := os.Stat(filePath); err == nil {
+						if _, err := os.Stat(filePath); err != nil {
+							if os.IsNotExist(err) {
+								logrus.Info("Namespace file path does not exist ", "filepath=", filePath)
+							} else {
+								return dirtyVolumes, fmt.Errorf("failed to delete file %s %v", filePath, err)
+							}
+						} else {
 							os.Remove(filePath)
 							logrus.Info("Deleted ", "filepath=", filePath)
-						} else if os.IsNotExist(err) {
-							logrus.Info("Namespace file path does not exist ", "filepath=", filePath)
-						} else {
-							return dirtyVolumes, fmt.Errorf("failed to delete file %s %v", filePath, err)
 						}
 					}
 				}
@@ -553,8 +556,8 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 				return imageErr
 			}
 
-			if (nextMajorVer >= BaseWipeVersion && BaseWipeVersion > prevMajorVer) ||
-				(nextMajorVer < BaseWipeVersion && BaseWipeVersion <= prevMajorVer) {
+			if (nextMajorVer >= baseWipeVersion && baseWipeVersion > prevMajorVer) ||
+				(nextMajorVer < baseWipeVersion && baseWipeVersion <= prevMajorVer) {
 				dirtyVolumes, err = wipeVolumes(initp.podName, initp.aeroCluster, dirtyVolumes)
 				if err != nil {
 					return err
@@ -613,22 +616,22 @@ func (initp *InitParams) updateStatus(ctx goctx.Context,
 	metadata.PodSpecHash = podSpecHash
 
 	var AddressTypeName = [4]string{
-		Access,
-		AlternateAccess,
-		TLSAccess,
-		TLSAlternateAccess,
+		access,
+		alternateAccess,
+		tlsAccess,
+		tlsAlternateAccess,
 	}
 
-	for _, podAddrName := range AddressTypeName {
-		switch podAddrName {
-		case Access:
-			metadata.Aerospike.AccessEndpoints = initp.getEndpoints(podAddrName)
-		case AlternateAccess:
-			metadata.Aerospike.AlternateAccessEndpoints = initp.getEndpoints(podAddrName)
-		case TLSAccess:
-			metadata.Aerospike.TLSAccessEndpoints = initp.getEndpoints(podAddrName)
-		case TLSAlternateAccess:
-			metadata.Aerospike.TLSAlternateAccessEndpoints = initp.getEndpoints(podAddrName)
+	for _, confAddrName := range AddressTypeName {
+		switch confAddrName {
+		case access:
+			metadata.Aerospike.AccessEndpoints = initp.getEndpoints(confAddrName)
+		case alternateAccess:
+			metadata.Aerospike.AlternateAccessEndpoints = initp.getEndpoints(confAddrName)
+		case tlsAccess:
+			metadata.Aerospike.TLSAccessEndpoints = initp.getEndpoints(confAddrName)
+		case tlsAlternateAccess:
+			metadata.Aerospike.TLSAlternateAccessEndpoints = initp.getEndpoints(confAddrName)
 		}
 	}
 
@@ -664,21 +667,21 @@ func (initp *InitParams) getEndpoints(addressType string) []string {
 	)
 
 	switch addressType {
-	case "access":
-		globalAddr = initp.globalAddressesAndPorts.globalAccessAddress
-		globalPort = initp.globalAddressesAndPorts.globalAccessPort
+	case access:
+		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalAccessAddress
+		globalPort = initp.networkInfo.globalAddressesAndPorts.globalAccessPort
 
-	case "alternate-access":
-		globalAddr = initp.globalAddressesAndPorts.globalAlternateAccessAddress
-		globalPort = initp.globalAddressesAndPorts.globalAlternateAccessPort
+	case alternateAccess:
+		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessAddress
+		globalPort = initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessPort
 
-	case "tls-access":
-		globalAddr = initp.globalAddressesAndPorts.globalTLSAccessAddress
-		globalPort = initp.globalAddressesAndPorts.globalTLSAccessPort
+	case tlsAccess:
+		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalTLSAccessAddress
+		globalPort = initp.networkInfo.globalAddressesAndPorts.globalTLSAccessPort
 
-	case "tls-alternate-access":
-		globalAddr = initp.globalAddressesAndPorts.globalTLSAlternateAccessAddress
-		globalPort = initp.globalAddressesAndPorts.globalTLSAlternateAccessPort
+	case tlsAlternateAccess:
+		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessAddress
+		globalPort = initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessPort
 	}
 
 	host := net.ParseIP(globalAddr)
@@ -686,7 +689,7 @@ func (initp *InitParams) getEndpoints(addressType string) []string {
 		return endpoint
 	}
 
-	if host.To4() != nil {
+	if host.To4() != nil { //nolint:gocritic // switch not applicable
 		accessPoint := host.String() + ":" + strconv.Itoa(int(globalPort))
 		endpoint = append(endpoint, accessPoint)
 	} else if host.To16() != nil {
