@@ -188,7 +188,7 @@ func getAerospikeClusterSpecWithLDAP(
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "test",
-							"replication-factor": networkTestPolicyClusterSize,
+							"replication-factor": 2,
 							"memory-size":        3000000000,
 							"migrate-sleep":      0,
 							"storage-engine": map[string]interface{}{
