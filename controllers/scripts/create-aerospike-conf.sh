@@ -101,7 +101,7 @@ sed -i -e "/fabric {/a \\        address ${CUSTOM_FABRIC_NETWORK_IPS}" ${CFG}
 {{- end}}
 
 {{- if eq .NetworkPolicy.TLSFabricType "customInterface"}}
-sed -i -e "/fabric {/a \\        address ${CUSTOM_TLS_FABRIC_NETWORK_IPS}" ${CFG}
+sed -i -e "/fabric {/a \\        tls-address ${CUSTOM_TLS_FABRIC_NETWORK_IPS}" ${CFG}
 {{- end}}
 
 # ------------------------------------------------------------------------------

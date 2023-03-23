@@ -122,7 +122,15 @@ def getNetworkIP(data, networks):
       netIPs = []
       for net in json.loads(annotations[key]):
         if net['name'] in networks:
-          netIPs.extend(net['ips'])
+          if 'ips' in net:
+            if len(net['ips']) == 0:
+              raise ValueError(\"ips list empty for network {} in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(net['name']))
+            netIPs.extend(net['ips'])
+          else:
+            raise KeyError(\"ips key missing for network {} in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(net['name']))
+
+      if len(netIPs) == 0:
+        raise ValueError(\"networks {} not found in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(networks))
       return ' '.join(netIPs)
 print(getNetworkIP(data, networks))")"
 }
