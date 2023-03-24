@@ -147,8 +147,8 @@ spec:
                     - customInterface
                     type: string
                   customAccessNetworkNames:
-                    description: CustomAccessNetworkNames is the list of networks
-                      used to attach to the
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
                     items:
                       type: string
                     maxItems: 1
@@ -156,39 +156,39 @@ spec:
                     type: array
                   customAlternateAccessNetworkNames:
                     description: CustomAlternateAccessNetworkNames is the list of
-                      networks used to atta
+                      the pod's network int
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
-                    description: CustomFabricNetworkNames is the list of networks
-                      used to attach to the
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
-                    description: 'CustomTLSAccessNetworkNames is the list of networks
-                      used to attach to '
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
-                    description: CustomTLSAlternateAccessNetworkNames is the list
-                      of networks used to a
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
-                    description: 'CustomTLSFabricNetworkNames is the list of networks
-                      used to attach to '
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
                     items:
                       type: string
                     maxItems: 1
@@ -6010,8 +6010,8 @@ spec:
                     - customInterface
                     type: string
                   customAccessNetworkNames:
-                    description: CustomAccessNetworkNames is the list of networks
-                      used to attach to the
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
                     items:
                       type: string
                     maxItems: 1
@@ -6019,39 +6019,39 @@ spec:
                     type: array
                   customAlternateAccessNetworkNames:
                     description: CustomAlternateAccessNetworkNames is the list of
-                      networks used to atta
+                      the pod's network int
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
-                    description: CustomFabricNetworkNames is the list of networks
-                      used to attach to the
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
-                    description: 'CustomTLSAccessNetworkNames is the list of networks
-                      used to attach to '
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
-                    description: CustomTLSAlternateAccessNetworkNames is the list
-                      of networks used to a
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
                     items:
                       type: string
                     maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
-                    description: 'CustomTLSFabricNetworkNames is the list of networks
-                      used to attach to '
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
                     items:
                       type: string
                     maxItems: 1

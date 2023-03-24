@@ -136,32 +136,32 @@ print(getNetworkIP(data, networks))")"
 }
 
 {{- if eq .NetworkPolicy.AccessType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomAccessNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomAccessNetworkNames}}"
 export CUSTOM_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.TLSAccessType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAccessNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSAccessNetworkNames}}"
 export CUSTOM_TLS_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.AlternateAccessType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomAlternateAccessNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomAlternateAccessNetworkNames}}"
 export CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.TLSAlternateAccessType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
 export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.FabricType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomFabricNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomFabricNetworkNames}}"
 export CUSTOM_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 {{- if eq .NetworkPolicy.TLSFabricType "customInterface"}}
-parseCustomNetworkIP "{{ .NetworkPolicy.CustomTLSFabricNetworkNames}}"
+parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSFabricNetworkNames}}"
 export CUSTOM_TLS_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 

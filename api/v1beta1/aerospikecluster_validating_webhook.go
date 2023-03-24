@@ -111,7 +111,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
-	if err := validateAerospikeNetPolicyUpdate(
+	if err := validateNetworkPolicyUpdate(
 		&old.Spec.AerospikeNetworkPolicy, &c.Spec.AerospikeNetworkPolicy,
 	); err != nil {
 		return err
@@ -1344,7 +1344,7 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
-func validateAerospikeNetPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) error {
+func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) error {
 	if oldPolicy.FabricType != newPolicy.FabricType {
 		return fmt.Errorf("cannot update fabric type")
 	}

@@ -168,6 +168,16 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, clusterNamespacedName ty
 				},
 			)
 
+			It(
+				"InvalidFabricType: should fail when fabric is set to value other than 'customInterface'",
+				func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = "invalid-enum"
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
 			// Following test-cases are applicable for all custom Interfaces
 			// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
 			It(
@@ -255,8 +265,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, clusterNamespacedName ty
 			)
 
 			It(
-				"TwoCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
-					"customAccessNetworkNames is added with 2 entries",
+				"MaxAllowedNetworkNames: should fail when more than the max allowed network names(only 1) are "+
+					"given in CR.",
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1beta1.AerospikeNetworkTypeCustomInterface
@@ -611,6 +621,10 @@ func doTestNetworkPolicy(
 		},
 	)
 
+	// All the custom interface related test-cases are tested by mocking the behavior of CNI plugins.
+	// Mocking is done by adding k8s.v1.cni.cncf.io/network-status manually in pod metadata annotations
+	// which is ideally added by CNI at runtime.
+	// Test cases with NetworkAttachmentDefinition of different namespaces can't be tested with current mocking.
 	Context("customInterface", func() {
 		clusterNamespacedName := getClusterNamespacedName(
 			"np-custom-interface", multiClusterNs1,
@@ -733,6 +747,7 @@ func doTestNetworkPolicy(
 			err = validateNetworkPolicy(ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
+
 	})
 }
 

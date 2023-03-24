@@ -738,7 +738,7 @@ const (
 	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 
-	// AerospikeNetworkTypeCustomInterface specifies any other custom network type to be used with Aerospike
+	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
 )
 
@@ -749,8 +749,12 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
-	// CustomAccessNetworkNames is the list of networks used to attach to the pod for Aerospike for access address.
-	// Required with 'customInterface' access type
+	// CustomAccessNetworkNames is the list of the pod's network interfaces used for Aerospike access address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign
+	// network interfaces to the pod.
+	// Required with 'customInterface' access type.
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
 	CustomAccessNetworkNames []string `json:"customAccessNetworkNames,omitempty"`
@@ -760,8 +764,12 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
-	// CustomAlternateAccessNetworkNames is the list of networks used to attach to the pod for Aerospike alternate
-	// access address.
+	// CustomAlternateAccessNetworkNames is the list of the pod's network interfaces used for Aerospike
+	// alternate access address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign
+	// network interfaces to the pod.
 	// Required with 'customInterface' alternateAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
@@ -772,7 +780,11 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
-	// CustomTLSAccessNetworkNames is the list of networks used to attach to the pod for Aerospike TLS access address.
+	// CustomTLSAccessNetworkNames is the list of the pod's network interfaces used for Aerospike TLS access address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign
+	// network interfaces to the pod.
 	// Required with 'customInterface' tlsAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
@@ -783,8 +795,12 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
-	// CustomTLSAlternateAccessNetworkNames is the list of networks used to attach to the pod for Aerospike TLS alternate
-	// access address.
+	// CustomTLSAlternateAccessNetworkNames is the list of the pod's network interfaces used for Aerospike TLS
+	// alternate access address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign
+	// network interfaces to the pod.
 	// Required with 'customInterface' tlsAlternateAccess type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
@@ -795,7 +811,11 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum:=customInterface
 	FabricType AerospikeNetworkType `json:"fabric,omitempty"`
 
-	// CustomFabricNetworkNames is the list of networks used to attach to the pod for Aerospike fabric address.
+	// CustomFabricNetworkNames is the list of the pod's network interfaces used for Aerospike fabric address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign
+	// network interfaces to the pod.
 	// Required with 'customInterface' fabric type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
@@ -806,7 +826,11 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:Enum:=customInterface
 	TLSFabricType AerospikeNetworkType `json:"tlsFabric,omitempty"`
 
-	// CustomTLSFabricNetworkNames is the list of networks used to attach to the pod for Aerospike TLS fabric address.
+	// CustomTLSFabricNetworkNames is the list of the pod's network interfaces used for Aerospike TLS fabric address.
+	// Each element in the list is specified with a namespace and the name of a NetworkAttachmentDefinition,
+	// separated by a forward slash (/).
+	// These elements must be defined in the pod annotation k8s.v1.cni.cncf.io/networks in order to assign network
+	// interfaces to the pod.
 	// Required with 'customInterface' tlsFabric type
 	// +kubebuilder:validation:MinItems:=1
 	// +kubebuilder:validation:MaxItems:=1
