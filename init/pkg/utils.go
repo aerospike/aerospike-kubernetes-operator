@@ -28,22 +28,22 @@ type globalAddressesAndPorts struct {
 }
 
 type networkInfo struct {
-	NetworkPolicy           asdbv1beta1.AerospikeNetworkPolicy
+	networkPolicy           asdbv1beta1.AerospikeNetworkPolicy
 	hostIP                  string
 	podIP                   string
 	internalIP              string
 	externalIP              string
 	globalAddressesAndPorts globalAddressesAndPorts
-	FabricPort              int32
-	FabricTLSPort           int32
-	PodPort                 int32
-	PodTLSPort              int32
-	HeartBeatPort           int32
-	HeartBeatTLSPort        int32
+	fabricPort              int32
+	fabricTLSPort           int32
+	podPort                 int32
+	podTLSPort              int32
+	heartBeatPort           int32
+	heartBeatTLSPort        int32
 	mappedPort              int32
 	mappedTLSPort           int32
-	MultiPodPerHost         bool
-	HostNetwork             bool
+	multiPodPerHost         bool
+	hostNetwork             bool
 }
 
 func getNamespacedName(name, namespace string) types.NamespacedName {
@@ -103,15 +103,15 @@ func getNetworkInfo(k8sClient client.Client, podName string,
 	}
 
 	networkInfo := &networkInfo{
-		MultiPodPerHost:  aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		NetworkPolicy:    aeroCluster.Spec.AerospikeNetworkPolicy,
-		PodPort:          servicePortParam,
-		PodTLSPort:       serviceTLSPortParam,
-		HeartBeatPort:    hbPortParam,
-		HeartBeatTLSPort: hbTLSPortParam,
-		FabricPort:       fabricPortParam,
-		FabricTLSPort:    fabricTLSPortParam,
-		HostNetwork:      aeroCluster.Spec.PodSpec.HostNetwork,
+		multiPodPerHost:  aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		networkPolicy:    aeroCluster.Spec.AerospikeNetworkPolicy,
+		podPort:          servicePortParam,
+		podTLSPort:       serviceTLSPortParam,
+		heartBeatPort:    hbPortParam,
+		heartBeatTLSPort: hbTLSPortParam,
+		fabricPort:       fabricPortParam,
+		fabricTLSPort:    fabricTLSPortParam,
+		hostNetwork:      aeroCluster.Spec.PodSpec.HostNetwork,
 		hostIP:           os.Getenv("MY_HOST_IP"),
 		podIP:            os.Getenv("MY_POD_IP"),
 	}
@@ -185,14 +185,14 @@ func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkI
 		return err
 	}
 
-	if networkInfo.MultiPodPerHost {
+	if networkInfo.multiPodPerHost {
 		// Use mapped service ports
 		networkInfo.mappedPort = infoPort
 		networkInfo.mappedTLSPort = tlsPort
 	} else {
 		// Use the actual ports.
-		networkInfo.mappedPort = networkInfo.PodPort
-		networkInfo.mappedTLSPort = networkInfo.PodTLSPort
+		networkInfo.mappedPort = networkInfo.podPort
+		networkInfo.mappedTLSPort = networkInfo.podTLSPort
 	}
 
 	return nil

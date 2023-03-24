@@ -36,13 +36,13 @@ func (initp *InitParams) createAerospikeConf() error {
 	}
 
 	confString = strings.ReplaceAll(confString, "ENV_NODE_ID", initp.nodeID)
-	confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.AccessType, access, confString)
-	confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.AlternateAccessType, alternateAccess, confString)
+	confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.AccessType, access, confString)
+	confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.AlternateAccessType, alternateAccess, confString)
 
 	if os.Getenv("MY_POD_TLS_ENABLED") == "true" {
-		confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.TLSAccessType,
+		confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.TLSAccessType,
 			tlsAccess, confString)
-		confString = initp.substituteEndpoint(initp.networkInfo.NetworkPolicy.TLSAlternateAccessType,
+		confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.TLSAlternateAccessType,
 			tlsAlternateAccess, confString)
 	}
 
@@ -62,39 +62,39 @@ func (initp *InitParams) createAerospikeConf() error {
 			continue
 		}
 
-		if initp.networkInfo.HeartBeatPort != 0 {
+		if initp.networkInfo.heartBeatPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.networkInfo.HeartBeatPort, strdataSplit[1])
+				strdataSplit[0], peer, initp.networkInfo.heartBeatPort, strdataSplit[1])
 		}
 
-		if initp.networkInfo.HeartBeatTLSPort != 0 {
+		if initp.networkInfo.heartBeatTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        tls-mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.networkInfo.HeartBeatTLSPort, strdataSplit[1])
+				strdataSplit[0], peer, initp.networkInfo.heartBeatTLSPort, strdataSplit[1])
 		}
 	}
 
-	if initp.networkInfo.HostNetwork {
-		if initp.networkInfo.HeartBeatPort != 0 {
+	if initp.networkInfo.hostNetwork {
+		if initp.networkInfo.heartBeatPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        address %s%s",
 				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.networkInfo.HeartBeatTLSPort != 0 {
+		if initp.networkInfo.heartBeatTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "heartbeat {")
 			confString = fmt.Sprintf("%sheartbeat {\n        tls-address %s%s",
 				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.networkInfo.FabricPort != 0 {
+		if initp.networkInfo.fabricPort != 0 {
 			strdataSplit := strings.Split(confString, "fabric {")
 			confString = fmt.Sprintf("%sfabric {\n        address %s%s",
 				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
 		}
 
-		if initp.networkInfo.FabricTLSPort != 0 {
+		if initp.networkInfo.fabricTLSPort != 0 {
 			strdataSplit := strings.Split(confString, "fabric {")
 			confString = fmt.Sprintf("%sfabric {\n        tls-address %s%s",
 				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
@@ -115,17 +115,13 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 	var (
 		accessAddress string
 		accessPort    int32
-		podPort       int32
-		mappedPort    int32
 	)
 
-	if addressType == access || addressType == alternateAccess {
-		podPort = initp.networkInfo.PodPort
-		mappedPort = initp.networkInfo.mappedPort
-	}
+	podPort := initp.networkInfo.podPort
+	mappedPort := initp.networkInfo.mappedPort
 
 	if addressType == tlsAccess || addressType == tlsAlternateAccess {
-		podPort = initp.networkInfo.PodTLSPort
+		podPort = initp.networkInfo.podTLSPort
 		mappedPort = initp.networkInfo.mappedTLSPort
 	}
 

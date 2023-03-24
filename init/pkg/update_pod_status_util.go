@@ -99,11 +99,11 @@ func getPodImage(ctx goctx.Context, k8sClient client.Client, podNamespacedName t
 }
 
 func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
-	podPort := initp.networkInfo.PodPort
+	podPort := initp.networkInfo.podPort
 	servicePort := initp.networkInfo.mappedPort
 
 	if tlsEnabled, _ := strconv.ParseBool(os.Getenv("MY_POD_TLS_ENABLED")); tlsEnabled {
-		podPort = initp.networkInfo.PodTLSPort
+		podPort = initp.networkInfo.podTLSPort
 		servicePort = initp.networkInfo.mappedTLSPort
 	}
 
@@ -685,17 +685,17 @@ func (initp *InitParams) getEndpoints(addressType string) []string {
 	}
 
 	host := net.ParseIP(globalAddr)
-	if host == nil {
-		return endpoint
-	}
 
-	if host.To4() != nil { //nolint:gocritic // switch not applicable
+	switch {
+	case host == nil:
+		return endpoint
+	case host.To4() != nil:
 		accessPoint := host.String() + ":" + strconv.Itoa(int(globalPort))
 		endpoint = append(endpoint, accessPoint)
-	} else if host.To16() != nil {
+	case host.To16() != nil:
 		accessPoint := "[" + host.String() + "]" + ":" + strconv.Itoa(int(globalPort))
 		endpoint = append(endpoint, accessPoint)
-	} else {
+	default:
 		panic("invalid address-type")
 	}
 
