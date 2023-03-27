@@ -738,6 +738,11 @@ const (
 	// the access port will the actual aerospike port else it will be a mapped port.
 	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
 
+	// AerospikeNetworkTypeConfigured specifies access/alternateAccess using the user configuredIP.
+	// label "aerospike.com/configured-access-address" in k8s node will be used as `accessAddress`
+	// label "aerospike.com/configured-alternate-access-address" in k8s node will be used as `alternateAccessAddress`
+	AerospikeNetworkTypeConfigured AerospikeNetworkType = "configuredIP"
+
 	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
 )
@@ -746,7 +751,7 @@ const (
 type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
 	// CustomAccessNetworkNames is the list of the pod's network interfaces used for Aerospike access address.
@@ -761,7 +766,7 @@ type AerospikeNetworkPolicy struct {
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
 	// CustomAlternateAccessNetworkNames is the list of the pod's network interfaces used for Aerospike
@@ -777,7 +782,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
 	// CustomTLSAccessNetworkNames is the list of the pod's network interfaces used for Aerospike TLS access address.
@@ -792,7 +797,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
 	// CustomTLSAlternateAccessNetworkNames is the list of the pod's network interfaces used for Aerospike TLS

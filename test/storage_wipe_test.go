@@ -139,8 +139,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						for namespace, recordExsist := range records {
-							Expect(recordExsist).To(
+						for namespace, recordExists := range records {
+							Expect(recordExists).To(
 								BeTrue(), fmt.Sprintf(
 									"Namespace: %s - should have records",
 									namespace,
@@ -184,8 +184,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						for namespace, recordExist := range records {
-							Expect(recordExist).To(
+						for namespace, recordExists := range records {
+							Expect(recordExists).To(
 								BeFalse(), fmt.Sprintf(
 									"Namespace: %s - should have records",
 									namespace,
@@ -354,7 +354,7 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 			"namespaces": []interface{}{
 				map[string]interface{}{
 					"name":               "test",
-					"replication-factor": networkTestPolicyClusterSize,
+					"replication-factor": 1,
 					"memory-size":        3000000000,
 					"migrate-sleep":      0,
 					"storage-engine": map[string]interface{}{
@@ -367,7 +367,7 @@ func getAerospikeClusterConfig() *asdbv1beta1.AerospikeConfigSpec {
 				},
 				map[string]interface{}{
 					"name":               "test1",
-					"replication-factor": networkTestPolicyClusterSize,
+					"replication-factor": 1,
 					"memory-size":        3000000000,
 					"migrate-sleep":      0,
 					"storage-engine": map[string]interface{}{
