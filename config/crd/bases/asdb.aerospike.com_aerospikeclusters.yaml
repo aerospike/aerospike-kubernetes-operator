@@ -135,6 +135,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   alternateAccess:
@@ -144,6 +145,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   customAccessNetworkNames:
@@ -207,6 +209,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   tlsAlternateAccess:
@@ -216,6 +219,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   tlsFabric:
@@ -5998,6 +6002,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   alternateAccess:
@@ -6007,6 +6012,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   customAccessNetworkNames:
@@ -6070,6 +6076,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   tlsAlternateAccess:
@@ -6079,6 +6086,7 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
                     - customInterface
                     type: string
                   tlsFabric:

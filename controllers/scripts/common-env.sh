@@ -104,14 +104,6 @@ export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
 export CONFIGURED_ACCESSIP=$(echo $HOSTIPS | awk '{print $3}')
 export CONFIGURED_ALTERNATE_ACCESSIP=$(echo $HOSTIPS | awk '{print $4}')
 
-if [[ "$CONFIGURED_ACCESSIP" == "NIL" ]]; then
-  CONFIGURED_ACCESSIP=''
-fi
-
-if [[ "$CONFIGURED_ALTERNATE_ACCESSIP" == "NIL" ]]; then
-  CONFIGURED_ALTERNATE_ACCESSIP=''
-fi
-
 # Sets up port related variables.
 export POD_PORT="{{.PodPort}}"
 export POD_TLSPORT="{{.PodTLSPort}}"

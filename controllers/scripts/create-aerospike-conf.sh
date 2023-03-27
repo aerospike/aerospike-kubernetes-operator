@@ -71,7 +71,7 @@ substituteEndpoint() {
         accessAddress=$configuredIP
         accessPort=$mappedPort
 
-        if [ -z "$configuredIP" ]
+        if [[ "$accessAddress" == "NIL" ]];
         then
           echo "Please set '${CONFIGURED_ACCESSIP_LABEL}' and '${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}' node label to use NetworkPolicy configuredIP for access and alternateAccess addresses"
           exit 1
