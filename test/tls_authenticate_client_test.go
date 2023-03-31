@@ -163,7 +163,7 @@ func getAerospikeConfig(
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
 						Name:       "admin",
-						SecretName: "auth-update",
+						SecretName: authSecretNameForUpdate,
 						Roles: []string{
 							"sys-admin",
 							"user-admin",

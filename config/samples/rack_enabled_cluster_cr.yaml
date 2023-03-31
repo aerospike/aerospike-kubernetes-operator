@@ -16,7 +16,7 @@ spec:
         zone: us-west1-a
       - id: 2
         # Change to the zone for your k8s cluster.
-        zone: us-west1-a
+        zone: us-west1-b
 
   storage:
     filesystemVolumePolicy:
