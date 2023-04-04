@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	goctx "context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ const (
 
 // ColdRestart initializes storage devices on first pod run.
 func (initp *InitParams) ColdRestart() error {
+	ctx := goctx.TODO()
 	// Create required directories.
 	if err := initp.makeWorkDir(); err != nil {
 		return err
@@ -59,7 +61,7 @@ func (initp *InitParams) ColdRestart() error {
 		return err
 	}
 
-	if err := initp.manageVolumesAndUpdateStatus("podRestart"); err != nil {
+	if err := initp.manageVolumesAndUpdateStatus(ctx, "podRestart"); err != nil {
 		return err
 	}
 

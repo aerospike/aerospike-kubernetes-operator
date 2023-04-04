@@ -2,7 +2,6 @@ package pkg
 
 import (
 	goctx "context"
-	"flag"
 	"os"
 	"strconv"
 	"strings"
@@ -39,14 +38,13 @@ func PopulateInitParams() (*InitParams, error) {
 		k8sClient client.Client
 		cfg       = ctrl.GetConfigOrDie()
 		scheme    = runtime.NewScheme()
+		ctx       = goctx.TODO()
 	)
 
-	logger := ctrl.Log.WithName("setup")
+	logger := ctrl.Log.WithName("init-setup")
 	opts := zap.Options{
 		Development: true,
 	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -70,7 +68,7 @@ func PopulateInitParams() (*InitParams, error) {
 	namespace := os.Getenv("MY_POD_NAMESPACE")
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
-	aeroCluster, err := getCluster(goctx.TODO(), k8sClient, clusterNamespacedName)
+	aeroCluster, err := getCluster(ctx, k8sClient, clusterNamespacedName)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +78,7 @@ func PopulateInitParams() (*InitParams, error) {
 		return nil, err
 	}
 
-	networkInfo, err := getNetworkInfo(k8sClient, podName, aeroCluster)
+	networkInfo, err := getNetworkInfo(ctx, k8sClient, podName, aeroCluster)
 	if err != nil {
 		return nil, err
 	}

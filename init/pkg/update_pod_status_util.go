@@ -1,7 +1,7 @@
 package pkg
 
 import (
-	goctx "context"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -85,11 +85,11 @@ func execute(cmd []string, stderr *os.File) error {
 	return nil
 }
 
-func (initp *InitParams) getPodImage(podNamespacedName types.NamespacedName) (string, error) {
+func (initp *InitParams) getPodImage(ctx context.Context, podNamespacedName types.NamespacedName) (string, error) {
 	initp.logger.Info("Get pod image", "podname", podNamespacedName)
 
 	pod := &corev1.Pod{}
-	if err := initp.k8sClient.Get(goctx.TODO(), podNamespacedName, pod); err != nil {
+	if err := initp.k8sClient.Get(ctx, podNamespacedName, pod); err != nil {
 		return "", err
 	}
 
@@ -191,8 +191,6 @@ func runDD(logger logr.Logger, cmd []string, wg *sync.WaitGroup, guard chan stru
 	if err := execute(cmd, stderr); err != nil {
 		dat, err := os.ReadFile(stderr.Name())
 		if err != nil {
-			stderr.Close()
-			os.Remove(stderr.Name())
 			panic(err.Error())
 		}
 
@@ -212,7 +210,7 @@ func runBlkdiscard(logger logr.Logger, cmd []string, wg *sync.WaitGroup, guard c
 		panic(err.Error())
 	}
 
-	logger.Info("Execution completed ", "cmd=", cmd)
+	logger.Info("Execution completed", "cmd", cmd)
 	<-guard
 }
 
@@ -330,8 +328,8 @@ func getNamespaceVolumePaths(logger logr.Logger, podName string, aeroCluster *as
 
 		if storageEngine["files"] != nil {
 			for _, fileInterface := range storageEngine["files"].([]interface{}) {
-				logger.Info("Got device paths ", "pod-name=", podName, " device-type=",
-					storageEngine["type"], " files=", fileInterface.(string))
+				logger.Info("Got device paths ", "pod-name", podName, " device-type",
+					storageEngine["type"], " files", fileInterface.(string))
 				filePathsSet.Insert(strings.Fields(fileInterface.(string))...)
 			}
 		}
@@ -517,10 +515,10 @@ func wipeVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.Ae
 	return dirtyVolumes, nil
 }
 
-func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error {
+func (initp *InitParams) manageVolumesAndUpdateStatus(ctx context.Context, restartType string) error {
 	podNamespacedName := getNamespacedName(initp.podName, initp.namespace)
 
-	podImage, err := initp.getPodImage(podNamespacedName)
+	podImage, err := initp.getPodImage(ctx, podNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -531,7 +529,7 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 		prevImage = initp.aeroCluster.Status.Pods[initp.podName].Image
 		initp.logger.Info("Restarted", "podname", initp.podName)
 	} else {
-		initp.logger.Info("Initializing ", "podname=", initp.podName)
+		initp.logger.Info("Initializing", "podname", initp.podName)
 	}
 
 	initializedVolumes := getInitializedVolumes(initp.logger, initp.podName, initp.aeroCluster)
@@ -584,14 +582,14 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 
 	initp.logger.Info("Updating pod status", "podname", initp.podName)
 
-	if err := initp.updateStatus(goctx.TODO(), metadata); err != nil {
+	if err := initp.updateStatus(ctx, metadata); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (initp *InitParams) updateStatus(ctx goctx.Context,
+func (initp *InitParams) updateStatus(ctx context.Context,
 	metadata *asdbv1beta1.AerospikePodStatus) error {
 	confHashBytes, err := os.ReadFile(filepath.Join(configMapDir, "aerospikeConfHash"))
 	if err != nil {

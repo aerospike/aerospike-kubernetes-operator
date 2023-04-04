@@ -1,11 +1,14 @@
 package pkg
 
 import (
+	goctx "context"
 	"fmt"
 )
 
 // QuickRestart refreshes Aerospike config map and tries to warm restart Aerospike.
 func (initp *InitParams) QuickRestart(cmName, cmNamespace string) error {
+	ctx := goctx.TODO()
+
 	if cmNamespace == "" {
 		return fmt.Errorf("kubernetes namespace required as an argument")
 	}
@@ -14,7 +17,7 @@ func (initp *InitParams) QuickRestart(cmName, cmNamespace string) error {
 		return fmt.Errorf("aerospike configmap required as an argument")
 	}
 
-	if err := initp.ExportK8sConfigmap(cmNamespace, cmName, configMapDir); err != nil {
+	if err := initp.ExportK8sConfigmap(ctx, cmNamespace, cmName, configMapDir); err != nil {
 		return err
 	}
 
@@ -23,7 +26,7 @@ func (initp *InitParams) QuickRestart(cmName, cmNamespace string) error {
 	}
 
 	// Update pod status in the k8s aerospike cluster object
-	if err := initp.manageVolumesAndUpdateStatus("quickRestart"); err != nil {
+	if err := initp.manageVolumesAndUpdateStatus(ctx, "quickRestart"); err != nil {
 		return err
 	}
 

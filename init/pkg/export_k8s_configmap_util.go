@@ -9,9 +9,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func (initp *InitParams) ExportK8sConfigmap(namespace, cmName, toDir string) error {
+func (initp *InitParams) ExportK8sConfigmap(ctx context.Context, namespace, cmName, toDir string) error {
 	configMap := &corev1.ConfigMap{}
-	if err := initp.k8sClient.Get(context.TODO(),
+	if err := initp.k8sClient.Get(ctx,
 		types.NamespacedName{Name: cmName, Namespace: namespace}, configMap); err != nil {
 		return err
 	}

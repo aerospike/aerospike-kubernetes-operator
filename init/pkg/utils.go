@@ -1,7 +1,7 @@
 package pkg
 
 import (
-	goctx "context"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +53,7 @@ func getNamespacedName(name, namespace string) types.NamespacedName {
 	}
 }
 
-func getCluster(ctx goctx.Context, k8sClient client.Client,
+func getCluster(ctx context.Context, k8sClient client.Client,
 	clusterNamespacedName types.NamespacedName) (*asdbv1beta1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
@@ -64,7 +63,7 @@ func getCluster(ctx goctx.Context, k8sClient client.Client,
 	return aeroCluster, nil
 }
 
-func getNetworkInfo(k8sClient client.Client, podName string,
+func getNetworkInfo(ctx context.Context, k8sClient client.Client, podName string,
 	aeroCluster *asdbv1beta1.AerospikeCluster) (*networkInfo, error) {
 	networkInfo := &networkInfo{
 		multiPodPerHost: aeroCluster.Spec.PodSpec.MultiPodPerHost,
@@ -100,7 +99,7 @@ func getNetworkInfo(k8sClient client.Client, podName string,
 		networkInfo.fabricPort = int32(*fabricPort)
 	}
 
-	if err := setHostPortEnv(k8sClient, podName, aeroCluster.Namespace, networkInfo); err != nil {
+	if err := setHostPortEnv(ctx, k8sClient, podName, aeroCluster.Namespace, networkInfo); err != nil {
 		return nil, err
 	}
 
@@ -159,14 +158,14 @@ func (initp *InitParams) makeWorkDir() error {
 	return nil
 }
 
-func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkInfo *networkInfo) error {
+func setHostPortEnv(ctx context.Context, k8sClient client.Client, podName, namespace string, networkInfo *networkInfo) error {
 	// Sets up port related variables.
-	infoPort, tlsPort, err := getPorts(goctx.TODO(), k8sClient, namespace, podName)
+	infoPort, tlsPort, err := getPorts(ctx, k8sClient, namespace, podName)
 	if err != nil {
 		return err
 	}
 
-	networkInfo.internalIP, networkInfo.externalIP, err = getHostIPS(goctx.TODO(), k8sClient, networkInfo.hostIP)
+	networkInfo.internalIP, networkInfo.externalIP, err = getHostIPS(ctx, k8sClient, networkInfo.hostIP)
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkI
 }
 
 // Get tls, info port
-func getPorts(ctx goctx.Context, k8sClient client.Client, namespace,
+func getPorts(ctx context.Context, k8sClient client.Client, namespace,
 	podName string) (infoPort, tlsPort int32, err error) {
 	serviceList := &corev1.ServiceList{}
 	listOps := &client.ListOptions{Namespace: namespace}
@@ -216,7 +215,7 @@ func getPorts(ctx goctx.Context, k8sClient client.Client, namespace,
 }
 
 // Note: the IPs returned from here should match the IPs used in the node summary.
-func getHostIPS(ctx goctx.Context, k8sClient client.Client, hostIP string) (internalIP, externalIP string, err error) {
+func getHostIPS(ctx context.Context, k8sClient client.Client, hostIP string) (internalIP, externalIP string, err error) {
 	internalIP = hostIP
 	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
