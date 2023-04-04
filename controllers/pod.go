@@ -737,15 +737,20 @@ func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) strin
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
-// GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName
+// GetEndpointsFromInfo returns the aerospike endpoints as a slice of host:port based on context and addressName passed
 // from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in
 // endpointsMap.
-//
 // E.g. addressName are access, alternate-access
 func GetEndpointsFromInfo(
-	addressName string, endpointsMap map[string]string,
+	aeroCtx, addressName string, endpointsMap map[string]string,
 ) []string {
-	portStr, ok := endpointsMap["service."+addressName+"-port"]
+	addressKeyPrefix := aeroCtx + "."
+
+	if addressName != "" {
+		addressKeyPrefix += addressName + "-"
+	}
+
+	portStr, ok := endpointsMap[addressKeyPrefix+"port"]
 	if !ok {
 		return nil
 	}
@@ -755,7 +760,7 @@ func GetEndpointsFromInfo(
 		return nil
 	}
 
-	hostsStr, ok := endpointsMap["service."+addressName+"-addresses"]
+	hostsStr, ok := endpointsMap[addressKeyPrefix+"addresses"]
 	if !ok {
 		return nil
 	}

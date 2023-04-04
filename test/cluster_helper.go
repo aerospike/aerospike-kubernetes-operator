@@ -932,6 +932,7 @@ func createDummyAerospikeClusterWithRFAndStorage(
 	return aeroCluster
 }
 
+//nolint:unparam // generic func
 func createNonSCDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1beta1.AerospikeCluster {
