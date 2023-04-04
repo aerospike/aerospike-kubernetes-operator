@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/go-logr/logr"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,8 +56,6 @@ func getNamespacedName(name, namespace string) types.NamespacedName {
 
 func getCluster(ctx goctx.Context, k8sClient client.Client,
 	clusterNamespacedName types.NamespacedName) (*asdbv1beta1.AerospikeCluster, error) {
-	logrus.Info("Get aerospike cluster ", "cluster-name=", clusterNamespacedName)
-
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
 		return nil, err
@@ -67,53 +66,38 @@ func getCluster(ctx goctx.Context, k8sClient client.Client,
 
 func getNetworkInfo(k8sClient client.Client, podName string,
 	aeroCluster *asdbv1beta1.AerospikeCluster) (*networkInfo, error) {
-	var (
-		serviceTLSPortParam int32
-		servicePortParam    int32
-		hbTLSPortParam      int32
-		hbPortParam         int32
-		fabricTLSPortParam  int32
-		fabricPortParam     int32
-	)
+	networkInfo := &networkInfo{
+		multiPodPerHost: aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		networkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
+		hostNetwork:     aeroCluster.Spec.PodSpec.HostNetwork,
+		hostIP:          os.Getenv("MY_HOST_IP"),
+		podIP:           os.Getenv("MY_POD_IP"),
+	}
 
 	asConfig := aeroCluster.Spec.AerospikeConfig
 
 	if _, serviceTLSPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
-		serviceTLSPortParam = int32(*serviceTLSPort)
+		networkInfo.podTLSPort = int32(*serviceTLSPort)
 	}
 
 	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
-		servicePortParam = int32(*servicePort)
+		networkInfo.podPort = int32(*servicePort)
 	}
 
 	if _, hbTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
-		hbTLSPortParam = int32(*hbTLSPort)
+		networkInfo.heartBeatTLSPort = int32(*hbTLSPort)
 	}
 
 	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
-		hbPortParam = int32(*hbPort)
+		networkInfo.heartBeatPort = int32(*hbPort)
 	}
 
 	if _, fabricTLSPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
-		fabricTLSPortParam = int32(*fabricTLSPort)
+		networkInfo.fabricTLSPort = int32(*fabricTLSPort)
 	}
 
 	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
-		fabricPortParam = int32(*fabricPort)
-	}
-
-	networkInfo := &networkInfo{
-		multiPodPerHost:  aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		networkPolicy:    aeroCluster.Spec.AerospikeNetworkPolicy,
-		podPort:          servicePortParam,
-		podTLSPort:       serviceTLSPortParam,
-		heartBeatPort:    hbPortParam,
-		heartBeatTLSPort: hbTLSPortParam,
-		fabricPort:       fabricPortParam,
-		fabricTLSPort:    fabricTLSPortParam,
-		hostNetwork:      aeroCluster.Spec.PodSpec.HostNetwork,
-		hostIP:           os.Getenv("MY_HOST_IP"),
-		podIP:            os.Getenv("MY_POD_IP"),
+		networkInfo.fabricPort = int32(*fabricPort)
 	}
 
 	if err := setHostPortEnv(k8sClient, podName, aeroCluster.Namespace, networkInfo); err != nil {
@@ -123,7 +107,7 @@ func getNetworkInfo(k8sClient client.Client, podName string,
 	return networkInfo, nil
 }
 
-func GetNodeIDFromPodName(podName string) (nodeID string, err error) {
+func getNodeIDFromPodName(podName string) (nodeID string, err error) {
 	parts := strings.Split(podName, "-")
 	if len(parts) < 3 {
 		return "", fmt.Errorf("failed to get nodeID from podName %s", podName)
@@ -135,15 +119,16 @@ func GetNodeIDFromPodName(podName string) (nodeID string, err error) {
 	return nodeID, nil
 }
 
-func getRack(podName string, aeroCluster *asdbv1beta1.AerospikeCluster) (*asdbv1beta1.Rack, error) {
+func getRack(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) (*asdbv1beta1.Rack, error) {
 	res := strings.Split(podName, "-")
 
+	//  Assuming podName format stsName-rackID-index
 	rackID, err := strconv.Atoi(res[len(res)-2])
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.Info("Checking for rack in rackConfig ", "rack-id=", rackID)
+	logger.Info("Checking for rack in rackConfig", "rack-id", rackID)
 
 	racks := aeroCluster.Spec.RackConfig.Racks
 	for idx := range racks {
@@ -163,9 +148,9 @@ func (initp *InitParams) makeWorkDir() error {
 		requiredDirs := [3]string{"smd", "usr/udf/lua", "xdr"}
 		for _, d := range requiredDirs {
 			toCreate := filepath.Join(defaultWorkDir, d)
-			logrus.Info("Creating directory ", toCreate)
+			initp.logger.Info("Creating directory", "dir", toCreate)
 
-			if err := os.MkdirAll(toCreate, 0644); err != nil { //nolint:gocritic // file permission
+			if err := os.MkdirAll(toCreate, 0755); err != nil { //nolint:gocritic // file permission
 				return err
 			}
 		}
@@ -175,6 +160,7 @@ func (initp *InitParams) makeWorkDir() error {
 }
 
 func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkInfo *networkInfo) error {
+	// Sets up port related variables.
 	infoPort, tlsPort, err := getPorts(goctx.TODO(), k8sClient, namespace, podName)
 	if err != nil {
 		return err
@@ -185,6 +171,7 @@ func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkI
 		return err
 	}
 
+	// Compute the mapped access ports based on config.
 	if networkInfo.multiPodPerHost {
 		// Use mapped service ports
 		networkInfo.mappedPort = infoPort
@@ -198,6 +185,7 @@ func setHostPortEnv(k8sClient client.Client, podName, namespace string, networkI
 	return nil
 }
 
+// Get tls, info port
 func getPorts(ctx goctx.Context, k8sClient client.Client, namespace,
 	podName string) (infoPort, tlsPort int32, err error) {
 	serviceList := &corev1.ServiceList{}
@@ -227,11 +215,13 @@ func getPorts(ctx goctx.Context, k8sClient client.Client, namespace,
 	return infoPort, tlsPort, err
 }
 
+// Note: the IPs returned from here should match the IPs used in the node summary.
 func getHostIPS(ctx goctx.Context, k8sClient client.Client, hostIP string) (internalIP, externalIP string, err error) {
 	internalIP = hostIP
 	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
 
+	// Get External IP
 	if err := k8sClient.List(ctx, nodeList); err != nil {
 		return internalIP, externalIP, err
 	}

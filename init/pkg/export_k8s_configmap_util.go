@@ -16,7 +16,7 @@ func (initp *InitParams) ExportK8sConfigmap(namespace, cmName, toDir string) err
 		return err
 	}
 
-	if err := os.MkdirAll(toDir, 0644); err != nil { //nolint:gocritic // file permission
+	if err := os.MkdirAll(toDir, 0755); err != nil { //nolint:gocritic // file permission
 		return err
 	}
 
@@ -57,6 +57,8 @@ func (initp *InitParams) ExportK8sConfigmap(namespace, cmName, toDir string) err
 			return err
 		}
 	}
+
+	initp.logger.Info("Created and populated config map directory", "cm-name", cmName, "dir", toDir)
 
 	return nil
 }

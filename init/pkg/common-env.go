@@ -2,16 +2,24 @@ package pkg
 
 import (
 	goctx "context"
+	"flag"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+)
+
+var (
+	myPodTLSEnabled = os.Getenv("MY_POD_TLS_ENABLED")
+	clusterName     = os.Getenv("MY_POD_CLUSTER_NAME")
 )
 
 type InitParams struct {
@@ -23,6 +31,7 @@ type InitParams struct {
 	rackID      string
 	nodeID      string
 	workDir     string
+	logger      logr.Logger
 }
 
 func PopulateInitParams() (*InitParams, error) {
@@ -31,6 +40,15 @@ func PopulateInitParams() (*InitParams, error) {
 		cfg       = ctrl.GetConfigOrDie()
 		scheme    = runtime.NewScheme()
 	)
+
+	logger := ctrl.Log.WithName("setup")
+	opts := zap.Options{
+		Development: true,
+	}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return nil, err
@@ -50,7 +68,6 @@ func PopulateInitParams() (*InitParams, error) {
 
 	podName := os.Getenv("MY_POD_NAME")
 	namespace := os.Getenv("MY_POD_NAMESPACE")
-	clusterName := os.Getenv("MY_POD_CLUSTER_NAME")
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 	aeroCluster, err := getCluster(goctx.TODO(), k8sClient, clusterNamespacedName)
@@ -58,7 +75,7 @@ func PopulateInitParams() (*InitParams, error) {
 		return nil, err
 	}
 
-	rack, err := getRack(podName, aeroCluster)
+	rack, err := getRack(logger, podName, aeroCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +85,7 @@ func PopulateInitParams() (*InitParams, error) {
 		return nil, err
 	}
 
-	nodeID, err := GetNodeIDFromPodName(podName)
+	nodeID, err := getNodeIDFromPodName(podName)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +114,7 @@ func PopulateInitParams() (*InitParams, error) {
 		nodeID:      nodeID,
 		networkInfo: networkInfo,
 		workDir:     workDir,
+		logger:      logger,
 	}
 
 	return &initp, nil

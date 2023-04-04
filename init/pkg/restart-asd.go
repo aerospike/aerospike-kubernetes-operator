@@ -3,13 +3,11 @@ package pkg
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/mitchellh/go-ps"
-	"github.com/sirupsen/logrus"
 )
 
 func (initp *InitParams) restartASD() error {
@@ -18,13 +16,14 @@ func (initp *InitParams) restartASD() error {
 		return err
 	}
 
-	strdata := string(data)
-	if !(strings.Contains(strdata, "tini") && strings.Contains(strdata, "-r")) {
+	strData := string(data)
+	// Check if we are running under tini to be able to warm restart.
+	if !(strings.Contains(strData, "tini") && strings.Contains(strData, "-r")) {
 		return fmt.Errorf("warm restart not supported - aborting")
 	}
 
 	// Create new Aerospike configuration
-	if err := initp.copyTemplates(filepath.Join(configVolume, "configmap"), configVolume); err != nil {
+	if err := initp.copyTemplates(configMapDir, configVolume); err != nil {
 		return err
 	}
 
@@ -40,6 +39,7 @@ func (initp *InitParams) restartASD() error {
 	asdPid := -1
 	isTerminated := false
 
+	// Get current asd pid
 	for _, proc := range processes {
 		if proc.Executable() == "asd" {
 			asdPid = proc.Pid()
@@ -50,10 +50,12 @@ func (initp *InitParams) restartASD() error {
 		return fmt.Errorf("error getting Aerospike server PID")
 	}
 
+	// Restart ASD by signalling the init process
 	if err := syscall.Kill(1, syscall.SIGUSR1); err != nil {
 		return err
 	}
 
+	// Wait for asd process to restart.
 	for i := 1; i <= 60; i++ {
 		asdProc, psErr := ps.FindProcess(asdPid)
 		if psErr != nil {
@@ -61,7 +63,7 @@ func (initp *InitParams) restartASD() error {
 		}
 
 		if asdProc != nil {
-			logrus.Info("Waiting for Aerospike server to terminate ...")
+			initp.logger.Info("Waiting for Aerospike server to terminate ...")
 			time.Sleep(5 * time.Second)
 		} else {
 			isTerminated = true
@@ -70,8 +72,11 @@ func (initp *InitParams) restartASD() error {
 	}
 
 	if !isTerminated {
+		// ASD did not terminate within stipulated time.
 		return fmt.Errorf("aborting warm start - Aerospike server did not terminate")
 	}
+
+	initp.logger.Info("Successfully terminated Aerospike server during warm restart")
 
 	return nil
 }

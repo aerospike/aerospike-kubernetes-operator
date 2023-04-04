@@ -33,7 +33,7 @@ LABEL maintainer="Aerospike, Inc. <developers@aerospike.com>"
 
 ARG VERSION=0.0.19
 ARG USER=root
-ARG DESCRIPTION="Initializes Aerospike pods created but the Aerospike Kubernetes Operator. Initialization includes setting up devices."
+ARG DESCRIPTION="Initializes Aerospike pods created by the Aerospike Kubernetes Operator. Initialization includes setting up devices."
 
 # Labels
 LABEL name="aerospike-kubernetes-init" \

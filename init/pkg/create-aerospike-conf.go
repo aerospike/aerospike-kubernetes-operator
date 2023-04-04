@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
@@ -30,16 +28,17 @@ func (initp *InitParams) createAerospikeConf() error {
 
 	confString := string(data)
 
+	// Update node and rack ids configuration file
 	re := regexp.MustCompile("rack-id.*0")
-	if re.FindString(confString) != "" {
-		confString = strings.ReplaceAll(confString, re.FindString(confString), "rack-id    "+initp.rackID)
+	if rackStr := re.FindString(confString); rackStr != "" {
+		confString = strings.ReplaceAll(confString, rackStr, "rack-id    "+initp.rackID)
 	}
 
 	confString = strings.ReplaceAll(confString, "ENV_NODE_ID", initp.nodeID)
 	confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.AccessType, access, confString)
 	confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.AlternateAccessType, alternateAccess, confString)
 
-	if os.Getenv("MY_POD_TLS_ENABLED") == "true" {
+	if tlsEnabled, _ := strconv.ParseBool(myPodTLSEnabled); tlsEnabled {
 		confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.TLSAccessType,
 			tlsAccess, confString)
 		confString = initp.substituteEndpoint(initp.networkInfo.networkPolicy.TLSAlternateAccessType,
@@ -48,14 +47,14 @@ func (initp *InitParams) createAerospikeConf() error {
 
 	readFile, err := os.Open(peers)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	defer readFile.Close()
 
 	fileScanner := bufio.NewScanner(readFile)
-	fileScanner.Split(bufio.ScanLines)
 
+	//  Update mesh seeds in the configuration file
 	for fileScanner.Scan() {
 		peer := fileScanner.Text()
 		if strings.Contains(peer, initp.podName) {
@@ -63,41 +62,39 @@ func (initp *InitParams) createAerospikeConf() error {
 		}
 
 		if initp.networkInfo.heartBeatPort != 0 {
-			strdataSplit := strings.Split(confString, "heartbeat {")
-			confString = fmt.Sprintf("%sheartbeat {\n        mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.networkInfo.heartBeatPort, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "heartbeat {",
+				fmt.Sprintf("heartbeat {\n        mesh-seed-address-port %s %d", peer, initp.networkInfo.heartBeatPort))
 		}
 
 		if initp.networkInfo.heartBeatTLSPort != 0 {
-			strdataSplit := strings.Split(confString, "heartbeat {")
-			confString = fmt.Sprintf("%sheartbeat {\n        tls-mesh-seed-address-port %s %d%s",
-				strdataSplit[0], peer, initp.networkInfo.heartBeatTLSPort, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "heartbeat {",
+				fmt.Sprintf("heartbeat {\n        tls-mesh-seed-address-port %s %d", peer, initp.networkInfo.heartBeatTLSPort))
 		}
 	}
 
+	// If host networking is used force heartbeat and fabric to advertise network
+	// interface bound to K8s node's host network.
 	if initp.networkInfo.hostNetwork {
+		// 8 spaces, fixed in config writer file config manager lib
+		// TODO: The search pattern is not robust. Add a better marker in management lib.
 		if initp.networkInfo.heartBeatPort != 0 {
-			strdataSplit := strings.Split(confString, "heartbeat {")
-			confString = fmt.Sprintf("%sheartbeat {\n        address %s%s",
-				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "heartbeat {",
+				fmt.Sprintf("heartbeat {\n        address %s", initp.networkInfo.podIP))
 		}
 
 		if initp.networkInfo.heartBeatTLSPort != 0 {
-			strdataSplit := strings.Split(confString, "heartbeat {")
-			confString = fmt.Sprintf("%sheartbeat {\n        tls-address %s%s",
-				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "heartbeat {",
+				fmt.Sprintf("heartbeat {\n        tls-address %s", initp.networkInfo.podIP))
 		}
 
 		if initp.networkInfo.fabricPort != 0 {
-			strdataSplit := strings.Split(confString, "fabric {")
-			confString = fmt.Sprintf("%sfabric {\n        address %s%s",
-				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "fabric {",
+				fmt.Sprintf("fabric {\n        address %s", initp.networkInfo.podIP))
 		}
 
 		if initp.networkInfo.fabricTLSPort != 0 {
-			strdataSplit := strings.Split(confString, "fabric {")
-			confString = fmt.Sprintf("%sfabric {\n        tls-address %s%s",
-				strdataSplit[0], initp.networkInfo.podIP, strdataSplit[1])
+			confString = strings.ReplaceAll(confString, "fabric {",
+				fmt.Sprintf("fabric {\n        tls-address %s", initp.networkInfo.podIP))
 		}
 	}
 
@@ -105,11 +102,14 @@ func (initp *InitParams) createAerospikeConf() error {
 		return err
 	}
 
-	logrus.Info("aerospike.template.conf = ", confString)
+	initp.logger.Info("Final aerospike conf file", "aerospike.template.conf", confString)
 
 	return nil
 }
 
+// Update access addresses in the configuration file
+// Compute the access endpoints based on network policy.
+// As a kludge the computed values are stored late to update node summary.
 func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNetworkType,
 	addressType, confString string) string {
 	var (
@@ -143,6 +143,7 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 		accessPort = podPort
 	}
 
+	// Store computed address to update the status later.
 	switch addressType {
 	case access:
 		initp.networkInfo.globalAddressesAndPorts.globalAccessAddress = accessAddress
@@ -161,11 +162,14 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 		initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessPort = accessPort
 	}
 
+	// Substitute in the configuration file.
 	confString = strings.ReplaceAll(confString, fmt.Sprintf("<%s-address>", addressType), accessAddress)
+
 	re := regexp.MustCompile(fmt.Sprintf("\\s*%s-port\\s*%d", addressType, podPort))
 
 	portString := re.FindString(confString)
 	if portString != "" {
+		// # This port is set in api/v1beta1/aerospikecluster_mutating_webhook.go and is used as placeholder.
 		confString = strings.ReplaceAll(confString, portString,
 			strings.ReplaceAll(portString, strconv.Itoa(int(podPort)), strconv.Itoa(int(accessPort))))
 	}

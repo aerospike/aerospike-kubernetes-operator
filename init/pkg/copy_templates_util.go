@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
-
-	"github.com/sirupsen/logrus"
 )
 
+// Copies template and supporting files to Aerospike config folder from input folder.
+// Refreshes Aerospike config map and tries to warm restart Aerospike.
 func (initp *InitParams) copyTemplates(source, destination string) error {
 	if source == "" {
 		return fmt.Errorf("template source volume not specified")
@@ -17,7 +17,7 @@ func (initp *InitParams) copyTemplates(source, destination string) error {
 		return fmt.Errorf("template destination volume not specified")
 	}
 
-	logrus.Info("Installing aerospike.conf into ", destination)
+	initp.logger.Info("Installing aerospike.conf", "source", source, "destination", destination)
 
 	filesToCopy := [2]string{"aerospike.template.conf", "peers"}
 	for _, file := range filesToCopy {

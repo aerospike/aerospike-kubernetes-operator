@@ -2,6 +2,7 @@ package pkg
 
 import (
 	goctx "context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/go-logr/logr"
 	"gomodules.xyz/jsonpatch/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,7 +47,7 @@ func (v *Volume) getMountPoint() string {
 	return filepath.Join(fileSystemMountPoint, v.volumeName)
 }
 
-func getImageVersion(image string) (version int, err error) {
+func getImageVersion(image string) (majorVersion int, err error) {
 	ver, err := asdbv1beta1.GetImageVersion(image)
 	if err != nil {
 		return 0, err
@@ -54,44 +55,41 @@ func getImageVersion(image string) (version int, err error) {
 
 	res := strings.Split(ver, ".")
 
-	version, err = strconv.Atoi(res[0])
+	majorVersion, err = strconv.Atoi(res[0])
 	if err != nil {
 		return 0, err
 	}
 
-	return version, err
+	return majorVersion, err
 }
 
 func execute(cmd []string, stderr *os.File) error {
-	if len(cmd) > 0 {
-		var command *exec.Cmd
-		if len(cmd) > 1 {
-			command = exec.Command(cmd[0], cmd[1:]...) //nolint:gosec // internal command array
-		} else {
-			command = exec.Command(cmd[0]) //nolint:gosec // internal command array
-		}
+	if len(cmd) == 0 {
+		return nil
+	}
 
-		if stderr != nil {
-			command.Stdout = stderr
-			command.Stderr = stderr
-		} else {
-			command.Stdout = os.Stdout
-			command.Stderr = os.Stderr
-		}
+	command := exec.Command(cmd[0], cmd[1:]...) //nolint:gosec // internal command array
 
-		if err := command.Run(); err != nil {
-			return err
-		}
+	if stderr != nil {
+		command.Stdout = stderr
+		command.Stderr = stderr
+	} else {
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+	}
+
+	if err := command.Run(); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func getPodImage(ctx goctx.Context, k8sClient client.Client, podNamespacedName types.NamespacedName) (string, error) {
-	logrus.Info("Get pod image ", "pod-name=", podNamespacedName)
+func (initp *InitParams) getPodImage(podNamespacedName types.NamespacedName) (string, error) {
+	initp.logger.Info("Get pod image", "podname", podNamespacedName)
 
 	pod := &corev1.Pod{}
-	if err := k8sClient.Get(ctx, podNamespacedName, pod); err != nil {
+	if err := initp.k8sClient.Get(goctx.TODO(), podNamespacedName, pod); err != nil {
 		return "", err
 	}
 
@@ -102,7 +100,7 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 	podPort := initp.networkInfo.podPort
 	servicePort := initp.networkInfo.mappedPort
 
-	if tlsEnabled, _ := strconv.ParseBool(os.Getenv("MY_POD_TLS_ENABLED")); tlsEnabled {
+	if tlsEnabled, _ := strconv.ParseBool(myPodTLSEnabled); tlsEnabled {
 		podPort = initp.networkInfo.podTLSPort
 		servicePort = initp.networkInfo.mappedTLSPort
 	}
@@ -114,7 +112,7 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 		PodPort:        int(podPort),
 		ServicePort:    servicePort,
 		Aerospike: asdbv1beta1.AerospikeInstanceSummary{
-			ClusterName: os.Getenv("MY_POD_CLUSTER_NAME"),
+			ClusterName: clusterName,
 			NodeID:      initp.nodeID,
 			TLSName:     os.Getenv("MY_POD_TLS_NAME"),
 		},
@@ -123,15 +121,14 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 	return &metadata
 }
 
-func getInitializedVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
-	logrus.Info("Looking for initialized volumes in status.pod.{pod_name}.initializedVolumes ", "pod_name=", podName)
+func getInitializedVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
+	logger.Info("Looking for initialized volumes in status.pod initializedVolume", "podname", podName)
 
 	if aeroCluster.Status.Pods[podName].InitializedVolumes != nil {
 		return aeroCluster.Status.Pods[podName].InitializedVolumes
 	}
 
-	logrus.Info("Looking for initialized volumes in "+
-		"status.pod.{pod_name}.initializedVolumePaths ", "pod_name=", podName)
+	logger.Info("Looking for initialized volumes in status.pod initializedVolumePaths", "podname", podName)
 
 	if aeroCluster.Status.Pods[podName].InitializedVolumePaths != nil {
 		return aeroCluster.Status.Pods[podName].InitializedVolumePaths
@@ -140,13 +137,14 @@ func getInitializedVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeClu
 	return nil
 }
 
-func getDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
-	logrus.Info("Looking for dirty volumes in status.pod.{pod_name}.dirtyVolumes ", "pod_name=", podName)
+func getDirtyVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
+	logger.Info("Looking for dirty volumes in status.pod dirtyVolumes", "podname", podName)
+
 	return aeroCluster.Status.Pods[podName].DirtyVolumes
 }
 
-func getAttachedVolumes(rack *asdbv1beta1.Rack) []asdbv1beta1.VolumeSpec {
-	logrus.Info("Looking for volumes in rack.effectiveStorage.volumes ", "rack-id=", rack.ID)
+func getAttachedVolumes(logger logr.Logger, rack *asdbv1beta1.Rack) []asdbv1beta1.VolumeSpec {
+	logger.Info("Looking for volumes in rack.effectiveStorage.volumes", "rack-id", rack.ID)
 
 	return rack.Storage.Volumes
 }
@@ -178,13 +176,17 @@ func newVolume(podName string, vol *asdbv1beta1.VolumeSpec) *Volume {
 	return &volume
 }
 
-func runDD(cmd []string, wg *sync.WaitGroup, guard chan struct{}) {
-	defer wg.Done()
-
+func runDD(logger logr.Logger, cmd []string, wg *sync.WaitGroup, guard chan struct{}) {
 	stderr, err := os.CreateTemp("/tmp", "init-stderr")
 	if err != nil {
 		panic(err.Error())
 	}
+
+	defer func() {
+		stderr.Close()
+		os.Remove(stderr.Name())
+		wg.Done()
+	}()
 
 	if err := execute(cmd, stderr); err != nil {
 		dat, err := os.ReadFile(stderr.Name())
@@ -195,48 +197,47 @@ func runDD(cmd []string, wg *sync.WaitGroup, guard chan struct{}) {
 		}
 
 		if !strings.Contains(string(dat), "No space left on device") {
-			panic(err.Error())
+			panic(errors.New(string(dat)))
 		}
 	}
 
-	stderr.Close()
-	os.Remove(stderr.Name())
-	logrus.Info("Execution completed ", "cmd=", cmd)
+	logger.Info("Execution completed", "cmd", cmd)
 	<-guard
 }
 
-func runBlkdiscard(cmd []string, wg *sync.WaitGroup, guard chan struct{}) {
+func runBlkdiscard(logger logr.Logger, cmd []string, wg *sync.WaitGroup, guard chan struct{}) {
 	defer wg.Done()
 
 	if err := execute(cmd, nil); err != nil {
 		panic(err.Error())
 	}
 
-	logrus.Info("Execution completed ", "cmd=", cmd)
+	logger.Info("Execution completed ", "cmd=", cmd)
 	<-guard
 }
 
-func initVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, volumes []string) ([]string, error) {
+func initVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster,
+	initializedVolumes []string) ([]string, error) {
 	var wg sync.WaitGroup
 
-	rack, err := getRack(podName, aeroCluster)
+	rack, err := getRack(logger, podName, aeroCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rack of pod %s %v", podName, err)
 	}
 
 	workerThreads := rack.Storage.CleanupThreads
-	persistentVolumes := getPersistentVolumes(getAttachedVolumes(rack))
+	persistentVolumes := getPersistentVolumes(getAttachedVolumes(logger, rack))
 	volumeNames := make([]string, 0, len(persistentVolumes))
 	guard := make(chan struct{}, workerThreads)
 
 	for volIndex := range persistentVolumes {
 		vol := &persistentVolumes[volIndex]
-		if utils.ContainsString(volumes, vol.Name) {
+		if utils.ContainsString(initializedVolumes, vol.Name) {
 			continue
 		}
 
 		volume := newVolume(podName, vol)
-		logrus.Info("Starting initialisation ", "volume=", volume)
+		logger.Info("Starting initialisation", "volume", volume)
 
 		if _, err = os.Stat(volume.getMountPoint()); err != nil {
 			return volumeNames, fmt.Errorf("mounting point %s does not exist %v", volume.getMountPoint(), err)
@@ -251,8 +252,8 @@ func initVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, volu
 				wg.Add(1)
 				guard <- struct{}{}
 
-				go runDD(dd, &wg, guard)
-				logrus.Info("Command submitted ", "volume=", volume)
+				go runDD(logger, dd, &wg, guard)
+				logger.Info("Command submitted", "volume", volume)
 
 			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -260,11 +261,11 @@ func initVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, volu
 				wg.Add(1)
 				guard <- struct{}{}
 
-				go runBlkdiscard(blkdiscard, &wg, guard)
-				logrus.Info("Command submitted ", "volume=", volume)
+				go runBlkdiscard(logger, blkdiscard, &wg, guard)
+				logger.Info("Command submitted", "volume", volume)
 
 			case "none":
-				logrus.Info("Pass through ", "volume=", volume)
+				logger.Info("Pass through", "volume", volume)
 
 			default:
 				return volumeNames, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -277,13 +278,13 @@ func initVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, volu
 
 				err = execute(find, nil)
 				if err != nil {
-					logrus.Warn("Failed to run find command ", "error=", err)
+					logger.Error(err, "Failed to run find command")
 				}
 
-				logrus.Info("Filepath initialised ", "filepath=", volume.getMountPoint())
+				logger.Info("Filepath initialised", "filepath", volume.getMountPoint())
 
 			case "none":
-				logrus.Info("Pass through ", "volume=", volume)
+				logger.Info("Pass through", "volume", volume)
 
 			default:
 				return volumeNames, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -299,15 +300,15 @@ func initVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, volu
 	close(guard)
 	wg.Wait()
 
-	volumeNames = append(volumeNames, volumes...)
-	logrus.Info("Extended initialised volume list ", "volumes=", volumeNames)
+	volumeNames = append(volumeNames, initializedVolumes...)
+	logger.Info("Extended initialised volume list", "initializedVolumes", volumeNames)
 
 	return volumeNames, nil
 }
 
-func getNamespaceVolumePaths(podName string, aeroCluster *asdbv1beta1.AerospikeCluster) (
+func getNamespaceVolumePaths(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) (
 	devicePaths, filePaths []string, err error) {
-	rack, err := getRack(podName, aeroCluster)
+	rack, err := getRack(logger, podName, aeroCluster)
 	if err != nil {
 		return devicePaths, filePaths, fmt.Errorf("failed to get rack of pod %s %v", podName, err)
 	}
@@ -321,15 +322,15 @@ func getNamespaceVolumePaths(podName string, aeroCluster *asdbv1beta1.AerospikeC
 
 		if storageEngine["devices"] != nil {
 			for _, deviceInterface := range storageEngine["devices"].([]interface{}) {
-				logrus.Info("Got device paths ", "pod-name=", podName, " device-type=",
-					storageEngine["type"], " devices=", deviceInterface.(string))
+				logger.Info("Got device paths", "pod-name", podName, " device-type",
+					storageEngine["type"], " devices", deviceInterface.(string))
 				devicePathsSet.Insert(strings.Fields(deviceInterface.(string))...)
 			}
 		}
 
 		if storageEngine["files"] != nil {
 			for _, fileInterface := range storageEngine["files"].([]interface{}) {
-				logrus.Info("Got device paths ", "pod-name=", podName, " device-type=",
+				logger.Info("Got device paths ", "pod-name=", podName, " device-type=",
 					storageEngine["type"], " files=", fileInterface.(string))
 				filePathsSet.Insert(strings.Fields(fileInterface.(string))...)
 			}
@@ -352,16 +353,16 @@ func remove(s []string, r string) []string {
 	return s
 }
 
-func cleanDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster,
+func cleanDirtyVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster,
 	dirtyVolumes []string) ([]string, error) {
 	var wg sync.WaitGroup
 
-	nsDevicePaths, _, err := getNamespaceVolumePaths(podName, aeroCluster)
+	nsDevicePaths, _, err := getNamespaceVolumePaths(logger, podName, aeroCluster)
 	if err != nil {
 		return dirtyVolumes, fmt.Errorf("failed to get namespaced volume paths %v", err)
 	}
 
-	rack, err := getRack(podName, aeroCluster)
+	rack, err := getRack(logger, podName, aeroCluster)
 	if err != nil {
 		return dirtyVolumes, fmt.Errorf("failed to get rack of pod %s %v", podName, err)
 	}
@@ -369,7 +370,7 @@ func cleanDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster
 	workerThreads := rack.Storage.CleanupThreads
 	guard := make(chan struct{}, workerThreads)
 
-	persistentVolumes := getPersistentVolumes(getAttachedVolumes(rack))
+	persistentVolumes := getPersistentVolumes(getAttachedVolumes(logger, rack))
 	for volIndex := range persistentVolumes {
 		vol := &persistentVolumes[volIndex]
 		if vol.Aerospike == nil || !utils.ContainsString(dirtyVolumes, vol.Name) ||
@@ -390,8 +391,8 @@ func cleanDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster
 				wg.Add(1)
 				guard <- struct{}{}
 
-				go runDD(dd, &wg, guard)
-				logrus.Info("Command submitted ", "volume=", volume)
+				go runDD(logger, dd, &wg, guard)
+				logger.Info("Command submitted", "volume", volume)
 
 			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -399,8 +400,8 @@ func cleanDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster
 				wg.Add(1)
 				guard <- struct{}{}
 
-				go runBlkdiscard(blkdiscard, &wg, guard)
-				logrus.Info("Command submitted ", "volume=", volume)
+				go runBlkdiscard(logger, blkdiscard, &wg, guard)
+				logger.Info("Command submitted", "volume", volume)
 
 			default:
 				return dirtyVolumes, fmt.Errorf("invalid effective_wipe_method %s", volume.effectiveWipeMethod)
@@ -412,20 +413,21 @@ func cleanDirtyVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster
 
 	close(guard)
 	wg.Wait()
-	logrus.Info("All cleanup jobs finished successfully")
+	logger.Info("All cleanup jobs finished successfully")
 
 	return dirtyVolumes, nil
 }
 
-func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirtyVolumes []string) ([]string, error) {
+func wipeVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster,
+	dirtyVolumes []string) ([]string, error) {
 	var wg sync.WaitGroup
 
-	nsDevicePaths, nsFilePaths, err := getNamespaceVolumePaths(podName, aeroCluster)
+	nsDevicePaths, nsFilePaths, err := getNamespaceVolumePaths(logger, podName, aeroCluster)
 	if err != nil {
 		return dirtyVolumes, fmt.Errorf("failed to get namespaced volume paths %v", err)
 	}
 
-	rack, err := getRack(podName, aeroCluster)
+	rack, err := getRack(logger, podName, aeroCluster)
 	if err != nil {
 		return dirtyVolumes, fmt.Errorf("failed to get rack of pod %s %v", podName, err)
 	}
@@ -433,7 +435,7 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 	workerThreads := rack.Storage.CleanupThreads
 	guard := make(chan struct{}, workerThreads)
 
-	persistentVolumes := getPersistentVolumes(getAttachedVolumes(rack))
+	persistentVolumes := getPersistentVolumes(getAttachedVolumes(logger, rack))
 	for volIndex := range persistentVolumes {
 		vol := &persistentVolumes[volIndex]
 		if vol.Aerospike == nil {
@@ -444,7 +446,7 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 		switch volume.volumeMode {
 		case string(corev1.PersistentVolumeBlock):
 			if utils.ContainsString(nsDevicePaths, volume.aerospikeVolumePath) {
-				logrus.Info("Wiping volume ", "volume=", volume)
+				logger.Info("Wiping volume", "volume", volume)
 
 				if _, err := os.Stat(volume.getMountPoint()); err != nil {
 					return dirtyVolumes, fmt.Errorf("mounting point %s does not exist %v", volume.getMountPoint(), err)
@@ -458,8 +460,8 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 					wg.Add(1)
 					guard <- struct{}{}
 
-					go runDD(dd, &wg, guard)
-					logrus.Info("Command submitted ", "volume=", volume)
+					go runDD(logger, dd, &wg, guard)
+					logger.Info("Command submitted", "volume", volume)
 
 				case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 					blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -467,8 +469,8 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 					wg.Add(1)
 					guard <- struct{}{}
 
-					go runBlkdiscard(blkdiscard, &wg, guard)
-					logrus.Info("Command submitted ", "volume=", volume)
+					go runBlkdiscard(logger, blkdiscard, &wg, guard)
+					logger.Info("Command submitted", "volume", volume)
 
 				default:
 					return dirtyVolumes, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -489,13 +491,13 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 						filePath := filepath.Join(volume.getMountPoint(), fileName)
 						if _, err := os.Stat(filePath); err != nil {
 							if os.IsNotExist(err) {
-								logrus.Info("Namespace file path does not exist ", "filepath=", filePath)
+								logger.Info("Namespace file path does not exist", "filepath", filePath)
 							} else {
 								return dirtyVolumes, fmt.Errorf("failed to delete file %s %v", filePath, err)
 							}
 						} else {
 							os.Remove(filePath)
-							logrus.Info("Deleted ", "filepath=", filePath)
+							logger.Info("Deleted", "filepath", filePath)
 						}
 					}
 				}
@@ -510,7 +512,7 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 
 	close(guard)
 	wg.Wait()
-	logrus.Info("All wipe jobs finished successfully")
+	logger.Info("All wipe jobs finished successfully")
 
 	return dirtyVolumes, nil
 }
@@ -518,7 +520,7 @@ func wipeVolumes(podName string, aeroCluster *asdbv1beta1.AerospikeCluster, dirt
 func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error {
 	podNamespacedName := getNamespacedName(initp.podName, initp.namespace)
 
-	podImage, err := getPodImage(goctx.TODO(), initp.k8sClient, podNamespacedName)
+	podImage, err := initp.getPodImage(podNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -527,23 +529,23 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 
 	if _, ok := initp.aeroCluster.Status.Pods[initp.podName]; ok {
 		prevImage = initp.aeroCluster.Status.Pods[initp.podName].Image
-		logrus.Info("Restarted ", "podname=", initp.podName)
+		initp.logger.Info("Restarted", "podname", initp.podName)
 	} else {
-		logrus.Info("Initializing ", "podname=", initp.podName)
+		initp.logger.Info("Initializing ", "podname=", initp.podName)
 	}
 
-	volumes := getInitializedVolumes(initp.podName, initp.aeroCluster)
-	dirtyVolumes := getDirtyVolumes(initp.podName, initp.aeroCluster)
+	initializedVolumes := getInitializedVolumes(initp.logger, initp.podName, initp.aeroCluster)
+	dirtyVolumes := getDirtyVolumes(initp.logger, initp.podName, initp.aeroCluster)
 
-	logrus.Info("Checking if initialization needed ", "podname=", initp.podName, " restart-type=", restartType)
+	initp.logger.Info("Checking if initialization needed", "podname", initp.podName, " restart-type", restartType)
 
 	if restartType == "podRestart" {
-		volumes, err = initVolumes(initp.podName, initp.aeroCluster, volumes)
+		initializedVolumes, err = initVolumes(initp.logger, initp.podName, initp.aeroCluster, initializedVolumes)
 		if err != nil {
 			return err
 		}
 
-		logrus.Info("Checking if volumes should be wiped ", "podname=", initp.podName)
+		initp.logger.Info("Checking if volumes should be wiped", "podname", initp.podName)
 
 		if prevImage != "" {
 			prevMajorVer, imageErr := getImageVersion(prevImage)
@@ -558,18 +560,18 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 
 			if (nextMajorVer >= baseWipeVersion && baseWipeVersion > prevMajorVer) ||
 				(nextMajorVer < baseWipeVersion && baseWipeVersion <= prevMajorVer) {
-				dirtyVolumes, err = wipeVolumes(initp.podName, initp.aeroCluster, dirtyVolumes)
+				dirtyVolumes, err = wipeVolumes(initp.logger, initp.podName, initp.aeroCluster, dirtyVolumes)
 				if err != nil {
 					return err
 				}
 			} else {
-				logrus.Info("Volumes should not be wiped ", "nextMajorVer=", nextMajorVer, " prevMajorVer=", prevMajorVer)
+				initp.logger.Info("Volumes should not be wiped", "nextMajorVer", nextMajorVer, "prevMajorVer", prevMajorVer)
 			}
 		} else {
-			logrus.Info("Volumes should not be wiped")
+			initp.logger.Info("Volumes should not be wiped")
 		}
 
-		dirtyVolumes, err = cleanDirtyVolumes(initp.podName, initp.aeroCluster, dirtyVolumes)
+		dirtyVolumes, err = cleanDirtyVolumes(initp.logger, initp.podName, initp.aeroCluster, dirtyVolumes)
 		if err != nil {
 			return err
 		}
@@ -577,10 +579,10 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 
 	metadata := initp.getNodeMetadata()
 	metadata.Image = podImage
-	metadata.InitializedVolumes = volumes
+	metadata.InitializedVolumes = initializedVolumes
 	metadata.DirtyVolumes = dirtyVolumes
 
-	logrus.Info("Updating pod status ", "podname=", initp.podName)
+	initp.logger.Info("Updating pod status", "podname", initp.podName)
 
 	if err := initp.updateStatus(goctx.TODO(), metadata); err != nil {
 		return err
@@ -591,49 +593,31 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(restartType string) error 
 
 func (initp *InitParams) updateStatus(ctx goctx.Context,
 	metadata *asdbv1beta1.AerospikePodStatus) error {
-	data, err := os.ReadFile(filepath.Join(configVolume, "configmap", "aerospikeConfHash"))
+	confHashBytes, err := os.ReadFile(filepath.Join(configMapDir, "aerospikeConfHash"))
 	if err != nil {
 		return fmt.Errorf("failed to read aerospikeConfHash file %v", err)
 	}
 
-	confHash := string(data)
+	metadata.AerospikeConfigHash = string(confHashBytes)
 
-	data, err = os.ReadFile(filepath.Join(configVolume, "configmap", "networkPolicyHash"))
+	networkPolicyHashBytes, err := os.ReadFile(filepath.Join(configMapDir, "networkPolicyHash"))
 	if err != nil {
 		return fmt.Errorf("failed to read networkPolicyHash file %v", err)
 	}
 
-	networkPolicyHash := string(data)
+	metadata.NetworkPolicyHash = string(networkPolicyHashBytes)
 
-	data, err = os.ReadFile(filepath.Join(configVolume, "configmap", "podSpecHash"))
+	podSpecHashBytes, err := os.ReadFile(filepath.Join(configMapDir, "podSpecHash"))
 	if err != nil {
 		return fmt.Errorf("failed to read podSpecHash file %v", err)
 	}
 
-	podSpecHash := string(data)
-	metadata.AerospikeConfigHash = confHash
-	metadata.NetworkPolicyHash = networkPolicyHash
-	metadata.PodSpecHash = podSpecHash
+	metadata.PodSpecHash = string(podSpecHashBytes)
 
-	var AddressTypeName = [4]string{
-		access,
-		alternateAccess,
-		tlsAccess,
-		tlsAlternateAccess,
-	}
-
-	for _, confAddrName := range AddressTypeName {
-		switch confAddrName {
-		case access:
-			metadata.Aerospike.AccessEndpoints = initp.getEndpoints(confAddrName)
-		case alternateAccess:
-			metadata.Aerospike.AlternateAccessEndpoints = initp.getEndpoints(confAddrName)
-		case tlsAccess:
-			metadata.Aerospike.TLSAccessEndpoints = initp.getEndpoints(confAddrName)
-		case tlsAlternateAccess:
-			metadata.Aerospike.TLSAlternateAccessEndpoints = initp.getEndpoints(confAddrName)
-		}
-	}
+	metadata.Aerospike.AccessEndpoints = initp.getEndpoints(access)
+	metadata.Aerospike.AlternateAccessEndpoints = initp.getEndpoints(alternateAccess)
+	metadata.Aerospike.TLSAccessEndpoints = initp.getEndpoints(tlsAccess)
+	metadata.Aerospike.TLSAlternateAccessEndpoints = initp.getEndpoints(tlsAlternateAccess)
 
 	var patches []jsonpatch.JsonPatchOperation
 

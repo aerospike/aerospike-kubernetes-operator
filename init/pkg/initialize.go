@@ -6,9 +6,14 @@ import (
 	"path/filepath"
 )
 
-const configVolume = "/etc/aerospike"
+const (
+	configVolume = "/etc/aerospike"
+	configMapDir = "/etc/aerospike/configmap"
+)
 
+// ColdRestart initializes storage devices on first pod run.
 func (initp *InitParams) ColdRestart() error {
+	// Create required directories.
 	if err := initp.makeWorkDir(); err != nil {
 		return err
 	}
@@ -18,6 +23,9 @@ func (initp *InitParams) ColdRestart() error {
 		return err
 	}
 
+	// Copy scripts and binaries needed for warm restart.
+	// Init should not fail if features.conf file is not present
+	// akoinit binary will always be present here, as same has been checked in entrypoint.sh
 	filesToCopy := [2]string{"/workdir/bin/akoinit", "/configs/features.conf"}
 	for _, file := range filesToCopy {
 		if _, err := os.Stat(file); err == nil {
@@ -28,8 +36,7 @@ func (initp *InitParams) ColdRestart() error {
 		}
 	}
 
-	configMapDir := filepath.Join(configVolume, "configmap")
-	if err := os.MkdirAll(configMapDir, 0745); err != nil { //nolint:gocritic // file permission
+	if err := os.MkdirAll(configMapDir, 0755); err != nil { //nolint:gocritic // file permission
 		return err
 	}
 
@@ -44,6 +51,9 @@ func (initp *InitParams) ColdRestart() error {
 			return err
 		}
 	}
+
+	initp.logger.Info("Copied all files from configmap to configmap directory",
+		"source", "/configs", "destination", configMapDir)
 
 	if err := initp.createAerospikeConf(); err != nil {
 		return err
