@@ -136,6 +136,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -145,6 +146,61 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -154,6 +210,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -163,6 +220,13 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
@@ -5939,6 +6003,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -5948,6 +6013,61 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    maxItems: 1
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -5957,6 +6077,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -5966,6 +6087,13 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
