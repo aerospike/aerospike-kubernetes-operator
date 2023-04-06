@@ -16,6 +16,8 @@ limitations under the License.
 package cmd
 
 import (
+	goctx "context"
+
 	"github.com/spf13/cobra"
 
 	"akoinit/pkg"
@@ -33,11 +35,13 @@ var quickRestart = &cobra.Command{
 	Long: `This command runs quick restart functionality like
 restart asd process in server and updating CR status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initp, err := pkg.PopulateInitParams()
+		ctx := goctx.TODO()
+
+		initParams, err := pkg.PopulateInitParams(ctx)
 		if err != nil {
 			return err
 		}
-		return initp.QuickRestart(cmName, cmNamespace)
+		return initParams.QuickRestart(ctx, cmName, cmNamespace)
 	},
 }
 

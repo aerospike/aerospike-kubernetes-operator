@@ -325,7 +325,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 						enableTLS,
 					)
 
-					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					err = deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, 2*time.Minute)
 					Expect(err).To(HaveOccurred())
 				},
 			)
@@ -343,7 +343,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 						enableTLS,
 					)
 
-					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					err = deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, 2*time.Minute)
 					Expect(err).To(HaveOccurred())
 				},
 			)
@@ -360,7 +360,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 						enableTLS,
 					)
 
-					err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					err := deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, 2*time.Minute)
 					Expect(err).To(HaveOccurred())
 				},
 			)

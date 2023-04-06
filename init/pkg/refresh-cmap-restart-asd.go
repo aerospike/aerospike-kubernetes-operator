@@ -6,9 +6,7 @@ import (
 )
 
 // QuickRestart refreshes Aerospike config map and tries to warm restart Aerospike.
-func (initp *InitParams) QuickRestart(cmName, cmNamespace string) error {
-	ctx := goctx.TODO()
-
+func (initp *InitParams) QuickRestart(ctx goctx.Context, cmName, cmNamespace string) error {
 	if cmNamespace == "" {
 		return fmt.Errorf("kubernetes namespace required as an argument")
 	}

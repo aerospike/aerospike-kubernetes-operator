@@ -33,12 +33,11 @@ type InitParams struct {
 	logger      logr.Logger
 }
 
-func PopulateInitParams() (*InitParams, error) {
+func PopulateInitParams(ctx goctx.Context) (*InitParams, error) {
 	var (
 		k8sClient client.Client
 		cfg       = ctrl.GetConfigOrDie()
 		scheme    = runtime.NewScheme()
-		ctx       = goctx.TODO()
 	)
 
 	logger := ctrl.Log.WithName("init-setup")
@@ -55,6 +54,8 @@ func PopulateInitParams() (*InitParams, error) {
 	if err := asdbv1beta1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
+
+	logger.Info("Gathering all the required info from environment variables, k8s cluster and AerospikeCluster")
 
 	var err error
 
@@ -74,11 +75,6 @@ func PopulateInitParams() (*InitParams, error) {
 	}
 
 	rack, err := getRack(logger, podName, aeroCluster)
-	if err != nil {
-		return nil, err
-	}
-
-	networkInfo, err := getNetworkInfo(ctx, k8sClient, podName, aeroCluster)
 	if err != nil {
 		return nil, err
 	}
@@ -103,17 +99,22 @@ func PopulateInitParams() (*InitParams, error) {
 		)
 	}
 
-	initp := InitParams{
+	initParams := InitParams{
 		aeroCluster: aeroCluster,
 		k8sClient:   k8sClient,
 		podName:     podName,
 		namespace:   namespace,
 		rackID:      strconv.Itoa(rack.ID),
 		nodeID:      nodeID,
-		networkInfo: networkInfo,
 		workDir:     workDir,
 		logger:      logger,
 	}
 
-	return &initp, nil
+	if err := initParams.setNetworkInfo(ctx); err != nil {
+		return nil, err
+	}
+
+	logger.Info("Gathered all the required info")
+
+	return &initParams, nil
 }
