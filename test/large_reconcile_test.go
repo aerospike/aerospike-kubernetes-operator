@@ -236,7 +236,6 @@ func loadDataInCluster(
 
 	_, readErr := rand.Read(token)
 	if readErr != nil {
-		fmt.Println("error:", readErr)
 		return readErr
 	}
 

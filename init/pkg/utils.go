@@ -158,7 +158,8 @@ func (initp *InitParams) makeWorkDir() error {
 	return nil
 }
 
-func setHostPortEnv(ctx context.Context, k8sClient client.Client, podName, namespace string, networkInfo *networkInfo) error {
+func setHostPortEnv(ctx context.Context, k8sClient client.Client, podName, namespace string,
+	networkInfo *networkInfo) error {
 	// Sets up port related variables.
 	infoPort, tlsPort, err := getPorts(ctx, k8sClient, namespace, podName)
 	if err != nil {
@@ -215,7 +216,8 @@ func getPorts(ctx context.Context, k8sClient client.Client, namespace,
 }
 
 // Note: the IPs returned from here should match the IPs used in the node summary.
-func getHostIPS(ctx context.Context, k8sClient client.Client, hostIP string) (internalIP, externalIP string, err error) {
+func getHostIPS(ctx context.Context, k8sClient client.Client,
+	hostIP string) (internalIP, externalIP string, err error) {
 	internalIP = hostIP
 	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
