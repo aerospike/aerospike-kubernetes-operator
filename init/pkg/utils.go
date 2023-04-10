@@ -20,10 +20,10 @@ import (
 )
 
 type globalAddressesAndPorts struct {
-	globalAccessAddress             string
-	globalAlternateAccessAddress    string
-	globalTLSAccessAddress          string
-	globalTLSAlternateAccessAddress string
+	globalAccessAddress             []string
+	globalAlternateAccessAddress    []string
+	globalTLSAccessAddress          []string
+	globalTLSAlternateAccessAddress []string
 	globalAccessPort                int32
 	globalAlternateAccessPort       int32
 	globalTLSAccessPort             int32

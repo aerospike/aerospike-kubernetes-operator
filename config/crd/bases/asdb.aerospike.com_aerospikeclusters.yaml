@@ -153,7 +153,6 @@ spec:
                       network interfaces u
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customAlternateAccessNetworkNames:
@@ -161,7 +160,6 @@ spec:
                       the pod's network int
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
@@ -169,7 +167,6 @@ spec:
                       network interfaces u
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
@@ -177,7 +174,6 @@ spec:
                       network interface
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
@@ -185,7 +181,6 @@ spec:
                       of the pod''s network '
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
@@ -193,7 +188,6 @@ spec:
                       network interface
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   fabric:
@@ -6020,7 +6014,6 @@ spec:
                       network interfaces u
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customAlternateAccessNetworkNames:
@@ -6028,7 +6021,6 @@ spec:
                       the pod's network int
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customFabricNetworkNames:
@@ -6036,7 +6028,6 @@ spec:
                       network interfaces u
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAccessNetworkNames:
@@ -6044,7 +6035,6 @@ spec:
                       network interface
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSAlternateAccessNetworkNames:
@@ -6052,7 +6042,6 @@ spec:
                       of the pod''s network '
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   customTLSFabricNetworkNames:
@@ -6060,7 +6049,6 @@ spec:
                       network interface
                     items:
                       type: string
-                    maxItems: 1
                     minItems: 1
                     type: array
                   fabric:

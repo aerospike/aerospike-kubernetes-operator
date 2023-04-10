@@ -133,7 +133,7 @@ func (initp *InitParams) createAerospikeConf() error {
 func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNetworkType,
 	addressType, configuredIP string, interfaceIPs []string, confString string) string {
 	var (
-		accessAddress string
+		accessAddress []string
 		accessPort    int32
 	)
 
@@ -147,15 +147,15 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 
 	switch networkType { //nolint:exhaustive // fallback to default
 	case asdbv1beta1.AerospikeNetworkTypePod:
-		accessAddress = initp.networkInfo.podIP
+		accessAddress = append(accessAddress, initp.networkInfo.podIP)
 		accessPort = podPort
 
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
-		accessAddress = initp.networkInfo.internalIP
+		accessAddress = append(accessAddress, initp.networkInfo.internalIP)
 		accessPort = mappedPort
 
 	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
-		accessAddress = initp.networkInfo.externalIP
+		accessAddress = append(accessAddress, initp.networkInfo.externalIP)
 		accessPort = mappedPort
 
 	case asdbv1beta1.AerospikeNetworkTypeConfigured:
@@ -166,14 +166,15 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 			os.Exit(1)
 		}
 
-		accessAddress = configuredIP
+		accessAddress = append(accessAddress, configuredIP)
 		accessPort = mappedPort
+
 	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
-		accessAddress = interfaceIPs[0]
+		accessAddress = interfaceIPs
 		accessPort = podPort
 
 	default:
-		accessAddress = initp.networkInfo.podIP
+		accessAddress = append(accessAddress, initp.networkInfo.podIP)
 		accessPort = podPort
 	}
 
@@ -197,12 +198,18 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 	}
 
 	// Substitute in the configuration file.
-	confString = strings.ReplaceAll(confString, fmt.Sprintf("<%s-address>", addressType), accessAddress)
+	// If multiple IPs are found, then add all of them in the specific addressType
+	var newStr string
+	for _, addr := range accessAddress {
+		newStr += fmt.Sprintf("%s-address    %s\n        ", addressType, addr)
+	}
+
+	confString = strings.ReplaceAll(confString, fmt.Sprintf("%s-address    <%s-address>", addressType, addressType),
+		strings.TrimSuffix(newStr, "\n        "))
 
 	re := regexp.MustCompile(fmt.Sprintf("\\s*%s-port\\s*%d", addressType, podPort))
 
-	portString := re.FindString(confString)
-	if portString != "" {
+	if portString := re.FindString(confString); portString != "" {
 		// # This port is set in api/v1beta1/aerospikecluster_mutating_webhook.go and is used as placeholder.
 		confString = strings.ReplaceAll(confString, portString,
 			strings.ReplaceAll(portString, strconv.Itoa(int(podPort)), strconv.Itoa(int(accessPort))))

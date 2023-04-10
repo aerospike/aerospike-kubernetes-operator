@@ -643,43 +643,45 @@ func (initp *InitParams) updateStatus(ctx context.Context,
 
 func (initp *InitParams) getEndpoints(addressType string) []string {
 	var (
-		endpoint   []string
-		globalAddr string
-		globalPort int32
+		endPoints       []string
+		globalAddresses []string
+		globalPort      int32
 	)
 
 	switch addressType {
 	case access:
-		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalAccessAddress
+		globalAddresses = initp.networkInfo.globalAddressesAndPorts.globalAccessAddress
 		globalPort = initp.networkInfo.globalAddressesAndPorts.globalAccessPort
 
 	case alternateAccess:
-		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessAddress
+		globalAddresses = initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessAddress
 		globalPort = initp.networkInfo.globalAddressesAndPorts.globalAlternateAccessPort
 
 	case tlsAccess:
-		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalTLSAccessAddress
+		globalAddresses = initp.networkInfo.globalAddressesAndPorts.globalTLSAccessAddress
 		globalPort = initp.networkInfo.globalAddressesAndPorts.globalTLSAccessPort
 
 	case tlsAlternateAccess:
-		globalAddr = initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessAddress
+		globalAddresses = initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessAddress
 		globalPort = initp.networkInfo.globalAddressesAndPorts.globalTLSAlternateAccessPort
 	}
 
-	host := net.ParseIP(globalAddr)
+	for _, addr := range globalAddresses {
+		host := net.ParseIP(addr)
 
-	switch {
-	case host == nil:
-		return endpoint
-	case host.To4() != nil:
-		accessPoint := host.String() + ":" + strconv.Itoa(int(globalPort))
-		endpoint = append(endpoint, accessPoint)
-	case host.To16() != nil:
-		accessPoint := "[" + host.String() + "]" + ":" + strconv.Itoa(int(globalPort))
-		endpoint = append(endpoint, accessPoint)
-	default:
-		panic("invalid address-type")
+		switch {
+		case host == nil:
+			continue
+		case host.To4() != nil:
+			accessPoint := host.String() + ":" + strconv.Itoa(int(globalPort))
+			endPoints = append(endPoints, accessPoint)
+		case host.To16() != nil:
+			accessPoint := "[" + host.String() + "]" + ":" + strconv.Itoa(int(globalPort))
+			endPoints = append(endPoints, accessPoint)
+		default:
+			panic("invalid address-type")
+		}
 	}
 
-	return endpoint
+	return endPoints
 }
