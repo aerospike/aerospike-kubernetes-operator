@@ -910,6 +910,11 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
+// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
+// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`
+// +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}

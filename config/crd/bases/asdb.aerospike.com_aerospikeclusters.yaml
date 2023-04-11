@@ -16,7 +16,23 @@ spec:
     singular: aerospikecluster
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.size
+      name: Size
+      type: string
+    - jsonPath: .spec.image
+      name: Image
+      type: string
+    - jsonPath: .spec.podSpec.MultiPodPerHost
+      name: MultiPodPerHost
+      type: boolean
+    - jsonPath: .spec.podSpec.hostNetwork
+      name: HostNetwork
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AerospikeCluster is the schema for the AerospikeCluster API
