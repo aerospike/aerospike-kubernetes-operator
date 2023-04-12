@@ -122,7 +122,7 @@ func (initp *InitParams) createAerospikeConf() error {
 		return err
 	}
 
-	initp.logger.Info("Final aerospike conf file", "aerospike.template.conf", confString)
+	initp.logger.Info(fmt.Sprintf("Final aerospike conf file: \n%s", confString))
 
 	return nil
 }

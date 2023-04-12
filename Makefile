@@ -54,7 +54,7 @@ IMG ?= controller:latest
 IMG_TAGS ?= ""
 
 
-INIT_VERSION ?= 0.0.19
+INIT_VERSION ?= 0.0.20
 # Image URL to use all building/pushing operator-init image targets
 INIT_IMG ?= aerospike/aerospike-kubernetes-init-nightly:${INIT_VERSION}
 
