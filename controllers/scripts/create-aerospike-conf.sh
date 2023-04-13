@@ -48,8 +48,6 @@ substituteEndpoint() {
     local externalIP=$5
     local podPort=$6
     local mappedPort=$7
-    local configuredIP=$8
-    local interfaceIP=$9
 
     case $networkType in
       pod)
@@ -65,22 +63,6 @@ substituteEndpoint() {
       hostExternal)
         accessAddress=$externalIP
         accessPort=$mappedPort
-        ;;
-
-      configuredIP)
-        accessAddress=$configuredIP
-        accessPort=$mappedPort
-
-        if [[ "$accessAddress" == "NIL" ]];
-        then
-          echo "Please set '${CONFIGURED_ACCESSIP_LABEL}' and '${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}' node label to use NetworkPolicy configuredIP for access and alternateAccess addresses"
-          exit 1
-        fi
-        ;;
-
-      customInterface)
-        accessAddress=$interfaceIP
-        accessPort=$podPort
         ;;
 
       *)
@@ -100,21 +82,13 @@ substituteEndpoint() {
     sed -i "s/^\(\s*\)${addressType}-port\s*${podPort}/\1${addressType}-port    ${accessPort}/" ${CFG}
 }
 
-substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CONFIGURED_ACCESSIP $CUSTOM_ACCESS_NETWORK_IPS
-substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT $CONFIGURED_ALTERNATE_ACCESSIP $CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS
+substituteEndpoint "access" {{.NetworkPolicy.AccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
+substituteEndpoint "alternate-access" {{.NetworkPolicy.AlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_PORT $MAPPED_PORT
 
 if [ "true" == "$MY_POD_TLS_ENABLED" ]; then
-  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CONFIGURED_ACCESSIP $CUSTOM_TLS_ACCESS_NETWORK_IPS
-  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT $CONFIGURED_ALTERNATE_ACCESSIP $CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS
+  substituteEndpoint "tls-access" {{.NetworkPolicy.TLSAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
+  substituteEndpoint "tls-alternate-access" {{.NetworkPolicy.TLSAlternateAccessType}} $PODIP $INTERNALIP $EXTERNALIP $POD_TLSPORT $MAPPED_TLSPORT
 fi
-
-{{- if eq .NetworkPolicy.FabricType "customInterface"}}
-sed -i -e "/fabric {/a \\        address ${CUSTOM_FABRIC_NETWORK_IPS}" ${CFG}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSFabricType "customInterface"}}
-sed -i -e "/fabric {/a \\        tls-address ${CUSTOM_TLS_FABRIC_NETWORK_IPS}" ${CFG}
-{{- end}}
 
 # ------------------------------------------------------------------------------
 # Update mesh seeds in the configuration file

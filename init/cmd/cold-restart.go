@@ -16,6 +16,8 @@ limitations under the License.
 package cmd
 
 import (
+	goctx "context"
+
 	"github.com/spf13/cobra"
 
 	"akoinit/pkg"
@@ -28,11 +30,13 @@ var coldRestart = &cobra.Command{
 	Long: `This command runs complete init container functionality
 during pod start and subsequent cold restarts.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initp, err := pkg.PopulateInitParams()
+		ctx := goctx.TODO()
+
+		initParams, err := pkg.PopulateInitParams(ctx)
 		if err != nil {
 			return err
 		}
-		return initp.ColdRestart()
+		return initParams.ColdRestart(ctx)
 	},
 }
 

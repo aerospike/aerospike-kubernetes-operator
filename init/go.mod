@@ -3,7 +3,9 @@ module akoinit
 go 1.19
 
 require (
-	github.com/aerospike/aerospike-kubernetes-operator v0.0.0-20230222143953-f60325e67930
+	github.com/aerospike/aerospike-kubernetes-operator v0.0.0-20230329033359-da076b384e3a
+	github.com/go-logr/logr v1.2.3
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/spf13/cobra v1.6.1
 	gomodules.xyz/jsonpatch/v2 v2.2.0
@@ -14,7 +16,7 @@ require (
 )
 
 require (
-	github.com/aerospike/aerospike-management-lib v0.0.0-20230111155501-5021d4245958 // indirect
+	github.com/aerospike/aerospike-management-lib v0.0.0-20230306055500-d9ede81e69b4 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/ashishshinde/aerospike-client-go/v6 v6.0.1-0.20220606044039-77304169d3a4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -23,7 +25,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect

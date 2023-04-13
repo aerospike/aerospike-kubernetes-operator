@@ -13,8 +13,7 @@ const (
 )
 
 // ColdRestart initializes storage devices on first pod run.
-func (initp *InitParams) ColdRestart() error {
-	ctx := goctx.TODO()
+func (initp *InitParams) ColdRestart(ctx goctx.Context) error {
 	// Create required directories.
 	if err := initp.makeWorkDir(); err != nil {
 		return err

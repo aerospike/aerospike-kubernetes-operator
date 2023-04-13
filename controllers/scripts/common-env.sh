@@ -46,9 +46,6 @@ print(getport(data, podname))")"
 export PODIP="$MY_POD_IP"
 INTERNALIP="$MY_HOST_IP"
 
-export CONFIGURED_ACCESSIP_LABEL="aerospike.com/configured-access-address"
-export CONFIGURED_ALTERNATE_ACCESSIP_LABEL="aerospike.com/configured-alternate-access-address"
-
 # Get External IP
 DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/nodes")"
 
@@ -59,8 +56,6 @@ host = '${MY_HOST_IP}';
 def gethost(data, host):
     internalIP = host
     externalIP = host
-    configuredAccessIP = 'NIL'
-    configuredAlternateAccessIP = 'NIL'
 
     # Iterate over all nodes and find this pod's node IPs.
     for item in data['items']:
@@ -85,24 +80,14 @@ def gethost(data, host):
            if nodeExternalIP != '':
                externalIP = nodeExternalIP
 
-           labels = item['metadata']['labels']
-
-           if '${CONFIGURED_ACCESSIP_LABEL}' in labels:
-               configuredAccessIP = labels['${CONFIGURED_ACCESSIP_LABEL}']
-
-           if '${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}' in labels:
-               configuredAlternateAccessIP = labels['${CONFIGURED_ALTERNATE_ACCESSIP_LABEL}']
-
            break
 
-    return internalIP + ' ' + externalIP + ' ' + configuredAccessIP + ' ' + configuredAlternateAccessIP
+    return internalIP + ' ' + externalIP
 
 print(gethost(data, host))")"
 
 export INTERNALIP=$(echo $HOSTIPS | awk '{print $1}')
 export EXTERNALIP=$(echo $HOSTIPS | awk '{print $2}')
-export CONFIGURED_ACCESSIP=$(echo $HOSTIPS | awk '{print $3}')
-export CONFIGURED_ALTERNATE_ACCESSIP=$(echo $HOSTIPS | awk '{print $4}')
 
 # Sets up port related variables.
 export POD_PORT="{{.PodPort}}"
@@ -117,68 +102,6 @@ export MAPPED_TLSPORT="$(echo $PORTSTRING | awk -F'[, |(|)]' '{print $4}')"
 # Use the actual ports.
 export MAPPED_PORT="$POD_PORT"
 export MAPPED_TLSPORT="$POD_TLSPORT"
-{{- end}}
-
-# parseCustomNetworkIP function parses the network IPs for the given list of network names
-# It parses network status information from pod annotations key `k8s.v1.cni.cncf.io/network-status` which is added by CNI
-parseCustomNetworkIP() {
-  local networks=$1
-  networks="$(echo "${networks}" | sed 's/\[//g'| sed 's/\]//g')"
-
-  DATA="$(curl --cacert $CA_CERT -H "Authorization: Bearer $TOKEN" "$KUBE_API_SERVER/api/v1/namespaces/$NAMESPACE/pods/$MY_POD_NAME")"
-
-  NETWORKIPS="$(echo $DATA | python3 -c "import sys, json
-data = json.load(sys.stdin);
-networks = '${networks}';
-networks = networks.strip().split(' ')
-def getNetworkIP(data, networks):
-    annotations = data['metadata']['annotations']
-    key = 'k8s.v1.cni.cncf.io/network-status'
-    if key in annotations:
-      netIPs = []
-      for net in json.loads(annotations[key]):
-        if net['name'] in networks:
-          if 'ips' in net:
-            if len(net['ips']) == 0:
-              raise ValueError(\"ips list empty for network {} in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(net['name']))
-            netIPs.extend(net['ips'])
-          else:
-            raise KeyError(\"ips key missing for network {} in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(net['name']))
-
-      if len(netIPs) == 0:
-        raise ValueError(\"networks {} not found in pod annotations key k8s.v1.cni.cncf.io/network-status\".format(networks))
-      return ' '.join(netIPs)
-print(getNetworkIP(data, networks))")"
-}
-
-{{- if eq .NetworkPolicy.AccessType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomAccessNetworkNames}}"
-export CUSTOM_ACCESS_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSAccessType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSAccessNetworkNames}}"
-export CUSTOM_TLS_ACCESS_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.AlternateAccessType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomAlternateAccessNetworkNames}}"
-export CUSTOM_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSAlternateAccessType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSAlternateAccessNetworkNames}}"
-export CUSTOM_TLS_ALTERNATE_ACCESS_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.FabricType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomFabricNetworkNames}}"
-export CUSTOM_FABRIC_NETWORK_IPS=${NETWORKIPS}
-{{- end}}
-
-{{- if eq .NetworkPolicy.TLSFabricType "customInterface"}}
-parseCustomNetworkIP "{{.NetworkPolicy.CustomTLSFabricNetworkNames}}"
-export CUSTOM_TLS_FABRIC_NETWORK_IPS=${NETWORKIPS}
 {{- end}}
 
 # Parse out cluster name, formatted as: stsname-rackid-index

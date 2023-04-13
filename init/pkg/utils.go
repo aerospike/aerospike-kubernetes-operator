@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,18 +10,20 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	netattach "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 type globalAddressesAndPorts struct {
-	globalAccessAddress             string
-	globalAlternateAccessAddress    string
-	globalTLSAccessAddress          string
-	globalTLSAlternateAccessAddress string
+	globalAccessAddress             []string
+	globalAlternateAccessAddress    []string
+	globalTLSAccessAddress          []string
+	globalTLSAlternateAccessAddress []string
 	globalAccessPort                int32
 	globalAlternateAccessPort       int32
 	globalTLSAccessPort             int32
@@ -28,23 +31,37 @@ type globalAddressesAndPorts struct {
 }
 
 type networkInfo struct {
-	networkPolicy           asdbv1beta1.AerospikeNetworkPolicy
-	hostIP                  string
-	podIP                   string
-	internalIP              string
-	externalIP              string
-	globalAddressesAndPorts globalAddressesAndPorts
-	fabricPort              int32
-	fabricTLSPort           int32
-	podPort                 int32
-	podTLSPort              int32
-	heartBeatPort           int32
-	heartBeatTLSPort        int32
-	mappedPort              int32
-	mappedTLSPort           int32
-	multiPodPerHost         bool
-	hostNetwork             bool
+	networkPolicy                      asdbv1beta1.AerospikeNetworkPolicy
+	hostIP                             string
+	podIP                              string
+	internalIP                         string
+	externalIP                         string
+	configureAccessIP                  string
+	configuredAlterAccessIP            string
+	customAccessNetworkIPs             []string
+	customTLSAccessNetworkIPs          []string
+	customAlternateAccessNetworkIPs    []string
+	customTLSAlternateAccessNetworkIPs []string
+	customFabricNetworkIPs             []string
+	customTLSFabricNetworkIPs          []string
+	globalAddressesAndPorts            globalAddressesAndPorts
+	fabricPort                         int32
+	fabricTLSPort                      int32
+	podPort                            int32
+	podTLSPort                         int32
+	heartBeatPort                      int32
+	heartBeatTLSPort                   int32
+	mappedPort                         int32
+	mappedTLSPort                      int32
+	multiPodPerHost                    bool
+	hostNetwork                        bool
 }
+
+const (
+	configuredAccessIPLabel          = "aerospike.com/configured-access-address"
+	configuredAlternateAccessIPLabel = "aerospike.com/configured-alternate-access-address"
+	networkStatusAnnotation          = "k8s.v1.cni.cncf.io/network-status"
+)
 
 func getNamespacedName(name, namespace string) types.NamespacedName {
 	return types.NamespacedName{
@@ -63,47 +80,50 @@ func getCluster(ctx context.Context, k8sClient client.Client,
 	return aeroCluster, nil
 }
 
-func getNetworkInfo(ctx context.Context, k8sClient client.Client, podName string,
-	aeroCluster *asdbv1beta1.AerospikeCluster) (*networkInfo, error) {
-	networkInfo := &networkInfo{
-		multiPodPerHost: aeroCluster.Spec.PodSpec.MultiPodPerHost,
-		networkPolicy:   aeroCluster.Spec.AerospikeNetworkPolicy,
-		hostNetwork:     aeroCluster.Spec.PodSpec.HostNetwork,
+func (initp *InitParams) setNetworkInfo(ctx context.Context) error {
+	initp.logger.Info("Gathering network related info")
+
+	initp.networkInfo = &networkInfo{
+		multiPodPerHost: initp.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		networkPolicy:   initp.aeroCluster.Spec.AerospikeNetworkPolicy,
+		hostNetwork:     initp.aeroCluster.Spec.PodSpec.HostNetwork,
 		hostIP:          os.Getenv("MY_HOST_IP"),
 		podIP:           os.Getenv("MY_POD_IP"),
 	}
 
-	asConfig := aeroCluster.Spec.AerospikeConfig
+	asConfig := initp.aeroCluster.Spec.AerospikeConfig
 
 	if _, serviceTLSPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
-		networkInfo.podTLSPort = int32(*serviceTLSPort)
+		initp.networkInfo.podTLSPort = int32(*serviceTLSPort)
 	}
 
 	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
-		networkInfo.podPort = int32(*servicePort)
+		initp.networkInfo.podPort = int32(*servicePort)
 	}
 
 	if _, hbTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
-		networkInfo.heartBeatTLSPort = int32(*hbTLSPort)
+		initp.networkInfo.heartBeatTLSPort = int32(*hbTLSPort)
 	}
 
 	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
-		networkInfo.heartBeatPort = int32(*hbPort)
+		initp.networkInfo.heartBeatPort = int32(*hbPort)
 	}
 
 	if _, fabricTLSPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
-		networkInfo.fabricTLSPort = int32(*fabricTLSPort)
+		initp.networkInfo.fabricTLSPort = int32(*fabricTLSPort)
 	}
 
 	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
-		networkInfo.fabricPort = int32(*fabricPort)
+		initp.networkInfo.fabricPort = int32(*fabricPort)
 	}
 
-	if err := setHostPortEnv(ctx, k8sClient, podName, aeroCluster.Namespace, networkInfo); err != nil {
-		return nil, err
+	if err := initp.setIPAndPorts(ctx); err != nil {
+		return err
 	}
 
-	return networkInfo, nil
+	initp.logger.Info("Gathered network related info")
+
+	return nil
 }
 
 func getNodeIDFromPodName(podName string) (nodeID string, err error) {
@@ -158,29 +178,79 @@ func (initp *InitParams) makeWorkDir() error {
 	return nil
 }
 
-func setHostPortEnv(ctx context.Context, k8sClient client.Client, podName, namespace string,
-	networkInfo *networkInfo) error {
+func (initp *InitParams) setIPAndPorts(ctx context.Context) error {
+	netInfo := initp.networkInfo
 	// Sets up port related variables.
-	infoPort, tlsPort, err := getPorts(ctx, k8sClient, namespace, podName)
+	infoPort, tlsPort, err := getPorts(ctx, initp.k8sClient, initp.aeroCluster.Namespace, initp.podName)
 	if err != nil {
 		return err
 	}
 
-	networkInfo.internalIP, networkInfo.externalIP, err = getHostIPS(ctx, k8sClient, networkInfo.hostIP)
+	netInfo.internalIP, netInfo.externalIP, netInfo.configureAccessIP,
+		netInfo.configuredAlterAccessIP, err = getHostIPS(ctx, initp.k8sClient, netInfo.hostIP)
 	if err != nil {
 		return err
 	}
 
 	// Compute the mapped access ports based on config.
-	if networkInfo.multiPodPerHost {
+	if netInfo.multiPodPerHost {
 		// Use mapped service ports
-		networkInfo.mappedPort = infoPort
-		networkInfo.mappedTLSPort = tlsPort
+		netInfo.mappedPort = infoPort
+		netInfo.mappedTLSPort = tlsPort
 	} else {
 		// Use the actual ports.
-		networkInfo.mappedPort = networkInfo.podPort
-		networkInfo.mappedTLSPort = networkInfo.podTLSPort
+		netInfo.mappedPort = netInfo.podPort
+		netInfo.mappedTLSPort = netInfo.podTLSPort
 	}
+
+	pod := &corev1.Pod{}
+	if gErr := initp.k8sClient.Get(ctx, types.NamespacedName{
+		Name:      initp.podName,
+		Namespace: initp.namespace,
+	}, pod); gErr != nil {
+		return gErr
+	}
+
+	initp.logger.Info("Gathering custom Interface related info if given")
+
+	// populate custom interface IPs in case of customInterface network type
+	netInfo.customAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AccessType, pod.Annotations,
+		netInfo.networkPolicy.CustomAccessNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	netInfo.customTLSAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAccessType, pod.Annotations,
+		netInfo.networkPolicy.CustomTLSAccessNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	netInfo.customAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AlternateAccessType,
+		pod.Annotations, netInfo.networkPolicy.CustomAlternateAccessNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	netInfo.customTLSAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAlternateAccessType,
+		pod.Annotations, netInfo.networkPolicy.CustomTLSAlternateAccessNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	netInfo.customFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.FabricType, pod.Annotations,
+		netInfo.networkPolicy.CustomFabricNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	netInfo.customTLSFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSFabricType, pod.Annotations,
+		netInfo.networkPolicy.CustomTLSFabricNetworkNames)
+	if err != nil {
+		return err
+	}
+
+	initp.logger.Info("Gathered custom Interface related info")
 
 	return nil
 }
@@ -216,15 +286,15 @@ func getPorts(ctx context.Context, k8sClient client.Client, namespace,
 }
 
 // Note: the IPs returned from here should match the IPs used in the node summary.
-func getHostIPS(ctx context.Context, k8sClient client.Client,
-	hostIP string) (internalIP, externalIP string, err error) {
+func getHostIPS(ctx context.Context, k8sClient client.Client, hostIP string) (
+	internalIP, externalIP, configuredAccessIP, configuredAlternateAccessIP string, err error) {
 	internalIP = hostIP
 	externalIP = hostIP
 	nodeList := &corev1.NodeList{}
 
 	// Get External IP
 	if err := k8sClient.List(ctx, nodeList); err != nil {
-		return internalIP, externalIP, err
+		return internalIP, externalIP, configuredAccessIP, configuredAlternateAccessIP, err
 	}
 
 	for idx := range nodeList.Items {
@@ -254,9 +324,61 @@ func getHostIPS(ctx context.Context, k8sClient client.Client,
 				externalIP = nodeExternalIP
 			}
 
+			if ip, exists := node.Labels[configuredAccessIPLabel]; exists {
+				configuredAccessIP = ip
+			}
+
+			if ip, exists := node.Labels[configuredAlternateAccessIPLabel]; exists {
+				configuredAlternateAccessIP = ip
+			}
+
 			break
 		}
 	}
 
-	return internalIP, externalIP, nil
+	return internalIP, externalIP, configuredAccessIP, configuredAlternateAccessIP, nil
+}
+
+// parseCustomNetworkIP function parses the network IPs for the given list of network names
+// It parses network status info from pod annotations key `k8s.v1.cni.cncf.io/network-status` which is added by CNI
+func parseCustomNetworkIP(networkType asdbv1beta1.AerospikeNetworkType,
+	annotations map[string]string, networks []string,
+) ([]string, error) {
+	if networkType != asdbv1beta1.AerospikeNetworkTypeCustomInterface {
+		return nil, nil
+	}
+
+	if _, exists := annotations[networkStatusAnnotation]; !exists {
+		return nil, fmt.Errorf("required pod network status annotation key %s is missing", networkStatusAnnotation)
+	}
+
+	var (
+		networkIPs  []string
+		netStatuses []netattach.NetworkStatus
+	)
+
+	if err := json.Unmarshal([]byte(annotations[networkStatusAnnotation]), &netStatuses); err != nil {
+		return nil, fmt.Errorf("%s json unmarshal failed, error: %s", networkStatusAnnotation, err.Error())
+	}
+
+	networkSet := sets.NewString(networks...)
+
+	for idx := range netStatuses {
+		net := &netStatuses[idx]
+		if networkSet.Has(net.Name) {
+			if len(net.IPs) == 0 {
+				return networkIPs, fmt.Errorf("ips list empty for network %s in pod annotations key %s",
+					net.Name, networkStatusAnnotation)
+			}
+
+			networkIPs = append(networkIPs, net.IPs...)
+		}
+	}
+
+	if len(networkIPs) == 0 {
+		return networkIPs, fmt.Errorf("networks %+v not found in pod annotations key %s",
+			networks, networkStatusAnnotation)
+	}
+
+	return networkIPs, nil
 }
