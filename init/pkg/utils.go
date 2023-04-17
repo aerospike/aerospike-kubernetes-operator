@@ -89,6 +89,7 @@ func (initp *InitParams) setNetworkInfo(ctx context.Context) error {
 		hostNetwork:     initp.aeroCluster.Spec.PodSpec.HostNetwork,
 		hostIP:          os.Getenv("MY_HOST_IP"),
 		podIP:           os.Getenv("MY_POD_IP"),
+		internalIP:      os.Getenv("MY_HOST_IP"),
 	}
 
 	asConfig := initp.aeroCluster.Spec.AerospikeConfig
@@ -180,20 +181,19 @@ func (initp *InitParams) makeWorkDir() error {
 
 func (initp *InitParams) setIPAndPorts(ctx context.Context) error {
 	netInfo := initp.networkInfo
-	// Sets up port related variables.
-	infoPort, tlsPort, err := getPorts(ctx, initp.k8sClient, initp.aeroCluster.Namespace, initp.podName)
-	if err != nil {
-		return err
-	}
 
-	netInfo.internalIP, netInfo.externalIP, netInfo.configureAccessIP,
-		netInfo.configuredAlterAccessIP, err = getHostIPS(ctx, initp.k8sClient, netInfo.hostIP)
-	if err != nil {
-		return err
-	}
+	if initp.podServiceCreated() { // Sets up port related variables.
+		infoPort, tlsPort, err := getPorts(ctx, initp.k8sClient, initp.aeroCluster.Namespace, initp.podName)
+		if err != nil {
+			return err
+		}
 
-	// Compute the mapped access ports based on config.
-	if netInfo.multiPodPerHost {
+		netInfo.internalIP, netInfo.externalIP, netInfo.configureAccessIP,
+			netInfo.configuredAlterAccessIP, err = getHostIPS(ctx, initp.k8sClient, netInfo.hostIP)
+		if err != nil {
+			return err
+		}
+
 		// Use mapped service ports
 		netInfo.mappedPort = infoPort
 		netInfo.mappedTLSPort = tlsPort
@@ -204,12 +204,14 @@ func (initp *InitParams) setIPAndPorts(ctx context.Context) error {
 	}
 
 	pod := &corev1.Pod{}
-	if gErr := initp.k8sClient.Get(ctx, types.NamespacedName{
+	if err := initp.k8sClient.Get(ctx, types.NamespacedName{
 		Name:      initp.podName,
 		Namespace: initp.namespace,
-	}, pod); gErr != nil {
-		return gErr
+	}, pod); err != nil {
+		return err
 	}
+
+	var err error
 
 	initp.logger.Info("Gathering custom Interface related info if given")
 
@@ -283,6 +285,26 @@ func getPorts(ctx context.Context, k8sClient client.Client, namespace,
 	}
 
 	return infoPort, tlsPort, err
+}
+
+func (initp *InitParams) podServiceCreated() bool {
+	if !initp.aeroCluster.Spec.PodSpec.MultiPodPerHost {
+		return false
+	}
+
+	networkSet := sets.NewString(
+		string(asdbv1beta1.AerospikeNetworkTypePod),
+		string(asdbv1beta1.AerospikeNetworkTypeCustomInterface),
+	)
+
+	if !networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AccessType)) ||
+		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType)) ||
+		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType)) ||
+		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType)) {
+		return true
+	}
+
+	return false
 }
 
 // Note: the IPs returned from here should match the IPs used in the node summary.

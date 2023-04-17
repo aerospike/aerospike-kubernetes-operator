@@ -195,6 +195,19 @@ func (r *SingleClusterReconciler) createRack(rackState *RackState) (
 		return nil, reconcileError(err)
 	}
 
+	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		// Create services for all statefulset pods
+		for i := 0; i < rackState.Size; i++ {
+			// Statefulset name created from cr name
+			name := fmt.Sprintf("%s-%d", stsName.Name, i)
+			if err := r.createPodService(
+				name, r.aeroCluster.Namespace,
+			); err != nil {
+				return nil, reconcileError(err)
+			}
+		}
+	}
+
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackCreated",
 		"[rack-%d] Created Rack", rackState.Rack.ID,
@@ -450,6 +463,13 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
+	if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		if err = r.cleanupPodServices(rackState); err != nil {
+			return reconcileError(err)
+		}
+	}
+
 	return reconcileSuccess()
 }
 
@@ -505,7 +525,7 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 		)
 	}
 
-	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for each pod
 		for _, podName := range newPodNames {
 			if err = r.createPodService(
@@ -609,6 +629,18 @@ func (r *SingleClusterReconciler) upgradeRack(
 		)
 
 		podNames := getPodNames(podsBatch)
+
+		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+			// Create services for all pods if network policy is changed and rely on nodePort service
+			for _, name := range podNames {
+				if err = r.createPodService(
+					name, r.aeroCluster.Namespace,
+				); err != nil && !errors.IsAlreadyExists(err) {
+					return nil, reconcileError(err)
+				}
+			}
+		}
 
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",

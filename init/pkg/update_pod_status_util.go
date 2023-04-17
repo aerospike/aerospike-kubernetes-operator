@@ -86,7 +86,7 @@ func execute(cmd []string, stderr *os.File) error {
 }
 
 func (initp *InitParams) getPodImage(ctx context.Context, podNamespacedName types.NamespacedName) (string, error) {
-	initp.logger.Info("Get pod image", "podname", podNamespacedName)
+	initp.logger.Info("Get pod image", "podName", podNamespacedName)
 
 	pod := &corev1.Pod{}
 	if err := initp.k8sClient.Get(ctx, podNamespacedName, pod); err != nil {
@@ -105,12 +105,11 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 		servicePort = initp.networkInfo.mappedTLSPort
 	}
 
-	metadata := asdbv1beta1.AerospikePodStatus{
+	metadata := &asdbv1beta1.AerospikePodStatus{
 		PodIP:          initp.networkInfo.podIP,
 		HostInternalIP: initp.networkInfo.internalIP,
 		HostExternalIP: initp.networkInfo.externalIP,
 		PodPort:        int(podPort),
-		ServicePort:    servicePort,
 		Aerospike: asdbv1beta1.AerospikeInstanceSummary{
 			ClusterName: clusterName,
 			NodeID:      initp.nodeID,
@@ -118,7 +117,11 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 		},
 	}
 
-	return &metadata
+	if initp.podServiceCreated() {
+		metadata.ServicePort = servicePort
+	}
+
+	return metadata
 }
 
 func getInitializedVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {

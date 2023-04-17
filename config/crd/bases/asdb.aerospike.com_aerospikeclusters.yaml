@@ -9049,9 +9049,18 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    podTlsPort:
+                      description: PodTLSPort is the port K8s internal Aerospike clients
+                        can connect to u
+                      type: integer
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.
+                      format: int32
+                      type: integer
+                    serviceTlsPort:
+                      description: ServicePort is the port Aerospike clients outside
+                        K8s can connect to u
                       format: int32
                       type: integer
                   required:
@@ -9059,9 +9068,7 @@ spec:
                   - image
                   - networkPolicyHash
                   - podIP
-                  - podPort
                   - podSpecHash
-                  - servicePort
                   type: object
                 description: Pods has Aerospike specific status of the pods.
                 type: object

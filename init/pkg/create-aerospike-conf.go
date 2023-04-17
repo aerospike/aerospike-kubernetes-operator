@@ -35,12 +35,15 @@ func (initp *InitParams) createAerospikeConf() error {
 	}
 
 	confString = strings.ReplaceAll(confString, "ENV_NODE_ID", initp.nodeID)
-	confString = initp.substituteEndpoint(
-		initp.networkInfo.networkPolicy.AccessType, access, initp.networkInfo.configureAccessIP,
-		initp.networkInfo.customAccessNetworkIPs, confString)
-	confString = initp.substituteEndpoint(
-		initp.networkInfo.networkPolicy.AlternateAccessType, alternateAccess, initp.networkInfo.configuredAlterAccessIP,
-		initp.networkInfo.customAlternateAccessNetworkIPs, confString)
+
+	if initp.networkInfo.podPort != 0 {
+		confString = initp.substituteEndpoint(
+			initp.networkInfo.networkPolicy.AccessType, access, initp.networkInfo.configureAccessIP,
+			initp.networkInfo.customAccessNetworkIPs, confString)
+		confString = initp.substituteEndpoint(
+			initp.networkInfo.networkPolicy.AlternateAccessType, alternateAccess, initp.networkInfo.configuredAlterAccessIP,
+			initp.networkInfo.customAlternateAccessNetworkIPs, confString)
+	}
 
 	if tlsEnabled, _ := strconv.ParseBool(myPodTLSEnabled); tlsEnabled {
 		confString = initp.substituteEndpoint(
