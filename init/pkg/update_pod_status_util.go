@@ -97,19 +97,12 @@ func (initp *InitParams) getPodImage(ctx context.Context, podNamespacedName type
 }
 
 func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
-	podPort := initp.networkInfo.podPort
-	servicePort := initp.networkInfo.mappedPort
-
-	if tlsEnabled, _ := strconv.ParseBool(myPodTLSEnabled); tlsEnabled {
-		podPort = initp.networkInfo.podTLSPort
-		servicePort = initp.networkInfo.mappedTLSPort
-	}
-
 	metadata := &asdbv1beta1.AerospikePodStatus{
 		PodIP:          initp.networkInfo.podIP,
 		HostInternalIP: initp.networkInfo.internalIP,
 		HostExternalIP: initp.networkInfo.externalIP,
-		PodPort:        int(podPort),
+		PodPort:        int(initp.networkInfo.podPort),
+		PodTLSPort:     int(initp.networkInfo.podTLSPort),
 		Aerospike: asdbv1beta1.AerospikeInstanceSummary{
 			ClusterName: clusterName,
 			NodeID:      initp.nodeID,
@@ -118,7 +111,8 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 	}
 
 	if initp.podServiceCreated() {
-		metadata.ServicePort = servicePort
+		metadata.ServicePort = initp.networkInfo.mappedPort
+		metadata.ServiceTLSPort = initp.networkInfo.mappedTLSPort
 	}
 
 	return metadata
