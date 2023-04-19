@@ -127,8 +127,16 @@ type AerospikeOperatorCertSource struct {
 	CertPathInOperator *AerospikeCertPathInOperatorSource `json:"certPathInOperator,omitempty"`
 }
 
-type AerospikeSecretCertSource struct {
+type CaCertPath struct {
 	SecretName string `json:"secretName"`
+	// +optional
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+}
+
+type AerospikeSecretCertSource struct {
+	// +optional
+	CacertPath *CaCertPath `json:"cacertPath,omitempty"`
+	SecretName string      `json:"secretName"`
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 	// +optional
@@ -152,7 +160,8 @@ type AerospikeCertPathInOperatorSource struct {
 }
 
 func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
-	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
+	return (c.SecretCertSource != nil &&
+		(c.SecretCertSource.ClientCertFilename != "" || c.SecretCertSource.CacertPath != nil)) ||
 		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
 }
 
@@ -165,13 +174,22 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 		)
 	}
 
-	if c.SecretCertSource != nil &&
-		(c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
-		return fmt.Errorf(
-			"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
-				" `secretCertSource`: %+v",
-			c.SecretCertSource,
-		)
+	if c.SecretCertSource != nil {
+		if (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+			return fmt.Errorf(
+				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
+					" `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+
+		if (c.SecretCertSource.CaCertsFilename == "") == (c.SecretCertSource.CacertPath == nil) {
+			return fmt.Errorf(
+				"either `CaCertsFilename` or `CacertPath` must be set in `operatorClientCertSpec` but not"+
+					" both: %+v",
+				c,
+			)
+		}
 	}
 
 	if c.CertPathInOperator != nil &&
@@ -183,11 +201,8 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 		)
 	}
 
-	if c.TLSClientName != "" && !c.IsClientCertConfigured() {
-		return fmt.Errorf(
-			"tlsClientName is provided but client certificate is not: secretCertSource=%+v, certPathInOperator=%v+v",
-			c.SecretCertSource, c.CertPathInOperator,
-		)
+	if !c.IsClientCertConfigured() {
+		return fmt.Errorf("operator client cert is not configured")
 	}
 
 	return nil

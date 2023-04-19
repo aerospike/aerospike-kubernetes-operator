@@ -7,7 +7,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
@@ -254,7 +256,7 @@ func getClusterServerPool(
 
 	if clientCertSpec.CertPathInOperator != nil || clientCertSpec.SecretCertSource != nil {
 		if clientCertSpec.CertPathInOperator != nil {
-			return appendCACertFromFile(
+			return appendCACertFromFileOrPath(
 				clientCertSpec.CertPathInOperator.CaCertsPath, serverPool,
 			)
 		}
@@ -286,16 +288,33 @@ func getClientCertificate(
 	return nil, fmt.Errorf("both SecrtenName and CertPathInOperator are not set")
 }
 
-func appendCACertFromFile(
+func appendCACertFromFileOrPath(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
+	var pem embed.FS
+
 	if caPath == "" {
 		return serverPool
 	}
 
-	caData, err := os.ReadFile(caPath)
-	if err == nil {
-		serverPool.AppendCertsFromPEM(caData)
+	err := fs.WalkDir(
+		pem, caPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() {
+				var caData []byte
+				if caData, err = fs.ReadFile(pem, path); err != nil {
+					return err
+				}
+				serverPool.AppendCertsFromPEM(caData)
+			}
+			return nil
+		},
+	)
+
+	if err != nil {
+		logrus.Info("\"Failed to load CA certs from dir", "caPath: ", caPath)
 	}
 
 	return serverPool
@@ -305,27 +324,46 @@ func appendCACertFromSecret(
 	secretSource *asdbv1beta1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool, k8sClient client.Client,
 ) *x509.CertPool {
-	if secretSource.CaCertsFilename == "" {
+	if secretSource.CaCertsFilename == "" && secretSource.CacertPath == nil {
 		return serverPool
 	}
 	// get the tls info from secret
 	logrus.Info("Trying to find an appropriate CA cert from the secret...", "secret: ", secretSource)
 
 	found := &v1.Secret{}
-	secretName := namespacedSecret(secretSource, defaultNamespace)
 
-	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
-		return serverPool
-	}
+	if secretSource.CacertPath != nil {
+		secretName := namespacedSecret(secretSource.CacertPath.SecretNamespace,
+			secretSource.CacertPath.SecretName, defaultNamespace)
+		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
+			return serverPool
+		}
 
-	if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
-		logrus.Info("Adding cert to tls serverpool from the secret.", "secret", secretName)
-		serverPool.AppendCertsFromPEM(caData)
+		for file, caData := range found.Data {
+			logrus.Info(
+				"Adding cert to tls server-pool from the secret.", "secret",
+				secretName, "file", file,
+			)
+			serverPool.AppendCertsFromPEM(caData)
+		}
 	} else {
-		logrus.Info(
-			"WARN: Can't find ca-file in the secret. using default certPool.",
-			"secret: ", secretName, "ca-file: ", secretSource.CaCertsFilename,
-		)
+		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
+		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
+			return serverPool
+		}
+
+		if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
+			logrus.Info(
+				"Adding cert to tls server-pool from the secret.", "secret",
+				secretName,
+			)
+			serverPool.AppendCertsFromPEM(caData)
+		} else {
+			logrus.Info(
+				"WARN: Can't find ca-file in the secret. using default certPool.",
+				"secret", secretName, "ca-file", secretSource.CaCertsFilename,
+			)
+		}
 	}
 
 	return serverPool
@@ -337,7 +375,7 @@ func loadCertAndKeyFromSecret(
 ) (*tls.Certificate, error) {
 	// get the tls info from secret
 	found := &v1.Secret{}
-	secretName := namespacedSecret(secretSource, defaultNamespace)
+	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 
 	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
 		return nil, err
@@ -364,18 +402,18 @@ func loadCertAndKeyFromSecret(
 }
 
 func namespacedSecret(
-	secretSource *asdbv1beta1.AerospikeSecretCertSource,
+	secretNamespace, secretName,
 	defaultNamespace string,
 ) types.NamespacedName {
-	if secretSource.SecretNamespace == "" {
+	if secretNamespace == "" {
 		return types.NamespacedName{
-			Name: secretSource.SecretName, Namespace: defaultNamespace,
+			Name: secretName, Namespace: defaultNamespace,
 		}
 	}
 
 	return types.NamespacedName{
-		Name:      secretSource.SecretName,
-		Namespace: secretSource.SecretNamespace,
+		Name:      secretName,
+		Namespace: secretNamespace,
 	}
 }
 

@@ -34,10 +34,13 @@ var (
 )
 
 var secrets map[string][]byte
+var cacertSecrets map[string][]byte
 
-const secretDir = "../config/samples/secrets" //nolint:gosec // for testing
+const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
+const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
 
 const tlsSecretName = "aerospike-secret"
+const tlsCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
 const authSecretName = "auth"
 const authSecretNameForUpdate = "auth-update"
 
@@ -48,16 +51,20 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
-func initConfigSecret(secretDir string) error {
-	secrets = make(map[string][]byte)
+func initConfigSecret(secretDirectory string) error {
+	if secretDirectory == secretDir {
+		secrets = make(map[string][]byte)
+	} else {
+		cacertSecrets = make(map[string][]byte)
+	}
 
-	fileInfo, err := os.ReadDir(secretDir)
+	fileInfo, err := os.ReadDir(secretDirectory)
 	if err != nil {
 		return err
 	}
 
 	if len(fileInfo) == 0 {
-		return fmt.Errorf("no secret file available in %s", secretDir)
+		return fmt.Errorf("no secret file available in %s", secretDirectory)
 	}
 
 	for _, file := range fileInfo {
@@ -66,12 +73,16 @@ func initConfigSecret(secretDir string) error {
 			continue
 		}
 
-		secret, err := os.ReadFile(filepath.Join(secretDir, file.Name()))
+		secret, err := os.ReadFile(filepath.Join(secretDirectory, file.Name()))
 		if err != nil {
 			return fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
 		}
 
-		secrets[file.Name()] = secret
+		if secretDirectory == secretDir {
+			secrets[file.Name()] = secret
+		} else {
+			cacertSecrets[file.Name()] = secret
+		}
 	}
 
 	return nil
@@ -85,7 +96,18 @@ func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
 		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
+	// Create cacertSecret
+	if err := initConfigSecret(cacertSecretDir); err != nil {
+		return fmt.Errorf("failed to init secrets: %v", err)
+	}
+
 	if err := createConfigSecret(
+		k8sClient, ctx, namespace, labels,
+	); err != nil {
+		return err
+	}
+
+	if err := createCacertSecret(
 		k8sClient, ctx, namespace, labels,
 	); err != nil {
 		return err
@@ -143,6 +165,34 @@ func createClusterPreReq(
 	if err := createAuthSecret(
 		k8sClient, ctx, namespace, labels, authSecretName, pass,
 	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createCacertSecret(
+	k8sClient client.Client, ctx goctx.Context, namespace string,
+	labels map[string]string,
+) error {
+	// Create configSecret
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      tlsCacertSecretName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: cacertSecrets,
+	}
+
+	// Remove old object
+	_ = k8sClient.Delete(ctx, s)
+
+	// use test context's create helper to create the object and add a cleanup
+	// function for the new object
+	err := k8sClient.Create(ctx, s)
+	if err != nil {
 		return err
 	}
 

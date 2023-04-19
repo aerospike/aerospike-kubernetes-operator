@@ -335,8 +335,8 @@ func validateClientCertSpec(
 			return fmt.Errorf("operator client cert is not specified")
 		}
 
-		if !clientCertSpec.IsClientCertConfigured() {
-			return fmt.Errorf("operator client cert is not configured")
+		if err := clientCertSpec.validate(); err != nil {
+			return err
 		}
 
 		return nil
@@ -764,10 +764,12 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
-				return fmt.Errorf(
-					"ca-path not allowed, please use ca-file. tlsConf %v",
-					tlsConf,
-				)
+				if _, ok1 := tlsConf["ca-file"]; ok1 {
+					return fmt.Errorf(
+						"both ca-path and ca-file can not be set, please use either of the configuration. tlsConf %v",
+						tlsConf,
+					)
+				}
 			}
 		}
 	}
@@ -1763,6 +1765,10 @@ func getTLSFilePaths(configSpec AerospikeConfigSpec) []string {
 
 					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
 						paths = append(paths, path.(string))
+					}
+
+					if path, ok := tlsInterface.(map[string]interface{})["ca-path"]; ok {
+						paths = append(paths, path.(string)+"/")
 					}
 				}
 			}

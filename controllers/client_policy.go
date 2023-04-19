@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
@@ -152,7 +154,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 
 	switch {
 	case clientCertSpec.CertPathInOperator != nil:
-		return r.appendCACertFromFile(
+		return r.appendCACertFromFileOrPath(
 			clientCertSpec.CertPathInOperator.CaCertsPath, serverPool,
 		)
 	case clientCertSpec.SecretCertSource != nil:
@@ -169,18 +171,37 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	}
 }
 
-func (r *SingleClusterReconciler) appendCACertFromFile(
+func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
+	var pem embed.FS
+
 	if caPath == "" {
 		r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
-	} else if caData, err := os.ReadFile(caPath); err != nil {
-		r.Log.Error(
-			err, "Failed to load CA certs from file.", "ca-path", caPath,
-		)
 	} else {
-		serverPool.AppendCertsFromPEM(caData)
-		r.Log.Info("Loaded CA root certs from file.", "ca-path", caPath)
+		err := fs.WalkDir(
+			pem, caPath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !d.IsDir() {
+					var caData []byte
+					if caData, err = fs.ReadFile(pem, path); err != nil {
+						return err
+					}
+					serverPool.AppendCertsFromPEM(caData)
+					r.Log.Info("Loaded CA root certs from file.", "ca-path", caPath,
+						"file", path)
+				}
+				return nil
+			},
+		)
+
+		if err != nil {
+			r.Log.Error(
+				err, "Failed to load CA certs from dir.", "ca-path", caPath,
+			)
+		}
 	}
 
 	return serverPool
@@ -190,9 +211,9 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	secretSource *asdbv1beta1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool,
 ) *x509.CertPool {
-	if secretSource.CaCertsFilename == "" {
+	if secretSource.CaCertsFilename == "" && secretSource.CacertPath == nil {
 		r.Log.Info(
-			"CaCertsFilename is not specified. Using default CA certs...",
+			"Neither CaCertsFilename nor CacertPath is specified. Using default CA certs...",
 			"secret", secretSource,
 		)
 
@@ -206,28 +227,50 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 
 	found := &corev1.Secret{}
 
-	secretName := namespacedSecret(secretSource, defaultNamespace)
-	if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
-		r.Log.Error(
-			err,
-			"Failed to get secret certificates to the pool, returning empty certPool",
-			"secret", secretName,
-		)
+	if secretSource.CacertPath != nil {
+		secretName := namespacedSecret(secretSource.CacertPath.SecretNamespace,
+			secretSource.CacertPath.SecretName, defaultNamespace)
+		if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+			r.Log.Error(
+				err,
+				"Failed to get secret certificates to the pool, returning empty certPool",
+				"secret", secretName,
+			)
 
-		return serverPool
-	}
+			return serverPool
+		}
 
-	if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
-		r.Log.V(1).Info(
-			"Adding cert to tls server-pool from the secret.", "secret",
-			secretName,
-		)
-		serverPool.AppendCertsFromPEM(caData)
+		for file, caData := range found.Data {
+			r.Log.V(1).Info(
+				"Adding cert to tls server-pool from the secret.", "secret",
+				secretName, "file", file,
+			)
+			serverPool.AppendCertsFromPEM(caData)
+		}
 	} else {
-		r.Log.V(1).Info(
-			"WARN: Can't find ca-file in the secret. using default certPool.",
-			"secret", secretName, "ca-file", secretSource.CaCertsFilename,
-		)
+		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
+		if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+			r.Log.Error(
+				err,
+				"Failed to get secret certificates to the pool, returning empty certPool",
+				"secret", secretName,
+			)
+
+			return serverPool
+		}
+
+		if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
+			r.Log.V(1).Info(
+				"Adding cert to tls server-pool from the secret.", "secret",
+				secretName,
+			)
+			serverPool.AppendCertsFromPEM(caData)
+		} else {
+			r.Log.V(1).Info(
+				"WARN: Can't find ca-file in the secret. using default certPool.",
+				"secret", secretName, "ca-file", secretSource.CaCertsFilename,
+			)
+		}
 	}
 
 	return serverPool
@@ -259,7 +302,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	// get the tls info from secret
 	found := &corev1.Secret{}
 
-	secretName := namespacedSecret(secretSource, defaultNamespace)
+	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 	if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
 		r.Log.Info(
 			"Warn: Failed to get secret certificates to the pool", "err", err,
@@ -275,7 +318,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 		)
 	} else if keyData, keyExists := found.Data[secretSource.ClientKeyFilename]; !keyExists {
 		return nil, fmt.Errorf(
-			"can't find certificate \"%s\" in secret %+v",
+			"can't find client key \"%s\" in secret %+v",
 			secretSource.ClientKeyFilename, secretName,
 		)
 	} else if cert, err := tls.X509KeyPair(crtData, keyData); err != nil {
@@ -293,18 +336,18 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 }
 
 func namespacedSecret(
-	secretSource *asdbv1beta1.AerospikeSecretCertSource,
+	secretNamespace, secretName,
 	defaultNamespace string,
 ) types.NamespacedName {
-	if secretSource.SecretNamespace == "" {
+	if secretNamespace == "" {
 		return types.NamespacedName{
-			Name: secretSource.SecretName, Namespace: defaultNamespace,
+			Name: secretName, Namespace: defaultNamespace,
 		}
 	}
 
 	return types.NamespacedName{
-		Name:      secretSource.SecretName,
-		Namespace: secretSource.SecretNamespace,
+		Name:      secretName,
+		Namespace: secretNamespace,
 	}
 }
 
