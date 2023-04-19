@@ -255,6 +255,7 @@ func (r *SingleClusterReconciler) restartPods(
 
 		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+			// Create services for all pods if network policy is changed and rely on nodePort service
 			if err := r.createPodService(
 				pod.Name, r.aeroCluster.Namespace,
 			); err != nil && errors.IsAlreadyExists(err) {

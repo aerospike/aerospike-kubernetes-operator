@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -690,6 +691,83 @@ func doTestNetworkPolicy(
 			Expect(err).ToNot(HaveOccurred())
 		},
 	)
+
+	// test-case valid only for multiPodPerHost true
+	if multiPodPerHost {
+		It("OnlyPodNetwork: should create cluster without nodePort service", func() {
+			clusterNamespacedName := getClusterNamespacedName(
+				"pod-network-cluster", multiClusterNs1)
+
+			networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
+				AccessType:             asdbv1beta1.AerospikeNetworkTypePod,
+				AlternateAccessType:    asdbv1beta1.AerospikeNetworkTypePod,
+				TLSAccessType:          asdbv1beta1.AerospikeNetworkTypePod,
+				TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkTypePod,
+			}
+
+			aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+				clusterNamespacedName, &networkPolicy, multiPodPerHost,
+				enableTLS,
+			)
+
+			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence := func(aeroCluster *asdbv1beta1.AerospikeCluster, shouldExist bool) {
+				for podName := range aeroCluster.Status.Pods {
+					svc := &corev1.Service{}
+					err = k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: aeroCluster.Namespace,
+						Name:      podName,
+					}, svc)
+
+					if !shouldExist {
+						Expect(err).To(HaveOccurred())
+						Expect(errors.IsNotFound(err)).To(BeTrue())
+						Expect(aeroCluster.Status.Pods[podName].ServicePort).To(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).To(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).To(Equal(""))
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+						Expect(aeroCluster.Status.Pods[podName].ServicePort).NotTo(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).NotTo(Equal(""))
+
+						if enableTLS {
+							Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).NotTo(Equal(int32(0)))
+						}
+					}
+				}
+			}
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, false)
+
+			By("Updating AccessType to hostInternal")
+			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1beta1.AerospikeNetworkTypeHostExternal
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = validateNetworkPolicy(ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, true)
+
+			By("Reverting AccessType to pod")
+			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1beta1.AerospikeNetworkTypePod
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, false)
+		})
+	}
 
 	Context(
 		"When using configuredIP", func() {
