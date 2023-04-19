@@ -179,76 +179,69 @@ func (initp *InitParams) makeWorkDir() error {
 	return nil
 }
 
-func (initp *InitParams) setIPAndPorts(ctx context.Context) error {
+func (initp *InitParams) setIPAndPorts(ctx context.Context) (err error) {
 	netInfo := initp.networkInfo
 
-	if initp.podServiceCreated() { // Sets up port related variables.
-		infoPort, tlsPort, err := getPorts(ctx, initp.k8sClient, initp.aeroCluster.Namespace, initp.podName)
-		if err != nil {
+	// Sets up port related variables.
+	// User service ports only when MultiPodPerHost is true and node network is defined in NetworkPolicy
+	if initp.aeroCluster.Spec.PodSpec.MultiPodPerHost && initp.isNodeNetwork() {
+		if netInfo.mappedPort, netInfo.mappedTLSPort, err = getPorts(
+			ctx, initp.k8sClient, initp.aeroCluster.Namespace, initp.podName); err != nil {
 			return err
 		}
-
-		netInfo.internalIP, netInfo.externalIP, netInfo.configureAccessIP,
-			netInfo.configuredAlterAccessIP, err = getHostIPS(ctx, initp.k8sClient, netInfo.hostIP)
-		if err != nil {
-			return err
-		}
-
-		// Use mapped service ports
-		netInfo.mappedPort = infoPort
-		netInfo.mappedTLSPort = tlsPort
 	} else {
 		// Use the actual ports.
 		netInfo.mappedPort = netInfo.podPort
 		netInfo.mappedTLSPort = netInfo.podTLSPort
 	}
 
-	pod := &corev1.Pod{}
-	if err := initp.k8sClient.Get(ctx, types.NamespacedName{
-		Name:      initp.podName,
-		Namespace: initp.namespace,
-	}, pod); err != nil {
-		return err
+	if initp.isNodeNetwork() {
+		if netInfo.internalIP, netInfo.externalIP, netInfo.configureAccessIP,
+			netInfo.configuredAlterAccessIP, err = getHostIPS(ctx, initp.k8sClient, netInfo.hostIP); err != nil {
+			return err
+		}
 	}
 
-	var err error
+	pod := &corev1.Pod{}
+
+	err = initp.k8sClient.Get(ctx, types.NamespacedName{
+		Name:      initp.podName,
+		Namespace: initp.namespace,
+	}, pod)
+	if err != nil {
+		return err
+	}
 
 	initp.logger.Info("Gathering custom Interface related info if given")
 
 	// populate custom interface IPs in case of customInterface network type
-	netInfo.customAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AccessType, pod.Annotations,
-		netInfo.networkPolicy.CustomAccessNetworkNames)
-	if err != nil {
+	if netInfo.customAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AccessType, pod.Annotations,
+		netInfo.networkPolicy.CustomAccessNetworkNames); err != nil {
 		return err
 	}
 
-	netInfo.customTLSAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAccessType, pod.Annotations,
-		netInfo.networkPolicy.CustomTLSAccessNetworkNames)
-	if err != nil {
+	if netInfo.customTLSAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAccessType, pod.Annotations,
+		netInfo.networkPolicy.CustomTLSAccessNetworkNames); err != nil {
 		return err
 	}
 
-	netInfo.customAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AlternateAccessType,
-		pod.Annotations, netInfo.networkPolicy.CustomAlternateAccessNetworkNames)
-	if err != nil {
+	if netInfo.customAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.AlternateAccessType,
+		pod.Annotations, netInfo.networkPolicy.CustomAlternateAccessNetworkNames); err != nil {
 		return err
 	}
 
-	netInfo.customTLSAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAlternateAccessType,
-		pod.Annotations, netInfo.networkPolicy.CustomTLSAlternateAccessNetworkNames)
-	if err != nil {
+	if netInfo.customTLSAlternateAccessNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSAlternateAccessType,
+		pod.Annotations, netInfo.networkPolicy.CustomTLSAlternateAccessNetworkNames); err != nil {
 		return err
 	}
 
-	netInfo.customFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.FabricType, pod.Annotations,
-		netInfo.networkPolicy.CustomFabricNetworkNames)
-	if err != nil {
+	if netInfo.customFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.FabricType, pod.Annotations,
+		netInfo.networkPolicy.CustomFabricNetworkNames); err != nil {
 		return err
 	}
 
-	netInfo.customTLSFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSFabricType, pod.Annotations,
-		netInfo.networkPolicy.CustomTLSFabricNetworkNames)
-	if err != nil {
+	if netInfo.customTLSFabricNetworkIPs, err = parseCustomNetworkIP(netInfo.networkPolicy.TLSFabricType, pod.Annotations,
+		netInfo.networkPolicy.CustomTLSFabricNetworkNames); err != nil {
 		return err
 	}
 
@@ -287,24 +280,18 @@ func getPorts(ctx context.Context, k8sClient client.Client, namespace,
 	return infoPort, tlsPort, err
 }
 
-func (initp *InitParams) podServiceCreated() bool {
-	if !initp.aeroCluster.Spec.PodSpec.MultiPodPerHost {
-		return false
-	}
-
+func (initp *InitParams) isNodeNetwork() bool {
 	networkSet := sets.NewString(
 		string(asdbv1beta1.AerospikeNetworkTypePod),
 		string(asdbv1beta1.AerospikeNetworkTypeCustomInterface),
+		string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AccessType),
+		string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType),
+		string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType),
+		string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType),
 	)
 
-	if !networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AccessType)) ||
-		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType)) ||
-		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType)) ||
-		!networkSet.Has(string(initp.aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType)) {
-		return true
-	}
-
-	return false
+	// If len of set is more than 2, it means network type different from "pod" and  "customInterface" are present.
+	return networkSet.Len() > 2
 }
 
 // Note: the IPs returned from here should match the IPs used in the node summary.

@@ -306,14 +306,13 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1beta1.Aerospike
 	networkSet := sets.NewString(
 		string(asdbv1beta1.AerospikeNetworkTypePod),
 		string(asdbv1beta1.AerospikeNetworkTypeCustomInterface),
+		string(networkPolicy.AccessType),
+		string(networkPolicy.TLSAccessType),
+		string(networkPolicy.AlternateAccessType),
+		string(networkPolicy.TLSAlternateAccessType),
 	)
 
-	if !networkSet.Has(string(networkPolicy.AccessType)) ||
-		!networkSet.Has(string(networkPolicy.TLSAccessType)) ||
-		!networkSet.Has(string(networkPolicy.AlternateAccessType)) ||
-		!networkSet.Has(string(networkPolicy.TLSAlternateAccessType)) {
-		return true
-	}
-
-	return false
+	// If len of set is more than 2, it means network type different from "pod" and  "customInterface" are present.
+	// In that case, pod service is required
+	return networkSet.Len() > 2
 }

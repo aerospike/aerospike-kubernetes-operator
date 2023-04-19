@@ -195,6 +195,7 @@ func (r *SingleClusterReconciler) createRack(rackState *RackState) (
 		return nil, reconcileError(err)
 	}
 
+	// Create pod service if node network is used in network policy
 	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for all statefulset pods
 		for i := 0; i < rackState.Size; i++ {
@@ -463,6 +464,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
+	// Delete all pod service if network policy is updated to some non node network type in network policy
+	// Check podServiceNeeded condition for both status and spec network policy
 	if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		if err = r.cleanupPodServices(rackState); err != nil {
@@ -525,6 +528,7 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 		)
 	}
 
+	// Create pod service for the scaled up pod when node network is used in network policy
 	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for each pod
 		for _, podName := range newPodNames {
@@ -630,6 +634,8 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 		podNames := getPodNames(podsBatch)
 
+		// Create services for all pods if network policy is changed and rely on nodePort service.
+		// Check podServiceNeeded condition for both status and spec network policy
 		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 			// Create services for all pods if network policy is changed and rely on nodePort service

@@ -253,9 +253,10 @@ func (r *SingleClusterReconciler) restartPods(
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
 
+		// Create services for all pods if network policy is changed and rely on nodePort service.
+		// Check podServiceNeeded condition for both status and spec network policy
 		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-			// Create services for all pods if network policy is changed and rely on nodePort service
 			if err := r.createPodService(
 				pod.Name, r.aeroCluster.Namespace,
 			); err != nil && errors.IsAlreadyExists(err) {
@@ -561,6 +562,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 			}
 		}
 
+		// Delete pod service if it was created earlier by looking at status network policy
 		if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) {
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails
