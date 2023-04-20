@@ -626,6 +626,76 @@ func negativeDeployClusterValidationTest(
 			)
 
 			Context(
+				"InvalidOperatorClientCertSpec: should fail for invalid OperatorClientCertSpec", func() {
+					It(
+						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = &asdbv1beta1.AerospikeSecretCertSource{}
+							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1beta1.AerospikeCertPathInOperatorSource{}
+							err := deployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
+
+							err := deployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"Should fail if both CaCertsFilename and CacertPath is set",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CacertPath = &asdbv1beta1.CaCertPath{}
+
+							err := deployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"MissingClientCertPath: should fail if clientCertPath is missing",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
+							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
+								&asdbv1beta1.AerospikeCertPathInOperatorSource{
+									CaCertsPath:    "cacert.pem",
+									ClientKeyPath:  "svc_key.pem",
+									ClientCertPath: "",
+								}
+
+							err := deployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+				},
+			)
+
+			Context(
 				"InvalidAerospikeConfig: should fail for empty/invalid aerospikeConfig",
 				func() {
 					It(
@@ -992,6 +1062,27 @@ func negativeDeployClusterValidationTest(
 									map[string]interface{}{
 										"name":      "aerospike-a-0.test-runner",
 										"cert-file": "/randompath/svc_cluster_chain.pem",
+									},
+								},
+							}
+							err := deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+								"tls": []interface{}{
+									map[string]interface{}{
+										"name":      "aerospike-a-0.test-runner",
+										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+										"ca-file":   "/etc/aerospike/secret/cacert.pem",
+										"ca-path":   "/etc/aerospike/secret/cacerts",
 									},
 								},
 							}
