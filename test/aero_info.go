@@ -61,7 +61,8 @@ func newAsConn(
 	tlsName := getServiceTLSName(aeroCluster)
 
 	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1beta1.AerospikeNetworkTypePod {
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1beta1.AerospikeNetworkTypePod &&
+		networkType != asdbv1beta1.AerospikeNetworkTypeCustomInterface {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return nil, err
@@ -189,9 +190,15 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 			)
 		}
 
-		return &as.Host{
+		asHost := &as.Host{
 			Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName,
-		}, nil
+		}
+
+		if pod.Aerospike.TLSName != "" {
+			asHost.Port = pod.PodTLSPort
+		}
+
+		return asHost, nil
 	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
 		if pod.HostInternalIP == "" {
 			return nil, fmt.Errorf(
@@ -208,7 +215,6 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 		}
 
 		host = pod.HostExternalIP
-
 	case asdbv1beta1.AerospikeNetworkTypeConfigured:
 		// configured IP is a fake IP used for testing, therefor this can not be used to connect
 		return nil, fmt.Errorf(
@@ -226,9 +232,25 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
 
-	return &as.Host{
-		Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName,
-	}, nil
+	asHost := &as.Host{
+		Name: host, TLSName: pod.Aerospike.TLSName,
+	}
+
+	if pod.Aerospike.TLSName != "" {
+		asHost.Port = pod.PodTLSPort
+
+		if pod.ServiceTLSPort != 0 {
+			asHost.Port = int(pod.ServiceTLSPort)
+		}
+	} else {
+		asHost.Port = pod.PodPort
+
+		if pod.ServicePort != 0 {
+			asHost.Port = int(pod.ServicePort)
+		}
+	}
+
+	return asHost, nil
 }
 
 func newHostConn(
