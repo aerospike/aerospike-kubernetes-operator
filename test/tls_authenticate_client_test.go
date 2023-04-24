@@ -280,6 +280,7 @@ func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context) {
 			networkConf["tls"] = tls
 
 			operatorClientCertSpec := getOperatorCert()
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientCertFilename = "server-cert.pem"
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientKeyFilename = "server_key.pem"
 			cacertPath := &asdbv1beta1.CaCertPath{

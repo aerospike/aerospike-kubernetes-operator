@@ -160,8 +160,7 @@ type AerospikeCertPathInOperatorSource struct {
 }
 
 func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
-	return (c.SecretCertSource != nil &&
-		(c.SecretCertSource.ClientCertFilename != "" || c.SecretCertSource.CacertPath != nil)) ||
+	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
 		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
 }
 
