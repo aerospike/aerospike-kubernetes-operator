@@ -761,7 +761,6 @@ type AerospikeNetworkPolicy struct {
 	// network interfaces to the pod.
 	// Required with 'customInterface' access type.
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomAccessNetworkNames []string `json:"customAccessNetworkNames,omitempty"`
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
@@ -777,7 +776,6 @@ type AerospikeNetworkPolicy struct {
 	// network interfaces to the pod.
 	// Required with 'customInterface' alternateAccess type
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomAlternateAccessNetworkNames []string `json:"customAlternateAccessNetworkNames,omitempty"`
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
@@ -792,7 +790,6 @@ type AerospikeNetworkPolicy struct {
 	// network interfaces to the pod.
 	// Required with 'customInterface' tlsAccess type
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAccessNetworkNames []string `json:"customTLSAccessNetworkNames,omitempty"`
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
@@ -808,7 +805,6 @@ type AerospikeNetworkPolicy struct {
 	// network interfaces to the pod.
 	// Required with 'customInterface' tlsAlternateAccess type
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
 
 	// FabricType is the type of network address to use for Aerospike fabric address.
@@ -823,7 +819,6 @@ type AerospikeNetworkPolicy struct {
 	// network interfaces to the pod.
 	// Required with 'customInterface' fabric type
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomFabricNetworkNames []string `json:"customFabricNetworkNames,omitempty"`
 
 	// TLSFabricType is the type of network address to use for Aerospike TLS fabric address.
@@ -838,7 +833,6 @@ type AerospikeNetworkPolicy struct {
 	// interfaces to the pod.
 	// Required with 'customInterface' tlsFabric type
 	// +kubebuilder:validation:MinItems:=1
-	// +kubebuilder:validation:MaxItems:=1
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
 }
 
@@ -910,6 +904,11 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
+// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
+// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`
+// +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
