@@ -766,7 +766,7 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 			if _, ok := tlsConf["ca-path"]; ok {
 				if _, ok1 := tlsConf["ca-file"]; ok1 {
 					return fmt.Errorf(
-						"either `ca-path` or `ca-file` must be set in `tls` but not both. tlsConf %v",
+						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
 						tlsConf,
 					)
 				}

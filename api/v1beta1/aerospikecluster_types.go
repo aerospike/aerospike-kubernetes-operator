@@ -184,9 +184,9 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 
 		if (c.SecretCertSource.CaCertsFilename == "") == (c.SecretCertSource.CacertPath == nil) {
 			return fmt.Errorf(
-				"either `CaCertsFilename` or `CacertPath` must be set in `operatorClientCertSpec` but not"+
+				"either `CaCertsFilename` or `CacertPath` must be set in `secretCertSource` but not"+
 					" both: %+v",
-				c,
+				c.SecretCertSource,
 			)
 		}
 	}
