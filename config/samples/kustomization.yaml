@@ -1,4 +1,4 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-  - dim_nostorage_cluster_cr_skip_validation.yaml
+  - dim_nostorage_cluster_skip_validation_cr.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

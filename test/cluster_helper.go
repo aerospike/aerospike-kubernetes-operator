@@ -555,8 +555,7 @@ func getClusterIfExists(
 ) (*asdbv1beta1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 
-	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
-	if err != nil {
+	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -571,7 +570,7 @@ func deleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
-	if err := k8sClient.Delete(ctx, aeroCluster); err != nil {
+	if err := k8sClient.Delete(ctx, aeroCluster); err != nil && !k8serrors.IsNotFound(err) {
 		return err
 	}
 

@@ -34,7 +34,7 @@ if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   fi
 fi
 
-namespaces="test test1 test2"
+namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace" || true
   if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then
