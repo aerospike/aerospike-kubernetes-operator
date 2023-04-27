@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	rbac "k8s.io/api/rbac/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -40,11 +39,6 @@ type SingleClusterReconciler struct {
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
-	if err := r.checkPermissionForNamespace(); err != nil {
-		r.Log.Error(err, "Failed to start reconcile")
-		return reconcileRequeueAfter(10).result, nil
-	}
-
 	r.Log.V(1).Info(
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
@@ -195,75 +189,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
-	r.Log.Info(
-		"Checking for serviceAccount name in clusterRoleBindings",
-		"namespace", r.aeroCluster.Namespace, "serviceAccount",
-		aeroClusterServiceAccountName,
-	)
-
-	CRBs := &rbac.ClusterRoleBindingList{}
-	if err := r.Client.List(context.TODO(), CRBs); err != nil {
-		return err
-	}
-
-	var (
-		isOlmCRBFound bool
-		svcActFound   bool
-	)
-
-	for idx := range CRBs.Items {
-		crb := &CRBs.Items[idx]
-		_, aerospikeLabelExists := crb.Labels["aerospike.com/default-ns.kind"]
-		_, olmLabelExists := crb.Labels["olm.owner"]
-
-		// Verify that the role
-		if !aerospikeLabelExists && !olmLabelExists {
-			continue
-		}
-
-		if strings.HasPrefix(crb.Name, "aerospike-kubernetes-operator") {
-			r.Log.Info("Checking in clusterRoleBinding", "crb", crb.Name)
-
-			isOlmCRBFound = true
-
-			for _, sub := range crb.Subjects {
-				// Verify serviceAccount for namespace
-				if sub.Kind == "ServiceAccount" &&
-					sub.Name == aeroClusterServiceAccountName &&
-					sub.Namespace == r.aeroCluster.Namespace {
-					r.Log.Info(
-						"Found the serviceAccount name in clusterRoleBindings",
-						"namespace", r.aeroCluster.Namespace, "serviceAccount",
-						aeroClusterServiceAccountName,
-					)
-
-					svcActFound = true
-
-					break
-				}
-			}
-		}
-
-		if svcActFound {
-			break
-		}
-	}
-
-	// No need to check for permission in non-olm setup. Skip if CRB not found,
-	// operator might have been deployed by non-olm method and CRB name may
-	// have a different prefix.
-	if isOlmCRBFound && !svcActFound {
-		return fmt.Errorf(
-			"setup missing RBAC for namespace `%s` - see https://docs.aerospike.com/cloud/kubernetes/operator/2.0."+
-				"0/create-cluster-kubectl#prepare-the-namespace",
-			r.aeroCluster.Namespace,
-		)
-	}
-
-	return nil
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl() error {
