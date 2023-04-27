@@ -58,6 +58,8 @@ var k8sClientset *kubernetes.Clientset
 
 var cloudProvider CloudProvider
 
+var projectRoot string
+
 var (
 	scheme = k8Runtime.NewScheme()
 )
@@ -75,15 +77,11 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeEach(func() {
 	By("Cleaning up all Aerospike clusters.")
-	deleteAllClusters(namespace)
-	deleteAllClusters(multiClusterNs1)
-	deleteAllClusters(multiClusterNs2)
-	err := cleanupPVC(k8sClient, namespace)
-	Expect(err).NotTo(HaveOccurred())
-	err = cleanupPVC(k8sClient, multiClusterNs1)
-	Expect(err).NotTo(HaveOccurred())
-	err = cleanupPVC(k8sClient, multiClusterNs2)
-	Expect(err).NotTo(HaveOccurred())
+
+	for idx := range testNamespaces {
+		deleteAllClusters(testNamespaces[idx])
+		Expect(cleanupPVC(k8sClient, testNamespaces[idx])).NotTo(HaveOccurred())
+	}
 })
 
 func deleteAllClusters(namespace string) {
@@ -153,10 +151,10 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
-		err = clientgoscheme.AddToScheme(clientgoscheme.Scheme)
+		err = clientgoscheme.AddToScheme(scheme)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = asdbv1beta1.AddToScheme(clientgoscheme.Scheme)
+		err = asdbv1beta1.AddToScheme(scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = admissionv1.AddToScheme(scheme)
@@ -165,7 +163,7 @@ var _ = BeforeSuite(
 		// +kubebuilder:scaffold:scheme
 
 		k8sClient, err = client.New(
-			cfg, client.Options{Scheme: clientgoscheme.Scheme},
+			cfg, client.Options{Scheme: scheme},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
@@ -173,8 +171,10 @@ var _ = BeforeSuite(
 		k8sClientset = kubernetes.NewForConfigOrDie(cfg)
 		Expect(k8sClient).NotTo(BeNil())
 
+		projectRoot, err = getGitRepoRootPath()
+		Expect(err).NotTo(HaveOccurred())
+
 		ctx := goctx.TODO()
-		_ = createNamespace(k8sClient, ctx, namespace)
 
 		// Setup by user function
 		// test creating resource
@@ -191,13 +191,17 @@ var _ = BeforeSuite(
 		// Create aerospike-secret
 		// Create auth-secret (admin)
 
+		// For aerospike
+		// Create aerospike-secret
+		// Create auth-secret (admin)
+
 		// For common
-		// Create namespace test1, test2
-		// ServiceAccount: aerospike-cluster (operatorNs, test1, test2)
+		// Create namespace test1, test2, aerospike
+		// ServiceAccount: aerospike-cluster (operatorNs, test1, test2, aerospike)
 		// ClusterRole: aerospike-cluster
 		// ClusterRoleBinding: aerospike-cluster
 
-		// Need to create storageclass if not created already
+		// Need to create storageClass if not created already
 		err = setupByUser(k8sClient, ctx)
 		Expect(err).ToNot(HaveOccurred())
 		cloudProvider, err = getCloudProvider(ctx, k8sClient)
@@ -207,9 +211,11 @@ var _ = BeforeSuite(
 var _ = AfterSuite(
 	func() {
 		By("Cleaning up all pvcs")
-		_ = cleanupPVC(k8sClient, namespace)
-		_ = cleanupPVC(k8sClient, multiClusterNs1)
-		_ = cleanupPVC(k8sClient, multiClusterNs2)
+
+		for idx := range testNamespaces {
+			_ = cleanupPVC(k8sClient, testNamespaces[idx])
+		}
+
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
 		err := testEnv.Stop()

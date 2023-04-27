@@ -12,12 +12,13 @@ echo "Removing Aerospike clusters"
 kubectl -n test delete aerospikecluster --all
 kubectl -n test1 delete aerospikecluster --all
 kubectl -n test2 delete aerospikecluster --all
-kubectl -n test3 delete aerospikecluster --all
+kubectl -n aerospike delete aerospikecluster --all
 
 # Force delete pods
 kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test || true
 kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test1 || true
 kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace test2 || true
+kubectl delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --namespace aerospike || true
 
 # Delete PVCs
 echo "Removing PVCs"
@@ -35,6 +36,7 @@ kubectl delete clusterrole aerospike-cluster-role || true
 kubectl -n test delete serviceaccount aerospike-operator-controller-manager || true
 kubectl -n test1 delete serviceaccount aerospike-operator-controller-manager || true
 kubectl -n test2 delete serviceaccount aerospike-operator-controller-manager || true
+kubectl -n aerospike delete serviceaccount aerospike-operator-controller-manager || true
 
 # Uninstall the operator
 echo "Removing test operator deployment"
@@ -48,7 +50,7 @@ kubectl delete CatalogSource $(kubectl get CatalogSource -n $OPERATOR_NS | grep 
 kubectl delete mutatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  mutatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
 kubectl delete validatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get  validatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")
 
-namespaces="test test1 test2"
+namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   # Delete operator CSVs
   kubectl -n "$namespace" delete csv $(kubectl get  csv -n "$namespace"| grep aerospike | cut -f 1 -d " ")
