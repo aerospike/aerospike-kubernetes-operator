@@ -40,6 +40,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"DeployClusterWithSyslog", func() {
+				DeployClusterWithSyslog(ctx)
+			},
+		)
+		Context(
 			"CommonNegativeClusterValidationTest", func() {
 				NegativeClusterValidationTest(ctx)
 			},
@@ -52,7 +57,8 @@ var _ = Describe(
 		Context(
 			"ScaleDownWithMigrateFillDelay", func() {
 				clusterNamespacedName := getClusterNamespacedName(
-					"migrate-fill-delay-cluster", namespace)
+					"migrate-fill-delay-cluster", namespace,
+				)
 				migrateFillDelay := int64(120)
 				BeforeEach(
 					func() {
@@ -75,30 +81,33 @@ var _ = Describe(
 					},
 				)
 
-				It("Should ignore migrate-fill-delay while scaling down", func() {
+				It(
+					"Should ignore migrate-fill-delay while scaling down", func() {
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.Size -= 2
-					err = k8sClient.Update(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.Size -= 2
+						err = k8sClient.Update(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					// verify that migrate-fill-delay is set to 0 while scaling down
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0)
-					Expect(err).ToNot(HaveOccurred())
+						// verify that migrate-fill-delay is set to 0 while scaling down
+						err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0)
+						Expect(err).ToNot(HaveOccurred())
 
-					err = waitForAerospikeCluster(
-						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-						getTimeout(2),
-					)
-					Expect(err).ToNot(HaveOccurred())
+						err = waitForAerospikeCluster(
+							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+							getTimeout(2),
+						)
+						Expect(err).ToNot(HaveOccurred())
 
-					// verify that migrate-fill-delay is reverted to original value after scaling down
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
-					Expect(err).ToNot(HaveOccurred())
-				})
-			})
+						// verify that migrate-fill-delay is reverted to original value after scaling down
+						err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
 	},
 )
 
@@ -259,10 +268,14 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 			// fetch kube-dns service to get the DNS server IP for DNS lookup
 			// This service name is same for both kube-dns and coreDNS DNS servers
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Namespace: "kube-system",
-				Name:      "kube-dns",
-			}, &kubeDNSSvc)).ShouldNot(HaveOccurred())
+			Expect(
+				k8sClient.Get(
+					ctx, types.NamespacedName{
+						Namespace: "kube-system",
+						Name:      "kube-dns",
+					}, &kubeDNSSvc,
+				),
+			).ShouldNot(HaveOccurred())
 
 			dnsConfig := &v1.PodDNSConfig{
 				Nameservers: kubeDNSSvc.Spec.ClusterIPs,
@@ -271,7 +284,8 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 					{
 						Name:  "ndots",
 						Value: func(input string) *string { return &input }("5"),
-					}},
+					},
+				},
 			}
 			aeroCluster.Spec.PodSpec.DNSConfig = dnsConfig
 
@@ -284,9 +298,37 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 		},
 	)
 
-	AfterEach(func() {
-		_ = deleteCluster(k8sClient, ctx, aeroCluster)
-	})
+	AfterEach(
+		func() {
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		},
+	)
+}
+
+func DeployClusterWithSyslog(ctx goctx.Context) {
+	It(
+		"deploy with syslog logging config", func() {
+			clusterNamespacedName := getClusterNamespacedName(
+				"logging-config-cluster", namespace,
+			)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+			loggingConf := []interface{}{
+				map[string]interface{}{
+					"name":     "syslog",
+					"path":     "path",
+					"tag":      "asd",
+					"facility": "local1",
+				},
+			}
+
+			aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		},
+	)
 }
 
 // Test cluster cr updation
@@ -1028,6 +1070,26 @@ func negativeDeployClusterValidationTest(
 					)
 				},
 			)
+
+			It(
+				"InvalidLogging: should fail for using syslog param with file or console logging", func() {
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					loggingConf := []interface{}{
+						map[string]interface{}{
+							"name":     "anyFileName",
+							"path":     "path",
+							"tag":      "asd",
+							"facility": "local1",
+						},
+					}
+
+					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 		},
 	)
 }
@@ -1407,6 +1469,28 @@ func negativeUpdateClusterValidationTest(
 							// XDR conf
 						},
 					)
+				},
+			)
+
+			It(
+				"InvalidLogging: should fail for using syslog param with file or console logging", func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					loggingConf := []interface{}{
+						map[string]interface{}{
+							"name":     "anyFileName",
+							"path":     "path",
+							"tag":      "asd",
+							"facility": "local1",
+						},
+					}
+
+					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
 				},
 			)
 		},
