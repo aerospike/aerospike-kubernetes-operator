@@ -10,7 +10,7 @@ spec:
 
   storage:
     filesystemVolumePolicy:
-      cascadeDelete: false
+      cascadeDelete: true
       initMethod: deleteFiles
     blockVolumePolicy:
       cascadeDelete: true

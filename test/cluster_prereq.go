@@ -19,36 +19,22 @@ const (
 )
 
 func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
-	// Create service account for getting access in cluster specific namespaces
-	if err := createServiceAccount(
-		k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs1,
-	); err != nil {
-		return err
-	}
+	subjects := make([]rbac.Subject, 0, len(testNamespaces))
 
-	if err := createServiceAccount(
-		k8sClient, ctx, aeroClusterServiceAccountName, multiClusterNs2,
-	); err != nil {
-		return err
-	}
+	for idx := range testNamespaces {
+		// Create service account for getting access in cluster specific namespaces
+		if err := createServiceAccount(
+			k8sClient, ctx, aeroClusterServiceAccountName, testNamespaces[idx],
+		); err != nil {
+			return err
+		}
 
-	// Create clusterRoleBinding to bind clusterRole and accounts
-	subjects := []rbac.Subject{
-		{
+		// Create subjects to bind clusterRole to serviceAccounts
+		subjects = append(subjects, rbac.Subject{
 			Kind:      "ServiceAccount",
 			Name:      aeroClusterServiceAccountName,
-			Namespace: namespace,
-		},
-		{
-			Kind:      "ServiceAccount",
-			Name:      aeroClusterServiceAccountName,
-			Namespace: multiClusterNs1,
-		},
-		{
-			Kind:      "ServiceAccount",
-			Name:      aeroClusterServiceAccountName,
-			Namespace: multiClusterNs2,
-		},
+			Namespace: testNamespaces[idx],
+		})
 	}
 
 	return updateRoleBinding(k8sClient, ctx, subjects)

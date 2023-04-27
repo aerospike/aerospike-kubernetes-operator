@@ -1,7 +1,28 @@
 #
 # Aerospike Kubernetes Operator Init Container.
 #
+# Build the akoinit binary
+FROM --platform=$BUILDPLATFORM golang:1.18 as builder
 
+# OS and Arch args
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN go mod download
+
+# Copy the go source
+COPY main.go main.go
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+
+# Build
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o akoinit main.go
 # Note: Don't change /workdir/bin path. This path is being referenced in operator codebase.
 
 # Base image
@@ -10,9 +31,9 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 # Maintainer
 LABEL maintainer="Aerospike, Inc. <developers@aerospike.com>"
 
-ARG VERSION=0.0.19
+ARG VERSION=0.0.20
 ARG USER=root
-ARG DESCRIPTION="Initializes Aerospike pods created but the Aerospike Kubernetes Operator. Initialization includes setting up devices."
+ARG DESCRIPTION="Initializes Aerospike pods created by the Aerospike Kubernetes Operator. Initialization includes setting up devices."
 
 # Labels
 LABEL name="aerospike-kubernetes-init" \
@@ -28,15 +49,15 @@ LABEL name="aerospike-kubernetes-init" \
 
 # Add entrypoint script
 ADD entrypoint.sh /workdir/bin/entrypoint.sh
+COPY --from=builder /workspace/akoinit /workdir/bin/
 
 # License file
 COPY LICENSE /licenses/
 
 # Install dependencies and configmap exporter
 RUN microdnf update -y \
-    && microdnf install wget python3 curl findutils util-linux procps -y \
+    && microdnf install findutils util-linux -y \
     && mkdir -p /workdir/bin \
-    && curl -L https://github.com/ashishshinde/kubernetes-configmap-exporter/releases/download/1.0.0/kubernetes-configmap-exporter -o /workdir/bin/kubernetes-configmap-exporter \
     # Update permissions
     && chgrp -R 0 /workdir \
     && chmod -R g=u+x,o=o+x /workdir \
