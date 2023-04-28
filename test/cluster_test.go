@@ -39,11 +39,12 @@ var _ = Describe(
 				DeployClusterWithDNSConfiguration(ctx)
 			},
 		)
-		Context(
-			"DeployClusterWithSyslog", func() {
-				DeployClusterWithSyslog(ctx)
-			},
-		)
+		// Need to setup some syslog related things for this
+		// Context(
+		// 	"DeployClusterWithSyslog", func() {
+		// 		DeployClusterWithSyslog(ctx)
+		// 	},
+		// )
 		Context(
 			"CommonNegativeClusterValidationTest", func() {
 				NegativeClusterValidationTest(ctx)
@@ -316,9 +317,10 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 			loggingConf := []interface{}{
 				map[string]interface{}{
 					"name":     "syslog",
-					"path":     "path",
+					"any":      "INFO",
+					"path":     "/dev/log",
 					"tag":      "asd",
-					"facility": "local1",
+					"facility": "local0",
 				},
 			}
 
@@ -1079,14 +1081,14 @@ func negativeDeployClusterValidationTest(
 					loggingConf := []interface{}{
 						map[string]interface{}{
 							"name":     "anyFileName",
-							"path":     "path",
+							"path":     "/dev/log",
 							"tag":      "asd",
-							"facility": "local1",
+							"facility": "local0",
 						},
 					}
 
 					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
-					err := deployCluster(k8sClient, ctx, aeroCluster)
+					err := k8sClient.Create(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
 			)
@@ -1482,9 +1484,9 @@ func negativeUpdateClusterValidationTest(
 					loggingConf := []interface{}{
 						map[string]interface{}{
 							"name":     "anyFileName",
-							"path":     "path",
+							"path":     "/dev/log",
 							"tag":      "asd",
-							"facility": "local1",
+							"facility": "local0",
 						},
 					}
 

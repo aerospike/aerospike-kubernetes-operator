@@ -31,7 +31,7 @@ const (
 	prevServerVersion   = "6.0.0.1"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "6.1.0.1"
+	latestServerVersion = "6.3.0.0"
 	invalidVersion      = "3.0.0.4"
 	pre5Version         = "4.9.0.33"
 )
