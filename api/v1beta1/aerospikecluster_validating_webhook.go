@@ -733,7 +733,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
 	}
 
-	if nsList, ok := nsListInterface.([]interface{}); !ok {
+	if nsList, ok1 := nsListInterface.([]interface{}); !ok1 {
 		return fmt.Errorf(
 			"aerospikeConfig.namespace not valid namespace list %v",
 			nsListInterface,
