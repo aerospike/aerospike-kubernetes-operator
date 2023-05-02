@@ -28,7 +28,7 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "6.0.0.1"
+	prevServerVersion   = "6.2.0.1"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
 	latestServerVersion = "6.3.0.0"
@@ -906,7 +906,7 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
 				AerospikeInitContainerSpec: &asdbv1beta1.
-					AerospikeInitContainerSpec{},
+				AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
@@ -976,7 +976,7 @@ func createDummyAerospikeCluster(
 			PodSpec: asdbv1beta1.AerospikePodSpec{
 				MultiPodPerHost: true,
 				AerospikeInitContainerSpec: &asdbv1beta1.
-					AerospikeInitContainerSpec{},
+				AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
