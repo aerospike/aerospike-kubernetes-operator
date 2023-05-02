@@ -733,7 +733,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
 	}
 
-	if nsList, ok := nsListInterface.([]interface{}); !ok {
+	if nsList, ok1 := nsListInterface.([]interface{}); !ok1 {
 		return fmt.Errorf(
 			"aerospikeConfig.namespace not valid namespace list %v",
 			nsListInterface,
@@ -742,6 +742,42 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		nsList, storage, clSize,
 	); err != nil {
 		return err
+	}
+
+	// logging conf
+	// config["logging"] is added in mutating webhook
+	loggingConfList, ok := config["logging"].([]interface{})
+	if !ok {
+		return fmt.Errorf(
+			"aerospikeConfig.logging not a valid list %v", config["logging"],
+		)
+	}
+
+	if err := validateLoggingConf(loggingConfList); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateLoggingConf(loggingConfList []interface{}) error {
+	syslogParams := []string{"facility", "path", "tag"}
+
+	for idx := range loggingConfList {
+		logConf, ok := loggingConfList[idx].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"aerospikeConfig.logging not a list of valid map %v", logConf,
+			)
+		}
+
+		if logConf["name"] != "syslog" {
+			for _, param := range syslogParams {
+				if _, ok := logConf[param]; ok {
+					return fmt.Errorf("can use %s only with `syslog` in aerospikeConfig.logging %v", param, logConf)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -1890,7 +1926,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 		if !networkSet.HasAll(netList...) {
 			return fmt.Errorf(
 				"required networks %v not present in pod metadata annotations key \"k8s.v1.cni.cncf.io/networks\"",
-				netList)
+				netList,
+			)
 		}
 
 		return nil
@@ -1899,7 +1936,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.AccessType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomAccessNetworkNames,
-			"access", "customAccessNetworkNames"); err != nil {
+			"access", "customAccessNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
@@ -1907,7 +1945,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.AlternateAccessType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomAlternateAccessNetworkNames,
-			"alternateAccess", "customAlternateAccessNetworkNames"); err != nil {
+			"alternateAccess", "customAlternateAccessNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
@@ -1915,7 +1954,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.TLSAccessType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomTLSAccessNetworkNames,
-			"tlsAccess", "customTLSAccessNetworkNames"); err != nil {
+			"tlsAccess", "customTLSAccessNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
@@ -1923,7 +1963,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.TLSAlternateAccessType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomTLSAlternateAccessNetworkNames,
-			"tlsAlternateAccess", "customTLSAlternateAccessNetworkNames"); err != nil {
+			"tlsAlternateAccess", "customTLSAlternateAccessNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
@@ -1931,7 +1972,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.FabricType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomFabricNetworkNames,
-			"fabric", "customFabricNetworkNames"); err != nil {
+			"fabric", "customFabricNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
@@ -1939,7 +1981,8 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	if networkPolicy.TLSFabricType == AerospikeNetworkTypeCustomInterface {
 		if err := validateNetworkList(
 			networkPolicy.CustomTLSFabricNetworkNames,
-			"tlsFabric", "customTLSFabricNetworkNames"); err != nil {
+			"tlsFabric", "customTLSFabricNetworkNames",
+		); err != nil {
 			return err
 		}
 	}
