@@ -904,9 +904,8 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			},
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
-				MultiPodPerHost: true,
-				AerospikeInitContainerSpec: &asdbv1beta1.
-				AerospikeInitContainerSpec{},
+				MultiPodPerHost:            true,
+				AerospikeInitContainerSpec: &asdbv1beta1.AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
@@ -974,9 +973,8 @@ func createDummyAerospikeCluster(
 			},
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
-				MultiPodPerHost: true,
-				AerospikeInitContainerSpec: &asdbv1beta1.
-				AerospikeInitContainerSpec{},
+				MultiPodPerHost:            true,
+				AerospikeInitContainerSpec: &asdbv1beta1.AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
