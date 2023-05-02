@@ -116,9 +116,7 @@ var _ = Describe(
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5", "5.3.0.10", "5.2.0.17",
-		"5.1.0.25", "5.0.0.21",
-		"4.9.0.11",
+		"6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
 	}
 
 	for _, v := range versions {
