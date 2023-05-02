@@ -147,7 +147,7 @@ func getRack(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.Aerosp
 		return nil, err
 	}
 
-	logger.Info("Checking for rack in rackConfig", "rack-id", rackID)
+	logger.Info("Looking for rack in rackConfig", "rack-id", rackID)
 
 	racks := aeroCluster.Spec.RackConfig.Racks
 	for idx := range racks {

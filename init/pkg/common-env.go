@@ -24,6 +24,7 @@ var (
 type InitParams struct {
 	k8sClient   client.Client
 	aeroCluster *asdbv1beta1.AerospikeCluster
+	rack        *asdbv1beta1.Rack
 	networkInfo *networkInfo
 	podName     string
 	namespace   string
@@ -101,6 +102,7 @@ func PopulateInitParams(ctx goctx.Context) (*InitParams, error) {
 
 	initParams := InitParams{
 		aeroCluster: aeroCluster,
+		rack:        rack,
 		k8sClient:   k8sClient,
 		podName:     podName,
 		namespace:   namespace,
