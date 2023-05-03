@@ -229,7 +229,7 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 		}
 
 		volume := newVolume(initp.podName, vol)
-		initp.logger.Info("Starting initialisation", "volume", volume)
+		initp.logger.Info(fmt.Sprintf("Starting initialisation for volume=%+v", *volume))
 
 		if _, err := os.Stat(volume.getMountPoint()); err != nil {
 			return volumeNames, fmt.Errorf("mounting point %s does not exist %v", volume.getMountPoint(), err)
@@ -245,7 +245,7 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 				guard <- struct{}{}
 
 				go runDD(initp.logger, dd, &wg, guard)
-				initp.logger.Info("Command submitted", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
 			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -254,10 +254,10 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 				guard <- struct{}{}
 
 				go runBlkdiscard(initp.logger, blkdiscard, &wg, guard)
-				initp.logger.Info("Command submitted", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", blkdiscard, *volume))
 
 			case "none":
-				initp.logger.Info("Pass through", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Pass through for volume=%+v", *volume))
 
 			default:
 				return volumeNames, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -276,7 +276,7 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 				initp.logger.Info("Filepath initialised", "filepath", volume.getMountPoint())
 
 			case "none":
-				initp.logger.Info("Pass through", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Pass through for volume=%+v", *volume))
 
 			default:
 				return volumeNames, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -340,10 +340,8 @@ func remove(s []string, r string) []string {
 	return s
 }
 
-func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes []string) ([]string, error) {
+func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes, nsDevicePaths []string) ([]string, error) {
 	var wg sync.WaitGroup
-
-	nsDevicePaths, _ := initp.getNamespaceVolumePaths()
 
 	workerThreads := initp.rack.Storage.CleanupThreads
 	guard := make(chan struct{}, workerThreads)
@@ -370,7 +368,7 @@ func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes []string) ([]string, err
 				guard <- struct{}{}
 
 				go runDD(initp.logger, dd, &wg, guard)
-				initp.logger.Info("Command submitted", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
 			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -379,7 +377,7 @@ func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes []string) ([]string, err
 				guard <- struct{}{}
 
 				go runBlkdiscard(initp.logger, blkdiscard, &wg, guard)
-				initp.logger.Info("Command submitted", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", blkdiscard, *volume))
 
 			default:
 				return dirtyVolumes, fmt.Errorf("invalid effective_wipe_method %s", volume.effectiveWipeMethod)
@@ -396,10 +394,8 @@ func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes []string) ([]string, err
 	return dirtyVolumes, nil
 }
 
-func (initp *InitParams) wipeVolumes(dirtyVolumes []string) ([]string, error) {
+func (initp *InitParams) wipeVolumes(dirtyVolumes, nsDevicePaths, nsFilePaths []string) ([]string, error) {
 	var wg sync.WaitGroup
-
-	nsDevicePaths, nsFilePaths := initp.getNamespaceVolumePaths()
 
 	workerThreads := initp.rack.Storage.CleanupThreads
 	guard := make(chan struct{}, workerThreads)
@@ -415,7 +411,7 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes []string) ([]string, error) {
 		switch volume.volumeMode {
 		case string(corev1.PersistentVolumeBlock):
 			if utils.ContainsString(nsDevicePaths, volume.aerospikeVolumePath) {
-				initp.logger.Info("Wiping volume", "volume", volume)
+				initp.logger.Info(fmt.Sprintf("Wiping volume=%+v", *volume))
 
 				if _, err := os.Stat(volume.getMountPoint()); err != nil {
 					return dirtyVolumes, fmt.Errorf("mounting point %s does not exist %v", volume.getMountPoint(), err)
@@ -430,7 +426,7 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes []string) ([]string, error) {
 					guard <- struct{}{}
 
 					go runDD(initp.logger, dd, &wg, guard)
-					initp.logger.Info("Command submitted", "volume", volume)
+					initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
 				case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
 					blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
@@ -439,7 +435,7 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes []string) ([]string, error) {
 					guard <- struct{}{}
 
 					go runBlkdiscard(initp.logger, blkdiscard, &wg, guard)
-					initp.logger.Info("Command submitted", "volume", volume)
+					initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", blkdiscard, *volume))
 
 				default:
 					return dirtyVolumes, fmt.Errorf("invalid effective_init_method %s", volume.effectiveInitMethod)
@@ -514,6 +510,8 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(ctx context.Context, resta
 			return err
 		}
 
+		nsDevicePaths, nsFilePaths := initp.getNamespaceVolumePaths()
+
 		initp.logger.Info("Checking if volumes should be wiped", "podname", initp.podName)
 
 		if prevImage != "" {
@@ -529,7 +527,7 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(ctx context.Context, resta
 
 			if (nextMajorVer >= baseWipeVersion && baseWipeVersion > prevMajorVer) ||
 				(nextMajorVer < baseWipeVersion && baseWipeVersion <= prevMajorVer) {
-				dirtyVolumes, err = initp.wipeVolumes(dirtyVolumes)
+				dirtyVolumes, err = initp.wipeVolumes(dirtyVolumes, nsDevicePaths, nsFilePaths)
 				if err != nil {
 					return err
 				}
@@ -540,7 +538,7 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(ctx context.Context, resta
 			initp.logger.Info("Volumes should not be wiped")
 		}
 
-		dirtyVolumes, err = initp.cleanDirtyVolumes(dirtyVolumes)
+		dirtyVolumes, err = initp.cleanDirtyVolumes(dirtyVolumes, nsDevicePaths)
 		if err != nil {
 			return err
 		}
