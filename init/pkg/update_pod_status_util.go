@@ -309,7 +309,7 @@ func (initp *InitParams) getNamespaceVolumePaths() (
 
 		if storageEngine["devices"] != nil {
 			for _, deviceInterface := range storageEngine["devices"].([]interface{}) {
-				initp.logger.Info("Got device paths", "pod-name", initp.podName, " device-type",
+				initp.logger.Info("Got device paths", "pod-name", initp.podName, " storage-engine-type",
 					storageEngine["type"], " devices", deviceInterface.(string))
 				devicePathsSet.Insert(strings.Fields(deviceInterface.(string))...)
 			}
@@ -317,7 +317,7 @@ func (initp *InitParams) getNamespaceVolumePaths() (
 
 		if storageEngine["files"] != nil {
 			for _, fileInterface := range storageEngine["files"].([]interface{}) {
-				initp.logger.Info("Got device paths ", "pod-name", initp.podName, " device-type",
+				initp.logger.Info("Got file paths ", "pod-name", initp.podName, " storage-engine-type",
 					storageEngine["type"], " files", fileInterface.(string))
 				filePathsSet.Insert(strings.Fields(fileInterface.(string))...)
 			}
