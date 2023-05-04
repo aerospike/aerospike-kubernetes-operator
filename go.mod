@@ -1,6 +1,6 @@
 module github.com/aerospike/aerospike-kubernetes-operator
 
-go 1.18
+go 1.19
 
 require (
 	github.com/aerospike/aerospike-management-lib v0.0.0-20230504060756-c97fe3a9726b
