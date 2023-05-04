@@ -14,7 +14,23 @@ spec:
     singular: aerospikecluster
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.size
+      name: Size
+      type: string
+    - jsonPath: .spec.image
+      name: Image
+      type: string
+    - jsonPath: .spec.podSpec.MultiPodPerHost
+      name: MultiPodPerHost
+      type: boolean
+    - jsonPath: .spec.podSpec.hostNetwork
+      name: HostNetwork
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AerospikeCluster is the schema for the AerospikeCluster API
@@ -134,6 +150,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -143,6 +160,55 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -152,6 +218,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -161,6 +228,13 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
@@ -5937,6 +6011,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -5946,6 +6021,55 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -5955,6 +6079,7 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -5964,6 +6089,13 @@ spec:
                     - hostInternal
                     - hostExternal
                     - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
