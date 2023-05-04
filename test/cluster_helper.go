@@ -33,7 +33,6 @@ const (
 	version6            = "6.0.0.5"
 	latestServerVersion = "6.3.0.0"
 	invalidVersion      = "3.0.0.4"
-	pre5Version         = "4.9.0.33"
 )
 
 var (
@@ -45,7 +44,6 @@ var (
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
 	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
