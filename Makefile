@@ -16,6 +16,10 @@ VERSION ?= 2.5.0
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
 
+# bundle channels
+CHANNELS ?= stable
+DEFAULT_CHANNEL ?= stable
+
 OS := $(shell uname -s)
 DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%S%Z")
 # CHANNELS define the bundle channels used in the bundle.
