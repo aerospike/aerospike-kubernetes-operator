@@ -106,44 +106,44 @@ func getClient(
 
 // getClientExternalAuth returns an Aerospike client using external
 // authentication user.
-func getClientExternalAuth(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
-	k8sClient client.Client, ldapUser string, ldapPassword string,
-) (*as.Client, error) {
-	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get host info: %v", err)
-	}
-
-	hosts := make([]*as.Host, 0, len(conns))
-	for connIndex := range conns {
-		hosts = append(
-			hosts, &as.Host{
-				Name:    conns[connIndex].ASConn.AerospikeHostName,
-				TLSName: conns[connIndex].ASConn.AerospikeTLSName,
-				Port:    conns[connIndex].ASConn.AerospikePort,
-			},
-		)
-	}
-	// Create policy using status, status has current connection info
-	policy := getClientPolicy(
-		aeroCluster, k8sClient,
-	)
-	policy.User = ldapUser
-	policy.Password = ldapPassword
-	policy.AuthMode = as.AuthModeExternal
-	aeroClient, err := as.NewClientWithPolicyAndHost(
-		policy, hosts...,
-	)
-
-	if aeroClient == nil {
-		return nil, fmt.Errorf(
-			"failed to create aerospike cluster client: %v", err,
-		)
-	}
-
-	return aeroClient, nil
-}
+// func getClientExternalAuth(
+//	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+//	k8sClient client.Client, ldapUser string, ldapPassword string,
+// ) (*as.Client, error) {
+//	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
+//	if err != nil {
+//		return nil, fmt.Errorf("failed to get host info: %v", err)
+//	}
+//
+//	hosts := make([]*as.Host, 0, len(conns))
+//	for connIndex := range conns {
+//		hosts = append(
+//			hosts, &as.Host{
+//				Name:    conns[connIndex].ASConn.AerospikeHostName,
+//				TLSName: conns[connIndex].ASConn.AerospikeTLSName,
+//				Port:    conns[connIndex].ASConn.AerospikePort,
+//			},
+//		)
+//	}
+//	// Create policy using status, status has current connection info
+//	policy := getClientPolicy(
+//		aeroCluster, k8sClient,
+//	)
+//	policy.User = ldapUser
+//	policy.Password = ldapPassword
+//	policy.AuthMode = as.AuthModeExternal
+//	aeroClient, err := as.NewClientWithPolicyAndHost(
+//		policy, hosts...,
+//	)
+//
+//	if aeroClient == nil {
+//		return nil, fmt.Errorf(
+//			"failed to create aerospike cluster client: %v", err,
+//		)
+//	}
+//
+//	return aeroClient, nil
+//}
 
 func getServiceTLSName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
 	if networkConfTmp, ok := aeroCluster.Spec.AerospikeConfig.Value["network"]; ok {
