@@ -513,7 +513,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Int{}
+	migrateFillDelaySet := sets.Set[int]{}
 
 	for idx := range c.Spec.RackConfig.Racks {
 		rack := &c.Spec.RackConfig.Racks[idx]
