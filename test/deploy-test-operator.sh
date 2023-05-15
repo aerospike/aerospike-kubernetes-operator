@@ -30,7 +30,8 @@ fi
 
 if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   if ! operator-sdk olm status; then
-    operator-sdk olm install
+    operator-sdk version
+    operator-sdk olm install --version=0.21.2
   fi
 fi
 

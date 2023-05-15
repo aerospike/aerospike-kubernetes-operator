@@ -25,6 +25,7 @@ require (
 	golang.org/x/crypto v0.1.0
 )
 
+// Pinned this dependcy to fix vulnerbaility in `net` pkg
 replace golang.org/x/net => golang.org/x/net v0.7.0
 
 require (
