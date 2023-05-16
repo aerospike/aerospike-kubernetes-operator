@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1
 
 import (
 	"crypto/x509"
@@ -51,7 +51,7 @@ var immutableNetworkParams = []string{
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1}
 
 var _ webhook.Validator = &AerospikeCluster{}
 
@@ -513,7 +513,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Set[int]{}
+	migrateFillDelaySet := sets.Int{}
 
 	for idx := range c.Spec.RackConfig.Racks {
 		rack := &c.Spec.RackConfig.Racks[idx]

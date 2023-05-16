@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe(
@@ -251,7 +251,7 @@ func DeployClusterForDiffStorageTest(
 }
 
 func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
-	var aeroCluster *asdbv1beta1.AerospikeCluster
+	var aeroCluster *asdbv1.AerospikeCluster
 
 	It(
 		"deploy with dnsPolicy 'None' and dnsConfig given",
@@ -338,30 +338,30 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	// Note: this storage will be used by dynamically added namespace after deployment of cluster
 	dynamicNsPath := "/test/dev/dynamicns"
-	dynamicNsVolume := asdbv1beta1.VolumeSpec{
+	dynamicNsVolume := asdbv1.VolumeSpec{
 		Name: "dynamicns",
-		Source: asdbv1beta1.VolumeSource{
-			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+		Source: asdbv1.VolumeSource{
+			PersistentVolume: &asdbv1.PersistentVolumeSpec{
 				Size:         resource.MustParse("1Gi"),
 				StorageClass: storageClass,
 				VolumeMode:   v1.PersistentVolumeBlock,
 			},
 		},
-		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 			Path: dynamicNsPath,
 		},
 	}
 	dynamicNsPath1 := "/test/dev/dynamicns1"
-	dynamicNsVolume1 := asdbv1beta1.VolumeSpec{
+	dynamicNsVolume1 := asdbv1.VolumeSpec{
 		Name: "dynamicns1",
-		Source: asdbv1beta1.VolumeSource{
-			PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+		Source: asdbv1.VolumeSource{
+			PersistentVolume: &asdbv1.PersistentVolumeSpec{
 				Size:         resource.MustParse("1Gi"),
 				StorageClass: storageClass,
 				VolumeMode:   v1.PersistentVolumeBlock,
 			},
 		},
-		Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 			Path: dynamicNsPath1,
 		},
 	}
@@ -527,30 +527,30 @@ func UpdateClusterTest(ctx goctx.Context) {
 							)
 							Expect(err).ToNot(HaveOccurred())
 
-							newVolumeSpec := []asdbv1beta1.VolumeSpec{
+							newVolumeSpec := []asdbv1.VolumeSpec{
 								{
 									Name: "ns",
-									Source: asdbv1beta1.VolumeSource{
-										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeBlock,
 											Size:         resource.MustParse("1Gi"),
 										},
 									},
-									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/dev/xvdf2",
 									},
 								},
 								{
 									Name: "workdir",
-									Source: asdbv1beta1.VolumeSource{
-										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeFilesystem,
 											Size:         resource.MustParse("1Gi"),
 										},
 									},
-									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/opt/aeropsike/ns1",
 									},
 								},
@@ -676,14 +676,14 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
 							)
-							aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{}
+							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
 							err := deployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 
 							aeroCluster = createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
 							)
-							aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
 								Value: map[string]interface{}{
 									"namespaces": "invalidConf",
 								},
@@ -760,43 +760,43 @@ func negativeDeployClusterValidationTest(
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 											if _, ok :=
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{
+												aeroCluster.Spec.Storage.Volumes = []asdbv1.VolumeSpec{
 													{
 														Name: "nsvol1",
-														Source: asdbv1beta1.VolumeSource{
-															PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+														Source: asdbv1.VolumeSource{
+															PersistentVolume: &asdbv1.PersistentVolumeSpec{
 																Size:         resource.MustParse("1Gi"),
 																StorageClass: storageClass,
 																VolumeMode:   v1.PersistentVolumeBlock,
 															},
 														},
-														Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 															Path: "/dev/xvdf1",
 														},
 													},
 													{
 														Name: "nsvol2",
-														Source: asdbv1beta1.VolumeSource{
-															PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+														Source: asdbv1.VolumeSource{
+															PersistentVolume: &asdbv1.PersistentVolumeSpec{
 																Size:         resource.MustParse("1Gi"),
 																StorageClass: storageClass,
 																VolumeMode:   v1.PersistentVolumeBlock,
 															},
 														},
-														Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 															Path: "/dev/xvdf2",
 														},
 													},
 													{
 														Name: "nsvol3",
-														Source: asdbv1beta1.VolumeSource{
-															PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+														Source: asdbv1.VolumeSource{
+															PersistentVolume: &asdbv1.PersistentVolumeSpec{
 																Size:         resource.MustParse("1Gi"),
 																StorageClass: storageClass,
 																VolumeMode:   v1.PersistentVolumeBlock,
 															},
 														},
-														Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 															Path: "/dev/xvdf3",
 														},
 													},
@@ -894,7 +894,7 @@ func negativeDeployClusterValidationTest(
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.Storage = asdbv1beta1.AerospikeStorageSpec{}
+												aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 													"enable-xdr":         false,
 													"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
@@ -1201,7 +1201,7 @@ func negativeUpdateClusterValidationTest(
 							)
 							Expect(err).ToNot(HaveOccurred())
 
-							aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{}
+							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
 							err = k8sClient.Update(ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
 
@@ -1210,7 +1210,7 @@ func negativeUpdateClusterValidationTest(
 							)
 							Expect(err).ToNot(HaveOccurred())
 
-							aeroCluster.Spec.AerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
 								Value: map[string]interface{}{
 									"namespaces": "invalidConf",
 								},

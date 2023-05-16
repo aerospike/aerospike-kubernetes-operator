@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe(
@@ -74,7 +74,7 @@ var _ = Describe(
 	},
 )
 
-func getTLSAuthenticateClient(config *asdbv1beta1.AerospikeCluster) (
+func getTLSAuthenticateClient(config *asdbv1.AerospikeCluster) (
 	[]string, error,
 ) {
 	configSpec := config.Spec.AerospikeConfig.Value
@@ -89,7 +89,7 @@ func getTLSAuthenticateClient(config *asdbv1beta1.AerospikeCluster) (
 		return nil, fmt.Errorf("service configuration not found")
 	}
 
-	tlsAuthenticateClient, err := asdbv1beta1.ReadTLSAuthenticateClient(serviceConf)
+	tlsAuthenticateClient, err := asdbv1.ReadTLSAuthenticateClient(serviceConf)
 	if err != nil {
 		return nil, err
 	}
@@ -99,68 +99,68 @@ func getTLSAuthenticateClient(config *asdbv1beta1.AerospikeCluster) (
 
 func getAerospikeConfig(
 	networkConf map[string]interface{},
-	operatorClientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec,
-) *asdbv1beta1.AerospikeCluster {
+	operatorClientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
+) *asdbv1.AerospikeCluster {
 	cascadeDelete := true
 
-	return &asdbv1beta1.AerospikeCluster{
+	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "tls-auth-client",
 			Namespace: "test",
 		},
-		Spec: asdbv1beta1.AerospikeClusterSpec{
+		Spec: asdbv1.AerospikeClusterSpec{
 			Size:  1,
 			Image: latestImage,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			Storage: asdbv1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+				BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1beta1.VolumeSpec{
+				Volumes: []asdbv1.VolumeSpec{
 					{
 						Name: "workdir",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
 								VolumeMode:   corev1.PersistentVolumeFilesystem,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aerospike",
 						},
 					},
 					{
 						Name: "ns",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
 								VolumeMode:   corev1.PersistentVolumeFilesystem,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aerospike/data",
 						},
 					},
 					{
 						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
+						Source: asdbv1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								SecretName: tlsSecretName,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/etc/aerospike/secret",
 						},
 					},
 				},
 			},
 
-			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
-				Users: []asdbv1beta1.AerospikeUserSpec{
+			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
+				Users: []asdbv1.AerospikeUserSpec{
 					{
 						Name:       "admin",
 						SecretName: authSecretNameForUpdate,
@@ -171,7 +171,7 @@ func getAerospikeConfig(
 					},
 				},
 			},
-			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
@@ -195,11 +195,11 @@ func getAerospikeConfig(
 				},
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
-			RackConfig: asdbv1beta1.RackConfig{
-				Racks: []asdbv1beta1.Rack{
+			RackConfig: asdbv1.RackConfig{
+				Racks: []asdbv1.Rack{
 					{
 						ID: 1,
-						AerospikeConfig: asdbv1beta1.AerospikeConfigSpec{
+						AerospikeConfig: asdbv1.AerospikeConfigSpec{
 							Value: map[string]interface{}{
 								"service": map[string]interface{}{
 									"feature-key-file": "/etc/aerospike/secret/features.conf",

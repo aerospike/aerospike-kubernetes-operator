@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe(
@@ -35,11 +35,11 @@ var _ = Describe(
 				aeroCluster := createDummyAerospikeCluster(
 					clusterNamespacedName, 5,
 				)
-				networkPolicy := asdbv1beta1.AerospikeNetworkPolicy{
-					AccessType:             asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
-					AlternateAccessType:    asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
-					TLSAccessType:          asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
-					TLSAlternateAccessType: asdbv1beta1.AerospikeNetworkType(*defaultNetworkType),
+				networkPolicy := asdbv1.AerospikeNetworkPolicy{
+					AccessType:             asdbv1.AerospikeNetworkType(*defaultNetworkType),
+					AlternateAccessType:    asdbv1.AerospikeNetworkType(*defaultNetworkType),
+					TLSAccessType:          asdbv1.AerospikeNetworkType(*defaultNetworkType),
+					TLSAlternateAccessType: asdbv1.AerospikeNetworkType(*defaultNetworkType),
 				}
 				aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
 
@@ -191,7 +191,7 @@ var _ = Describe(
 )
 
 func loadDataInCluster(
-	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	policy := getClientPolicy(aeroCluster, k8sClient)
 	policy.FailIfNotConnected = false
@@ -279,13 +279,13 @@ func loadDataInCluster(
 
 func waitForClusterScaleDown(
 	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1beta1.AerospikeCluster, replicas int,
+	aeroCluster *asdbv1.AerospikeCluster, replicas int,
 	retryInterval, timeout time.Duration,
 ) error {
 	err := wait.Poll(
 		retryInterval, timeout, func() (done bool, err error) {
 			// Fetch the AerospikeCluster instance
-			newCluster := &asdbv1beta1.AerospikeCluster{}
+			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
 				goctx.TODO(), types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
@@ -324,13 +324,13 @@ func waitForClusterScaleDown(
 }
 
 func waitForClusterRollingRestart(
-	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 	replicas int, tempConf int, retryInterval, timeout time.Duration,
 ) error {
 	err := wait.Poll(
 		retryInterval, timeout, func() (done bool, err error) {
 			// Fetch the AerospikeCluster instance
-			newCluster := &asdbv1beta1.AerospikeCluster{}
+			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
 				goctx.TODO(), types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
@@ -365,13 +365,13 @@ func waitForClusterRollingRestart(
 }
 
 func waitForClusterUpgrade(
-	k8sClient client.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 	replicas int, tempImage string, retryInterval, timeout time.Duration,
 ) error {
 	err := wait.Poll(
 		retryInterval, timeout, func() (done bool, err error) {
 			// Fetch the AerospikeCluster instance
-			newCluster := &asdbv1beta1.AerospikeCluster{}
+			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
 				goctx.TODO(), types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,

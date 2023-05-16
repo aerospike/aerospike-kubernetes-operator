@@ -24,8 +24,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
@@ -39,6 +40,7 @@ var (
 
 func init() {
 	// +kubebuilder:scaffold:scheme
+	utilRuntime.Must(asdbv1.AddToScheme(scheme))
 	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
 	utilRuntime.Must(asdbv1beta1.AddToScheme(scheme))
 }
@@ -173,10 +175,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&asdbv1beta1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(
-			err, "unable to create webhook", "webhook", "AerospikeCluster",
-		)
+	if err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "v1-webhook", "AerospikeCluster")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

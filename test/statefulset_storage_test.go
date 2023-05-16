@@ -11,7 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -191,12 +191,12 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						volume := asdbv1beta1.VolumeSpec{
+						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",
-							Source: asdbv1beta1.VolumeSource{
+							Source: asdbv1.VolumeSource{
 								EmptyDir: &v1.EmptyDirVolumeSource{},
 							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 								Path: "/newvolume",
 							},
 						}
@@ -348,12 +348,12 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						volume := asdbv1beta1.VolumeSpec{
+						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",
-							Source: asdbv1beta1.VolumeSource{
+							Source: asdbv1.VolumeSource{
 								EmptyDir: &v1.EmptyDirVolumeSource{},
 							},
-							Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 								Path: "/newvolume",
 							},
 						}
@@ -390,7 +390,7 @@ var _ = Describe(
 )
 
 //nolint:unparam // generic function
-func getSTSFromRackID(aeroCluster *asdbv1beta1.AerospikeCluster, rackID int) (
+func getSTSFromRackID(aeroCluster *asdbv1.AerospikeCluster, rackID int) (
 	*appsv1.StatefulSet, error,
 ) {
 	found := &appsv1.StatefulSet{}
@@ -437,7 +437,7 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isIni
 }
 
 func getNamespacedNameForSTS(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackID int,
 ) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),

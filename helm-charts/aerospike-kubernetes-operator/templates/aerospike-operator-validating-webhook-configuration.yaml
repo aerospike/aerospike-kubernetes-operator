@@ -15,7 +15,7 @@ webhooks:
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
-      path: /validate-asdb-aerospike-com-v1beta1-aerospikecluster
+      path: /validate-asdb-aerospike-com-v1-aerospikecluster
   failurePolicy: Fail
   name: vaerospikecluster.kb.io
   rules:

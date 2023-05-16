@@ -12,7 +12,7 @@
 #
 # kubectl create secret generic aerospike-secret --from-file=<path-of-features.conf> -n aerospike
 
-apiVersion: asdb.aerospike.com/v1beta1
+apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
   name: aerocluster
