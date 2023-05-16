@@ -216,7 +216,7 @@ test-deploy: manifests kustomize
 	cd test/config/default && $(KUSTOMIZE) edit set namespace ${NS}
 	$(KUSTOMIZE) build test/config/default | kubectl apply -f -
 
-.PHONY: test-deploy
+.PHONY: test-undeploy
 test-undeploy: kustomize
 	cp -r config test
 	cp test/manager-patch-for-tests.yaml test/config/manager/manager-patch-for-tests.yaml
@@ -286,7 +286,7 @@ bundle: manifests kustomize
 # Remove generated bundle
 .PHONY: bundle-clean
 bundle-clean:
-	rm -rf bundle bundle.Dockerfile
+	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
 
 # Build the bundle image.
 # Bundle images are not architecture-specific. They contain only plaintext kubernetes manifests and operator metadata.
