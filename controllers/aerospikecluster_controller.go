@@ -40,11 +40,11 @@ var (
 // AerospikeClusterReconciler reconciles AerospikeClusters
 type AerospikeClusterReconciler struct {
 	client.Client
+	Recorder   record.EventRecorder
 	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
-	Log        logr.Logger
 	Scheme     *k8sRuntime.Scheme
-	Recorder   record.EventRecorder
+	Log        logr.Logger
 }
 
 // SetupWithManager sets up the controller with the Manager

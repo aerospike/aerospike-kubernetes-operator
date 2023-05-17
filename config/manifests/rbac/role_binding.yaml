@@ -15,4 +15,3 @@ subjects:
 - kind: ServiceAccount
   name: aerospike-operator-controller-manager
   namespace: aerospike
-
