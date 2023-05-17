@@ -11,8 +11,7 @@ configMapGenerator:
 - files:
   - controller_manager_config.yaml
   name: manager-config
-
 images:
 - name: controller
   newName: docker.io/aerospike/aerospike-kubernetes-operator-nightly
-  newTag: 2.4.0
+  newTag: 2.5.0

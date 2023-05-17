@@ -51,7 +51,7 @@ var immutableNetworkParams = []string{
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &AerospikeCluster{}
 
@@ -109,6 +109,12 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	// MultiPodPerHost cannot be updated
 	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
 		return fmt.Errorf("cannot update MultiPodPerHost setting")
+	}
+
+	if err := validateNetworkPolicyUpdate(
+		&old.Spec.AerospikeNetworkPolicy, &c.Spec.AerospikeNetworkPolicy,
+	); err != nil {
+		return err
 	}
 
 	// Validate AerospikeConfig update
@@ -249,6 +255,10 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	if err := validateClientCertSpec(
 		c.Spec.OperatorClientCertSpec, c.Spec.AerospikeConfig,
 	); err != nil {
+		return err
+	}
+
+	if err := c.validateNetworkPolicy(c.Namespace); err != nil {
 		return err
 	}
 
@@ -503,7 +513,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Int{}
+	migrateFillDelaySet := sets.Set[int]{}
 
 	for idx := range c.Spec.RackConfig.Racks {
 		rack := &c.Spec.RackConfig.Racks[idx]
@@ -723,7 +733,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
 	}
 
-	if nsList, ok := nsListInterface.([]interface{}); !ok {
+	if nsList, ok1 := nsListInterface.([]interface{}); !ok1 {
 		return fmt.Errorf(
 			"aerospikeConfig.namespace not valid namespace list %v",
 			nsListInterface,
@@ -732,6 +742,42 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		nsList, storage, clSize,
 	); err != nil {
 		return err
+	}
+
+	// logging conf
+	// config["logging"] is added in mutating webhook
+	loggingConfList, ok := config["logging"].([]interface{})
+	if !ok {
+		return fmt.Errorf(
+			"aerospikeConfig.logging not a valid list %v", config["logging"],
+		)
+	}
+
+	if err := validateLoggingConf(loggingConfList); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateLoggingConf(loggingConfList []interface{}) error {
+	syslogParams := []string{"facility", "path", "tag"}
+
+	for idx := range loggingConfList {
+		logConf, ok := loggingConfList[idx].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"aerospikeConfig.logging not a list of valid map %v", logConf,
+			)
+		}
+
+		if logConf["name"] != "syslog" {
+			for _, param := range syslogParams {
+				if _, ok := logConf[param]; ok {
+					return fmt.Errorf("can use %s only with `syslog` in aerospikeConfig.logging %v", param, logConf)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -1334,6 +1380,28 @@ func validateNetworkConnectionUpdate(
 	return nil
 }
 
+func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) error {
+	if oldPolicy.FabricType != newPolicy.FabricType {
+		return fmt.Errorf("cannot update fabric type")
+	}
+
+	if oldPolicy.TLSFabricType != newPolicy.TLSFabricType {
+		return fmt.Errorf("cannot update tlsFabric type")
+	}
+
+	if newPolicy.FabricType == AerospikeNetworkTypeCustomInterface &&
+		!reflect.DeepEqual(oldPolicy.CustomFabricNetworkNames, newPolicy.CustomFabricNetworkNames) {
+		return fmt.Errorf("cannot change/update customFabricNetworkNames")
+	}
+
+	if newPolicy.TLSFabricType == AerospikeNetworkTypeCustomInterface &&
+		!reflect.DeepEqual(oldPolicy.CustomTLSFabricNetworkNames, newPolicy.CustomTLSFabricNetworkNames) {
+		return fmt.Errorf("cannot change/update customTLSFabricNetworkNames")
+	}
+
+	return nil
+}
+
 func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
@@ -1829,6 +1897,94 @@ func validateDNS(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSConfig) error {
 
 	if dnsPolicy == v1.DNSNone && dnsConfig == nil {
 		return fmt.Errorf("dnsConfig is required field when dnsPolicy is set to None")
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
+	networkPolicy := &c.Spec.AerospikeNetworkPolicy
+
+	annotations := c.Spec.PodSpec.AerospikeObjectMeta.Annotations
+	networks := annotations["k8s.v1.cni.cncf.io/networks"]
+	networkList := strings.Split(networks, ",")
+	networkSet := sets.NewString()
+
+	setNamespaceDefault(networkList, namespace)
+
+	networkSet.Insert(networkList...)
+
+	validateNetworkList := func(netList []string, addressType AerospikeNetworkType, listName string) error {
+		if netList == nil {
+			return fmt.Errorf("%s is required with 'customInterface' %s type", listName, addressType)
+		}
+
+		if c.Spec.PodSpec.HostNetwork {
+			return fmt.Errorf("hostNetwork is not allowed with 'customInterface' network type")
+		}
+
+		if !networkSet.HasAll(netList...) {
+			return fmt.Errorf(
+				"required networks %v not present in pod metadata annotations key \"k8s.v1.cni.cncf.io/networks\"",
+				netList,
+			)
+		}
+
+		return nil
+	}
+
+	if networkPolicy.AccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomAccessNetworkNames,
+			"access", "customAccessNetworkNames",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.AlternateAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomAlternateAccessNetworkNames,
+			"alternateAccess", "customAlternateAccessNetworkNames",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.TLSAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSAccessNetworkNames,
+			"tlsAccess", "customTLSAccessNetworkNames",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.TLSAlternateAccessType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSAlternateAccessNetworkNames,
+			"tlsAlternateAccess", "customTLSAlternateAccessNetworkNames",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.FabricType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomFabricNetworkNames,
+			"fabric", "customFabricNetworkNames",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.TLSFabricType == AerospikeNetworkTypeCustomInterface {
+		if err := validateNetworkList(
+			networkPolicy.CustomTLSFabricNetworkNames,
+			"tlsFabric", "customTLSFabricNetworkNames",
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil

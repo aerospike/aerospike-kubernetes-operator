@@ -89,7 +89,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.19"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.20"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
@@ -408,6 +408,10 @@ func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
+}
+
+func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) *int {
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "tls-port")
 }
 
 func GetPortFromConfig(

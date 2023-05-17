@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -38,11 +40,15 @@ var secrets map[string][]byte
 const secretDir = "../config/samples/secrets" //nolint:gosec // for testing
 
 const tlsSecretName = "aerospike-secret"
-const authSecretName = "auth"
+const authSecretName = "auth-secret"
 const authSecretNameForUpdate = "auth-update"
 
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
+const aerospikeNs string = "aerospike"
+
+// list of all the namespaces used in test-suite
+var testNamespaces = []string{namespace, multiClusterNs1, multiClusterNs2, aerospikeNs}
 
 const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
 
@@ -78,41 +84,25 @@ func initConfigSecret(secretDir string) error {
 }
 
 func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
-	labels := getLabels()
-
 	// Create configSecret
 	if err := initConfigSecret(secretDir); err != nil {
 		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
-	if err := createConfigSecret(
-		k8sClient, ctx, namespace, labels,
-	); err != nil {
-		return err
-	}
-
-	// Create authSecret
-	pass := "admin"
-	if err := createAuthSecret(
-		k8sClient, ctx, namespace, labels, authSecretName, pass,
-	); err != nil {
-		return err
+	// Create preReq for namespaces used for testing
+	for idx := range testNamespaces {
+		if err := createClusterPreReq(k8sClient, ctx, testNamespaces[idx]); err != nil {
+			return err
+		}
 	}
 
 	// Create another authSecret. Used in access-control tests
 	passUpdate := "admin321"
+	labels := getLabels()
+
 	if err := createAuthSecret(
 		k8sClient, ctx, namespace, labels, authSecretNameForUpdate, passUpdate,
 	); err != nil {
-		return err
-	}
-
-	// Create preReq for multi-clusters
-	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs1); err != nil {
-		return err
-	}
-
-	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs2); err != nil {
 		return err
 	}
 
@@ -139,7 +129,7 @@ func createClusterPreReq(
 	}
 
 	// Create authSecret
-	pass := "admin"
+	pass := "admin123"
 	if err := createAuthSecret(
 		k8sClient, ctx, namespace, labels, authSecretName, pass,
 	); err != nil {
@@ -163,10 +153,14 @@ func createConfigSecret(
 		Type: corev1.SecretTypeOpaque,
 		Data: secrets,
 	}
+
+	// Remove old object
+	_ = k8sClient.Delete(ctx, s)
+
 	// use test context's create helper to create the object and add a cleanup
 	// function for the new object
 	err := k8sClient.Create(ctx, s)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil {
 		return err
 	}
 
@@ -705,4 +699,13 @@ func contains(elems []string, v string) bool {
 	}
 
 	return false
+}
+
+func getGitRepoRootPath() (string, error) {
+	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(path)), nil
 }

@@ -14,7 +14,23 @@ spec:
     singular: aerospikecluster
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.size
+      name: Size
+      type: string
+    - jsonPath: .spec.image
+      name: Image
+      type: string
+    - jsonPath: .spec.podSpec.MultiPodPerHost
+      name: MultiPodPerHost
+      type: boolean
+    - jsonPath: .spec.podSpec.hostNetwork
+      name: HostNetwork
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AerospikeCluster is the schema for the AerospikeCluster API
@@ -133,6 +149,8 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -141,6 +159,56 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -149,6 +217,8 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -157,6 +227,14 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
@@ -1036,6 +1114,34 @@ spec:
                               type: object
                             type: array
                         type: object
+                    type: object
+                  dnsConfig:
+                    description: DNSConfig defines the DNS parameters of a pod in
+                      addition to those gen
+                    properties:
+                      nameservers:
+                        description: A list of DNS name server IP addresses.
+                        items:
+                          type: string
+                        type: array
+                      options:
+                        description: A list of DNS resolver options.
+                        items:
+                          description: PodDNSConfigOption defines DNS resolver options
+                            of a pod.
+                          properties:
+                            name:
+                              description: Required.
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      searches:
+                        description: A list of DNS search domains for host-name lookup.
+                        items:
+                          type: string
+                        type: array
                     type: object
                   dnsPolicy:
                     description: DnsPolicy same as https://kubernetes.
@@ -5904,6 +6010,8 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
                     type: string
                   alternateAccess:
                     description: AlternateAccessType is the type of network address
@@ -5912,6 +6020,56 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
+                    type: string
+                  customAccessNetworkNames:
+                    description: CustomAccessNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customAlternateAccessNetworkNames:
+                    description: CustomAlternateAccessNetworkNames is the list of
+                      the pod's network int
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customFabricNetworkNames:
+                    description: CustomFabricNetworkNames is the list of the pod's
+                      network interfaces u
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAccessNetworkNames:
+                    description: CustomTLSAccessNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSAlternateAccessNetworkNames:
+                    description: 'CustomTLSAlternateAccessNetworkNames is the list
+                      of the pod''s network '
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  customTLSFabricNetworkNames:
+                    description: CustomTLSFabricNetworkNames is the list of the pod's
+                      network interface
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  fabric:
+                    description: 'FabricType is the type of network address to use
+                      for Aerospike fabric '
+                    enum:
+                    - customInterface
                     type: string
                   tlsAccess:
                     description: 'TLSAccessType is the type of network address to
@@ -5920,6 +6078,8 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
                     type: string
                   tlsAlternateAccess:
                     description: TLSAlternateAccessType is the type of network address
@@ -5928,6 +6088,14 @@ spec:
                     - pod
                     - hostInternal
                     - hostExternal
+                    - configuredIP
+                    - customInterface
+                    type: string
+                  tlsFabric:
+                    description: 'TLSFabricType is the type of network address to
+                      use for Aerospike TLS '
+                    enum:
+                    - customInterface
                     type: string
                 type: object
               image:
@@ -6811,6 +6979,34 @@ spec:
                               type: object
                             type: array
                         type: object
+                    type: object
+                  dnsConfig:
+                    description: DNSConfig defines the DNS parameters of a pod in
+                      addition to those gen
+                    properties:
+                      nameservers:
+                        description: A list of DNS name server IP addresses.
+                        items:
+                          type: string
+                        type: array
+                      options:
+                        description: A list of DNS resolver options.
+                        items:
+                          description: PodDNSConfigOption defines DNS resolver options
+                            of a pod.
+                          properties:
+                            name:
+                              description: Required.
+                              type: string
+                            value:
+                              type: string
+                          type: object
+                        type: array
+                      searches:
+                        description: A list of DNS search domains for host-name lookup.
+                        items:
+                          type: string
+                        type: array
                     type: object
                   dnsPolicy:
                     description: DnsPolicy same as https://kubernetes.

@@ -30,11 +30,12 @@ fi
 
 if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   if ! operator-sdk olm status; then
+    operator-sdk version
     operator-sdk olm install
   fi
 fi
 
-namespaces="test test1 test2"
+namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace" || true
   if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then

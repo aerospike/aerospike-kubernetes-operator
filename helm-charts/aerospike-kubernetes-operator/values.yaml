@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 2.4.0
+  tag: 2.5.0
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -34,13 +34,13 @@ watchNamespaces: "default"
 aerospikeKubernetesInitRegistry: "docker.io"
 
 ## Resources - limits / requests
-resources: {}
-  # limits:
-  #   cpu: 100m
-  #   memory: 64Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 64Mi
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
 
 ## Affinity rules
 affinity: {}
@@ -111,4 +111,10 @@ kubeRBACProxy:
     tag: v0.13.1
     pullPolicy: IfNotPresent
   port: 8443
-  resources: {}
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 5m
+      memory: 64Mi

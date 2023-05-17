@@ -41,8 +41,8 @@ const (
 )
 
 type initializeTemplateInput struct {
-	NetworkPolicy    asdbv1beta1.AerospikeNetworkPolicy
 	WorkDir          string
+	NetworkPolicy    asdbv1beta1.AerospikeNetworkPolicy
 	FabricPort       int32
 	PodPort          int32
 	PodTLSPort       int32

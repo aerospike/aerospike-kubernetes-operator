@@ -23,12 +23,11 @@ var _ = Describe(
 
 		Context(
 			"WarmRestart", func() {
-				// TODO: Uncomment this test when aerospike server images start supporting warm restart
-				// It(
-				//	"Should work with tini", func() {
-				//		WarmRestart(ctx)
-				//	},
-				//)
+				It(
+					"Should work with tini", func() {
+						WarmRestart(ctx)
+					},
+				)
 				It(
 					"Should cold start without tini", func() {
 						PodRestart(ctx)
@@ -40,13 +39,10 @@ var _ = Describe(
 	},
 )
 
-/*
-TODO: Uncomment this test when aerospike server images start supporting warm restart
+func WarmRestart(ctx goCtx.Context) {
+	rollCluster(ctx, latestImage, true)
+}
 
-	func WarmRestart(ctx goCtx.Context) {
-		rollCluster(ctx, latestImage, true)
-	}
-*/
 func PodRestart(ctx goCtx.Context) {
 	image := fmt.Sprintf(
 		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",

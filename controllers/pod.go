@@ -179,11 +179,14 @@ func (r *SingleClusterReconciler) restartASDInPod(
 	rackState *RackState, pod *corev1.Pod,
 ) error {
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
+	initBinary := "/etc/aerospike/akoinit"
 	cmd := []string{
-		"bash",
-		"/etc/aerospike/refresh-cmap-restart-asd.sh",
-		cmName.Namespace,
+		initBinary,
+		"quick-restart",
+		"--cm-name",
 		cmName.Name,
+		"--cm-namespace",
+		cmName.Namespace,
 	}
 
 	// Quick restart attempt should not take significant time.
@@ -193,12 +196,37 @@ func (r *SingleClusterReconciler) restartASDInPod(
 		r.KubeConfig,
 	)
 	if err != nil {
-		r.Log.V(1).Info(
-			"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
-			stdout, "stderr", stderr,
-		)
+		if strings.Contains(err.Error(), initBinary+": no such file or directory") {
+			cmd := []string{
+				"bash",
+				"/etc/aerospike/refresh-cmap-restart-asd.sh",
+				cmName.Namespace,
+				cmName.Name,
+			}
 
-		return err
+			// Quick restart attempt should not take significant time.
+			// Therefore, it's ok to block the operator on the quick restart attempt.
+			stdout, stderr, err = utils.Exec(
+				pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
+				r.KubeConfig,
+			)
+
+			if err != nil {
+				r.Log.V(1).Info(
+					"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+					stdout, "stderr", stderr,
+				)
+
+				return err
+			}
+		} else {
+			r.Log.V(1).Info(
+				"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+				stdout, "stderr", stderr,
+			)
+
+			return err
+		}
 	}
 
 	r.Recorder.Eventf(
@@ -709,15 +737,20 @@ func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) strin
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
-// GetEndpointsFromInfo returns the aerospike service endpoints as a slice of host:port elements named addressName
+// GetEndpointsFromInfo returns the aerospike endpoints as a slice of host:port based on context and addressName passed
 // from the info endpointsMap. It returns an empty slice if the access address with addressName is not found in
 // endpointsMap.
-//
 // E.g. addressName are access, alternate-access
 func GetEndpointsFromInfo(
-	addressName string, endpointsMap map[string]string,
+	aeroCtx, addressName string, endpointsMap map[string]string,
 ) []string {
-	portStr, ok := endpointsMap["service."+addressName+"-port"]
+	addressKeyPrefix := aeroCtx + "."
+
+	if addressName != "" {
+		addressKeyPrefix += addressName + "-"
+	}
+
+	portStr, ok := endpointsMap[addressKeyPrefix+"port"]
 	if !ok {
 		return nil
 	}
@@ -727,7 +760,7 @@ func GetEndpointsFromInfo(
 		return nil
 	}
 
-	hostsStr, ok := endpointsMap["service."+addressName+"-addresses"]
+	hostsStr, ok := endpointsMap[addressKeyPrefix+"addresses"]
 	if !ok {
 		return nil
 	}
@@ -789,8 +822,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
 
-			statusDevices := sets.String{}
-			specDevices := sets.String{}
+			statusDevices := sets.Set[string]{}
+			specDevices := sets.Set[string]{}
 
 			if statusStorage["devices"] != nil {
 				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
@@ -804,7 +837,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 				}
 			}
 
-			removedDevicesPerNS := statusDevices.Difference(specDevices).List()
+			removedDevicesPerNS := sets.List(statusDevices.Difference(specDevices))
 			for _, removedDevice := range removedDevicesPerNS {
 				deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, removedDevice)
 				r.Log.Info(
@@ -815,8 +848,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 				removedDevices = append(removedDevices, deviceName)
 			}
 
-			statusFiles := sets.String{}
-			specFiles := sets.String{}
+			statusFiles := sets.Set[string]{}
+			specFiles := sets.Set[string]{}
 
 			if statusStorage["files"] != nil {
 				for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
@@ -830,14 +863,14 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 				}
 			}
 
-			removedFilesPerNS := statusFiles.Difference(specFiles).List()
+			removedFilesPerNS := sets.List(statusFiles.Difference(specFiles))
 			if len(removedFilesPerNS) > 0 {
 				removedFiles = append(removedFiles, removedFilesPerNS...)
 			}
 
 			var statusMounts []string
 
-			specMounts := sets.String{}
+			specMounts := sets.Set[string]{}
 
 			if statusNamespace.(map[string]interface{})["index-type"] != nil {
 				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
@@ -941,7 +974,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 	}
 
 	if len(removedDevices) > 0 {
-		dirtyVolumes := sets.String{}
+		dirtyVolumes := sets.Set[string]{}
 		dirtyVolumes.Insert(removedDevices...)
 		dirtyVolumes.Insert(podStatus.DirtyVolumes...)
 
@@ -950,7 +983,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		patch1 := jsonpatch.PatchOperation{
 			Operation: "replace",
 			Path:      "/status/pods/" + pod.Name + "/dirtyVolumes",
-			Value:     dirtyVolumes.List(),
+			Value:     sets.List(dirtyVolumes),
 		}
 		patches = append(patches, patch1)
 
@@ -1017,7 +1050,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 
 			var specDevices []string
 
-			statusDevices := sets.String{}
+			statusDevices := sets.Set[string]{}
 
 			if specStorage["devices"] != nil {
 				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {

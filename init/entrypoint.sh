@@ -20,4 +20,9 @@
 set -e
 
 # Initialize the pod.
-bash /configs/initialize.sh "$@"
+if [ -f "/workdir/bin/akoinit" ]; then
+  /workdir/bin/akoinit cold-restart
+else
+  bash /configs/initialize.sh "$@"
+fi
+

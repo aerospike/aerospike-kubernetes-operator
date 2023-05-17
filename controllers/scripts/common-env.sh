@@ -79,6 +79,7 @@ def gethost(data, host):
 
            if nodeExternalIP != '':
                externalIP = nodeExternalIP
+
            break
 
     return internalIP + ' ' + externalIP
@@ -104,7 +105,7 @@ export MAPPED_TLSPORT="$POD_TLSPORT"
 {{- end}}
 
 # Parse out cluster name, formatted as: stsname-rackid-index
-IFS='-' read -ra ADDR <<< "${MY_POD_NAME}"
+IFS='-' read -ra ADDR <<<"${MY_POD_NAME}"
 
 POD_ORDINAL="${ADDR[-1]}"
 
@@ -114,5 +115,5 @@ export NODE_ID="${RACK_ID}a${POD_ORDINAL}"
 
 GENERATED_ENV="/tmp/generate-env.sh"
 if [ -f $GENERATED_ENV ]; then
-	source $GENERATED_ENV
+  source $GENERATED_ENV
 fi

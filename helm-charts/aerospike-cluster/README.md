@@ -48,7 +48,7 @@ helm install aerospike ./aerospike-cluster/ \
 | ---------- | ----------- | --------- |
 | `replicas` | Aerospike cluster size | `3` |
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
-| `image.tag` | Aerospike server container image tag | `6.1.0.1` |
+| `image.tag` | Aerospike server container image tag | `6.3.0.0` |
 | `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry | `{}` (nil) |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |

@@ -30,7 +30,7 @@ import (
 )
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions=v1
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (c *AerospikeCluster) Default() admission.Response {
@@ -60,7 +60,7 @@ func (c *AerospikeCluster) Default() admission.Response {
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set network defaults
-	c.Spec.AerospikeNetworkPolicy.SetDefaults()
+	c.Spec.AerospikeNetworkPolicy.setDefaults(c.ObjectMeta.Namespace)
 
 	// Set common storage defaults.
 	c.Spec.Storage.SetDefaults()
@@ -282,6 +282,37 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 	}
 
 	return nil
+}
+
+// setDefaults applies default to unspecified fields on the network policy.
+func (n *AerospikeNetworkPolicy) setDefaults(namespace string) {
+	if n.AccessType == AerospikeNetworkTypeUnspecified {
+		n.AccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if n.AlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.AlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+
+	if n.TLSAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAccessType = AerospikeNetworkTypeHostInternal
+	}
+
+	if n.TLSAlternateAccessType == AerospikeNetworkTypeUnspecified {
+		n.TLSAlternateAccessType = AerospikeNetworkTypeHostExternal
+	}
+
+	// Set network namespace if not present
+	n.setNetworkNamespace(namespace)
+}
+
+func (n *AerospikeNetworkPolicy) setNetworkNamespace(namespace string) {
+	setNamespaceDefault(n.CustomAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomAlternateAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSAlternateAccessNetworkNames, namespace)
+	setNamespaceDefault(n.CustomFabricNetworkNames, namespace)
+	setNamespaceDefault(n.CustomTLSFabricNetworkNames, namespace)
 }
 
 // *****************************************************************************
@@ -745,4 +776,17 @@ func escapeString(str string) string {
 	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
 
 	return str
+}
+
+func setNamespaceDefault(networks []string, namespace string) {
+	for idx := range networks {
+		netName := strings.TrimSpace(networks[idx])
+		namespacedName := strings.Split(netName, "/")
+
+		if len(namespacedName) == 1 {
+			netName = namespace + "/" + netName
+		}
+
+		networks[idx] = netName
+	}
 }

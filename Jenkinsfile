@@ -1,14 +1,14 @@
 pipeline {
     agent any
     tools {
-        go 'go-1.18'
+        go 'go-1.19'
     }
 
     environment {
         GOPATH="/var/lib/jenkins/go"
         // Operator sdk command "operator-sdk" should be present in PATH or at
-        // /usr/local/operator-sdk-1.10.1/
-        PATH="/usr/local/operator-sdk-1.10.1/:${GOPATH}/bin:/usr/local/bin:${env.PATH}"
+        // /usr/local/operator-sdk-1.28.0/
+        PATH="/usr/local/operator-sdk-1.28.0/:${GOPATH}/bin:/usr/local/bin:${env.PATH}"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY="docker.io"
@@ -106,7 +106,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "2.4.0"
+    def prefix = "2.5.0"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
