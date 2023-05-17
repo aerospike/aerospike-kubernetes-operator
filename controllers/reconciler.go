@@ -30,13 +30,13 @@ import (
 
 // SingleClusterReconciler reconciles a single AerospikeCluster
 type SingleClusterReconciler struct {
-	aeroCluster *asdbv1beta1.AerospikeCluster
 	client.Client
-	KubeClient *kubernetes.Clientset
-	KubeConfig *rest.Config
-	Log        logr.Logger
-	Scheme     *k8sRuntime.Scheme
-	Recorder   record.EventRecorder
+	Recorder    record.EventRecorder
+	aeroCluster *asdbv1beta1.AerospikeCluster
+	KubeClient  *kubernetes.Clientset
+	KubeConfig  *rest.Config
+	Scheme      *k8sRuntime.Scheme
+	Log         logr.Logger
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {

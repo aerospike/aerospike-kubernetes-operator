@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -178,7 +179,8 @@ func Exec(
 
 	var stdout, stderr bytes.Buffer
 
-	err = exec.Stream(
+	err = exec.StreamWithContext(
+		context.TODO(),
 		remotecommand.StreamOptions{
 			Stdout: &stdout, Stderr: &stderr,
 		},
