@@ -21,7 +21,7 @@ spec:
     {{- with .Values.podLabels }}{{ toYaml . | nindent 4 }}{{ end }}
     {{- with .Values.labels }}{{ toYaml . | nindent 4 }}{{ end }}
   ports:
-    - port: {{ .Values.webhookService.port | default 443 }}
+    - port: {{ .Values.webhookService.port }}
       # Can be the name of port 9443 of the container
       targetPort: {{ .Values.webhookService.targetPort  }}
       protocol: TCP
