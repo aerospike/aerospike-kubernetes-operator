@@ -284,9 +284,9 @@ func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context) {
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientCertFilename = "server-cert.pem"
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientKeyFilename = "server_key.pem"
 			cacertPath := &asdbv1beta1.CaCertPath{
-				SecretName: "aerospike-cacert-secret",
+				SecretName: tlsCacertSecretName,
 			}
-			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CacertPath = cacertPath
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertPath = cacertPath
 
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,

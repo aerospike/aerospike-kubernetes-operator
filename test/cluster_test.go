@@ -675,7 +675,6 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost560(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = &asdbv1beta1.AerospikeSecretCertSource{}
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1beta1.AerospikeCertPathInOperatorSource{}
 							err := deployCluster(
 								k8sClient, ctx, aeroCluster,
@@ -700,12 +699,12 @@ func negativeDeployClusterValidationTest(
 					)
 
 					It(
-						"Should fail if both CaCertsFilename and CacertPath is set",
+						"Should fail if both CaCertsFilename and CaCertPath is set",
 						func() {
 							aeroCluster := createAerospikeClusterPost560(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CacertPath = &asdbv1beta1.CaCertPath{}
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertPath = &asdbv1beta1.CaCertPath{}
 
 							err := deployCluster(
 								k8sClient, ctx, aeroCluster,

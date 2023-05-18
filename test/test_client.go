@@ -7,10 +7,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"embed"
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -291,20 +291,18 @@ func getClientCertificate(
 func appendCACertFromFileOrPath(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
-	var pem embed.FS
-
 	if caPath == "" {
 		return serverPool
 	}
 
-	err := fs.WalkDir(
-		pem, caPath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(
+		caPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if !d.IsDir() {
 				var caData []byte
-				if caData, err = fs.ReadFile(pem, path); err != nil {
+				if caData, err = os.ReadFile(path); err != nil {
 					return err
 				}
 				serverPool.AppendCertsFromPEM(caData)
@@ -324,7 +322,7 @@ func appendCACertFromSecret(
 	secretSource *asdbv1beta1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool, k8sClient client.Client,
 ) *x509.CertPool {
-	if secretSource.CaCertsFilename == "" && secretSource.CacertPath == nil {
+	if secretSource.CaCertsFilename == "" && secretSource.CaCertPath == nil {
 		return serverPool
 	}
 	// get the tls info from secret
@@ -332,9 +330,9 @@ func appendCACertFromSecret(
 
 	found := &v1.Secret{}
 
-	if secretSource.CacertPath != nil {
-		secretName := namespacedSecret(secretSource.CacertPath.SecretNamespace,
-			secretSource.CacertPath.SecretName, defaultNamespace)
+	if secretSource.CaCertPath != nil {
+		secretName := namespacedSecret(secretSource.CaCertPath.SecretNamespace,
+			secretSource.CaCertPath.SecretName, defaultNamespace)
 		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
 			return serverPool
 		}

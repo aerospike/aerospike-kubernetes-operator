@@ -57,20 +57,16 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
-func initConfigSecret(secretDirectory string) error {
-	if secretDirectory == secretDir {
-		secrets = make(map[string][]byte)
-	} else {
-		cacertSecrets = make(map[string][]byte)
-	}
+func initConfigSecret(secretDirectory string) (map[string][]byte, error) {
+	initSecrets := make(map[string][]byte)
 
 	fileInfo, err := os.ReadDir(secretDirectory)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(fileInfo) == 0 {
-		return fmt.Errorf("no secret file available in %s", secretDirectory)
+		return nil, fmt.Errorf("no secret file available in %s", secretDirectory)
 	}
 
 	for _, file := range fileInfo {
@@ -81,27 +77,24 @@ func initConfigSecret(secretDirectory string) error {
 
 		secret, err := os.ReadFile(filepath.Join(secretDirectory, file.Name()))
 		if err != nil {
-			return fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
+			return nil, fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
 		}
 
-		if secretDirectory == secretDir {
-			secrets[file.Name()] = secret
-		} else {
-			cacertSecrets[file.Name()] = secret
-		}
+		initSecrets[file.Name()] = secret
 	}
 
-	return nil
+	return initSecrets, nil
 }
 
 func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
+	var err error
 	// Create configSecret
-	if err := initConfigSecret(secretDir); err != nil {
+	if secrets, err = initConfigSecret(secretDir); err != nil {
 		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
 	// Create cacertSecret
-	if err := initConfigSecret(cacertSecretDir); err != nil {
+	if cacertSecrets, err = initConfigSecret(cacertSecretDir); err != nil {
 		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
@@ -209,12 +202,7 @@ func createConfigSecret(
 
 	// use test context's create helper to create the object and add a cleanup
 	// function for the new object
-	err := k8sClient.Create(ctx, s)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return k8sClient.Create(ctx, s)
 }
 
 func createAuthSecret(
