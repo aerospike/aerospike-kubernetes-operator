@@ -90,10 +90,8 @@ var Post6Privileges = map[string][]PrivilegeScope{
 }
 
 // IsAerospikeAccessControlValid validates the accessControl specification in the clusterSpec.
+// Asserts that the AerospikeAccessControlSpec has correct references to other objects like namespaces
 //
-// Asserts that the AerospikeAccessControlSpec
-//
-//	has correct references to other objects like namespaces
 //	follows rules defined https://www.aerospike.com/docs/guide/limitations.html
 //	follows rules found through server code inspection for e.g. predefined roles
 //	meets operator requirements. For e.g. the necessity to have at least one sys-admin and user-admin user.
