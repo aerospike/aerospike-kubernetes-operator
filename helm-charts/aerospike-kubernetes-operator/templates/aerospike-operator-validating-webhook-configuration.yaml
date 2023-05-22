@@ -22,7 +22,7 @@ webhooks:
   - apiGroups:
     - asdb.aerospike.com
     apiVersions:
-    - v1beta1
+    - v1
     operations:
     - CREATE
     - UPDATE

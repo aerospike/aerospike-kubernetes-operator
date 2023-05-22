@@ -89,6 +89,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 BUNDLE_DIR:= bundle
+CATALOG_DIR:= catalog
 ANNOTATIONS_FILE_PATH:= $(BUNDLE_DIR)/metadata/annotations.yaml
 OVERLAYS_DIR:= $(ROOT_DIR)/config/overlays/manifests/olm
 
@@ -334,15 +335,19 @@ endif
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
-.PHONY: catalog-dockerfile
-catalog-dockerfile: opm ## Generate a catalog dockerfile.
+.PHONY: catalog
+catalog: opm ## Generate a file-based catalog and its dockerfile.
+	rm -rf $(CATALOG_DIR).Dockerfile $(CATALOG_DIR)
+	mkdir $(CATALOG_DIR)
 	$(OPM) index add --container-tool docker --mode semver --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT) --generate
-
+	$(OPM) migrate database/index.db $(CATALOG_DIR) --output=yaml
+	$(OPM) generate dockerfile $(CATALOG_DIR)
+	$(OPM) validate $(CATALOG_DIR)
 
 # Build and push multi-arch catalog image.
 .PHONY: docker-buildx-catalog
-docker-buildx-catalog: catalog-dockerfile
+docker-buildx-catalog: catalog
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${CATALOG_IMG} -f index.Dockerfile .
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${CATALOG_IMG} -f $(CATALOG_DIR).Dockerfile .
 	- docker buildx rm project-v3-builder

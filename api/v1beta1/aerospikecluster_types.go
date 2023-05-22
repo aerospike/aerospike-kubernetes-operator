@@ -904,6 +904,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+//+kubebuilder:deprecatedversion
 // +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`

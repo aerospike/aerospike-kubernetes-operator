@@ -7,6 +7,7 @@ set -e
 
 # Use the input operator image for testing if provided
 BUNDLE_IMG=$1
+CATALOG_IMG=$2
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
@@ -46,11 +47,28 @@ for namespace in $namespaces; do
   fi
 done
 
-operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",") --timeout=10m0s
+kubectl apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: test
+spec:
+  displayName: Aerospike operator
+  publisher: Aerospike operator
+  sourceType: grpc
+  image: "${CATALOG_IMG}"
+  updateStrategy:
+    registryPoll:
+      interval: 10m
+EOF
+
+Kubectl apply -f operator_group.yaml
+Kubectl apply -f subscription.yaml
 
 for namespace in $namespaces; do
 ATTEMPT=0
-until [ $ATTEMPT -eq 10 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
+until [ $ATTEMPT -eq 15 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
     sleep 2
     ((ATTEMPT+=1))
 done
