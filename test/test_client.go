@@ -322,7 +322,7 @@ func appendCACertFromSecret(
 	secretSource *asdbv1beta1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool, k8sClient client.Client,
 ) *x509.CertPool {
-	if secretSource.CaCertsFilename == "" && secretSource.CaCertPath == nil {
+	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
 		return serverPool
 	}
 	// get the tls info from secret
@@ -330,9 +330,9 @@ func appendCACertFromSecret(
 
 	found := &v1.Secret{}
 
-	if secretSource.CaCertPath != nil {
-		secretName := namespacedSecret(secretSource.CaCertPath.SecretNamespace,
-			secretSource.CaCertPath.SecretName, defaultNamespace)
+	if secretSource.CaCertsSource != nil {
+		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
+			secretSource.CaCertsSource.SecretName, defaultNamespace)
 		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
 			return serverPool
 		}

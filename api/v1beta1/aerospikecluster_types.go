@@ -127,7 +127,7 @@ type AerospikeOperatorCertSource struct {
 	CertPathInOperator *AerospikeCertPathInOperatorSource `json:"certPathInOperator,omitempty"`
 }
 
-type CaCertPath struct {
+type CaCertsSource struct {
 	SecretName string `json:"secretName"`
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
@@ -135,8 +135,8 @@ type CaCertPath struct {
 
 type AerospikeSecretCertSource struct {
 	// +optional
-	CaCertPath *CaCertPath `json:"caCertPath,omitempty"`
-	SecretName string      `json:"secretName"`
+	CaCertsSource *CaCertsSource `json:"caCertSource,omitempty"`
+	SecretName    string         `json:"secretName"`
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 	// +optional
@@ -182,9 +182,9 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 			)
 		}
 
-		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertPath != nil) {
+		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertsSource != nil) {
 			return fmt.Errorf(
-				"both `caCertsFilename` or `caCertPath` cannot be set in `secretCertSource`: %+v",
+				"both `caCertsFilename` or `caCertSource` cannot be set in `secretCertSource`: %+v",
 				c.SecretCertSource,
 			)
 		}

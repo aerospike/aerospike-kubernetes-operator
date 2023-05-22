@@ -148,7 +148,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	}
 
 	if clientCertSpec == nil {
-		r.Log.Info("OperatorClientCertSpec is not configured. Using default system CA certs...")
+		r.Log.Info("\"operatorClientCertSpec\" is not configured. Using default system CA certs...")
 		return serverPool
 	}
 
@@ -163,7 +163,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 		)
 	default:
 		r.Log.Error(
-			fmt.Errorf("both SecrtenName and CertPathInOperator are not set"),
+			fmt.Errorf("both \"secretName\" and \"certPathInOperator\" are not set"),
 			"Returning empty certPool.",
 		)
 
@@ -179,6 +179,7 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 		return serverPool
 	}
 
+	// caPath can be a file name as well as directory path containing cacert files.
 	err := filepath.WalkDir(
 		caPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -210,9 +211,9 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	secretSource *asdbv1beta1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool,
 ) *x509.CertPool {
-	if secretSource.CaCertsFilename == "" && secretSource.CaCertPath == nil {
+	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
 		r.Log.Info(
-			"Neither CaCertsFilename nor CaCertPath is specified. Using default CA certs...",
+			"Neither \"caCertsFilename\" nor \"caCertSource\" is specified. Using default CA certs...",
 			"secret", secretSource,
 		)
 
@@ -226,9 +227,9 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 
 	found := &corev1.Secret{}
 
-	if secretSource.CaCertPath != nil {
-		secretName := namespacedSecret(secretSource.CaCertPath.SecretNamespace,
-			secretSource.CaCertPath.SecretName, defaultNamespace)
+	if secretSource.CaCertsSource != nil {
+		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
+			secretSource.CaCertsSource.SecretName, defaultNamespace)
 		if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
 			r.Log.Error(
 				err,
@@ -290,7 +291,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 			clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, fmt.Errorf("both SecrtenName and CertPathInOperator are not set")
+		return nil, fmt.Errorf("both \"secretName\" and \"certPathInOperator\" are not set")
 	}
 }
 
