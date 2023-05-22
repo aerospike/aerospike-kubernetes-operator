@@ -17,8 +17,6 @@ limitations under the License.
 package v1beta1
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -154,43 +152,6 @@ type AerospikeCertPathInOperatorSource struct {
 func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
 	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
 		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
-}
-
-func (c *AerospikeOperatorClientCertSpec) validate() error {
-	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
-		return fmt.Errorf(
-			"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not"+
-				" both: %+v",
-			c,
-		)
-	}
-
-	if c.SecretCertSource != nil &&
-		(c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
-		return fmt.Errorf(
-			"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
-				" `secretCertSource`: %+v",
-			c.SecretCertSource,
-		)
-	}
-
-	if c.CertPathInOperator != nil &&
-		(c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
-		return fmt.Errorf(
-			"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator"+
-				"`: %+v",
-			c.CertPathInOperator,
-		)
-	}
-
-	if c.TLSClientName != "" && !c.IsClientCertConfigured() {
-		return fmt.Errorf(
-			"tlsClientName is provided but client certificate is not: secretCertSource=%+v, certPathInOperator=%v+v",
-			c.SecretCertSource, c.CertPathInOperator,
-		)
-	}
-
-	return nil
 }
 
 type AerospikeObjectMeta struct {

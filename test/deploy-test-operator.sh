@@ -63,8 +63,8 @@ spec:
       interval: 10m
 EOF
 
-Kubectl apply -f operator_group.yaml
-Kubectl apply -f subscription.yaml
+kubectl apply -f operator_group.yaml
+kubectl apply -f subscription.yaml
 
 for namespace in $namespaces; do
 ATTEMPT=0
