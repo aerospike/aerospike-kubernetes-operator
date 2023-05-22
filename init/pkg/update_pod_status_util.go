@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -48,7 +48,7 @@ func (v *Volume) getMountPoint() string {
 }
 
 func getImageVersion(image string) (majorVersion int, err error) {
-	ver, err := asdbv1beta1.GetImageVersion(image)
+	ver, err := asdbv1.GetImageVersion(image)
 	if err != nil {
 		return 0, err
 	}
@@ -96,7 +96,7 @@ func (initp *InitParams) getPodImage(ctx context.Context, podNamespacedName type
 	return pod.Spec.Containers[0].Image, nil
 }
 
-func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
+func (initp *InitParams) getNodeMetadata() *asdbv1.AerospikePodStatus {
 	podPort := initp.networkInfo.podPort
 	servicePort := initp.networkInfo.mappedPort
 
@@ -105,13 +105,13 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 		servicePort = initp.networkInfo.mappedTLSPort
 	}
 
-	metadata := asdbv1beta1.AerospikePodStatus{
+	metadata := asdbv1.AerospikePodStatus{
 		PodIP:          initp.networkInfo.podIP,
 		HostInternalIP: initp.networkInfo.internalIP,
 		HostExternalIP: initp.networkInfo.externalIP,
 		PodPort:        int(podPort),
 		ServicePort:    servicePort,
-		Aerospike: asdbv1beta1.AerospikeInstanceSummary{
+		Aerospike: asdbv1.AerospikeInstanceSummary{
 			ClusterName: clusterName,
 			NodeID:      initp.nodeID,
 			TLSName:     os.Getenv("MY_POD_TLS_NAME"),
@@ -121,7 +121,7 @@ func (initp *InitParams) getNodeMetadata() *asdbv1beta1.AerospikePodStatus {
 	return &metadata
 }
 
-func getInitializedVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
+func getInitializedVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1.AerospikeCluster) []string {
 	logger.Info("Looking for initialized volumes in status.pod initializedVolume", "podname", podName)
 
 	if aeroCluster.Status.Pods[podName].InitializedVolumes != nil {
@@ -137,19 +137,19 @@ func getInitializedVolumes(logger logr.Logger, podName string, aeroCluster *asdb
 	return nil
 }
 
-func getDirtyVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) []string {
+func getDirtyVolumes(logger logr.Logger, podName string, aeroCluster *asdbv1.AerospikeCluster) []string {
 	logger.Info("Looking for dirty volumes in status.pod dirtyVolumes", "podname", podName)
 
 	return aeroCluster.Status.Pods[podName].DirtyVolumes
 }
 
-func getAttachedVolumes(logger logr.Logger, rack *asdbv1beta1.Rack) []asdbv1beta1.VolumeSpec {
+func getAttachedVolumes(logger logr.Logger, rack *asdbv1.Rack) []asdbv1.VolumeSpec {
 	logger.Info("Looking for volumes in rack.effectiveStorage.volumes", "rack-id", rack.ID)
 
 	return rack.Storage.Volumes
 }
 
-func getPersistentVolumes(volumes []asdbv1beta1.VolumeSpec) (volumeList []asdbv1beta1.VolumeSpec) {
+func getPersistentVolumes(volumes []asdbv1.VolumeSpec) (volumeList []asdbv1.VolumeSpec) {
 	for idx := range volumes {
 		volume := &volumes[idx]
 		if volume.Source.PersistentVolume != nil {
@@ -160,7 +160,7 @@ func getPersistentVolumes(volumes []asdbv1beta1.VolumeSpec) (volumeList []asdbv1
 	return volumeList
 }
 
-func newVolume(podName string, vol *asdbv1beta1.VolumeSpec) *Volume {
+func newVolume(podName string, vol *asdbv1.VolumeSpec) *Volume {
 	var volume Volume
 
 	volume.podName = podName
@@ -238,8 +238,8 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 		switch volume.volumeMode {
 		case string(corev1.PersistentVolumeBlock):
 			switch volume.effectiveInitMethod {
-			case string(asdbv1beta1.AerospikeVolumeMethodDD):
-				dd := []string{string(asdbv1beta1.AerospikeVolumeMethodDD), "if=/dev/zero", "of=" + volume.getMountPoint(), "bs=1M"}
+			case string(asdbv1.AerospikeVolumeMethodDD):
+				dd := []string{string(asdbv1.AerospikeVolumeMethodDD), "if=/dev/zero", "of=" + volume.getMountPoint(), "bs=1M"}
 
 				wg.Add(1)
 				guard <- struct{}{}
@@ -247,8 +247,8 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 				go runDD(initp.logger, dd, &wg, guard)
 				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
-			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
-				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
+			case string(asdbv1.AerospikeVolumeMethodBlkdiscard):
+				blkdiscard := []string{string(asdbv1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
 
 				wg.Add(1)
 				guard <- struct{}{}
@@ -265,7 +265,7 @@ func (initp *InitParams) initVolumes(initializedVolumes []string) ([]string, err
 
 		case string(corev1.PersistentVolumeFilesystem):
 			switch volume.effectiveInitMethod {
-			case string(asdbv1beta1.AerospikeVolumeMethodDeleteFiles):
+			case string(asdbv1.AerospikeVolumeMethodDeleteFiles):
 				find := []string{"find", volume.getMountPoint(), "-type", "f", "-delete"}
 
 				err := execute(find, nil)
@@ -361,8 +361,8 @@ func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes, nsDevicePaths []string)
 			}
 
 			switch volume.effectiveWipeMethod {
-			case string(asdbv1beta1.AerospikeVolumeMethodDD):
-				dd := []string{string(asdbv1beta1.AerospikeVolumeMethodDD), "if=/dev/zero", "of=" + volume.getMountPoint(), "bs=1M"}
+			case string(asdbv1.AerospikeVolumeMethodDD):
+				dd := []string{string(asdbv1.AerospikeVolumeMethodDD), "if=/dev/zero", "of=" + volume.getMountPoint(), "bs=1M"}
 
 				wg.Add(1)
 				guard <- struct{}{}
@@ -370,8 +370,8 @@ func (initp *InitParams) cleanDirtyVolumes(dirtyVolumes, nsDevicePaths []string)
 				go runDD(initp.logger, dd, &wg, guard)
 				initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
-			case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
-				blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
+			case string(asdbv1.AerospikeVolumeMethodBlkdiscard):
+				blkdiscard := []string{string(asdbv1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
 
 				wg.Add(1)
 				guard <- struct{}{}
@@ -418,8 +418,8 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes, nsDevicePaths, nsFilePaths []
 				}
 
 				switch volume.effectiveWipeMethod {
-				case string(asdbv1beta1.AerospikeVolumeMethodDD):
-					dd := []string{string(asdbv1beta1.AerospikeVolumeMethodDD),
+				case string(asdbv1.AerospikeVolumeMethodDD):
+					dd := []string{string(asdbv1.AerospikeVolumeMethodDD),
 						"if=/dev/zero", "of=" + volume.getMountPoint(), "bs=1M"}
 
 					wg.Add(1)
@@ -428,8 +428,8 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes, nsDevicePaths, nsFilePaths []
 					go runDD(initp.logger, dd, &wg, guard)
 					initp.logger.Info(fmt.Sprintf("Command submitted %v for volume=%+v", dd, *volume))
 
-				case string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard):
-					blkdiscard := []string{string(asdbv1beta1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
+				case string(asdbv1.AerospikeVolumeMethodBlkdiscard):
+					blkdiscard := []string{string(asdbv1.AerospikeVolumeMethodBlkdiscard), volume.getMountPoint()}
 
 					wg.Add(1)
 					guard <- struct{}{}
@@ -444,7 +444,7 @@ func (initp *InitParams) wipeVolumes(dirtyVolumes, nsDevicePaths, nsFilePaths []
 				dirtyVolumes = remove(dirtyVolumes, volume.volumeName)
 			}
 		case string(corev1.PersistentVolumeFilesystem):
-			if volume.effectiveWipeMethod == string(asdbv1beta1.AerospikeVolumeMethodDeleteFiles) {
+			if volume.effectiveWipeMethod == string(asdbv1.AerospikeVolumeMethodDeleteFiles) {
 				if _, err := os.Stat(volume.getMountPoint()); err != nil {
 					return dirtyVolumes, fmt.Errorf("mounting point %s does not exist %v", volume.getMountPoint(), err)
 				}
@@ -559,7 +559,7 @@ func (initp *InitParams) manageVolumesAndUpdateStatus(ctx context.Context, resta
 }
 
 func (initp *InitParams) updateStatus(ctx context.Context,
-	metadata *asdbv1beta1.AerospikePodStatus) error {
+	metadata *asdbv1.AerospikePodStatus) error {
 	confHashBytes, err := os.ReadFile(filepath.Join(configMapDir, "aerospikeConfHash"))
 	if err != nil {
 		return fmt.Errorf("failed to read aerospikeConfHash file %v", err)

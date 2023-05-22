@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 type globalAddressesAndPorts struct {
@@ -31,7 +31,7 @@ type globalAddressesAndPorts struct {
 }
 
 type networkInfo struct {
-	networkPolicy                      asdbv1beta1.AerospikeNetworkPolicy
+	networkPolicy                      asdbv1.AerospikeNetworkPolicy
 	hostIP                             string
 	podIP                              string
 	internalIP                         string
@@ -71,8 +71,8 @@ func getNamespacedName(name, namespace string) types.NamespacedName {
 }
 
 func getCluster(ctx context.Context, k8sClient client.Client,
-	clusterNamespacedName types.NamespacedName) (*asdbv1beta1.AerospikeCluster, error) {
-	aeroCluster := &asdbv1beta1.AerospikeCluster{}
+	clusterNamespacedName types.NamespacedName) (*asdbv1.AerospikeCluster, error) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
 	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
 		return nil, err
 	}
@@ -93,27 +93,27 @@ func (initp *InitParams) setNetworkInfo(ctx context.Context) error {
 
 	asConfig := initp.aeroCluster.Spec.AerospikeConfig
 
-	if _, serviceTLSPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
+	if _, serviceTLSPort := asdbv1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
 		initp.networkInfo.podTLSPort = int32(*serviceTLSPort)
 	}
 
-	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
+	if servicePort := asdbv1.GetServicePort(asConfig); servicePort != nil {
 		initp.networkInfo.podPort = int32(*servicePort)
 	}
 
-	if _, hbTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
+	if _, hbTLSPort := asdbv1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
 		initp.networkInfo.heartBeatTLSPort = int32(*hbTLSPort)
 	}
 
-	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
+	if hbPort := asdbv1.GetHeartbeatPort(asConfig); hbPort != nil {
 		initp.networkInfo.heartBeatPort = int32(*hbPort)
 	}
 
-	if _, fabricTLSPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
+	if _, fabricTLSPort := asdbv1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
 		initp.networkInfo.fabricTLSPort = int32(*fabricTLSPort)
 	}
 
-	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
+	if fabricPort := asdbv1.GetFabricPort(asConfig); fabricPort != nil {
 		initp.networkInfo.fabricPort = int32(*fabricPort)
 	}
 
@@ -138,7 +138,7 @@ func getNodeIDFromPodName(podName string) (nodeID string, err error) {
 	return nodeID, nil
 }
 
-func getRack(logger logr.Logger, podName string, aeroCluster *asdbv1beta1.AerospikeCluster) (*asdbv1beta1.Rack, error) {
+func getRack(logger logr.Logger, podName string, aeroCluster *asdbv1.AerospikeCluster) (*asdbv1.Rack, error) {
 	res := strings.Split(podName, "-")
 
 	//  Assuming podName format stsName-rackID-index
@@ -341,10 +341,10 @@ func getHostIPS(ctx context.Context, k8sClient client.Client, hostIP string) (
 
 // parseCustomNetworkIP function parses the network IPs for the given list of network names
 // It parses network status info from pod annotations key `k8s.v1.cni.cncf.io/network-status` which is added by CNI
-func parseCustomNetworkIP(networkType asdbv1beta1.AerospikeNetworkType,
+func parseCustomNetworkIP(networkType asdbv1.AerospikeNetworkType,
 	annotations map[string]string, networks []string,
 ) ([]string, error) {
-	if networkType != asdbv1beta1.AerospikeNetworkTypeCustomInterface {
+	if networkType != asdbv1.AerospikeNetworkTypeCustomInterface {
 		return nil, nil
 	}
 

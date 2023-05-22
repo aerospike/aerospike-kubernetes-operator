@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 const (
@@ -51,14 +51,14 @@ func (initp *InitParams) createAerospikeConf() error {
 			initp.networkInfo.configuredAlterAccessIP, initp.networkInfo.customTLSAlternateAccessNetworkIPs, confString)
 	}
 
-	if initp.networkInfo.networkPolicy.FabricType == asdbv1beta1.AerospikeNetworkTypeCustomInterface {
+	if initp.networkInfo.networkPolicy.FabricType == asdbv1.AerospikeNetworkTypeCustomInterface {
 		for _, ip := range initp.networkInfo.customFabricNetworkIPs {
 			confString = strings.ReplaceAll(confString, "fabric {",
 				fmt.Sprintf("fabric {\n        address %s", ip))
 		}
 	}
 
-	if initp.networkInfo.networkPolicy.TLSFabricType == asdbv1beta1.AerospikeNetworkTypeCustomInterface {
+	if initp.networkInfo.networkPolicy.TLSFabricType == asdbv1.AerospikeNetworkTypeCustomInterface {
 		for _, ip := range initp.networkInfo.customTLSFabricNetworkIPs {
 			confString = strings.ReplaceAll(confString, "fabric {",
 				fmt.Sprintf("fabric {\n        tls-address %s", ip))
@@ -130,7 +130,7 @@ func (initp *InitParams) createAerospikeConf() error {
 // Update access addresses in the configuration file
 // Compute the access endpoints based on network policy.
 // As a kludge the computed values are stored late to update node summary.
-func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNetworkType,
+func (initp *InitParams) substituteEndpoint(networkType asdbv1.AerospikeNetworkType,
 	addressType, configuredIP string, interfaceIPs []string, confString string) string {
 	var (
 		accessAddress []string
@@ -146,19 +146,19 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 	}
 
 	switch networkType { //nolint:exhaustive // fallback to default
-	case asdbv1beta1.AerospikeNetworkTypePod:
+	case asdbv1.AerospikeNetworkTypePod:
 		accessAddress = append(accessAddress, initp.networkInfo.podIP)
 		accessPort = podPort
 
-	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
+	case asdbv1.AerospikeNetworkTypeHostInternal:
 		accessAddress = append(accessAddress, initp.networkInfo.internalIP)
 		accessPort = mappedPort
 
-	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
+	case asdbv1.AerospikeNetworkTypeHostExternal:
 		accessAddress = append(accessAddress, initp.networkInfo.externalIP)
 		accessPort = mappedPort
 
-	case asdbv1beta1.AerospikeNetworkTypeConfigured:
+	case asdbv1.AerospikeNetworkTypeConfigured:
 		if configuredIP == "" {
 			initp.logger.Error(fmt.Errorf("configureIP missing"),
 				fmt.Sprintf("Please set %s and %s node label to use NetworkPolicy configuredIP for "+
@@ -169,7 +169,7 @@ func (initp *InitParams) substituteEndpoint(networkType asdbv1beta1.AerospikeNet
 		accessAddress = append(accessAddress, configuredIP)
 		accessPort = mappedPort
 
-	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
+	case asdbv1.AerospikeNetworkTypeCustomInterface:
 		accessAddress = interfaceIPs
 		accessPort = podPort
 

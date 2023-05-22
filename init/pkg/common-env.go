@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var (
@@ -23,8 +23,8 @@ var (
 
 type InitParams struct {
 	k8sClient   client.Client
-	aeroCluster *asdbv1beta1.AerospikeCluster
-	rack        *asdbv1beta1.Rack
+	aeroCluster *asdbv1.AerospikeCluster
+	rack        *asdbv1.Rack
 	networkInfo *networkInfo
 	podName     string
 	namespace   string
@@ -52,7 +52,7 @@ func PopulateInitParams(ctx goctx.Context) (*InitParams, error) {
 		return nil, err
 	}
 
-	if err := asdbv1beta1.AddToScheme(scheme); err != nil {
+	if err := asdbv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 
@@ -85,7 +85,7 @@ func PopulateInitParams(ctx goctx.Context) (*InitParams, error) {
 		return nil, err
 	}
 
-	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
+	workDir := asdbv1.GetWorkDirectory(rack.AerospikeConfig)
 	volume := rack.Storage.GetVolumeForAerospikePath(workDir)
 
 	if volume != nil {
