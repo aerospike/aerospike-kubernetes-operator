@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: test
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: aerospike-kubernetes-operator
+  source: aerospike-kubernetes-operator
+  sourceNamespace: test
