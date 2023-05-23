@@ -125,8 +125,16 @@ type AerospikeOperatorCertSource struct {
 	CertPathInOperator *AerospikeCertPathInOperatorSource `json:"certPathInOperator,omitempty"`
 }
 
-type AerospikeSecretCertSource struct {
+type CaCertsSource struct {
 	SecretName string `json:"secretName"`
+	// +optional
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+}
+
+type AerospikeSecretCertSource struct {
+	// +optional
+	CaCertsSource *CaCertsSource `json:"caCertsSource,omitempty"`
+	SecretName    string         `json:"secretName"`
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 	// +optional

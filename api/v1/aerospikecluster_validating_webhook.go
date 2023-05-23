@@ -335,8 +335,8 @@ func validateClientCertSpec(
 			return fmt.Errorf("operator client cert is not specified")
 		}
 
-		if !clientCertSpec.IsClientCertConfigured() {
-			return fmt.Errorf("operator client cert is not configured")
+		if err := clientCertSpec.validate(); err != nil {
+			return err
 		}
 
 		return nil
@@ -800,10 +800,12 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
-				return fmt.Errorf(
-					"ca-path not allowed, please use ca-file. tlsConf %v",
-					tlsConf,
-				)
+				if _, ok1 := tlsConf["ca-file"]; ok1 {
+					return fmt.Errorf(
+						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
+						tlsConf,
+					)
+				}
 			}
 		}
 	}
@@ -1800,6 +1802,10 @@ func getTLSFilePaths(configSpec AerospikeConfigSpec) []string {
 					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
 						paths = append(paths, path.(string))
 					}
+
+					if path, ok := tlsInterface.(map[string]interface{})["ca-path"]; ok {
+						paths = append(paths, path.(string)+"/")
+					}
 				}
 			}
 		}
@@ -1925,7 +1931,7 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 
 		if !networkSet.HasAll(netList...) {
 			return fmt.Errorf(
-				"required networks %v not present in pod metadata annotations key \"k8s.v1.cni.cncf.io/networks\"",
+				"required networks %v not present in pod metadata annotations key `k8s.v1.cni.cncf.io/networks`",
 				netList,
 			)
 		}
