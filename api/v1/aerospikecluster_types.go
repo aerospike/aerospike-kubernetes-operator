@@ -127,8 +127,16 @@ type AerospikeOperatorCertSource struct {
 	CertPathInOperator *AerospikeCertPathInOperatorSource `json:"certPathInOperator,omitempty"`
 }
 
-type AerospikeSecretCertSource struct {
+type CaCertsSource struct {
 	SecretName string `json:"secretName"`
+	// +optional
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+}
+
+type AerospikeSecretCertSource struct {
+	// +optional
+	CaCertsSource *CaCertsSource `json:"caCertsSource,omitempty"`
+	SecretName    string         `json:"secretName"`
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 	// +optional
@@ -165,13 +173,21 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 		)
 	}
 
-	if c.SecretCertSource != nil &&
-		(c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
-		return fmt.Errorf(
-			"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
-				" `secretCertSource`: %+v",
-			c.SecretCertSource,
-		)
+	if c.SecretCertSource != nil {
+		if (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+			return fmt.Errorf(
+				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
+					" `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+
+		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertsSource != nil) {
+			return fmt.Errorf(
+				"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
 	}
 
 	if c.CertPathInOperator != nil &&
@@ -183,11 +199,8 @@ func (c *AerospikeOperatorClientCertSpec) validate() error {
 		)
 	}
 
-	if c.TLSClientName != "" && !c.IsClientCertConfigured() {
-		return fmt.Errorf(
-			"tlsClientName is provided but client certificate is not: secretCertSource=%+v, certPathInOperator=%v+v",
-			c.SecretCertSource, c.CertPathInOperator,
-		)
+	if !c.IsClientCertConfigured() {
+		return fmt.Errorf("operator client cert is not configured")
 	}
 
 	return nil

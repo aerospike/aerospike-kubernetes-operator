@@ -17608,6 +17608,15 @@ spec:
                     properties:
                       caCertsFilename:
                         type: string
+                      caCertsSource:
+                        properties:
+                          secretName:
+                            type: string
+                          secretNamespace:
+                            type: string
+                        required:
+                        - secretName
+                        type: object
                       clientCertFilename:
                         type: string
                       clientKeyFilename:
@@ -26158,6 +26167,15 @@ spec:
                     properties:
                       caCertsFilename:
                         type: string
+                      caCertsSource:
+                        properties:
+                          secretName:
+                            type: string
+                          secretNamespace:
+                            type: string
+                        required:
+                        - secretName
+                        type: object
                       clientCertFilename:
                         type: string
                       clientKeyFilename:
