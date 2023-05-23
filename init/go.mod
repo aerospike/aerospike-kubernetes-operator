@@ -3,7 +3,7 @@ module akoinit
 go 1.19
 
 require (
-	github.com/aerospike/aerospike-kubernetes-operator v0.0.0-20230522091105-5e8acf315ec6
+	github.com/aerospike/aerospike-kubernetes-operator v0.0.0-20230523090905-e006e2d3d32d
 	github.com/go-logr/logr v1.2.3
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/mitchellh/go-ps v1.0.0

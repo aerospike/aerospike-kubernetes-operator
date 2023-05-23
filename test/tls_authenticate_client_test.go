@@ -283,7 +283,7 @@ func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context) {
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientCertFilename = "server-cert.pem"
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientKeyFilename = "server_key.pem"
-			cacertPath := &asdbv1beta1.CaCertsSource{
+			cacertPath := &asdbv1.CaCertsSource{
 				SecretName: tlsCacertSecretName,
 			}
 			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
@@ -291,14 +291,14 @@ func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context) {
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
 			)
-			secretVolume := asdbv1beta1.VolumeSpec{
+			secretVolume := asdbv1.VolumeSpec{
 				Name: tlsCacertSecretName,
-				Source: asdbv1beta1.VolumeSource{
+				Source: asdbv1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName: tlsCacertSecretName,
 					},
 				},
-				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 					Path: "/etc/aerospike/secret/cacerts",
 				},
 			}

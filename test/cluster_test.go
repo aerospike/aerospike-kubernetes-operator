@@ -675,7 +675,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost560(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1beta1.AerospikeCertPathInOperatorSource{}
+							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
 							err := deployCluster(
 								k8sClient, ctx, aeroCluster,
 							)
@@ -704,7 +704,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost560(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1beta1.CaCertsSource{}
+							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
 
 							err := deployCluster(
 								k8sClient, ctx, aeroCluster,
@@ -721,7 +721,7 @@ func negativeDeployClusterValidationTest(
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
-								&asdbv1beta1.AerospikeCertPathInOperatorSource{
+								&asdbv1.AerospikeCertPathInOperatorSource{
 									CaCertsPath:    "cacert.pem",
 									ClientKeyPath:  "svc_key.pem",
 									ClientCertPath: "",
