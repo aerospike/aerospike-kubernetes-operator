@@ -1931,7 +1931,7 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 
 		if !networkSet.HasAll(netList...) {
 			return fmt.Errorf(
-				"required networks %v not present in pod metadata annotations key \"k8s.v1.cni.cncf.io/networks\"",
+				"required networks %v not present in pod metadata annotations key `k8s.v1.cni.cncf.io/networks`",
 				netList,
 			)
 		}

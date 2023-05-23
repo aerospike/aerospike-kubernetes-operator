@@ -148,7 +148,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	}
 
 	if clientCertSpec == nil {
-		r.Log.Info("\"operatorClientCertSpec\" is not configured. Using default system CA certs...")
+		r.Log.Info("`operatorClientCertSpec` is not configured. Using default system CA certs...")
 		return serverPool
 	}
 
@@ -163,7 +163,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 		)
 	default:
 		r.Log.Error(
-			fmt.Errorf("both \"secretName\" and \"certPathInOperator\" are not set"),
+			fmt.Errorf("both `secretName` and `certPathInOperator` are not set"),
 			"Returning empty certPool.",
 		)
 
@@ -175,7 +175,7 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
 	if caPath == "" {
-		r.Log.Info("CA path is not provided in \"operatorClientCertSpec\". Using default system CA certs...")
+		r.Log.Info("CA path is not provided in `operatorClientCertSpec`. Using default system CA certs...")
 		return serverPool
 	}
 
@@ -213,7 +213,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 ) *x509.CertPool {
 	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
 		r.Log.Info(
-			"Neither \"caCertsFilename\" nor \"caCertSource\" is specified. Using default CA certs...",
+			"Neither `caCertsFilename` nor `caCertSource` is specified. Using default CA certs...",
 			"secret", secretSource,
 		)
 
@@ -291,7 +291,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 			clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, fmt.Errorf("both \"secretName\" and \"certPathInOperator\" are not set")
+		return nil, fmt.Errorf("both `secretName` and `certPathInOperator` are not set")
 	}
 }
 
@@ -313,12 +313,12 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 
 	if crtData, crtExists := found.Data[secretSource.ClientCertFilename]; !crtExists {
 		return nil, fmt.Errorf(
-			"can't find certificate \"%s\" in secret %+v",
+			"can't find certificate `%s` in secret %+v",
 			secretSource.ClientCertFilename, secretName,
 		)
 	} else if keyData, keyExists := found.Data[secretSource.ClientKeyFilename]; !keyExists {
 		return nil, fmt.Errorf(
-			"can't find client key \"%s\" in secret %+v",
+			"can't find client key `%s` in secret %+v",
 			secretSource.ClientKeyFilename, secretName,
 		)
 	} else if cert, err := tls.X509KeyPair(crtData, keyData); err != nil {

@@ -300,7 +300,7 @@ spec:
                     properties:
                       caCertsFilename:
                         type: string
-                      cacertPath:
+                      caCertsSource:
                         properties:
                           secretName:
                             type: string
@@ -8859,7 +8859,7 @@ spec:
                     properties:
                       caCertsFilename:
                         type: string
-                      cacertPath:
+                      caCertsSource:
                         properties:
                           secretName:
                             type: string
