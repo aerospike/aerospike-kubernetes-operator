@@ -36,6 +36,7 @@ pipeline {
             stages {
                 stage("Checkout") {
                     steps {
+                        sh "chmod -R 744 bin || true"
                         checkout([
                             $class: 'GitSCM',
                             branches: scm.branches,
@@ -97,6 +98,12 @@ pipeline {
     post {
         always {
             junit testResults: '**/junit.xml', keepLongStdio: true
+        }
+        cleanup {
+            script {
+                sh "chmod -R 744 bin || true"
+            }
+            cleanWs()
         }
     }
 }
