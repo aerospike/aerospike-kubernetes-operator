@@ -28,12 +28,11 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "6.0.0.1"
+	prevServerVersion   = "6.2.0.1"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "6.1.0.1"
+	latestServerVersion = "6.3.0.0"
 	invalidVersion      = "3.0.0.4"
-	pre5Version         = "4.9.0.33"
 )
 
 var (
@@ -45,7 +44,6 @@ var (
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre5Image          = fmt.Sprintf("%s:%s", baseImage, pre5Version)
 	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
@@ -555,8 +553,7 @@ func getClusterIfExists(
 ) (*asdbv1beta1.AerospikeCluster, error) {
 	aeroCluster := &asdbv1beta1.AerospikeCluster{}
 
-	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
-	if err != nil {
+	if err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster); err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -571,7 +568,7 @@ func deleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1beta1.AerospikeCluster,
 ) error {
-	if err := k8sClient.Delete(ctx, aeroCluster); err != nil {
+	if err := k8sClient.Delete(ctx, aeroCluster); err != nil && !k8serrors.IsNotFound(err) {
 		return err
 	}
 
@@ -905,9 +902,8 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			},
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
-				MultiPodPerHost: true,
-				AerospikeInitContainerSpec: &asdbv1beta1.
-					AerospikeInitContainerSpec{},
+				MultiPodPerHost:            true,
+				AerospikeInitContainerSpec: &asdbv1beta1.AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
@@ -975,9 +971,8 @@ func createDummyAerospikeCluster(
 			},
 
 			PodSpec: asdbv1beta1.AerospikePodSpec{
-				MultiPodPerHost: true,
-				AerospikeInitContainerSpec: &asdbv1beta1.
-					AerospikeInitContainerSpec{},
+				MultiPodPerHost:            true,
+				AerospikeInitContainerSpec: &asdbv1beta1.AerospikeInitContainerSpec{},
 			},
 
 			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{

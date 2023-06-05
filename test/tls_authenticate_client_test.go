@@ -25,6 +25,7 @@ var _ = Describe(
 		Context(
 			"When using tls-authenticate-client: Any", func() {
 				doTestTLSAuthenticateClientAny(ctx)
+				doTestTLSAuthenticateClientAnyWithCapath(ctx)
 			},
 		)
 		Context(
@@ -163,7 +164,7 @@ func getAerospikeConfig(
 				Users: []asdbv1beta1.AerospikeUserSpec{
 					{
 						Name:       "admin",
-						SecretName: "auth-update",
+						SecretName: authSecretNameForUpdate,
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
@@ -240,6 +241,68 @@ func doTestTLSAuthenticateClientAny(ctx goctx.Context) {
 			aeroCluster := getAerospikeConfig(
 				networkConf, operatorClientCertSpec,
 			)
+			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+			tlsAuthenticateClient, err := getTLSAuthenticateClient(aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(
+				reflect.DeepEqual(
+					[]string{"any"}, tlsAuthenticateClient,
+				),
+			).To(
+				BeTrue(),
+				fmt.Sprintf(
+					"TlsAuthenticateClientAny Validation Failed with following value: %v",
+					tlsAuthenticateClient,
+				),
+			)
+
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+}
+
+func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context) {
+	It(
+		"TlsAuthenticateClientAny with capath", func() {
+			networkConf := getNetworkTLSConfig()
+			networkConf["service"].(map[string]interface{})["tls-authenticate-client"] = "any"
+			tls := []interface{}{
+				map[string]interface{}{
+					"name":      "aerospike-a-0.test-runner",
+					"cert-file": "/etc/aerospike/secret/server-cert.pem",
+					"key-file":  "/etc/aerospike/secret/server_key.pem",
+					"ca-path":   "/etc/aerospike/secret/cacerts",
+				},
+			}
+			networkConf["tls"] = tls
+
+			operatorClientCertSpec := getOperatorCert()
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientCertFilename = "server-cert.pem"
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientKeyFilename = "server_key.pem"
+			cacertPath := &asdbv1beta1.CaCertsSource{
+				SecretName: tlsCacertSecretName,
+			}
+			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
+
+			aeroCluster := getAerospikeConfig(
+				networkConf, operatorClientCertSpec,
+			)
+			secretVolume := asdbv1beta1.VolumeSpec{
+				Name: tlsCacertSecretName,
+				Source: asdbv1beta1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: tlsCacertSecretName,
+					},
+				},
+				Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+					Path: "/etc/aerospike/secret/cacerts",
+				},
+			}
+			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, secretVolume)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 			tlsAuthenticateClient, err := getTLSAuthenticateClient(aeroCluster)

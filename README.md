@@ -42,7 +42,7 @@ Run the following command with the appropriate name and version for the operator
 
 ```sh
 IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator-nightly
-VERSION=2.4.0
+VERSION=2.5.0
 make docker-buildx IMG=${IMAGE_TAG_BASE}:${VERSION} PLATFORMS=linux/amd64
 ```
 **Note**: Change `PLATFORMS` var as per host machine or remove it to build multi-arch image
@@ -82,8 +82,8 @@ operator using OLM.
 
 ### Install operator-sdk
 
-Install operator-sdk version 1.10.1 using the
-installation [guide](https://v1-10-x.sdk.operatorframework.io/docs/installation/)
+Install operator-sdk version 1.28.0 using the
+installation [guide](https://v1-28-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle
 
@@ -94,7 +94,7 @@ Set up the environment with image names.
 ```shell
 export ACCOUNT=aerospike
 export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator
-export VERSION=2.4.0
+export VERSION=2.5.0
 export IMG=docker.io/${IMAGE_TAG_BASE}-nightly:${VERSION}
 export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle-nightly:${VERSION}
 ```
@@ -155,16 +155,16 @@ kubectl -n ns1 create  serviceaccount aerospike-operator-controller-manager
 
 ```shell
 kubectl get clusterrolebindings.rbac.authorization.k8s.io  | grep aerospike-kubernetes-operator
-aerospike-kubernetes-operator.v2.4.0-74b946466d                 ClusterRole/aerospike-kubernetes-operator.v2.4.0-74b946466d   41m
+aerospike-kubernetes-operator.v2.5.0-74b946466d                 ClusterRole/aerospike-kubernetes-operator.v2.5.0-74b946466d   41m
 ```
 
-In the example above the name of the cluster role binding is `aerospike-kubernetes-operator.v2.4.0-74b946466d`
+In the example above the name of the cluster role binding is `aerospike-kubernetes-operator.v2.5.0-74b946466d`
 
 Edit the role binding and add a new subject entry for the service account
 
 ```shell
-# Replace aerospike-kubernetes-operator.v2.4.0-5-dev-74b946466d with the name of the cluster role binding found above
-kubectl edit clusterrolebindings.rbac.authorization.k8s.io  aerospike-kubernetes-operator.v2.4.0-5-dev-74b946466d
+# Replace aerospike-kubernetes-operator.v2.5.0-74b946466d with the name of the cluster role binding found above
+kubectl edit clusterrolebindings.rbac.authorization.k8s.io  aerospike-kubernetes-operator.v2.5.0-74b946466d
 ```
 
 In the editor that is launched append the following lines to the subjects section as shown below
@@ -185,17 +185,17 @@ kind: ClusterRoleBinding
 metadata:
   creationTimestamp: "2021-09-16T10:48:36Z"
   labels:
-    olm.owner: aerospike-kubernetes-operator.v2.4.0-5-dev
+    olm.owner: aerospike-kubernetes-operator.v2.5.0
     olm.owner.kind: ClusterServiceVersion
     olm.owner.namespace: test
     operators.coreos.com/aerospike-kubernetes-operator.test: ""
-  name: aerospike-kubernetes-operator.v2.4.0-5-dev-74b946466d
+  name: aerospike-kubernetes-operator.v2.5.0-74b946466d
   resourceVersion: "51841234"
   uid: be546dd5-b21e-4cc3-8a07-e2fe5fe5274c
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: aerospike-kubernetes-operator.v2.4.0-5-dev-74b946466d
+  name: aerospike-kubernetes-operator.v2.5.0-74b946466d
 subjects:
   - kind: ServiceAccount
     name: aerospike-operator-controller-manager

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,30 +36,37 @@ var (
 )
 
 var secrets map[string][]byte
+var cacertSecrets map[string][]byte
 
-const secretDir = "../config/samples/secrets" //nolint:gosec // for testing
+const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
+const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
 
 const tlsSecretName = "aerospike-secret"
-const authSecretName = "auth"
+const tlsCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
+const authSecretName = "auth-secret"
 const authSecretNameForUpdate = "auth-update"
 
 const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
+const aerospikeNs string = "aerospike"
+
+// list of all the namespaces used in test-suite
+var testNamespaces = []string{namespace, multiClusterNs1, multiClusterNs2, aerospikeNs}
 
 const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1beta1.AerospikeVolumeMethodDeleteFiles
 
-func initConfigSecret(secretDir string) error {
-	secrets = make(map[string][]byte)
+func initConfigSecret(secretDirectory string) (map[string][]byte, error) {
+	initSecrets := make(map[string][]byte)
 
-	fileInfo, err := os.ReadDir(secretDir)
+	fileInfo, err := os.ReadDir(secretDirectory)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(fileInfo) == 0 {
-		return fmt.Errorf("no secret file available in %s", secretDir)
+		return nil, fmt.Errorf("no secret file available in %s", secretDirectory)
 	}
 
 	for _, file := range fileInfo {
@@ -66,53 +75,43 @@ func initConfigSecret(secretDir string) error {
 			continue
 		}
 
-		secret, err := os.ReadFile(filepath.Join(secretDir, file.Name()))
+		secret, err := os.ReadFile(filepath.Join(secretDirectory, file.Name()))
 		if err != nil {
-			return fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
+			return nil, fmt.Errorf("wrong secret file %s: %v", file.Name(), err)
 		}
 
-		secrets[file.Name()] = secret
+		initSecrets[file.Name()] = secret
 	}
 
-	return nil
+	return initSecrets, nil
 }
 
 func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
-	labels := getLabels()
-
+	var err error
 	// Create configSecret
-	if err := initConfigSecret(secretDir); err != nil {
+	if secrets, err = initConfigSecret(secretDir); err != nil {
 		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
-	if err := createConfigSecret(
-		k8sClient, ctx, namespace, labels,
-	); err != nil {
-		return err
+	// Create cacertSecret
+	if cacertSecrets, err = initConfigSecret(cacertSecretDir); err != nil {
+		return fmt.Errorf("failed to init secrets: %v", err)
 	}
 
-	// Create authSecret
-	pass := "admin"
-	if err := createAuthSecret(
-		k8sClient, ctx, namespace, labels, authSecretName, pass,
-	); err != nil {
-		return err
+	// Create preReq for namespaces used for testing
+	for idx := range testNamespaces {
+		if err := createClusterPreReq(k8sClient, ctx, testNamespaces[idx]); err != nil {
+			return err
+		}
 	}
 
 	// Create another authSecret. Used in access-control tests
 	passUpdate := "admin321"
+	labels := getLabels()
+
 	if err := createAuthSecret(
 		k8sClient, ctx, namespace, labels, authSecretNameForUpdate, passUpdate,
 	); err != nil {
-		return err
-	}
-
-	// Create preReq for multi-clusters
-	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs1); err != nil {
-		return err
-	}
-
-	if err := createClusterPreReq(k8sClient, ctx, multiClusterNs2); err != nil {
 		return err
 	}
 
@@ -138,11 +137,45 @@ func createClusterPreReq(
 		return err
 	}
 
+	if err := createCacertSecret(
+		k8sClient, ctx, namespace, labels,
+	); err != nil {
+		return err
+	}
+
 	// Create authSecret
-	pass := "admin"
+	pass := "admin123"
 	if err := createAuthSecret(
 		k8sClient, ctx, namespace, labels, authSecretName, pass,
 	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createCacertSecret(
+	k8sClient client.Client, ctx goctx.Context, namespace string,
+	labels map[string]string,
+) error {
+	// Create configSecret
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      tlsCacertSecretName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: cacertSecrets,
+	}
+
+	// Remove old object
+	_ = k8sClient.Delete(ctx, s)
+
+	// use test context's create helper to create the object and add a cleanup
+	// function for the new object
+	err := k8sClient.Create(ctx, s)
+	if err != nil {
 		return err
 	}
 
@@ -169,12 +202,7 @@ func createConfigSecret(
 
 	// use test context's create helper to create the object and add a cleanup
 	// function for the new object
-	err := k8sClient.Create(ctx, s)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return k8sClient.Create(ctx, s)
 }
 
 func createAuthSecret(
@@ -709,4 +737,13 @@ func contains(elems []string, v string) bool {
 	}
 
 	return false
+}
+
+func getGitRepoRootPath() (string, error) {
+	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(path)), nil
 }

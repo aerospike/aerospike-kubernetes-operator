@@ -10,9 +10,5 @@ roleRef:
   name: role-place-holder
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: aerospike
-- kind: ServiceAccount
   name: aerospike-operator-controller-manager
   namespace: aerospike
-

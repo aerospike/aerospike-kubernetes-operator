@@ -10,27 +10,14 @@ on:
       - master
 
 jobs:
-  resolve-modules:
-    name: Resolve Modules
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout Sources
-        uses: actions/checkout@v2
-      - id: set-matrix
-        run: ./tools/resolve-modules.sh
   golangci:
     name: lint
-    needs: resolve-modules
     runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJson(needs.resolve-modules.outputs.matrix) }}
     steps:
       - name: Setup-go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
       - name: Checkout sources
         uses: actions/checkout@v3
       - name: Run golangci-lint
@@ -38,4 +25,3 @@ jobs:
         with:
           version: v1.50
           args: --timeout=5m
-          working-directory: ${{ matrix.workdir }}

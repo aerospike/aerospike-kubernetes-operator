@@ -19,6 +19,8 @@ spec:
   replicas: 2
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
       labels:
         control-plane: controller-manager
     spec:
@@ -26,13 +28,18 @@ spec:
       - command:
         - /manager
         args:
-          # These arguments are changed in patch for tests: test/manager-patch-for-tests.yaml
-          # If you modify these args, please also sync args in that patch.
-        - --leader-elect
+        - --config=controller_manager_config.yaml
         - --zap-log-level=info
         image: controller:latest
         name: manager
         imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
