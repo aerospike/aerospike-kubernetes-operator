@@ -1,4 +1,5 @@
 # Operator
+{{ include "validateDeprecateFields" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,19 +46,17 @@ spec:
         command:
         - "/manager"
         args:
-        - --health-probe-bind-address=:{{ .Values.healthPort | default 8081 }}
-        - --metrics-bind-address=127.0.0.1:{{ .Values.metricsPort | default 8080 }}
-        - --leader-elect
-        imagePullPolicy: {{ .Values.operatorImage.pullPolicy | default "IfNotPresent" }}
+          - --config=controller_manager_config.yaml
+        imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
-          containerPort: {{ .Values.webhookServicePort | default 9443 }}
+          containerPort: {{ .Values.webhookService.targetPort }}
           protocol: TCP
         env:
         - name: WATCH_NAMESPACE
-          value: {{ .Values.watchNamespaces | default "default" | quote }}
+          value: {{ .Values.watchNamespaces | quote }}
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
-          value: {{ .Values.aerospikeKubernetesInitRegistry | default "docker.io" }}
+          value: {{ .Values.aerospikeKubernetesInitRegistry }}
         {{- if .Values.extraEnv }}
         {{- range $key, $value := .Values.extraEnv }}
         - name: "{{ $key }}"
@@ -73,6 +72,9 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
+        - mountPath: /controller_manager_config.yaml
+          name: manager-config
+          subPath: controller_manager_config.yaml
         {{- with .Values.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -82,39 +84,42 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: {{ .Values.healthPort | default 8081 }}
-          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds | default 15 }}
-          periodSeconds: {{ .Values.livenessProbe.periodSeconds | default 20 }}
-          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds | default 1 }}
-          successThreshold: {{ .Values.livenessProbe.successThreshold | default 1 }}
-          failureThreshold: {{ .Values.livenessProbe.failureThreshold | default 3 }}
+            port: {{ .Values.healthPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
         readinessProbe:
           httpGet:
             path: /readyz
-            port: {{ .Values.healthPort | default 8081 }}
-          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds | default 5 }}
-          periodSeconds: {{ .Values.readinessProbe.periodSeconds | default 10 }}
-          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds | default 1 }}
-          successThreshold: {{ .Values.readinessProbe.successThreshold | default 1 }}
-          failureThreshold: {{ .Values.readinessProbe.failureThreshold | default 3 }}
+            port: {{ .Values.healthPort }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
       - name: kube-rbac-proxy
         image: {{ .Values.kubeRBACProxy.image.repository }}:{{ .Values.kubeRBACProxy.image.tag }}
-        imagePullPolicy: {{ .Values.kubeRBACProxy.image.pullPolicy | default "IfNotPresent" }}
+        imagePullPolicy: {{ .Values.kubeRBACProxy.image.pullPolicy }}
         args:
-        - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxyPort | default 8443 }}
-        - --upstream=http://127.0.0.1:{{ .Values.metricsPort | default 8080 }}/
+        - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxy.port }}
+        - --upstream=http://127.0.0.1:{{ .Values.metricsPort }}/
         - --logtostderr=true
         - --v=10
         ports:
-        - containerPort: {{ .Values.kubeRBACProxyPort | default 8443 }}
+        - containerPort: {{ .Values.kubeRBACProxy.port }}
           name: https
           protocol: TCP
         {{- with .Values.kubeRBACProxy.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
       volumes:
-      # TODO: Make adding volumes configurable.
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: {{ .Values.certs.webhookServerCertSecretName | default "webhook-server-cert" }}
+        - configMap:
+            name: {{ template "aerospike-kubernetes-operator.fullname" . }}
+          name: manager-config
+        # TODO: Make adding volumes configurable.
+        - name: cert
+          secret:
+            defaultMode: 420
+            secretName: {{ .Values.certs.webhookServerCertSecretName }}

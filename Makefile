@@ -262,7 +262,6 @@ bundle: manifests kustomize
 	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" $(BUNDLE_DIR)/metadata/annotations.yaml; \
 	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 
-
 # Remove generated bundle
 .PHONY: bundle-clean
 bundle-clean:

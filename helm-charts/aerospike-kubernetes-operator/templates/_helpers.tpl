@@ -50,3 +50,18 @@ Selector labels
 app.kubernetes.io/name: {{ include "aerospike-kubernetes-operator.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
+
+
+{{/*
+Deprecated fields are not allowed to be used with new charts, install/upgrade should fail
+*/}}
+{{- define "validateDeprecateFields" -}}
+{{- if .Values.kubeRBACProxyPort -}}
+    {{ fail ".Values.kubeRBACProxyPort field is deprecated, use .Values.kubeRBACProxy.port instead" }}
+{{- end -}}
+
+{{- if .Values.webhookServicePort -}}
+    {{ fail ".Values.webhookServicePort field is deprecated, use .Values.webhookServicePort.targetPort instead" }}
+{{- end -}}
+
+{{- end -}}
