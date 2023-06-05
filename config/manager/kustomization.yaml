@@ -13,5 +13,5 @@ configMapGenerator:
   name: manager-config
 images:
 - name: controller
-  newName: docker.io/tanmayj10/aerospike-kubernetes-operator
-  newTag: pvcid
+  newName: docker.io/aerospike/aerospike-kubernetes-operator-nightly
+  newTag: 2.5.0
