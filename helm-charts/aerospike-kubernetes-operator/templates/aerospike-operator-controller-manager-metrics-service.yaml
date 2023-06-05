@@ -1,18 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: aerospike-operator-webhook-service
+  name: aerospike-operator-controller-manager-metrics-service
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
-    {{- with .Values.webhookService.labels }}{{ toYaml . | nindent 4 }}{{ end }}
-  {{- with .Values.webhookService.annotations }}
+    {{- with .Values.metricsService.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+  {{- with .Values.metricsService.annotations }}
   annotations: {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.webhookService.type | default "ClusterIP" | quote }}
+  type: {{ .Values.metricsService.type | quote }}
   selector:
     # Specified by the deployment/pod
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -21,7 +21,8 @@ spec:
     {{- with .Values.podLabels }}{{ toYaml . | nindent 4 }}{{ end }}
     {{- with .Values.labels }}{{ toYaml . | nindent 4 }}{{ end }}
   ports:
-    - port: {{ .Values.webhookService.port | default 443 }}
-      # Can be the name of port 9443 of the container
-      targetPort: {{ .Values.webhookServicePort | default 9443 }}
-      protocol: TCP
+  - name: https
+    port: {{ .Values.metricsService.port }}
+    protocol: TCP
+    targetPort: https
+---
