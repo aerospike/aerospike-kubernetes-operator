@@ -5,7 +5,7 @@ replicas: 2
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
   tag: 2.5.0
-  # pullPolicy: IfNotPresent
+  pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containining credentials can be added
@@ -19,10 +19,8 @@ rbac:
   # serviceAccountName: "default"
 
 ## Ports
-# healthPort: 8081
-# metricsPort: 8080
-# webhookServicePort: 9443
-# kubeRBACProxyPort: 8443
+healthPort: 8081
+metricsPort: 8080
 
 ## Create certificates
 certs:
@@ -74,17 +72,18 @@ podAnnotations: {}
 podLabels: {}
 
 ## Service configuration
-metricsService: {}
+metricsService:
   # labels: {}
   # annotations: {}
-  # port: 8443
-  # type: ClusterIP
+  port: 8443
+  type: ClusterIP
 
-webhookService: {}
+webhookService:
   # labels: {}
   # annotations: {}
-  # port: 443
-  # type: ClusterIP
+  port: 443
+  targetPort: 9443
+  type: ClusterIP
 
 ## Pod security context
 podSecurityContext: {}
@@ -92,25 +91,26 @@ podSecurityContext: {}
 ## Container security context
 securityContext: {}
 
-livenessProbe: {}
-  # initialDelaySeconds: 15
-  # periodSeconds: 20
-  # timeoutSeconds: 1
-  # successThreshold: 1
-  # failureThreshold: 3
-readinessProbe: {}
-  # initialDelaySeconds: 5
-  # periodSeconds: 10
-  # timeoutSeconds: 1
-  # successThreshold: 1
-  # failureThreshold: 3
+livenessProbe:
+   initialDelaySeconds: 15
+   periodSeconds: 20
+   timeoutSeconds: 1
+   successThreshold: 1
+   failureThreshold: 3
+readinessProbe:
+   initialDelaySeconds: 5
+   periodSeconds: 10
+   timeoutSeconds: 1
+   successThreshold: 1
+   failureThreshold: 3
 
 # Kube RBAC Proxy sidecar
 kubeRBACProxy:
   image:
     repository: gcr.io/kubebuilder/kube-rbac-proxy
     tag: v0.13.1
-    # pullPolicy: IfNotPresent
+    pullPolicy: IfNotPresent
+  port: 8443
   resources:
     limits:
       cpu: 500m
