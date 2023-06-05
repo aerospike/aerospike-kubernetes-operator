@@ -1,4 +1,5 @@
 resources:
+- service_account.yaml
 - role.yaml
 - role_binding.yaml
 - leader_election_role.yaml
@@ -9,9 +10,3 @@ resources:
 - auth_proxy_service.yaml
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
-- auth_proxy_client_clusterrole.yaml
-# TODO: For CR, Added by us
-- aerospikecluster_editor_role.yaml
-- aerospikecluster_viewer_role.yaml
-- aerospikecluster_role_binding.yaml
-- service_account.yaml

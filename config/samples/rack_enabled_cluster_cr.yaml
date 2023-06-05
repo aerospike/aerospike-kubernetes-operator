@@ -16,7 +16,7 @@ spec:
         zone: us-west1-a
       - id: 2
         # Change to the zone for your k8s cluster.
-        zone: us-west1-b
+        zone: us-west1-a
 
   storage:
     filesystemVolumePolicy:
@@ -24,6 +24,7 @@ spec:
       initMethod: deleteFiles
     blockVolumePolicy:
       cascadeDelete: true
+      initMethod: blkdiscard
     volumes:
       - name: workdir
         aerospike:
@@ -38,7 +39,7 @@ spec:
           path: /test/dev/xvdf
         source:
           persistentVolume:
-            storageClass: ssd
+            storageClass: local-ssd
             volumeMode: Block
             size: 5Gi
       - name: aerospike-config-secret

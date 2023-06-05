@@ -63,11 +63,6 @@ endif
 IMG ?= controller:latest
 IMG_TAGS ?= ""
 
-
-INIT_VERSION ?= 0.0.20
-# Image URL to use all building/pushing operator-init image targets
-INIT_IMG ?= aerospike/aerospike-kubernetes-init-nightly:${INIT_VERSION}
-
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.26
 
@@ -164,21 +159,6 @@ docker-buildx-openshift: ## Build and push docker image for the manager for open
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
 	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
-	- docker buildx rm project-v3-builder
-
-.PHONY: docker-init-buildx
-docker-init-buildx: ## Build and push docker image for the init container for cross-platform support
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	cd init
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --build-arg VERSION=$(INIT_VERSION) -f init/Dockerfile init/
-	- docker buildx rm project-v3-builder
-
-.PHONY: docker-init-buildx-openshift
-docker-init-buildx-openshift: ## Build and push docker image for the init container for openshift cross-platform support
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${INIT_IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(INIT_VERSION) --build-arg USER=1001 -f init/Dockerfile init/
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push
@@ -281,7 +261,6 @@ bundle: manifests kustomize
 	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" $(BUNDLE_DIR)/metadata/annotations.yaml; \
 	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" $(BUNDLE_DIR)/metadata/annotations.yaml; \
 	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
-
 
 # Remove generated bundle
 .PHONY: bundle-clean
