@@ -297,7 +297,7 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	}
 
 	for idx := range nodes.Items {
-		unqZones[nodes.Items[idx].Labels["topology.kubernetes.io/zone"]] = 1
+		unqZones[nodes.Items[idx].Labels[zoneKey]] = 1
 	}
 
 	zones := make([]string, 0, len(unqZones))
@@ -319,7 +319,7 @@ func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
 		return "", fmt.Errorf("node list empty: %v", nodes.Items)
 	}
 
-	return nodes.Items[0].Labels["topology.kubernetes.io/region"], nil
+	return nodes.Items[0].Labels[regionKey], nil
 }
 
 func getCloudProvider(

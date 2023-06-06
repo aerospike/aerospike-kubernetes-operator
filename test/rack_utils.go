@@ -292,8 +292,6 @@ func validateRackEnabledCluster(
 }
 
 func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
-	zoneKey := "topology.kubernetes.io/zone"
-	regionKey := "topology.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 	rackSelectorMap := map[string]string{}
@@ -368,8 +366,6 @@ func validateSTSPodsForRack(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
 	rackState *RackState,
 ) error {
-	zoneKey := "topology.kubernetes.io/zone"
-	regionKey := "topology.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 

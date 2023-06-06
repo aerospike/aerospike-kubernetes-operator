@@ -50,6 +50,9 @@ const multiClusterNs1 string = "test1"
 const multiClusterNs2 string = "test2"
 const aerospikeNs string = "aerospike"
 
+const zoneKey = "topology.kubernetes.io/zone"
+const regionKey = "topology.kubernetes.io/region"
+
 // list of all the namespaces used in test-suite
 var testNamespaces = []string{namespace, multiClusterNs1, multiClusterNs2, aerospikeNs}
 
