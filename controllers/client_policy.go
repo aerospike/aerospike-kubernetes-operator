@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
@@ -29,7 +29,7 @@ type fromSecretPasswordProvider struct {
 
 // Get returns the password for the username using userSpec.
 func (pp fromSecretPasswordProvider) Get(
-	_ string, userSpec *asdbv1beta1.AerospikeUserSpec,
+	_ string, userSpec *asdbv1.AerospikeUserSpec,
 ) (string, error) {
 	secret := &corev1.Secret{}
 	secretName := userSpec.SecretName
@@ -68,7 +68,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	policy.ClusterName = r.aeroCluster.Name
 
 	// tls config
-	if tlsName, _ := asdbv1beta1.GetServiceTLSNameAndPort(
+	if tlsName, _ := asdbv1.GetServiceTLSNameAndPort(
 		r.aeroCluster.Spec.
 			AerospikeConfig,
 	); tlsName != "" {
@@ -109,12 +109,12 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	// validateAndReconcileAccessControl uses many helper func over spec object. So statusSpec to spec conversion
 	// help in reusing those functions over statusSpec.
 	// See if this can be done in better manner
-	// statusSpec := asdbv1beta1.AerospikeClusterSpec{}
+	// statusSpec := asdbv1.AerospikeClusterSpec{}
 	// if err := lib.DeepCopy(&statusSpec, &aeroCluster.Status.AerospikeClusterStatusSpec); err != nil {
 	// 	r.Log.Error(err, "Failed to copy spec in status", "err", err)
 	// }
 
-	statusToSpec, err := asdbv1beta1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
+	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		r.Log.Error(err, "Failed to copy spec in status", "err", err)
 	}
@@ -134,7 +134,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 }
 
 func (r *SingleClusterReconciler) getClusterServerCAPool(
-	clientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec,
+	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 	clusterNamespace string,
 ) *x509.CertPool {
 	// Try to load system CA certs, otherwise just make an empty pool
@@ -208,7 +208,7 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 }
 
 func (r *SingleClusterReconciler) appendCACertFromSecret(
-	secretSource *asdbv1beta1.AerospikeSecretCertSource,
+	secretSource *asdbv1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool,
 ) *x509.CertPool {
 	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
@@ -277,7 +277,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 }
 
 func (r *SingleClusterReconciler) getClientCertificate(
-	clientCertSpec *asdbv1beta1.AerospikeOperatorClientCertSpec,
+	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 	clusterNamespace string,
 ) (*tls.Certificate, error) {
 	switch {
@@ -296,7 +296,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 }
 
 func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
-	secretSource *asdbv1beta1.AerospikeSecretCertSource,
+	secretSource *asdbv1.AerospikeSecretCertSource,
 	defaultNamespace string,
 ) (*tls.Certificate, error) {
 	// get the tls info from secret

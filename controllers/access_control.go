@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
@@ -34,36 +34,36 @@ const (
 // Returns a tuple of admin username and password to use. If the cluster is not security
 // enabled both username and password will be zero strings.
 func AerospikeAdminCredentials(
-	desiredState, currentState *asdbv1beta1.AerospikeClusterSpec,
+	desiredState, currentState *asdbv1.AerospikeClusterSpec,
 	passwordProvider AerospikeUserPasswordProvider,
 ) (user, pass string, err error) {
 	var enabled bool
 
-	outgoingVersion, err := asdbv1beta1.GetImageVersion(currentState.Image)
+	outgoingVersion, err := asdbv1.GetImageVersion(currentState.Image)
 	if err != nil {
-		incomingVersion, newErr := asdbv1beta1.GetImageVersion(desiredState.Image)
+		incomingVersion, newErr := asdbv1.GetImageVersion(desiredState.Image)
 		if newErr != nil {
 			return "", "", newErr
 		}
 
-		enabled, newErr = asdbv1beta1.IsSecurityEnabled(
+		enabled, newErr = asdbv1.IsSecurityEnabled(
 			incomingVersion, desiredState.AerospikeConfig,
 		)
 		if newErr != nil {
 			return "", "", newErr
 		}
 	} else {
-		enabled, err = asdbv1beta1.IsSecurityEnabled(
+		enabled, err = asdbv1.IsSecurityEnabled(
 			outgoingVersion, currentState.AerospikeConfig,
 		)
 		if err != nil {
-			incomingVersion, newErr := asdbv1beta1.GetImageVersion(desiredState.Image)
+			incomingVersion, newErr := asdbv1.GetImageVersion(desiredState.Image)
 			if newErr != nil {
 				return "", "", newErr
 			}
 
 			// Its possible this is a new cluster and current state is empty.
-			enabled, newErr = asdbv1beta1.IsSecurityEnabled(
+			enabled, newErr = asdbv1.IsSecurityEnabled(
 				incomingVersion, desiredState.AerospikeConfig,
 			)
 			if newErr != nil {
@@ -79,25 +79,25 @@ func AerospikeAdminCredentials(
 
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
-		return asdbv1beta1.AdminUsername, asdbv1beta1.DefaultAdminPassword, nil
+		return asdbv1.AdminUsername, asdbv1.DefaultAdminPassword, nil
 	}
 
-	adminUserSpec, ok := asdbv1beta1.GetUsersFromSpec(currentState)[asdbv1beta1.AdminUsername]
+	adminUserSpec, ok := asdbv1.GetUsersFromSpec(currentState)[asdbv1.AdminUsername]
 	if !ok {
 		// Should not happen on a validated spec.
 		return "", "", fmt.Errorf(
-			"%s user missing in access control", asdbv1beta1.AdminUsername,
+			"%s user missing in access control", asdbv1.AdminUsername,
 		)
 	}
 
 	password, err := passwordProvider.Get(
-		asdbv1beta1.AdminUsername, &adminUserSpec,
+		asdbv1.AdminUsername, &adminUserSpec,
 	)
 	if err != nil {
 		return "", "", err
 	}
 
-	return asdbv1beta1.AdminUsername, password, nil
+	return asdbv1.AdminUsername, password, nil
 }
 
 // reconcileAccessControl reconciles access control to ensure current state moves to the desired state.
@@ -107,7 +107,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 ) error {
 	desired := &r.aeroCluster.Spec
 
-	currentState, err := asdbv1beta1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
+	currentState, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
 		r.Log.Error(err, "Failed to copy spec in status", "err", err)
 		return err
@@ -115,8 +115,8 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
 	adminPolicy := GetAdminPolicy(desired)
-	desiredRoles := asdbv1beta1.GetRolesFromSpec(desired)
-	currentRoles := asdbv1beta1.GetRolesFromSpec(currentState)
+	desiredRoles := asdbv1.GetRolesFromSpec(desired)
+	currentRoles := asdbv1.GetRolesFromSpec(currentState)
 
 	if err := r.reconcileRoles(
 		desiredRoles, currentRoles, client, adminPolicy,
@@ -124,8 +124,8 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 		return err
 	}
 
-	desiredUsers := asdbv1beta1.GetUsersFromSpec(desired)
-	currentUsers := asdbv1beta1.GetUsersFromSpec(currentState)
+	desiredUsers := asdbv1.GetUsersFromSpec(desired)
+	currentUsers := asdbv1.GetUsersFromSpec(currentState)
 
 	return r.reconcileUsers(
 		desiredUsers, currentUsers, passwordProvider, client, adminPolicy,
@@ -133,7 +133,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 }
 
 // GetAdminPolicy returns the AdminPolicy to use for performing access control operations.
-func GetAdminPolicy(clusterSpec *asdbv1beta1.AerospikeClusterSpec) as.AdminPolicy {
+func GetAdminPolicy(clusterSpec *asdbv1.AerospikeClusterSpec) as.AdminPolicy {
 	if clusterSpec.AerospikeAccessControl == nil || clusterSpec.AerospikeAccessControl.AdminPolicy == nil {
 		return *as.NewAdminPolicy()
 	}
@@ -145,8 +145,8 @@ func GetAdminPolicy(clusterSpec *asdbv1beta1.AerospikeClusterSpec) as.AdminPolic
 
 // reconcileRoles reconciles roles to take them from current to desired.
 func (r *SingleClusterReconciler) reconcileRoles(
-	desired map[string]asdbv1beta1.AerospikeRoleSpec,
-	current map[string]asdbv1beta1.AerospikeRoleSpec, client *as.Client,
+	desired map[string]asdbv1.AerospikeRoleSpec,
+	current map[string]asdbv1.AerospikeRoleSpec, client *as.Client,
 	adminPolicy as.AdminPolicy,
 ) error {
 	// List roles in the cluster.
@@ -166,7 +166,7 @@ func (r *SingleClusterReconciler) reconcileRoles(
 	roleReconcileCmds := make([]aerospikeAccessControlReconcileCmd, 0, len(rolesToDrop)+len(desired))
 
 	for _, roleToDrop := range rolesToDrop {
-		if _, ok := asdbv1beta1.PredefinedRoles[roleToDrop]; !ok {
+		if _, ok := asdbv1.PredefinedRoles[roleToDrop]; !ok {
 			// Not a predefined role and can be dropped.
 			roleReconcileCmds = append(
 				roleReconcileCmds, aerospikeRoleDrop{name: roleToDrop},
@@ -196,8 +196,8 @@ func (r *SingleClusterReconciler) reconcileRoles(
 
 // reconcileUsers reconciles users to take them from current to desired.
 func (r *SingleClusterReconciler) reconcileUsers(
-	desired map[string]asdbv1beta1.AerospikeUserSpec,
-	current map[string]asdbv1beta1.AerospikeUserSpec,
+	desired map[string]asdbv1.AerospikeUserSpec,
+	current map[string]asdbv1.AerospikeUserSpec,
 	passwordProvider AerospikeUserPasswordProvider, client *as.Client,
 	adminPolicy as.AdminPolicy,
 ) error {
@@ -238,7 +238,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 		cmd := aerospikeUserCreateUpdate{
 			name: userName, password: &password, roles: userSpec.Roles,
 		}
-		if userName == asdbv1beta1.AdminUsername {
+		if userName == asdbv1.AdminUsername {
 			adminUpdateCmd = &cmd
 		} else {
 			userReconcileCmds = append(userReconcileCmds, cmd)
@@ -267,7 +267,7 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 
 	for _, privilege := range privilegeStrings {
 		parts := strings.Split(privilege, ".")
-		if _, ok := asdbv1beta1.Privileges[parts[0]]; !ok {
+		if _, ok := asdbv1.Privileges[parts[0]]; !ok {
 			// First part of the privilege is not part of defined privileges.
 			return nil, fmt.Errorf("invalid privilege %s", privilege)
 		}
@@ -397,7 +397,7 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
 // AerospikeUserPasswordProvider provides password for a give user..
 type AerospikeUserPasswordProvider interface {
 	// Get returns the password for username.
-	Get(username string, userSpec *asdbv1beta1.AerospikeUserSpec) (
+	Get(username string, userSpec *asdbv1.AerospikeUserSpec) (
 		string, error,
 	)
 }
@@ -408,7 +408,7 @@ type aerospikeAccessControlReconcileCmd interface {
 	// Execute executes the command. The implementation should be idempotent.
 	execute(
 		client *as.Client, adminPolicy *as.AdminPolicy, logger logger, recorder record.EventRecorder,
-		aeroCluster *asdbv1beta1.AerospikeCluster,
+		aeroCluster *asdbv1.AerospikeCluster,
 	) error
 }
 
@@ -435,7 +435,7 @@ type aerospikeRoleCreateUpdate struct {
 // Execute creates a new Aerospike role or updates an existing one.
 func (roleCreate aerospikeRoleCreateUpdate) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	role, err := client.QueryRole(adminPolicy, roleCreate.name)
 	isCreate := false
@@ -479,7 +479,7 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 // createRole creates a new Aerospike role.
 func (roleCreate aerospikeRoleCreateUpdate) createRole(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	logger.Info("Creating role", "role name", roleCreate.name)
 
@@ -508,7 +508,7 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	client *as.Client, adminPolicy *as.AdminPolicy, role *as.Role,
 	logger logger, recorder record.EventRecorder,
-	aeroCluster *asdbv1beta1.AerospikeCluster,
+	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	// Update the role.
 	logger.Info("Updating role", "role name", roleCreate.name)
@@ -604,7 +604,7 @@ type aerospikeUserCreateUpdate struct {
 // Execute creates a new Aerospike user or updates an existing one.
 func (userCreate aerospikeUserCreateUpdate) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	user, err := client.QueryUser(adminPolicy, userCreate.name)
 	isCreate := false
@@ -649,7 +649,7 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 // createUser creates a new Aerospike user.
 func (userCreate aerospikeUserCreateUpdate) createUser(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	logger.Info("Creating user", "username", userCreate.name)
 
@@ -677,7 +677,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 // updateUser updates an existing Aerospike user.
 func (userCreate aerospikeUserCreateUpdate) updateUser(
 	client *as.Client, adminPolicy *as.AdminPolicy, user *as.UserRoles,
-	logger logger, recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	logger logger, recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	// Update the user.
 	logger.Info("Updating user", "username", userCreate.name)
@@ -746,7 +746,7 @@ type aerospikeUserDrop struct {
 // Execute implements dropping the user.
 func (userDrop aerospikeUserDrop) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	logger.Info("Dropping user", "username", userDrop.name)
 
@@ -775,7 +775,7 @@ type aerospikeRoleDrop struct {
 // Execute implements dropping the role.
 func (roleDrop aerospikeRoleDrop) execute(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
-	recorder record.EventRecorder, aeroCluster *asdbv1beta1.AerospikeCluster,
+	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	logger.Info("Dropping role", "role", roleDrop.name)
 
