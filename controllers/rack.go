@@ -638,7 +638,15 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		podsToUpgrade = append(podsToUpgrade, pod)
 	}
 
-	podsBatchList := r.getPodsBatchToRestart(podsToUpgrade, len(podList))
+	var podsBatchList [][]*corev1.Pod
+
+	if len(failedPods) != 0 {
+		podsBatchList = make([][]*corev1.Pod, 1, 1)
+		podsBatchList[0] = podsToUpgrade
+	} else {
+		// Create batch of pods
+		podsBatchList = r.getPodsBatchToRestart(podsToUpgrade, len(podList))
+	}
 
 	if len(podsBatchList) > 0 {
 		// Handle one batch
@@ -850,12 +858,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		podList []*corev1.Pod
 	)
 
-	// Find pods which needs restart
-	podsToRestart := make([]*corev1.Pod, 0, len(podList))
-
 	if len(failedPods) != 0 {
 		podList = failedPods
-		podsToRestart = podList
 		restartTypeMap = make(map[string]RestartType)
 
 		for idx := range podList {
@@ -895,6 +899,9 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			" config",
 	)
 
+	// Find pods which needs restart
+	podsToRestart := make([]*corev1.Pod, 0, len(podList))
+
 	for idx := range podList {
 		pod := podList[idx]
 
@@ -907,8 +914,15 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		podsToRestart = append(podsToRestart, pod)
 	}
 
-	// Create batch of pods
-	podsBatchList := r.getPodsBatchToRestart(podsToRestart, len(podList))
+	var podsBatchList [][]*corev1.Pod
+
+	if len(failedPods) != 0 {
+		podsBatchList = make([][]*corev1.Pod, 1, 1)
+		podsBatchList[0] = podsToRestart
+	} else {
+		// Create batch of pods
+		podsBatchList = r.getPodsBatchToRestart(podsToRestart, len(podList))
+	}
 
 	// Restart batch of pods
 	if len(podsBatchList) > 0 {
