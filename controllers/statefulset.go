@@ -1097,7 +1097,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if rackState.Rack.Zone != "" {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "failure-domain.beta.kubernetes.io/zone",
+				Key:      "topology.kubernetes.io/zone",
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.Zone},
 			},
@@ -1107,7 +1107,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if rackState.Rack.Region != "" {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "failure-domain.beta.kubernetes.io/region",
+				Key:      "topology.kubernetes.io/region",
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.Region},
 			},
