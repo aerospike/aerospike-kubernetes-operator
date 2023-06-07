@@ -86,6 +86,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 		failedPods, _ := getFailedAndActivePods(podList)
 		if len(failedPods) != 0 {
+			r.Log.Info("Upgrading or rolling restart rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
+
 			if res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods); !res.isSuccess {
 				return res
 			}
@@ -594,7 +596,9 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		podList []*corev1.Pod
 	)
 
-	if len(failedPods) == 0 {
+	if len(failedPods) != 0 {
+		podList = failedPods
+	} else {
 		// List the pods for this aeroCluster's statefulset
 		podList, err = r.getOrderedRackPodList(rackState.Rack.ID)
 		if err != nil {
@@ -604,8 +608,6 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 				),
 			)
 		}
-	} else {
-		podList = failedPods
 	}
 
 	// Update STS definition. The operation is idempotent, so it's ok to call
@@ -641,6 +643,9 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 	var podsBatchList [][]*corev1.Pod
 
 	if len(failedPods) != 0 {
+		// creating a single batch of all failed pods in a rack, irrespective of batch size
+		r.Log.Info("Skipping batchSize for failed pods")
+
 		podsBatchList = make([][]*corev1.Pod, 1)
 		podsBatchList[0] = podsToUpgrade
 	} else {
@@ -917,6 +922,9 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	var podsBatchList [][]*corev1.Pod
 
 	if len(failedPods) != 0 {
+		// creating a single batch of all failed pods in a rack, irrespective of batch size
+		r.Log.Info("Skipping batchSize for failed pods")
+
 		podsBatchList = make([][]*corev1.Pod, 1)
 		podsBatchList[0] = podsToRestart
 	} else {
