@@ -641,7 +641,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 	var podsBatchList [][]*corev1.Pod
 
 	if len(failedPods) != 0 {
-		podsBatchList = make([][]*corev1.Pod, 1, 1)
+		podsBatchList = make([][]*corev1.Pod, 1)
 		podsBatchList[0] = podsToUpgrade
 	} else {
 		// Create batch of pods
@@ -917,7 +917,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	var podsBatchList [][]*corev1.Pod
 
 	if len(failedPods) != 0 {
-		podsBatchList = make([][]*corev1.Pod, 1, 1)
+		podsBatchList = make([][]*corev1.Pod, 1)
 		podsBatchList[0] = podsToRestart
 	} else {
 		// Create batch of pods
