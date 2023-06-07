@@ -17,8 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -159,53 +157,6 @@ type AerospikeCertPathInOperatorSource struct {
 	ClientKeyPath string `json:"clientKeyPath,omitempty"`
 }
 
-func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
-	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
-		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
-}
-
-func (c *AerospikeOperatorClientCertSpec) validate() error {
-	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
-		return fmt.Errorf(
-			"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not"+
-				" both: %+v",
-			c,
-		)
-	}
-
-	if c.SecretCertSource != nil {
-		if (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
-			return fmt.Errorf(
-				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
-					" `secretCertSource`: %+v",
-				c.SecretCertSource,
-			)
-		}
-
-		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertsSource != nil) {
-			return fmt.Errorf(
-				"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`: %+v",
-				c.SecretCertSource,
-			)
-		}
-	}
-
-	if c.CertPathInOperator != nil &&
-		(c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
-		return fmt.Errorf(
-			"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator"+
-				"`: %+v",
-			c.CertPathInOperator,
-		)
-	}
-
-	if !c.IsClientCertConfigured() {
-		return fmt.Errorf("operator client cert is not configured")
-	}
-
-	return nil
-}
-
 type AerospikeObjectMeta struct {
 	// Key - Value pair that may be set by external tools to store and retrieve arbitrary metadata
 	Annotations map[string]string `json:"annotations,omitempty"`
@@ -308,34 +259,6 @@ type SchedulingPolicy struct { //nolint:govet // for readability
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 	// NodeSelector constraints for this pod.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-}
-
-// SetDefaults applies defaults to the pod spec.
-func (p *AerospikePodSpec) SetDefaults() error {
-	var groupID int64
-
-	if p.InputDNSPolicy == nil {
-		if p.HostNetwork {
-			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
-		} else {
-			p.DNSPolicy = corev1.DNSClusterFirst
-		}
-	} else {
-		p.DNSPolicy = *p.InputDNSPolicy
-	}
-
-	if p.SecurityContext != nil {
-		if p.SecurityContext.FSGroup == nil {
-			p.SecurityContext.FSGroup = &groupID
-		}
-	} else {
-		SecurityContext := &corev1.PodSecurityContext{
-			FSGroup: &groupID,
-		}
-		p.SecurityContext = SecurityContext
-	}
-
-	return nil
 }
 
 // RackConfig specifies all racks and related policies
@@ -498,27 +421,6 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
-}
-
-// SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
-func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
-	if p.InputInitMethod == nil {
-		p.InitMethod = defaultPolicy.InitMethod
-	} else {
-		p.InitMethod = *p.InputInitMethod
-	}
-
-	if p.InputWipeMethod == nil {
-		p.WipeMethod = defaultPolicy.WipeMethod
-	} else {
-		p.WipeMethod = *p.InputWipeMethod
-	}
-
-	if p.InputCascadeDelete == nil {
-		p.CascadeDelete = defaultPolicy.CascadeDelete
-	} else {
-		p.CascadeDelete = *p.InputCascadeDelete
-	}
 }
 
 // AerospikeServerVolumeAttachment is a volume attachment in the Aerospike server container.

@@ -36,6 +36,7 @@ if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   fi
 fi
 
+# NOTE: Update targetNamespaces list in custom_operator_deployment.yaml OperatorGroup Kind as well if below namespaces list is updated
 namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace" || true
@@ -47,30 +48,14 @@ for namespace in $namespaces; do
   fi
 done
 
-kubectl apply -f - <<EOF
-apiVersion: operators.coreos.com/v1alpha1
-kind: CatalogSource
-metadata:
-  name: aerospike-kubernetes-operator
-  namespace: test
-spec:
-  displayName: Aerospike operator
-  publisher: Aerospike operator
-  sourceType: grpc
-  image: "${CATALOG_IMG}"
-  updateStrategy:
-    registryPoll:
-      interval: 10m
-EOF
-
-kubectl apply -f test/operator_group.yaml
-kubectl apply -f test/subscription.yaml
+sed -i "s/CATALOG_IMG/${CATALOG_IMG}/" test/custom_operator_deployment.yaml
+kubectl apply -f test/custom_operator_deployment.yaml
 
 for namespace in $namespaces; do
-ATTEMPT=0
-until [ $ATTEMPT -eq 15 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
+  ATTEMPT=0
+  until [ $ATTEMPT -eq 15 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
     sleep 2
-    ((ATTEMPT+=1))
-done
+    ((ATTEMPT += 1))
+  done
 done
 sleep 10

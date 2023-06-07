@@ -21,8 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
@@ -157,11 +155,6 @@ type AerospikeCertPathInOperatorSource struct {
 	ClientKeyPath string `json:"clientKeyPath,omitempty"`
 }
 
-func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
-	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
-		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
-}
-
 type AerospikeObjectMeta struct {
 	// Key - Value pair that may be set by external tools to store and retrieve arbitrary metadata
 	Annotations map[string]string `json:"annotations,omitempty"`
@@ -264,34 +257,6 @@ type SchedulingPolicy struct { //nolint:govet // for readability
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 	// NodeSelector constraints for this pod.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-}
-
-// SetDefaults applies defaults to the pod spec.
-func (p *AerospikePodSpec) SetDefaults() error {
-	var groupID int64
-
-	if p.InputDNSPolicy == nil {
-		if p.HostNetwork {
-			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
-		} else {
-			p.DNSPolicy = corev1.DNSClusterFirst
-		}
-	} else {
-		p.DNSPolicy = *p.InputDNSPolicy
-	}
-
-	if p.SecurityContext != nil {
-		if p.SecurityContext.FSGroup == nil {
-			p.SecurityContext.FSGroup = &groupID
-		}
-	} else {
-		SecurityContext := &corev1.PodSecurityContext{
-			FSGroup: &groupID,
-		}
-		p.SecurityContext = SecurityContext
-	}
-
-	return nil
 }
 
 // RackConfig specifies all racks and related policies
@@ -454,27 +419,6 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// Effective/operative value to use for cascade delete after applying defaults.
 	CascadeDelete bool `json:"effectiveCascadeDelete,omitempty"`
-}
-
-// SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
-func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
-	if p.InputInitMethod == nil {
-		p.InitMethod = defaultPolicy.InitMethod
-	} else {
-		p.InitMethod = *p.InputInitMethod
-	}
-
-	if p.InputWipeMethod == nil {
-		p.WipeMethod = defaultPolicy.WipeMethod
-	} else {
-		p.WipeMethod = *p.InputWipeMethod
-	}
-
-	if p.InputCascadeDelete == nil {
-		p.CascadeDelete = defaultPolicy.CascadeDelete
-	} else {
-		p.CascadeDelete = *p.InputCascadeDelete
-	}
 }
 
 // AerospikeServerVolumeAttachment is a volume attachment in the Aerospike server container.
@@ -873,7 +817,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-//+kubebuilder:deprecatedversion
+// +kubebuilder:deprecatedversion
 // +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`
@@ -903,183 +847,4 @@ type AerospikeClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&AerospikeCluster{}, &AerospikeClusterList{})
-}
-
-// CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
-func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) { //nolint:dupl // not duplicate
-	status := AerospikeClusterStatusSpec{}
-
-	status.Size = spec.Size
-	status.Image = spec.Image
-
-	// Storage
-	statusStorage := AerospikeStorageSpec{}
-	lib.DeepCopy(&statusStorage, &spec.Storage)
-
-	status.Storage = statusStorage
-
-	if spec.AerospikeAccessControl != nil {
-		// AerospikeAccessControl
-		statusAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		lib.DeepCopy(
-			statusAerospikeAccessControl, spec.AerospikeAccessControl,
-		)
-
-		status.AerospikeAccessControl = statusAerospikeAccessControl
-	}
-
-	// AerospikeConfig
-	statusAerospikeConfig := &AerospikeConfigSpec{}
-	lib.DeepCopy(
-		statusAerospikeConfig, spec.AerospikeConfig,
-	)
-
-	status.AerospikeConfig = statusAerospikeConfig
-
-	if spec.ValidationPolicy != nil {
-		// ValidationPolicy
-		statusValidationPolicy := &ValidationPolicySpec{}
-		lib.DeepCopy(
-			statusValidationPolicy, spec.ValidationPolicy,
-		)
-
-		status.ValidationPolicy = statusValidationPolicy
-	}
-
-	// RackConfig
-	statusRackConfig := RackConfig{}
-	lib.DeepCopy(&statusRackConfig, &spec.RackConfig)
-	status.RackConfig = statusRackConfig
-
-	// AerospikeNetworkPolicy
-	statusAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	lib.DeepCopy(
-		&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy,
-	)
-
-	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
-
-	if spec.OperatorClientCertSpec != nil {
-		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		lib.DeepCopy(
-			clientCertSpec, spec.OperatorClientCertSpec,
-		)
-
-		status.OperatorClientCertSpec = clientCertSpec
-	}
-
-	// Storage
-	statusPodSpec := AerospikePodSpec{}
-	lib.DeepCopy(&statusPodSpec, &spec.PodSpec)
-	status.PodSpec = statusPodSpec
-
-	seedsFinderServices := SeedsFinderServices{}
-	lib.DeepCopy(
-		&seedsFinderServices, &spec.SeedsFinderServices,
-	)
-
-	status.SeedsFinderServices = seedsFinderServices
-
-	// RosterNodeBlockList
-	if len(spec.RosterNodeBlockList) != 0 {
-		var rosterNodeBlockList []string
-
-		lib.DeepCopy(
-			&rosterNodeBlockList, &spec.RosterNodeBlockList,
-		)
-
-		status.RosterNodeBlockList = rosterNodeBlockList
-	}
-
-	return &status, nil
-}
-
-// CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) { //nolint:dupl // no need
-	spec := AerospikeClusterSpec{}
-
-	spec.Size = status.Size
-	spec.Image = status.Image
-
-	// Storage
-	specStorage := AerospikeStorageSpec{}
-	lib.DeepCopy(&specStorage, &status.Storage)
-	spec.Storage = specStorage
-
-	if status.AerospikeAccessControl != nil {
-		// AerospikeAccessControl
-		specAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		lib.DeepCopy(
-			specAerospikeAccessControl, status.AerospikeAccessControl,
-		)
-
-		spec.AerospikeAccessControl = specAerospikeAccessControl
-	}
-
-	// AerospikeConfig
-	specAerospikeConfig := &AerospikeConfigSpec{}
-	lib.DeepCopy(
-		specAerospikeConfig, status.AerospikeConfig,
-	)
-
-	spec.AerospikeConfig = specAerospikeConfig
-
-	if status.ValidationPolicy != nil {
-		// ValidationPolicy
-		specValidationPolicy := &ValidationPolicySpec{}
-		lib.DeepCopy(
-			specValidationPolicy, status.ValidationPolicy,
-		)
-
-		spec.ValidationPolicy = specValidationPolicy
-	}
-
-	// RackConfig
-	specRackConfig := RackConfig{}
-	lib.DeepCopy(&specRackConfig, &status.RackConfig)
-
-	spec.RackConfig = specRackConfig
-
-	// AerospikeNetworkPolicy
-	specAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	lib.DeepCopy(
-		&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy,
-	)
-
-	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
-
-	if status.OperatorClientCertSpec != nil {
-		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		lib.DeepCopy(
-			clientCertSpec, status.OperatorClientCertSpec,
-		)
-
-		spec.OperatorClientCertSpec = clientCertSpec
-	}
-
-	// Storage
-	specPodSpec := AerospikePodSpec{}
-	lib.DeepCopy(&specPodSpec, &status.PodSpec)
-
-	spec.PodSpec = specPodSpec
-
-	seedsFinderServices := SeedsFinderServices{}
-	lib.DeepCopy(
-		&seedsFinderServices, &status.SeedsFinderServices,
-	)
-
-	spec.SeedsFinderServices = seedsFinderServices
-
-	// RosterNodeBlockList
-	if len(status.RosterNodeBlockList) != 0 {
-		var rosterNodeBlockList []string
-
-		lib.DeepCopy(
-			&rosterNodeBlockList, &status.RosterNodeBlockList,
-		)
-
-		spec.RosterNodeBlockList = rosterNodeBlockList
-	}
-
-	return &spec, nil
 }

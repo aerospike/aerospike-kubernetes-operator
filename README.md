@@ -97,7 +97,7 @@ export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator
 export VERSION=2.5.0
 export IMG=docker.io/${IMAGE_TAG_BASE}-nightly:${VERSION}
 export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle-nightly:${VERSION}
-export CATALOG_IMG=docker.io/${IMAGE_TAG_BASE}-catalog-nightly:v$(VERSION)
+export CATALOG_IMG=docker.io/${IMAGE_TAG_BASE}-catalog-nightly:${VERSION}
 ```
 
 Create the bundle
@@ -171,7 +171,7 @@ spec:
 EOF
 ```
 
-- Targeting single namespace
+- Targeting multiple namespace
   Assuming you want the operator to target two other namespaces ns1 and ns2, create operator group with MultiNamespace install mode.
 ```shell
 ```shell

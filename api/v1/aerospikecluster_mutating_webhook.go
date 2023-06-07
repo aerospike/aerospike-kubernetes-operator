@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -108,6 +109,34 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Update rosterNodeBlockList
 	for idx, nodeID := range c.Spec.RosterNodeBlockList {
 		c.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
+	return nil
+}
+
+// SetDefaults applies defaults to the pod spec.
+func (p *AerospikePodSpec) SetDefaults() error {
+	var groupID int64
+
+	if p.InputDNSPolicy == nil {
+		if p.HostNetwork {
+			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		} else {
+			p.DNSPolicy = corev1.DNSClusterFirst
+		}
+	} else {
+		p.DNSPolicy = *p.InputDNSPolicy
+	}
+
+	if p.SecurityContext != nil {
+		if p.SecurityContext.FSGroup == nil {
+			p.SecurityContext.FSGroup = &groupID
+		}
+	} else {
+		SecurityContext := &corev1.PodSecurityContext{
+			FSGroup: &groupID,
+		}
+		p.SecurityContext = SecurityContext
 	}
 
 	return nil

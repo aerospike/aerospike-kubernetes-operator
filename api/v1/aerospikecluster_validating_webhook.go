@@ -308,6 +308,48 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 	return nil
 }
 
+func (c *AerospikeOperatorClientCertSpec) validate() error {
+	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
+		return fmt.Errorf(
+			"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not"+
+				" both: %+v",
+			c,
+		)
+	}
+
+	if c.SecretCertSource != nil {
+		if (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+			return fmt.Errorf(
+				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
+					" `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+
+		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertsSource != nil) {
+			return fmt.Errorf(
+				"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+	}
+
+	if c.CertPathInOperator != nil &&
+		(c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
+		return fmt.Errorf(
+			"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator"+
+				"`: %+v",
+			c.CertPathInOperator,
+		)
+	}
+
+	if !c.IsClientCertConfigured() {
+		return fmt.Errorf("operator client cert is not configured")
+	}
+
+	return nil
+}
+
 func validateClientCertSpec(
 	clientCertSpec *AerospikeOperatorClientCertSpec,
 	configSpec *AerospikeConfigSpec,
@@ -355,6 +397,11 @@ func validateClientCertSpec(
 	}
 
 	return nil
+}
+
+func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
+	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
+		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
 }
 
 func (c *AerospikeCluster) validateRackUpdate(

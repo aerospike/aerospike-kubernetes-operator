@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	v1 "k8s.io/api/core/v1"
+
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -474,4 +476,14 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	}
 
 	return false
+}
+
+func getContainerNames(containers []v1.Container) []string {
+	containerNames := make([]string, 0, len(containers))
+
+	for idx := range containers {
+		containerNames = append(containerNames, containers[idx].Name)
+	}
+
+	return containerNames
 }

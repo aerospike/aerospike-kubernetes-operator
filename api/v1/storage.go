@@ -125,6 +125,27 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 	}
 }
 
+// SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
+func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
+	if p.InputInitMethod == nil {
+		p.InitMethod = defaultPolicy.InitMethod
+	} else {
+		p.InitMethod = *p.InputInitMethod
+	}
+
+	if p.InputWipeMethod == nil {
+		p.WipeMethod = defaultPolicy.WipeMethod
+	} else {
+		p.WipeMethod = *p.InputWipeMethod
+	}
+
+	if p.InputCascadeDelete == nil {
+		p.CascadeDelete = defaultPolicy.CascadeDelete
+	} else {
+		p.CascadeDelete = *p.InputCascadeDelete
+	}
+}
+
 // GetPVs returns the PV volumes from the storage spec.
 func (s *AerospikeStorageSpec) GetPVs() (pVs []VolumeSpec) {
 	for idx := range s.Volumes {
@@ -377,16 +398,6 @@ func validateAttachment(
 	}
 
 	return nil
-}
-
-func getContainerNames(containers []v1.Container) []string {
-	containerNames := make([]string, 0, len(containers))
-
-	for idx := range containers {
-		containerNames = append(containerNames, containers[idx].Name)
-	}
-
-	return containerNames
 }
 
 // isSafeChange indicates if a change to a volume is safe to allow.
