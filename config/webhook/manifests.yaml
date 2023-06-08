@@ -11,14 +11,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-asdb-aerospike-com-v1beta1-aerospikecluster
+      path: /mutate-asdb-aerospike-com-v1-aerospikecluster
   failurePolicy: Fail
   name: maerospikecluster.kb.io
   rules:
   - apiGroups:
     - asdb.aerospike.com
     apiVersions:
-    - v1beta1
+    - v1
     operations:
     - CREATE
     - UPDATE
@@ -38,14 +38,14 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-asdb-aerospike-com-v1beta1-aerospikecluster
+      path: /validate-asdb-aerospike-com-v1-aerospikecluster
   failurePolicy: Fail
   name: vaerospikecluster.kb.io
   rules:
   - apiGroups:
     - asdb.aerospike.com
     apiVersions:
-    - v1beta1
+    - v1
     operations:
     - CREATE
     - UPDATE

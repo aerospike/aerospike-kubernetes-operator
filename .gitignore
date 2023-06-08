@@ -44,6 +44,8 @@ GTAGS
 # OLM Bundle
 bundle/
 bundle-*/
+catalog/
+catalog.*
 downloaded/
 upgrade-testing/
 bundle.Dockerfile

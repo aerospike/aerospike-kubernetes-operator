@@ -7,6 +7,7 @@ set -e
 
 # Use the input operator image for testing if provided
 BUNDLE_IMG=$1
+CATALOG_IMG=$2
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
@@ -35,6 +36,7 @@ if [ $IS_OPENSHIFT_CLUSTER == 0 ]; then
   fi
 fi
 
+# NOTE: Update targetNamespaces list in custom_operator_deployment.yaml OperatorGroup Kind as well if below namespaces list is updated
 namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace" || true
@@ -46,13 +48,14 @@ for namespace in $namespaces; do
   fi
 done
 
-operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",") --timeout=10m0s
+sed -i "s/CATALOG_IMG/${CATALOG_IMG}/" test/custom_operator_deployment.yaml
+kubectl apply -f test/custom_operator_deployment.yaml
 
 for namespace in $namespaces; do
-ATTEMPT=0
-until [ $ATTEMPT -eq 10 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
+  ATTEMPT=0
+  until [ $ATTEMPT -eq 15 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
     sleep 2
-    ((ATTEMPT+=1))
-done
+    ((ATTEMPT += 1))
+  done
 done
 sleep 10

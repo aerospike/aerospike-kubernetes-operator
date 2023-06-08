@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -51,7 +51,7 @@ func getServiceForPod(
 }
 
 func newAsConn(
-	_ logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
+	_ logr.Logger, aeroCluster *asdbv1.AerospikeCluster, pod *corev1.Pod,
 	k8sClient client.Client,
 ) (*deployment.ASConn, error) {
 	// Use the Kubernetes service port and IP since the test might run outside
@@ -60,8 +60,8 @@ func newAsConn(
 
 	tlsName := getServiceTLSName(aeroCluster)
 
-	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1beta1.AerospikeNetworkTypePod {
+	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
+	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1.AerospikeNetworkTypePod {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return nil, err
@@ -71,7 +71,7 @@ func newAsConn(
 			port = svc.Spec.Ports[0].NodePort
 		} else {
 			for _, portInfo := range svc.Spec.Ports {
-				if portInfo.Name == asdbv1beta1.ServiceTLSPortName {
+				if portInfo.Name == asdbv1.ServiceTLSPortName {
 					port = portInfo.NodePort
 					break
 				}
@@ -80,13 +80,13 @@ func newAsConn(
 	} else {
 		if tlsName == "" {
 			port = int32(
-				*asdbv1beta1.GetServicePort(
+				*asdbv1.GetServicePort(
 					aeroCluster.Spec.
 						AerospikeConfig,
 				),
 			)
 		} else {
-			_, portP := asdbv1beta1.GetServiceTLSNameAndPort(
+			_, portP := asdbv1.GetServiceTLSNameAndPort(
 				aeroCluster.Spec.
 					AerospikeConfig,
 			)
@@ -112,10 +112,10 @@ func newAsConn(
 
 func getEndpointIP(
 	pod *corev1.Pod, k8sClient client.Client,
-	networkType asdbv1beta1.AerospikeNetworkType,
+	networkType asdbv1.AerospikeNetworkType,
 ) (string, error) {
 	switch networkType {
-	case asdbv1beta1.AerospikeNetworkTypePod:
+	case asdbv1.AerospikeNetworkTypePod:
 		if pod.Status.PodIP == "" {
 			return "", fmt.Errorf(
 				"pod ip is not assigned yet for the pod %s", pod.Name,
@@ -123,7 +123,7 @@ func getEndpointIP(
 		}
 
 		return pod.Status.PodIP, nil
-	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
+	case asdbv1.AerospikeNetworkTypeHostInternal:
 		if pod.Status.HostIP == "" {
 			return "", fmt.Errorf(
 				"host ip is not assigned yet for the pod %s", pod.Name,
@@ -131,7 +131,7 @@ func getEndpointIP(
 		}
 
 		return pod.Status.HostIP, nil
-	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
+	case asdbv1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
 		err := k8sClient.Get(
 			goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
@@ -159,16 +159,16 @@ func getEndpointIP(
 			"failed to find %s address in the node %s for pod %s: nodes addresses are %v",
 			networkType, pod.Spec.NodeName, pod.Name, k8sNode.Status.Addresses,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeConfigured:
+	case asdbv1.AerospikeNetworkTypeConfigured:
 		// configured IP is a fake IP used for testing, therefor this can not be used to connect
 		return "", fmt.Errorf(
 			"can not use configured network type: %s", networkType,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
+	case asdbv1.AerospikeNetworkTypeCustomInterface:
 		return "", fmt.Errorf(
 			"%s not support yet", networkType,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
+	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return "", fmt.Errorf(
 			"unknown network type: %s", networkType,
 		)
@@ -177,12 +177,12 @@ func getEndpointIP(
 	return "", fmt.Errorf("unknown network type: %s", networkType)
 }
 
-func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
+func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
 	var host string
 
-	networkType := asdbv1beta1.AerospikeNetworkType(*defaultNetworkType)
+	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
 	switch networkType {
-	case asdbv1beta1.AerospikeNetworkTypePod:
+	case asdbv1.AerospikeNetworkTypePod:
 		if pod.PodIP == "" {
 			return nil, fmt.Errorf(
 				"pod ip is not defined in pod status yet: %+v", pod,
@@ -192,7 +192,7 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 		return &as.Host{
 			Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName,
 		}, nil
-	case asdbv1beta1.AerospikeNetworkTypeHostInternal:
+	case asdbv1.AerospikeNetworkTypeHostInternal:
 		if pod.HostInternalIP == "" {
 			return nil, fmt.Errorf(
 				"internal host ip is not defined in pod status yet: %+v", pod,
@@ -200,7 +200,7 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 		}
 
 		host = pod.HostInternalIP
-	case asdbv1beta1.AerospikeNetworkTypeHostExternal:
+	case asdbv1.AerospikeNetworkTypeHostExternal:
 		if pod.HostExternalIP == "" {
 			return nil, fmt.Errorf(
 				"external host ip is not defined in pod status yet: %+v", pod,
@@ -209,16 +209,16 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 
 		host = pod.HostExternalIP
 
-	case asdbv1beta1.AerospikeNetworkTypeConfigured:
+	case asdbv1.AerospikeNetworkTypeConfigured:
 		// configured IP is a fake IP used for testing, therefor this can not be used to connect
 		return nil, fmt.Errorf(
 			"can not use configured network type: %s", networkType,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeCustomInterface:
+	case asdbv1.AerospikeNetworkTypeCustomInterface:
 		return nil, fmt.Errorf(
 			"%s not support yet", networkType,
 		)
-	case asdbv1beta1.AerospikeNetworkTypeUnspecified:
+	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return nil, fmt.Errorf(
 			"unknown network type: %s", networkType,
 		)
@@ -232,7 +232,7 @@ func createHost(pod *asdbv1beta1.AerospikePodStatus) (*as.Host, error) {
 }
 
 func newHostConn(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster, pod *corev1.Pod,
+	log logr.Logger, aeroCluster *asdbv1.AerospikeCluster, pod *corev1.Pod,
 	k8sClient client.Client,
 ) (*deployment.HostConn, error) {
 	asConn, err := newAsConn(log, aeroCluster, pod, k8sClient)
@@ -246,7 +246,7 @@ func newHostConn(
 }
 
 func getPodList(
-	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client,
 ) (*corev1.PodList, error) {
 	podList := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -262,7 +262,7 @@ func getPodList(
 }
 
 func getSTSList(
-	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client,
 ) (*appsv1.StatefulSetList, error) {
 	stsList := &appsv1.StatefulSetList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
@@ -297,7 +297,7 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	}
 
 	for idx := range nodes.Items {
-		unqZones[nodes.Items[idx].Labels["failure-domain.beta.kubernetes.io/zone"]] = 1
+		unqZones[nodes.Items[idx].Labels[zoneKey]] = 1
 	}
 
 	zones := make([]string, 0, len(unqZones))
@@ -319,7 +319,7 @@ func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
 		return "", fmt.Errorf("node list empty: %v", nodes.Items)
 	}
 
-	return nodes.Items[0].Labels["failure-domain.beta.kubernetes.io/region"], nil
+	return nodes.Items[0].Labels[regionKey], nil
 }
 
 func getCloudProvider(
@@ -373,7 +373,7 @@ func determineByProviderID(node *corev1.Node) CloudProvider {
 }
 
 func newAllHostConn(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+	log logr.Logger, aeroCluster *asdbv1.AerospikeCluster,
 	k8sClient client.Client,
 ) ([]*deployment.HostConn, error) {
 	podList, err := getPodList(aeroCluster, k8sClient)
@@ -400,7 +400,7 @@ func newAllHostConn(
 }
 
 func getAeroClusterPVCList(
-	aeroCluster *asdbv1beta1.AerospikeCluster, k8sClient client.Client,
+	aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client,
 ) ([]corev1.PersistentVolumeClaim, error) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}

@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
@@ -25,7 +25,7 @@ const (
 	testClusterSize = 2
 )
 
-var aerospikeConfigWithSecurity = &asdbv1beta1.AerospikeConfigSpec{
+var aerospikeConfigWithSecurity = &asdbv1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
 		"security": map[string]interface{}{},
 		"namespaces": []interface{}{
@@ -39,7 +39,7 @@ var aerospikeConfigWithSecurity = &asdbv1beta1.AerospikeConfigSpec{
 	},
 }
 
-var aerospikeConfigWithSecurityWithQuota = &asdbv1beta1.AerospikeConfigSpec{
+var aerospikeConfigWithSecurityWithQuota = &asdbv1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
 		"security": map[string]interface{}{
 			"enable-quotas": true,
@@ -62,8 +62,8 @@ var _ = Describe(
 			"AccessControl", func() {
 				It(
 					"Try ValidAccessControl", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -78,7 +78,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "admin",
 									SecretName: "someSecret",
@@ -101,13 +101,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(valid).To(
 							BeTrue(), "Valid aerospike spec marked invalid",
@@ -120,8 +120,8 @@ var _ = Describe(
 
 				It(
 					"Try MissingRequiredUserRoles", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -131,7 +131,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -150,13 +150,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						// if valid || err == nil {
 						// 	Fail(fmt.Sprintf("InValid aerospike spec validated")
@@ -177,8 +177,8 @@ var _ = Describe(
 
 				It(
 					"Try InvalidUserRole", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -188,7 +188,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -208,13 +208,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -236,8 +236,8 @@ var _ = Describe(
 
 				It(
 					"Try DuplicateUser", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -247,7 +247,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -266,13 +266,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -298,8 +298,8 @@ var _ = Describe(
 
 				It(
 					"Try DuplicateUserRole", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -309,7 +309,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -321,13 +321,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -358,8 +358,8 @@ var _ = Describe(
 						}
 
 						for _, invalidSecretName := range invalidSecretNames {
-							accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-								Roles: []asdbv1beta1.AerospikeRoleSpec{
+							accessControl := asdbv1.AerospikeAccessControlSpec{
+								Roles: []asdbv1.AerospikeRoleSpec{
 									{
 										Name: "profiler",
 										Privileges: []string{
@@ -369,7 +369,7 @@ var _ = Describe(
 										},
 									},
 								},
-								Users: []asdbv1beta1.AerospikeUserSpec{
+								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:       "aerospike",
 										SecretName: "someSecret",
@@ -388,13 +388,13 @@ var _ = Describe(
 								},
 							}
 
-							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							clusterSpec := asdbv1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+							valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
@@ -429,8 +429,8 @@ var _ = Describe(
 						}
 
 						for _, invalidUserName := range invalidUserNames {
-							accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-								Roles: []asdbv1beta1.AerospikeRoleSpec{
+							accessControl := asdbv1.AerospikeAccessControlSpec{
+								Roles: []asdbv1.AerospikeRoleSpec{
 									{
 										Name: "profiler",
 										Privileges: []string{
@@ -440,7 +440,7 @@ var _ = Describe(
 										},
 									},
 								},
-								Users: []asdbv1beta1.AerospikeUserSpec{
+								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:       "aerospike",
 										SecretName: "someSecret",
@@ -459,13 +459,13 @@ var _ = Describe(
 								},
 							}
 
-							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							clusterSpec := asdbv1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+							valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
@@ -502,8 +502,8 @@ var _ = Describe(
 						}
 
 						for _, invalidRoleName := range invalidRoleNames {
-							accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-								Roles: []asdbv1beta1.AerospikeRoleSpec{
+							accessControl := asdbv1.AerospikeAccessControlSpec{
+								Roles: []asdbv1.AerospikeRoleSpec{
 									{
 										Name: invalidRoleName,
 										Privileges: []string{
@@ -513,7 +513,7 @@ var _ = Describe(
 										},
 									},
 								},
-								Users: []asdbv1beta1.AerospikeUserSpec{
+								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:       "aerospike",
 										SecretName: "someSecret",
@@ -532,13 +532,13 @@ var _ = Describe(
 								},
 							}
 
-							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							clusterSpec := asdbv1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+							valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
@@ -565,8 +565,8 @@ var _ = Describe(
 
 				It(
 					"Try DuplicateRole", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -584,7 +584,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -603,13 +603,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -635,8 +635,8 @@ var _ = Describe(
 
 				It(
 					"Try DuplicateRolePrivilege", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -647,7 +647,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -666,13 +666,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -698,8 +698,8 @@ var _ = Describe(
 
 				It(
 					"Try DuplicateRoleWhitelist", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -713,7 +713,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -732,13 +732,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -762,8 +762,8 @@ var _ = Describe(
 
 				It(
 					"Try InvalidWhitelist", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -776,7 +776,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -795,13 +795,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -825,8 +825,8 @@ var _ = Describe(
 
 				It(
 					"Try PredefinedRoleUpdate", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -848,7 +848,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -868,13 +868,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -903,8 +903,8 @@ var _ = Describe(
 						}
 
 						for _, invalidWhitelist := range invalidWhitelists {
-							accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-								Roles: []asdbv1beta1.AerospikeRoleSpec{
+							accessControl := asdbv1.AerospikeAccessControlSpec{
+								Roles: []asdbv1.AerospikeRoleSpec{
 									{
 										Name: "profiler",
 										Privileges: []string{
@@ -915,7 +915,7 @@ var _ = Describe(
 										Whitelist: []string{invalidWhitelist},
 									},
 								},
-								Users: []asdbv1beta1.AerospikeUserSpec{
+								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:       "aerospike",
 										SecretName: "someSecret",
@@ -934,13 +934,13 @@ var _ = Describe(
 								},
 							}
 
-							clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+							clusterSpec := asdbv1.AerospikeClusterSpec{
 								Image:                  latestImage,
 								AerospikeAccessControl: &accessControl,
 								AerospikeConfig:        aerospikeConfigWithSecurity,
 							}
 
-							valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+							valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
@@ -965,8 +965,8 @@ var _ = Describe(
 
 				It(
 					"Try MissingNamespacePrivilege", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -975,7 +975,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -994,13 +994,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -1021,8 +1021,8 @@ var _ = Describe(
 
 				It(
 					"Try MissingSetPrivilege", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -1031,7 +1031,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -1050,13 +1050,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -1077,8 +1077,8 @@ var _ = Describe(
 
 				It(
 					"Try InvalidPrivilege", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -1088,7 +1088,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -1107,13 +1107,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -1137,8 +1137,8 @@ var _ = Describe(
 
 				It(
 					"Try InvalidPost6Privilege in 5.x", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -1148,7 +1148,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -1167,13 +1167,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  "aerospike/aerospike-server-enterprise:5.7.0.8",
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -1197,8 +1197,8 @@ var _ = Describe(
 
 				It(
 					"Try valid Post 6.0 definedRoleUpdate", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -1221,7 +1221,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -1250,13 +1250,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  "aerospike/aerospike-server-enterprise:5.7.0.8",
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(valid).To(
@@ -1267,8 +1267,8 @@ var _ = Describe(
 
 				It(
 					"Try InvalidGlobalScopeOnlyPrivilege", func() {
-						accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-							Roles: []asdbv1beta1.AerospikeRoleSpec{
+						accessControl := asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
 								{
 									Name: "profiler",
 									Privileges: []string{
@@ -1279,7 +1279,7 @@ var _ = Describe(
 									},
 								},
 							},
-							Users: []asdbv1beta1.AerospikeUserSpec{
+							Users: []asdbv1.AerospikeUserSpec{
 								{
 									Name:       "aerospike",
 									SecretName: "someSecret",
@@ -1298,13 +1298,13 @@ var _ = Describe(
 							},
 						}
 
-						clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+						clusterSpec := asdbv1.AerospikeClusterSpec{
 							Image:                  latestImage,
 							AerospikeAccessControl: &accessControl,
 							AerospikeConfig:        aerospikeConfigWithSecurity,
 						}
 
-						valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
@@ -1340,8 +1340,8 @@ var _ = Describe(
 							"AccessControlValidation: should fail as Security is disabled but access control is specified",
 							func() {
 								// Just a smoke test to ensure validation hook works.
-								accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1363,7 +1363,7 @@ var _ = Describe(
 											},
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretName,
@@ -1426,8 +1426,8 @@ var _ = Describe(
 							"AccessControlValidation: should fail, missing user-admin required role",
 							func() {
 								// Just a smoke test to ensure validation hook works.
-								accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1449,7 +1449,7 @@ var _ = Describe(
 											},
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretName,
@@ -1506,8 +1506,8 @@ var _ = Describe(
 						)
 						It(
 							"Try ValidAccessControlQuota", func() {
-								accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1521,7 +1521,7 @@ var _ = Describe(
 											WriteQuota: 1,
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: "someSecret",
@@ -1541,13 +1541,13 @@ var _ = Describe(
 									},
 								}
 
-								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								clusterSpec := asdbv1.AerospikeClusterSpec{
 									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
 									AerospikeConfig:        aerospikeConfigWithSecurityWithQuota,
 								}
 
-								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+								valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(valid).To(
 									BeTrue(),
@@ -1558,8 +1558,8 @@ var _ = Describe(
 						It(
 							"Try Invalid AccessControlEnableQuotaMissing",
 							func() {
-								accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1573,7 +1573,7 @@ var _ = Describe(
 											WriteQuota: 1,
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: "someSecret",
@@ -1592,13 +1592,13 @@ var _ = Describe(
 										},
 									},
 								}
-								clusterSpec := asdbv1beta1.AerospikeClusterSpec{
+								clusterSpec := asdbv1.AerospikeClusterSpec{
 									Image:                  latestImage,
 									AerospikeAccessControl: &accessControl,
 									AerospikeConfig:        aerospikeConfigWithSecurity,
 								}
 
-								valid, err := asdbv1beta1.IsAerospikeAccessControlValid(&clusterSpec)
+								valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
 
 								if valid || err == nil {
 									Fail("InValid aerospike spec validated")
@@ -1629,7 +1629,7 @@ var _ = Describe(
 						It(
 							"SecurityUpdateReject: should fail, Cannot update cluster security config",
 							func() {
-								var accessControl *asdbv1beta1.AerospikeAccessControlSpec
+								var accessControl *asdbv1.AerospikeAccessControlSpec
 
 								clusterName := "ac-no-security"
 								clusterNamespacedName := getClusterNamespacedName(
@@ -1658,8 +1658,8 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								accessControl = &asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl = &asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1671,7 +1671,7 @@ var _ = Describe(
 											},
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretNameForUpdate,
@@ -1740,8 +1740,8 @@ var _ = Describe(
 
 								By("AccessControlCreate")
 
-								accessControl := asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1760,7 +1760,7 @@ var _ = Describe(
 											},
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretName,
@@ -1813,8 +1813,8 @@ var _ = Describe(
 
 								By("AccessControlUpdate")
 								// Apply updates to drop users, drop roles, update privileges for roles and update roles for users.
-								accessControl = asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1826,7 +1826,7 @@ var _ = Describe(
 											},
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretNameForUpdate,
@@ -1898,8 +1898,8 @@ var _ = Describe(
 
 								By("EnableQuota")
 
-								accessControl = asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1920,7 +1920,7 @@ var _ = Describe(
 											WriteQuota: 1,
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretName,
@@ -1976,8 +1976,8 @@ var _ = Describe(
 
 								By("QuotaParamsSpecifiedButFlagIsOff")
 
-								accessControl = asdbv1beta1.AerospikeAccessControlSpec{
-									Roles: []asdbv1beta1.AerospikeRoleSpec{
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
 										{
 											Name: "profiler",
 											Privileges: []string{
@@ -1998,7 +1998,7 @@ var _ = Describe(
 											WriteQuota: 1,
 										},
 									},
-									Users: []asdbv1beta1.AerospikeUserSpec{
+									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
 											SecretName: authSecretName,
@@ -2073,14 +2073,14 @@ var _ = Describe(
 )
 
 func testAccessControlReconcile(
-	desired *asdbv1beta1.AerospikeCluster, ctx goctx.Context,
+	desired *asdbv1.AerospikeCluster, ctx goctx.Context,
 ) error {
 	err := aerospikeClusterCreateUpdate(k8sClient, desired, ctx)
 	if err != nil {
 		return err
 	}
 
-	current := &asdbv1beta1.AerospikeCluster{}
+	current := &asdbv1.AerospikeCluster{}
 	err = k8sClient.Get(
 		ctx,
 		types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace},
@@ -2109,44 +2109,44 @@ func testAccessControlReconcile(
 
 func getAerospikeClusterSpecWithAccessControl(
 	clusterNamespacedName types.NamespacedName,
-	accessControl *asdbv1beta1.AerospikeAccessControlSpec,
+	accessControl *asdbv1.AerospikeAccessControlSpec,
 	aerospikeConfSpec *AerospikeConfSpec,
-) *asdbv1beta1.AerospikeCluster {
+) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
-	return &asdbv1beta1.AerospikeCluster{
+	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
 			Namespace: clusterNamespacedName.Namespace,
 		},
-		Spec: asdbv1beta1.AerospikeClusterSpec{
+		Spec: asdbv1.AerospikeClusterSpec{
 			Size: testClusterSize,
 			Image: fmt.Sprintf(
 				"%s:%s", baseImage, aerospikeConfSpec.getVersion(),
 			),
-			ValidationPolicy: &asdbv1beta1.ValidationPolicySpec{
+			ValidationPolicy: &asdbv1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,
 			},
 			AerospikeAccessControl: accessControl,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				Volumes: []asdbv1beta1.VolumeSpec{
+			Storage: asdbv1.AerospikeStorageSpec{
+				Volumes: []asdbv1.VolumeSpec{
 					{
 						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
+						Source: asdbv1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								SecretName: tlsSecretName,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/etc/aerospike/secret",
 						},
 					},
 				},
 			},
-			PodSpec: asdbv1beta1.AerospikePodSpec{
+			PodSpec: asdbv1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
-			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),
 			},
 		},
@@ -2155,7 +2155,7 @@ func getAerospikeClusterSpecWithAccessControl(
 
 // validateAccessControl validates that the new access control have been applied correctly.
 func validateAccessControl(
-	log logr.Logger, aeroCluster *asdbv1beta1.AerospikeCluster,
+	log logr.Logger, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	clientP, err := getClient(log, aeroCluster, k8sClient)
 	if err != nil {
@@ -2176,8 +2176,8 @@ func validateAccessControl(
 }
 
 func getRole(
-	roles []asdbv1beta1.AerospikeRoleSpec, roleName string,
-) *asdbv1beta1.AerospikeRoleSpec {
+	roles []asdbv1.AerospikeRoleSpec, roleName string,
+) *asdbv1.AerospikeRoleSpec {
 	for _, role := range roles {
 		if role.Name == roleName {
 			return &role
@@ -2188,8 +2188,8 @@ func getRole(
 }
 
 func getUser(
-	users []asdbv1beta1.AerospikeUserSpec, userName string,
-) *asdbv1beta1.AerospikeUserSpec {
+	users []asdbv1.AerospikeUserSpec, userName string,
+) *asdbv1.AerospikeUserSpec {
 	for _, user := range users {
 		if user.Name == userName {
 			return &user
@@ -2201,7 +2201,7 @@ func getUser(
 
 // validateRoles validates that the new roles have been applied correctly.
 func validateRoles(
-	clientP *as.Client, clusterSpec *asdbv1beta1.AerospikeClusterSpec,
+	clientP *as.Client, clusterSpec *asdbv1.AerospikeClusterSpec,
 ) error {
 	client := *clientP
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
@@ -2214,8 +2214,8 @@ func validateRoles(
 	var currentRoleNames []string
 
 	for _, role := range asRoles {
-		if _, isPredefined := asdbv1beta1.PredefinedRoles[role.Name]; !isPredefined {
-			if _, isPredefined = asdbv1beta1.Post6PredefinedRoles[role.Name]; !isPredefined {
+		if _, isPredefined := asdbv1.PredefinedRoles[role.Name]; !isPredefined {
+			if _, isPredefined = asdbv1.Post6PredefinedRoles[role.Name]; !isPredefined {
 				currentRoleNames = append(currentRoleNames, role.Name)
 			}
 		}
@@ -2249,10 +2249,10 @@ func validateRoles(
 
 	// Verify the privileges and whitelists are correct.
 	for _, asRole := range asRoles {
-		if _, isPredefined := asdbv1beta1.PredefinedRoles[asRole.Name]; isPredefined {
+		if _, isPredefined := asdbv1.PredefinedRoles[asRole.Name]; isPredefined {
 			continue
 		} else {
-			if _, isPredefined = asdbv1beta1.Post6PredefinedRoles[asRole.Name]; isPredefined {
+			if _, isPredefined = asdbv1.Post6PredefinedRoles[asRole.Name]; isPredefined {
 				continue
 			}
 		}
@@ -2319,7 +2319,7 @@ func validateRoles(
 
 // validateUsers validates that the new users have been applied correctly.
 func validateUsers(
-	clientP *as.Client, aeroCluster *asdbv1beta1.AerospikeCluster,
+	clientP *as.Client, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	clusterSpec := &aeroCluster.Spec
 	client := *clientP

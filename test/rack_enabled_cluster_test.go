@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -54,11 +54,11 @@ var _ = Describe(
 							clusterNamespacedName, 2,
 						)
 						// This needs to be changed based on setup. update zone, region, nodeName according to setup
-						racks := []asdbv1beta1.Rack{
+						racks := []asdbv1.Rack{
 							{ID: 1, Zone: zone1},
 							{ID: 2, Zone: zone2},
 						}
-						rackConf := asdbv1beta1.RackConfig{
+						rackConf := asdbv1.RackConfig{
 							Racks: racks,
 						}
 						aeroCluster.Spec.RackConfig = rackConf
@@ -175,12 +175,12 @@ var _ = Describe(
 							RequiredDuringSchedulingIgnoredDuringExecution: ns,
 						}
 
-						rackConf := asdbv1beta1.RackConfig{
-							Racks: []asdbv1beta1.Rack{
+						rackConf := asdbv1.RackConfig{
+							Racks: []asdbv1.Rack{
 								{
 									ID: 3,
-									InputPodSpec: &asdbv1beta1.RackPodSpec{
-										SchedulingPolicy: asdbv1beta1.SchedulingPolicy{
+									InputPodSpec: &asdbv1.RackPodSpec{
+										SchedulingPolicy: asdbv1.SchedulingPolicy{
 											Affinity: affinity,
 										},
 									},
