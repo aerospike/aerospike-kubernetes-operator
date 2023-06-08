@@ -377,25 +377,6 @@ type AerospikeAccessControlSpec struct {
 // +k8s:openapi-gen=true
 type AerospikeVolumeMethod string
 
-const (
-	// AerospikeVolumeMethodNone specifies the block volume should not be initialized.
-	AerospikeVolumeMethodNone AerospikeVolumeMethod = "none"
-
-	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
-	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
-
-	// AerospikeVolumeMethodBlkdiscard specifies the block volume should be zeroed using blkdiscard command.
-	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
-
-	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume
-	// should be initialized by deleting files.
-	AerospikeVolumeMethodDeleteFiles AerospikeVolumeMethod = "deleteFiles"
-
-	// AerospikeVolumeSingleCleanupThread specifies the single thread
-	// for disks cleanup in init container.
-	AerospikeVolumeSingleCleanupThread int = 1
-)
-
 // AerospikePersistentVolumePolicySpec contains policies to manage persistent volumes.
 type AerospikePersistentVolumePolicySpec struct {
 
@@ -633,32 +614,6 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 // AerospikeNetworkType specifies the type of network address to use.
 // +k8s:openapi-gen=true
 type AerospikeNetworkType string
-
-const (
-	// AerospikeNetworkTypeUnspecified implies using default access.
-	AerospikeNetworkTypeUnspecified AerospikeNetworkType = ""
-
-	// AerospikeNetworkTypePod specifies access using the PodIP and actual Aerospike service port.
-	AerospikeNetworkTypePod AerospikeNetworkType = "pod"
-
-	// AerospikeNetworkTypeHostInternal specifies access using the Kubernetes host's internal IP.
-	// If the cluster runs single pod per Kubernetes host,
-	// the access port will the actual aerospike port else it will be a mapped port.
-	AerospikeNetworkTypeHostInternal AerospikeNetworkType = "hostInternal"
-
-	// AerospikeNetworkTypeHostExternal specifies access using the Kubernetes host's external IP.
-	// If the cluster runs single pod per Kubernetes host,
-	// the access port will the actual aerospike port else it will be a mapped port.
-	AerospikeNetworkTypeHostExternal AerospikeNetworkType = "hostExternal"
-
-	// AerospikeNetworkTypeConfigured specifies access/alternateAccess using the user configuredIP.
-	// label "aerospike.com/configured-access-address" in k8s node will be used as `accessAddress`
-	// label "aerospike.com/configured-alternate-access-address" in k8s node will be used as `alternateAccessAddress`
-	AerospikeNetworkTypeConfigured AerospikeNetworkType = "configuredIP"
-
-	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
-	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
-)
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 type AerospikeNetworkPolicy struct {
