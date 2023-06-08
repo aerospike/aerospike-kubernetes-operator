@@ -13159,13 +13159,6 @@ spec:
                       image:
                         description: Image is the Aerospike image this pod is running.
                         type: string
-                      initializedVolumePaths:
-                        description: InitializedVolumePaths is deprecated version of
-                          InitializedVolumes.
-                        items:
-                          type: string
-                        nullable: true
-                        type: array
                       initializedVolumes:
                         description: InitializedVolumes is the list of volume names
                           that have already been initialized.
