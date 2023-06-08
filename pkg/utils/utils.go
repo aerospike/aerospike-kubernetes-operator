@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 )
 
 // ClusterNamespacedName return namespaced name
-func ClusterNamespacedName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
+func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
 	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
 }
 
@@ -72,14 +72,14 @@ func IsPVCTerminating(pvc *corev1.PersistentVolumeClaim) bool {
 
 // GetDesiredImage returns the desired image for the input containerName from the aeroCluster spec.
 func GetDesiredImage(
-	aeroCluster *asdbv1beta1.AerospikeCluster, containerName string,
+	aeroCluster *asdbv1.AerospikeCluster, containerName string,
 ) (string, error) {
-	if containerName == asdbv1beta1.AerospikeServerContainerName {
+	if containerName == asdbv1.AerospikeServerContainerName {
 		return aeroCluster.Spec.Image, nil
 	}
 
-	if containerName == asdbv1beta1.AerospikeInitContainerName {
-		return asdbv1beta1.GetAerospikeInitContainerImage(aeroCluster), nil
+	if containerName == asdbv1.AerospikeInitContainerName {
+		return asdbv1.GetAerospikeInitContainerImage(aeroCluster), nil
 	}
 
 	sidecars := aeroCluster.Spec.PodSpec.Sidecars
@@ -103,8 +103,8 @@ func GetDesiredImage(
 // belonging to the given AerospikeCluster CR name.
 func LabelsForAerospikeCluster(clName string) map[string]string {
 	return map[string]string{
-		asdbv1beta1.AerospikeAppLabel:            "aerospike-cluster",
-		asdbv1beta1.AerospikeCustomResourceLabel: clName,
+		asdbv1.AerospikeAppLabel:            "aerospike-cluster",
+		asdbv1.AerospikeCustomResourceLabel: clName,
 	}
 }
 
@@ -113,7 +113,7 @@ func LabelsForAerospikeClusterRack(
 	clName string, rackID int,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
-	labels[asdbv1beta1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
+	labels[asdbv1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
 
 	return labels
 }

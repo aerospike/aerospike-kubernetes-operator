@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
@@ -50,11 +50,11 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
-			racks := []asdbv1beta1.Rack{
+			racks := []asdbv1.Rack{
 				{ID: 1},
 				{ID: 2},
 			}
-			rackConf := asdbv1beta1.RackConfig{
+			rackConf := asdbv1.RackConfig{
 				Namespaces: []string{scNamespace},
 				Racks:      racks,
 			}
@@ -87,11 +87,11 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace
-			racks := []asdbv1beta1.Rack{
+			racks := []asdbv1.Rack{
 				{ID: 1},
 				{ID: 2},
 			}
-			rackConf := asdbv1beta1.RackConfig{
+			rackConf := asdbv1.RackConfig{
 				Namespaces: []string{scNamespace},
 				Racks:      racks,
 			}
@@ -168,12 +168,12 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			nonSCNamespace := "bar"
-			racks := []asdbv1beta1.Rack{
+			racks := []asdbv1.Rack{
 				{ID: 1},
 				{ID: 2},
 			}
 			rollingUpdateBatchSize := intstr.FromInt(2)
-			rackConf := asdbv1beta1.RackConfig{
+			rackConf := asdbv1.RackConfig{
 				Namespaces:             []string{scNamespace, nonSCNamespace},
 				Racks:                  racks,
 				RollingUpdateBatchSize: &rollingUpdateBatchSize,
@@ -249,7 +249,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
 
-			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
 						getSCNamespaceConfig(sc1Name, sc1Path),
@@ -262,7 +262,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc2Name, sc2Path))
 
-			racks[1].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+			racks[1].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
 						getSCNamespaceConfig(sc2Name, sc2Path),
@@ -285,7 +285,7 @@ var _ = Describe("SCMode", func() {
 
 			conf := getSCNamespaceConfig(sc1Name, sc1Path)
 			conf["replication-factor"] = 5
-			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{conf},
 				},
@@ -301,7 +301,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
-			racks[0].InputAerospikeConfig = &asdbv1beta1.AerospikeConfigSpec{
+			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{
 						map[string]interface{}{
@@ -452,7 +452,7 @@ func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
 	return deployment.ParseInfoIntoMap(cmdOutput, ":", "=")
 }
 
-func getSCAndNonSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
+func getSCAndNonSCAerospikeConfig() *asdbv1.AerospikeConfigSpec {
 	conf := getSCAerospikeConfig()
 	nonSCConf := map[string]interface{}{
 		"name":               "bar",
@@ -467,8 +467,8 @@ func getSCAndNonSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
 	return conf
 }
 
-func getSCAerospikeConfig() *asdbv1beta1.AerospikeConfigSpec {
-	return &asdbv1beta1.AerospikeConfigSpec{
+func getSCAerospikeConfig() *asdbv1.AerospikeConfigSpec {
+	return &asdbv1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
 			"service": map[string]interface{}{
 				"feature-key-file": "/etc/aerospike/secret/features.conf",

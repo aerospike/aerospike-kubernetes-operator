@@ -9,7 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -59,12 +59,12 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	)
 	// Add a volume of type empty dir to figure if pod restarted.
 	aeroCluster.Spec.Storage.Volumes = append(
-		aeroCluster.Spec.Storage.Volumes, asdbv1beta1.VolumeSpec{
+		aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
 			Name: "test-dir",
-			Source: asdbv1beta1.VolumeSource{
+			Source: asdbv1.VolumeSource{
 				EmptyDir: &v1.EmptyDirVolumeSource{},
 			},
-			Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{Path: tempTestDir},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: tempTestDir},
 		},
 	)
 	err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -72,7 +72,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 
 	defer func(
 		k8sClient client.Client, ctx goCtx.Context,
-		aeroCluster *asdbv1beta1.AerospikeCluster,
+		aeroCluster *asdbv1.AerospikeCluster,
 	) {
 		_ = deleteCluster(k8sClient, ctx, aeroCluster)
 	}(k8sClient, ctx, aeroCluster)
@@ -98,7 +98,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 
 // createMarkerFile create a file on ephemeral storage to detect pod restart.
 func createMarkerFile(
-	ctx goCtx.Context, aeroCluster *asdbv1beta1.AerospikeCluster,
+	ctx goCtx.Context, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -113,7 +113,7 @@ func createMarkerFile(
 		}
 
 		_, _, err := utils.Exec(
-			&podList.Items[podIndex], asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
+			&podList.Items[podIndex], asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
@@ -129,7 +129,7 @@ func createMarkerFile(
 
 // isMarkerPresent indicates if the test file is present on all pods.
 func isMarkerPresent(
-	ctx goCtx.Context, aeroCluster *asdbv1beta1.AerospikeCluster,
+	ctx goCtx.Context, aeroCluster *asdbv1.AerospikeCluster,
 ) (map[string]bool, error) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -146,7 +146,7 @@ func isMarkerPresent(
 		}
 
 		_, _, err := utils.Exec(
-			&podList.Items[podIndex], asdbv1beta1.AerospikeServerContainerName, cmd, k8sClientset,
+			&podList.Items[podIndex], asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 

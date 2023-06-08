@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var (
@@ -73,10 +73,10 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
-						racks := []asdbv1beta1.Rack{
+						racks := []asdbv1.Rack{
 							{ID: 1, Zone: zones[0]},
 						}
-						aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 							Racks: racks,
 						}
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
@@ -138,7 +138,7 @@ var _ = Describe(
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations["annotation-test-2"] = "test-2"
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels["label-test-2"] = "test-2"
 					err = addRack(
-						k8sClient, ctx, clusterNamespacedName, &asdbv1beta1.Rack{ID: 2, Zone: zone})
+						k8sClient, ctx, clusterNamespacedName, &asdbv1.Rack{ID: 2, Zone: zone})
 					Expect(err).ToNot(HaveOccurred())
 					By("Validating Added Annotations")
 					actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)
@@ -229,7 +229,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.InitContainers, initCont1,
 					)
 
-					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{
+					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{
 						{
 							ContainerName: "init-myservice",
 							Path:          "/workdir",
@@ -281,7 +281,7 @@ var _ = Describe(
 					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
-					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1beta1.VolumeAttachment{}
+					aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{}
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -476,7 +476,7 @@ var _ = Describe(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{
-							asdbv1beta1.AerospikeAppLabel: "test"}
+							asdbv1.AerospikeAppLabel: "test"}
 
 						err := k8sClient.Create(ctx, aeroCluster)
 						Expect(err).Should(HaveOccurred())
@@ -533,7 +533,7 @@ func getEnvVar(envVar string) string {
 }
 
 func validateImageRegistry(
-	k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1beta1.AerospikeCluster, registry string,
+	k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1.AerospikeCluster, registry string,
 ) {
 	stsList, err := getSTSList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())

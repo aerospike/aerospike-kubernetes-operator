@@ -14,14 +14,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 const fileDir = "config/samples"
 
 var _ = Describe("Sample files validation", func() {
 	var (
-		aeroCluster = &v1beta1.AerospikeCluster{}
+		aeroCluster = &asdbv1.AerospikeCluster{}
 		ctx         = context.TODO()
 		err         error
 	)
@@ -40,7 +40,7 @@ var _ = Describe("Sample files validation", func() {
 	Context("XDR sample files validation", func() {
 
 		It("XDR sample files validation", func() {
-			var destCluster *v1beta1.AerospikeCluster
+			var destCluster *asdbv1.AerospikeCluster
 
 			sourceClusterFile := filepath.Join(projectRoot, fileDir, "xdr_src_cluster_cr.yaml")
 			destClusterFile := filepath.Join(projectRoot, fileDir, "xdr_dst_cluster_cr.yaml")
@@ -157,7 +157,7 @@ func getSamplesFiles() ([]string, error) {
 	return files, nil
 }
 
-func deployClusterUsingFile(ctx context.Context, filePath string) (*v1beta1.AerospikeCluster, error) {
+func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.AerospikeCluster, error) {
 	cmd := exec.Command("kubectl", "create", "-f", filePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -171,7 +171,7 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*v1beta1.Aero
 		return nil, err
 	}
 
-	aeroCluster := &v1beta1.AerospikeCluster{}
+	aeroCluster := &asdbv1.AerospikeCluster{}
 
 	if err := yaml.Unmarshal(data, aeroCluster); err != nil {
 		return aeroCluster, err

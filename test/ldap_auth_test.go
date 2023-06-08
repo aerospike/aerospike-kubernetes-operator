@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe(
@@ -52,7 +52,7 @@ var _ = Describe(
 )
 
 func validateTransactions(
-	cluster *asdbv1beta1.AerospikeCluster,
+	cluster *asdbv1.AerospikeCluster,
 	ldapUser string, ldapPassword string,
 ) error {
 	client, err := getClientExternalAuth(
@@ -95,56 +95,56 @@ func validateTransactions(
 // configuration
 func getAerospikeClusterSpecWithLDAP(
 	clusterNamespacedName types.NamespacedName,
-) *asdbv1beta1.AerospikeCluster {
+) *asdbv1.AerospikeCluster {
 	cascadeDelete := true
 	networkConf := getNetworkTLSConfig()
 	operatorClientCertSpec := getOperatorCert()
 
-	return &asdbv1beta1.AerospikeCluster{
+	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
 			Namespace: clusterNamespacedName.Namespace,
 		},
-		Spec: asdbv1beta1.AerospikeClusterSpec{
+		Spec: asdbv1.AerospikeClusterSpec{
 			Size:  2,
 			Image: latestImage,
-			Storage: asdbv1beta1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+			Storage: asdbv1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				BlockVolumePolicy: asdbv1beta1.AerospikePersistentVolumePolicySpec{
+				BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 					InputCascadeDelete: &cascadeDelete,
 				},
-				Volumes: []asdbv1beta1.VolumeSpec{
+				Volumes: []asdbv1.VolumeSpec{
 					{
 						Name: "workdir",
-						Source: asdbv1beta1.VolumeSource{
-							PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
 								StorageClass: storageClass,
 								VolumeMode:   corev1.PersistentVolumeFilesystem,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/opt/aerospike",
 						},
 					},
 					{
 						Name: aerospikeConfigSecret,
-						Source: asdbv1beta1.VolumeSource{
+						Source: asdbv1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								SecretName: tlsSecretName,
 							},
 						},
-						Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 							Path: "/etc/aerospike/secret",
 						},
 					},
 				},
 			},
 
-			AerospikeAccessControl: &asdbv1beta1.AerospikeAccessControlSpec{
-				Users: []asdbv1beta1.AerospikeUserSpec{
+			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
+				Users: []asdbv1.AerospikeUserSpec{
 					{
 						Name:       "admin",
 						SecretName: authSecretName,
@@ -155,10 +155,10 @@ func getAerospikeClusterSpecWithLDAP(
 					},
 				},
 			},
-			PodSpec: asdbv1beta1.AerospikePodSpec{
+			PodSpec: asdbv1.AerospikePodSpec{
 				MultiPodPerHost: true,
 			},
-			AerospikeConfig: &asdbv1beta1.AerospikeConfigSpec{
+			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",

@@ -1,4 +1,4 @@
-package v1beta1
+package v1
 
 import (
 	"fmt"
@@ -122,6 +122,27 @@ func (s *AerospikeStorageSpec) SetDefaults() {
 		case s.Volumes[idx].Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
 			s.Volumes[idx].AerospikePersistentVolumePolicySpec.SetDefaults(&s.FileSystemVolumePolicy)
 		}
+	}
+}
+
+// SetDefaults applies default values to unset fields of the policy using corresponding fields from defaultPolicy
+func (p *AerospikePersistentVolumePolicySpec) SetDefaults(defaultPolicy *AerospikePersistentVolumePolicySpec) {
+	if p.InputInitMethod == nil {
+		p.InitMethod = defaultPolicy.InitMethod
+	} else {
+		p.InitMethod = *p.InputInitMethod
+	}
+
+	if p.InputWipeMethod == nil {
+		p.WipeMethod = defaultPolicy.WipeMethod
+	} else {
+		p.WipeMethod = *p.InputWipeMethod
+	}
+
+	if p.InputCascadeDelete == nil {
+		p.CascadeDelete = defaultPolicy.CascadeDelete
+	} else {
+		p.CascadeDelete = *p.InputCascadeDelete
 	}
 }
 
@@ -377,16 +398,6 @@ func validateAttachment(
 	}
 
 	return nil
-}
-
-func getContainerNames(containers []v1.Container) []string {
-	containerNames := make([]string, 0, len(containers))
-
-	for idx := range containers {
-		containerNames = append(containerNames, containers[idx].Name)
-	}
-
-	return containerNames
 }
 
 // isSafeChange indicates if a change to a volume is safe to allow.

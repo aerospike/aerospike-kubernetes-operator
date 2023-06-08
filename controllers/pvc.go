@@ -9,12 +9,12 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 func (r *SingleClusterReconciler) removePVCs(
-	storage *asdbv1beta1.AerospikeStorageSpec,
+	storage *asdbv1.AerospikeStorageSpec,
 	pvcItems []corev1.PersistentVolumeClaim,
 ) error {
 	deletedPVCs, err := r.removePVCsAsync(storage, pvcItems)
@@ -26,7 +26,7 @@ func (r *SingleClusterReconciler) removePVCs(
 }
 
 func (r *SingleClusterReconciler) removePVCsAsync(
-	storage *asdbv1beta1.AerospikeStorageSpec,
+	storage *asdbv1.AerospikeStorageSpec,
 	pvcItems []corev1.PersistentVolumeClaim,
 ) ([]corev1.PersistentVolumeClaim, error) {
 	var deletedPVCs []corev1.PersistentVolumeClaim
@@ -196,8 +196,8 @@ func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
 }
 
 func getPVCVolumeConfig(
-	storage *asdbv1beta1.AerospikeStorageSpec, pvcStorageVolName string,
-) *asdbv1beta1.VolumeSpec {
+	storage *asdbv1.AerospikeStorageSpec, pvcStorageVolName string,
+) *asdbv1.VolumeSpec {
 	volumes := storage.Volumes
 	for idx := range volumes {
 		v := &volumes[idx]

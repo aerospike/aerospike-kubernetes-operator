@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -30,7 +31,7 @@ import (
 )
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (c *AerospikeCluster) Default() admission.Response {
@@ -108,6 +109,34 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Update rosterNodeBlockList
 	for idx, nodeID := range c.Spec.RosterNodeBlockList {
 		c.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
+	return nil
+}
+
+// SetDefaults applies defaults to the pod spec.
+func (p *AerospikePodSpec) SetDefaults() error {
+	var groupID int64
+
+	if p.InputDNSPolicy == nil {
+		if p.HostNetwork {
+			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		} else {
+			p.DNSPolicy = corev1.DNSClusterFirst
+		}
+	} else {
+		p.DNSPolicy = *p.InputDNSPolicy
+	}
+
+	if p.SecurityContext != nil {
+		if p.SecurityContext.FSGroup == nil {
+			p.SecurityContext.FSGroup = &groupID
+		}
+	} else {
+		SecurityContext := &corev1.PodSecurityContext{
+			FSGroup: &groupID,
+		}
+		p.SecurityContext = SecurityContext
 	}
 
 	return nil

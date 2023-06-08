@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -32,7 +32,7 @@ import (
 type SingleClusterReconciler struct {
 	client.Client
 	Recorder    record.EventRecorder
-	aeroCluster *asdbv1beta1.AerospikeCluster
+	aeroCluster *asdbv1.AerospikeCluster
 	KubeClient  *kubernetes.Clientset
 	KubeConfig  *rest.Config
 	Scheme      *k8sRuntime.Scheme
@@ -168,7 +168,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, res.err
 	}
 
-	if asdbv1beta1.IsClusterSCEnabled(r.aeroCluster) {
+	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
 		if !r.IsStatusEmpty() {
 			if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 				return res.result, res.err
@@ -267,12 +267,12 @@ func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl() error {
-	version, err := asdbv1beta1.GetImageVersion(r.aeroCluster.Spec.Image)
+	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
 	}
 
-	enabled, err := asdbv1beta1.IsSecurityEnabled(
+	enabled, err := asdbv1.IsSecurityEnabled(
 		version, r.aeroCluster.Spec.AerospikeConfig,
 	)
 	if err != nil {
@@ -332,7 +332,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.Log.Info("Update status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
-	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
@@ -344,12 +344,12 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	// TODO: FIXME: Copy only required fields, StatusSpec may not have all the fields in Spec.
 	// DeepCopy at that location may create problem
 	// Deep copy merges so blank out the spec part of status before copying over.
-	// newAeroCluster.Status.AerospikeClusterStatusSpec = asdbv1beta1.AerospikeClusterStatusSpec{}
+	// newAeroCluster.Status.AerospikeClusterStatusSpec = asdbv1.AerospikeClusterStatusSpec{}
 	// if err := lib.DeepCopy(&newAeroCluster.Status.AerospikeClusterStatusSpec, &aeroCluster.Spec); err != nil {
 	// 	return err
 	// }
 
-	specToStatus, err := asdbv1beta1.CopySpecToStatus(&r.aeroCluster.Spec)
+	specToStatus, err := asdbv1.CopySpecToStatus(&r.aeroCluster.Spec)
 	if err != nil {
 		return err
 	}
@@ -376,7 +376,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 	r.Log.Info("Update access control status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
-	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
@@ -386,7 +386,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 	}
 
 	// AerospikeAccessControl
-	statusAerospikeAccessControl := &asdbv1beta1.AerospikeAccessControlSpec{}
+	statusAerospikeAccessControl := &asdbv1.AerospikeAccessControlSpec{}
 	lib.DeepCopy(
 		statusAerospikeAccessControl, r.aeroCluster.Spec.AerospikeAccessControl,
 	)
@@ -408,7 +408,7 @@ func (r *SingleClusterReconciler) createStatus() error {
 	r.Log.Info("Creating status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
-	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
@@ -418,7 +418,7 @@ func (r *SingleClusterReconciler) createStatus() error {
 	}
 
 	if newAeroCluster.Status.Pods == nil {
-		newAeroCluster.Status.Pods = map[string]asdbv1beta1.AerospikePodStatus{}
+		newAeroCluster.Status.Pods = map[string]asdbv1.AerospikePodStatus{}
 	}
 
 	if err := r.Client.Status().Update(
@@ -479,7 +479,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
 	return r.IsStatusEmpty(), nil
 }
 
-func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1beta1.AerospikeCluster) error {
+func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCluster) error {
 	oldAeroCluster := r.aeroCluster
 
 	oldJSON, err := json.Marshal(oldAeroCluster)

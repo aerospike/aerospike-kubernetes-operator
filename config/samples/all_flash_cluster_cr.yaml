@@ -4,7 +4,7 @@
 # mode. In privileged mode when using index on flash Aerospike server
 # tweaks the Kubernetes worker node's sysctls for Virtual Memory.
 
-apiVersion: asdb.aerospike.com/v1beta1
+apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
   name: aerocluster

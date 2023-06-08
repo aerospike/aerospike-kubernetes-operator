@@ -41,7 +41,7 @@ import (
 
 	// +kubebuilder:scaffold:imports
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -86,7 +86,7 @@ var _ = BeforeEach(func() {
 
 func deleteAllClusters(namespace string) {
 	ctx := goctx.TODO()
-	list := &asdbv1beta1.AerospikeClusterList{}
+	list := &asdbv1.AerospikeClusterList{}
 	listOps := &client.ListOptions{Namespace: namespace}
 
 	err := k8sClient.List(ctx, list, listOps)
@@ -154,7 +154,7 @@ var _ = BeforeSuite(
 		err = clientgoscheme.AddToScheme(scheme)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = asdbv1beta1.AddToScheme(scheme)
+		err = asdbv1.AddToScheme(scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = admissionv1.AddToScheme(scheme)
