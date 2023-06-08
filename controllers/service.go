@@ -12,11 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-func getSTSHeadLessSvcName(aeroCluster *asdbv1beta1.AerospikeCluster) string {
+func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 	return aeroCluster.Name
 }
 
@@ -113,12 +113,12 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 			if loadBalancer.TargetPort >= 1024 {
 				// if target port is specified in CR.
 				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
+			} else if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(
 				r.aeroCluster.Spec.AerospikeConfig,
 			); tlsName != "" && tlsPort != nil {
 				targetPort = int32(*tlsPort)
 			} else {
-				targetPort = int32(*asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
+				targetPort = int32(*asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
 			}
 
 			var port int32
@@ -259,24 +259,24 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 }
 
 func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
-	if svcPort := asdbv1beta1.GetServicePort(
+	if svcPort := asdbv1.GetServicePort(
 		r.aeroCluster.Spec.
 			AerospikeConfig,
 	); svcPort != nil {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{
-				Name: asdbv1beta1.ServicePortName,
+				Name: asdbv1.ServicePortName,
 				Port: int32(*svcPort),
 			},
 		)
 	}
 
-	if _, tlsPort := asdbv1beta1.GetServiceTLSNameAndPort(
+	if _, tlsPort := asdbv1.GetServiceTLSNameAndPort(
 		r.aeroCluster.Spec.AerospikeConfig,
 	); tlsPort != nil {
 		service.Spec.Ports = append(
 			service.Spec.Ports, corev1.ServicePort{
-				Name: asdbv1beta1.ServiceTLSPortName,
+				Name: asdbv1.ServiceTLSPortName,
 				Port: int32(*tlsPort),
 			},
 		)
@@ -298,14 +298,14 @@ func (r *SingleClusterReconciler) cleanupPodServices(rackState *RackState) error
 	return nil
 }
 
-func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1beta1.AerospikeNetworkPolicy) bool {
+func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
 	if !multiPodPerHost || networkPolicy == nil {
 		return false
 	}
 
 	networkSet := sets.NewString(
-		string(asdbv1beta1.AerospikeNetworkTypePod),
-		string(asdbv1beta1.AerospikeNetworkTypeCustomInterface),
+		string(asdbv1.AerospikeNetworkTypePod),
+		string(asdbv1.AerospikeNetworkTypeCustomInterface),
 		string(networkPolicy.AccessType),
 		string(networkPolicy.TLSAccessType),
 		string(networkPolicy.AlternateAccessType),

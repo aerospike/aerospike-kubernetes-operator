@@ -90,7 +90,7 @@ func init() {
 }
 
 func getNamespacedNameForSTSConfigMap(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackID int,
 ) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),

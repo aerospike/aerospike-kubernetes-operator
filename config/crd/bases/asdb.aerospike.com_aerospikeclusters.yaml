@@ -13190,7 +13190,7 @@ spec:
                       type: string
                     podTlsPort:
                       description: PodTLSPort is the port K8s internal Aerospike clients
-                        can connect to u
+                        can connect to using TLS.
                       type: integer
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
@@ -13198,8 +13198,8 @@ spec:
                       format: int32
                       type: integer
                     serviceTlsPort:
-                      description: ServicePort is the port Aerospike clients outside
-                        K8s can connect to u
+                      description: ServiceTLSPort is the port Aerospike clients outside
+                        K8s can connect to using TLS.
                       format: int32
                       type: integer
                   required:
