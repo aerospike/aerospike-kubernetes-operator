@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
@@ -193,7 +193,7 @@ func (r *SingleClusterReconciler) restartASDInPod(
 	// Quick restart attempt should not take significant time.
 	// Therefore, it's ok to block the operator on the quick restart attempt.
 	stdout, stderr, err := utils.Exec(
-		pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
+		pod, asdbv1.AerospikeServerContainerName, cmd, r.KubeClient,
 		r.KubeConfig,
 	)
 	if err != nil {
@@ -208,7 +208,7 @@ func (r *SingleClusterReconciler) restartASDInPod(
 			// Quick restart attempt should not take significant time.
 			// Therefore, it's ok to block the operator on the quick restart attempt.
 			stdout, stderr, err = utils.Exec(
-				pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient,
+				pod, asdbv1.AerospikeServerContainerName, cmd, r.KubeClient,
 				r.KubeConfig,
 			)
 
@@ -334,7 +334,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 			r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
-				"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1beta1.AerospikeRackIDLabel], pod.Name,
+				"[rack-%s] Restarted Pod %s", pod.Labels[asdbv1.AerospikeRackIDLabel], pod.Name,
 			)
 		}
 
@@ -663,7 +663,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 // getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability
 // checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1beta1.Rack) (
+func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) (
 	[]corev1.Pod, error,
 ) {
 	var ignorablePods []corev1.Pod
@@ -747,7 +747,7 @@ func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Po
 	return false
 }
 
-func getFQDNForPod(aeroCluster *asdbv1beta1.AerospikeCluster, host string) string {
+func getFQDNForPod(aeroCluster *asdbv1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)
 }
 
@@ -804,7 +804,7 @@ func getPodNames(pods []*corev1.Pod) []string {
 //nolint:gocyclo // for readability
 func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, podsToRestart []*corev1.Pod) error {
 	var (
-		rackStatus     asdbv1beta1.Rack
+		rackStatus     asdbv1.Rack
 		removedDevices []string
 		removedFiles   []string
 	)
@@ -1022,11 +1022,11 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 
 func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]string, error) {
 	var (
-		rackStatus asdbv1beta1.Rack
+		rackStatus asdbv1.Rack
 		volumes    []string
 	)
 
-	newAeroCluster := &asdbv1beta1.AerospikeCluster{}
+	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
@@ -1131,7 +1131,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(volumes []string, pod
 	return quickRestart
 }
 
-func getVolumeNameFromDevicePath(volumes []asdbv1beta1.VolumeSpec, s string) string {
+func getVolumeNameFromDevicePath(volumes []asdbv1.VolumeSpec, s string) string {
 	for idx := range volumes {
 		if volumes[idx].Aerospike.Path == s {
 			return volumes[idx].Name
@@ -1152,7 +1152,7 @@ func (r *SingleClusterReconciler) deleteFileStorage(pod *corev1.Pod, fileName st
 		"Deleting file", "file", fileName, "cmd", cmd, "podname", pod.Name,
 	)
 
-	stdout, stderr, err := utils.Exec(pod, asdbv1beta1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
+	stdout, stderr, err := utils.Exec(pod, asdbv1.AerospikeServerContainerName, cmd, r.KubeClient, r.KubeConfig)
 
 	if err != nil {
 		r.Log.V(1).Info(

@@ -1,4 +1,4 @@
-apiVersion: asdb.aerospike.com/v1beta1
+apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
   name: {{ template "aerospike-cluster.commonName" . }}

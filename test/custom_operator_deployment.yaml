@@ -1,0 +1,42 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: test
+spec:
+  displayName: Aerospike operator
+  publisher: Aerospike operator
+  sourceType: grpc
+  image: CATALOG_IMG
+  updateStrategy:
+    registryPoll:
+      interval: 10m
+
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: AerospikeCluster.v1beta1.asdb.aerospike.com
+  name: test-operator-group
+  namespace: test
+spec:
+  targetNamespaces:
+    - aerospike
+    - test
+    - test1
+    - test2
+  upgradeStrategy: Default
+
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: aerospike-kubernetes-operator
+  namespace: test
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: aerospike-kubernetes-operator
+  source: aerospike-kubernetes-operator
+  sourceNamespace: test

@@ -7,7 +7,7 @@
 # Assumes OpenLDAP installed from openldap/ folder. For details
 # see https://docs.aerospike.com/server/operations/configure/security/ldap
 
-apiVersion: asdb.aerospike.com/v1beta1
+apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
   name: aerocluster

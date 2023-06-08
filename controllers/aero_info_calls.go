@@ -19,7 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
@@ -55,7 +55,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
-		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1beta1.AerospikeRackIDLabel],
+		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
 	// Check for cluster stability
@@ -151,7 +151,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 ) error {
 	asConn := r.newAsConn(pod)
 
-	_, heartbeatTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	_, heartbeatTLSPort := asdbv1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatTLSPort != nil {
 		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
@@ -161,7 +161,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 		}
 	}
 
-	heartbeatPort := asdbv1beta1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
+	heartbeatPort := asdbv1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatPort != nil {
 		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
@@ -242,9 +242,9 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods, ignorablePods 
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn {
 	// Use pod IP and direct service port from within the operator for info calls.
-	tlsName, port := asdbv1beta1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	tlsName, port := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if tlsName == "" || port == nil {
-		port = asdbv1beta1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+		port = asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
 	}
 
 	host := pod.Status.PodIP
@@ -264,9 +264,9 @@ func hostID(hostName string, hostPort int) string {
 
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	policy *as.ClientPolicy,
-	asConfig *asdbv1beta1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod,
+	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod,
 ) reconcileResult {
-	migrateFillDelay, err := asdbv1beta1.GetMigrateFillDelay(asConfig)
+	migrateFillDelay, err := asdbv1.GetMigrateFillDelay(asConfig)
 	if err != nil {
 		reconcileError(err)
 	}
@@ -274,7 +274,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	var oldMigrateFillDelay int
 
 	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
-		oldMigrateFillDelay, err = asdbv1beta1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
+		oldMigrateFillDelay, err = asdbv1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
 		if err != nil {
 			reconcileError(err)
 		}
