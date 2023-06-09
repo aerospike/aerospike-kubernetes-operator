@@ -9,12 +9,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var (
-	loadBalancersPerCloud = map[CloudProvider]asdbv1beta1.LoadBalancerSpec{
+	loadBalancersPerCloud = map[CloudProvider]asdbv1.LoadBalancerSpec{
 		CloudProviderGCP: {
 			Annotations: map[string]string{
 				"cloud.google.com/load-balancer-type": "Internal",
@@ -120,7 +120,7 @@ var _ = Describe(
 	},
 )
 
-func createLoadBalancer() *asdbv1beta1.LoadBalancerSpec {
+func createLoadBalancer() *asdbv1.LoadBalancerSpec {
 	lb, validCloud := loadBalancersPerCloud[cloudProvider]
 	Expect(validCloud).To(
 		BeTrue(), fmt.Sprintf(
@@ -129,19 +129,19 @@ func createLoadBalancer() *asdbv1beta1.LoadBalancerSpec {
 		),
 	)
 
-	result := &asdbv1beta1.LoadBalancerSpec{}
+	result := &asdbv1.LoadBalancerSpec{}
 	lib.DeepCopy(result, lb)
 
 	return result
 }
 
-func loadBalancerName(aeroCluster *asdbv1beta1.AerospikeCluster) types.NamespacedName {
+func loadBalancerName(aeroCluster *asdbv1.AerospikeCluster) types.NamespacedName {
 	return types.NamespacedName{
 		Name: aeroCluster.Name + "-lb", Namespace: aeroCluster.Namespace,
 	}
 }
 
-func validateLoadBalancerExists(aeroCluster *asdbv1beta1.AerospikeCluster) {
+func validateLoadBalancerExists(aeroCluster *asdbv1.AerospikeCluster) {
 	service := &corev1.Service{}
 	err := k8sClient.Get(goctx.TODO(), loadBalancerName(aeroCluster), service)
 	Expect(err).ToNot(HaveOccurred())

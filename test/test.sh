@@ -11,10 +11,11 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "c:f:a:r:p:" opt
+while getopts "b:c:f:a:r:p:" opt
 do
    case "$opt" in
-      c ) CONTAINER="$OPTARG" ;;
+      b ) BUNDLE="$OPTARG" ;;
+      c ) CATALOG="$OPTARG" ;;
       f ) FOCUS="$OPTARG" ;;
       a ) ARGS="$OPTARG" ;;
       r ) REGISTRY="$OPTARG" ;;
@@ -40,7 +41,7 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh "$CONTAINER"
+"$DIR"/deploy-test-operator.sh "$BUNDLE" "$CATALOG"
 
 # Deploy LDAP
 echo "------------------------------"

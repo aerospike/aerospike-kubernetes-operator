@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -42,7 +42,7 @@ const (
 
 type initializeTemplateInput struct {
 	WorkDir          string
-	NetworkPolicy    asdbv1beta1.AerospikeNetworkPolicy
+	NetworkPolicy    asdbv1.AerospikeNetworkPolicy
 	FabricPort       int32
 	PodPort          int32
 	PodTLSPort       int32
@@ -89,7 +89,7 @@ func init() {
 }
 
 // createConfigMapData create configMap data
-func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1beta1.Rack) (
+func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	map[string]string, error,
 ) {
 	// Add config template
@@ -155,9 +155,9 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1beta1.Rack) (
 }
 
 func createPodSpecForRack(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rack *asdbv1beta1.Rack,
-) *asdbv1beta1.AerospikePodSpec {
-	rackFullPodSpec := asdbv1beta1.AerospikePodSpec{}
+	aeroCluster *asdbv1.AerospikeCluster, rack *asdbv1.Rack,
+) *asdbv1.AerospikePodSpec {
+	rackFullPodSpec := asdbv1.AerospikePodSpec{}
 	lib.DeepCopy(
 		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
 	)
@@ -169,7 +169,7 @@ func createPodSpecForRack(
 	return &rackFullPodSpec
 }
 
-func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1beta1.Rack) (
+func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	string, error,
 ) {
 	log := pkgLog.WithValues(
@@ -198,8 +198,8 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1beta1.Rack) (
 }
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1beta1.Rack) (map[string]string, error) {
-	workDir := asdbv1beta1.GetWorkDirectory(rack.AerospikeConfig)
+func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string]string, error) {
+	workDir := asdbv1.GetWorkDirectory(rack.AerospikeConfig)
 	volume := rack.Storage.GetVolumeForAerospikePath(workDir)
 
 	if volume != nil {
@@ -217,32 +217,32 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1beta1.Rack) (map[s
 	asConfig := r.aeroCluster.Spec.AerospikeConfig
 
 	var serviceTLSPortParam int32
-	if _, serviceTLSPort := asdbv1beta1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
+	if _, serviceTLSPort := asdbv1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
 		serviceTLSPortParam = int32(*serviceTLSPort)
 	}
 
 	var servicePortParam int32
-	if servicePort := asdbv1beta1.GetServicePort(asConfig); servicePort != nil {
+	if servicePort := asdbv1.GetServicePort(asConfig); servicePort != nil {
 		servicePortParam = int32(*servicePort)
 	}
 
 	var hbTLSPortParam int32
-	if _, hbTLSPort := asdbv1beta1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
+	if _, hbTLSPort := asdbv1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
 		hbTLSPortParam = int32(*hbTLSPort)
 	}
 
 	var hbPortParam int32
-	if hbPort := asdbv1beta1.GetHeartbeatPort(asConfig); hbPort != nil {
+	if hbPort := asdbv1.GetHeartbeatPort(asConfig); hbPort != nil {
 		hbPortParam = int32(*hbPort)
 	}
 
 	var fabricTLSPortParam int32
-	if _, fabricTLSPort := asdbv1beta1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
+	if _, fabricTLSPort := asdbv1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
 		fabricTLSPortParam = int32(*fabricTLSPort)
 	}
 
 	var fabricPortParam int32
-	if fabricPort := asdbv1beta1.GetFabricPort(asConfig); fabricPort != nil {
+	if fabricPort := asdbv1.GetFabricPort(asConfig); fabricPort != nil {
 		fabricPortParam = int32(*fabricPort)
 	}
 

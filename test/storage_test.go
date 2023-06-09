@@ -8,7 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 // * Test
@@ -90,7 +90,7 @@ var _ = Describe(
 									clusterNamespacedName, 2,
 								)
 
-								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1beta1.VolumeSource{}
+								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1.VolumeSource{}
 
 								err := deployCluster(
 									k8sClient, ctx, aeroCluster,
@@ -191,7 +191,7 @@ var _ = Describe(
 									clusterNamespacedName, 2,
 								)
 
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{
 									{
 										ContainerName: "invalid",
 										Path:          "/opt/aerospike",
@@ -212,8 +212,8 @@ var _ = Describe(
 									clusterNamespacedName, 2,
 								)
 
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{}
-								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1beta1.VolumeAttachment{}
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{}
+								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1.VolumeAttachment{}
 								aeroCluster.Spec.Storage.Volumes[0].Aerospike = nil
 
 								err := deployCluster(
@@ -230,14 +230,14 @@ var _ = Describe(
 									clusterNamespacedName, 2,
 								)
 								containerName := "container"
-								aeroCluster.Spec.PodSpec = asdbv1beta1.AerospikePodSpec{
+								aeroCluster.Spec.PodSpec = asdbv1.AerospikePodSpec{
 									Sidecars: []v1.Container{
 										{
 											Name: containerName,
 										},
 									},
 								}
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{
 									{
 										ContainerName: containerName,
 										Path:          "/opt/aerospike",
@@ -262,20 +262,20 @@ var _ = Describe(
 									clusterNamespacedName, 2,
 								)
 								containerName := "container"
-								aeroCluster.Spec.PodSpec = asdbv1beta1.AerospikePodSpec{
+								aeroCluster.Spec.PodSpec = asdbv1.AerospikePodSpec{
 									Sidecars: []v1.Container{
 										{
 											Name: containerName,
 										},
 									},
 								}
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{
 									{
 										ContainerName: containerName,
 										Path:          "/opt/aerospike",
 									},
 								}
-								aeroCluster.Spec.Storage.Volumes[1].Sidecars = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[1].Sidecars = []asdbv1.VolumeAttachment{
 									{
 										ContainerName: containerName,
 										Path:          "/opt/aerospike",
@@ -294,9 +294,9 @@ var _ = Describe(
 								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{
 									{
-										ContainerName: asdbv1beta1.AerospikeServerContainerName,
+										ContainerName: asdbv1.AerospikeServerContainerName,
 										Path:          "/opt/aerospike/newpath",
 									},
 								}
@@ -314,9 +314,9 @@ var _ = Describe(
 								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
-								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1beta1.VolumeAttachment{
+								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1.VolumeAttachment{
 									{
-										ContainerName: asdbv1beta1.AerospikeInitContainerName,
+										ContainerName: asdbv1.AerospikeInitContainerName,
 										Path:          "/opt/aerospike/newpath",
 									},
 								}
@@ -367,16 +367,16 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								volume := asdbv1beta1.VolumeSpec{
+								volume := asdbv1.VolumeSpec{
 									Name: "newvolume",
-									Source: asdbv1beta1.VolumeSource{
-										PersistentVolume: &asdbv1beta1.PersistentVolumeSpec{
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
 											Size:         resource.MustParse("1Gi"),
 											StorageClass: storageClass,
 											VolumeMode:   v1.PersistentVolumeFilesystem,
 										},
 									},
-									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/newvolume",
 									},
 								}
@@ -395,7 +395,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster.Spec.Storage.Volumes = []asdbv1beta1.VolumeSpec{}
+								aeroCluster.Spec.Storage.Volumes = []asdbv1.VolumeSpec{}
 
 								err = k8sClient.Update(ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
@@ -410,12 +410,12 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								volume := asdbv1beta1.VolumeSpec{
+								volume := asdbv1.VolumeSpec{
 									Name: "newvolume",
-									Source: asdbv1beta1.VolumeSource{
+									Source: asdbv1.VolumeSource{
 										EmptyDir: &v1.EmptyDirVolumeSource{},
 									},
-									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/newvolume",
 									},
 								}
@@ -453,7 +453,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1beta1.VolumeSource{
+								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1.VolumeSource{
 									EmptyDir: &v1.EmptyDirVolumeSource{},
 								}
 
@@ -484,12 +484,12 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								volume := asdbv1beta1.VolumeSpec{
+								volume := asdbv1.VolumeSpec{
 									Name: "newvolume",
-									Source: asdbv1beta1.VolumeSource{
+									Source: asdbv1.VolumeSource{
 										EmptyDir: &v1.EmptyDirVolumeSource{},
 									},
-									Aerospike: &asdbv1beta1.AerospikeServerVolumeAttachment{
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/newvolume",
 									},
 								}
@@ -507,7 +507,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								volumes := aeroCluster.Spec.Storage.Volumes
-								aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1beta1.VolumeSource{
+								aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1.VolumeSource{
 									Secret: &v1.SecretVolumeSource{
 										SecretName: authSecretName,
 									},
@@ -551,7 +551,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								va := asdbv1beta1.VolumeAttachment{
+								va := asdbv1.VolumeAttachment{
 									ContainerName: containerName,
 									Path:          "/newpath",
 								}
@@ -578,7 +578,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1beta1.VolumeAttachment{}
+								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{}
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 							},

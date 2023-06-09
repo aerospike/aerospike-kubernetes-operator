@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -240,14 +240,14 @@ func (r *SingleClusterReconciler) createRack(rackState *RackState) (
 }
 
 func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
-	[]asdbv1beta1.Rack, error,
+	[]asdbv1.Rack, error,
 ) {
 	oldRacks, err := r.getCurrentRackList()
 	if err != nil {
 		return nil, err
 	}
 
-	var toDelete []asdbv1beta1.Rack
+	var toDelete []asdbv1.Rack
 
 	for oldRackIdx := range oldRacks {
 		var rackFound bool
@@ -268,7 +268,7 @@ func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
 }
 
 func (r *SingleClusterReconciler) deleteRacks(
-	racksToDelete []asdbv1beta1.Rack, ignorablePods []corev1.Pod,
+	racksToDelete []asdbv1.Rack, ignorablePods []corev1.Pod,
 ) reconcileResult {
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
@@ -1032,13 +1032,13 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		}
 
 		// Check for Added/Updated volumeAttachments
-		var containerAttachments []asdbv1beta1.VolumeAttachment
+		var containerAttachments []asdbv1.VolumeAttachment
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 		if volume.Aerospike != nil {
 			containerAttachments = append(
-				containerAttachments, asdbv1beta1.VolumeAttachment{
-					ContainerName: asdbv1beta1.AerospikeServerContainerName,
+				containerAttachments, asdbv1.VolumeAttachment{
+					ContainerName: asdbv1.AerospikeServerContainerName,
 					Path:          volume.Aerospike.Path,
 				},
 			)
@@ -1061,10 +1061,10 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 
 	// Check for removed volumeAttachments
 	allConfiguredInitContainers := []string{
-		asdbv1beta1.
+		asdbv1.
 			AerospikeInitContainerName,
 	}
-	allConfiguredContainers := []string{asdbv1beta1.AerospikeServerContainerName}
+	allConfiguredContainers := []string{asdbv1.AerospikeServerContainerName}
 
 	for idx := range r.aeroCluster.Spec.PodSpec.Sidecars {
 		allConfiguredContainers = append(allConfiguredContainers, r.aeroCluster.Spec.PodSpec.Sidecars[idx].Name)
@@ -1097,7 +1097,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	return false
 }
 
-func (r *SingleClusterReconciler) getRackStatusVolumes(rackState *RackState) []asdbv1beta1.VolumeSpec {
+func (r *SingleClusterReconciler) getRackStatusVolumes(rackState *RackState) []asdbv1.VolumeSpec {
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
 		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
 		if rack.ID == rackState.Rack.ID {
@@ -1108,7 +1108,7 @@ func (r *SingleClusterReconciler) getRackStatusVolumes(rackState *RackState) []a
 	return nil
 }
 
-func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1beta1.VolumeSpec, pod *corev1.Pod) bool {
+func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1.VolumeSpec, pod *corev1.Pod) bool {
 	podVolume := getPodVolume(pod, volume.Name)
 	if podVolume == nil {
 		// Volume not found in pod.volumes. This is newly added volume.
@@ -1120,7 +1120,7 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1bet
 		return true
 	}
 
-	var volumeCopy asdbv1beta1.VolumeSpec
+	var volumeCopy asdbv1.VolumeSpec
 
 	lib.DeepCopy(&volumeCopy, volume)
 
@@ -1163,7 +1163,7 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1bet
 }
 
 func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
-	volumeName string, volumeAttachments []asdbv1beta1.VolumeAttachment,
+	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
 	podContainers []corev1.Container,
 ) bool {
 	for _, attachment := range volumeAttachments {
@@ -1227,15 +1227,15 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 }
 
 func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
-	volumes []asdbv1beta1.VolumeSpec,
-	rackStatusVolumes []asdbv1beta1.VolumeSpec,
+	volumes []asdbv1.VolumeSpec,
+	rackStatusVolumes []asdbv1.VolumeSpec,
 	configuredContainers []string, podContainers []corev1.Container,
 	isInitContainers bool,
 ) bool {
 	// TODO: Deal with injected volumes later.
 	for idx := range podContainers {
 		container := &podContainers[idx]
-		if isInitContainers && container.Name == asdbv1beta1.AerospikeInitContainerName {
+		if isInitContainers && container.Name == asdbv1.AerospikeInitContainerName {
 			// InitContainer has all the volumes mounted, there is no specific entry in storage for initContainer
 			continue
 		}
@@ -1303,7 +1303,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 }
 
 func (r *SingleClusterReconciler) isContainerVolumeInStorage(
-	volumes []asdbv1beta1.VolumeSpec, containerVolumeName string,
+	volumes []asdbv1.VolumeSpec, containerVolumeName string,
 	containerName string, isInitContainers bool,
 ) bool {
 	volume := getStorageVolume(volumes, containerVolumeName)
@@ -1324,7 +1324,7 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorage(
 			return false
 		}
 	} else {
-		if containerName == asdbv1beta1.AerospikeServerContainerName {
+		if containerName == asdbv1.AerospikeServerContainerName {
 			if volume.Aerospike == nil {
 				return false
 			}
@@ -1341,7 +1341,7 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorage(
 }
 
 func (r *SingleClusterReconciler) isContainerVolumeInStorageStatus(
-	volumes []asdbv1beta1.VolumeSpec, containerVolumeName string,
+	volumes []asdbv1.VolumeSpec, containerVolumeName string,
 ) bool {
 	volume := getStorageVolume(volumes, containerVolumeName)
 	if volume == nil {
@@ -1405,9 +1405,9 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
 }
 
 func (r *SingleClusterReconciler) getCurrentRackList() (
-	[]asdbv1beta1.Rack, error,
+	[]asdbv1.Rack, error,
 ) {
-	var rackList []asdbv1beta1.Rack
+	var rackList []asdbv1.Rack
 	rackList = append(rackList, r.aeroCluster.Status.RackConfig.Racks...)
 
 	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack
@@ -1436,7 +1436,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 		if !found {
 			// Create a dummy rack config using globals.
 			// TODO: Refactor and reuse code in mutate setting.
-			dummyRack := asdbv1beta1.Rack{
+			dummyRack := asdbv1.Rack{
 				ID: *rackID, Storage: r.aeroCluster.Spec.Storage,
 				AerospikeConfig: *r.aeroCluster.Spec.AerospikeConfig,
 			}
@@ -1449,7 +1449,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 }
 
 func isContainerNameInStorageVolumeAttachments(
-	containerName string, mounts []asdbv1beta1.VolumeAttachment,
+	containerName string, mounts []asdbv1.VolumeAttachment,
 ) bool {
 	for _, mount := range mounts {
 		if mount.ContainerName == containerName {
@@ -1478,7 +1478,7 @@ func splitRacks(nodes, racks int) []int {
 	return topology
 }
 
-func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := splitRacks(
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
@@ -1554,8 +1554,8 @@ func getPodVolume(pod *corev1.Pod, name string) *corev1.Volume {
 }
 
 func getStorageVolume(
-	volumes []asdbv1beta1.VolumeSpec, name string,
-) *asdbv1beta1.VolumeSpec {
+	volumes []asdbv1.VolumeSpec, name string,
+) *asdbv1.VolumeSpec {
 	for idx := range volumes {
 		if name == volumes[idx].Name {
 			return &volumes[idx]
