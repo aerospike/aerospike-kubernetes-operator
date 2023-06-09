@@ -91,6 +91,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			if res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods); !res.isSuccess {
 				return res
 			}
+
+			r.Log.Info("Upgraded or rolling restarted rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
 		}
 	}
 
