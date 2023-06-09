@@ -11,7 +11,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -252,18 +251,6 @@ func (r *SingleClusterReconciler) restartPods(
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
-
-		// Create services for all pods if network policy is changed and rely on nodePort service.
-		// Check podServiceNeeded condition for both status and spec network policy
-		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
-			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-			if err := r.createPodService(
-				pod.Name, r.aeroCluster.Namespace,
-			); err != nil && errors.IsAlreadyExists(err) {
-				return reconcileError(err)
-			}
-		}
-
 		// Check if this pod needs restart
 		restartType := restartTypeMap[pod.Name]
 
