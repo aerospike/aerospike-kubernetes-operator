@@ -306,11 +306,7 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 	}
 
 	// escape LDAP configuration
-	if err := escapeLDAPConfiguration(configSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return escapeLDAPConfiguration(configSpec)
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
@@ -560,14 +556,10 @@ func setDefaultNetworkConf(
 		networkConf["fabric"] = map[string]interface{}{}
 	}
 
-	if err := addOperatorClientNameIfNeeded(
+	return addOperatorClientNameIfNeeded(
 		asLog, serviceConf, configSpec,
 		clientCertSpec,
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 func addOperatorClientNameIfNeeded(
