@@ -48,7 +48,7 @@ for namespace in $namespaces; do
   fi
 done
 
-sed -i "s/CATALOG_IMG/${CATALOG_IMG}/" test/custom_operator_deployment.yaml
+sed -i "s@CATALOG_IMG@${CATALOG_IMG}@g" test/custom_operator_deployment.yaml
 kubectl apply -f test/custom_operator_deployment.yaml
 
 for namespace in $namespaces; do
