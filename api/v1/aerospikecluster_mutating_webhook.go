@@ -555,14 +555,10 @@ func setDefaultNetworkConf(
 		networkConf["fabric"] = map[string]interface{}{}
 	}
 
-	if err := addOperatorClientNameIfNeeded(
+	return addOperatorClientNameIfNeeded(
 		asLog, serviceConf, configSpec,
 		clientCertSpec,
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 func addOperatorClientNameIfNeeded(

@@ -1304,23 +1304,18 @@ func aerospikeClusterCreateUpdateWithTO(
 	ctx goctx.Context, retryInterval, timeout time.Duration,
 ) error {
 	current := &asdbv1.AerospikeCluster{}
-	err := k8sClient.Get(
+	if err := k8sClient.Get(
 		ctx,
 		types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace},
 		current,
-	)
-
-	if err != nil {
+	); err != nil {
 		// Deploy the cluster.
 		// t.Logf("Deploying cluster at %v", time.Now().Format(time.RFC850))
-		if deployErr := deployClusterWithTO(
+		return deployClusterWithTO(
 			k8sClient, ctx, desired, retryInterval, timeout,
-		); deployErr != nil {
-			return deployErr
-		}
-
-		return nil
+		)
 	}
+
 	// Apply the update.
 	if desired.Spec.AerospikeAccessControl != nil {
 		current.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{}
@@ -1334,8 +1329,7 @@ func aerospikeClusterCreateUpdateWithTO(
 		&desired.Spec.AerospikeConfig.Value,
 	)
 
-	err = k8sClient.Update(ctx, current)
-	if err != nil {
+	if err := k8sClient.Update(ctx, current); err != nil {
 		return err
 	}
 

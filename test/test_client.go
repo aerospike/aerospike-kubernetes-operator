@@ -206,15 +206,14 @@ func getClientPolicy(
 			// InsecureSkipVerify: true,
 		}
 
-		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
-			// This is possible when tls-authenticate-client = false
-			// r.Log.Info("Operator's client cert is not configured. Skip using client certs.", "clientCertSpec", clientCertSpec)
-		} else if cert, err := getClientCertificate(
-			clientCertSpec, aeroCluster.Namespace, k8sClient,
-		); err == nil {
-			tlsConf.Certificates = append(tlsConf.Certificates, *cert)
-		} else {
-			logrus.Error(err, "Failed to get client certificate. Using basic clientPolicy")
+		if clientCertSpec != nil && clientCertSpec.IsClientCertConfigured() {
+			if cert, err := getClientCertificate(
+				clientCertSpec, aeroCluster.Namespace, k8sClient,
+			); err == nil {
+				tlsConf.Certificates = append(tlsConf.Certificates, *cert)
+			} else {
+				logrus.Error(err, "Failed to get client certificate. Using basic clientPolicy")
+			}
 		}
 
 		policy.TlsConfig = &tlsConf

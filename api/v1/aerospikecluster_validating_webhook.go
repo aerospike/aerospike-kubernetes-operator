@@ -135,11 +135,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	// Validate RackConfig update
-	if err := c.validateRackUpdate(aslog, old); err != nil {
-		return err
-	}
-
-	return nil
+	return c.validateRackUpdate(aslog, old)
 }
 
 func (c *AerospikeCluster) validate(aslog logr.Logger) error {
@@ -267,11 +263,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	if err := c.validateSCNamespaces(); err != nil {
-		return err
-	}
-
-	return nil
+	return c.validateSCNamespaces()
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
@@ -800,11 +792,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		)
 	}
 
-	if err := validateLoggingConf(loggingConfList); err != nil {
-		return err
-	}
-
-	return nil
+	return validateLoggingConf(loggingConfList)
 }
 
 func validateLoggingConf(loggingConfList []interface{}) error {
@@ -1405,11 +1393,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus); err != nil {
-		return err
-	}
-
-	return nil
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
 }
 
 func validateNetworkConnectionUpdate(
