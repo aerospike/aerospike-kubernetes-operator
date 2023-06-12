@@ -118,11 +118,7 @@ func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
 		return err
 	}
 
-	if err := createClusterRBAC(k8sClient, ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return createClusterRBAC(k8sClient, ctx)
 }
 
 func createClusterPreReq(
@@ -148,13 +144,10 @@ func createClusterPreReq(
 
 	// Create authSecret
 	pass := "admin123"
-	if err := createAuthSecret(
-		k8sClient, ctx, namespace, labels, authSecretName, pass,
-	); err != nil {
-		return err
-	}
 
-	return nil
+	return createAuthSecret(
+		k8sClient, ctx, namespace, labels, authSecretName, pass,
+	)
 }
 
 func createCacertSecret(
