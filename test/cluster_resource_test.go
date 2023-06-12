@@ -118,7 +118,8 @@ func clusterRecoveryTest(ctx goctx.Context) {
 			},
 			)
 
-			It("UpdateClusterWithResource: should recover failed pods first after reverting back to schedulable resources", func() {
+			It("UpdateClusterWithResource: should recover failed pods first after reverting back"+
+				" to schedulable resources", func() {
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
