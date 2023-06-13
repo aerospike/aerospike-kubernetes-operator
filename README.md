@@ -171,7 +171,7 @@ spec:
 EOF
 ```
 
-- Targeting multiple namespace
+- Targeting multiple namespaces
   Assuming you want the operator to target two other namespaces ns1 and ns2, create operator group with MultiNamespace install mode.
 ```shell
 ```shell
