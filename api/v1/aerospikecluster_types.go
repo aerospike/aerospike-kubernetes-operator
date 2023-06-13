@@ -802,11 +802,6 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// if they are reused in any namespace.
 	DirtyVolumes []string `json:"dirtyVolumes,omitempty"`
 
-	// InitializedVolumePaths is deprecated version of InitializedVolumes.
-	// +optional
-	// +nullable
-	InitializedVolumePaths []string `json:"initializedVolumePaths,omitempty"`
-
 	// AerospikeConfigHash is ripemd160 hash of aerospikeConfig used by this pod
 	AerospikeConfigHash string `json:"aerospikeConfigHash"`
 
