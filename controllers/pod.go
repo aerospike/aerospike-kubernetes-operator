@@ -345,16 +345,6 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func getRearrangedFailedAndActivePods(pods []*corev1.Pod) []*corev1.Pod {
-	var rearrangedPods []*corev1.Pod
-
-	failedPods, activePods := getFailedAndActivePods(pods)
-	rearrangedPods = append(rearrangedPods, failedPods...)
-	rearrangedPods = append(rearrangedPods, activePods...)
-
-	return rearrangedPods
-}
-
 func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
 	for idx := range pods {
 		pod := pods[idx]

@@ -669,6 +669,13 @@ func updateCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
+	return updateClusterWithTO(k8sClient, ctx, aeroCluster, getTimeout(aeroCluster.Spec.Size))
+}
+
+func updateClusterWithTO(
+	k8sClient client.Client, ctx goctx.Context,
+	aeroCluster *asdbv1.AerospikeCluster, timeout time.Duration,
+) error {
 	err := k8sClient.Update(ctx, aeroCluster)
 	if err != nil {
 		return err
@@ -676,7 +683,7 @@ func updateCluster(
 
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
+		timeout,
 	)
 }
 
