@@ -2251,10 +2251,10 @@ func validateRoles(
 	for _, asRole := range asRoles {
 		if _, isPredefined := asdbv1.PredefinedRoles[asRole.Name]; isPredefined {
 			continue
-		} else {
-			if _, isPredefined = asdbv1.Post6PredefinedRoles[asRole.Name]; isPredefined {
-				continue
-			}
+		}
+
+		if _, isPredefined := asdbv1.Post6PredefinedRoles[asRole.Name]; isPredefined {
+			continue
 		}
 
 		expectedRoleSpec := *getRole(accessControl.Roles, asRole.Name)
