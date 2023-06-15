@@ -515,7 +515,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Check podServiceNeeded condition for both status and spec network policy
 	if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		if err = r.cleanupPodServices(rackState); err != nil {
+		if err := r.cleanupPodServices(rackState); err != nil {
 			return reconcileError(err)
 		}
 	}
