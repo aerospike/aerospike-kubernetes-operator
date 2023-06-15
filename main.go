@@ -1,14 +1,22 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
+	coordv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
@@ -30,6 +38,8 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -125,6 +135,7 @@ func main() {
 
 	kubeConfig := ctrl.GetConfigOrDie()
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
+	client := mgr.GetClient()
 
 	setupLog.Info("Init aerospike-server config schemas")
 
@@ -148,7 +159,7 @@ func main() {
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 
 	if err = (&aerospikecluster.AerospikeClusterReconciler{
-		Client:     mgr.GetClient(),
+		Client:     client,
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
@@ -180,6 +191,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	go migrationRoutine(client, options.LeaderElectionID)
+
 	setupLog.Info("Starting manager")
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
@@ -188,6 +201,160 @@ func main() {
 	}
 
 	eventBroadcaster.Shutdown()
+}
+
+func migrationRoutine(client crClient.Client, leaderElectionID string) {
+	for {
+		resp, err := http.Get("http://localhost:8081/readyz")
+		if err != nil {
+			setupLog.Error(err, "unable to do ready check")
+			os.Exit(1)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			setupLog.Info("controller is ready")
+			resp.Body.Close()
+
+			break
+		}
+
+		setupLog.Info("controller is not ready, retrying...")
+		resp.Body.Close()
+	}
+
+	ctx := context.TODO()
+
+	lease := &coordv1.Lease{}
+	leaseNamespacedName := types.NamespacedName{
+		Name:      leaderElectionID,
+		Namespace: os.Getenv("POD_NAMESPACE"),
+	}
+
+	if err := client.Get(ctx, leaseNamespacedName, lease); err != nil {
+		setupLog.Error(err, "unable to get lease object")
+		os.Exit(1)
+	}
+
+	if !strings.HasPrefix(*lease.Spec.HolderIdentity, os.Getenv("POD_NAME")) {
+		setupLog.Info("HolderIdentity not matching", "podname",
+			os.Getenv("POD_NAME"), "holderIdentity", *lease.Spec.HolderIdentity)
+		return
+	}
+
+	setupLog.Info("Formatting Initialised Volumes name")
+
+	if err := addNewlyFormattedInitialisedVolumeNames(ctx, client, setupLog); err != nil {
+		setupLog.Error(err, "problem patching Initialised volumes")
+		os.Exit(1)
+	}
+}
+
+func addNewlyFormattedInitialisedVolumeNames(ctx context.Context, client crClient.Client, setupLog logr.Logger) error {
+	aeroClusterList := &asdbv1.AerospikeClusterList{}
+	if err := client.List(ctx, aeroClusterList); err != nil {
+		if errors.IsNotFound(err) {
+			// Request objects not found.
+			return nil
+		}
+		// Error reading the object.
+		return err
+	}
+
+	for idx := range aeroClusterList.Items {
+		aeroCluster := aeroClusterList.Items[idx]
+
+		podList, err := getClusterPodList(ctx, client, &aeroCluster)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Request objects not found.
+				return nil
+			}
+			// Error reading the object.
+			return err
+		}
+
+		var patches []jsonpatch.PatchOperation
+
+		for podIdx := range podList.Items {
+			pod := podList.Items[podIdx]
+			initializedVolumes := aeroCluster.Status.Pods[pod.Name].InitializedVolumes
+			initializedVolumesMap := make(map[string]string)
+			oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
+
+			for idx := range initializedVolumes {
+				initVolInfo := strings.Split(initializedVolumes[idx], "@")
+				if len(initVolInfo) < 2 {
+					oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[idx])
+				} else {
+					initializedVolumesMap[initVolInfo[0]] = initVolInfo[1]
+				}
+			}
+
+			for idx := range oldFormatInitVolNames {
+				if _, ok := initializedVolumesMap[oldFormatInitVolNames[idx]]; !ok {
+					pvcUID, pvcErr := getPVCUid(context.TODO(), client, &pod, initializedVolumes[idx])
+					if pvcErr != nil {
+						return pvcErr
+					}
+
+					initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", initializedVolumes[idx], pvcUID))
+				}
+			}
+
+			if len(initializedVolumes) > len(aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
+				setupLog.Info("Got updates initialised volumes list", "initvol", initializedVolumes, "pod-name", pod.Name)
+				patch1 := jsonpatch.PatchOperation{
+					Operation: "replace",
+					Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
+					Value:     initializedVolumes,
+				}
+				patches = append(patches, patch1)
+			}
+		}
+
+		if len(patches) == 0 {
+			continue
+		}
+
+		jsonPatchJSON, err := json.Marshal(patches)
+		if err != nil {
+			return err
+		}
+
+		constantPatch := crClient.RawPatch(types.JSONPatchType, jsonPatchJSON)
+
+		// Since the pod status is updated from pod init container,
+		// set the field owner to "pod" for pod status updates.
+		setupLog.Info("Patching status with updated initialised volumes")
+
+		if err = client.Status().Patch(
+			context.TODO(), &aeroCluster, constantPatch, crClient.FieldOwner("pod"),
+		); err != nil {
+			return fmt.Errorf("error updating status: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func getPVCUid(ctx context.Context, client crClient.Client, pod *v1.Pod, volName string) (string, error) {
+	for idx := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[idx].Name == volName {
+			pvc := &v1.PersistentVolumeClaim{}
+			pvcNamespacedName := types.NamespacedName{
+				Name:      pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName,
+				Namespace: pod.Namespace,
+			}
+
+			if err := client.Get(ctx, pvcNamespacedName, pvc); err != nil {
+				return "", err
+			}
+
+			return string(pvc.UID), nil
+		}
+	}
+
+	return "", nil
 }
 
 // getWatchNamespace returns the Namespace the operator should be watching for changes
@@ -234,4 +401,22 @@ func newClient(
 	_ ...crClient.Object,
 ) (crClient.Client, error) {
 	return crClient.New(config, options)
+}
+
+func getClusterPodList(ctx context.Context, client crClient.Client, aeroCluster *asdbv1.AerospikeCluster) (
+	*v1.PodList, error,
+) {
+	// List the pods for this aeroCluster's statefulset
+	podList := &v1.PodList{}
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(aeroCluster.Name))
+	listOps := &crClient.ListOptions{
+		Namespace: aeroCluster.Namespace, LabelSelector: labelSelector,
+	}
+
+	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
+	if err := client.List(ctx, podList, listOps); err != nil {
+		return nil, err
+	}
+
+	return podList, nil
 }
