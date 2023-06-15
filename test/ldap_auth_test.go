@@ -22,7 +22,7 @@ import (
 var _ = Describe(
 	"LDAP External Auth test", func() {
 		ctx := goctx.TODO()
-		FIt(
+		It(
 			"Validate LDAP user transactions", func() {
 				By("DeployCluster with LDAP auth")
 				clusterNamespacedName := getClusterNamespacedName(
