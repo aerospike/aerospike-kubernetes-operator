@@ -205,6 +205,7 @@ func main() {
 
 func migrationRoutine(client crClient.Client, leaderElectionID string) {
 	for {
+		// Checking if controller is ready.
 		resp, err := http.Get("http://localhost:8081/readyz")
 		if err != nil {
 			setupLog.Error(err, "unable to do ready check")
@@ -235,6 +236,7 @@ func migrationRoutine(client crClient.Client, leaderElectionID string) {
 		os.Exit(1)
 	}
 
+	// Migration steps should be done by one pod only.
 	if !strings.HasPrefix(*lease.Spec.HolderIdentity, os.Getenv("POD_NAME")) {
 		setupLog.Info("HolderIdentity not matching", "podname",
 			os.Getenv("POD_NAME"), "holderIdentity", *lease.Spec.HolderIdentity)
@@ -297,6 +299,7 @@ func addNewlyFormattedInitialisedVolumeNames(ctx context.Context, client crClien
 						return pvcErr
 					}
 
+					// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
 					initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", initializedVolumes[idx], pvcUID))
 				}
 			}
