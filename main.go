@@ -85,7 +85,7 @@ func main() {
 	info, err := os.Stat(legacyOlmCertDir)
 	if err == nil && info.IsDir() {
 		setupLog.Info(
-			"legacy OLM < 0.17 directory is present - initializing webhook" +
+			"Legacy OLM < 0.17 directory is present - initializing webhook" +
 				" server ",
 		)
 
@@ -108,7 +108,7 @@ func main() {
 
 	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
 	if err != nil {
-		setupLog.Error(err, "unable to load the config file")
+		setupLog.Error(err, "Unable to load the config file")
 		os.Exit(1)
 	}
 
@@ -129,7 +129,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "Unable to start manager")
 		os.Exit(1)
 	}
 
@@ -169,171 +169,184 @@ func main() {
 		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(
-			err, "unable to create controller", "controller",
+			err, "Unable to create controller", "controller",
 			"AerospikeCluster",
 		)
 		os.Exit(1)
 	}
 
 	if err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "v1-webhook", "AerospikeCluster")
+		setupLog.Error(err, "Unable to create webhook", "v1-webhook", "AerospikeCluster")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
+		setupLog.Error(err, "Unable to set up health check")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
+		setupLog.Error(err, "Unable to set up ready check")
 		os.Exit(1)
 	}
 
-	go migrationRoutine(client, options.LeaderElectionID)
+	go migrationAerospikeClusters(client, &options, watchNs)
 
 	setupLog.Info("Starting manager")
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+		setupLog.Error(err, "Problem running manager")
 		os.Exit(1)
 	}
 
 	eventBroadcaster.Shutdown()
 }
 
-func migrationRoutine(client crClient.Client, leaderElectionID string) {
+func migrationAerospikeClusters(client crClient.Client, options *ctrl.Options, watchNs string) {
 	for {
 		// Checking if controller is ready.
-		resp, err := http.Get("http://localhost:8081/readyz")
+		readyzURL := fmt.Sprintf("http://localhost%s/readyz", options.HealthProbeBindAddress)
+
+		resp, err := http.Get(readyzURL) //nolint:gosec // locally created url
 		if err != nil {
-			setupLog.Error(err, "unable to do ready check")
+			setupLog.Error(err, "Unable to do ready check")
 			os.Exit(1)
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			setupLog.Info("controller is ready")
+			setupLog.Info("Controller is ready")
 			resp.Body.Close()
 
 			break
 		}
 
-		setupLog.Info("controller is not ready, retrying...")
+		setupLog.Info("Controller is not ready, retrying...")
 		resp.Body.Close()
 	}
 
 	ctx := context.TODO()
 
-	lease := &coordv1.Lease{}
-	leaseNamespacedName := types.NamespacedName{
-		Name:      leaderElectionID,
-		Namespace: os.Getenv("POD_NAMESPACE"),
+	if options.LeaderElection {
+		lease := &coordv1.Lease{}
+		leaseNamespacedName := types.NamespacedName{
+			Name:      options.LeaderElectionID,
+			Namespace: os.Getenv("POD_NAMESPACE"),
+		}
+
+		if err := client.Get(ctx, leaseNamespacedName, lease); err != nil {
+			setupLog.Error(err, "Unable to get lease object")
+			os.Exit(1)
+		}
+
+		// Migration steps should be done by one pod only.
+		if !strings.HasPrefix(*lease.Spec.HolderIdentity, os.Getenv("POD_NAME")) {
+			setupLog.Info("HolderIdentity not matching", "podname",
+				os.Getenv("POD_NAME"), "holderIdentity", *lease.Spec.HolderIdentity)
+			return
+		}
 	}
 
-	if err := client.Get(ctx, leaseNamespacedName, lease); err != nil {
-		setupLog.Error(err, "unable to get lease object")
-		os.Exit(1)
-	}
+	setupLog.Info("Migrating Initialised Volumes name to new format")
 
-	// Migration steps should be done by one pod only.
-	if !strings.HasPrefix(*lease.Spec.HolderIdentity, os.Getenv("POD_NAME")) {
-		setupLog.Info("HolderIdentity not matching", "podname",
-			os.Getenv("POD_NAME"), "holderIdentity", *lease.Spec.HolderIdentity)
-		return
-	}
-
-	setupLog.Info("Formatting Initialised Volumes name")
-
-	if err := addNewlyFormattedInitialisedVolumeNames(ctx, client, setupLog); err != nil {
-		setupLog.Error(err, "problem patching Initialised volumes")
+	if err := migrateInitialisedVolumeNames(ctx, client, setupLog, watchNs); err != nil {
+		setupLog.Error(err, "Problem patching Initialised volumes")
 		os.Exit(1)
 	}
 }
 
-func addNewlyFormattedInitialisedVolumeNames(ctx context.Context, client crClient.Client, setupLog logr.Logger) error {
-	aeroClusterList := &asdbv1.AerospikeClusterList{}
-	if err := client.List(ctx, aeroClusterList); err != nil {
-		if errors.IsNotFound(err) {
-			// Request objects not found.
-			return nil
+func migrateInitialisedVolumeNames(ctx context.Context, client crClient.Client, setupLog logr.Logger,
+	watchNs string) error {
+	namespaces := strings.Split(watchNs, ",")
+
+	for _, ns := range namespaces {
+		aeroClusterList := &asdbv1.AerospikeClusterList{}
+		listOps := &crClient.ListOptions{
+			Namespace: ns,
 		}
-		// Error reading the object.
-		return err
-	}
 
-	for idx := range aeroClusterList.Items {
-		aeroCluster := aeroClusterList.Items[idx]
-
-		podList, err := getClusterPodList(ctx, client, &aeroCluster)
-		if err != nil {
+		if err := client.List(ctx, aeroClusterList, listOps); err != nil {
 			if errors.IsNotFound(err) {
 				// Request objects not found.
-				return nil
+				continue
 			}
 			// Error reading the object.
 			return err
 		}
 
-		var patches []jsonpatch.PatchOperation
+		for idx := range aeroClusterList.Items {
+			aeroCluster := &aeroClusterList.Items[idx]
 
-		for podIdx := range podList.Items {
-			pod := podList.Items[podIdx]
-			initializedVolumes := aeroCluster.Status.Pods[pod.Name].InitializedVolumes
-			initializedVolumesMap := make(map[string]string)
-			oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
-
-			for idx := range initializedVolumes {
-				initVolInfo := strings.Split(initializedVolumes[idx], "@")
-				if len(initVolInfo) < 2 {
-					oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[idx])
-				} else {
-					initializedVolumesMap[initVolInfo[0]] = initVolInfo[1]
+			podList, err := getClusterPodList(ctx, client, aeroCluster)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					// Request objects not found.
+					continue
 				}
+				// Error reading the object.
+				return err
 			}
 
-			for idx := range oldFormatInitVolNames {
-				if _, ok := initializedVolumesMap[oldFormatInitVolNames[idx]]; !ok {
-					pvcUID, pvcErr := getPVCUid(context.TODO(), client, &pod, initializedVolumes[idx])
-					if pvcErr != nil {
-						return pvcErr
+			var patches []jsonpatch.PatchOperation
+
+			for podIdx := range podList.Items {
+				pod := &podList.Items[podIdx]
+				initializedVolumes := aeroCluster.Status.Pods[pod.Name].InitializedVolumes
+				initializedVolumesMap := make(map[string]string)
+				oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
+
+				for idx := range initializedVolumes {
+					initVolInfo := strings.Split(initializedVolumes[idx], "@")
+					if len(initVolInfo) < 2 {
+						oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[idx])
+					} else {
+						initializedVolumesMap[initVolInfo[0]] = initVolInfo[1]
 					}
+				}
 
-					// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
-					initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", initializedVolumes[idx], pvcUID))
+				for idx := range oldFormatInitVolNames {
+					if _, ok := initializedVolumesMap[oldFormatInitVolNames[idx]]; !ok {
+						pvcUID, pvcErr := getPVCUid(ctx, client, pod, oldFormatInitVolNames[idx])
+						if pvcErr != nil {
+							return pvcErr
+						}
+
+						// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
+						initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[idx], pvcUID))
+					}
+				}
+
+				if len(initializedVolumes) > len(aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
+					setupLog.Info("Got updates initialised volumes list", "initvol", initializedVolumes, "pod-name", pod.Name)
+					patch1 := jsonpatch.PatchOperation{
+						Operation: "replace",
+						Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
+						Value:     initializedVolumes,
+					}
+					patches = append(patches, patch1)
 				}
 			}
 
-			if len(initializedVolumes) > len(aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
-				setupLog.Info("Got updates initialised volumes list", "initvol", initializedVolumes, "pod-name", pod.Name)
-				patch1 := jsonpatch.PatchOperation{
-					Operation: "replace",
-					Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
-					Value:     initializedVolumes,
-				}
-				patches = append(patches, patch1)
+			if len(patches) == 0 {
+				continue
 			}
-		}
 
-		if len(patches) == 0 {
-			continue
-		}
+			jsonPatchJSON, err := json.Marshal(patches)
+			if err != nil {
+				return err
+			}
 
-		jsonPatchJSON, err := json.Marshal(patches)
-		if err != nil {
-			return err
-		}
+			constantPatch := crClient.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-		constantPatch := crClient.RawPatch(types.JSONPatchType, jsonPatchJSON)
+			// Since the pod status is updated from pod init container,
+			// set the field owner to "pod" for pod status updates.
+			setupLog.Info("Patching status with updated initialised volumes")
 
-		// Since the pod status is updated from pod init container,
-		// set the field owner to "pod" for pod status updates.
-		setupLog.Info("Patching status with updated initialised volumes")
-
-		if err = client.Status().Patch(
-			context.TODO(), &aeroCluster, constantPatch, crClient.FieldOwner("pod"),
-		); err != nil {
-			return fmt.Errorf("error updating status: %v", err)
+			if err = client.Status().Patch(
+				ctx, aeroCluster, constantPatch, crClient.FieldOwner("pod"),
+			); err != nil {
+				return fmt.Errorf("error updating status: %v", err)
+			}
 		}
 	}
 
