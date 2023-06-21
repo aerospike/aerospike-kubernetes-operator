@@ -18,6 +18,7 @@ import (
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -257,15 +258,25 @@ func migrationAerospikeClusters(client crClient.Client, options *ctrl.Options, w
 
 func migrateInitialisedVolumeNames(ctx context.Context, client crClient.Client, setupLog logr.Logger,
 	watchNs string) error {
-	namespaces := strings.Split(watchNs, ",")
-
-	for _, ns := range namespaces {
-		aeroClusterList := &asdbv1.AerospikeClusterList{}
-		listOps := &crClient.ListOptions{
-			Namespace: ns,
+	var listOpsSlice []crClient.ListOptions
+	if watchNs == "" {
+		listOpsSlice = make([]crClient.ListOptions, 0, 1)
+		listOps := crClient.ListOptions{}
+		listOpsSlice = append(listOpsSlice, listOps)
+	} else {
+		namespaces := strings.Split(watchNs, ",")
+		listOpsSlice = make([]crClient.ListOptions, 0, len(namespaces))
+		for _, ns := range namespaces {
+			listOps := crClient.ListOptions{
+				Namespace: ns,
+			}
+			listOpsSlice = append(listOpsSlice, listOps)
 		}
+	}
 
-		if err := client.List(ctx, aeroClusterList, listOps); err != nil {
+	for idx := range listOpsSlice {
+		aeroClusterList := &asdbv1.AerospikeClusterList{}
+		if err := client.List(ctx, aeroClusterList, &listOpsSlice[idx]); err != nil {
 			if errors.IsNotFound(err) {
 				// Request objects not found.
 				continue
@@ -292,7 +303,7 @@ func migrateInitialisedVolumeNames(ctx context.Context, client crClient.Client, 
 			for podIdx := range podList.Items {
 				pod := &podList.Items[podIdx]
 				initializedVolumes := aeroCluster.Status.Pods[pod.Name].InitializedVolumes
-				initializedVolumesMap := make(map[string]string)
+				newFormatInitVolNames := sets.Set[string]{}
 				oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
 
 				for idx := range initializedVolumes {
@@ -300,12 +311,12 @@ func migrateInitialisedVolumeNames(ctx context.Context, client crClient.Client, 
 					if len(initVolInfo) < 2 {
 						oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[idx])
 					} else {
-						initializedVolumesMap[initVolInfo[0]] = initVolInfo[1]
+						newFormatInitVolNames.Insert(initVolInfo[0])
 					}
 				}
 
 				for idx := range oldFormatInitVolNames {
-					if _, ok := initializedVolumesMap[oldFormatInitVolNames[idx]]; !ok {
+					if !newFormatInitVolNames.Has(oldFormatInitVolNames[idx]) {
 						pvcUID, pvcErr := getPVCUid(ctx, client, pod, oldFormatInitVolNames[idx])
 						if pvcErr != nil {
 							return pvcErr
