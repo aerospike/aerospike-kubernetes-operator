@@ -316,3 +316,19 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 	// In that case, pod service is required
 	return networkSet.Len() > 2
 }
+
+func (r *SingleClusterReconciler) createPodServiceIfNeeded(pods []*corev1.Pod) error {
+	if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		// Create services for all pods if network policy is changed and rely on nodePort service
+		for idx := range pods {
+			if err := r.createPodService(
+				pods[idx].Name, r.aeroCluster.Namespace,
+			); err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

@@ -691,18 +691,8 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		// Create services for all pods if network policy is changed and rely on nodePort service.
-		// Check podServiceNeeded condition for both status and spec network policy
-		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
-			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-			// Create services for all pods if network policy is changed and rely on nodePort service
-			for idx := range podsBatch {
-				if err = r.createPodService(
-					podsBatch[idx].Name, r.aeroCluster.Namespace,
-				); err != nil && !errors.IsAlreadyExists(err) {
-					return nil, reconcileError(err)
-				}
-			}
+		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+			return nil, reconcileError(err)
 		}
 
 		podNames := getPodNames(podsBatch)
@@ -985,18 +975,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		// Create services for all pods if network policy is changed and rely on nodePort service.
-		// Check podServiceNeeded condition for both status and spec network policy
-		if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
-			podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-			// Create services for all pods if network policy is changed and rely on nodePort service
-			for idx := range podsBatch {
-				if err = r.createPodService(
-					podsBatch[idx].Name, r.aeroCluster.Namespace,
-				); err != nil && !errors.IsAlreadyExists(err) {
-					return nil, reconcileError(err)
-				}
-			}
+		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+			return nil, reconcileError(err)
 		}
 
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
