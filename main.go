@@ -192,7 +192,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go migrationAerospikeClusters(client, &options, watchNs)
+	go migrateAerospikeClusters(client, &options, watchNs)
 
 	setupLog.Info("Starting manager")
 
@@ -204,7 +204,7 @@ func main() {
 	eventBroadcaster.Shutdown()
 }
 
-func migrationAerospikeClusters(client crClient.Client, options *ctrl.Options, watchNs string) {
+func migrateAerospikeClusters(client crClient.Client, options *ctrl.Options, watchNs string) {
 	for {
 		// Checking if controller is ready.
 		readyzURL := fmt.Sprintf("http://localhost%s/readyz", options.HealthProbeBindAddress)
