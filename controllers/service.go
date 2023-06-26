@@ -142,6 +142,7 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 					Ports: []corev1.ServicePort{
 						{
 							Port:       port,
+							Name:       loadBalancer.PortName,
 							TargetPort: intstr.FromInt(int(targetPort)),
 						},
 					},

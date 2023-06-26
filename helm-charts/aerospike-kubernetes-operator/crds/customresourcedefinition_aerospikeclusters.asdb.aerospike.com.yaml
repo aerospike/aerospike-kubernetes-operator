@@ -7968,6 +7968,10 @@ spec:
                           maximum: 65535
                           minimum: 1024
                           type: integer
+                        portName:
+                          description: The name of the port exposed on load balancer
+                            service.
+                          type: string
                         targetPort:
                           description: TargetPort Target port. If not specified the
                             tls-port of network.service stanza is used from Aerospike
@@ -16697,6 +16701,10 @@ spec:
                           maximum: 65535
                           minimum: 1024
                           type: integer
+                        portName:
+                          description: The name of the port exposed on load balancer
+                            service.
+                          type: string
                         targetPort:
                           description: TargetPort Target port. If not specified the
                             tls-port of network.service stanza is used from Aerospike
