@@ -88,7 +88,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		if len(failedPods) != 0 {
 			r.Log.Info("Upgrading or rolling restart rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
 
-			if res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods); !res.isSuccess {
+			_, res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods)
+			if !res.isSuccess {
 				return res
 			}
 
@@ -326,7 +327,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 }
 
 func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.StatefulSet, rackState *RackState,
-	ignorablePods []corev1.Pod, failedPods []*corev1.Pod) reconcileResult {
+	ignorablePods []corev1.Pod, failedPods []*corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
 	var res reconcileResult
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
@@ -344,13 +345,13 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			found.Name,
 		)
 
-		return reconcileError(err)
+		return found, reconcileError(err)
 	}
 
 	// Upgrade
 	upgradeNeeded, err := r.isRackUpgradeNeeded(rackState.Rack.ID)
 	if err != nil {
-		return reconcileError(err)
+		return found, reconcileError(err)
 	}
 
 	if upgradeNeeded {
@@ -370,12 +371,12 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 				)
 			}
 
-			return res
+			return found, res
 		}
 	} else {
 		var needRollingRestartRack, restartTypeMap, nErr = r.needRollingRestartRack(rackState)
 		if nErr != nil {
-			return reconcileError(nErr)
+			return found, reconcileError(nErr)
 		}
 
 		if needRollingRestartRack || len(failedPods) != 0 {
@@ -395,12 +396,12 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 					)
 				}
 
-				return res
+				return found, res
 			}
 		}
 	}
 
-	return reconcileSuccess()
+	return found, reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) reconcileRack(
@@ -466,7 +467,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
-	if res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, nil); !res.isSuccess {
+	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, nil)
+	if !res.isSuccess {
 		return res
 	}
 
