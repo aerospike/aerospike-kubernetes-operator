@@ -92,6 +92,10 @@ type LoadBalancerSpec struct { //nolint:govet // for readability
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty" patchStrategy:"merge"`
 
+	// The name of the port exposed on load balancer service.
+	// +optional
+	PortName string `json:"portName,omitempty"`
+
 	// Port Exposed port on load balancer. If not specified TargetPort is used.
 	// +kubebuilder:validation:Minimum=1024
 	// +kubebuilder:validation:Maximum=65535
