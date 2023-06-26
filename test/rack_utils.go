@@ -15,28 +15,28 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 type RackState struct {
-	Rack asdbv1beta1.Rack
+	Rack asdbv1.Rack
 	Size int
 }
 
 func addRack(
 	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
+	clusterNamespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}
 	// Remove default rack
-	defaultRackID := asdbv1beta1.DefaultRackID
+	defaultRackID := asdbv1.DefaultRackID
 	if len(aeroCluster.Spec.RackConfig.Racks) == 1 && aeroCluster.Spec.RackConfig.Racks[0].ID == defaultRackID {
-		aeroCluster.Spec.RackConfig = asdbv1beta1.RackConfig{Racks: []asdbv1beta1.Rack{}}
+		aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: []asdbv1.Rack{}}
 	}
 
 	aeroCluster.Spec.RackConfig.Racks = append(
@@ -44,11 +44,8 @@ func addRack(
 	)
 	// Size shouldn't make any difference in working. Still put different size to check if it create any issue.
 	aeroCluster.Spec.Size++
-	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
-		return err
-	}
 
-	return nil
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func removeLastRack(
@@ -70,16 +67,12 @@ func removeLastRack(
 	// This will also indirectly check if older rack is removed or not.
 	// If older node is not deleted then cluster sz will not be as expected
 
-	if err := updateCluster(k8sClient, ctx, aeroCluster); err != nil {
-		return err
-	}
-
-	return nil
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func validateAerospikeConfigServiceUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, rack *asdbv1beta1.Rack,
+	clusterNamespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -158,7 +151,7 @@ func isNamespaceRackEnabled(
 		return false, fmt.Errorf("cluster has empty pod list in status")
 	}
 
-	var pod asdbv1beta1.AerospikePodStatus
+	var pod asdbv1.AerospikePodStatus
 	for podName := range aeroCluster.Status.Pods {
 		pod = aeroCluster.Status.Pods[podName]
 	}
@@ -292,8 +285,6 @@ func validateRackEnabledCluster(
 }
 
 func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
-	zoneKey := "failure-domain.beta.kubernetes.io/zone"
-	regionKey := "failure-domain.beta.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 	rackSelectorMap := map[string]string{}
@@ -368,8 +359,6 @@ func validateSTSPodsForRack(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
 	rackState *RackState,
 ) error {
-	zoneKey := "failure-domain.beta.kubernetes.io/zone"
-	regionKey := "failure-domain.beta.kubernetes.io/region"
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 
@@ -425,7 +414,7 @@ func validateSTSPodsForRack(
 	return nil
 }
 
-func getConfiguredRackStateList(aeroCluster *asdbv1beta1.AerospikeCluster) []RackState {
+func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := splitRacks(
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
@@ -468,7 +457,7 @@ func splitRacks(nodeCount, rackCount int) []int {
 }
 
 func getNamespacedNameForStatefulSet(
-	aeroCluster *asdbv1beta1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackID int,
 ) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
@@ -508,10 +497,10 @@ func isNodePartOfRack(nodeID, rackID string) bool {
 	return rackID == tokens[0]
 }
 
-func getDummyRackConf(rackIDs ...int) []asdbv1beta1.Rack {
-	racks := make([]asdbv1beta1.Rack, 0, len(rackIDs))
+func getDummyRackConf(rackIDs ...int) []asdbv1.Rack {
+	racks := make([]asdbv1.Rack, 0, len(rackIDs))
 	for _, rID := range rackIDs {
-		racks = append(racks, asdbv1beta1.Rack{ID: rID})
+		racks = append(racks, asdbv1.Rack{ID: rID})
 	}
 
 	return racks

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -30,7 +31,7 @@ import (
 )
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=maerospikecluster.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (c *AerospikeCluster) Default() admission.Response {
@@ -108,6 +109,34 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Update rosterNodeBlockList
 	for idx, nodeID := range c.Spec.RosterNodeBlockList {
 		c.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
+	return nil
+}
+
+// SetDefaults applies defaults to the pod spec.
+func (p *AerospikePodSpec) SetDefaults() error {
+	var groupID int64
+
+	if p.InputDNSPolicy == nil {
+		if p.HostNetwork {
+			p.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+		} else {
+			p.DNSPolicy = corev1.DNSClusterFirst
+		}
+	} else {
+		p.DNSPolicy = *p.InputDNSPolicy
+	}
+
+	if p.SecurityContext != nil {
+		if p.SecurityContext.FSGroup == nil {
+			p.SecurityContext.FSGroup = &groupID
+		}
+	} else {
+		SecurityContext := &corev1.PodSecurityContext{
+			FSGroup: &groupID,
+		}
+		p.SecurityContext = SecurityContext
 	}
 
 	return nil
@@ -274,11 +303,6 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 		if err := setDefaultXDRConf(asLog, configSpec); err != nil {
 			return err
 		}
-	}
-
-	// escape LDAP configuration
-	if err := escapeLDAPConfiguration(configSpec); err != nil {
-		return err
 	}
 
 	return nil
@@ -531,14 +555,10 @@ func setDefaultNetworkConf(
 		networkConf["fabric"] = map[string]interface{}{}
 	}
 
-	if err := addOperatorClientNameIfNeeded(
+	return addOperatorClientNameIfNeeded(
 		asLog, serviceConf, configSpec,
 		clientCertSpec,
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 func addOperatorClientNameIfNeeded(
@@ -706,76 +726,6 @@ func isNameExist(names []string, name string) bool {
 	}
 
 	return false
-}
-
-// escapeLDAPConfiguration escapes LDAP variables ${un} and ${dn} to
-// $${_DNE}{un} and $${_DNE}{dn} to prevent aerospike container images
-// template expansion from messing up the LDAP section.
-func escapeLDAPConfiguration(configSpec AerospikeConfigSpec) error {
-	config := configSpec.Value
-
-	if _, ok := config["security"]; ok {
-		security, ok := config["security"].(map[string]interface{})
-		if !ok {
-			return fmt.Errorf(
-				"security conf not in valid format %v", config["security"],
-			)
-		}
-
-		if _, ok := security["ldap"]; ok {
-			security["ldap"] = escapeValue(security["ldap"])
-		}
-	}
-
-	return nil
-}
-
-func escapeValue(valueGeneric interface{}) interface{} {
-	switch value := valueGeneric.(type) {
-	case string:
-		return escapeString(value)
-	case []interface{}:
-		var modifiedSlice []interface{}
-
-		for _, item := range value {
-			modifiedSlice = append(modifiedSlice, escapeValue(item))
-		}
-
-		return modifiedSlice
-	case []string:
-		var modifiedSlice []string
-
-		for _, item := range value {
-			modifiedSlice = append(modifiedSlice, escapeString(item))
-		}
-
-		return modifiedSlice
-	case map[string]interface{}:
-		modifiedMap := map[string]interface{}{}
-
-		for key, mapValue := range value {
-			modifiedMap[escapeString(key)] = escapeValue(mapValue)
-		}
-
-		return modifiedMap
-	case map[string]string:
-		modifiedMap := map[string]string{}
-
-		for key, mapValue := range value {
-			modifiedMap[escapeString(key)] = escapeString(mapValue)
-		}
-
-		return modifiedMap
-	default:
-		return value
-	}
-}
-
-func escapeString(str string) string {
-	str = strings.ReplaceAll(str, "${un}", "$${_DNE}{un}")
-	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
-
-	return str
 }
 
 func setNamespaceDefault(networks []string, namespace string) {

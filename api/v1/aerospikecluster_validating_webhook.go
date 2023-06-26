@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1
 
 import (
 	"crypto/x509"
@@ -51,7 +51,7 @@ var immutableNetworkParams = []string{
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1beta1,name=vaerospikecluster.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1}
 
 var _ webhook.Validator = &AerospikeCluster{}
 
@@ -135,11 +135,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	// Validate RackConfig update
-	if err := c.validateRackUpdate(aslog, old); err != nil {
-		return err
-	}
-
-	return nil
+	return c.validateRackUpdate(aslog, old)
 }
 
 func (c *AerospikeCluster) validate(aslog logr.Logger) error {
@@ -267,11 +263,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	if err := c.validateSCNamespaces(); err != nil {
-		return err
-	}
-
-	return nil
+	return c.validateSCNamespaces()
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
@@ -303,6 +295,48 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 		if !scNamespaceSet.Equal(tmpSCNamespaceSet) {
 			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
 		}
+	}
+
+	return nil
+}
+
+func (c *AerospikeOperatorClientCertSpec) validate() error {
+	if (c.SecretCertSource == nil) == (c.CertPathInOperator == nil) {
+		return fmt.Errorf(
+			"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not"+
+				" both: %+v",
+			c,
+		)
+	}
+
+	if c.SecretCertSource != nil {
+		if (c.SecretCertSource.ClientCertFilename == "") != (c.SecretCertSource.ClientKeyFilename == "") {
+			return fmt.Errorf(
+				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in"+
+					" `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+
+		if (c.SecretCertSource.CaCertsFilename != "") && (c.SecretCertSource.CaCertsSource != nil) {
+			return fmt.Errorf(
+				"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`: %+v",
+				c.SecretCertSource,
+			)
+		}
+	}
+
+	if c.CertPathInOperator != nil &&
+		(c.CertPathInOperator.ClientCertPath == "") != (c.CertPathInOperator.ClientKeyPath == "") {
+		return fmt.Errorf(
+			"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator"+
+				"`: %+v",
+			c.CertPathInOperator,
+		)
+	}
+
+	if !c.IsClientCertConfigured() {
+		return fmt.Errorf("operator client cert is not configured")
 	}
 
 	return nil
@@ -355,6 +389,11 @@ func validateClientCertSpec(
 	}
 
 	return nil
+}
+
+func (c *AerospikeOperatorClientCertSpec) IsClientCertConfigured() bool {
+	return (c.SecretCertSource != nil && c.SecretCertSource.ClientCertFilename != "") ||
+		(c.CertPathInOperator != nil && c.CertPathInOperator.ClientCertPath != "")
 }
 
 func (c *AerospikeCluster) validateRackUpdate(
@@ -753,11 +792,7 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		)
 	}
 
-	if err := validateLoggingConf(loggingConfList); err != nil {
-		return err
-	}
-
-	return nil
+	return validateLoggingConf(loggingConfList)
 }
 
 func validateLoggingConf(loggingConfList []interface{}) error {
@@ -1358,11 +1393,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	if err := validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus); err != nil {
-		return err
-	}
-
-	return nil
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
 }
 
 func validateNetworkConnectionUpdate(

@@ -15,14 +15,14 @@ webhooks:
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
-      path: /mutate-asdb-aerospike-com-v1beta1-aerospikecluster
+      path: /mutate-asdb-aerospike-com-v1-aerospikecluster
   failurePolicy: Fail
   name: maerospikecluster.kb.io
   rules:
   - apiGroups:
     - asdb.aerospike.com
     apiVersions:
-    - v1beta1
+    - v1
     operations:
     - CREATE
     - UPDATE

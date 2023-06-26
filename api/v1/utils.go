@@ -1,4 +1,4 @@
-package v1beta1
+package v1
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	v1 "k8s.io/api/core/v1"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -89,7 +91,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:0.0.20"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev1"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
@@ -474,4 +476,14 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	}
 
 	return false
+}
+
+func getContainerNames(containers []v1.Container) []string {
+	containerNames := make([]string, 0, len(containers))
+
+	for idx := range containers {
+		containerNames = append(containerNames, containers[idx].Name)
+	}
+
+	return containerNames
 }

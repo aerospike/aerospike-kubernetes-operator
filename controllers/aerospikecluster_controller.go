@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 const patchFieldOwner = "aerospike-kuberneter-operator"
@@ -50,7 +50,7 @@ type AerospikeClusterReconciler struct {
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&asdbv1beta1.AerospikeCluster{}).
+		For(&asdbv1.AerospikeCluster{}).
 		Owns(
 			&appsv1.StatefulSet{}, builder.WithPredicates(
 				predicate.Funcs{
@@ -74,7 +74,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // RackState contains the rack configuration and rack size.
 type RackState struct {
-	Rack *asdbv1beta1.Rack
+	Rack *asdbv1.Rack
 	Size int
 }
 
@@ -100,7 +100,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 	log.Info("Reconciling AerospikeCluster")
 
 	// Fetch the AerospikeCluster instance
-	aeroCluster := &asdbv1beta1.AerospikeCluster{}
+	aeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
