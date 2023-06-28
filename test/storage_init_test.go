@@ -385,7 +385,7 @@ var _ = Describe(
 
 						oldInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
 
-						By("Unscheduling aerospike pods ")
+						By("Unscheduling aerospike pods")
 
 						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
@@ -411,6 +411,9 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
 						newInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
 
 						By("Validating initialisedVolumes list")
@@ -434,18 +437,20 @@ func compareInitialisedVolumes(oldInitVol, newInitVol []string) error {
 	for idx := range newInitVol {
 		initVol := strings.Split(newInitVol[idx], "@")
 		if _, ok := newInitVolMap[initVol[0]]; ok {
-			return fmt.Errorf("found two occurrences of same volume in initialisedVolume list")
+			return fmt.Errorf("found more than one occurrences of same volume in initialisedVolume list")
 		}
 
 		newInitVolMap[initVol[0]] = initVol[1]
 	}
 
 	for idx := range oldInitVol {
-		initVol := strings.Split(newInitVol[idx], "@")
+		initVol := strings.Split(oldInitVol[idx], "@")
 		if initVol[0] == "ns" {
 			if initVol[1] == newInitVolMap[initVol[0]] {
 				return fmt.Errorf("invalid pvc uid, it should be changed after deleting pvc")
 			}
+
+			return nil
 		}
 	}
 
