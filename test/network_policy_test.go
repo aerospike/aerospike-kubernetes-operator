@@ -942,9 +942,15 @@ func doTestNetworkPolicy(
 		}
 
 		It("Should recover when correct custom network names are updated", func() {
-			aeroCluster = createNonSCDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-			aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"missing-network"}
+			networkPolicy := asdbv1.AerospikeNetworkPolicy{
+				AccessType:               asdbv1.AerospikeNetworkTypeCustomInterface,
+				CustomAccessNetworkNames: []string{"missing-network"},
+			}
+
+			aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+				clusterNamespacedName, &networkPolicy, multiPodPerHost,
+				enableTLS,
+			)
 			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 				networkAnnotationKey: "missing-network, test1/ipvlan-conf-1, test1/ipvlan-conf-2",
 				networkStatusAnnotationKey: `[{

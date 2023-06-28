@@ -137,10 +137,9 @@ func (r *SingleClusterReconciler) createSTS(
 					// TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{
 						{
-							Name:  asdbv1.AerospikeInitContainerName,
-							Image: asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
-							// TODO: revert this before merge
-							ImagePullPolicy: corev1.PullAlways,
+							Name:            asdbv1.AerospikeInitContainerName,
+							Image:           asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{

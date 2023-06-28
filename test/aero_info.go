@@ -233,21 +233,13 @@ func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
 	}
 
 	asHost := &as.Host{
-		Name: host, TLSName: pod.Aerospike.TLSName,
+		Name:    host,
+		Port:    int(pod.ServicePort),
+		TLSName: pod.Aerospike.TLSName,
 	}
 
 	if pod.Aerospike.TLSName != "" {
-		asHost.Port = pod.PodTLSPort
-
-		if pod.ServiceTLSPort != 0 {
-			asHost.Port = int(pod.ServiceTLSPort)
-		}
-	} else {
-		asHost.Port = pod.PodPort
-
-		if pod.ServicePort != 0 {
-			asHost.Port = int(pod.ServicePort)
-		}
+		asHost.Port = int(pod.ServiceTLSPort)
 	}
 
 	return asHost, nil
