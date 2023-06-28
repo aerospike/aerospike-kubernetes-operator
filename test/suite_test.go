@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -127,6 +128,23 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		if err := k8sClient.Delete(goctx.TODO(), &pvcList.Items[pvcIndex]); err != nil {
 			return fmt.Errorf("could not delete pvc %s: %w", pvcList.Items[pvcIndex].Name, err)
 		}
+	}
+
+	return nil
+}
+
+func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) error {
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := k8sClient.Get(goctx.TODO(), pvcNamespacedName, pvc); err != nil {
+		return err
+	}
+
+	if utils.IsPVCTerminating(pvc) {
+		return nil
+	}
+
+	if err := k8sClient.Delete(goctx.TODO(), pvc); err != nil {
+		return fmt.Errorf("could not delete pvc %s: %w", pvc.Name, err)
 	}
 
 	return nil

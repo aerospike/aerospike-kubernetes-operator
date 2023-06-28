@@ -328,7 +328,7 @@ func migrateInitialisedVolumeNames(ctx context.Context, client crClient.Client, 
 				}
 
 				if len(initializedVolumes) > len(aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
-					setupLog.Info("Got updates initialised volumes list", "initvol", initializedVolumes, "pod-name", pod.Name)
+					setupLog.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "pod-name", pod.Name)
 					patch1 := jsonpatch.PatchOperation{
 						Operation: "replace",
 						Path:      "/status/pods/" + pod.Name + "/initializedVolumes",

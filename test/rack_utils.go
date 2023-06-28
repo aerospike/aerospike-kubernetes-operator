@@ -472,6 +472,13 @@ func getClusterNamespacedName(name, namespace string) types.NamespacedName {
 	}
 }
 
+func getPVCNamespacedName(name, namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
+}
+
 func getRackPodList(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
 ) (*corev1.PodList, error) {
