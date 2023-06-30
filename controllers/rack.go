@@ -232,20 +232,6 @@ func (r *SingleClusterReconciler) createRack(rackState *RackState) (
 		return nil, reconcileError(err)
 	}
 
-	// Create pod service if node network is used in network policy
-	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		// Create services for all statefulset pods
-		for i := 0; i < rackState.Size; i++ {
-			// Statefulset name created from cr name
-			name := fmt.Sprintf("%s-%d", stsName.Name, i)
-			if err := r.createPodService(
-				name, r.aeroCluster.Namespace,
-			); err != nil {
-				return nil, reconcileError(err)
-			}
-		}
-	}
-
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackCreated",
 		"[rack-%d] Created Rack", rackState.Rack.ID,
@@ -513,11 +499,11 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
-	// Delete all pod service if network policy is updated to some non node network type in network policy
-	// Check podServiceNeeded condition for both status and spec network policy
-	if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+	// Safe check to delete all dangling pod services which are no longer required
+	// There won't be any case of dangling pod service with MultiPodPerHost false, so ignore that case
+	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost &&
 		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		if err := r.cleanupPodServices(rackState); err != nil {
+		if err := r.cleanupDanglingPodServices(rackState); err != nil {
 			return reconcileError(err)
 		}
 	}
@@ -719,9 +705,8 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			return statefulSet, reconcileRequeueAfter(1)
 		}
 	}
-	// If it was last batch then go ahead
 
-	// return a fresh copy
+	// If it was last batch then go ahead return a fresh copy
 	statefulSet, err = r.getSTS(rackState)
 	if err != nil {
 		return statefulSet, reconcileError(err)

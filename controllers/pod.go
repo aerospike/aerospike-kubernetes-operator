@@ -539,8 +539,8 @@ func (r *SingleClusterReconciler) cleanupPods(
 			}
 		}
 
-		// Delete pod service if it was created earlier by looking at status network policy
-		if podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) {
+		// Try to delete corresponding pod service if it was created
+		if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails
 			if err := r.deletePodService(

@@ -188,7 +188,8 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	SchedulingPolicy `json:",inline"`
 
 	// If set true then multiple pods can be created per Kubernetes Node.
-	// This will create a NodePort service for each Pod.
+	// This will create a NodePort service for each Pod if aerospikeNetworkPolicy defined
+	// has one of the network types: 'hostInternal', 'hostExternal', 'configuredIP'
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
 	// and any traffic that is sent to this port is forwarded to the service.
 	// Here service picks a random port in range (30000-32767), so these port should be open.

@@ -242,7 +242,7 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
-				"Can't find service for pod while trying to delete it. Skipping...",
+				"Pod service not found for deletion. Skipping...",
 				"service", serviceName,
 			)
 
@@ -284,7 +284,7 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	}
 }
 
-func (r *SingleClusterReconciler) cleanupPodServices(rackState *RackState) error {
+func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackState) error {
 	podList, err := r.getRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return err
@@ -313,7 +313,7 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 		string(networkPolicy.TLSAlternateAccessType),
 	)
 
-	// If len of set is more than 2, it means network type different from "pod" and  "customInterface" are present.
+	// If len of set is more than 2, it means network type different from "pod" and "customInterface" are present.
 	// In that case, pod service is required
 	return networkSet.Len() > 2
 }
