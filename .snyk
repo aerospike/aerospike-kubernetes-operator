@@ -6,76 +6,90 @@ ignore:
         reason: fix not available
         expires: 2023-04-18T11:38:28.614Z
   SNYK-CC-K8S-1:
-      - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
-          reason: Third party (Local Static Provisioner) manifest file
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) manifest file
   SNYK-CC-K8S-4:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-5:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-6:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-8:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-9:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-10:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-11:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
+    - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
+        reason: Third party (Local Static Provisioner) yaml
   SNYK-CC-K8S-41:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: False positive, fix already present in main 'config/manager/manager.yaml'
-      - 'config/samples/openldap/openldap-deployment.yaml > *':
-          reason: File only used for testing
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: False positive, fix already present in main 'config/manager/manager.yaml'
+    - 'config/samples/openldap/openldap-deployment.yaml > *':
+        reason: File only used for testing
   SNYK-CC-K8S-42:
-      - 'config/default/manager_webhook_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
-      - 'config/default/manager_config_patch.yaml > *':
-          reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_webhook_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
+    - 'config/default/manager_config_patch.yaml > *':
+        reason: Duplicate of issue present in main 'config/manager/manager.yaml'
   SNYK-CC-K8S-44:
-      - 'helm-charts//templates/aerospike-cluster-rbac.yaml > *':
-          reason: Will be removed in AKO 3.0 version
+    - 'helm-charts/aerospike-kubernetes-operator/templates/aerospike-cluster-rbac.yaml > *':
+        reason: Will be removed in AKO 3.0 version
   SNYK-CC-K8S-47:
-        - 'config/manifests/rbac/role.yaml > *':
-            reason: Will be removed in AKO 3.0 version
-        - 'config/rbac/role.yaml > *':
-            reason: Secret and Pod permission required for Operator working
-        - 'helm-charts//templates/aerospike-operator-manager-clusterrole.yaml > *':
-            reason: Secret and Pod permission required for Operator working
+    - 'config/manifests/rbac/role.yaml > *':
+        reason: Will be removed in AKO 3.0 version
+    - 'config/rbac/role.yaml > *':
+        reason: Secret and Pod permission required for Operator working
+    - 'helm-charts/aerospike-kubernetes-operator/templates/aerospike-operator-manager-clusterrole.yaml > *':
+        reason: Secret and Pod permission required for Operator working
