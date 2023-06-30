@@ -465,14 +465,7 @@ func getNamespacedNameForStatefulSet(
 	}
 }
 
-func getClusterNamespacedName(name, namespace string) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
-	}
-}
-
-func getPVCNamespacedName(name, namespace string) types.NamespacedName {
+func getNamespacedName(name, namespace string) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      name,
 		Namespace: namespace,

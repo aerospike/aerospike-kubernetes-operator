@@ -20,6 +20,7 @@ import (
 	goctx "context"
 	"flag"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"testing"
 	"time"
 
@@ -136,6 +137,10 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) error {
 	pvc := &corev1.PersistentVolumeClaim{}
 	if err := k8sClient.Get(goctx.TODO(), pvcNamespacedName, pvc); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+
 		return err
 	}
 
