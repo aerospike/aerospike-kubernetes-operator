@@ -89,7 +89,8 @@ webhookService:
 podSecurityContext: {}
 
 ## Container security context
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
 
 livenessProbe:
    initialDelaySeconds: 15
