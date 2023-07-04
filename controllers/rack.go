@@ -86,14 +86,15 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 		failedPods, _ := getFailedAndActivePods(podList)
 		if len(failedPods) != 0 {
-			r.Log.Info("Upgrading or rolling restart rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 
-			_, res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods)
-			if !res.isSuccess {
+			if res = r.reconcileRack(
+				found, state, ignorablePods,
+			); !res.isSuccess {
 				return res
 			}
 
-			r.Log.Info("Upgraded or rolling restarted rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 		}
 	}
 
@@ -327,7 +328,14 @@ func (r *SingleClusterReconciler) deleteRacks(
 }
 
 func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.StatefulSet, rackState *RackState,
-	ignorablePods []corev1.Pod, failedPods []*corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+	ignorablePods []corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return found, reconcileError(err)
+	}
+
+	failedPods, _ := getFailedAndActivePods(podList)
+
 	var res reconcileResult
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
@@ -379,7 +387,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, reconcileError(nErr)
 		}
 
-		if needRollingRestartRack || len(failedPods) != 0 {
+		if needRollingRestartRack {
 			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeMap, failedPods)
 			if !res.isSuccess {
 				if res.err != nil {
@@ -398,6 +406,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 				return found, res
 			}
+		} else if len(failedPods) != 0 {
+			r.Log.Info("Found failed pods in the Rack, please apply the CR with right configs to recover", "rackID",
+				rackState.Rack.ID, "failedPods", failedPods)
+			return found, reconcileRequeueAfter(60)
 		}
 	}
 
@@ -447,7 +459,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// revert migrate-fill-delay to original value if it was set to 0 during scale down
 	// Reset will be done if there is Scale down or Rack redistribution
-	// This check won't cover scenario where scale down operation was done and then reverted back to previous value
+	// This check won't cover scenario where scale down operation was done and then reverted to previous value
 	// before the scale down could complete.
 	if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 		(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
@@ -467,7 +479,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
-	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, nil)
+	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods)
 	if !res.isSuccess {
 		return res
 	}
