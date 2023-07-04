@@ -343,7 +343,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	// Now rack.spec, rack.status will be same but few pods will have changed config.
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
-	if err := r.updateSTSConfigMap(
+	if err = r.updateSTSConfigMap(
 		getNamespacedNameForSTSConfigMap(
 			r.aeroCluster, rackState.Rack.ID,
 		), rackState.Rack,
