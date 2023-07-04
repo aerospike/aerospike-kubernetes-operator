@@ -110,7 +110,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
 
-			found, res = r.createRack(zeroSizedRack)
+			found, res = r.createEmptyRack(zeroSizedRack)
 			if !res.isSuccess {
 				return res
 			}
@@ -169,7 +169,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
-			found, res = r.createRack(zeroSizedRack)
+			found, res = r.createEmptyRack(zeroSizedRack)
 
 			if !res.isSuccess {
 				return res
@@ -197,7 +197,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) createRack(rackState *RackState) (
+func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	*appsv1.StatefulSet, reconcileResult,
 ) {
 	r.Log.Info("Create new Aerospike cluster if needed")
