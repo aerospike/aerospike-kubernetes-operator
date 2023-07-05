@@ -26,7 +26,7 @@ var _ = Describe(
 		ctx := goctx.TODO()
 
 		clusterName := "podspec"
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 

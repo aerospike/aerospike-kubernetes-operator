@@ -4,8 +4,10 @@ package test
 // If specified devices should be initialized only on first use.
 import (
 	goctx "context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,8 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -22,6 +26,7 @@ const (
 	storageInitTestClusterSize = 2
 	magicBytes                 = "aero"
 	sidecarContainerName       = "tomcat"
+	clusterName                = "storage-init"
 )
 
 var _ = Describe(
@@ -50,8 +55,7 @@ var _ = Describe(
 						AerospikeInitContainerSpec{},
 				}
 
-				clusterName := "storage-init"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -301,9 +305,7 @@ var _ = Describe(
 			"When doing invalid operations", func() {
 
 				threeVar := 3
-
-				clusterName := "storage-init"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -338,8 +340,211 @@ var _ = Describe(
 				)
 			},
 		)
+
+		Context(
+			"When doing PVC change", func() {
+
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+
+				BeforeEach(
+					func() {
+
+						racks := []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						}
+
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						rackConf := asdbv1.RackConfig{
+							Racks: racks,
+						}
+						aeroCluster.Spec.RackConfig = rackConf
+
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should change the pvcUID in initialisedVolumes", func() {
+
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						// validate initialisedVolumes format
+						err = validateInitVolumes(aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						initVolName := "ns"
+						unscheduledPod := clusterName + "-1-0"
+						deletedPVC := initVolName + "-" + unscheduledPod
+
+						oldInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
+
+						By("Unscheduling aerospike pods")
+
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
+						Expect(err).Should(HaveOccurred())
+
+						By("Cleaning up previous pvc")
+
+						pvcNamespacedName := getNamespacedName(
+							deletedPVC, namespace,
+						)
+
+						err = deletePVC(k8sClient, pvcNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Setting resources to schedule the pods")
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						newInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
+
+						By("Validating initialisedVolumes list")
+
+						err = compareInitialisedVolumes(oldInitVol, newInitVol, initVolName)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should remove old formatted initialisedVolumes names", func() {
+
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						// validate initialisedVolumes format
+						err = validateInitVolumes(aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						unscheduledPod := clusterName + "-1-0"
+
+						oldInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
+
+						By("Patching old volume name format")
+
+						patch1 := jsonpatch.PatchOperation{
+							Operation: "replace",
+							Path:      "/status/pods/" + unscheduledPod + "/initializedVolumes",
+							Value:     append(oldInitVol, "ns"),
+						}
+
+						var patches []jsonpatch.PatchOperation
+						patches = append(patches, patch1)
+
+						jsonPatchJSON, err := json.Marshal(patches)
+						Expect(err).ToNot(HaveOccurred())
+
+						constantPatch := crClient.RawPatch(types.JSONPatchType, jsonPatchJSON)
+
+						err = k8sClient.Status().Patch(
+							ctx, aeroCluster, constantPatch, crClient.FieldOwner("pod"),
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateInitVolumes(aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						By("Unscheduling aerospike pods")
+
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
+						Expect(err).Should(HaveOccurred())
+
+						By("Setting resources to schedule the pods")
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Validating initialisedVolumes list")
+
+						err = validateInitVolumes(aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+			},
+		)
 	},
 )
+
+func compareInitialisedVolumes(oldInitVol, newInitVol []string, initVolName string) error {
+	newInitVolMap := make(map[string]string, 2)
+
+	for idx := range newInitVol {
+		initVol := strings.Split(newInitVol[idx], "@")
+		if _, ok := newInitVolMap[initVol[0]]; ok {
+			return fmt.Errorf("found more than one occurrences of same volume in initialisedVolume list")
+		}
+
+		newInitVolMap[initVol[0]] = initVol[1]
+	}
+
+	for idx := range oldInitVol {
+		initVol := strings.Split(oldInitVol[idx], "@")
+		if initVol[0] == initVolName {
+			if initVol[1] == newInitVolMap[initVol[0]] {
+				return fmt.Errorf("invalid pvc uid, it should be changed after deleting pvc")
+			}
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("volume not found in initialisedVolumes list %s", initVolName)
+}
+
+func validateInitVolumes(aeroCluster *asdbv1.AerospikeCluster) error {
+	for podName := range aeroCluster.Status.Pods {
+		for idx := range aeroCluster.Status.Pods[podName].InitializedVolumes {
+			if !strings.Contains(aeroCluster.Status.Pods[podName].InitializedVolumes[idx], "@") {
+				return fmt.Errorf("InitializedVolume is not formatted as expected, current volName=%s",
+					aeroCluster.Status.Pods[podName].InitializedVolumes[idx])
+			}
+		}
+	}
+
+	return nil
+}
 
 func checkData(
 	aeroCluster *asdbv1.AerospikeCluster, assertHasData bool,

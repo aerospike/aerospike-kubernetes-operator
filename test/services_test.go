@@ -38,7 +38,7 @@ var _ = Describe(
 		It(
 			"Validate LB created", func() {
 				By("DeployCluster with LB")
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					"load-balancer-create", namespace,
 				)
 				aeroCluster := createDummyAerospikeCluster(
@@ -59,7 +59,7 @@ var _ = Describe(
 		It(
 			"Validate LB can not be updated", func() {
 				By("DeployCluster")
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					"load-balancer-invalid", namespace,
 				)
 				aeroCluster := createDummyAerospikeCluster(
@@ -86,7 +86,7 @@ var _ = Describe(
 		It(
 			"Validate LB created in existing cluster", func() {
 				By("DeployCluster without LB")
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					"load-balancer-update", namespace,
 				)
 				aeroCluster := createDummyAerospikeCluster(

@@ -52,7 +52,7 @@ func PodRestart(ctx goCtx.Context) {
 
 func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	clusterName := "warm-restart-cluster"
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 	aeroCluster := createAerospikeClusterPost560(
 		clusterNamespacedName, 2, image,

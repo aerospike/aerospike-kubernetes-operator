@@ -56,6 +56,7 @@ func (c *AerospikeCluster) Default() admission.Response {
 	return webhook.Patched(
 		"Patched aerospike spec with defaults",
 		webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec},
+		webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels},
 	)
 }
 
@@ -109,6 +110,14 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Update rosterNodeBlockList
 	for idx, nodeID := range c.Spec.RosterNodeBlockList {
 		c.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
+	if _, ok := c.Labels[AerospikeAPIVersionLabel]; !ok {
+		if c.Labels == nil {
+			c.Labels = make(map[string]string)
+		}
+
+		c.Labels[AerospikeAPIVersionLabel] = AerospikeAPIVersion
 	}
 
 	return nil
