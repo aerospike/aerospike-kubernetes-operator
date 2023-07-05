@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -691,6 +692,83 @@ func doTestNetworkPolicy(
 		},
 	)
 
+	// test-case valid only for multiPodPerHost true
+	if multiPodPerHost {
+		It("OnlyPodNetwork: should create cluster without nodePort service", func() {
+			clusterNamespacedName := getClusterNamespacedName(
+				"pod-network-cluster", multiClusterNs1)
+
+			networkPolicy := asdbv1.AerospikeNetworkPolicy{
+				AccessType:             asdbv1.AerospikeNetworkTypePod,
+				AlternateAccessType:    asdbv1.AerospikeNetworkTypePod,
+				TLSAccessType:          asdbv1.AerospikeNetworkTypePod,
+				TLSAlternateAccessType: asdbv1.AerospikeNetworkTypePod,
+			}
+
+			aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+				clusterNamespacedName, &networkPolicy, multiPodPerHost,
+				enableTLS,
+			)
+
+			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence := func(aeroCluster *asdbv1.AerospikeCluster, shouldExist bool) {
+				for podName := range aeroCluster.Status.Pods {
+					svc := &corev1.Service{}
+					err = k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: aeroCluster.Namespace,
+						Name:      podName,
+					}, svc)
+
+					if !shouldExist {
+						Expect(err).To(HaveOccurred())
+						Expect(errors.IsNotFound(err)).To(BeTrue())
+						Expect(aeroCluster.Status.Pods[podName].ServicePort).To(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).To(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).To(Equal(""))
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+						Expect(aeroCluster.Status.Pods[podName].ServicePort).NotTo(Equal(int32(0)))
+						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).NotTo(Equal(""))
+
+						if enableTLS {
+							Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).NotTo(Equal(int32(0)))
+						}
+					}
+				}
+			}
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, false)
+
+			By("Updating AccessType to hostInternal")
+			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeHostExternal
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = validateNetworkPolicy(ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, true)
+
+			By("Reverting AccessType to pod")
+			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypePod
+			err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			validateSvcExistence(aeroCluster, false)
+		})
+	}
+
 	Context(
 		"When using configuredIP", func() {
 			clusterNamespacedName := getNamespacedName("np-configured-ip", multiClusterNs1)
@@ -787,36 +865,39 @@ func doTestNetworkPolicy(
 			"np-custom-interface", multiClusterNs1,
 		)
 
-		It(
-			"Should add all custom interface IPs in aerospike.conf file", func() {
-				networkPolicy := asdbv1.AerospikeNetworkPolicy{
-					AccessType:                        asdbv1.AerospikeNetworkTypeCustomInterface,
-					CustomAccessNetworkNames:          []string{networkOne, networkTwo},
-					AlternateAccessType:               asdbv1.AerospikeNetworkTypeCustomInterface,
-					CustomAlternateAccessNetworkNames: []string{networkTwo},
-					FabricType:                        asdbv1.AerospikeNetworkTypeCustomInterface,
-					CustomFabricNetworkNames:          []string{networkThree},
-				}
+		// Skip this test when multiPodPerHost is true and enabledTLS true because Network Policy contains all
+		// customInterface type, so no nodePort service will be created hence no port mapping with k8s host node
+		if !(multiPodPerHost && enableTLS) {
+			It(
+				"Should add all custom interface IPs in aerospike.conf file", func() {
+					networkPolicy := asdbv1.AerospikeNetworkPolicy{
+						AccessType:                        asdbv1.AerospikeNetworkTypeCustomInterface,
+						CustomAccessNetworkNames:          []string{networkOne, networkTwo},
+						AlternateAccessType:               asdbv1.AerospikeNetworkTypeCustomInterface,
+						CustomAlternateAccessNetworkNames: []string{networkTwo},
+						FabricType:                        asdbv1.AerospikeNetworkTypeCustomInterface,
+						CustomFabricNetworkNames:          []string{networkThree},
+					}
 
-				if enableTLS {
-					networkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					networkPolicy.CustomTLSAccessNetworkNames = []string{networkOne, networkTwo}
-					networkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					networkPolicy.CustomTLSAlternateAccessNetworkNames = []string{networkTwo}
-					networkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-					networkPolicy.CustomTLSFabricNetworkNames = []string{networkThree}
-				}
+					if enableTLS {
+						networkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+						networkPolicy.CustomTLSAccessNetworkNames = []string{networkOne, networkTwo}
+						networkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+						networkPolicy.CustomTLSAlternateAccessNetworkNames = []string{networkTwo}
+						networkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
+						networkPolicy.CustomTLSFabricNetworkNames = []string{networkThree}
+					}
 
-				aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
-					clusterNamespacedName, &networkPolicy, multiPodPerHost,
-					enableTLS,
-				)
+					aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+						clusterNamespacedName, &networkPolicy, multiPodPerHost,
+						enableTLS,
+					)
 
-				aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-					// Network Interfaces to be used
-					networkAnnotationKey: "test1/ipvlan-conf-1, ipvlan-conf-2, ipvlan-conf-3",
-					// CNI updates this network-status in the pod annotations
-					networkStatusAnnotationKey: `[{
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						// Network Interfaces to be used
+						networkAnnotationKey: "test1/ipvlan-conf-1, ipvlan-conf-2, ipvlan-conf-3",
+						// CNI updates this network-status in the pod annotations
+						networkStatusAnnotationKey: `[{
     "name": "aws-cni",
     "interface": "eth0",
     "ips": [
@@ -849,20 +930,27 @@ func doTestNetworkPolicy(
     "mac": "06:0d:8f:a4:be:f8",
     "dns": {}
 }]`,
-				}
+					}
 
-				err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
-				Expect(err).ToNot(HaveOccurred())
+					err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+					Expect(err).ToNot(HaveOccurred())
 
-				err = validateNetworkPolicy(ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-			},
-		)
+					err = validateNetworkPolicy(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		}
 
 		It("Should recover when correct custom network names are updated", func() {
-			aeroCluster = createNonSCDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-			aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"missing-network"}
+			networkPolicy := asdbv1.AerospikeNetworkPolicy{
+				AccessType:               asdbv1.AerospikeNetworkTypeCustomInterface,
+				CustomAccessNetworkNames: []string{"missing-network"},
+			}
+
+			aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+				clusterNamespacedName, &networkPolicy, multiPodPerHost,
+				enableTLS,
+			)
 			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 				networkAnnotationKey: "missing-network, test1/ipvlan-conf-1, test1/ipvlan-conf-2",
 				networkStatusAnnotationKey: `[{

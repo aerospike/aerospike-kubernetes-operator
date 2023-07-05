@@ -15,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -87,19 +86,6 @@ func (r *SingleClusterReconciler) createSTS(
 
 	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
 
-	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
-		// Create services for all statefulset pods
-		for i := 0; i < rackState.Size; i++ {
-			// Statefulset name created from cr name
-			name := fmt.Sprintf("%s-%d", namespacedName.Name, i)
-			if err := r.createPodService(
-				name, r.aeroCluster.Namespace,
-			); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
 		r.aeroCluster.Spec.AerospikeConfig,
@@ -151,9 +137,8 @@ func (r *SingleClusterReconciler) createSTS(
 					// TerminationGracePeriodSeconds: &int64(30),
 					InitContainers: []corev1.Container{
 						{
-							Name:  asdbv1.AerospikeInitContainerName,
-							Image: asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
-							// Change to PullAlways for image testing.
+							Name:            asdbv1.AerospikeInitContainerName,
+							Image:           asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
@@ -481,246 +466,6 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	return nil
 }
 
-func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
-	r.Log.Info("Create headless service for statefulSet")
-
-	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-
-	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
-	service := &corev1.Service{}
-
-	err := r.Client.Get(
-		context.TODO(), types.NamespacedName{
-			Name: serviceName, Namespace: r.aeroCluster.Namespace,
-		}, service,
-	)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			service = &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					// Headless service has the same name as AerospikeCluster
-					Name:      serviceName,
-					Namespace: r.aeroCluster.Namespace,
-					// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-					Annotations: map[string]string{
-						"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-					},
-					Labels: ls,
-				},
-				Spec: corev1.ServiceSpec{
-					// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
-					// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
-					PublishNotReadyAddresses: true,
-					ClusterIP:                "None",
-					Selector:                 ls,
-				},
-			}
-
-			r.appendServicePorts(service)
-
-			// Set AerospikeCluster instance as the owner and controller
-			err = controllerutil.SetControllerReference(
-				r.aeroCluster, service, r.Scheme,
-			)
-			if err != nil {
-				return err
-			}
-
-			if err = r.Client.Create(
-				context.TODO(), service, createOption,
-			); err != nil {
-				return fmt.Errorf(
-					"failed to create headless service for statefulset: %v",
-					err,
-				)
-			}
-
-			r.Log.Info("Created new headless service")
-
-			return nil
-		}
-
-		return err
-	}
-
-	r.Log.Info(
-		"Service already exist for statefulSet. Using existing service", "name",
-		utils.NamespacedName(service.Namespace, service.Name),
-	)
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
-	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
-	if loadBalancer == nil {
-		r.Log.Info("LoadBalancer is not configured. Skipping...")
-		return nil
-	}
-
-	serviceName := r.aeroCluster.Name + "-lb"
-	service := &corev1.Service{}
-
-	if err := r.Client.Get(
-		context.TODO(), types.NamespacedName{
-			Name: serviceName, Namespace: r.aeroCluster.Namespace,
-		}, service,
-	); err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("Creating LoadBalancer service for cluster")
-			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-
-			var targetPort int32
-			if loadBalancer.TargetPort >= 1024 {
-				// if target port is specified in CR.
-				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(
-				r.aeroCluster.Spec.AerospikeConfig,
-			); tlsName != "" && tlsPort != nil {
-				targetPort = int32(*tlsPort)
-			} else {
-				targetPort = int32(*asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
-			}
-
-			var port int32
-			if loadBalancer.Port >= 1024 {
-				// if port is specified in CR.
-				port = loadBalancer.Port
-			} else {
-				port = targetPort
-			}
-
-			service = &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        serviceName,
-					Namespace:   r.aeroCluster.Namespace,
-					Annotations: loadBalancer.Annotations,
-					Labels:      ls,
-				},
-				Spec: corev1.ServiceSpec{
-					Type:     corev1.ServiceTypeLoadBalancer,
-					Selector: ls,
-					Ports: []corev1.ServicePort{
-						{
-							Port:       port,
-							Name:       loadBalancer.PortName,
-							TargetPort: intstr.FromInt(int(targetPort)),
-						},
-					},
-				},
-			}
-
-			if len(loadBalancer.LoadBalancerSourceRanges) > 0 {
-				service.Spec.LoadBalancerSourceRanges = loadBalancer.LoadBalancerSourceRanges
-			}
-
-			if len(loadBalancer.ExternalTrafficPolicy) > 0 {
-				service.Spec.ExternalTrafficPolicy = loadBalancer.ExternalTrafficPolicy
-			}
-
-			// Set AerospikeCluster instance as the owner and controller
-			if nErr := controllerutil.SetControllerReference(
-				r.aeroCluster, service, r.Scheme,
-			); nErr != nil {
-				return nErr
-			}
-
-			if nErr := r.Client.Create(
-				context.TODO(), service, createOption,
-			); nErr != nil {
-				return nErr
-			}
-
-			r.Log.Info(
-				"Created new LoadBalancer service.", "serviceName",
-				service.GetName(),
-			)
-
-			return nil
-		}
-
-		return err
-	}
-
-	r.Log.Info(
-		"LoadBalancer Service already exist for cluster. Using existing service",
-		"name", utils.NamespacedName(service.Namespace, service.Name),
-	)
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) error {
-	service := &corev1.Service{}
-	if err := r.Client.Get(
-		context.TODO(),
-		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
-	); err == nil {
-		return nil
-	}
-
-	// NodePort will be allocated automatically
-	service = &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pName,
-			Namespace: pNamespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeNodePort,
-			Selector: map[string]string{
-				"statefulset.kubernetes.io/pod-name": pName,
-			},
-			ExternalTrafficPolicy: "Local",
-		},
-	}
-
-	r.appendServicePorts(service)
-
-	// Set AerospikeCluster instance as the owner and controller.
-	// It is created before Pod, so Pod cannot be the owner
-	err := controllerutil.SetControllerReference(
-		r.aeroCluster, service, r.Scheme,
-	)
-	if err != nil {
-		return err
-	}
-
-	if err := r.Client.Create(
-		context.TODO(), service, createOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to create new service for pod %s: %v", pName, err,
-		)
-	}
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
-	if svcPort := asdbv1.GetServicePort(
-		r.aeroCluster.Spec.
-			AerospikeConfig,
-	); svcPort != nil {
-		service.Spec.Ports = append(
-			service.Spec.Ports, corev1.ServicePort{
-				Name: asdbv1.ServicePortName,
-				Port: int32(*svcPort),
-			},
-		)
-	}
-
-	if _, tlsPort := asdbv1.GetServiceTLSNameAndPort(
-		r.aeroCluster.Spec.AerospikeConfig,
-	); tlsPort != nil {
-		service.Spec.Ports = append(
-			service.Spec.Ports, corev1.ServicePort{
-				Name: asdbv1.ServiceTLSPortName,
-				Port: int32(*tlsPort),
-			},
-		)
-	}
-}
-
 // isPodUpgraded checks if all containers in the pod have images from the
 // cluster spec.
 func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
@@ -793,30 +538,6 @@ func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
 	}
 
 	return true
-}
-
-func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
-	service := &corev1.Service{}
-
-	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
-	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info(
-				"Can't find service for pod while trying to delete it. Skipping...",
-				"service", serviceName,
-			)
-
-			return nil
-		}
-
-		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
-	}
-
-	if err := r.Client.Delete(context.TODO(), service); err != nil {
-		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
-	}
-
-	return nil
 }
 
 // Called while creating new cluster and also during rolling restart.
@@ -1202,13 +923,13 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st.Spec.Template.Spec.ImagePullSecrets = r.aeroCluster.Spec.PodSpec.ImagePullSecrets
 
 	st.Spec.Template.Spec.Containers =
-		updateStatefulSetContainers(
+		updateSTSContainers(
 			st.Spec.Template.Spec.Containers,
 			r.aeroCluster.Spec.PodSpec.Sidecars,
 		)
 
 	st.Spec.Template.Spec.InitContainers =
-		updateStatefulSetContainers(
+		updateSTSContainers(
 			st.Spec.Template.Spec.InitContainers,
 			r.aeroCluster.Spec.PodSpec.InitContainers,
 		)
@@ -1216,7 +937,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	r.updateReservedContainers(st)
 }
 
-func updateStatefulSetContainers(
+func updateSTSContainers(
 	stsContainers []corev1.Container, specContainers []corev1.Container,
 ) []corev1.Container {
 	// Add new sidecars.
@@ -1774,15 +1495,6 @@ func getNamespacedNameForSTS(
 	}
 }
 
-func getNamespacedNameForSTSConfigMap(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
-}
-
 func getSTSPodOrdinal(podName string) (*int32, error) {
 	parts := strings.Split(podName, "-")
 	ordinalStr := parts[len(parts)-1]
@@ -1799,9 +1511,6 @@ func getSTSPodOrdinal(podName string) (*int32, error) {
 
 func getSTSPodName(statefulSetName string, index int32) string {
 	return fmt.Sprintf("%s-%d", statefulSetName, index)
-}
-func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
-	return aeroCluster.Name
 }
 
 func newSTSEnvVar(name, fieldPath string) corev1.EnvVar {

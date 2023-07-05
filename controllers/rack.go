@@ -110,7 +110,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
 
-			found, res = r.createRack(zeroSizedRack)
+			found, res = r.createEmptyRack(zeroSizedRack)
 			if !res.isSuccess {
 				return res
 			}
@@ -169,7 +169,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
-			found, res = r.createRack(zeroSizedRack)
+			found, res = r.createEmptyRack(zeroSizedRack)
 
 			if !res.isSuccess {
 				return res
@@ -197,7 +197,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) createRack(rackState *RackState) (
+func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	*appsv1.StatefulSet, reconcileResult,
 ) {
 	r.Log.Info("Create new Aerospike cluster if needed")
@@ -490,6 +490,15 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return reconcileError(err)
 	}
 
+	// Safe check to delete all dangling pod services which are no longer required
+	// There won't be any case of dangling pod service with MultiPodPerHost false, so ignore that case
+	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost &&
+		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		if err := r.cleanupDanglingPodServices(rackState); err != nil {
+			return reconcileError(err)
+		}
+	}
+
 	return reconcileSuccess()
 }
 
@@ -545,7 +554,8 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 		)
 	}
 
-	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	// Create pod service for the scaled up pod when node network is used in network policy
+	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for each pod
 		for _, podName := range newPodNames {
 			if err = r.createPodService(
@@ -660,6 +670,10 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
+		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+			return nil, reconcileError(err)
+		}
+
 		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(
@@ -682,9 +696,8 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			return statefulSet, reconcileRequeueAfter(1)
 		}
 	}
-	// If it was last batch then go ahead
 
-	// return a fresh copy
+	// If it was last batch then go ahead return a fresh copy
 	statefulSet, err = r.getSTS(rackState)
 	if err != nil {
 		return statefulSet, reconcileError(err)
@@ -939,6 +952,10 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			"podsBatch", getPodNames(podsBatch),
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
+
+		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+			return nil, reconcileError(err)
+		}
 
 		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
 		if !res.isSuccess {
