@@ -87,8 +87,12 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, chkErr
 	}
 
-	if err := r.migrateAerospikeCluster(context.TODO(), hasFailed); err != nil {
-		return reconcile.Result{Requeue: true}, err
+	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
+		r.Log.Info("cluster migration is not needed")
+	} else {
+		if err := r.migrateAerospikeCluster(context.TODO(), hasFailed); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
 	}
 
 	// Reconcile all racks
@@ -796,11 +800,6 @@ func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 
 func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
 	r.Log.Info("Migrating Initialised Volumes name to new format")
-
-	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
-		r.Log.Info("cluster migration is not needed")
-		return nil
-	}
 
 	if !hasFailed {
 		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {

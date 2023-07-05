@@ -695,7 +695,7 @@ func doTestNetworkPolicy(
 	// test-case valid only for multiPodPerHost true
 	if multiPodPerHost {
 		It("OnlyPodNetwork: should create cluster without nodePort service", func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"pod-network-cluster", multiClusterNs1)
 
 			networkPolicy := asdbv1.AerospikeNetworkPolicy{
