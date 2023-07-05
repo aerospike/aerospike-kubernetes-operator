@@ -797,16 +797,16 @@ func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
 	r.Log.Info("Migrating Initialised Volumes name to new format")
 
-	if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
-		return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
-	}
-
-	if r.aeroCluster.Labels["aerospike.com/api-version"] == "v1" {
-		r.Log.Info("migration is not needed")
+	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
+		r.Log.Info("cluster migration is not needed")
 		return nil
 	}
 
 	if !hasFailed {
+		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
+			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
+		}
+
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
 			r.Log.Error(err, "Problem patching Initialised volumes")
 			return err
