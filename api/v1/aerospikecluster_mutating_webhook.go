@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"gomodules.xyz/jsonpatch/v2"
+	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -34,7 +36,7 @@ import (
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (c *AerospikeCluster) Default() admission.Response {
+func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 	asLog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	asLog.Info(
@@ -53,10 +55,16 @@ func (c *AerospikeCluster) Default() admission.Response {
 		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", c.Spec,
 	)
 
+	var patches []jsonpatch.JsonPatchOperation
+	patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec})
+
+	if operation == v1.Create {
+		patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels})
+	}
+
 	return webhook.Patched(
 		"Patched aerospike spec with defaults",
-		webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec},
-		webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels},
+		patches...,
 	)
 }
 
