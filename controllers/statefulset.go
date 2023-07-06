@@ -1104,10 +1104,11 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage() error {
 
 			if !utils.IsImageEqual(container.Image, desiredImage) {
 				r.Log.Info(
-					"Updating image in statefulset spec", "container",
-					container.Name, "desiredImage", desiredImage,
-					"currentImage",
-					container.Image,
+					"Updating image in statefulset spec",
+					"statefulset", statefulSet.Name,
+					"container", container.Name,
+					"desiredImage", desiredImage,
+					"currentImage", container.Image,
 				)
 
 				statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage

@@ -820,7 +820,7 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 		}
 	}
 
-	if err := r.updateClusterLabel(ctx); err != nil {
+	if err := r.AddApiVersionLabel(ctx); err != nil {
 		r.Log.Error(err, "Problem patching label")
 		return err
 	}
@@ -932,7 +932,7 @@ func (r *SingleClusterReconciler) getPVCUid(ctx context.Context, pod *corev1.Pod
 	return "", nil
 }
 
-func (r *SingleClusterReconciler) updateClusterLabel(ctx context.Context) error {
+func (r *SingleClusterReconciler) AddApiVersionLabel(ctx context.Context) error {
 	aeroCluster := r.aeroCluster
 	if aeroCluster.Labels == nil {
 		aeroCluster.Labels = make(map[string]string)

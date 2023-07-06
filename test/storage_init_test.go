@@ -347,6 +347,7 @@ var _ = Describe(
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
+				initVolName := "ns"
 
 				BeforeEach(
 					func() {
@@ -363,6 +364,8 @@ var _ = Describe(
 							Racks: racks,
 						}
 						aeroCluster.Spec.RackConfig = rackConf
+						aeroCluster.Labels = make(map[string]string)
+						aeroCluster.Labels["checkLabel"] = "true"
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -391,13 +394,12 @@ var _ = Describe(
 						err = validateInitVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						initVolName := "ns"
 						unscheduledPod := clusterName + "-1-0"
 						deletedPVC := initVolName + "-" + unscheduledPod
 
 						oldInitVol := aeroCluster.Status.Pods[unscheduledPod].InitializedVolumes
 
-						By("Unscheduling aerospike pods")
+						By("Unschedule aerospike pods")
 
 						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
@@ -454,7 +456,7 @@ var _ = Describe(
 						patch1 := jsonpatch.PatchOperation{
 							Operation: "replace",
 							Path:      "/status/pods/" + unscheduledPod + "/initializedVolumes",
-							Value:     append(oldInitVol, "ns"),
+							Value:     append(oldInitVol, initVolName),
 						}
 
 						var patches []jsonpatch.PatchOperation
@@ -473,8 +475,25 @@ var _ = Describe(
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
+						checkLabel := aeroCluster.Labels["checkLabel"]
+						Expect(checkLabel).To(Equal("true"))
+
+						apiLabel := aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel]
+						Expect(apiLabel).To(Equal(asdbv1.AerospikeAPIVersion))
+
 						err = validateInitVolumes(aeroCluster)
 						Expect(err).Should(HaveOccurred())
+
+						aeroCluster.Labels = nil
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						_, ok := aeroCluster.Labels["checkLabel"]
+						Expect(ok).To(Equal(false))
+
+						apiLabel = aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel]
+						Expect(apiLabel).To(Equal(asdbv1.AerospikeAPIVersion))
 
 						By("Unscheduling aerospike pods")
 
