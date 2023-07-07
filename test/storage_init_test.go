@@ -489,13 +489,16 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
 						_, ok := aeroCluster.Labels["checkLabel"]
 						Expect(ok).To(Equal(false))
 
 						apiLabel = aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel]
 						Expect(apiLabel).To(Equal(asdbv1.AerospikeAPIVersion))
 
-						By("Unscheduling aerospike pods")
+						By("Unschedule aerospike pods")
 
 						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
