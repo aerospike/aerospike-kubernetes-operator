@@ -1332,7 +1332,7 @@ var _ = Describe(
 						ctx := goctx.Background()
 
 						clusterName := "ac-invalid"
-						clusterNamespacedName := getClusterNamespacedName(
+						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
 						)
 
@@ -1632,7 +1632,7 @@ var _ = Describe(
 								var accessControl *asdbv1.AerospikeAccessControlSpec
 
 								clusterName := "ac-no-security"
-								clusterNamespacedName := getClusterNamespacedName(
+								clusterNamespacedName := getNamespacedName(
 									clusterName, namespace,
 								)
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
@@ -1734,7 +1734,7 @@ var _ = Describe(
 							"AccessControlLifeCycle", func() {
 
 								clusterName := "ac-lifecycle"
-								clusterNamespacedName := getClusterNamespacedName(
+								clusterNamespacedName := getNamespacedName(
 									clusterName, namespace,
 								)
 

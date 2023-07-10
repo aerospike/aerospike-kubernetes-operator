@@ -188,7 +188,8 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	SchedulingPolicy `json:",inline"`
 
 	// If set true then multiple pods can be created per Kubernetes Node.
-	// This will create a NodePort service for each Pod.
+	// This will create a NodePort service for each Pod if aerospikeNetworkPolicy defined
+	// has one of the network types: 'hostInternal', 'hostExternal', 'configuredIP'
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
 	// and any traffic that is sent to this port is forwarded to the service.
 	// Here service picks a random port in range (30000-32767), so these port should be open.
@@ -790,9 +791,13 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// HostExternalIP of the K8s host this pod is scheduled on.
 	HostExternalIP string `json:"hostExternalIP,omitempty"`
 	// PodPort is the port K8s internal Aerospike clients can connect to.
-	PodPort int `json:"podPort"`
+	PodPort int `json:"podPort,omitempty"`
+	// PodTLSPort is the port K8s internal Aerospike clients can connect to using TLS.
+	PodTLSPort int `json:"podTlsPort,omitempty"`
 	// ServicePort is the port Aerospike clients outside K8s can connect to.
-	ServicePort int32 `json:"servicePort"`
+	ServicePort int32 `json:"servicePort,omitempty"`
+	// ServiceTLSPort is the port Aerospike clients outside K8s can connect to using TLS.
+	ServiceTLSPort int32 `json:"serviceTlsPort,omitempty"`
 
 	// Aerospike server instance summary for this pod.
 	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`

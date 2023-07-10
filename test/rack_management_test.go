@@ -21,7 +21,7 @@ var _ = Describe(
 				It(
 					"Should validate rack management flow", func() {
 						clusterName := "rack-management1"
-						clusterNamespacedName := getClusterNamespacedName(
+						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
 						)
 
@@ -153,7 +153,7 @@ var _ = Describe(
 					"should allow Cluster sz less than number of racks",
 					func() {
 						clusterName := "rack-management2"
-						clusterNamespacedName := getClusterNamespacedName(
+						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
 						)
 
@@ -216,7 +216,7 @@ var _ = Describe(
 						// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
 
 						clusterName := "rack-config-update"
-						clusterNamespacedName := getClusterNamespacedName(
+						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
 						)
 						aeroCluster := createDummyAerospikeCluster(
@@ -377,7 +377,7 @@ var _ = Describe(
 					"When using valid rack storage config", func() {
 
 						clusterName := "rack-specific-storage"
-						clusterNamespacedName := getClusterNamespacedName(
+						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
 						)
 						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
@@ -406,7 +406,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				clusterName := "invalid-rack-config"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 

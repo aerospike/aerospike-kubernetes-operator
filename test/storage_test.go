@@ -37,7 +37,7 @@ var _ = Describe(
 		ctx := goctx.Background()
 
 		clusterName := "storage"
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 

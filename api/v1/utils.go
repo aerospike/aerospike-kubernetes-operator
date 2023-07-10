@@ -91,11 +91,13 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev1"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev2"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIDLabel         = "aerospike.com/rack-id"
+	AerospikeAPIVersionLabel     = "aerospike.com/api-version"
+	AerospikeAPIVersion          = "v1"
 )
 
 func getInitContainerImage(registry string) string {

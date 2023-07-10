@@ -27,7 +27,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "large-reconcile"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
