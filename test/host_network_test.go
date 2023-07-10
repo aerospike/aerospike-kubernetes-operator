@@ -19,7 +19,7 @@ var _ = Describe(
 		Context(
 			"HostNetwork", func() {
 				clusterName := "host-network-cluster"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := createAerospikeClusterPost560(

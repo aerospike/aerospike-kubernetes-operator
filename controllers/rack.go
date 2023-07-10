@@ -458,15 +458,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
-	if err := r.updateAerospikeInitContainerImage(found); err != nil {
-		r.Log.Error(
-			err, "Failed to update Aerospike Init container", "stsName",
-			found.Name,
-		)
-
-		return reconcileError(err)
-	}
-
 	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, nil)
 	if !res.isSuccess {
 		return res

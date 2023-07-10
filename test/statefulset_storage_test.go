@@ -22,7 +22,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := "sts-storage"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 

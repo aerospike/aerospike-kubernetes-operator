@@ -29,5 +29,5 @@ func (h *mutatingHandler) Handle(
 	}
 
 	// Default the object
-	return obj.Default()
+	return obj.Default(req.Operation)
 }

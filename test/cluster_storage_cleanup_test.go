@@ -27,7 +27,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := "storage-cleanup"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -231,7 +231,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := "rack-storage"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -404,7 +404,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				clusterName := "rack-storage-invalid"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 

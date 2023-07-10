@@ -25,7 +25,7 @@ var _ = Describe(
 		It(
 			"Validate LDAP user transactions", func() {
 				By("DeployCluster with LDAP auth")
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					"ldap-auth", namespace,
 				)
 				aeroCluster := getAerospikeClusterSpecWithLDAP(clusterNamespacedName)

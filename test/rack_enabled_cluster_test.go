@@ -34,7 +34,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "rack-enabled"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
