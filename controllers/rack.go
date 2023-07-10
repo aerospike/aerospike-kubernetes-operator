@@ -763,7 +763,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	// Ignore safe stop check on pod not in running state.
 	if utils.IsPodRunningAndReady(pod) {
-		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods, true); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}

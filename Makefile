@@ -328,5 +328,5 @@ catalog: opm ## Generate a file-based catalog and its dockerfile.
 docker-buildx-catalog: catalog
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag ${CATALOG_IMG} -f $(CATALOG_DIR).Dockerfile .
+	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag $(CATALOG_IMG) -f $(CATALOG_DIR).Dockerfile .
 	- docker buildx rm project-v3-builder

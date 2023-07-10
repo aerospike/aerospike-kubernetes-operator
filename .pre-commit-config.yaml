@@ -1,8 +1,12 @@
 repos:
   - repo: https://github.com/tekwizely/pre-commit-golang
-    rev: v1.0.0-rc.1 # change this to the latest version
+    rev: v1.0.0-rc.1
     hooks:
       - id: go-mod-tidy
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.52.2
+    hooks:
       - id: golangci-lint
         args:
           - --config=.golangci.yml
