@@ -40,7 +40,7 @@ var _ = Describe("BatchRestart", func() {
 
 	Context("When doing valid operations", func() {
 		clusterName := batchClusterName
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 		Context("BatchRollingRestart", func() {
@@ -48,7 +48,7 @@ var _ = Describe("BatchRestart", func() {
 		})
 		Context("BatchUpgrade", func() {
 			clusterName := "batch-upgrade"
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
 			BatchUpgrade(ctx, clusterNamespacedName)
@@ -57,7 +57,7 @@ var _ = Describe("BatchRestart", func() {
 
 	Context("When doing invalid operations", func() {
 		clusterName := batchClusterName
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 		BeforeEach(
@@ -125,7 +125,7 @@ var _ = Describe("BatchRestart", func() {
 
 	Context("When doing namespace related operations", func() {
 		clusterName := batchClusterName
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 		It("Should fail if replication-factor is 1", func() {

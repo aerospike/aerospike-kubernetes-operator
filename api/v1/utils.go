@@ -96,6 +96,8 @@ const (
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIDLabel         = "aerospike.com/rack-id"
+	AerospikeAPIVersionLabel     = "aerospike.com/api-version"
+	AerospikeAPIVersion          = "v1"
 )
 
 func getInitContainerImage(registry string) string {

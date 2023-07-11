@@ -28,7 +28,7 @@ var _ = Describe("SCMode", func() {
 
 	Context("When doing valid operation", func() {
 		clusterName := "sc-mode"
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 		AfterEach(func() {
@@ -204,7 +204,7 @@ var _ = Describe("SCMode", func() {
 
 	Context("When doing invalid operation", func() {
 		clusterName := "sc-mode-invalid"
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
 

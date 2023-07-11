@@ -49,7 +49,7 @@ var _ = Describe(
 				}
 
 				clusterName := "storage-wipe"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 

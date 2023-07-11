@@ -576,7 +576,7 @@ func deleteCluster(
 	// TODO: Maybe add these checks in cluster delete itself.
 	// time.Sleep(time.Second * 12)
 
-	clusterNamespacedName := getClusterNamespacedName(
+	clusterNamespacedName := getNamespacedName(
 		aeroCluster.Name, aeroCluster.Namespace,
 	)
 

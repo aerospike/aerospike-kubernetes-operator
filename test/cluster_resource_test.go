@@ -22,7 +22,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "cl-resource-lifecycle"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -67,7 +67,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 	Context(
 		"Deploy", func() {
 			clusterName := "cluster-resource-invalid"
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
@@ -111,7 +111,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 	Context(
 		"Update", func() {
 			clusterName := "cl-resource-insuff"
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
