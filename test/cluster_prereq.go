@@ -2,8 +2,6 @@ package test
 
 import (
 	goctx "context"
-	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -16,6 +14,8 @@ const (
 	// aerospike-operator- is the prefix set in config/default/kustomization.yaml file.
 	// Need to modify this name if prefix is changed in yaml file
 	aeroClusterServiceAccountName string = "aerospike-operator-controller-manager"
+	aeroClusterCRB                string = "aerospike-cluster"
+	aeroClusterCR                 string = "aerospike-cluster"
 )
 
 func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
@@ -37,44 +37,19 @@ func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 		})
 	}
 
-	return updateRoleBinding(k8sClient, ctx, subjects)
-}
-
-func getClusterRoleBinding(
-	k8sClient client.Client, ctx goctx.Context,
-) (*rbac.ClusterRoleBinding, error) {
-	crbs := &rbac.ClusterRoleBindingList{}
-	if err := k8sClient.List(ctx, crbs); err != nil {
-		return nil, err
+	crb := &rbac.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: aeroClusterCRB,
+		},
+		Subjects: subjects,
+		RoleRef: rbac.RoleRef{
+			APIGroup: rbac.GroupName,
+			Kind:     "ClusterRole",
+			Name:     aeroClusterCR,
+		},
 	}
 
-	for crbIndex := range crbs.Items {
-		value, ok := crbs.Items[crbIndex].Labels["olm.owner"]
-		if !ok {
-			continue
-		}
-
-		if strings.HasPrefix(value, "aerospike-kubernetes-operator") {
-			return &crbs.Items[crbIndex], nil
-		}
-	}
-
-	return nil, fmt.Errorf("could not find cluster role binding for operator")
-}
-
-func updateRoleBinding(
-	k8sClient client.Client, ctx goctx.Context,
-	subjects []rbac.Subject,
-) error {
-	crb, err := getClusterRoleBinding(k8sClient, ctx)
-	if err != nil {
-		return err
-	}
-
-	crb.Subjects = subjects
-
-	err = k8sClient.Update(ctx, crb)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err := k8sClient.Create(ctx, crb); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
