@@ -1,8 +1,8 @@
 # Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
 # ignores vulnerabilities until expiry date; change duration by modifying expiry date
 
-# Helm-chart ingores present in this file doesn't work on Snyk UI. They are just placeholders of issues to be ignores.
-# Helm-chart related ignores should be added directly in the Snyk UI
+# Helm-chart related ignore rules present in this file don't work on Snyk UI. They are just placeholders of issues to be ignored.
+# Helm-chart related ignore rules should be added directly in the Snyk UI
 
 ignore:
   SNYK-RHEL8-OPENSSLLIBS-3315644:
@@ -11,7 +11,7 @@ ignore:
         expires: 2023-04-18T11:38:28.614Z
   SNYK-CC-K8S-1:
     - 'config/samples/storage/aerospike_local_volume_provisioner.yaml > *':
-        reason: Third party (Local Static Provisioner) manifest file
+        reason: Third-party (Local Static Provisioner) manifest file
   SNYK-CC-K8S-4:
     - 'config/default/manager_webhook_patch.yaml > *':
         reason: False positive, fix already present in main 'config/manager/manager.yaml'
@@ -94,6 +94,6 @@ ignore:
         reason: Required by init-container. Only asdb.aerospike.com group permission
   SNYK-CC-K8S-47:
     - 'config/rbac/role.yaml > *':
-        reason: Secret permission required for Operator working
+        reason: Secret permission is required for the Operator working
     - 'helm-charts/aerospike-kubernetes-operator/templates/aerospike-operator-manager-clusterrole.yaml > *':
-        reason: Secret permission required for Operator working
+        reason: Secret permission is required for the Operator working
