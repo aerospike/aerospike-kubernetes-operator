@@ -109,7 +109,6 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 		}
-
 	}
 
 	for idx := range rackStateList {

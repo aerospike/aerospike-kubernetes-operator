@@ -799,7 +799,7 @@ var _ = Describe(
 
 		Context("When testing failed rack recovery by scale down", func() {
 			clusterName := "failed-rack-config"
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
 			BeforeEach(
@@ -854,7 +854,7 @@ var _ = Describe(
 		Context(
 			"When testing failed rack recovery by rolling restart", func() {
 				clusterName := "cl-resource-insuff"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 

@@ -879,11 +879,13 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 
 		if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
 			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
+
 			patch1 := jsonpatch.PatchOperation{
 				Operation: "replace",
 				Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
 				Value:     initializedVolumes,
 			}
+
 			patches = append(patches, patch1)
 		}
 	}
