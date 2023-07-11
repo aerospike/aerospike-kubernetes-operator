@@ -576,7 +576,7 @@ func deleteCluster(
 	// TODO: Maybe add these checks in cluster delete itself.
 	// time.Sleep(time.Second * 12)
 
-	clusterNamespacedName := getClusterNamespacedName(
+	clusterNamespacedName := getNamespacedName(
 		aeroCluster.Name, aeroCluster.Namespace,
 	)
 
@@ -935,7 +935,6 @@ func createDummyAerospikeClusterWithRFAndStorage(
 	return aeroCluster
 }
 
-//nolint:unparam // generic func
 func createNonSCDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {

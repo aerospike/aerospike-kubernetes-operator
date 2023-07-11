@@ -16,13 +16,13 @@ var _ = Describe(
 			"When DeployMultiClusterMultiNs", func() {
 				// 1st cluster
 				clusterName1 := "multicluster"
-				clusterNamespacedName1 := getClusterNamespacedName(
+				clusterNamespacedName1 := getNamespacedName(
 					clusterName1, multiClusterNs1,
 				)
 
 				// 2nd cluster
 				clusterName2 := "multicluster"
-				clusterNamespacedName2 := getClusterNamespacedName(
+				clusterNamespacedName2 := getNamespacedName(
 					clusterName2, multiClusterNs2,
 				)
 
@@ -47,13 +47,13 @@ var _ = Describe(
 			"When DeployMultiClusterSingleNsTest", func() {
 				// 1st cluster
 				clusterName1 := "multicluster1"
-				clusterNamespacedName1 := getClusterNamespacedName(
+				clusterNamespacedName1 := getNamespacedName(
 					clusterName1, multiClusterNs1,
 				)
 
 				// 2nd cluster
 				clusterName2 := "multicluster2"
-				clusterNamespacedName2 := getClusterNamespacedName(
+				clusterNamespacedName2 := getNamespacedName(
 					clusterName2, multiClusterNs1,
 				)
 

@@ -57,7 +57,7 @@ var _ = Describe(
 		)
 		Context(
 			"ScaleDownWithMigrateFillDelay", func() {
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					"migrate-fill-delay-cluster", namespace,
 				)
 				migrateFillDelay := int64(120)
@@ -123,7 +123,7 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 		It(
 			fmt.Sprintf("Deploy-%s", v), func() {
 				clusterName := "deploy-cluster"
-				clusterNamespacedName := getClusterNamespacedName(
+				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -166,7 +166,7 @@ func DeployClusterForDiffStorageTest(
 			// SSD Storage Engine
 			It(
 				"SSDStorageCluster", func() {
-					clusterNamespacedName := getClusterNamespacedName(
+					clusterNamespacedName := getNamespacedName(
 						"ssdstoragecluster", namespace,
 					)
 					aeroCluster := createSSDStorageCluster(
@@ -183,7 +183,7 @@ func DeployClusterForDiffStorageTest(
 			// HDD Storage Engine with Data in Memory
 			It(
 				"HDDAndDataInMemStorageCluster", func() {
-					clusterNamespacedName := getClusterNamespacedName(
+					clusterNamespacedName := getNamespacedName(
 						"inmemstoragecluster", namespace,
 					)
 
@@ -201,7 +201,7 @@ func DeployClusterForDiffStorageTest(
 			// HDD Storage Engine with Data in Index Engine
 			It(
 				"HDDAndDataInIndexStorageCluster", func() {
-					clusterNamespacedName := getClusterNamespacedName(
+					clusterNamespacedName := getNamespacedName(
 						"datainindexcluster", namespace,
 					)
 
@@ -219,7 +219,7 @@ func DeployClusterForDiffStorageTest(
 			// Data in Memory Without Persistence
 			It(
 				"DataInMemWithoutPersistentStorageCluster", func() {
-					clusterNamespacedName := getClusterNamespacedName(
+					clusterNamespacedName := getNamespacedName(
 						"nopersistentcluster", namespace,
 					)
 
@@ -256,7 +256,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 	It(
 		"deploy with dnsPolicy 'None' and dnsConfig given",
 		func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"dns-config-cluster", namespace,
 			)
 			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -307,7 +307,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 func DeployClusterWithSyslog(ctx goctx.Context) {
 	It(
 		"deploy with syslog logging config", func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"logging-config-cluster", namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -334,7 +334,7 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 // Test cluster cr updation
 func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 	// Note: this storage will be used by dynamically added namespace after deployment of cluster
 	dynamicNsPath := "/test/dev/dynamicns"
@@ -599,7 +599,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 // Test cluster validation Common for deployment and update both
 func NegativeClusterValidationTest(ctx goctx.Context) {
 	clusterName := "invalid-cluster"
-	clusterNamespacedName := getClusterNamespacedName(clusterName, namespace)
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 	Context(
 		"NegativeDeployClusterValidationTest", func() {
@@ -621,7 +621,7 @@ func negativeDeployClusterValidationTest(
 		"Validation", func() {
 			It(
 				"EmptyClusterName: should fail for EmptyClusterName", func() {
-					cName := getClusterNamespacedName(
+					cName := getNamespacedName(
 						"", clusterNamespacedName.Namespace,
 					)
 
@@ -634,7 +634,7 @@ func negativeDeployClusterValidationTest(
 			It(
 				"EmptyNamespaceName: should fail for EmptyNamespaceName",
 				func() {
-					cName := getClusterNamespacedName("validclustername", "")
+					cName := getNamespacedName("validclustername", "")
 
 					aeroCluster := createDummyAerospikeCluster(cName, 1)
 					err := deployCluster(k8sClient, ctx, aeroCluster)

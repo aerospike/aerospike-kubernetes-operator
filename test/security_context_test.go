@@ -38,7 +38,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext applied", func() {
 			By("DeployCluster with SecurityContext")
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"security-context-create", namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
@@ -73,7 +73,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext updated", func() {
 			By("DeployCluster")
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"security-context-updated", namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
