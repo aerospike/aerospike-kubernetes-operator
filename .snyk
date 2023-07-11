@@ -1,5 +1,9 @@
 # Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
 # ignores vulnerabilities until expiry date; change duration by modifying expiry date
+
+# Helm-chart ingores present in this file doesn't work on Snyk UI. They are just placeholders of issues to be ignores.
+# Helm-chart related ignores should be added directly in the Snyk UI
+
 ignore:
   SNYK-RHEL8-OPENSSLLIBS-3315644:
     - '*':
@@ -84,12 +88,12 @@ ignore:
     - 'config/default/manager_config_patch.yaml > *':
         reason: Duplicate of issue present in main 'config/manager/manager.yaml'
   SNYK-CC-K8S-44:
-    - 'helm-charts/aerospike-kubernetes-operator/templates/aerospike-cluster-rbac.yaml > *':
-        reason: Will be removed in AKO 3.0 version
+    - 'helm-charts/aerospike-kubernetes-operator/templates/aerospikecluster-clusterrole.yaml > *':
+        reason: Required by init-container. Only asdb.aerospike.com group permission
+    - 'config/manifests/rbac/aerospikecluster_role.yaml > *':
+        reason: Required by init-container. Only asdb.aerospike.com group permission
   SNYK-CC-K8S-47:
-    - 'config/manifests/rbac/role.yaml > *':
-        reason: Will be removed in AKO 3.0 version
     - 'config/rbac/role.yaml > *':
-        reason: Secret and Pod permission required for Operator working
+        reason: Secret permission required for Operator working
     - 'helm-charts/aerospike-kubernetes-operator/templates/aerospike-operator-manager-clusterrole.yaml > *':
-        reason: Secret and Pod permission required for Operator working
+        reason: Secret permission required for Operator working
