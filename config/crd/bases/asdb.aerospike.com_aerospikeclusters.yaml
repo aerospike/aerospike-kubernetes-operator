@@ -13199,7 +13199,6 @@ spec:
                   - podIP
                   - podPort
                   - podSpecHash
-                  - servicePort
                   type: object
                 description: Pods has Aerospike specific status of the pods. This
                   is map instead of the conventional map as list convention to allow
@@ -30511,7 +30510,6 @@ spec:
                   - podIP
                   - podPort
                   - podSpecHash
-                  - servicePort
                   type: object
                 description: Pods has Aerospike specific status of the pods. This
                   is map instead of the conventional map as list convention to allow

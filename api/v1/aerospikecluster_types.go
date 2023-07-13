@@ -793,7 +793,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// PodPort is the port K8s internal Aerospike clients can connect to.
 	PodPort int `json:"podPort"`
 	// ServicePort is the port Aerospike clients outside K8s can connect to.
-	ServicePort int32 `json:"servicePort"`
+	ServicePort int32 `json:"servicePort,omitempty"`
 
 	// Aerospike server instance summary for this pod.
 	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`

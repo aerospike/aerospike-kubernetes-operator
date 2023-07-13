@@ -86,12 +86,13 @@ const (
 )
 
 const (
-	AerospikeServerContainerName                   string = "aerospike-server"
-	AerospikeInitContainerName                     string = "aerospike-init"
-	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
-	AerospikeInitContainerDefaultRegistry          string = "docker.io"
-	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev2"
+	AerospikeServerContainerName          string = "aerospike-server"
+	AerospikeInitContainerName            string = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar  string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry string = "docker.io"
+	// TODO: revert this before merge
+	AerospikeInitContainerDefaultRegistryNamespace string = "abhishekdwivedi3060"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:3.0.0-tls"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
