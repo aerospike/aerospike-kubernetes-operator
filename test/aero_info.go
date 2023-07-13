@@ -190,15 +190,9 @@ func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
 			)
 		}
 
-		asHost := &as.Host{
+		return &as.Host{
 			Name: pod.PodIP, Port: pod.PodPort, TLSName: pod.Aerospike.TLSName,
-		}
-
-		if pod.Aerospike.TLSName != "" {
-			asHost.Port = pod.PodTLSPort
-		}
-
-		return asHost, nil
+		}, nil
 	case asdbv1.AerospikeNetworkTypeHostInternal:
 		if pod.HostInternalIP == "" {
 			return nil, fmt.Errorf(
@@ -232,17 +226,9 @@ func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
 
-	asHost := &as.Host{
-		Name:    host,
-		Port:    int(pod.ServicePort),
-		TLSName: pod.Aerospike.TLSName,
-	}
-
-	if pod.Aerospike.TLSName != "" {
-		asHost.Port = int(pod.ServiceTLSPort)
-	}
-
-	return asHost, nil
+	return &as.Host{
+		Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName,
+	}, nil
 }
 
 func newHostConn(

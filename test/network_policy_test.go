@@ -725,16 +725,11 @@ func doTestNetworkPolicy(
 						Expect(err).To(HaveOccurred())
 						Expect(errors.IsNotFound(err)).To(BeTrue())
 						Expect(aeroCluster.Status.Pods[podName].ServicePort).To(Equal(int32(0)))
-						Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).To(Equal(int32(0)))
 						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).To(Equal(""))
 					} else {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(aeroCluster.Status.Pods[podName].ServicePort).NotTo(Equal(int32(0)))
 						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).NotTo(Equal(""))
-
-						if enableTLS {
-							Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).NotTo(Equal(int32(0)))
-						}
 					}
 				}
 			}

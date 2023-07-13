@@ -791,13 +791,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// HostExternalIP of the K8s host this pod is scheduled on.
 	HostExternalIP string `json:"hostExternalIP,omitempty"`
 	// PodPort is the port K8s internal Aerospike clients can connect to.
-	PodPort int `json:"podPort,omitempty"`
-	// PodTLSPort is the port K8s internal Aerospike clients can connect to using TLS.
-	PodTLSPort int `json:"podTlsPort,omitempty"`
+	PodPort int `json:"podPort"`
 	// ServicePort is the port Aerospike clients outside K8s can connect to.
-	ServicePort int32 `json:"servicePort,omitempty"`
-	// ServiceTLSPort is the port Aerospike clients outside K8s can connect to using TLS.
-	ServiceTLSPort int32 `json:"serviceTlsPort,omitempty"`
+	ServicePort int32 `json:"servicePort"`
 
 	// Aerospike server instance summary for this pod.
 	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`
