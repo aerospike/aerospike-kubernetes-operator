@@ -322,7 +322,8 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 		}
 	}
 
-	return nil
+	// removes old escape sequence which was added in LDAP in previous versions of operator
+	return removeEscapeValueFromLDAP(configSpec)
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
@@ -743,6 +744,76 @@ func isNameExist(names []string, name string) bool {
 	}
 
 	return false
+}
+
+// removeEscapeValueFromLDAP removes escape values previously added in LDAP variables ${un} and ${dn}.
+// It converts variables $${_DNE}{un} and $${_DNE}{dn} to ${un} and ${dn} respectively to support
+// backward compatibility
+func removeEscapeValueFromLDAP(configSpec AerospikeConfigSpec) error {
+	config := configSpec.Value
+
+	if _, ok := config["security"]; ok {
+		security, ok := config["security"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"security conf not in valid format %v", config["security"],
+			)
+		}
+
+		if _, ok := security["ldap"]; ok {
+			security["ldap"] = removeEscapeValue(security["ldap"])
+		}
+	}
+
+	return nil
+}
+
+func removeEscapeValue(valueGeneric interface{}) interface{} {
+	switch value := valueGeneric.(type) {
+	case string:
+		return removeEscapeString(value)
+	case []interface{}:
+		var modifiedSlice []interface{}
+
+		for _, item := range value {
+			modifiedSlice = append(modifiedSlice, removeEscapeValue(item))
+		}
+
+		return modifiedSlice
+	case []string:
+		var modifiedSlice []string
+
+		for _, item := range value {
+			modifiedSlice = append(modifiedSlice, removeEscapeString(item))
+		}
+
+		return modifiedSlice
+	case map[string]interface{}:
+		modifiedMap := map[string]interface{}{}
+
+		for key, mapValue := range value {
+			modifiedMap[removeEscapeString(key)] = removeEscapeValue(mapValue)
+		}
+
+		return modifiedMap
+	case map[string]string:
+		modifiedMap := map[string]string{}
+
+		for key, mapValue := range value {
+			modifiedMap[removeEscapeString(key)] = removeEscapeString(mapValue)
+		}
+
+		return modifiedMap
+	default:
+		return value
+	}
+}
+
+func removeEscapeString(str string) string {
+	str = strings.ReplaceAll(str, "$${_DNE}{un}", "${un}")
+	str = strings.ReplaceAll(str, "$${_DNE}{dn}", "${dn}")
+
+	return str
 }
 
 func setNamespaceDefault(networks []string, namespace string) {
