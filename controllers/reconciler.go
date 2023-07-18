@@ -729,7 +729,7 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
 		}
 
-		if err := r.migrateAerospikeClusterStatus(ctx); err != nil {
+		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
 			r.Log.Error(err, "Problem patching Initialised volumes")
 			return err
 		}
@@ -751,97 +751,67 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 	return nil
 }
 
-func (r *SingleClusterReconciler) migrateAerospikeClusterStatus(ctx context.Context) error {
-	r.Log.Info("Migrating AerospikeCluster status to new format")
+func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Context) error {
+	r.Log.Info("Migrating Initialised Volumes name to new format")
+
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request objects not found.
+			return nil
+		}
+		// Error reading the object.
+		return err
+	}
 
 	var patches []jsonpatch.PatchOperation
 
-	for idx := range r.aeroCluster.Status.RackConfig.Racks {
-		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
+	for podIdx := range podList.Items {
+		pod := &podList.Items[podIdx]
 
-		confTemp, err := r.buildConfigTemplate(rack)
-		if err != nil {
-			return fmt.Errorf("failed to build config template: %v", err)
+		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
+			return fmt.Errorf("empty status found in CR for pod %s", pod.Name)
 		}
 
-		// remove old escape values from LDAP
-		confTemp = strings.ReplaceAll(confTemp, "$${_DNE}{un}", "${un}")
-		confTemp = strings.ReplaceAll(confTemp, "$${_DNE}{dn}", "${dn}")
+		initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
+		newFormatInitVolNames := sets.Set[string]{}
+		oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
 
-		confHash, err := utils.GetHash(confTemp)
-		if err != nil {
-			return err
-		}
-
-		podList, err := r.getRackPodList(rack.ID)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				// Request objects not found.
-				return nil
+		for volIdx := range initializedVolumes {
+			initVolInfo := strings.Split(initializedVolumes[volIdx], "@")
+			if len(initVolInfo) < 2 {
+				oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[volIdx])
+			} else {
+				newFormatInitVolNames.Insert(initVolInfo[0])
 			}
-			// Error reading the object.
-			return err
 		}
 
-		for podIdx := range podList.Items {
-			pod := &podList.Items[podIdx]
-
-			if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
-				return fmt.Errorf("empty status found in CR for pod %s", pod.Name)
-			}
-
-			initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
-			newFormatInitVolNames := sets.Set[string]{}
-			oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
-
-			for volIdx := range initializedVolumes {
-				initVolInfo := strings.Split(initializedVolumes[volIdx], "@")
-				if len(initVolInfo) < 2 {
-					oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[volIdx])
-				} else {
-					newFormatInitVolNames.Insert(initVolInfo[0])
+		for oldVolIdx := range oldFormatInitVolNames {
+			if !newFormatInitVolNames.Has(oldFormatInitVolNames[oldVolIdx]) {
+				pvcUID, pvcErr := r.getPVCUid(ctx, pod, oldFormatInitVolNames[oldVolIdx])
+				if pvcErr != nil {
+					return pvcErr
 				}
-			}
 
-			for oldVolIdx := range oldFormatInitVolNames {
-				if !newFormatInitVolNames.Has(oldFormatInitVolNames[oldVolIdx]) {
-					pvcUID, pvcErr := r.getPVCUid(ctx, pod, oldFormatInitVolNames[oldVolIdx])
-					if pvcErr != nil {
-						return pvcErr
-					}
-
-					if pvcUID == "" {
-						return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
-					}
-
-					// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
-					initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+				if pvcUID == "" {
+					return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
 				}
+
+				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
+				initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+			}
+		}
+
+		if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
+			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
+
+			patch1 := jsonpatch.PatchOperation{
+				Operation: "replace",
+				Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
+				Value:     initializedVolumes,
 			}
 
-			if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
-				r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
-
-				patches = append(patches,
-					jsonpatch.PatchOperation{
-						Operation: "replace",
-						Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
-						Value:     initializedVolumes,
-					})
-			}
-
-			if r.aeroCluster.Status.Pods[pod.Name].AerospikeConfigHash != confHash {
-				r.Log.Info("Got updated AerospikeConfigHash",
-					"old", r.aeroCluster.Status.Pods[pod.Name].AerospikeConfigHash,
-					"new", confHash)
-
-				patches = append(patches,
-					jsonpatch.PatchOperation{
-						Operation: "replace",
-						Path:      "/status/pods/" + pod.Name + "/aerospikeConfigHash",
-						Value:     confHash,
-					})
-			}
+			patches = append(patches, patch1)
 		}
 	}
 
@@ -858,7 +828,7 @@ func (r *SingleClusterReconciler) migrateAerospikeClusterStatus(ctx context.Cont
 
 	// Since the pod status is updated from pod init container,
 	// set the field owner to "pod" for pod status updates.
-	r.Log.Info("Patching status with new migrated status")
+	r.Log.Info("Patching status with updated initialised volumes")
 
 	if err = r.Client.Status().Patch(
 		ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),

@@ -322,8 +322,8 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 		}
 	}
 
-	// removes old escape sequence which was added in LDAP in previous versions of operator
-	return removeEscapeValueFromLDAP(configSpec)
+	// escape LDAP configuration
+	return escapeLDAPConfiguration(configSpec)
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
@@ -746,10 +746,10 @@ func isNameExist(names []string, name string) bool {
 	return false
 }
 
-// removeEscapeValueFromLDAP removes escape values previously added in LDAP variables ${un} and ${dn}.
-// It converts variables $${_DNE}{un} and $${_DNE}{dn} to ${un} and ${dn} respectively to support
-// backward compatibility
-func removeEscapeValueFromLDAP(configSpec AerospikeConfigSpec) error {
+// escapeLDAPConfiguration escapes LDAP variables ${un} and ${dn} to
+// $${_DNE}{un} and $${_DNE}{dn} to prevent aerospike container images
+// template expansion from messing up the LDAP section.
+func escapeLDAPConfiguration(configSpec AerospikeConfigSpec) error {
 	config := configSpec.Value
 
 	if _, ok := config["security"]; ok {
@@ -761,22 +761,22 @@ func removeEscapeValueFromLDAP(configSpec AerospikeConfigSpec) error {
 		}
 
 		if _, ok := security["ldap"]; ok {
-			security["ldap"] = removeEscapeValue(security["ldap"])
+			security["ldap"] = escapeValue(security["ldap"])
 		}
 	}
 
 	return nil
 }
 
-func removeEscapeValue(valueGeneric interface{}) interface{} {
+func escapeValue(valueGeneric interface{}) interface{} {
 	switch value := valueGeneric.(type) {
 	case string:
-		return removeEscapeString(value)
+		return escapeString(value)
 	case []interface{}:
 		var modifiedSlice []interface{}
 
 		for _, item := range value {
-			modifiedSlice = append(modifiedSlice, removeEscapeValue(item))
+			modifiedSlice = append(modifiedSlice, escapeValue(item))
 		}
 
 		return modifiedSlice
@@ -784,7 +784,7 @@ func removeEscapeValue(valueGeneric interface{}) interface{} {
 		var modifiedSlice []string
 
 		for _, item := range value {
-			modifiedSlice = append(modifiedSlice, removeEscapeString(item))
+			modifiedSlice = append(modifiedSlice, escapeString(item))
 		}
 
 		return modifiedSlice
@@ -792,7 +792,7 @@ func removeEscapeValue(valueGeneric interface{}) interface{} {
 		modifiedMap := map[string]interface{}{}
 
 		for key, mapValue := range value {
-			modifiedMap[removeEscapeString(key)] = removeEscapeValue(mapValue)
+			modifiedMap[escapeString(key)] = escapeValue(mapValue)
 		}
 
 		return modifiedMap
@@ -800,7 +800,7 @@ func removeEscapeValue(valueGeneric interface{}) interface{} {
 		modifiedMap := map[string]string{}
 
 		for key, mapValue := range value {
-			modifiedMap[removeEscapeString(key)] = removeEscapeString(mapValue)
+			modifiedMap[escapeString(key)] = escapeString(mapValue)
 		}
 
 		return modifiedMap
@@ -809,9 +809,9 @@ func removeEscapeValue(valueGeneric interface{}) interface{} {
 	}
 }
 
-func removeEscapeString(str string) string {
-	str = strings.ReplaceAll(str, "$${_DNE}{un}", "${un}")
-	str = strings.ReplaceAll(str, "$${_DNE}{dn}", "${dn}")
+func escapeString(str string) string {
+	str = strings.ReplaceAll(str, "${un}", "$${_DNE}{un}")
+	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
 
 	return str
 }
