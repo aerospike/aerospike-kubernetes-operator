@@ -29,6 +29,7 @@ import (
 
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
+	boolean "github.com/golangf/extra-boolean"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -42,11 +43,6 @@ import (
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
-var immutableNetworkParams = []string{
-	"tls-name", "port", "access-port",
-	"alternate-access-port", "tls-port", "tls-access-port",
-	"tls-alternate-access-port",
-}
 
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
@@ -834,13 +830,14 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 				tlsNames[tlsName.(string)] = struct{}{}
 			}
 
-			if _, ok := tlsConf["ca-path"]; ok {
-				if _, ok1 := tlsConf["ca-file"]; ok1 {
-					return fmt.Errorf(
-						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
-						tlsConf,
-					)
-				}
+			_, CAPathOK := tlsConf["ca-path"]
+			_, caFileOK := tlsConf["ca-file"]
+
+			if boolean.Xnor(CAPathOK, caFileOK) {
+				return fmt.Errorf(
+					"only one of (`ca-path` and `ca-file`) must be set in `tls`. tlsConf %v",
+					tlsConf,
+				)
 			}
 		}
 	}
@@ -1375,14 +1372,8 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS cannot be updated dynamically
-	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
-	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
-	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
-
-	if ok11 != ok22 ||
-		ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
-		return fmt.Errorf("cannot update cluster network.tls config")
+	if err := validateTLSUpdate(oldConf, newConf); err != nil {
+		return err
 	}
 
 	for _, connectionType := range networkConnectionTypes {
@@ -1396,18 +1387,101 @@ func validateAerospikeConfigUpdate(
 	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
 }
 
+func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
+	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
+	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
+
+	if ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
+		oldTLSCAFileMap := make(map[string]string)
+		usedTLS := sets.NewString()
+
+		// fetching names of TLS configurations used in connections
+		for _, connectionType := range networkConnectionTypes {
+			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
+				connectionConfigMap := connectionConfig.(map[string]interface{})
+				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+					usedTLS.Insert(tlsName.(string))
+				}
+			}
+		}
+
+		for _, tls := range oldTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+
+			oldCAFile, oldCAFileOK := tlsMap["ca-file"]
+			if oldCAFileOK {
+				oldTLSCAFileMap[tlsMap["name"].(string)] = oldCAFile.(string)
+			}
+		}
+
+		for _, tls := range newTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+			if caFile, ok := oldTLSCAFileMap[tlsMap["name"].(string)]; ok {
+				newCAFile, newCAFileOK := tlsMap["ca-file"]
+				if newCAFileOK && newCAFile.(string) != caFile && usedTLS.Has(tlsMap["name"].(string)) {
+					return fmt.Errorf("cannot change ca-file of used tls")
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateNetworkConnectionUpdate(
 	newConf, oldConf map[string]interface{}, connectionType string,
 ) error {
+	var networkPorts = []string{
+		"port", "access-port",
+		"alternate-access-port",
+	}
+
 	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 
-	for _, param := range immutableNetworkParams {
-		if isValueUpdated(oldConnectionConfig, newConnectionConfig, param) {
-			return fmt.Errorf(
-				"cannot update %s for network.%s", param, connectionType,
-			)
+	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
+	newTLSName, newTLSNameOk := newConnectionConfig["tls-name"]
+
+	if oldTLSNameOk && newTLSNameOk {
+		if !reflect.DeepEqual(oldTLSName, newTLSName) {
+			return fmt.Errorf("cannot modify tls name")
 		}
+	}
+
+	for _, port := range networkPorts {
+		if err := validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig, port); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[string]interface{}, port string) error {
+	oldPort, oldPortOk := oldConnectionConfig[port]
+	newPort, newPortOk := newConnectionConfig[port]
+
+	if oldPortOk && newPortOk {
+		if !reflect.DeepEqual(oldPort, newPort) {
+			return fmt.Errorf("cannot modify port number")
+		}
+	}
+
+	oldTLSPort, oldTLSPortOk := oldConnectionConfig["tls-"+port]
+	newTLSPort, newTLSPortOk := newConnectionConfig["tls-"+port]
+
+	if oldTLSPortOk && newTLSPortOk {
+		if !reflect.DeepEqual(oldTLSPort, newTLSPort) {
+			return fmt.Errorf("cannot modify tls port number")
+		}
+	}
+
+	if oldPortOk && !(newPortOk || newTLSPortOk) {
+		return fmt.Errorf("cannot remove non-tls port if tls port is not set")
+	}
+
+	if oldTLSPortOk && !(newPortOk || newTLSPortOk) {
+		return fmt.Errorf("cannot remove tls port if non tls port is not set")
 	}
 
 	return nil
