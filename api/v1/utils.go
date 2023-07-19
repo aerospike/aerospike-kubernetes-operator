@@ -92,7 +92,7 @@ const (
 	AerospikeInitContainerDefaultRegistry string = "docker.io"
 	// TODO: revert this before merge
 	AerospikeInitContainerDefaultRegistryNamespace string = "abhishekdwivedi3060"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:3.0.0-tls"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:3.0.0-ldap"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"

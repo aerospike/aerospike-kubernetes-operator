@@ -724,8 +724,6 @@ func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 }
 
 func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
-	r.Log.Info("Migrating Initialised Volumes name to new format")
-
 	if !hasFailed {
 		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
 			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
@@ -754,6 +752,8 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 }
 
 func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Context) error {
+	r.Log.Info("Migrating Initialised Volumes name to new format")
+
 	podList, err := r.getClusterPodList()
 	if err != nil {
 		if errors.IsNotFound(err) {
