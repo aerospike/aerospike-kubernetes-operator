@@ -21,7 +21,6 @@ require (
 )
 
 require (
-	github.com/golangf/extra-boolean v1.0.10
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/crypto v0.1.0
 	gomodules.xyz/jsonpatch/v2 v2.2.0

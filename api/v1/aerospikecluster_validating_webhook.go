@@ -29,7 +29,6 @@ import (
 
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
-	boolean "github.com/golangf/extra-boolean"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -835,14 +834,13 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 				tlsNames[tlsName.(string)] = struct{}{}
 			}
 
-			_, CAPathOK := tlsConf["ca-path"]
-			_, caFileOK := tlsConf["ca-file"]
-
-			if boolean.Xnor(CAPathOK, caFileOK) {
-				return fmt.Errorf(
-					"only one of (`ca-path` and `ca-file`) must be set in `tls`. tlsConf %v",
-					tlsConf,
-				)
+			if _, ok := tlsConf["ca-path"]; ok {
+				if _, ok1 := tlsConf["ca-file"]; ok1 {
+					return fmt.Errorf(
+						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
+						tlsConf,
+					)
+				}
 			}
 		}
 	}
@@ -1393,37 +1391,72 @@ func validateAerospikeConfigUpdate(
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
-	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
-	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
+	oldTLS, oldExists := oldConf["network"].(map[string]interface{})["tls"]
+	newTLS, newExists := newConf["network"].(map[string]interface{})["tls"]
 
-	if ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
+	if oldExists && newExists && (!reflect.DeepEqual(oldTLS, newTLS)) {
 		oldTLSCAFileMap := make(map[string]string)
-		usedTLS := sets.NewString()
+		oldTLSCAPathMap := make(map[string]string)
+		newUsedTLS := sets.NewString()
+		oldUsedTLS := sets.NewString()
 
 		// fetching names of TLS configurations used in connections
 		for _, connectionType := range networkConnectionTypes {
 			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
 				connectionConfigMap := connectionConfig.(map[string]interface{})
 				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
-					usedTLS.Insert(tlsName.(string))
+					newUsedTLS.Insert(tlsName.(string))
+				}
+			}
+		}
+
+		// fetching names of TLS configurations used in old connections configurations
+		for _, connectionType := range networkConnectionTypes {
+			if connectionConfig, exists := oldConf["network"].(map[string]interface{})[connectionType]; exists {
+				connectionConfigMap := connectionConfig.(map[string]interface{})
+				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+					oldUsedTLS.Insert(tlsName.(string))
 				}
 			}
 		}
 
 		for _, tls := range oldTLS.([]interface{}) {
 			tlsMap := tls.(map[string]interface{})
+			if !oldUsedTLS.Has(tlsMap["name"].(string)) {
+				continue
+			}
 
 			oldCAFile, oldCAFileOK := tlsMap["ca-file"]
 			if oldCAFileOK {
 				oldTLSCAFileMap[tlsMap["name"].(string)] = oldCAFile.(string)
 			}
+
+			oldCAPath, oldCAPathOK := tlsMap["ca-path"]
+			if oldCAPathOK {
+				oldTLSCAPathMap[tlsMap["name"].(string)] = oldCAPath.(string)
+			}
 		}
 
 		for _, tls := range newTLS.([]interface{}) {
 			tlsMap := tls.(map[string]interface{})
-			if caFile, ok := oldTLSCAFileMap[tlsMap["name"].(string)]; ok {
-				newCAFile, newCAFileOK := tlsMap["ca-file"]
-				if newCAFileOK && newCAFile.(string) != caFile && usedTLS.Has(tlsMap["name"].(string)) {
+			if !newUsedTLS.Has(tlsMap["name"].(string)) {
+				continue
+			}
+
+			_, newCAPathOK := tlsMap["ca-path"]
+			newCAFile, newCAFileOK := tlsMap["ca-file"]
+
+			oldCAFile, oldCAFileOK := oldTLSCAFileMap[tlsMap["name"].(string)]
+			_, oldCAPathOK := oldTLSCAPathMap[tlsMap["name"].(string)]
+
+			if (oldCAFileOK || oldCAPathOK) && !(newCAPathOK || newCAFileOK) {
+				return fmt.Errorf(
+					"cannot remove `ca-file` or `ca-path` from tls",
+				)
+			}
+
+			if oldCAFileOK {
+				if newCAFileOK && newCAFile.(string) != oldCAFile {
 					return fmt.Errorf("cannot change ca-file of used tls")
 				}
 			}
