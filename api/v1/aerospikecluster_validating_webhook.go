@@ -29,6 +29,7 @@ import (
 
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
+	boolean "github.com/golangf/extra-boolean"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -834,13 +835,14 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 				tlsNames[tlsName.(string)] = struct{}{}
 			}
 
-			if _, ok := tlsConf["ca-path"]; ok {
-				if _, ok1 := tlsConf["ca-file"]; ok1 {
-					return fmt.Errorf(
-						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
-						tlsConf,
-					)
-				}
+			_, CAPathOK := tlsConf["ca-path"]
+			_, caFileOK := tlsConf["ca-file"]
+
+			if boolean.Xnor(CAPathOK, caFileOK) {
+				return fmt.Errorf(
+					"only one of (`ca-path` and `ca-file`) must be set in `tls`. tlsConf %v",
+					tlsConf,
+				)
 			}
 		}
 	}
@@ -1375,14 +1377,8 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS cannot be updated dynamically
-	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
-	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
-	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
-
-	if ok11 != ok22 ||
-		ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
-		return fmt.Errorf("cannot update cluster network.tls config")
+	if err := validateTLSUpdate(oldConf, newConf); err != nil {
+		return err
 	}
 
 	for _, connectionType := range networkConnectionTypes {
@@ -1394,6 +1390,47 @@ func validateAerospikeConfigUpdate(
 	}
 
 	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
+}
+
+func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
+	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
+	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
+
+	if ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
+		oldTLSCAFileMap := make(map[string]string)
+		usedTLS := sets.NewString()
+
+		// fetching names of TLS configurations used in connections
+		for _, connectionType := range networkConnectionTypes {
+			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
+				connectionConfigMap := connectionConfig.(map[string]interface{})
+				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+					usedTLS.Insert(tlsName.(string))
+				}
+			}
+		}
+
+		for _, tls := range oldTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+
+			oldCAFile, oldCAFileOK := tlsMap["ca-file"]
+			if oldCAFileOK {
+				oldTLSCAFileMap[tlsMap["name"].(string)] = oldCAFile.(string)
+			}
+		}
+
+		for _, tls := range newTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+			if caFile, ok := oldTLSCAFileMap[tlsMap["name"].(string)]; ok {
+				newCAFile, newCAFileOK := tlsMap["ca-file"]
+				if newCAFileOK && newCAFile.(string) != caFile && usedTLS.Has(tlsMap["name"].(string)) {
+					return fmt.Errorf("cannot change ca-file of used tls")
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateNetworkConnectionUpdate(
