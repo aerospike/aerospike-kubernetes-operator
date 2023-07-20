@@ -1451,14 +1451,12 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 
 			if (oldCAFileOK || oldCAPathOK) && !(newCAPathOK || newCAFileOK) {
 				return fmt.Errorf(
-					"cannot remove `ca-file` or `ca-path` from tls",
+					"cannot remove used `ca-file` or `ca-path` from tls",
 				)
 			}
 
-			if oldCAFileOK {
-				if newCAFileOK && newCAFile.(string) != oldCAFile {
-					return fmt.Errorf("cannot change ca-file of used tls")
-				}
+			if oldCAFileOK && newCAFileOK && newCAFile.(string) != oldCAFile {
+				return fmt.Errorf("cannot change ca-file of used tls")
 			}
 		}
 	}

@@ -412,14 +412,8 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-					network["tls"] = []interface{}{
-						map[string]interface{}{
-							"name":      "aerospike-a-0.test-runner",
-							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-							"key-file":  "/etc/aerospike/secret/svc_key.pem",
-							"ca-file":   "/etc/aerospike/secret/cacert.pem",
-						},
-					}
+					tlsList = network["tls"].([]interface{})
+					network["tls"] = tlsList[:1]
 					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -494,6 +488,22 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					tlsList = network["tls"].([]interface{})
 					usedTLS = tlsList[0].(map[string]interface{})
 					usedTLS["ca-file"] = "/etc/aerospike/secret/fb_cert.pem"
+					tlsList[0] = usedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					By("Updating both ca-file and ca-path in TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					usedTLS = tlsList[0].(map[string]interface{})
+					usedTLS["ca-path"] = "/etc/aerospike/secret/cacerts"
 					tlsList[0] = usedTLS
 					network["tls"] = tlsList
 					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
