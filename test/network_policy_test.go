@@ -1095,28 +1095,26 @@ func validateNetworkPolicy(
 		tlsName := getServiceTLSName(current)
 
 		if tlsName != "" {
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo("service", "tls-access", endpointsMap),
-				[]string{customNetIPVlanOne, customNetIPVlanTwo}, valueAccessAddress, 0)
-			if err != nil {
+				[]string{customNetIPVlanOne, customNetIPVlanTwo}, valueAccessAddress, 0); err != nil {
 				return err
 			}
 
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAlternateAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo("service", "tls-alternate-access",
-					endpointsMap), []string{customNetIPVlanTwo}, valueAlternateAccessAddress, 0)
-			if err != nil {
+					endpointsMap), []string{customNetIPVlanTwo}, valueAlternateAccessAddress, 0); err != nil {
 				return err
 			}
 
 			if networkPolicy.TLSFabricType == asdbv1.AerospikeNetworkTypeCustomInterface {
-				err = validatePodEndpoint(
+				_, port := asdbv1.GetFabricTLSNameAndPort(desired.Spec.AerospikeConfig)
+				if err := validatePodEndpoint(
 					ctx, &podList.Items[podIndex], current, networkPolicy.TLSFabricType, false,
 					aerospikecluster.GetEndpointsFromInfo("fabric", "tls", endpointsMap),
-					[]string{customNetIPVlanThree}, "", int32(*asdbv1.GetFabricTLSPort(desired.Spec.AerospikeConfig)))
-				if err != nil {
+					[]string{customNetIPVlanThree}, "", int32(*port)); err != nil {
 					return err
 				}
 			}
