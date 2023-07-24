@@ -14,6 +14,7 @@ rules:
     - nodes
     - services
     - configmaps
+    - persistentvolumeclaims
   verbs:
     - get
     - list
