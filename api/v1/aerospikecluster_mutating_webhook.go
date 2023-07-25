@@ -513,6 +513,12 @@ func setDefaultNetworkConf(
 		serviceDefaults["access-addresses"] = []string{"<access-address>"}
 		serviceDefaults["alternate-access-port"] = *srvPort
 		serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
+	} else {
+		delete(serviceConf, "port")
+		delete(serviceConf, "access-port")
+		delete(serviceConf, "access-addresses")
+		delete(serviceConf, "alternate-access-addresses")
+		delete(serviceConf, "alternate-access-addresses")
 	}
 
 	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
@@ -521,6 +527,12 @@ func setDefaultNetworkConf(
 		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
 		serviceDefaults["tls-alternate-access-port"] = *tlsPort
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
+	} else {
+		delete(serviceConf, "tls-port")
+		delete(serviceConf, "tls-access-port")
+		delete(serviceConf, "tls-access-addresses")
+		delete(serviceConf, "tls-alternate-access-addresses")
+		delete(serviceConf, "tls-alternate-access-addresses")
 	}
 
 	if err := setDefaultsInConfigMap(

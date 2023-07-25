@@ -670,7 +670,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
 			return nil, reconcileError(err)
 		}
 
@@ -953,7 +953,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
 			return nil, reconcileError(err)
 		}
 

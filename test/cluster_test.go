@@ -51,7 +51,7 @@ var _ = Describe(
 			},
 		)
 		Context(
-			"UpdateCluster", func() {
+			"UpdateTLSCluster", func() {
 				UpdateClusterTest(ctx)
 			},
 		)
@@ -331,7 +331,7 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 	)
 }
 
-// Test cluster cr updation
+// Test cluster cr update
 func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
@@ -466,6 +466,20 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 					err = rollingRestartClusterByAddingNamespaceDynamicallyTest(
 						k8sClient, ctx, dynamicNs, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By changing non-tls to tls")
+
+					err = rollingRestartClusterByEnablingTLS(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By changing tls to non-tls")
+
+					err = rollingRestartClusterByDisablingTLS(
+						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -1627,7 +1641,7 @@ func negativeUpdateClusterValidationTest(
 			)
 
 			It(
-				"WhenTLSExist: should fail for no tls path in storage voluems",
+				"WhenTLSExist: should fail for no tls path in storage volumes",
 				func() {
 					aeroCluster, err := getCluster(
 						k8sClient, ctx, clusterNamespacedName,

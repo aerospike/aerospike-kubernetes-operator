@@ -47,6 +47,131 @@ var (
 	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
+func rollingRestartClusterByEnablingTLS(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Change tls conf
+	aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
+		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+				SecretName:         tlsSecretName,
+				CaCertsFilename:    "cacert.pem",
+				ClientCertFilename: "svc_cluster_chain.pem",
+				ClientKeyFilename:  "svc_key.pem",
+			},
+		},
+	}
+	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
+	heartbeartNetwork := network[asdbv1.HeartbeatPortName].(map[string]interface{})
+
+	delete(serviceNetwork, "port")
+	delete(fabricNetwork, "port")
+	delete(heartbeartNetwork, "port")
+
+	network[asdbv1.ServicePortName] = serviceNetwork
+	network[asdbv1.FabricPortName] = fabricNetwork
+	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
+	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+
+	pkgLog.Info("aerocluster", "aerocluster", *aeroCluster)
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
+}
+
+func rollingRestartClusterByDisablingTLS(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+	serviceNetwork["port"] = float64(3000)
+	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
+	fabricNetwork["port"] = float64(3001)
+	heartbeartNetwork := network[asdbv1.HeartbeatPortName].(map[string]interface{})
+	heartbeartNetwork["port"] = float64(3002)
+
+	network[asdbv1.ServicePortName] = serviceNetwork
+	network[asdbv1.FabricPortName] = fabricNetwork
+	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
+	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkConfig()
+	aeroCluster.Spec.OperatorClientCertSpec = nil
+
+	err = k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+	)
+
+	return err
+}
+
 func scaleUpClusterTestWithNSDeviceHandling(
 	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, increaseBy int32,

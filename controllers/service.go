@@ -259,6 +259,29 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
+func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string) error {
+	service := &corev1.Service{}
+	if err := r.Client.Get(
+		context.TODO(),
+		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
+	); err != nil {
+		return err
+	}
+
+	service.Spec.Ports = nil
+	r.appendServicePorts(service)
+
+	if err := r.Client.Update(
+		context.TODO(), service, updateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update service for pod %s: %v", pName, err,
+		)
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	if svcPort := asdbv1.GetServicePort(
 		r.aeroCluster.Spec.
@@ -318,7 +341,7 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 	return networkSet.Len() > 2
 }
 
-func (r *SingleClusterReconciler) createPodServiceIfNeeded(pods []*corev1.Pod) error {
+func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev1.Pod) error {
 	if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
 		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for all pods if network policy is changed and rely on nodePort service
@@ -329,7 +352,47 @@ func (r *SingleClusterReconciler) createPodServiceIfNeeded(pods []*corev1.Pod) e
 				return err
 			}
 		}
+	} else if isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig) &&
+		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		for idx := range pods {
+			if err := r.updatePodServicePorts(
+				pods[idx].Name, r.aeroCluster.Namespace,
+			); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
+}
+
+func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpec) bool {
+	specTLSName, _ := asdbv1.GetServiceTLSNameAndPort(specAeroConf)
+	statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(statusAeroConf)
+
+	specSVCPort := asdbv1.GetServicePort(specAeroConf)
+	statusSVCPort := asdbv1.GetServicePort(statusAeroConf)
+
+	return specTLSName != statusTLSName || specSVCPort != statusSVCPort
+}
+
+func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
+	tlsName, port = asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if tlsName != "" && r.aeroCluster.Status.AerospikeConfig != nil {
+		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(
+			r.aeroCluster.Status.
+				AerospikeConfig,
+		)
+
+		statusPort := asdbv1.GetServicePort(
+			r.aeroCluster.Status.
+				AerospikeConfig,
+		)
+
+		if statusTLSName == "" && statusPort != nil {
+			tlsName = ""
+		}
+	}
+
+	return tlsName, port
 }

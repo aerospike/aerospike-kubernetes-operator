@@ -571,7 +571,7 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 	}
 }
 
-// updateSTS updates the stateful set to match the spec. It is idempotent.
+// updateSTS updates the statefulset to match the spec. It is idempotent.
 func (r *SingleClusterReconciler) updateSTS(
 	statefulSet *appsv1.StatefulSet, rackState *RackState,
 ) error {
