@@ -29,7 +29,6 @@ import (
 
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
-	boolean "github.com/golangf/extra-boolean"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -830,14 +829,13 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 				tlsNames[tlsName.(string)] = struct{}{}
 			}
 
-			_, CAPathOK := tlsConf["ca-path"]
-			_, caFileOK := tlsConf["ca-file"]
-
-			if boolean.Xnor(CAPathOK, caFileOK) {
-				return fmt.Errorf(
-					"only one of (`ca-path` and `ca-file`) must be set in `tls`. tlsConf %v",
-					tlsConf,
-				)
+			if _, ok := tlsConf["ca-path"]; ok {
+				if _, ok1 := tlsConf["ca-file"]; ok1 {
+					return fmt.Errorf(
+						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
+						tlsConf,
+					)
+				}
 			}
 		}
 	}
@@ -1388,7 +1386,6 @@ func validateAerospikeConfigUpdate(
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
-
 	oldTLS, oldExists := oldConf["network"].(map[string]interface{})["tls"]
 	newTLS, newExists := newConf["network"].(map[string]interface{})["tls"]
 
@@ -1403,7 +1400,6 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
 				connectionConfigMap := connectionConfig.(map[string]interface{})
 				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
-
 					newUsedTLS.Insert(tlsName.(string))
 				}
 			}
@@ -1415,14 +1411,12 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 				connectionConfigMap := connectionConfig.(map[string]interface{})
 				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
 					oldUsedTLS.Insert(tlsName.(string))
-
 				}
 			}
 		}
 
 		for _, tls := range oldTLS.([]interface{}) {
 			tlsMap := tls.(map[string]interface{})
-
 			if !oldUsedTLS.Has(tlsMap["name"].(string)) {
 				continue
 			}
@@ -1436,12 +1430,10 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 			if oldCAPathOK {
 				oldTLSCAPathMap[tlsMap["name"].(string)] = oldCAPath.(string)
 			}
-
 		}
 
 		for _, tls := range newTLS.([]interface{}) {
 			tlsMap := tls.(map[string]interface{})
-
 			if !newUsedTLS.Has(tlsMap["name"].(string)) {
 				continue
 			}
@@ -1460,7 +1452,6 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 
 			if oldCAFileOK && newCAFileOK && newCAFile.(string) != oldCAFile {
 				return fmt.Errorf("cannot change ca-file of used tls")
-
 			}
 		}
 	}
