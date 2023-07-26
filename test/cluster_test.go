@@ -509,6 +509,34 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
+
+					By("Updating tls-name in service network config")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork["tls-name"] = "unknown-tls"
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					By("Updating tls-port in service network config")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork["tls-port"] = float64(4000)
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
 				},
 			)
 		},
