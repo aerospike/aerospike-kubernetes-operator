@@ -904,8 +904,8 @@ var _ = Describe(
 
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
-					err = k8sClient.Update(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*3)
+					Expect(err).To(HaveOccurred())
 
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())

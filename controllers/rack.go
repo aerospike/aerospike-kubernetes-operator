@@ -779,8 +779,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
-		// temporarily add the pod to be deleted in ignorablePods slice to avoid setting migrate-fill-delay to pod when
-		// pod is not ready
+		// setting migrate-fill-delay only if pod is running and ready.
+		// This check ensures that migrate-fill-delay is not set while processing failed racks.
+		// setting migrate-fill-delay will fail if there are any failed pod
 		if res := r.setMigrateFillDelay(
 			policy, &rackState.Rack.AerospikeConfig, true,
 			append(ignorablePods, *pod),
@@ -804,7 +805,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		)
 	}
 
-	// No need for these checks if pod is not running. These checks will fail if there is any other pod in failed state.
+	// No need for these checks if pod was not running.
+	// These checks will fail if there is any other pod in failed state.
 	if isPodRunningAndReady {
 		// Wait for pods to get terminated
 		if err = r.waitForSTSToBeReady(found); err != nil {
