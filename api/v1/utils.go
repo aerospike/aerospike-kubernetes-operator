@@ -414,10 +414,6 @@ func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
 }
 
-func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) *int {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "tls-port")
-}
-
 func GetPortFromConfig(
 	aeroConf *AerospikeConfigSpec, connectionType string, paramName string,
 ) *int {

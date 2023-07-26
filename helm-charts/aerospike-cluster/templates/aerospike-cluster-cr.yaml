@@ -7,6 +7,10 @@ metadata:
     app: {{ template "aerospike-cluster.commonName" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+
 spec:
   # Aerospike cluster size
   size: {{ .Values.replicas | default 3 }}

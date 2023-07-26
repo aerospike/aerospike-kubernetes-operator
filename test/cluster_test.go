@@ -51,6 +51,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"UpdateTLSCluster", func() {
+				UpdateTLSClusterTest(ctx)
+			},
+		)
+		Context(
 			"UpdateCluster", func() {
 				UpdateClusterTest(ctx)
 			},
@@ -338,7 +343,186 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 	)
 }
 
-// Test cluster cr updation
+func UpdateTLSClusterTest(ctx goctx.Context) {
+	clusterName := "update-tls-cluster"
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
+
+	BeforeEach(
+		func() {
+			aeroCluster := createBasicTLSCluster(clusterNamespacedName, 3)
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+				getSCNamespaceConfig("test", "/test/dev/xvdf"),
+			}
+			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
+	AfterEach(
+		func() {
+			aeroCluster, err := getCluster(
+				k8sClient, ctx, clusterNamespacedName,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		},
+	)
+
+	Context(
+		"When doing valid operations", func() {
+			It(
+				"Try update operations", func() {
+					By("Adding new TLS configuration")
+
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList := network["tls"].([]interface{})
+					tlsList = append(tlsList, map[string]interface{}{
+						"name":      "aerospike-a-0.test-runner1",
+						"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+						"key-file":  "/etc/aerospike/secret/svc_key.pem",
+						"ca-file":   "/etc/aerospike/secret/cacert.pem",
+					})
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Modifying unused TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					unusedTLS := tlsList[1].(map[string]interface{})
+					unusedTLS["name"] = "aerospike-a-0.test-runner2"
+					unusedTLS["ca-file"] = "/etc/aerospike/secret/fb_cert.pem"
+					tlsList[1] = unusedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Removing unused TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					network["tls"] = tlsList[:1]
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Changing ca-file to ca-path in TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					usedTLS := tlsList[0].(map[string]interface{})
+					usedTLS["ca-path"] = "/etc/aerospike/secret/cacerts"
+					delete(usedTLS, "ca-file")
+					tlsList[0] = usedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					secretVolume := asdbv1.VolumeSpec{
+						Name: tlsCacertSecretName,
+						Source: asdbv1.VolumeSource{
+							Secret: &v1.SecretVolumeSource{
+								SecretName: tlsCacertSecretName,
+							},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/secret/cacerts",
+						},
+					}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, secretVolume)
+					operatorClientCertSpec := getOperatorCert()
+					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
+					cacertPath := &asdbv1.CaCertsSource{
+						SecretName: tlsCacertSecretName,
+					}
+					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
+					aeroCluster.Spec.OperatorClientCertSpec = operatorClientCertSpec
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+
+	Context(
+		"When doing invalid operations", func() {
+			It(
+				"Try update operations", func() {
+					By("Modifying name of used TLS configuration")
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList := network["tls"].([]interface{})
+					usedTLS := tlsList[0].(map[string]interface{})
+					usedTLS["name"] = "aerospike-a-0.test-runner2"
+					tlsList[0] = usedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					By("Modifying ca-file of used TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					usedTLS = tlsList[0].(map[string]interface{})
+					usedTLS["ca-file"] = "/etc/aerospike/secret/fb_cert.pem"
+					tlsList[0] = usedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					By("Updating both ca-file and ca-path in TLS configuration")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					tlsList = network["tls"].([]interface{})
+					usedTLS = tlsList[0].(map[string]interface{})
+					usedTLS["ca-path"] = "/etc/aerospike/secret/cacerts"
+					tlsList[0] = usedTLS
+					network["tls"] = tlsList
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+// Test cluster cr update
 func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
@@ -1634,7 +1818,7 @@ func negativeUpdateClusterValidationTest(
 			)
 
 			It(
-				"WhenTLSExist: should fail for no tls path in storage voluems",
+				"WhenTLSExist: should fail for no tls path in storage volumes",
 				func() {
 					aeroCluster, err := getCluster(
 						k8sClient, ctx, clusterNamespacedName,
