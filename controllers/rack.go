@@ -75,6 +75,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			continue
 		}
 
+		// 1. Fetch the pods for the rack and if there are failed pods then reconcile rack
 		podList, err = r.getOrderedRackPodList(state.Rack.ID)
 		if err != nil {
 			return reconcileError(
@@ -97,7 +98,19 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 		}
 
-		// Use old podList as if there are new failed pods then they will not recover with this rolling restart
+		// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
+		// This is needed in cases where hash values generated from CR spec are same as hash values in pods.
+		// But, pods are in failed state due to their bad spec.
+		// e.g. configuring unschedulable resources in CR podSpec and reverting them to old value.
+		podList, err = r.getOrderedRackPodList(state.Rack.ID)
+		if err != nil {
+			return reconcileError(
+				fmt.Errorf(
+					"failed to list pods: %v", err,
+				),
+			)
+		}
+
 		failedPods, _ = getFailedAndActivePods(podList)
 		if len(failedPods) != 0 {
 			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
