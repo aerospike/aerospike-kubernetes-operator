@@ -1513,7 +1513,7 @@
             "type": "integer",
             "default": 256,
             "minimum": 16,
-            "maximum": 4096,
+            "maximum": 268453456,
             "description": "",
             "dynamic": false
           },

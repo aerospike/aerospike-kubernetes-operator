@@ -37,14 +37,6 @@
           "description": "",
           "dynamic": true
         },
-        "batch-max-requests": {
-          "type": "integer",
-          "default": 5000,
-          "minimum": 0,
-          "maximum": 4294967295,
-          "description": "",
-          "dynamic": true
-        },
         "batch-max-unused-buffers": {
           "type": "integer",
           "default": 256,
@@ -123,6 +115,14 @@
           "description": "",
           "dynamic": false
         },
+        "info-max-ms": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "",
+          "dynamic": true
+        },
         "info-threads": {
           "type": "integer",
           "default": 16,
@@ -189,7 +189,7 @@
         },
         "node-id": {
           "type": "string",
-          "default": "BB9040011AC4202",
+          "default": "BB9C0E8CD290C00",
           "description": "",
           "dynamic": false
         },
@@ -252,6 +252,24 @@
         "salt-allocations": {
           "type": "boolean",
           "default": false,
+          "description": "",
+          "dynamic": false
+        },
+        "secrets-address-port": {
+          "type": "string",
+          "default": "",
+          "description": "",
+          "dynamic": false
+        },
+        "secrets-tls-context": {
+          "type": "string",
+          "default": "",
+          "description": "",
+          "dynamic": false
+        },
+        "secrets-uds-path": {
+          "type": "string",
+          "default": "",
           "description": "",
           "dynamic": false
         },
@@ -321,6 +339,12 @@
           "description": "",
           "dynamic": false
         },
+        "vault-namespace": {
+          "type": "string",
+          "default": "",
+          "description": "",
+          "dynamic": false
+        },
         "vault-path": {
           "type": "string",
           "default": "",
@@ -331,7 +355,7 @@
           "type": "string",
           "default": "",
           "description": "",
-          "dynamic": false
+          "dynamic": true
         },
         "vault-url": {
           "type": "string",
@@ -395,7 +419,7 @@
             "dynamic": true,
             "default": "INFO"
           },
-          "rbuffer": {
+          "secrets": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -456,6 +480,12 @@
             "default": "INFO"
           },
           "batch": {
+            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
+            "description": "",
+            "dynamic": true,
+            "default": "INFO"
+          },
+          "batch-sub": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -557,19 +587,13 @@
             "dynamic": true,
             "default": "INFO"
           },
-          "job": {
+          "key-busy": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
             "default": "INFO"
           },
           "migrate": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "mon": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -594,12 +618,6 @@
             "default": "INFO"
           },
           "partition": {
-            "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
-            "description": "",
-            "dynamic": true,
-            "default": "INFO"
-          },
-          "paxos": {
             "enum": ["CRITICAL", "critical", "WARNING", "warning", "INFO", "info", "DEBUG", "debug", "DETAIL", "detail"],
             "description": "",
             "dynamic": true,
@@ -730,6 +748,24 @@
             "description": "",
             "dynamic": true,
             "default": "INFO"
+          },
+          "facility": {
+            "enum": ["auth", "authpriv", "cron", "daemon", "ftp", "kern", "lpr", "mail", "news", "syslog", "user", "uucp", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"],
+            "description": "",
+            "dynamic": false,
+            "default": "local0"
+          },
+          "path": {
+            "type": "string",
+            "default": "/dev/log",
+            "description": "",
+            "dynamic": false
+          },
+          "tag": {
+            "type": "string",
+            "default": "asd",
+            "description": "",
+            "dynamic": false
           }
         }
       }
@@ -1320,12 +1356,6 @@
             "description": "",
             "dynamic": true
           },
-          "data-in-index": {
-            "type": "boolean",
-            "default": false,
-            "description": "",
-            "dynamic": false
-          },
           "default-ttl": {
             "type": "integer",
             "default": 0,
@@ -1341,6 +1371,12 @@
             "dynamic": false
           },
           "disable-write-dup-res": {
+            "type": "boolean",
+            "default": false,
+            "description": "",
+            "dynamic": true
+          },
+          "disallow-expunge": {
             "type": "boolean",
             "default": false,
             "description": "",
@@ -1439,6 +1475,12 @@
             "maximum": 17179869184,
             "description": "",
             "dynamic": false
+          },
+          "inline-short-queries": {
+            "type": "boolean",
+            "default": false,
+            "description": "",
+            "dynamic": true
           },
           "max-record-size": {
             "type": "integer",
@@ -1561,12 +1603,6 @@
             "description": "",
             "dynamic": false
           },
-          "single-bin": {
-            "type": "boolean",
-            "default": false,
-            "description": "",
-            "dynamic": false
-          },
           "single-query-threads": {
             "type": "integer",
             "default": 4,
@@ -1576,6 +1612,14 @@
             "dynamic": true
           },
           "stop-writes-pct": {
+            "type": "integer",
+            "default": 90,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "",
+            "dynamic": true
+          },
+          "stop-writes-sys-memory-pct": {
             "type": "integer",
             "default": 90,
             "minimum": 0,
@@ -1833,9 +1877,109 @@
                   "maximum": 18446744073709551615,
                   "description": "",
                   "dynamic": true
+                },
+                "stop-writes-size": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
                 }
               }
             }
+          },
+          "sindex-type": {
+            "oneOf": [{
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "shmem",
+                  "enum": ["shmem"]
+                }
+              }
+            }, {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "mounts", "mounts-size-limit"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "pmem",
+                  "enum": ["pmem"]
+                },
+                "mounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "mounts-high-water-pct": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
+                "mounts-size-limit": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 1073741824,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
+                }
+              }
+            }, {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "mounts", "mounts-size-limit"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "",
+                  "dynamic": false,
+                  "default": "flash",
+                  "enum": ["flash"]
+                },
+                "mounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "",
+                  "dynamic": false,
+                  "default": []
+                },
+                "mounts-high-water-pct": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
+                "mounts-size-limit": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 4294967296,
+                  "maximum": 18446744073709551615,
+                  "description": "",
+                  "dynamic": true
+                }
+              }
+            }]
           },
           "storage-engine": {
             "oneOf": [{
@@ -1900,10 +2044,18 @@
                   "default": "none",
                   "enum": ["none", "lz4", "snappy", "zstd"]
                 },
+                "compression-acceleration": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 1,
+                  "maximum": 65537,
+                  "description": "",
+                  "dynamic": true
+                },
                 "compression-level": {
                   "type": "integer",
                   "default": 0,
-                  "minimum": 0,
+                  "minimum": 1,
                   "maximum": 9,
                   "description": "",
                   "dynamic": true
@@ -2017,6 +2169,14 @@
                   "description": "",
                   "dynamic": true
                 },
+                "max-used-pct": {
+                  "type": "integer",
+                  "default": 70,
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "",
+                  "dynamic": true
+                },
                 "max-write-cache": {
                   "type": "integer",
                   "default": 67108864,
@@ -2046,12 +2206,6 @@
                   "default": false,
                   "description": "",
                   "dynamic": true
-                },
-                "scheduler-mode": {
-                  "type": "string",
-                  "enum": ["anticipatory", "cfq", "deadline", "noop", "null"],
-                  "description": "",
-                  "dynamic": false
                 },
                 "serialize-tomb-raider": {
                   "type": "boolean",
@@ -2107,10 +2261,18 @@
                   "default": "none",
                   "enum": ["none", "lz4", "snappy", "zstd"]
                 },
+                "compression-acceleration": {
+                  "type": "integer",
+                  "default": 0,
+                  "minimum": 1,
+                  "maximum": 65537,
+                  "description": "",
+                  "dynamic": true
+                },
                 "compression-level": {
                   "type": "integer",
                   "default": 0,
-                  "minimum": 0,
+                  "minimum": 1,
                   "maximum": 9,
                   "description": "",
                   "dynamic": true
@@ -2206,6 +2368,14 @@
                   "default": 1000,
                   "minimum": 0,
                   "maximum": 1000,
+                  "description": "",
+                  "dynamic": true
+                },
+                "max-used-pct": {
+                  "type": "integer",
+                  "default": 70,
+                  "minimum": 0,
+                  "maximum": 100,
                   "description": "",
                   "dynamic": true
                 },
@@ -2450,71 +2620,6 @@
               "dynamic": true
             }
           }
-        },
-        "syslog": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "local": {
-              "type": "integer",
-              "default": -1,
-              "minimum": 0,
-              "maximum": 7,
-              "description": "",
-              "dynamic": false
-            },
-            "report-authentication": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": true
-            },
-            "report-data-op": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "",
-              "dynamic": true,
-              "default": []
-            },
-            "report-data-op-role": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "",
-              "dynamic": true,
-              "default": []
-            },
-            "report-data-op-user": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "",
-              "dynamic": true,
-              "default": []
-            },
-            "report-sys-admin": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": true
-            },
-            "report-user-admin": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": true
-            },
-            "report-violation": {
-              "type": "boolean",
-              "default": false,
-              "description": "",
-              "dynamic": true
-            }
-          }
         }
       }
     },
@@ -2572,14 +2677,6 @@
                 "default": 0,
                 "minimum": 0,
                 "maximum": 4294967295,
-                "description": "",
-                "dynamic": true
-              },
-              "max-used-service-threads": {
-                "type": "integer",
-                "default": 0,
-                "minimum": 0,
-                "maximum": 4096,
                 "description": "",
                 "dynamic": true
               },
