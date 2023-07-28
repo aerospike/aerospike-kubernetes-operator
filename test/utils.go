@@ -319,7 +319,7 @@ func isClusterStateValid(
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return 10 * time.Minute * time.Duration(nodes)
+	return 3 * time.Minute * time.Duration(nodes)
 }
 
 func getPodLogs(

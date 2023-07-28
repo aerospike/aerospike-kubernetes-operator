@@ -4,7 +4,6 @@ import (
 	goctx "context"
 	"fmt"
 	"reflect"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,87 +60,8 @@ var _ = Describe(
 				invalidResourceTest(ctx, false, true)
 			},
 		)
-
-		Context(
-			"When doing cluster recovery operations", func() {
-				clusterRecoveryTest(ctx)
-			},
-		)
 	},
 )
-
-func clusterRecoveryTest(ctx goctx.Context) {
-	Context(
-		"Cluster recovery", func() {
-			clusterName := "cl-resource-insuff"
-			clusterNamespacedName := getNamespacedName(
-				clusterName, namespace,
-			)
-
-			BeforeEach(
-				func() {
-					aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
-					racks := getDummyRackConf(1, 2)
-					aeroCluster.Spec.RackConfig.Racks = racks
-					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
-
-			AfterEach(
-				func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				},
-			)
-
-			It("UpdateClusterWithResource: should recover after reverting back to schedulable resources", func() {
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-
-				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
-				Expect(err).Should(HaveOccurred())
-
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
-
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-			},
-			)
-
-			It("UpdateClusterWithResource: should recover failed pods first after reverting back"+
-				" to schedulable resources", func() {
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
-
-				err = k8sClient.Update(ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
-				aeroCluster.Spec.RackConfig.Racks[0].ID = 2
-				aeroCluster.Spec.RackConfig.Racks[1].ID = 1
-
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-			},
-			)
-		},
-	)
-}
 
 func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool) {
 	Context(

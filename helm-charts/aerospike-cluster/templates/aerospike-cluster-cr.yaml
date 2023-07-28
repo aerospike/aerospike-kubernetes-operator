@@ -80,7 +80,7 @@ spec:
     - name: aerospike-config-secret
       source:
         secret:
-          secretName: aerospike-license
+          secretName: aerospike-secret
       aerospike:
         path: /etc/aerospike/secrets
   {{- end }}

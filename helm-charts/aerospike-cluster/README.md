@@ -21,7 +21,7 @@ cd aerospike-kubernetes-operator/helm-charts
 #### Create a secret containing aerospike feature key file - `features.conf`
 
 ```sh
-kubectl create secret generic aerospike-license --from-file=<path-to-features.conf-file> --namespace <namespace>
+kubectl create secret generic aerospike-secret --from-file=<path-to-features.conf-file> --namespace <namespace>
 ```
 
 #### Install the chart
@@ -98,7 +98,7 @@ storage:
   - name: aerospike-config-secret
     source:
       secret:
-        secretName: aerospike-license
+        secretName: aerospike-secret
     aerospike:
       path: /etc/aerospike/secrets
 

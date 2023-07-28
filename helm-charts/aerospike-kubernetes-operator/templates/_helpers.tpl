@@ -61,7 +61,7 @@ Deprecated fields are not allowed to be used with new charts, install/upgrade sh
 {{- end -}}
 
 {{- if .Values.webhookServicePort -}}
-    {{ fail ".Values.webhookServicePort field is deprecated, use .Values.webhookServicePort.targetPort instead" }}
+    {{ fail ".Values.webhookServicePort field is deprecated, use .Values.webhookService.targetPort instead" }}
 {{- end -}}
 
 {{- end -}}
