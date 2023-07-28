@@ -27,6 +27,7 @@ import (
 )
 
 const (
+	baseDockerImage     = "aerospike/aerospike-server-enterprise"
 	baseImage           = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc"
 	prevServerVersion   = "6.2.0.1"
 	pre6Version         = "5.7.0.17"
@@ -40,11 +41,11 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
-	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	prevImage          = fmt.Sprintf("%s:%s", baseDockerImage, prevServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
-	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
+	version6Image      = fmt.Sprintf("%s:%s", baseDockerImage, version6)
+	invalidImage       = fmt.Sprintf("%s:%s", baseDockerImage, invalidVersion)
+	pre6Image          = fmt.Sprintf("%s:%s", baseDockerImage, pre6Version)
 )
 
 func scaleUpClusterTestWithNSDeviceHandling(

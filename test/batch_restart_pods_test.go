@@ -21,8 +21,8 @@ const batchClusterName = "batch-restart"
 
 var (
 	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "6.0.0.99")
-	availableImage1  = fmt.Sprintf("%s:%s", baseImage, "6.0.0.1")
-	availableImage2  = fmt.Sprintf("%s:%s", baseImage, "6.0.0.2")
+	availableImage1  = fmt.Sprintf("%s:%s", baseDockerImage, "6.0.0.1")
+	availableImage2  = fmt.Sprintf("%s:%s", baseDockerImage, "6.0.0.2")
 )
 
 func percent(val string) *intstr.IntOrString {
