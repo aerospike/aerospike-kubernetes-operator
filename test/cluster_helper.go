@@ -27,11 +27,11 @@ import (
 )
 
 const (
-	baseImage           = "aerospike/aerospike-server-enterprise"
+	baseImage           = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc"
 	prevServerVersion   = "6.2.0.1"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "6.3.0.0"
+	latestServerVersion = "6.4.0.0-rc2"
 	invalidVersion      = "3.0.0.4"
 )
 

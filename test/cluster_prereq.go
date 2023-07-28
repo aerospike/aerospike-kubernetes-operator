@@ -22,9 +22,15 @@ func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	subjects := make([]rbac.Subject, 0, len(testNamespaces))
 
 	for idx := range testNamespaces {
+		secretName := "jfrogcred"
+		secretRefs := make([]corev1.LocalObjectReference, 0)
+		secretRef := new(corev1.LocalObjectReference)
+		secretRef.Name = secretName
+		secretRefs = append(secretRefs, *secretRef)
+
 		// Create service account for getting access in cluster specific namespaces
 		if err := createServiceAccount(
-			k8sClient, ctx, aeroClusterServiceAccountName, testNamespaces[idx],
+			k8sClient, ctx, aeroClusterServiceAccountName, testNamespaces[idx], secretRefs,
 		); err != nil {
 			return err
 		}
@@ -74,18 +80,25 @@ func createNamespace(
 }
 
 func createServiceAccount(
-	k8sClient client.Client, ctx goctx.Context, name string, namespace string,
+	k8sClient client.Client, ctx goctx.Context, name string, namespace string, secretRef []corev1.LocalObjectReference,
 ) error {
 	svcAct := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
+		ImagePullSecrets: secretRef,
 	}
 
 	err := k8sClient.Create(ctx, svcAct)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
+	} else if errors.IsAlreadyExists(err) {
+		pkgLog.Info("service account already exist")
+		errUpdate := k8sClient.Update(ctx, svcAct)
+		if errUpdate != nil {
+			return err
+		}
 	}
 
 	return nil

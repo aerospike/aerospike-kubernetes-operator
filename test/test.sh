@@ -11,7 +11,7 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "b:c:f:a:r:p:" opt
+while getopts "b:c:f:a:r:p:t:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -20,6 +20,7 @@ do
       a ) ARGS="$OPTARG" ;;
       r ) REGISTRY="$OPTARG" ;;
       p ) CRED_PATH="$OPTARG" ;;
+      t ) JFROG_TOKEN="$OPTARG" ;;
 
    esac
 done
@@ -52,7 +53,7 @@ echo "------------------------------"
 # Create imagePullSecret for AerospikeInitImage
 IMAGE_PULL_SECRET="registrycred"
 
-"$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH"
+"$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH" -t "$JFROG_TOKEN"
 
 # Run tests
 echo "---------------------"
