@@ -1306,8 +1306,51 @@ func negativeDeployClusterValidationTest(
 									map[string]interface{}{
 										"name":      "aerospike-a-0.test-runner",
 										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+										"key-file":  "/etc/aerospike/secret/svc_key.pem",
 										"ca-file":   "/etc/aerospike/secret/cacert.pem",
 										"ca-path":   "/etc/aerospike/secret/cacerts",
+									},
+								},
+							}
+							err := deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+								"tls": []interface{}{
+									map[string]interface{}{
+										"name":      "aerospike-a-0.test-runner",
+										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+										"key-file":  "/etc/aerospike/secret/svc_key.pem",
+										"ca-file":   "secrets:Test-secret:Key",
+									},
+								},
+							}
+							err := deployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
+					It(
+						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
+						func() {
+							aeroCluster := createAerospikeClusterPost560(
+								clusterNamespacedName, 1, latestImage,
+							)
+							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+								"tls": []interface{}{
+									map[string]interface{}{
+										"name":      "aerospike-a-0.test-runner",
+										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+										"key-file":  "/etc/aerospike/secret/svc_key.pem",
+										"ca-path":   "secrets:Test-secret:Key",
 									},
 								},
 							}
