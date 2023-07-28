@@ -61,61 +61,68 @@ var _ = Describe(
 			},
 		)
 		Context(
-			"ScaleDownWithMigrateFillDelay", func() {
-				clusterNamespacedName := getNamespacedName(
-					"migrate-fill-delay-cluster", namespace,
-				)
-				migrateFillDelay := int64(120)
-				BeforeEach(
-					func() {
-						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
-							migrateFillDelay
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					},
-				)
-
-				It(
-					"Should ignore migrate-fill-delay while scaling down", func() {
-
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.Size -= 2
-						err = k8sClient.Update(ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						// verify that migrate-fill-delay is set to 0 while scaling down
-						err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = waitForAerospikeCluster(
-							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-							getTimeout(2),
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						// verify that migrate-fill-delay is reverted to original value after scaling down
-						err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
+			"RunScaleDownWithMigrateFillDelay", func() {
+				ScaleDownWithMigrateFillDelay(ctx)
 			},
 		)
 	},
 )
+
+func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
+	Context(
+		"ScaleDownWithMigrateFillDelay", func() {
+			clusterNamespacedName := getNamespacedName(
+				"migrate-fill-delay-cluster", namespace,
+			)
+			migrateFillDelay := int64(120)
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
+						migrateFillDelay
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				},
+			)
+
+			It(
+				"Should ignore migrate-fill-delay while scaling down", func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.Size -= 2
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					// verify that migrate-fill-delay is set to 0 while scaling down
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = waitForAerospikeCluster(
+						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+						getTimeout(2),
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					// verify that migrate-fill-delay is reverted to original value after scaling down
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+}
 
 // Test cluster deployment with all image post 4.9.0
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
