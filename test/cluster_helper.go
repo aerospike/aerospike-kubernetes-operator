@@ -1230,61 +1230,6 @@ func createHDDAndDataInMemStorageCluster(
 	return aeroCluster
 }
 
-func createHDDAndDataInIndexStorageCluster(
-	clusterNamespacedName types.NamespacedName, size int32, repFact int32,
-	multiPodPerHost bool,
-) *asdbv1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
-	aeroCluster.Spec.Storage.Volumes = append(
-		aeroCluster.Spec.Storage.Volumes, []asdbv1.VolumeSpec{
-			{
-				Name: "device",
-				Source: asdbv1.VolumeSource{
-					PersistentVolume: &asdbv1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
-						StorageClass: storageClass,
-						VolumeMode:   corev1.PersistentVolumeBlock,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/dev/xvdf1",
-				},
-			},
-			{
-				Name: "ns",
-				Source: asdbv1.VolumeSource{
-					PersistentVolume: &asdbv1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
-						StorageClass: storageClass,
-						VolumeMode:   corev1.PersistentVolumeFilesystem,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/opt/aerospike/data",
-				},
-			},
-		}...,
-	)
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
-		map[string]interface{}{
-			"name":               "test",
-			"memory-size":        2000955200,
-			"single-bin":         true,
-			"data-in-index":      true,
-			"replication-factor": repFact,
-			"storage-engine": map[string]interface{}{
-				"type":           "device",
-				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
-				"filesize":       2000955200,
-				"data-in-memory": true,
-			},
-		},
-	}
-
-	return aeroCluster
-}
-
 func createDataInMemWithoutPersistentStorageCluster(
 	clusterNamespacedName types.NamespacedName, size int32, repFact int32,
 	multiPodPerHost bool,

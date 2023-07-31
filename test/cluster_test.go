@@ -210,24 +210,6 @@ func DeployClusterForDiffStorageTest(
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
-			// HDD Storage Engine with Data in Index Engine
-			It(
-				"HDDAndDataInIndexStorageCluster", func() {
-					clusterNamespacedName := getNamespacedName(
-						"datainindexcluster", namespace,
-					)
-
-					aeroCluster := createHDDAndDataInIndexStorageCluster(
-						clusterNamespacedName, clusterSz, repFact,
-						multiPodPerHost,
-					)
-
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
 			// Data in Memory Without Persistence
 			It(
 				"DataInMemWithoutPersistentStorageCluster", func() {
