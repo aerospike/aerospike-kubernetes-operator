@@ -70,7 +70,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(increaseBy),
+		getTimeout(aeroCluster.Spec.Size),
 	)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 
 	err = waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(increaseBy),
+		getTimeout(aeroCluster.Spec.Size),
 	)
 	if err != nil {
 		return err

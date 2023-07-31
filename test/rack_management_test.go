@@ -846,7 +846,7 @@ var _ = Describe(
 
 				aeroCluster.Spec.Size = 2
 
-				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*5)
+				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*7)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

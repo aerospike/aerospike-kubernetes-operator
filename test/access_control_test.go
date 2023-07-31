@@ -2119,10 +2119,8 @@ func getAerospikeClusterSpecWithAccessControl(
 			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: asdbv1.AerospikeClusterSpec{
-			Size: testClusterSize,
-			Image: fmt.Sprintf(
-				"%s:%s", baseImage, aerospikeConfSpec.getVersion(),
-			),
+			Size:  testClusterSize,
+			Image: latestImage,
 			ValidationPolicy: &asdbv1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
 				SkipXdrDlogFileValidate: true,
