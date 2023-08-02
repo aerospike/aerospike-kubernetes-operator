@@ -16,6 +16,9 @@ image:
 ##   - secret_with_credentials_to_custom_registry
 imagePullSecrets: {}
 
+## Custom labels that will be applied on the aerospikecluster resource
+customLabels: {}
+
 ## Aerospike access control configuration
 aerospikeAccessControl: {}
   # users:
@@ -93,7 +96,7 @@ storage: {}
   # - name: aerospike-config-secret
   #   source:
   #     secret:
-  #       secretName: aerospike-license
+  #       secretName: aerospike-secret
   #   aerospike:
   #     path: /etc/aerospike/secrets
 

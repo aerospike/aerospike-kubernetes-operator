@@ -2,6 +2,7 @@ package test
 
 import (
 	goctx "context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -795,5 +796,127 @@ var _ = Describe(
 				)
 			},
 		)
+
+		Context("When testing failed rack recovery by scale down", func() {
+			clusterName := "failed-rack-config"
+			clusterNamespacedName := getNamespacedName(
+				clusterName, namespace,
+			)
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+					racks := getDummyRackConf(1, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+
+					By("Deploying cluster")
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				},
+			)
+
+			It("Should recover after scaling down failed rack", func() {
+				By("Scaling up the cluster size beyond the available k8s nodes, pods will go in failed state")
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				nodes, err := getNodeList(ctx, k8sClient)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Size = int32(len(nodes.Items) + 1)
+
+				// scaleup, no need to wait for long
+				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*2)
+				Expect(err).To(HaveOccurred())
+
+				By("Scaling down the cluster size, failed pods should recover")
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Size = int32(len(nodes.Items) - 1)
+
+				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*10)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context(
+			"When testing failed rack recovery by rolling restart", func() {
+				clusterName := "cl-resource-insuff"
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+
+				BeforeEach(
+					func() {
+						aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+						racks := getDummyRackConf(1, 2)
+						aeroCluster.Spec.RackConfig.Racks = racks
+						aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					},
+				)
+
+				It("UpdateClusterWithResource: should recover after reverting back to schedulable resources", func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
+					Expect(err).Should(HaveOccurred())
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("UpdateClusterWithResource: should recover failed pods first after reverting back"+
+					" to schedulable resources", func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*3)
+					Expect(err).To(HaveOccurred())
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+					aeroCluster.Spec.RackConfig.Racks[0].ID = 2
+					aeroCluster.Spec.RackConfig.Racks[1].ID = 1
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
 	},
 )

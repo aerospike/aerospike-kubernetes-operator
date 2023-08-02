@@ -86,10 +86,11 @@ const (
 )
 
 const (
-	AerospikeServerContainerName                   string = "aerospike-server"
-	AerospikeInitContainerName                     string = "aerospike-init"
-	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
-	AerospikeInitContainerDefaultRegistry          string = "docker.io"
+	AerospikeServerContainerName          string = "aerospike-server"
+	AerospikeInitContainerName            string = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar  string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry string = "docker.io"
+
 	AerospikeInitContainerDefaultRegistryNamespace string = "tanmayj10"
 	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev3"
 

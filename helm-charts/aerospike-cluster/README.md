@@ -21,7 +21,7 @@ cd aerospike-kubernetes-operator/helm-charts
 #### Create a secret containing aerospike feature key file - `features.conf`
 
 ```sh
-kubectl create secret generic aerospike-license --from-file=<path-to-features.conf-file> --namespace <namespace>
+kubectl create secret generic aerospike-secret --from-file=<path-to-features.conf-file> --namespace <namespace>
 ```
 
 #### Install the chart
@@ -50,6 +50,7 @@ helm install aerospike ./aerospike-cluster/ \
 | `image.repository` | Aerospike server container image repository | `aerospike/aerospike-server-enterprise` |
 | `image.tag` | Aerospike server container image tag | `6.3.0.0` |
 | `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry | `{}` (nil) |
+| `customLabels` | Custom labels to add on the aerospikecluster resource | `{}` (nil) |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster. | `{}` (nil) |
 | `aerospikeConfig` | Aerospike configuration | `{}` (nil) |
 | `aerospikeNetworkPolicy` | Network policy (client access configuration) | `{}` (nil) |
@@ -97,7 +98,7 @@ storage:
   - name: aerospike-config-secret
     source:
       secret:
-        secretName: aerospike-license
+        secretName: aerospike-secret
     aerospike:
       path: /etc/aerospike/secrets
 
