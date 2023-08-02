@@ -1760,12 +1760,24 @@ func validateRequiredFileStorageForFeatureConf(
 ) error {
 	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
-	tlsPaths := getTLSFilePaths(configSpec)
+	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
 
 	var allPaths []string
 
-	allPaths = append(allPaths, featureKeyFilePaths...)
-	allPaths = append(allPaths, tlsPaths...)
+	for _, path := range featureKeyFilePaths {
+		if !isSecretManagerPath(path) {
+			allPaths = append(allPaths, path)
+		}
+	}
+
+	for _, path := range nonCAPaths {
+		if !isSecretManagerPath(path) {
+			allPaths = append(allPaths, path)
+		}
+	}
+
+	// CA cert related fields are not supported with Secret Manager, so check their mount volume
+	allPaths = append(allPaths, caPaths...)
 
 	for _, path := range allPaths {
 		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
@@ -1881,36 +1893,40 @@ func getFeatureKeyFilePaths(configSpec AerospikeConfigSpec) []string {
 	return nil
 }
 
-func getTLSFilePaths(configSpec AerospikeConfigSpec) []string {
+func getTLSFilePaths(configSpec AerospikeConfigSpec) (nonCAPaths, caPaths []string) {
 	config := configSpec.Value
 
-	var paths []string
 	// feature-key-file needs secret
 	if network, ok := config["network"]; ok {
 		if tlsListInterface, ok := network.(map[string]interface{})["tls"]; ok {
 			if tlsList, ok := tlsListInterface.([]interface{}); ok {
 				for _, tlsInterface := range tlsList {
 					if path, ok := tlsInterface.(map[string]interface{})["cert-file"]; ok {
-						paths = append(paths, path.(string))
+						nonCAPaths = append(nonCAPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["key-file"]; ok {
-						paths = append(paths, path.(string))
+						nonCAPaths = append(nonCAPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
-						paths = append(paths, path.(string))
+						caPaths = append(caPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["ca-path"]; ok {
-						paths = append(paths, path.(string)+"/")
+						caPaths = append(caPaths, path.(string)+"/")
 					}
 				}
 			}
 		}
 	}
 
-	return paths
+	return nonCAPaths, caPaths
+}
+
+// isSecretManagerPath indicates if the given path is a Secret Manager's unique identifier path
+func isSecretManagerPath(path string) bool {
+	return strings.HasPrefix(path, "secrets:") || strings.HasPrefix(path, "vault:")
 }
 
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.
