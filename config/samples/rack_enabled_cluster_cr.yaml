@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:6.3.0.0
+  image: aerospike/aerospike-server-enterprise:6.4.0.0
   rackConfig:
     namespaces:
       - test
