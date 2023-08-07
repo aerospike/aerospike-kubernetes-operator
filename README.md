@@ -206,77 +206,10 @@ spec:
 EOF
 ```
 
-For each additional targeted namespace
-
-- Create the operator service account for that namespace
-
-```shell
-# Replace ns1 with your target namespace
-kubectl -n ns1 create  serviceaccount aerospike-operator-controller-manager
-```
-
-- Find the cluster role binding created for the operator and add the service account created above
-
-```shell
-kubectl get clusterrolebindings.rbac.authorization.k8s.io  | grep aerospike-kubernetes-operator
-aerospike-kubernetes-operator.v3.0.0-74b946466d                 ClusterRole/aerospike-kubernetes-operator.v3.0.0-74b946466d   41m
-```
-
-In the example above the name of the cluster role binding is `aerospike-kubernetes-operator.v3.0.0-74b946466d`
-
-Edit the role binding and add a new subject entry for the service account
-
-```shell
-# Replace aerospike-kubernetes-operator.v3.0.0-74b946466d with the name of the cluster role binding found above
-kubectl edit clusterrolebindings.rbac.authorization.k8s.io  aerospike-kubernetes-operator.v3.0.0-74b946466d
-```
-
-In the editor that is launched append the following lines to the subjects section as shown below
-
-```yaml
-  # A new entry for ns1.
-  # Replace ns1 with your namespace
-  - kind: ServiceAccount
-    name: aerospike-operator-controller-manager
-    namespace: ns1
-```
-
-Here is a full example
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  creationTimestamp: "2021-09-16T10:48:36Z"
-  labels:
-    olm.owner: aerospike-kubernetes-operator.v3.0.0
-    olm.owner.kind: ClusterServiceVersion
-    olm.owner.namespace: test
-    operators.coreos.com/aerospike-kubernetes-operator.test: ""
-  name: aerospike-kubernetes-operator.v3.0.0-74b946466d
-  resourceVersion: "51841234"
-  uid: be546dd5-b21e-4cc3-8a07-e2fe5fe5274c
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: aerospike-kubernetes-operator.v3.0.0-74b946466d
-subjects:
-  - kind: ServiceAccount
-    name: aerospike-operator-controller-manager
-    namespace: aerospike
-
-  # New entry
-  - kind: ServiceAccount
-    name: aerospike-operator-controller-manager
-    namespace: ns1
-```
-
-Save and ensure that the changes are applied.
-
 ### Deploy your Aerospike clusters
 
 Deploy Aerospike clusters using the Operator
-documentation [here](https://docs.aerospike.com/docs/cloud/kubernetes/operator/Create-Aerospike-cluster.html).
+documentation [here](https://docs.aerospike.com/docs/cloud/kubernetes/operator/create-cluster-kubectl.html).
 
 ### Undeploy operator with OLM
 
