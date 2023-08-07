@@ -106,7 +106,7 @@ spec:
         - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxy.port }}
         - --upstream=http://127.0.0.1:{{ .Values.metricsPort }}/
         - --logtostderr=true
-        - --v=10
+        - --v=0
         ports:
         - containerPort: {{ .Values.kubeRBACProxy.port }}
           name: https
