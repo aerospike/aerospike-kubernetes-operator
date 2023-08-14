@@ -176,8 +176,8 @@ spec:
   maintainers:
   - email: developers@aerospike.com
     name: Aerospike, Inc.
-  maturity: beta
-  minKubeVersion: 1.16.0
+  maturity: stable
+  minKubeVersion: 1.19.0
   provider:
     name: Aerospike
   version: 0.0.0

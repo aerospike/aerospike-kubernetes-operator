@@ -75,6 +75,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			continue
 		}
 
+		// 1. Fetch the pods for the rack and if there are failed pods then reconcile rack
 		podList, err = r.getOrderedRackPodList(state.Rack.ID)
 		if err != nil {
 			return reconcileError(
@@ -86,14 +87,40 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 		failedPods, _ := getFailedAndActivePods(podList)
 		if len(failedPods) != 0 {
-			r.Log.Info("Upgrading or rolling restart rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 
-			_, res = r.upgradeOrRollingRestartRack(found, state, ignorablePods, failedPods)
-			if !res.isSuccess {
+			if res = r.reconcileRack(
+				found, state, ignorablePods, failedPods,
+			); !res.isSuccess {
 				return res
 			}
 
-			r.Log.Info("Upgraded or rolling restarted rack with failed pods", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+		}
+
+		// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
+		// This is needed in cases where hash values generated from CR spec are same as hash values in pods.
+		// But, pods are in failed state due to their bad spec.
+		// e.g. configuring unschedulable resources in CR podSpec and reverting them to old value.
+		podList, err = r.getOrderedRackPodList(state.Rack.ID)
+		if err != nil {
+			return reconcileError(
+				fmt.Errorf(
+					"failed to list pods: %v", err,
+				),
+			)
+		}
+
+		failedPods, _ = getFailedAndActivePods(podList)
+		if len(failedPods) != 0 {
+			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+
+			if _, res = r.rollingRestartRack(found, state, ignorablePods, nil,
+				failedPods); !res.isSuccess {
+				return res
+			}
+
+			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 		}
 	}
 
@@ -122,7 +149,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		} else {
 			// Reconcile other statefulset
 			if res = r.reconcileRack(
-				found, state, ignorablePods,
+				found, state, ignorablePods, nil,
 			); !res.isSuccess {
 				return res
 			}
@@ -134,7 +161,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		state := scaledDownRackList[idx].rackState
 		sts := scaledDownRackList[idx].rackSTS
 
-		if res = r.reconcileRack(sts, state, ignorablePods); !res.isSuccess {
+		if res = r.reconcileRack(sts, state, ignorablePods, nil); !res.isSuccess {
 			return res
 		}
 	}
@@ -379,7 +406,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, reconcileError(nErr)
 		}
 
-		if needRollingRestartRack || len(failedPods) != 0 {
+		if needRollingRestartRack {
 			found, res = r.rollingRestartRack(found, rackState, ignorablePods, restartTypeMap, failedPods)
 			if !res.isSuccess {
 				if res.err != nil {
@@ -405,7 +432,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 }
 
 func (r *SingleClusterReconciler) reconcileRack(
-	found *appsv1.StatefulSet, rackState *RackState, ignorablePods []corev1.Pod,
+	found *appsv1.StatefulSet, rackState *RackState, ignorablePods []corev1.Pod, failedPods []*corev1.Pod,
 ) reconcileResult {
 	r.Log.Info(
 		"Reconcile existing Aerospike cluster statefulset", "stsName",
@@ -445,29 +472,22 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
-	// revert migrate-fill-delay to original value if it was set to 0 during scale down
-	// Reset will be done if there is Scale down or Rack redistribution
-	// This check won't cover scenario where scale down operation was done and then reverted back to previous value
-	// before the scale down could complete.
-	if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
-		(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
-		if res = r.setMigrateFillDelay(r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
-			nil); !res.isSuccess {
-			r.Log.Error(res.err, "Failed to revert migrate-fill-delay after scale down")
-			return res
+	if failedPods == nil {
+		// revert migrate-fill-delay to original value if it was set to 0 during scale down
+		// Reset will be done if there is Scale down or Rack redistribution
+		// This check won't cover scenario where scale down operation was done and then reverted to previous value
+		// before the scale down could complete.
+		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
+			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
+			if res = r.setMigrateFillDelay(r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
+				nil); !res.isSuccess {
+				r.Log.Error(res.err, "Failed to revert migrate-fill-delay after scale down")
+				return res
+			}
 		}
 	}
 
-	if err := r.updateAerospikeInitContainerImage(found); err != nil {
-		r.Log.Error(
-			err, "Failed to update Aerospike Init container", "stsName",
-			found.Name,
-		)
-
-		return reconcileError(err)
-	}
-
-	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, nil)
+	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePods, failedPods)
 	if !res.isSuccess {
 		return res
 	}
@@ -761,22 +781,26 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	pod = utils.GetPod(podName, oldPodList.Items)
 
-	// Ignore safe stop check on pod not in running state.
-	if utils.IsPodRunningAndReady(pod) {
+	isPodRunningAndReady := utils.IsPodRunningAndReady(pod)
+
+	// Ignore safe stop check if pod is not running.
+	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
+	if isPodRunningAndReady {
 		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}
-	}
 
-	// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
-	// temporarily add the pod to be deleted in ignorablePods slice to avoid setting migrate-fill-delay to pod when
-	// pod is not ready
-	if res := r.setMigrateFillDelay(
-		policy, &rackState.Rack.AerospikeConfig, true,
-		append(ignorablePods, *pod),
-	); !res.isSuccess {
-		return found, res
+		// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
+		// setting migrate-fill-delay only if pod is running and ready.
+		// This check ensures that migrate-fill-delay is not set while processing failed racks.
+		// setting migrate-fill-delay will fail if there are any failed pod
+		if res := r.setMigrateFillDelay(
+			policy, &rackState.Rack.AerospikeConfig, true,
+			append(ignorablePods, *pod),
+		); !res.isSuccess {
+			return found, res
+		}
 	}
 
 	// Update new object with new size
@@ -794,39 +818,43 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		)
 	}
 
-	// Wait for pods to get terminated
-	if err = r.waitForSTSToBeReady(found); err != nil {
-		r.Log.Error(err, "Failed to wait for statefulset to be ready")
-		return found, reconcileRequeueAfter(1)
-	}
-
-	// This check is added only in scale down but not in rolling restart.
-	// If scale down leads to unavailable or dead partition then we should scale up the cluster,
-	// This can be left to the user but if we would do it here on our own then we can reuse
-	// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
-	// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
-	if err = r.validateSCClusterState(policy, ignorablePods); err != nil {
-		// reset cluster size
-		newSize := *found.Spec.Replicas + 1
-		found.Spec.Replicas = &newSize
-
-		r.Log.Error(
-			err, "Cluster validation failed, re-setting AerospikeCluster statefulset to previous size",
-			"size", newSize,
-		)
-
-		if err = r.Client.Update(
-			context.TODO(), found, updateOption,
-		); err != nil {
-			return found, reconcileError(
-				fmt.Errorf(
-					"failed to update pod size %d StatefulSet pods: %v",
-					newSize, err,
-				),
-			)
+	// No need for these checks if pod was not running.
+	// These checks will fail if there is any other pod in failed state.
+	if isPodRunningAndReady {
+		// Wait for pods to get terminated
+		if err = r.waitForSTSToBeReady(found); err != nil {
+			r.Log.Error(err, "Failed to wait for statefulset to be ready")
+			return found, reconcileRequeueAfter(1)
 		}
 
-		return found, reconcileRequeueAfter(1)
+		// This check is added only in scale down but not in rolling restart.
+		// If scale down leads to unavailable or dead partition then we should scale up the cluster,
+		// This can be left to the user but if we would do it here on our own then we can reuse
+		// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
+		// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
+		if err = r.validateSCClusterState(policy, ignorablePods); err != nil {
+			// reset cluster size
+			newSize := *found.Spec.Replicas + 1
+			found.Spec.Replicas = &newSize
+
+			r.Log.Error(
+				err, "Cluster validation failed, re-setting AerospikeCluster statefulset to previous size",
+				"size", newSize,
+			)
+
+			if err = r.Client.Update(
+				context.TODO(), found, updateOption,
+			); err != nil {
+				return found, reconcileError(
+					fmt.Errorf(
+						"failed to update pod size %d StatefulSet pods: %v",
+						newSize, err,
+					),
+				)
+			}
+
+			return found, reconcileRequeueAfter(1)
+		}
 	}
 
 	// Fetch new object
@@ -868,7 +896,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
 	failedPods []*corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
-	r.Log.Info("Rolling restart AerospikeCluster statefulset nodes with new config")
+	r.Log.Info("Rolling restart AerospikeCluster statefulset pods")
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",
@@ -900,7 +928,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		pods = append(pods, *podList[idx])
 	}
 
-	if r.isAnyPodInImageFailedState(pods) {
+	if len(failedPods) != 0 && r.isAnyPodInImageFailedState(pods) {
 		return found, reconcileError(
 			fmt.Errorf(
 				"cannot Rolling restart AerospikeCluster. " +
@@ -917,8 +945,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	}
 
 	r.Log.Info(
-		"Statefulset spec updated - doing rolling restart with new" +
-			" config",
+		"Statefulset spec updated - doing rolling restart",
 	)
 
 	// Find pods which needs restart

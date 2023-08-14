@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -40,11 +40,6 @@ type SingleClusterReconciler struct {
 }
 
 func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
-	if err := r.checkPermissionForNamespace(); err != nil {
-		r.Log.Error(err, "Failed to start reconcile")
-		return reconcileRequeueAfter(10).result, nil
-	}
-
 	r.Log.V(1).Info(
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
@@ -81,8 +76,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Handle previously failed cluster
-	if err := r.checkPreviouslyFailedCluster(); err != nil {
-		return reconcile.Result{}, err
+	hasFailed, chkErr := r.checkPreviouslyFailedCluster()
+	if chkErr != nil {
+		return reconcile.Result{}, chkErr
+	}
+
+	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
+		r.Log.Info("cluster migration is not needed")
+	} else {
+		if err := r.migrateAerospikeCluster(context.TODO(), hasFailed); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
 	}
 
 	// Reconcile all racks
@@ -195,75 +199,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func (r *SingleClusterReconciler) checkPermissionForNamespace() error {
-	r.Log.Info(
-		"Checking for serviceAccount name in clusterRoleBindings",
-		"namespace", r.aeroCluster.Namespace, "serviceAccount",
-		aeroClusterServiceAccountName,
-	)
-
-	CRBs := &rbac.ClusterRoleBindingList{}
-	if err := r.Client.List(context.TODO(), CRBs); err != nil {
-		return err
-	}
-
-	var (
-		isOlmCRBFound bool
-		svcActFound   bool
-	)
-
-	for idx := range CRBs.Items {
-		crb := &CRBs.Items[idx]
-		_, aerospikeLabelExists := crb.Labels["aerospike.com/default-ns.kind"]
-		_, olmLabelExists := crb.Labels["olm.owner"]
-
-		// Verify that the role
-		if !aerospikeLabelExists && !olmLabelExists {
-			continue
-		}
-
-		if strings.HasPrefix(crb.Name, "aerospike-kubernetes-operator") {
-			r.Log.Info("Checking in clusterRoleBinding", "crb", crb.Name)
-
-			isOlmCRBFound = true
-
-			for _, sub := range crb.Subjects {
-				// Verify serviceAccount for namespace
-				if sub.Kind == "ServiceAccount" &&
-					sub.Name == aeroClusterServiceAccountName &&
-					sub.Namespace == r.aeroCluster.Namespace {
-					r.Log.Info(
-						"Found the serviceAccount name in clusterRoleBindings",
-						"namespace", r.aeroCluster.Namespace, "serviceAccount",
-						aeroClusterServiceAccountName,
-					)
-
-					svcActFound = true
-
-					break
-				}
-			}
-		}
-
-		if svcActFound {
-			break
-		}
-	}
-
-	// No need to check for permission in non-olm setup. Skip if CRB not found,
-	// operator might have been deployed by non-olm method and CRB name may
-	// have a different prefix.
-	if isOlmCRBFound && !svcActFound {
-		return fmt.Errorf(
-			"setup missing RBAC for namespace `%s` - see https://docs.aerospike.com/cloud/kubernetes/operator/2.0."+
-				"0/create-cluster-kubectl#prepare-the-namespace",
-			r.aeroCluster.Namespace,
-		)
-	}
-
-	return nil
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl() error {
@@ -726,17 +661,17 @@ func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
+func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, error) {
 	isNew, err := r.isNewCluster()
 	if err != nil {
-		return fmt.Errorf("error determining if cluster is new: %v", err)
+		return false, fmt.Errorf("error determining if cluster is new: %v", err)
 	}
 
 	if isNew {
 		r.Log.V(1).Info("It's a new cluster, create empty status object")
 
 		if err := r.createStatus(); err != nil {
-			return err
+			return false, err
 		}
 	} else {
 		r.Log.V(1).Info(
@@ -746,17 +681,17 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() error {
 
 		hasFailed, err := r.hasClusterFailed()
 		if err != nil {
-			return fmt.Errorf(
+			return hasFailed, fmt.Errorf(
 				"error determining if cluster has failed: %v", err,
 			)
 		}
 
 		if hasFailed {
-			return r.recoverFailedCreate()
+			return hasFailed, r.recoverFailedCreate()
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
@@ -786,4 +721,151 @@ func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.H
 
 func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 	return r.aeroCluster.Status.AerospikeConfig == nil
+}
+
+func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
+	if !hasFailed {
+		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
+			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
+		}
+
+		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
+			r.Log.Error(err, "Problem patching Initialised volumes")
+			return err
+		}
+
+		if err := r.updateAerospikeInitContainerImage(); err != nil {
+			r.Log.Error(
+				err, "Failed to update Aerospike Init container",
+			)
+
+			return err
+		}
+	}
+
+	if err := r.AddAPIVersionLabel(ctx); err != nil {
+		r.Log.Error(err, "Problem patching label")
+		return err
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Context) error {
+	r.Log.Info("Migrating Initialised Volumes name to new format")
+
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request objects not found.
+			return nil
+		}
+		// Error reading the object.
+		return err
+	}
+
+	var patches []jsonpatch.PatchOperation
+
+	for podIdx := range podList.Items {
+		pod := &podList.Items[podIdx]
+
+		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
+			return fmt.Errorf("empty status found in CR for pod %s", pod.Name)
+		}
+
+		initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
+		newFormatInitVolNames := sets.Set[string]{}
+		oldFormatInitVolNames := make([]string, 0, len(initializedVolumes))
+
+		for volIdx := range initializedVolumes {
+			initVolInfo := strings.Split(initializedVolumes[volIdx], "@")
+			if len(initVolInfo) < 2 {
+				oldFormatInitVolNames = append(oldFormatInitVolNames, initializedVolumes[volIdx])
+			} else {
+				newFormatInitVolNames.Insert(initVolInfo[0])
+			}
+		}
+
+		for oldVolIdx := range oldFormatInitVolNames {
+			if !newFormatInitVolNames.Has(oldFormatInitVolNames[oldVolIdx]) {
+				pvcUID, pvcErr := r.getPVCUid(ctx, pod, oldFormatInitVolNames[oldVolIdx])
+				if pvcErr != nil {
+					return pvcErr
+				}
+
+				if pvcUID == "" {
+					return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
+				}
+
+				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
+				initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+			}
+		}
+
+		if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
+			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
+
+			patch1 := jsonpatch.PatchOperation{
+				Operation: "replace",
+				Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
+				Value:     initializedVolumes,
+			}
+
+			patches = append(patches, patch1)
+		}
+	}
+
+	if len(patches) == 0 {
+		return nil
+	}
+
+	jsonPatchJSON, err := json.Marshal(patches)
+	if err != nil {
+		return err
+	}
+
+	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
+
+	// Since the pod status is updated from pod init container,
+	// set the field owner to "pod" for pod status updates.
+	r.Log.Info("Patching status with updated initialised volumes")
+
+	if err = r.Client.Status().Patch(
+		ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+	); err != nil {
+		return fmt.Errorf("error updating status: %v", err)
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) getPVCUid(ctx context.Context, pod *corev1.Pod, volName string) (string, error) {
+	for idx := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[idx].Name == volName {
+			pvc := &corev1.PersistentVolumeClaim{}
+			pvcNamespacedName := types.NamespacedName{
+				Name:      pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName,
+				Namespace: pod.Namespace,
+			}
+
+			if err := r.Client.Get(ctx, pvcNamespacedName, pvc); err != nil {
+				return "", err
+			}
+
+			return string(pvc.UID), nil
+		}
+	}
+
+	return "", nil
+}
+
+func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error {
+	aeroCluster := r.aeroCluster
+	if aeroCluster.Labels == nil {
+		aeroCluster.Labels = make(map[string]string)
+	}
+
+	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
+
+	return r.Client.Update(ctx, aeroCluster, updateOption)
 }

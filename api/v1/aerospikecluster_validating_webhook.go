@@ -1375,14 +1375,8 @@ func validateAerospikeConfigUpdate(
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
-	// TLS cannot be updated dynamically
-	// TODO: How to enable dynamic tls update, need to pass policy for individual nodes.
-	oldTLS, ok11 := oldConf["network"].(map[string]interface{})["tls"]
-	newTLS, ok22 := newConf["network"].(map[string]interface{})["tls"]
-
-	if ok11 != ok22 ||
-		ok11 && ok22 && (!reflect.DeepEqual(oldTLS, newTLS)) {
-		return fmt.Errorf("cannot update cluster network.tls config")
+	if err := validateTLSUpdate(oldConf, newConf); err != nil {
+		return err
 	}
 
 	for _, connectionType := range networkConnectionTypes {
@@ -1394,6 +1388,80 @@ func validateAerospikeConfigUpdate(
 	}
 
 	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
+}
+
+func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
+	oldTLS, oldExists := oldConf["network"].(map[string]interface{})["tls"]
+	newTLS, newExists := newConf["network"].(map[string]interface{})["tls"]
+
+	if oldExists && newExists && (!reflect.DeepEqual(oldTLS, newTLS)) {
+		oldTLSCAFileMap := make(map[string]string)
+		oldTLSCAPathMap := make(map[string]string)
+		newUsedTLS := sets.NewString()
+		oldUsedTLS := sets.NewString()
+
+		// fetching names of TLS configurations used in connections
+		for _, connectionType := range networkConnectionTypes {
+			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
+				connectionConfigMap := connectionConfig.(map[string]interface{})
+				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+					newUsedTLS.Insert(tlsName.(string))
+				}
+			}
+		}
+
+		// fetching names of TLS configurations used in old connections configurations
+		for _, connectionType := range networkConnectionTypes {
+			if connectionConfig, exists := oldConf["network"].(map[string]interface{})[connectionType]; exists {
+				connectionConfigMap := connectionConfig.(map[string]interface{})
+				if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+					oldUsedTLS.Insert(tlsName.(string))
+				}
+			}
+		}
+
+		for _, tls := range oldTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+			if !oldUsedTLS.Has(tlsMap["name"].(string)) {
+				continue
+			}
+
+			oldCAFile, oldCAFileOK := tlsMap["ca-file"]
+			if oldCAFileOK {
+				oldTLSCAFileMap[tlsMap["name"].(string)] = oldCAFile.(string)
+			}
+
+			oldCAPath, oldCAPathOK := tlsMap["ca-path"]
+			if oldCAPathOK {
+				oldTLSCAPathMap[tlsMap["name"].(string)] = oldCAPath.(string)
+			}
+		}
+
+		for _, tls := range newTLS.([]interface{}) {
+			tlsMap := tls.(map[string]interface{})
+			if !newUsedTLS.Has(tlsMap["name"].(string)) {
+				continue
+			}
+
+			_, newCAPathOK := tlsMap["ca-path"]
+			newCAFile, newCAFileOK := tlsMap["ca-file"]
+
+			oldCAFile, oldCAFileOK := oldTLSCAFileMap[tlsMap["name"].(string)]
+			_, oldCAPathOK := oldTLSCAPathMap[tlsMap["name"].(string)]
+
+			if (oldCAFileOK || oldCAPathOK) && !(newCAPathOK || newCAFileOK) {
+				return fmt.Errorf(
+					"cannot remove used `ca-file` or `ca-path` from tls",
+				)
+			}
+
+			if oldCAFileOK && newCAFileOK && newCAFile.(string) != oldCAFile {
+				return fmt.Errorf("cannot change ca-file of used tls")
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateNetworkConnectionUpdate(
@@ -1692,12 +1760,24 @@ func validateRequiredFileStorageForFeatureConf(
 ) error {
 	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
-	tlsPaths := getTLSFilePaths(configSpec)
+	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
 
 	var allPaths []string
 
-	allPaths = append(allPaths, featureKeyFilePaths...)
-	allPaths = append(allPaths, tlsPaths...)
+	for _, path := range featureKeyFilePaths {
+		if !isSecretManagerPath(path) {
+			allPaths = append(allPaths, path)
+		}
+	}
+
+	for _, path := range nonCAPaths {
+		if !isSecretManagerPath(path) {
+			allPaths = append(allPaths, path)
+		}
+	}
+
+	// CA cert related fields are not supported with Secret Manager, so check their mount volume
+	allPaths = append(allPaths, caPaths...)
 
 	for _, path := range allPaths {
 		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
@@ -1813,36 +1893,40 @@ func getFeatureKeyFilePaths(configSpec AerospikeConfigSpec) []string {
 	return nil
 }
 
-func getTLSFilePaths(configSpec AerospikeConfigSpec) []string {
+func getTLSFilePaths(configSpec AerospikeConfigSpec) (nonCAPaths, caPaths []string) {
 	config := configSpec.Value
 
-	var paths []string
 	// feature-key-file needs secret
 	if network, ok := config["network"]; ok {
 		if tlsListInterface, ok := network.(map[string]interface{})["tls"]; ok {
 			if tlsList, ok := tlsListInterface.([]interface{}); ok {
 				for _, tlsInterface := range tlsList {
 					if path, ok := tlsInterface.(map[string]interface{})["cert-file"]; ok {
-						paths = append(paths, path.(string))
+						nonCAPaths = append(nonCAPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["key-file"]; ok {
-						paths = append(paths, path.(string))
+						nonCAPaths = append(nonCAPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
-						paths = append(paths, path.(string))
+						caPaths = append(caPaths, path.(string))
 					}
 
 					if path, ok := tlsInterface.(map[string]interface{})["ca-path"]; ok {
-						paths = append(paths, path.(string)+"/")
+						caPaths = append(caPaths, path.(string)+"/")
 					}
 				}
 			}
 		}
 	}
 
-	return paths
+	return nonCAPaths, caPaths
+}
+
+// isSecretManagerPath indicates if the given path is a Secret Manager's unique identifier path
+func isSecretManagerPath(path string) bool {
+	return strings.HasPrefix(path, "secrets:") || strings.HasPrefix(path, "vault:")
 }
 
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.

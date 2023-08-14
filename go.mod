@@ -3,7 +3,7 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.19
 
 require (
-	github.com/aerospike/aerospike-management-lib v0.0.0-20230710095848-9eb02bd730be
+	github.com/aerospike/aerospike-management-lib v0.0.0-20230814122406-a5247ec7486a
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/ashishshinde/aerospike-client-go/v6 v6.0.1-0.20220606044039-77304169d3a4
 	github.com/evanphx/json-patch v4.12.0+incompatible
@@ -23,6 +23,7 @@ require (
 require (
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/crypto v0.1.0
+	gomodules.xyz/jsonpatch/v2 v2.2.0
 )
 
 // Pinned this dependcy to fix vulnerbaility in `net` pkg
@@ -78,9 +79,8 @@ require (
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
+	google.golang.org/protobuf v1.29.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

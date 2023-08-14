@@ -8,13 +8,16 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 6.3.0.0
+  tag: 6.4.0.0
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containining credentials can be added
 ## imagePullSecrets:
 ##   - secret_with_credentials_to_custom_registry
 imagePullSecrets: {}
+
+## Custom labels that will be applied on the aerospikecluster resource
+customLabels: {}
 
 ## Aerospike access control configuration
 aerospikeAccessControl: {}
@@ -93,7 +96,7 @@ storage: {}
   # - name: aerospike-config-secret
   #   source:
   #     secret:
-  #       secretName: aerospike-license
+  #       secretName: aerospike-secret
   #   aerospike:
   #     path: /etc/aerospike/secrets
 

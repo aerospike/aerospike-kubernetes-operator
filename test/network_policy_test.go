@@ -107,7 +107,7 @@ func negativeAerospikeNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enab
 func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableTLS bool) {
 	Context(
 		"Negative cases for customInterface", func() {
-			clusterNamespacedName := getClusterNamespacedName("np-custom-interface", namespace)
+			clusterNamespacedName := getNamespacedName("np-custom-interface", namespace)
 
 			It(
 				"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
@@ -273,7 +273,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 	Context(
 		"Negative cases for configuredIP", func() {
-			clusterNamespacedName := getClusterNamespacedName("np-configured-ip", multiClusterNs1)
+			clusterNamespacedName := getNamespacedName("np-configured-ip", multiClusterNs1)
 
 			BeforeEach(
 				func() {
@@ -354,7 +354,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 	Context("Negative cases for customInterface", func() {
-		clusterNamespacedName := getClusterNamespacedName("np-custom-interface", namespace)
+		clusterNamespacedName := getNamespacedName("np-custom-interface", namespace)
 		Context(
 			"InvalidAerospikeCustomInterface", func() {
 				BeforeEach(
@@ -647,7 +647,7 @@ func doTestNetworkPolicy(
 
 	It(
 		"DefaultNetworkPolicy", func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"np-default", multiClusterNs1,
 			)
 
@@ -668,7 +668,7 @@ func doTestNetworkPolicy(
 
 	It(
 		"PodAndExternal", func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"np-pod-external", multiClusterNs1,
 			)
 
@@ -695,7 +695,7 @@ func doTestNetworkPolicy(
 	// test-case valid only for multiPodPerHost true
 	if multiPodPerHost {
 		It("OnlyPodNetwork: should create cluster without nodePort service", func() {
-			clusterNamespacedName := getClusterNamespacedName(
+			clusterNamespacedName := getNamespacedName(
 				"pod-network-cluster", multiClusterNs1)
 
 			networkPolicy := asdbv1.AerospikeNetworkPolicy{
@@ -725,16 +725,11 @@ func doTestNetworkPolicy(
 						Expect(err).To(HaveOccurred())
 						Expect(errors.IsNotFound(err)).To(BeTrue())
 						Expect(aeroCluster.Status.Pods[podName].ServicePort).To(Equal(int32(0)))
-						Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).To(Equal(int32(0)))
 						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).To(Equal(""))
 					} else {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(aeroCluster.Status.Pods[podName].ServicePort).NotTo(Equal(int32(0)))
 						Expect(aeroCluster.Status.Pods[podName].HostExternalIP).NotTo(Equal(""))
-
-						if enableTLS {
-							Expect(aeroCluster.Status.Pods[podName].ServiceTLSPort).NotTo(Equal(int32(0)))
-						}
 					}
 				}
 			}
@@ -771,7 +766,7 @@ func doTestNetworkPolicy(
 
 	Context(
 		"When using configuredIP", func() {
-			clusterNamespacedName := getClusterNamespacedName("np-configured-ip", multiClusterNs1)
+			clusterNamespacedName := getNamespacedName("np-configured-ip", multiClusterNs1)
 			BeforeEach(
 				func() {
 					err := deleteNodeLabels(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
@@ -861,7 +856,7 @@ func doTestNetworkPolicy(
 	// which is ideally added by CNI at runtime.
 	// Test cases with NetworkAttachmentDefinition of different namespaces can't be tested with current mocking.
 	Context("customInterface", func() {
-		clusterNamespacedName := getClusterNamespacedName(
+		clusterNamespacedName := getNamespacedName(
 			"np-custom-interface", multiClusterNs1,
 		)
 
@@ -1095,28 +1090,26 @@ func validateNetworkPolicy(
 		tlsName := getServiceTLSName(current)
 
 		if tlsName != "" {
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo("service", "tls-access", endpointsMap),
-				[]string{customNetIPVlanOne, customNetIPVlanTwo}, valueAccessAddress, 0)
-			if err != nil {
+				[]string{customNetIPVlanOne, customNetIPVlanTwo}, valueAccessAddress, 0); err != nil {
 				return err
 			}
 
-			err = validatePodEndpoint(
+			if err := validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.TLSAlternateAccessType, true,
 				aerospikecluster.GetEndpointsFromInfo("service", "tls-alternate-access",
-					endpointsMap), []string{customNetIPVlanTwo}, valueAlternateAccessAddress, 0)
-			if err != nil {
+					endpointsMap), []string{customNetIPVlanTwo}, valueAlternateAccessAddress, 0); err != nil {
 				return err
 			}
 
 			if networkPolicy.TLSFabricType == asdbv1.AerospikeNetworkTypeCustomInterface {
-				err = validatePodEndpoint(
+				_, port := asdbv1.GetFabricTLSNameAndPort(desired.Spec.AerospikeConfig)
+				if err := validatePodEndpoint(
 					ctx, &podList.Items[podIndex], current, networkPolicy.TLSFabricType, false,
 					aerospikecluster.GetEndpointsFromInfo("fabric", "tls", endpointsMap),
-					[]string{customNetIPVlanThree}, "", int32(*asdbv1.GetFabricTLSPort(desired.Spec.AerospikeConfig)))
-				if err != nil {
+					[]string{customNetIPVlanThree}, "", int32(*port)); err != nil {
 					return err
 				}
 			}

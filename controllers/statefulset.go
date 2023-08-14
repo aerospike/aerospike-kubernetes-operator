@@ -1081,44 +1081,53 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 	updateImage(statefulset.Spec.Template.Spec.InitContainers)
 }
 
-func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet *appsv1.StatefulSet) error {
-	for idx := range statefulSet.Spec.Template.Spec.InitContainers {
-		container := &statefulSet.Spec.Template.Spec.InitContainers[idx]
-		if container.Name != asdbv1.AerospikeInitContainerName {
-			continue
-		}
+func (r *SingleClusterReconciler) updateAerospikeInitContainerImage() error {
+	stsList, err := r.getClusterSTSList()
+	if err != nil {
+		return err
+	}
 
-		desiredImage, err := utils.GetDesiredImage(
-			r.aeroCluster, container.Name,
-		)
-		if err != nil {
-			return err
-		}
+	for stsIdx := range stsList.Items {
+		statefulSet := stsList.Items[stsIdx]
+		for idx := range statefulSet.Spec.Template.Spec.InitContainers {
+			container := &statefulSet.Spec.Template.Spec.InitContainers[idx]
+			if container.Name != asdbv1.AerospikeInitContainerName {
+				continue
+			}
 
-		if !utils.IsImageEqual(container.Image, desiredImage) {
-			r.Log.Info(
-				"Updating image in statefulset spec", "container",
-				container.Name, "desiredImage", desiredImage,
-				"currentImage",
-				container.Image,
+			desiredImage, err := utils.GetDesiredImage(
+				r.aeroCluster, container.Name,
 			)
+			if err != nil {
+				return err
+			}
 
-			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+			if !utils.IsImageEqual(container.Image, desiredImage) {
+				r.Log.Info(
+					"Updating image in statefulset spec",
+					"statefulset", statefulSet.Name,
+					"container", container.Name,
+					"desiredImage", desiredImage,
+					"currentImage", container.Image,
+				)
 
-			if err := r.Client.Update(context.TODO(), statefulSet, updateOption); err != nil {
-				return fmt.Errorf(
-					"failed to update StatefulSet %s: %v",
-					statefulSet.Name,
-					err,
+				statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+
+				if err := r.Client.Update(context.TODO(), &statefulSet, updateOption); err != nil {
+					return fmt.Errorf(
+						"failed to update StatefulSet %s: %v",
+						statefulSet.Name,
+						err,
+					)
+				}
+
+				r.Log.V(1).Info(
+					"Saved StatefulSet", "statefulSet", statefulSet,
 				)
 			}
 
-			r.Log.V(1).Info(
-				"Saved StatefulSet", "statefulSet", *statefulSet,
-			)
+			break
 		}
-
-		break
 	}
 
 	return nil

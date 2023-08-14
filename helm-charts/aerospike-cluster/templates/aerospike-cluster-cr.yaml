@@ -7,12 +7,16 @@ metadata:
     app: {{ template "aerospike-cluster.commonName" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+
 spec:
   # Aerospike cluster size
   size: {{ .Values.replicas | default 3 }}
 
   # Aerospike server docker image
-  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "6.3.0.0" }}
+  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "6.4.0.0" }}
 
   # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}
@@ -76,7 +80,7 @@ spec:
     - name: aerospike-config-secret
       source:
         secret:
-          secretName: aerospike-license
+          secretName: aerospike-secret
       aerospike:
         path: /etc/aerospike/secrets
   {{- end }}

@@ -33,35 +33,6 @@ const (
 
 const baseVersion = "4.9.0.3"
 
-// ContainsString check whether list contains given string
-func ContainsString(list []string, ele string) bool {
-	for _, listEle := range list {
-		if strings.EqualFold(ele, listEle) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// GetWorkDirectory returns the Aerospike work directory to use for aerospikeConfig.
-func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
-	// Get namespace config.
-	aerospikeConfig := aerospikeConfigSpec.Value
-
-	serviceTmp := aerospikeConfig[confKeyService]
-	if serviceTmp != nil {
-		serviceConf := serviceTmp.(map[string]interface{})
-
-		workDir, ok := serviceConf[confKeyWorkDirectory]
-		if ok {
-			return workDir.(string)
-		}
-	}
-
-	return defaultWorkDirectory
-}
-
 const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
@@ -91,12 +62,43 @@ const (
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0-dev2"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0"
 
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIDLabel         = "aerospike.com/rack-id"
+	AerospikeAPIVersionLabel     = "aerospike.com/api-version"
+	AerospikeAPIVersion          = "v1"
 )
+
+// ContainsString check whether list contains given string
+func ContainsString(list []string, ele string) bool {
+	for _, listEle := range list {
+		if strings.EqualFold(ele, listEle) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetWorkDirectory returns the Aerospike work directory to use for aerospikeConfig.
+func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
+	// Get namespace config.
+	aerospikeConfig := aerospikeConfigSpec.Value
+
+	serviceTmp := aerospikeConfig[confKeyService]
+	if serviceTmp != nil {
+		serviceConf := serviceTmp.(map[string]interface{})
+
+		workDir, ok := serviceConf[confKeyWorkDirectory]
+		if ok {
+			return workDir.(string)
+		}
+	}
+
+	return defaultWorkDirectory
+}
 
 func getInitContainerImage(registry string) string {
 	return fmt.Sprintf(
@@ -410,10 +412,6 @@ func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
-}
-
-func GetFabricTLSPort(aeroConf *AerospikeConfigSpec) *int {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "tls-port")
 }
 
 func GetPortFromConfig(

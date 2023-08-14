@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"gomodules.xyz/jsonpatch/v2"
+	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -34,7 +36,7 @@ import (
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (c *AerospikeCluster) Default() admission.Response {
+func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 	asLog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	asLog.Info(
@@ -53,9 +55,16 @@ func (c *AerospikeCluster) Default() admission.Response {
 		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", c.Spec,
 	)
 
+	var patches []jsonpatch.JsonPatchOperation
+	patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec})
+
+	if operation == v1.Create {
+		patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels})
+	}
+
 	return webhook.Patched(
 		"Patched aerospike spec with defaults",
-		webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec},
+		patches...,
 	)
 }
 
@@ -109,6 +118,14 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Update rosterNodeBlockList
 	for idx, nodeID := range c.Spec.RosterNodeBlockList {
 		c.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
+	}
+
+	if _, ok := c.Labels[AerospikeAPIVersionLabel]; !ok {
+		if c.Labels == nil {
+			c.Labels = make(map[string]string)
+		}
+
+		c.Labels[AerospikeAPIVersionLabel] = AerospikeAPIVersion
 	}
 
 	return nil
@@ -305,7 +322,8 @@ func (c *AerospikeCluster) setDefaultAerospikeConfigs(
 		}
 	}
 
-	return nil
+	// escape LDAP configuration
+	return escapeLDAPConfiguration(configSpec)
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
@@ -726,6 +744,76 @@ func isNameExist(names []string, name string) bool {
 	}
 
 	return false
+}
+
+// escapeLDAPConfiguration escapes LDAP variables ${un} and ${dn} to
+// $${_DNE}{un} and $${_DNE}{dn} to prevent aerospike container images
+// template expansion from messing up the LDAP section.
+func escapeLDAPConfiguration(configSpec AerospikeConfigSpec) error {
+	config := configSpec.Value
+
+	if _, ok := config["security"]; ok {
+		security, ok := config["security"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"security conf not in valid format %v", config["security"],
+			)
+		}
+
+		if _, ok := security["ldap"]; ok {
+			security["ldap"] = escapeValue(security["ldap"])
+		}
+	}
+
+	return nil
+}
+
+func escapeValue(valueGeneric interface{}) interface{} {
+	switch value := valueGeneric.(type) {
+	case string:
+		return escapeString(value)
+	case []interface{}:
+		var modifiedSlice []interface{}
+
+		for _, item := range value {
+			modifiedSlice = append(modifiedSlice, escapeValue(item))
+		}
+
+		return modifiedSlice
+	case []string:
+		var modifiedSlice []string
+
+		for _, item := range value {
+			modifiedSlice = append(modifiedSlice, escapeString(item))
+		}
+
+		return modifiedSlice
+	case map[string]interface{}:
+		modifiedMap := map[string]interface{}{}
+
+		for key, mapValue := range value {
+			modifiedMap[escapeString(key)] = escapeValue(mapValue)
+		}
+
+		return modifiedMap
+	case map[string]string:
+		modifiedMap := map[string]string{}
+
+		for key, mapValue := range value {
+			modifiedMap[escapeString(key)] = escapeString(mapValue)
+		}
+
+		return modifiedMap
+	default:
+		return value
+	}
+}
+
+func escapeString(str string) string {
+	str = strings.ReplaceAll(str, "${un}", "$${_DNE}{un}")
+	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
+
+	return str
 }
 
 func setNamespaceDefault(networks []string, namespace string) {

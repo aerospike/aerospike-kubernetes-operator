@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.9"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 2.5.0
+VERSION ?= 3.0.0
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -177,7 +177,7 @@ endif
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | kubectl replace --force -f -
+	$(KUSTOMIZE) build config/crd | kubectl replace -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
@@ -249,7 +249,7 @@ enable-pre-commit:
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:2.5.0 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:3.0.0 make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
@@ -264,8 +264,7 @@ bundle: manifests kustomize
 	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^FROM.*/a # Labels for RedHat Openshift Platform" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^annotations.*/a \  com.redhat.openshift.versions: "$(OPENSHIFT_VERSION)"" $(BUNDLE_DIR)/metadata/annotations.yaml; \
-	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" $(BUNDLE_DIR)/metadata/annotations.yaml; \
-	sed -i "s@name: role-place-holder@name: aerospike-kubernetes-operator-default-ns@g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator-default-ns_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
+	sed -i "/^annotations.*/a \  # Annotations for RedHat Openshift Platform" $(BUNDLE_DIR)/metadata/annotations.yaml;
 
 # Remove generated bundle
 .PHONY: bundle-clean
