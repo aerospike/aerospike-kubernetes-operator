@@ -482,7 +482,7 @@ func setDefaultNetworkConf(
 
 	// Network section
 	if _, ok := config["network"]; !ok {
-		config["network"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network cannot be nil")
 	}
 
 	networkConf, ok := config["network"].(map[string]interface{})
@@ -494,7 +494,7 @@ func setDefaultNetworkConf(
 
 	// Service section
 	if _, ok = networkConf["service"]; !ok {
-		networkConf["service"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.service cannot be nil")
 	}
 
 	serviceConf, ok := networkConf["service"].(map[string]interface{})
@@ -552,7 +552,7 @@ func setDefaultNetworkConf(
 
 	// Heartbeat section
 	if _, ok = networkConf["heartbeat"]; !ok {
-		networkConf["heartbeat"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.heartbeat cannot be nil")
 	}
 
 	heartbeatConf, ok := networkConf["heartbeat"].(map[string]interface{})
@@ -582,7 +582,7 @@ func setDefaultNetworkConf(
 
 	// Fabric section
 	if _, ok := networkConf["fabric"]; !ok {
-		networkConf["fabric"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.fabric cannot be nil")
 	}
 
 	return addOperatorClientNameIfNeeded(
