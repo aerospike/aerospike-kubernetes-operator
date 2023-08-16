@@ -999,6 +999,7 @@ func validateNetworkConnection(
 					connectionType,
 				)
 			}
+
 			if _, exists := tlsNames[tlsName.(string)]; !exists {
 				return fmt.Errorf("tls-name '%s' is not configured", tlsName)
 			}

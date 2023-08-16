@@ -353,6 +353,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev
 				if !errors.IsAlreadyExists(err) {
 					return err
 				}
+
 				if err := r.updatePodServicePorts(
 					pods[idx].Name, r.aeroCluster.Namespace,
 				); err != nil {
