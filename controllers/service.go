@@ -342,23 +342,22 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev1.Pod) error {
-	if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+	if (!podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) ||
+		isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig)) &&
 		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for all pods if network policy is changed and rely on nodePort service
 		for idx := range pods {
 			if err := r.createPodService(
 				pods[idx].Name, r.aeroCluster.Namespace,
-			); err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-		}
-	} else if isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig) &&
-		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		for idx := range pods {
-			if err := r.updatePodServicePorts(
-				pods[idx].Name, r.aeroCluster.Namespace,
 			); err != nil {
-				return err
+				if !errors.IsAlreadyExists(err) {
+					return err
+				}
+				if err := r.updatePodServicePorts(
+					pods[idx].Name, r.aeroCluster.Namespace,
+				); err != nil {
+					return err
+				}
 			}
 		}
 	}

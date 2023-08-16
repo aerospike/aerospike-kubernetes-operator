@@ -82,7 +82,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		return err
 	}
 
-	// cluster level aerospike config may be empty and
+	// cluster level aerospike config may be empty but not nil
 	if c.Spec.AerospikeConfig != nil {
 		// Set common aerospikeConfig defaults
 		// Update configMap
@@ -91,6 +91,8 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		); err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("cluster level aerospikeConfig cannot be nil")
 	}
 
 	// Update racks configuration using global values where required.
@@ -515,11 +517,10 @@ func setDefaultNetworkConf(
 		serviceDefaults["alternate-access-port"] = *srvPort
 		serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
 	} else {
-		delete(serviceConf, "port")
 		delete(serviceConf, "access-port")
 		delete(serviceConf, "access-addresses")
 		delete(serviceConf, "alternate-access-addresses")
-		delete(serviceConf, "alternate-access-addresses")
+		delete(serviceConf, "alternate-access-port")
 	}
 
 	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
@@ -529,11 +530,10 @@ func setDefaultNetworkConf(
 		serviceDefaults["tls-alternate-access-port"] = *tlsPort
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
 	} else {
-		delete(serviceConf, "tls-port")
 		delete(serviceConf, "tls-access-port")
 		delete(serviceConf, "tls-access-addresses")
 		delete(serviceConf, "tls-alternate-access-addresses")
-		delete(serviceConf, "tls-alternate-access-addresses")
+		delete(serviceConf, "tls-alternate-access-port")
 	}
 
 	if err := setDefaultsInConfigMap(

@@ -993,6 +993,12 @@ func validateNetworkConnection(
 	if connectionConfig, exists := networkConf[connectionType]; exists {
 		connectionConfigMap := connectionConfig.(map[string]interface{})
 		if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
+			if _, tlsPortExist := connectionConfigMap["tls-port"]; !tlsPortExist {
+				return fmt.Errorf(
+					"you can't specify tls-name for network.%s without specifying tls-port",
+					connectionType,
+				)
+			}
 			if _, exists := tlsNames[tlsName.(string)]; !exists {
 				return fmt.Errorf("tls-name '%s' is not configured", tlsName)
 			}

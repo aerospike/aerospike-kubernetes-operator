@@ -39,6 +39,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"When using tls-authenticate-client: TLS port missing", func() {
+				doTestTLSPortMissing(ctx)
+			},
+		)
+		Context(
 			"When using tls-authenticate-client: TLS config missing", func() {
 				doTestTLSMissing(ctx)
 			},
@@ -358,6 +363,27 @@ func doTestTLSNameMissing(ctx goctx.Context) {
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			expectedError := "without specifying tls-name"
+			assertError(err, expectedError)
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		},
+	)
+}
+
+func doTestTLSPortMissing(ctx goctx.Context) {
+	It(
+		"TLSPortMissing", func() {
+			networkConf := getNetworkTLSConfig()
+			delete(
+				networkConf["service"].(map[string]interface{}), "tls-port",
+			)
+
+			operatorClientCertSpec := getOperatorCert()
+
+			aeroCluster := getAerospikeConfig(
+				networkConf, operatorClientCertSpec,
+			)
+			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+			expectedError := "without specifying tls-port"
 			assertError(err, expectedError)
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
