@@ -4,7 +4,7 @@ A Helm chart for Aerospike Kubernetes Operator
 
 ## Pre Requisites
 
-- Kubernetes 1.16+
+- Kubernetes 1.19+
 
 ## Usage
 
