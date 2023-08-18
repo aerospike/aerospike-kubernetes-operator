@@ -590,7 +590,9 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 			if err = r.createPodService(
 				podName, r.aeroCluster.Namespace,
 			); err != nil {
-				return found, reconcileError(err)
+				if !errors.IsAlreadyExists(err) {
+					return found, reconcileError(err)
+				}
 			}
 		}
 	}

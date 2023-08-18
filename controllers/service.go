@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -195,7 +196,7 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 		context.TODO(),
 		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
 	); err == nil {
-		return nil
+		return errors.NewAlreadyExists(schema.GroupResource{Resource: "Service"}, service.Name)
 	}
 
 	// NodePort will be allocated automatically
@@ -268,6 +269,8 @@ func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string
 		return err
 	}
 
+	// Resetting ports here based on current spec config.
+	// kubernetes is able to set previously assigned nodePort value to the services if any
 	service.Spec.Ports = nil
 	r.appendServicePorts(service)
 
@@ -367,6 +370,11 @@ func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev
 }
 
 func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpec) bool {
+	if statusAeroConf == nil {
+		// If aerospikeconfig status is nil, assuming network service config has been changed
+		return true
+	}
+
 	specTLSName, _ := asdbv1.GetServiceTLSNameAndPort(specAeroConf)
 	statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(statusAeroConf)
 
@@ -379,15 +387,8 @@ func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpe
 func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
 	tlsName, port = asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if tlsName != "" && r.aeroCluster.Status.AerospikeConfig != nil {
-		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(
-			r.aeroCluster.Status.
-				AerospikeConfig,
-		)
-
-		statusPort := asdbv1.GetServicePort(
-			r.aeroCluster.Status.
-				AerospikeConfig,
-		)
+		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Status.AerospikeConfig)
+		statusPort := asdbv1.GetServicePort(r.aeroCluster.Status.AerospikeConfig)
 
 		if statusTLSName == "" && statusPort != nil {
 			tlsName = ""

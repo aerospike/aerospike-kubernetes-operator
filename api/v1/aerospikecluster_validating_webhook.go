@@ -816,7 +816,7 @@ func validateLoggingConf(loggingConfList []interface{}) error {
 func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interface{}) error {
 	serviceConf, serviceExist := networkConf["service"]
 	if !serviceExist {
-		return fmt.Errorf("network.service section not found in config. Looks like object is not mutated by webhook")
+		return fmt.Errorf("network.service section not found in config")
 	}
 
 	tlsNames := make(map[string]struct{})
@@ -1501,7 +1501,7 @@ func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[stri
 
 	if oldPortOk && newPortOk {
 		if !reflect.DeepEqual(oldPort, newPort) {
-			return fmt.Errorf("cannot modify port number oldPort %v, newPort %v, networkPort %s", oldPort, newPort, port)
+			return fmt.Errorf("cannot modify %s number: old value %v, new value %v", port, oldPort, newPort)
 		}
 	}
 
@@ -1510,13 +1510,12 @@ func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[stri
 
 	if oldTLSPortOk && newTLSPortOk {
 		if !reflect.DeepEqual(oldTLSPort, newTLSPort) {
-			return fmt.Errorf("cannot modify tls port number oldTLSPort %v, newTLSPort %v, networkPort %s",
-				oldPort, newPort, "tls-"+port)
+			return fmt.Errorf("cannot modify %s number: old value %v, new value %v", "tls-"+port, oldPort, newPort)
 		}
 	}
 
-	if newTLSPortOk != oldTLSPortOk || newPortOk != oldPortOk {
-		if !(oldPortOk || oldTLSPortOk) {
+	if (!newTLSPortOk && oldTLSPortOk) || (!newPortOk && oldPortOk) {
+		if !(oldPortOk && oldTLSPortOk) {
 			return fmt.Errorf("cannot remove tls or non-tls configurations unless both ports has been set initially")
 		}
 	}

@@ -83,16 +83,16 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	}
 
 	// cluster level aerospike config may be empty but not nil
-	if c.Spec.AerospikeConfig != nil {
-		// Set common aerospikeConfig defaults
-		// Update configMap
-		if err := c.setDefaultAerospikeConfigs(
-			asLog, *c.Spec.AerospikeConfig,
-		); err != nil {
-			return err
-		}
-	} else {
+	if c.Spec.AerospikeConfig == nil {
 		return fmt.Errorf("cluster level aerospikeConfig cannot be nil")
+	}
+
+	// Set common aerospikeConfig defaults
+	// Update configMap
+	if err := c.setDefaultAerospikeConfigs(
+		asLog, *c.Spec.AerospikeConfig,
+	); err != nil {
+		return err
 	}
 
 	// Update racks configuration using global values where required.
