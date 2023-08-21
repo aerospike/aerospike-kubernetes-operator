@@ -819,14 +819,14 @@ func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interfac
 		return fmt.Errorf("network.service section not found in config")
 	}
 
-	tlsNames := make(map[string]struct{})
+	tlsNames := sets.Set[string]{}
 	// network.tls conf
 	if _, ok := networkConf["tls"]; ok {
 		tlsConfList := networkConf["tls"].([]interface{})
 		for _, tlsConfInt := range tlsConfList {
 			tlsConf := tlsConfInt.(map[string]interface{})
 			if tlsName, ok := tlsConf["name"]; ok {
-				tlsNames[tlsName.(string)] = struct{}{}
+				tlsNames.Insert(tlsName.(string))
 			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
@@ -987,7 +987,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 }
 
 func validateNetworkConnection(
-	networkConf map[string]interface{}, tlsNames map[string]struct{},
+	networkConf map[string]interface{}, tlsNames sets.Set[string],
 	connectionType string,
 ) error {
 	if connectionConfig, exists := networkConf[connectionType]; exists {
@@ -1000,7 +1000,7 @@ func validateNetworkConnection(
 				)
 			}
 
-			if _, exists := tlsNames[tlsName.(string)]; !exists {
+			if !tlsNames.Has(tlsName.(string)) {
 				return fmt.Errorf("tls-name '%s' is not configured", tlsName)
 			}
 		} else {

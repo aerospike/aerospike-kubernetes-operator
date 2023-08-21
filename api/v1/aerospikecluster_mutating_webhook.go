@@ -82,7 +82,6 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		return err
 	}
 
-	// cluster level aerospike config may be empty but not nil
 	if c.Spec.AerospikeConfig == nil {
 		return fmt.Errorf("cluster level aerospikeConfig cannot be nil")
 	}
