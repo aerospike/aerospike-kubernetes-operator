@@ -69,15 +69,7 @@ func rollingRestartClusterByEnablingTLS(
 	}
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -101,19 +93,7 @@ func rollingRestartClusterByEnablingTLS(
 	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 
-	pkgLog.Info("aerocluster", "aerocluster", *aeroCluster)
-
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func rollingRestartClusterByDisablingTLS(
@@ -125,28 +105,9 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
-	network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
-	serviceNetwork["port"] = float64(3000)
-	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
-	fabricNetwork["port"] = float64(3001)
-	heartbeartNetwork := network[asdbv1.HeartbeatPortName].(map[string]interface{})
-	heartbeartNetwork["port"] = float64(3002)
+	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
 
-	network[asdbv1.ServicePortName] = serviceNetwork
-	network[asdbv1.FabricPortName] = fabricNetwork
-	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
-	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
-
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -159,17 +120,7 @@ func rollingRestartClusterByDisablingTLS(
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkConfig()
 	aeroCluster.Spec.OperatorClientCertSpec = nil
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func scaleUpClusterTestWithNSDeviceHandling(
@@ -187,15 +138,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -222,15 +165,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -262,16 +197,7 @@ func scaleUpClusterTest(
 
 	aeroCluster.Spec.Size += increaseBy
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	// Wait for aerocluster to reach 2 replicas
-	return waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(increaseBy),
-	)
+	return updateClusterWithTO(k8sClient, ctx, aeroCluster, getTimeout(increaseBy))
 }
 
 func scaleDownClusterTestWithNSDeviceHandling(
@@ -289,15 +215,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -319,15 +237,7 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -359,16 +269,7 @@ func scaleDownClusterTest(
 
 	aeroCluster.Spec.Size -= decreaseBy
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	// How much time to wait in scaleDown
-	return waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(decreaseBy),
-	)
+	return updateClusterWithTO(k8sClient, ctx, aeroCluster, getTimeout(decreaseBy))
 }
 
 func rollingRestartClusterTest(
@@ -387,16 +288,7 @@ func rollingRestartClusterTest(
 
 	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
+	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
 		return err
 	}
@@ -422,17 +314,7 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 	namespaceConfig["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func rollingRestartClusterByReusingNamespaceStorageTest(
@@ -461,12 +343,7 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	nsList = append(nsList, dynamicNs1)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return k8sClient.Update(ctx, aeroCluster)
 }
 
 func rollingRestartClusterByAddingNamespaceDynamicallyTest(
@@ -484,17 +361,7 @@ func rollingRestartClusterByAddingNamespaceDynamicallyTest(
 	nsList = append(nsList, dynamicNs)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
@@ -511,17 +378,7 @@ func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
 	nsList = nsList[:len(nsList)-1]
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
 
-	err = k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	err = waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func validateAerospikeConfigServiceClusterUpdate(
@@ -648,14 +505,7 @@ func upgradeClusterTest(
 		return err
 	}
 
-	if err := k8sClient.Update(ctx, aeroCluster); err != nil {
-		return err
-	}
-
-	return waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-	)
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func getCluster(

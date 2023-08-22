@@ -105,12 +105,6 @@ func (r *SingleClusterReconciler) createSTS(
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
 	}
 
-	if tlsName != "" {
-		envVarList = append(
-			envVarList, newSTSEnvVarStatic("MY_POD_TLS_ENABLED", "true"),
-		)
-	}
-
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,

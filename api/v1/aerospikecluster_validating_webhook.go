@@ -1498,6 +1498,7 @@ func validateNetworkConnectionUpdate(
 func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[string]interface{}, port string) error {
 	oldPort, oldPortOk := oldConnectionConfig[port]
 	newPort, newPortOk := newConnectionConfig[port]
+	tlsPort := "tls-" + port
 
 	if oldPortOk && newPortOk {
 		if !reflect.DeepEqual(oldPort, newPort) {
@@ -1505,18 +1506,19 @@ func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[stri
 		}
 	}
 
-	oldTLSPort, oldTLSPortOk := oldConnectionConfig["tls-"+port]
-	newTLSPort, newTLSPortOk := newConnectionConfig["tls-"+port]
+	oldTLSPort, oldTLSPortOk := oldConnectionConfig[tlsPort]
+	newTLSPort, newTLSPortOk := newConnectionConfig[tlsPort]
 
 	if oldTLSPortOk && newTLSPortOk {
 		if !reflect.DeepEqual(oldTLSPort, newTLSPort) {
-			return fmt.Errorf("cannot modify %s number: old value %v, new value %v", "tls-"+port, oldPort, newPort)
+			return fmt.Errorf(
+				"cannot modify %s number: old value %v, new value %v", tlsPort, oldTLSPort, newTLSPort)
 		}
 	}
 
 	if (!newTLSPortOk && oldTLSPortOk) || (!newPortOk && oldPortOk) {
 		if !(oldPortOk && oldTLSPortOk) {
-			return fmt.Errorf("cannot remove tls or non-tls configurations unless both ports has been set initially")
+			return fmt.Errorf("cannot remove tls or non-tls configurations unless both configurations have been set initially")
 		}
 	}
 

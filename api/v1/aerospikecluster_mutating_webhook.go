@@ -83,7 +83,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	}
 
 	if c.Spec.AerospikeConfig == nil {
-		return fmt.Errorf("cluster level aerospikeConfig cannot be nil")
+		return fmt.Errorf("spec.aerospikeConfig cannot be nil")
 	}
 
 	// Set common aerospikeConfig defaults
