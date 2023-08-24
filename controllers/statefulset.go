@@ -745,6 +745,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	volumes := rackState.Rack.Storage.GetNonPVs()
+	initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 	for idx := range volumes {
 		volume := &volumes[idx]
@@ -758,7 +759,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		// Add volumeMount in statefulSet pod containers for volume
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
-			st.Spec.Template.Spec.InitContainers, "",
+			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,

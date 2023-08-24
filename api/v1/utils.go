@@ -53,7 +53,7 @@ const (
 	confKeyWorkDirectory = "work-directory"
 
 	// Defaults.
-	defaultWorkDirectory = "/opt/aerospike"
+	DefaultWorkDirectory = "/opt/aerospike"
 )
 
 const (
@@ -61,9 +61,9 @@ const (
 	AerospikeInitContainerName                     string = "aerospike-init"
 	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          string = "docker.io"
-	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.0.0"
-
+	AerospikeInitContainerDefaultRegistryNamespace string = "sud82"
+	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.1.0-dev1"
+	// docker.io/sud82/aerospike-kubernetes-init:2.1.0-dev1
 	AerospikeAppLabel            = "app"
 	AerospikeCustomResourceLabel = "aerospike.com/cr"
 	AerospikeRackIDLabel         = "aerospike.com/rack-id"
@@ -97,7 +97,7 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 		}
 	}
 
-	return defaultWorkDirectory
+	return DefaultWorkDirectory
 }
 
 func getInitContainerImage(registry string) string {

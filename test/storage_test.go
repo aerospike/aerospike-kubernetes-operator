@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
@@ -327,10 +328,48 @@ var _ = Describe(
 								Expect(err).Should(HaveOccurred())
 							},
 						)
-
 					},
 				)
+				Context(
+					"When configuring workdir", func() {
+						It(
+							"Should allow emptydir volume for default workdir", func() {
+								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+									clusterNamespacedName, "/opt/aerospike", "",
+								)
 
+								err := deployCluster(
+									k8sClient, ctx, aeroCluster,
+								)
+								Expect(err).ShouldNot(HaveOccurred())
+							},
+						)
+						It(
+							"Should allow emptydir volume for any workdir", func() {
+								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+									clusterNamespacedName, "/opt/aerospike/data", "/opt/aerospike/data",
+								)
+
+								err := deployCluster(
+									k8sClient, ctx, aeroCluster,
+								)
+								Expect(err).ShouldNot(HaveOccurred())
+							},
+						)
+						It(
+							"Should allow default workdir without any configured volume", func() {
+								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+									clusterNamespacedName, "", "",
+								)
+
+								err := deployCluster(
+									k8sClient, ctx, aeroCluster,
+								)
+								Expect(err).ShouldNot(HaveOccurred())
+							},
+						)
+					},
+				)
 			},
 		)
 
@@ -587,5 +626,58 @@ var _ = Describe(
 				)
 			},
 		)
+
 	},
 )
+
+// Taking workdirVolumePath and workdirConfigPath separately as
+// workdirConfigPath can be empty in case of default workdir
+func createDummyAerospikeClusterWithNonPVWorkdir(
+	clusterNamespacedName types.NamespacedName, workdirVolumePath, workdirConfigPath string) *asdbv1.AerospikeCluster {
+	aeroCluster := createDummyAerospikeCluster(
+		clusterNamespacedName, 2,
+	)
+
+	aeroCluster.Spec.ValidationPolicy = &asdbv1.ValidationPolicySpec{
+		SkipWorkDirValidate: true,
+	}
+
+	aeroCluster.Spec.PodSpec = getNonRootPodSpec()
+
+	aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
+		Volumes: []asdbv1.VolumeSpec{
+			getStorageVolumeForSecret(),
+		},
+	}
+
+	if workdirVolumePath != "" {
+		workdirVolume := asdbv1.VolumeSpec{
+			Name: "workdir",
+			Source: asdbv1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: workdirVolumePath,
+			},
+		}
+
+		aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, workdirVolume)
+	}
+
+	if workdirConfigPath != "" {
+		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+			"feature-key-file": "/etc/aerospike/secret/features.conf",
+			"work-directory":   workdirConfigPath,
+		}
+	} else {
+		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+			"feature-key-file": "/etc/aerospike/secret/features.conf",
+		}
+	}
+
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+		getNonSCInMemoryNamespaceConfig("mem"),
+	}
+
+	return aeroCluster
+}
