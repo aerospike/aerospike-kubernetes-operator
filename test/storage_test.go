@@ -331,7 +331,7 @@ var _ = Describe(
 					},
 				)
 				Context(
-					"When configuring workdir", func() {
+					"When configuring Non PV workdir", func() {
 						It(
 							"Should allow emptydir volume for default workdir", func() {
 								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
@@ -366,6 +366,18 @@ var _ = Describe(
 									k8sClient, ctx, aeroCluster,
 								)
 								Expect(err).ShouldNot(HaveOccurred())
+							},
+						)
+						It(
+							"Should fail if workdir configured but volume is not", func() {
+								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+									clusterNamespacedName, "", "/opt/aerospike",
+								)
+
+								err := deployCluster(
+									k8sClient, ctx, aeroCluster,
+								)
+								Expect(err).Should(HaveOccurred())
 							},
 						)
 					},
@@ -668,10 +680,6 @@ func createDummyAerospikeClusterWithNonPVWorkdir(
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 			"feature-key-file": "/etc/aerospike/secret/features.conf",
 			"work-directory":   workdirConfigPath,
-		}
-	} else {
-		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
-			"feature-key-file": "/etc/aerospike/secret/features.conf",
 		}
 	}
 

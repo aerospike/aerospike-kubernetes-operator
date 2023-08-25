@@ -1026,7 +1026,7 @@ func validateNamespaceConfig(
 	}
 
 	// Get list of all devices used in namespace. match it with namespace device list
-	blockStorageDeviceList, fileStorageList, err := storage.getAerospikeStorageList()
+	blockStorageDeviceList, fileStorageList, err := storage.getAerospikeStorageList(true)
 	if err != nil {
 		return err
 	}
@@ -1689,11 +1689,29 @@ func validateAerospikeConfigSchema(
 	return nil
 }
 
+func validateWorkDir(workDirPath string, fileStorageList []string) error {
+	if !filepath.IsAbs(workDirPath) {
+		return fmt.Errorf(
+			"aerospike work directory path %s must be absolute",
+			workDirPath,
+		)
+	}
+
+	if !isFileStorageConfiguredForDir(fileStorageList, workDirPath) {
+		return fmt.Errorf(
+			"aerospike work directory path %s not found in storage volume's aerospike paths %v",
+			workDirPath, fileStorageList,
+		)
+	}
+
+	return nil
+}
+
 func validateRequiredFileStorageForMetadata(
 	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 	validationPolicy *ValidationPolicySpec, version string,
 ) error {
-	_, fileStorageList, err := storage.getAerospikeStorageList()
+	_, onlyPVFileStorageList, err := storage.getAerospikeStorageList(true)
 	if err != nil {
 		return err
 	}
@@ -1702,18 +1720,21 @@ func validateRequiredFileStorageForMetadata(
 	if !validationPolicy.SkipWorkDirValidate {
 		workDirPath := GetWorkDirectory(configSpec)
 
-		if !filepath.IsAbs(workDirPath) {
-			return fmt.Errorf(
-				"aerospike work directory path %s must be absolute in storage config %v",
-				workDirPath, storage,
-			)
+		if err := validateWorkDir(workDirPath, onlyPVFileStorageList); err != nil {
+			return err
 		}
+	} else {
+		workDirPath := GetConfiguredWorkDirectory(configSpec)
 
-		if !isFileStorageConfiguredForDir(fileStorageList, workDirPath) {
-			return fmt.Errorf(
-				"aerospike work directory path %s not mounted on a filesystem in storage config %v",
-				workDirPath, storage,
-			)
+		if workDirPath != "" {
+			_, allFileStorageList, err := storage.getAerospikeStorageList(false)
+			if err != nil {
+				return err
+			}
+
+			if err := validateWorkDir(workDirPath, allFileStorageList); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1741,7 +1762,7 @@ func validateRequiredFileStorageForMetadata(
 				dglogDirPath := filepath.Dir(*dglogFilePath)
 
 				if !isFileStorageConfiguredForDir(
-					fileStorageList, dglogDirPath,
+					onlyPVFileStorageList, dglogDirPath,
 				) {
 					return fmt.Errorf(
 						"xdr digestlog path %v not mounted in Storage config %v",

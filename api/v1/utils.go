@@ -82,8 +82,8 @@ func ContainsString(list []string, ele string) bool {
 	return false
 }
 
-// GetWorkDirectory returns the Aerospike work directory to use for aerospikeConfig.
-func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
+// GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
+func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 	// Get namespace config.
 	aerospikeConfig := aerospikeConfigSpec.Value
 
@@ -95,6 +95,16 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 		if ok {
 			return workDir.(string)
 		}
+	}
+
+	return ""
+}
+
+// GetWorkDirectory returns the Aerospike work directory to be used for aerospikeConfig.
+func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
+	workDir := GetConfiguredWorkDirectory(aerospikeConfigSpec)
+	if workDir != "" {
+		return workDir
 	}
 
 	return DefaultWorkDirectory
