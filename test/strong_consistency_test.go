@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -31,13 +32,19 @@ var _ = Describe("SCMode", func() {
 		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
-		AfterEach(func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-		})
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
+				err := deleteCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+			},
+		)
 
 		// Dead/Unavailable partition
 		// If there are D/U p then it should get stuck and not succeed,
@@ -208,13 +215,18 @@ var _ = Describe("SCMode", func() {
 			clusterName, namespace,
 		)
 
-		AfterEach(func() {
-			aeroCluster, _ := getCluster(k8sClient, ctx, clusterNamespacedName)
-			if aeroCluster != nil {
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
 				err := deleteCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-			}
-		})
+			},
+		)
 
 		// Validation: can not remove more than replica node.
 		//             not allow updating strong-consistency config

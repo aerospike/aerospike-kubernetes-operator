@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The aerospike-operator Authors.
+Copyright 2023 The aerospike-operator Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -17,12 +17,11 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	as "github.com/ashishshinde/aerospike-client-go/v6"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // ------------------------------------------------------------------------------------
@@ -58,6 +57,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
+	if err = r.getAndSetReplicationFactor(policy, ignorablePods); err != nil {
+		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
+
+		return reconcileError(err)
+	}
+
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 		return res
@@ -65,7 +70,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	if setRoster {
 		// Setup roster after migration.
-		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
+		if err = r.getAndSetRoster(policy, ignorablePods); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return reconcileRequeueAfter(1)
 		}
@@ -80,6 +85,60 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) getAndSetReplicationFactor(
+	policy *as.ClientPolicy, ignorablePods []corev1.Pod,
+) error {
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	if err != nil {
+		return err
+	}
+
+	specNSRFMap := make(map[string]int64)
+	specNamespaces := make([]string, 0)
+
+	racks := r.aeroCluster.Spec.RackConfig.Racks
+	for idx := range racks {
+		for _, namespace := range racks[idx].AerospikeConfig.Value["namespaces"].([]interface{}) {
+			scEnabled := asdbv1.IsNSSCEnabled(namespace.(map[string]interface{}))
+			if !scEnabled {
+				nsString := namespace.(map[string]interface{})["name"].(string)
+				rf := namespace.(map[string]interface{})["replication-factor"].(float64)
+				specNSRFMap[nsString] = int64(rf)
+
+				specNamespaces = append(specNamespaces, nsString)
+			}
+		}
+	}
+
+	rfNamespacesPerHost, err := deployment.GetReplicationFactor(r.Log, allHostConns, policy, specNamespaces)
+	if err != nil {
+		return err
+	}
+
+	changedReplicationFactorMap := make(map[string]int64)
+	changedRFMAPPerHost := make(map[string]map[string]int64)
+
+	for hostID, rfMap := range rfNamespacesPerHost {
+		for ns, rf := range rfMap {
+			if specNSRFMap[ns] != rf {
+				changedReplicationFactorMap[ns] = specNSRFMap[ns]
+			}
+		}
+
+		if len(changedReplicationFactorMap) > 0 {
+			changedRFMAPPerHost[hostID] = changedReplicationFactorMap
+		}
+	}
+
+	if len(changedRFMAPPerHost) > 0 {
+		if err := deployment.SetReplicationFactor(allHostConns, policy, changedRFMAPPerHost); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) quiescePods(

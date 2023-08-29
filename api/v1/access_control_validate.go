@@ -19,6 +19,8 @@ const (
 
 	// NamespaceSet is namespace and optional set scoped privilege.
 	NamespaceSet
+
+	Version6 = "6.0.0.0"
 )
 
 const (
@@ -213,7 +215,7 @@ func isRoleSpecValid(
 
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
-			cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+			cmp, err := asconfig.CompareVersions(version, Version6)
 			if err != nil {
 				return false, err
 			}
@@ -319,7 +321,7 @@ func isPrivilegeValid(
 	}
 
 	// Check if new privileges are used in an older version.
-	cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+	cmp, err := asconfig.CompareVersions(version, Version6)
 	if err != nil {
 		return false, err
 	}

@@ -374,12 +374,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)

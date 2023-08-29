@@ -10,12 +10,13 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-// Test cluster cr updation
+// Test cluster CR update
 var _ = Describe(
 	"ClusterStorageCleanUp", func() {
 		ctx := goctx.TODO()
@@ -206,12 +207,14 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						// cleanup cluster
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					},
 				)
 			},
@@ -219,7 +222,7 @@ var _ = Describe(
 	},
 )
 
-// Test cluster cr updation
+// Test cluster CR update
 var _ = Describe(
 	"RackUsingLocalStorage", func() {
 		ctx := goctx.TODO()
@@ -388,11 +391,14 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					},
 				)
 			},

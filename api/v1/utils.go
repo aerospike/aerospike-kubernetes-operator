@@ -467,7 +467,7 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 
 	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 	for _, nsConfInterface := range nsList {
-		isEnabled := isNSSCEnabled(nsConfInterface.(map[string]interface{}))
+		isEnabled := IsNSSCEnabled(nsConfInterface.(map[string]interface{}))
 		if isEnabled {
 			return true
 		}

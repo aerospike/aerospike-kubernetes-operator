@@ -8,8 +8,7 @@ import (
 )
 
 func (r *SingleClusterReconciler) getAndSetRoster(
-	policy *as.ClientPolicy, rosterNodeBlockList []string,
-	ignorablePods []corev1.Pod,
+	policy *as.ClientPolicy, ignorablePods []corev1.Pod,
 ) error {
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {
@@ -21,7 +20,7 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 		return err
 	}
 
-	return deployment.GetAndSetRoster(r.Log, allHostConns, policy, rosterNodeBlockList, removedNSes)
+	return deployment.GetAndSetRoster(r.Log, allHostConns, policy, r.aeroCluster.Spec.RosterNodeBlockList, removedNSes)
 }
 
 func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePods []corev1.Pod) error {

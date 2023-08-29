@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,10 +74,14 @@ var _ = Describe("BatchRestart", func() {
 
 		AfterEach(
 			func() {
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
+				err := deleteCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 			},
 		)
 
@@ -218,10 +223,14 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
 	// Restart 1 node at a time
@@ -328,10 +337,14 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
 	// Restart 1 node at a time

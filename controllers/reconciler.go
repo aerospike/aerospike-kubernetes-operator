@@ -180,7 +180,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		// Setup roster
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, nil); err != nil {
+		if err := r.getAndSetRoster(policy, nil); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return reconcile.Result{}, err
 		}

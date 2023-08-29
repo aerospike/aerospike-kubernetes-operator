@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -56,6 +57,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"UpdateNonSCCluster", func() {
+				UpdateNonSCClusterTest(ctx)
+			},
+		)
+		Context(
 			"UpdateCluster", func() {
 				UpdateClusterTest(ctx)
 			},
@@ -87,12 +93,14 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+					err := deleteCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				},
 			)
 
@@ -344,12 +352,14 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(
-				k8sClient, ctx, clusterNamespacedName,
-			)
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
 
@@ -504,6 +514,59 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 	)
 }
 
+func UpdateNonSCClusterTest(ctx goctx.Context) {
+	clusterName := "update-nonSC-cluster"
+	clusterNamespacedName := getNamespacedName(clusterName, namespace)
+
+	BeforeEach(
+		func() {
+			aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+				getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
+			}
+			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
+	AfterEach(
+		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
+	Context(
+		"When doing valid operations", func() {
+			It(
+				"Try update operations", func() {
+					By("Modifying replication-factor of non-SC namespace")
+
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					namespaceConfig :=
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+					namespaceConfig["replication-factor"] = 3
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
 // Test cluster cr update
 func UpdateClusterTest(ctx goctx.Context) {
 	clusterName := "update-cluster"
@@ -562,12 +625,14 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(
-				k8sClient, ctx, clusterNamespacedName,
-			)
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 		},
 	)
 
@@ -740,7 +805,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 							Context(
 								"Namespace", func() {
 									It(
-										"UpdateReplicationFactor: should fail for updating namespace replication-factor. Cannot be updated",
+										"UpdateReplicationFactor: should fail for updating SC namespace replication-factor. Cannot be updated",
 										func() {
 											aeroCluster, err := getCluster(
 												k8sClient, ctx,
@@ -750,7 +815,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-											namespaceConfig["replication-factor"] = 5
+											namespaceConfig["replication-factor"] = 3
 											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
 											err = k8sClient.Update(
@@ -1419,12 +1484,14 @@ func negativeUpdateClusterValidationTest(
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+					err := deleteCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				},
 			)
 
@@ -1817,12 +1884,14 @@ func negativeUpdateClusterValidationTest(
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+					err := deleteCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				},
 			)
 

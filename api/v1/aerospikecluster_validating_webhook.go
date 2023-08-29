@@ -277,7 +277,7 @@ func (c *AerospikeCluster) validateSCNamespaces() error {
 		for _, nsConfInterface := range nsList {
 			nsConf := nsConfInterface.(map[string]interface{})
 
-			isEnabled := isNSSCEnabled(nsConf)
+			isEnabled := IsNSSCEnabled(nsConf)
 			if isEnabled {
 				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
 
@@ -1242,7 +1242,7 @@ func validateNamespaceReplicationFactor(
 		return err
 	}
 
-	scEnabled := isNSSCEnabled(nsConf)
+	scEnabled := IsNSSCEnabled(nsConf)
 
 	// clSize < rf is allowed in AP mode but not in sc mode
 	if scEnabled && (clSize < rf) {
@@ -1253,7 +1253,7 @@ func validateNamespaceReplicationFactor(
 
 	return nil
 }
-func isNSSCEnabled(nsConf map[string]interface{}) bool {
+func IsNSSCEnabled(nsConf map[string]interface{}) bool {
 	scEnabled, ok := nsConf["strong-consistency"]
 	if !ok {
 		return false
@@ -1387,7 +1387,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus, incomingVersion)
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
@@ -1503,7 +1503,7 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) e
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec, incomingVersion string) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1538,7 +1538,12 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 
 			if singleConf["name"] == oldSingleConf["name"] {
 				// replication-factor update not allowed
-				if isValueUpdated(
+				val, err := asconfig.CompareVersions(incomingVersion, Version6)
+				if err != nil {
+					return fmt.Errorf("failed to check image version: %v", err)
+				}
+
+				if (IsNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(
