@@ -181,6 +181,7 @@ func (s *AerospikeStorageSpec) getAerospikeStorageList(onlyPV bool) (
 				if !onlyPV {
 					fileStorageList = append(fileStorageList, volume.Aerospike.Path)
 				}
+
 				continue
 			}
 

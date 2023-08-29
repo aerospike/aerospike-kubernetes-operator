@@ -57,18 +57,17 @@ const (
 )
 
 const (
-	AerospikeServerContainerName                   string = "aerospike-server"
-	AerospikeInitContainerName                     string = "aerospike-init"
-	AerospikeInitContainerRegistryEnvVar           string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
-	AerospikeInitContainerDefaultRegistry          string = "docker.io"
-	AerospikeInitContainerDefaultRegistryNamespace string = "sud82"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.1.0-dev1"
-	// docker.io/sud82/aerospike-kubernetes-init:2.1.0-dev1
-	AerospikeAppLabel            = "app"
-	AerospikeCustomResourceLabel = "aerospike.com/cr"
-	AerospikeRackIDLabel         = "aerospike.com/rack-id"
-	AerospikeAPIVersionLabel     = "aerospike.com/api-version"
-	AerospikeAPIVersion          = "v1"
+	AerospikeServerContainerName                   = "aerospike-server"
+	AerospikeInitContainerName                     = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry          = "docker.io"
+	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.1.0-dev1"
+	AerospikeAppLabel                              = "app"
+	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
+	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
+	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
+	AerospikeAPIVersion                            = "v1"
 )
 
 // ContainsString check whether list contains given string
