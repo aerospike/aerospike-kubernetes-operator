@@ -57,12 +57,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
-	if err = r.getAndSetReplicationFactor(policy, ignorablePods); err != nil {
-		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
-
-		return reconcileError(err)
-	}
-
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
 		return res
@@ -88,7 +82,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 func (r *SingleClusterReconciler) getAndSetReplicationFactor(
-	policy *as.ClientPolicy, ignorablePods []corev1.Pod,
+	ignorablePods []corev1.Pod,
 ) error {
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
 	if err != nil {
@@ -111,6 +105,8 @@ func (r *SingleClusterReconciler) getAndSetReplicationFactor(
 			}
 		}
 	}
+
+	policy := r.getClientPolicy()
 
 	rfNamespacesPerHost, err := deployment.GetReplicationFactor(r.Log, allHostConns, policy, specNamespaces)
 	if err != nil {

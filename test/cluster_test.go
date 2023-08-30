@@ -515,7 +515,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 }
 
 func UpdateNonSCClusterTest(ctx goctx.Context) {
-	clusterName := "update-nonSC-cluster"
+	clusterName := "update-nonsc-cluster"
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 	BeforeEach(

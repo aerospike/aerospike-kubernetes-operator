@@ -145,31 +145,25 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	return restartType
 }
 
-func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
-	restartTypeMap map[string]RestartType,
-) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart)
+func (r *SingleClusterReconciler) rollingRestartPods(podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
+	restartTypeMap map[string]RestartType, rackState *RackState, handleFailedPods bool) reconcileResult {
+	if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
+		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
+
+		return reconcileError(err)
+	}
 
 	// If already dead node (failed pod) then no need to check node safety, migration
-	if len(failedPods) != 0 {
-		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
-
-		if res := r.restartPods(rackState, failedPods, restartTypeMap); !res.isSuccess {
+	if !handleFailedPods {
+		if res := r.waitForMultipleNodesSafeStopReady(podsToRestart, ignorablePods, false); !res.isSuccess {
 			return res
 		}
 	}
 
-	if len(activePods) != 0 {
-		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
+	r.Log.Info("Restart pods", "pods", getPodNames(podsToRestart))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
-			return res
-		}
-
-		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.isSuccess {
-			return res
-		}
+	if res := r.restartPods(rackState, podsToRestart, restartTypeMap); !res.isSuccess {
+		return res
 	}
 
 	return reconcileSuccess()
@@ -345,44 +339,36 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+func getFailedPods(pods []*corev1.Pod) (failedPods []*corev1.Pod) {
 	for idx := range pods {
 		pod := pods[idx]
 		if err := utils.CheckPodFailed(pod); err != nil {
 			failedPods = append(failedPods, pod)
-			continue
 		}
-
-		activePods = append(activePods, pod)
 	}
 
-	return failedPods, activePods
+	return failedPods
 }
 
-func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod,
-) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(rackState *RackState,
+	podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod, handleFailedPods bool) reconcileResult {
+	if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
+		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
+
+		return reconcileError(err)
+	}
 
 	// If already dead node (failed pod) then no need to check node safety, migration
-	if len(failedPods) != 0 {
-		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
-
-		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.isSuccess {
+	if !handleFailedPods {
+		if res := r.waitForMultipleNodesSafeStopReady(podsToUpdate, ignorablePods, false); !res.isSuccess {
 			return res
 		}
 	}
 
-	if len(activePods) != 0 {
-		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
+	r.Log.Info("Restart pods with updated container image", "pods", getPodNames(podsToUpdate))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
-			return res
-		}
-
-		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.isSuccess {
-			return res
-		}
+	if res := r.deletePodAndEnsureImageUpdated(rackState, podsToUpdate); !res.isSuccess {
+		return res
 	}
 
 	return reconcileSuccess()
