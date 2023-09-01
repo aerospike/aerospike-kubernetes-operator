@@ -1102,17 +1102,7 @@ func createBasicTLSCluster(
 							Path: "/opt/aerospike",
 						},
 					},
-					{
-						Name: aerospikeConfigSecret,
-						Source: asdbv1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: tlsSecretName,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/etc/aerospike/secret",
-						},
-					},
+					getStorageVolumeForSecret(),
 				},
 			},
 			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
@@ -1334,17 +1324,7 @@ func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 					Path: "/opt/aerospike",
 				},
 			},
-			{
-				Name: aerospikeConfigSecret,
-				Source: asdbv1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: tlsSecretName,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/etc/aerospike/secret",
-				},
-			},
+			getStorageVolumeForSecret(),
 		},
 	}
 
@@ -1367,6 +1347,20 @@ func getStorageVolumeForAerospike(name, path string) asdbv1.VolumeSpec {
 	}
 }
 
+func getStorageVolumeForSecret() asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: aerospikeConfigSecret,
+		Source: asdbv1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: tlsSecretName,
+			},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: "/etc/aerospike/secret",
+		},
+	}
+}
+
 func getSCNamespaceConfig(name, path string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
@@ -1376,6 +1370,17 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"memory-size":        1000955200,
+		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type": "memory",
 		},
 	}
 }
@@ -1392,6 +1397,23 @@ func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interfa
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getNonRootPodSpec() asdbv1.AerospikePodSpec {
+	var id int64 = 1001
+
+	changePolicy := corev1.PodFSGroupChangePolicy("Always")
+
+	return asdbv1.AerospikePodSpec{
+		HostNetwork:     false,
+		MultiPodPerHost: true,
+		SecurityContext: &corev1.PodSecurityContext{
+			RunAsUser:           &id,
+			RunAsGroup:          &id,
+			FSGroup:             &id,
+			FSGroupChangePolicy: &changePolicy,
 		},
 	}
 }

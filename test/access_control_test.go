@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -2130,17 +2129,7 @@ func getAerospikeClusterSpecWithAccessControl(
 			AerospikeAccessControl: accessControl,
 			Storage: asdbv1.AerospikeStorageSpec{
 				Volumes: []asdbv1.VolumeSpec{
-					{
-						Name: aerospikeConfigSecret,
-						Source: asdbv1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: tlsSecretName,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/etc/aerospike/secret",
-						},
-					},
+					getStorageVolumeForSecret(),
 				},
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
