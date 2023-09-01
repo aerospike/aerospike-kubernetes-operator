@@ -527,6 +527,8 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
+					// Should fail when changing network config from tls to non-tls in a single step.
+					// Ideally first tls and non-tls config both has to set and then remove tls config.
 					By("Updating tls to non-tls in single step in service network config")
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
@@ -836,6 +838,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 							Context(
 								"Network", func() {
+									// Should fail when changing network config from non-tls to tls in a single step.
+									// Ideally first tls and non-tls config both has to set and then remove non-tls config.
 									It(
 										"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
 										func() {

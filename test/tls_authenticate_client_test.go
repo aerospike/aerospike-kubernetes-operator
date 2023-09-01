@@ -19,7 +19,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
-const TLSClusterName = "tls-auth-client"
+const tlsClusterName = "tls-auth-client"
 
 var _ = Describe(
 	"TlsAuthenticateClient", func() {
@@ -28,7 +28,7 @@ var _ = Describe(
 		AfterEach(func() {
 			aeroCluster := &asdbv1.AerospikeCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      TLSClusterName,
+					Name:      tlsClusterName,
 					Namespace: namespace,
 				},
 			}
@@ -129,7 +129,7 @@ func getAerospikeConfig(
 
 	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      TLSClusterName,
+			Name:      tlsClusterName,
 			Namespace: "test",
 		},
 		Spec: asdbv1.AerospikeClusterSpec{
