@@ -289,17 +289,7 @@ var _ = Describe(
 								Path: "/opt/aerospike",
 							},
 						},
-						{
-							Name: aerospikeConfigSecret,
-							Source: asdbv1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: tlsSecretName,
-								},
-							},
-							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-								Path: "/etc/aerospike/secret",
-							},
-						},
+						getStorageVolumeForSecret(),
 					},
 				}
 

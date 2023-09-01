@@ -171,14 +171,17 @@ func (s *AerospikeStorageSpec) GetNonPVs() (nonPVs []VolumeSpec) {
 }
 
 // getAerospikeStorageList gives blockStorageDeviceList and fileStorageList
-func (s *AerospikeStorageSpec) getAerospikeStorageList() (
+func (s *AerospikeStorageSpec) getAerospikeStorageList(onlyPV bool) (
 	blockStorageDeviceList []string, fileStorageList []string, err error,
 ) {
 	for idx := range s.Volumes {
 		volume := &s.Volumes[idx]
 		if volume.Aerospike != nil {
-			// TODO: Do we need to check for other type of sources
 			if volume.Source.PersistentVolume == nil {
+				if !onlyPV {
+					fileStorageList = append(fileStorageList, volume.Aerospike.Path)
+				}
+
 				continue
 			}
 

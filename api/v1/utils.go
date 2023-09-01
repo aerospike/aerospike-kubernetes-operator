@@ -53,23 +53,21 @@ const (
 	confKeyWorkDirectory = "work-directory"
 
 	// Defaults.
-	defaultWorkDirectory = "/opt/aerospike"
+	DefaultWorkDirectory = "/opt/aerospike"
 )
 
 const (
-	AerospikeServerContainerName          string = "aerospike-server"
-	AerospikeInitContainerName            string = "aerospike-init"
-	AerospikeInitContainerRegistryEnvVar  string = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
-	AerospikeInitContainerDefaultRegistry string = "docker.io"
-
-	AerospikeInitContainerDefaultRegistryNamespace string = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        string = "aerospike-kubernetes-init:2.1.0-dev2"
-
-	AerospikeAppLabel            = "app"
-	AerospikeCustomResourceLabel = "aerospike.com/cr"
-	AerospikeRackIDLabel         = "aerospike.com/rack-id"
-	AerospikeAPIVersionLabel     = "aerospike.com/api-version"
-	AerospikeAPIVersion          = "v1"
+	AerospikeServerContainerName                   = "aerospike-server"
+	AerospikeInitContainerName                     = "aerospike-init"
+	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerDefaultRegistry          = "docker.io"
+	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.1.0-dev2"
+	AerospikeAppLabel                              = "app"
+	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
+	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
+	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
+	AerospikeAPIVersion                            = "v1"
 )
 
 // ContainsString check whether list contains given string
@@ -83,8 +81,8 @@ func ContainsString(list []string, ele string) bool {
 	return false
 }
 
-// GetWorkDirectory returns the Aerospike work directory to use for aerospikeConfig.
-func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
+// GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
+func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 	// Get namespace config.
 	aerospikeConfig := aerospikeConfigSpec.Value
 
@@ -98,7 +96,17 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 		}
 	}
 
-	return defaultWorkDirectory
+	return ""
+}
+
+// GetWorkDirectory returns the Aerospike work directory to be used for aerospikeConfig.
+func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
+	workDir := GetConfiguredWorkDirectory(aerospikeConfigSpec)
+	if workDir != "" {
+		return workDir
+	}
+
+	return DefaultWorkDirectory
 }
 
 func getInitContainerImage(registry string) string {
