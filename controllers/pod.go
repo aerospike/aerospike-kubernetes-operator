@@ -147,14 +147,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 func (r *SingleClusterReconciler) rollingRestartPods(podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
 	restartTypeMap map[string]RestartType, rackState *RackState, handleFailedPods bool) reconcileResult {
-	if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
-		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
-
-		return reconcileError(err)
-	}
-
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if !handleFailedPods {
+		if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
+			r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
+
+			return reconcileError(err)
+		}
+
 		if res := r.waitForMultipleNodesSafeStopReady(podsToRestart, ignorablePods, false); !res.isSuccess {
 			return res
 		}
@@ -352,14 +352,14 @@ func getFailedPods(pods []*corev1.Pod) (failedPods []*corev1.Pod) {
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(rackState *RackState,
 	podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod, handleFailedPods bool) reconcileResult {
-	if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
-		r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
-
-		return reconcileError(err)
-	}
-
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if !handleFailedPods {
+		if err := r.getAndSetReplicationFactor(ignorablePods); err != nil {
+			r.Log.Error(err, "Failed to fetch/set replication-factor for cluster")
+
+			return reconcileError(err)
+		}
+
 		if res := r.waitForMultipleNodesSafeStopReady(podsToUpdate, ignorablePods, false); !res.isSuccess {
 			return res
 		}

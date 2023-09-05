@@ -98,6 +98,35 @@ func getNamespacedNameForSTSConfigMap(
 	}
 }
 
+func (r *SingleClusterReconciler) hasReplicationFactorModified(aerospikeConfigSpec asdbv1.AerospikeConfigSpec,
+	confFile string) (bool, error) {
+	version := strings.Split(r.aeroCluster.Spec.Image, ":")
+
+	c, err := asconfig.FromConfFile(r.Log, version[1], strings.NewReader(confFile))
+	if err != nil {
+		return false, fmt.Errorf("failed to parse asconfig file: %w", err)
+	}
+
+	cmap := *c.ToMap()
+
+	for _, cmConfNamespace := range cmap["namespace"].([]lib.Stats) {
+		for _, specNamespace := range aerospikeConfigSpec.Value["namespaces"].([]interface{}) {
+			if specNamespace.(map[string]interface{})["name"] != cmConfNamespace["name"] {
+				continue
+			}
+
+			specRF, _ := asdbv1.GetNamespaceReplicationFactor(specNamespace.(map[string]interface{}))
+			configMapRF, _ := asdbv1.GetNamespaceReplicationFactor(cmConfNamespace)
+
+			if specRF != configMapRF {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
 // createConfigMapData create configMap data
 func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	map[string]string, error,

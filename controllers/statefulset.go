@@ -437,7 +437,7 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 }
 
 func (r *SingleClusterReconciler) updateSTSConfigMap(
-	namespacedName types.NamespacedName, rack *asdbv1.Rack,
+	namespacedName types.NamespacedName, rack *asdbv1.Rack, handleFailedPods bool,
 ) error {
 	r.Log.Info("Updating ConfigMap", "ConfigMap", namespacedName)
 
@@ -446,7 +446,18 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 		return err
 	}
 
-	// build the aerospike config file based on the current spec
+	if handleFailedPods {
+		rfModified, err := r.hasReplicationFactorModified(rack.AerospikeConfig, confMap.Data[aerospikeTemplateConfFileName])
+		if err != nil {
+			return err
+		}
+
+		if rfModified {
+			return fmt.Errorf("cannot change replication-factor if any pod is in failed state")
+		}
+	}
+
+	// Build the aerospike config file based on the current spec
 	configMapData, err := r.createConfigMapData(rack)
 	if err != nil {
 		return fmt.Errorf("failed to build dotConfig from map: %v", err)

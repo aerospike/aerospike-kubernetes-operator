@@ -59,7 +59,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		ignorablePodNames,
 	)
 
-	// handle failed racks
+	// Handle failed racks
 	for idx := range rackStateList {
 		var podList []*corev1.Pod
 
@@ -365,7 +365,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	if err := r.updateSTSConfigMap(
 		getNamespacedNameForSTSConfigMap(
 			r.aeroCluster, rackState.Rack.ID,
-		), rackState.Rack,
+		), rackState.Rack, len(failedPods) > 0,
 	); err != nil {
 		r.Log.Error(
 			err, "Failed to update configMap from AerospikeConfig", "stsName",
@@ -679,7 +679,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 	var podsBatchList [][]*corev1.Pod
 
 	if handleFailedPods {
-		// creating a single batch of all failed pods in a rack, irrespective of batch size
+		// Creating a single batch of all failed pods in a rack, irrespective of batch size
 		r.Log.Info("Skipping batchSize for failed pods")
 
 		podsBatchList = make([][]*corev1.Pod, 1)

@@ -448,7 +448,6 @@ func isBatchRestart(aeroCluster *asdbv1.AerospikeCluster) bool {
 	for i := 0; i < 100; i++ {
 		readyPods := getReadyPods(aeroCluster)
 		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
-		fmt.Printf("unreadyPods %d\n", unreadyPods)
 
 		if unreadyPods > 1 {
 			return true

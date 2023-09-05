@@ -681,7 +681,7 @@ func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
 				noOfRacksForNamespaces = nsConfs[nsName].noOfRacksForNamespaces + 1
 			}
 
-			rf, _ := getNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+			rf, _ := GetNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
 			nsConfs[nsName] = nsConf{
 				noOfRacksForNamespaces: noOfRacksForNamespaces,
 				replicationFactor:      rf,
@@ -1237,7 +1237,7 @@ func validateNamespaceConfig(
 func validateNamespaceReplicationFactor(
 	nsConf map[string]interface{}, clSize int,
 ) error {
-	rf, err := getNamespaceReplicationFactor(nsConf)
+	rf, err := GetNamespaceReplicationFactor(nsConf)
 	if err != nil {
 		return err
 	}
@@ -1262,7 +1262,7 @@ func IsNSSCEnabled(nsConf map[string]interface{}) bool {
 	return scEnabled.(bool)
 }
 
-func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
+func GetNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	rfInterface, ok := nsConf["replication-factor"]
 	if !ok {
 		rfInterface = 2 // default replication-factor
