@@ -590,7 +590,9 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 			if err = r.createPodService(
 				podName, r.aeroCluster.Namespace,
 			); err != nil {
-				return found, reconcileError(err)
+				if !errors.IsAlreadyExists(err) {
+					return found, reconcileError(err)
+				}
 			}
 		}
 	}
@@ -699,7 +701,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
 			return nil, reconcileError(err)
 		}
 
@@ -989,7 +991,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createPodServiceIfNeeded(podsBatch); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
 			return nil, reconcileError(err)
 		}
 

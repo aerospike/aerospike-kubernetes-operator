@@ -498,6 +498,66 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
+
+					By("Updating tls-name in service network config")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork["tls-name"] = "unknown-tls"
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					By("Updating tls-port in service network config")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork["tls-port"] = float64(4000)
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					// Should fail when changing network config from tls to non-tls in a single step.
+					// Ideally first tls and non-tls config both has to set and then remove tls config.
+					By("Updating tls to non-tls in single step in service network config")
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					delete(serviceNetwork, "port")
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					delete(serviceNetwork, "tls-port")
+					delete(serviceNetwork, "tls-name")
+					delete(serviceNetwork, "tls-authenticate-client")
+					serviceNetwork["port"] = float64(3000)
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
 				},
 			)
 		},
@@ -642,6 +702,20 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("RollingRestart By changing non-tls to tls")
+
+					err = rollingRestartClusterByEnablingTLS(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart By changing tls to non-tls")
+
+					err = rollingRestartClusterByDisablingTLS(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("Upgrade/Downgrade")
 
 					// TODO: How to check if it is checking cluster stability before killing node
@@ -756,6 +830,40 @@ func UpdateClusterTest(ctx goctx.Context) {
 											err = k8sClient.Update(
 												ctx, aeroCluster,
 											)
+											Expect(err).Should(HaveOccurred())
+										},
+									)
+								},
+							)
+
+							Context(
+								"Network", func() {
+									// Should fail when changing network config from non-tls to tls in a single step.
+									// Ideally first tls and non-tls config both has to set and then remove non-tls config.
+									It(
+										"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
+										func() {
+											aeroCluster, err := getCluster(
+												k8sClient, ctx, clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											network := getNetworkTLSConfig()
+											serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+											delete(serviceNetwork, "port")
+											network[asdbv1.ServicePortName] = serviceNetwork
+											aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+											aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
+												AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+													SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+														SecretName:         tlsSecretName,
+														CaCertsFilename:    "cacert.pem",
+														ClientCertFilename: "svc_cluster_chain.pem",
+														ClientKeyFilename:  "svc_key.pem",
+													},
+												},
+											}
+											err = updateCluster(k8sClient, ctx, aeroCluster)
 											Expect(err).Should(HaveOccurred())
 										},
 									)

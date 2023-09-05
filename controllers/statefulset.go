@@ -105,12 +105,6 @@ func (r *SingleClusterReconciler) createSTS(
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
 	}
 
-	if tlsName != "" {
-		envVarList = append(
-			envVarList, newSTSEnvVarStatic("MY_POD_TLS_ENABLED", "true"),
-		)
-	}
-
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
@@ -571,7 +565,7 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 	}
 }
 
-// updateSTS updates the stateful set to match the spec. It is idempotent.
+// updateSTS updates the statefulset to match the spec. It is idempotent.
 func (r *SingleClusterReconciler) updateSTS(
 	statefulSet *appsv1.StatefulSet, rackState *RackState,
 ) error {

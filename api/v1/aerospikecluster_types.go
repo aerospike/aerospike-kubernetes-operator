@@ -521,7 +521,7 @@ type VolumeSource struct {
 
 type VolumeSpec struct {
 	// TODO: should this be inside source.PV or other type of source will also need this
-	// Contains  policies for this volumes.
+	// Contains policies for this volume.
 	AerospikePersistentVolumePolicySpec `json:",inline"`
 
 	// Name for this volume, Name or path should be given.

@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -195,7 +196,7 @@ func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) err
 		context.TODO(),
 		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
 	); err == nil {
-		return nil
+		return errors.NewAlreadyExists(schema.GroupResource{Resource: "Service"}, service.Name)
 	}
 
 	// NodePort will be allocated automatically
@@ -254,6 +255,31 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 
 	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string) error {
+	service := &corev1.Service{}
+	if err := r.Client.Get(
+		context.TODO(),
+		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
+	); err != nil {
+		return err
+	}
+
+	// Resetting ports here based on current spec config.
+	// kubernetes is able to set previously assigned nodePort value to the services if any
+	service.Spec.Ports = nil
+	r.appendServicePorts(service)
+
+	if err := r.Client.Update(
+		context.TODO(), service, updateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update service for pod %s: %v", pName, err,
+		)
 	}
 
 	return nil
@@ -318,18 +344,56 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 	return networkSet.Len() > 2
 }
 
-func (r *SingleClusterReconciler) createPodServiceIfNeeded(pods []*corev1.Pod) error {
-	if !podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) &&
+func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev1.Pod) error {
+	if (!podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) ||
+		isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig)) &&
 		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for all pods if network policy is changed and rely on nodePort service
 		for idx := range pods {
 			if err := r.createPodService(
 				pods[idx].Name, r.aeroCluster.Namespace,
-			); err != nil && !errors.IsAlreadyExists(err) {
-				return err
+			); err != nil {
+				if !errors.IsAlreadyExists(err) {
+					return err
+				}
+
+				if err := r.updatePodServicePorts(
+					pods[idx].Name, r.aeroCluster.Namespace,
+				); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	return nil
+}
+
+func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpec) bool {
+	if statusAeroConf == nil {
+		// If aerospikeconfig status is nil, assuming network service config has been changed
+		return true
+	}
+
+	specTLSName, _ := asdbv1.GetServiceTLSNameAndPort(specAeroConf)
+	statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(statusAeroConf)
+
+	specSVCPort := asdbv1.GetServicePort(specAeroConf)
+	statusSVCPort := asdbv1.GetServicePort(statusAeroConf)
+
+	return specTLSName != statusTLSName || specSVCPort != statusSVCPort
+}
+
+func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
+	tlsName, port = asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	if tlsName != "" && r.aeroCluster.Status.AerospikeConfig != nil {
+		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Status.AerospikeConfig)
+		statusPort := asdbv1.GetServicePort(r.aeroCluster.Status.AerospikeConfig)
+
+		if statusTLSName == "" && statusPort != nil {
+			tlsName = ""
+		}
+	}
+
+	return tlsName, port
 }

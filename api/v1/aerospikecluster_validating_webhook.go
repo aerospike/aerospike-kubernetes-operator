@@ -42,11 +42,6 @@ import (
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
-var immutableNetworkParams = []string{
-	"tls-name", "port", "access-port",
-	"alternate-access-port", "tls-port", "tls-access-port",
-	"tls-alternate-access-port",
-}
 
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
@@ -821,17 +816,17 @@ func validateLoggingConf(loggingConfList []interface{}) error {
 func (c *AerospikeCluster) validateNetworkConfig(networkConf map[string]interface{}) error {
 	serviceConf, serviceExist := networkConf["service"]
 	if !serviceExist {
-		return fmt.Errorf("network.service section not found in config. Looks like object is not mutated by webhook")
+		return fmt.Errorf("network.service section not found in config")
 	}
 
-	tlsNames := make(map[string]struct{})
+	tlsNames := sets.Set[string]{}
 	// network.tls conf
 	if _, ok := networkConf["tls"]; ok {
 		tlsConfList := networkConf["tls"].([]interface{})
 		for _, tlsConfInt := range tlsConfList {
 			tlsConf := tlsConfInt.(map[string]interface{})
 			if tlsName, ok := tlsConf["name"]; ok {
-				tlsNames[tlsName.(string)] = struct{}{}
+				tlsNames.Insert(tlsName.(string))
 			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
@@ -992,13 +987,20 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 }
 
 func validateNetworkConnection(
-	networkConf map[string]interface{}, tlsNames map[string]struct{},
+	networkConf map[string]interface{}, tlsNames sets.Set[string],
 	connectionType string,
 ) error {
 	if connectionConfig, exists := networkConf[connectionType]; exists {
 		connectionConfigMap := connectionConfig.(map[string]interface{})
 		if tlsName, ok := connectionConfigMap[confKeyTLSName]; ok {
-			if _, exists := tlsNames[tlsName.(string)]; !exists {
+			if _, tlsPortExist := connectionConfigMap["tls-port"]; !tlsPortExist {
+				return fmt.Errorf(
+					"you can't specify tls-name for network.%s without specifying tls-port",
+					connectionType,
+				)
+			}
+
+			if !tlsNames.Has(tlsName.(string)) {
 				return fmt.Errorf("tls-name '%s' is not configured", tlsName)
 			}
 		} else {
@@ -1467,14 +1469,56 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 func validateNetworkConnectionUpdate(
 	newConf, oldConf map[string]interface{}, connectionType string,
 ) error {
+	var networkPorts = []string{
+		"port", "access-port",
+		"alternate-access-port",
+	}
+
 	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 
-	for _, param := range immutableNetworkParams {
-		if isValueUpdated(oldConnectionConfig, newConnectionConfig, param) {
+	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
+	newTLSName, newTLSNameOk := newConnectionConfig["tls-name"]
+
+	if oldTLSNameOk && newTLSNameOk {
+		if !reflect.DeepEqual(oldTLSName, newTLSName) {
+			return fmt.Errorf("cannot modify tls name")
+		}
+	}
+
+	for _, port := range networkPorts {
+		if err := validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig, port); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[string]interface{}, port string) error {
+	oldPort, oldPortOk := oldConnectionConfig[port]
+	newPort, newPortOk := newConnectionConfig[port]
+	tlsPort := "tls-" + port
+
+	if oldPortOk && newPortOk {
+		if !reflect.DeepEqual(oldPort, newPort) {
+			return fmt.Errorf("cannot modify %s number: old value %v, new value %v", port, oldPort, newPort)
+		}
+	}
+
+	oldTLSPort, oldTLSPortOk := oldConnectionConfig[tlsPort]
+	newTLSPort, newTLSPortOk := newConnectionConfig[tlsPort]
+
+	if oldTLSPortOk && newTLSPortOk {
+		if !reflect.DeepEqual(oldTLSPort, newTLSPort) {
 			return fmt.Errorf(
-				"cannot update %s for network.%s", param, connectionType,
-			)
+				"cannot modify %s number: old value %v, new value %v", tlsPort, oldTLSPort, newTLSPort)
+		}
+	}
+
+	if (!newTLSPortOk && oldTLSPortOk) || (!newPortOk && oldPortOk) {
+		if !(oldPortOk && oldTLSPortOk) {
+			return fmt.Errorf("cannot remove tls or non-tls configurations unless both configurations have been set initially")
 		}
 	}
 
