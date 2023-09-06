@@ -105,12 +105,6 @@ func (r *SingleClusterReconciler) createSTS(
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
 	}
 
-	if tlsName != "" {
-		envVarList = append(
-			envVarList, newSTSEnvVarStatic("MY_POD_TLS_ENABLED", "true"),
-		)
-	}
-
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
@@ -582,7 +576,7 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 	}
 }
 
-// updateSTS updates the stateful set to match the spec. It is idempotent.
+// updateSTS updates the statefulset to match the spec. It is idempotent.
 func (r *SingleClusterReconciler) updateSTS(
 	statefulSet *appsv1.StatefulSet, rackState *RackState,
 ) error {
@@ -756,6 +750,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	volumes := rackState.Rack.Storage.GetNonPVs()
+	initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 	for idx := range volumes {
 		volume := &volumes[idx]
@@ -769,7 +764,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		// Add volumeMount in statefulSet pod containers for volume
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
-			st.Spec.Template.Spec.InitContainers, "",
+			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,

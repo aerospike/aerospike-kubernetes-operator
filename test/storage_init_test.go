@@ -870,17 +870,7 @@ func getLongInitStorageConfig(
 					Path: "/opt/aerospike/blockdevice-init-dd",
 				},
 			},
-			{
-				Name: aerospikeConfigSecret,
-				Source: asdbv1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: tlsSecretName,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/etc/aerospike/secret",
-				},
-			},
+			getStorageVolumeForSecret(),
 		},
 	}
 }

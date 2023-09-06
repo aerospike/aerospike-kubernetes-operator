@@ -438,10 +438,10 @@ func getNetworkConfig() map[string]interface{} {
 		"service": map[string]interface{}{
 			"port": 3000,
 		},
-		"heartbeat": map[string]interface{}{
+		"fabric": map[string]interface{}{
 			"port": 3001,
 		},
-		"fabric": map[string]interface{}{
+		"heartbeat": map[string]interface{}{
 			"port": 3002,
 		},
 	}
@@ -709,17 +709,7 @@ func getAerospikeStorageConfig(
 					},
 				},
 			},
-			{
-				Name: aerospikeConfigSecret,
-				Source: asdbv1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: tlsSecretName,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/etc/aerospike/secret",
-				},
-			},
+			getStorageVolumeForSecret(),
 		},
 	}
 }

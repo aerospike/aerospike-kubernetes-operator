@@ -297,7 +297,8 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods, ignorablePods 
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn {
 	// Use pod IP and direct service port from within the operator for info calls.
-	tlsName, port := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
+	tlsName, port := r.getServiceTLSNameAndPortIfConfigured()
+
 	if tlsName == "" || port == nil {
 		port = asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
 	}
