@@ -646,6 +646,12 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		}
 	}
 
+	err = r.updateSTSHeadlessSvc()
+	if err != nil {
+		r.Log.Error(err, "Failed to update headless service")
+		return nil, reconcileError(err)
+	}
+
 	// Update STS definition. The operation is idempotent, so it's ok to call
 	// it without checking for a change in the spec.
 	//
@@ -937,6 +943,12 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 					"A pod is already in failed state due to image related issues",
 			),
 		)
+	}
+
+	err = r.updateSTSHeadlessSvc()
+	if err != nil {
+		r.Log.Error(err, "Failed to update headless service")
+		return nil, reconcileError(err)
 	}
 
 	err = r.updateSTS(found, rackState)

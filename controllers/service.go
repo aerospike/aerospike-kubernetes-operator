@@ -91,6 +91,17 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 	return nil
 }
 
+func (r *SingleClusterReconciler) updateSTSHeadlessSvc() error {
+	if !isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig) {
+		r.Log.Info("No need to update headless service for statefulSet")
+		return nil
+	}
+
+	r.Log.Info("Update headless service for statefulSet")
+
+	return r.updateServicePorts(getSTSHeadLessSvcName(r.aeroCluster), r.aeroCluster.Namespace)
+}
+
 func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
 	if loadBalancer == nil {
@@ -260,11 +271,11 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
-func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string) error {
+func (r *SingleClusterReconciler) updateServicePorts(sName, sNamespace string) error {
 	service := &corev1.Service{}
 	if err := r.Client.Get(
 		context.TODO(),
-		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
+		types.NamespacedName{Name: sName, Namespace: sNamespace}, service,
 	); err != nil {
 		return err
 	}
@@ -278,7 +289,7 @@ func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string
 		context.TODO(), service, updateOption,
 	); err != nil {
 		return fmt.Errorf(
-			"failed to update service for pod %s: %v", pName, err,
+			"failed to update service %s: %v", sName, err,
 		)
 	}
 
@@ -357,7 +368,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev
 					return err
 				}
 
-				if err := r.updatePodServicePorts(
+				if err := r.updateServicePorts(
 					pods[idx].Name, r.aeroCluster.Namespace,
 				); err != nil {
 					return err
@@ -371,7 +382,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev
 
 func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpec) bool {
 	if statusAeroConf == nil {
-		// If aerospikeconfig status is nil, assuming network service config has been changed
+		// If aerospikeConfig status is nil, assuming network service config has been changed
 		return true
 	}
 
@@ -381,7 +392,7 @@ func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpe
 	specSVCPort := asdbv1.GetServicePort(specAeroConf)
 	statusSVCPort := asdbv1.GetServicePort(statusAeroConf)
 
-	return specTLSName != statusTLSName || specSVCPort != statusSVCPort
+	return specTLSName != statusTLSName || *specSVCPort != *statusSVCPort
 }
 
 func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
