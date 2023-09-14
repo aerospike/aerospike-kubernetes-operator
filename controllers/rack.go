@@ -232,11 +232,6 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	// NoOp if already exist
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
 
-	if err := r.createSTSHeadlessSvc(); err != nil {
-		r.Log.Error(err, "Failed to create headless service")
-		return nil, reconcileError(err)
-	}
-
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
 	if err := r.buildSTSConfigMap(cmName, rackState.Rack); err != nil {
@@ -584,17 +579,8 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 	}
 
 	// Create pod service for the scaled up pod when node network is used in network policy
-	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		// Create services for each pod
-		for _, podName := range newPodNames {
-			if err = r.createPodService(
-				podName, r.aeroCluster.Namespace,
-			); err != nil {
-				if !errors.IsAlreadyExists(err) {
-					return found, reconcileError(err)
-				}
-			}
-		}
+	if err = r.createOrUpdatePodServiceIfNeeded(newPodNames); err != nil {
+		return nil, reconcileError(err)
 	}
 
 	// update replicas here to avoid new replicas count comparison while cleaning up dangling pods of rack
@@ -644,12 +630,6 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 				),
 			)
 		}
-	}
-
-	err = r.updateSTSHeadlessSvc()
-	if err != nil {
-		r.Log.Error(err, "Failed to update headless service")
-		return nil, reconcileError(err)
 	}
 
 	// Update STS definition. The operation is idempotent, so it's ok to call
@@ -707,11 +687,11 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
+		podNames := getPodNames(podsBatch)
+
+		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
 			return nil, reconcileError(err)
 		}
-
-		podNames := getPodNames(podsBatch)
 
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
@@ -839,7 +819,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// If scale down leads to unavailable or dead partition then we should scale up the cluster,
 		// This can be left to the user but if we would do it here on our own then we can reuse
 		// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
-		// In case of rolling restart, no pod cleanup happens, therefor rolling config back is left to the user.
+		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
 		if err = r.validateSCClusterState(policy, ignorablePods); err != nil {
 			// reset cluster size
 			newSize := *found.Spec.Replicas + 1
@@ -945,12 +925,6 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		)
 	}
 
-	err = r.updateSTSHeadlessSvc()
-	if err != nil {
-		r.Log.Error(err, "Failed to update headless service")
-		return nil, reconcileError(err)
-	}
-
 	err = r.updateSTS(found, rackState)
 	if err != nil {
 		return found, reconcileError(
@@ -1003,7 +977,9 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if err = r.createOrUpdatePodServiceIfNeeded(podsBatch); err != nil {
+		podNames := getPodNames(podsBatch)
+
+		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
 			return nil, reconcileError(err)
 		}
 

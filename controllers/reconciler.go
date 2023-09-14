@@ -102,7 +102,18 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return res.getResult()
 	}
 
-	if err := r.createSTSLoadBalancerSvc(); err != nil {
+	if err := r.createOrUpdateSTSHeadlessSvc(); err != nil {
+		r.Log.Error(err, "Failed to create headless service")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
+			"Failed to create Service(Headless) %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return reconcile.Result{}, err
+	}
+
+	if err := r.createOrUpdateSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
