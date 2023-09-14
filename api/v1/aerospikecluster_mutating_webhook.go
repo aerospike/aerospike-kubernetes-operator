@@ -82,15 +82,16 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		return err
 	}
 
-	// cluster level aerospike config may be empty and
-	if c.Spec.AerospikeConfig != nil {
-		// Set common aerospikeConfig defaults
-		// Update configMap
-		if err := c.setDefaultAerospikeConfigs(
-			asLog, *c.Spec.AerospikeConfig,
-		); err != nil {
-			return err
-		}
+	if c.Spec.AerospikeConfig == nil {
+		return fmt.Errorf("spec.aerospikeConfig cannot be nil")
+	}
+
+	// Set common aerospikeConfig defaults
+	// Update configMap
+	if err := c.setDefaultAerospikeConfigs(
+		asLog, *c.Spec.AerospikeConfig,
+	); err != nil {
+		return err
 	}
 
 	// Update racks configuration using global values where required.
@@ -480,7 +481,7 @@ func setDefaultNetworkConf(
 
 	// Network section
 	if _, ok := config["network"]; !ok {
-		config["network"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network cannot be nil")
 	}
 
 	networkConf, ok := config["network"].(map[string]interface{})
@@ -492,7 +493,7 @@ func setDefaultNetworkConf(
 
 	// Service section
 	if _, ok = networkConf["service"]; !ok {
-		networkConf["service"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.service cannot be nil")
 	}
 
 	serviceConf, ok := networkConf["service"].(map[string]interface{})
@@ -514,6 +515,11 @@ func setDefaultNetworkConf(
 		serviceDefaults["access-addresses"] = []string{"<access-address>"}
 		serviceDefaults["alternate-access-port"] = *srvPort
 		serviceDefaults["alternate-access-addresses"] = []string{"<alternate-access-address>"}
+	} else {
+		delete(serviceConf, "access-port")
+		delete(serviceConf, "access-addresses")
+		delete(serviceConf, "alternate-access-addresses")
+		delete(serviceConf, "alternate-access-port")
 	}
 
 	if tlsName, tlsPort := GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
@@ -522,6 +528,11 @@ func setDefaultNetworkConf(
 		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
 		serviceDefaults["tls-alternate-access-port"] = *tlsPort
 		serviceDefaults["tls-alternate-access-addresses"] = []string{"<tls-alternate-access-address>"}
+	} else {
+		delete(serviceConf, "tls-access-port")
+		delete(serviceConf, "tls-access-addresses")
+		delete(serviceConf, "tls-alternate-access-addresses")
+		delete(serviceConf, "tls-alternate-access-port")
 	}
 
 	if err := setDefaultsInConfigMap(
@@ -540,7 +551,7 @@ func setDefaultNetworkConf(
 
 	// Heartbeat section
 	if _, ok = networkConf["heartbeat"]; !ok {
-		networkConf["heartbeat"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.heartbeat cannot be nil")
 	}
 
 	heartbeatConf, ok := networkConf["heartbeat"].(map[string]interface{})
@@ -570,7 +581,7 @@ func setDefaultNetworkConf(
 
 	// Fabric section
 	if _, ok := networkConf["fabric"]; !ok {
-		networkConf["fabric"] = map[string]interface{}{}
+		return fmt.Errorf("aerospikeConfig.network.fabric cannot be nil")
 	}
 
 	return addOperatorClientNameIfNeeded(
