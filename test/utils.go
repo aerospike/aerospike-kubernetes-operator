@@ -35,6 +35,11 @@ var (
 	pkgLog       = ctrl.Log.WithName("test")
 )
 
+const (
+	servicePort    = 3000
+	serviceTLSPort = 4333
+)
+
 var secrets map[string][]byte
 var cacertSecrets map[string][]byte
 
@@ -408,8 +413,8 @@ func getNetworkTLSConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
-			"tls-port": 4333,
-			"port":     3000,
+			"tls-port": serviceTLSPort,
+			"port":     servicePort,
 		},
 		"fabric": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
@@ -436,7 +441,7 @@ func getNetworkTLSConfig() map[string]interface{} {
 func getNetworkConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
-			"port": 3000,
+			"port": servicePort,
 		},
 		"fabric": map[string]interface{}{
 			"port": 3001,

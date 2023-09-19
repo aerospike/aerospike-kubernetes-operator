@@ -102,6 +102,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return res.getResult()
 	}
 
+	if err := r.createOrUpdatePDB(); err != nil {
+		r.Log.Error(err, "Failed to create PodDisruptionBudget")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetCreateFailed",
+			"Failed to create PodDisruptionBudget %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return reconcile.Result{}, err
+	}
+
 	if err := r.createSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
 		r.Recorder.Eventf(

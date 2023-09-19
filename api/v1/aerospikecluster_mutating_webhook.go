@@ -25,6 +25,7 @@ import (
 	"gomodules.xyz/jsonpatch/v2"
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -69,6 +70,13 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 }
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
+	// Set maxUnavailable default
+	if c.Spec.MaxUnavailable == nil {
+		// Set default maxUnavailable to 1
+		maxUnavailable := intstr.FromInt(1)
+		c.Spec.MaxUnavailable = &maxUnavailable
+	}
+
 	// Set network defaults
 	c.Spec.AerospikeNetworkPolicy.setDefaults(c.ObjectMeta.Namespace)
 
@@ -504,7 +512,7 @@ func setDefaultNetworkConf(
 		)
 	}
 	// Override these sections
-	// TODO: These values lines will be replaces with runtime info by script in init-container
+	// TODO: These values lines will be replaced with runtime info by script in init-container
 	// See if we can get better way to make template
 	serviceDefaults := map[string]interface{}{}
 	srvPort := GetServicePort(configSpec)

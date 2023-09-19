@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -162,9 +163,9 @@ func (r *SingleClusterReconciler) createSTS(
 							Ports:           ports,
 							Env:             envVarList,
 							VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),
+							ReadinessProbe:  r.getReadinessProbe(),
 						},
 					},
-
 					Volumes: getDefaultSTSVolumes(r.aeroCluster, rackState),
 				},
 			},
@@ -199,6 +200,51 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	return r.getSTS(rackState)
+}
+
+func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
+	var readinessPort *int
+
+	if _, tlsPort := asdbv1.GetTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig, asdbv1.ServicePortName); tlsPort != nil {
+		readinessPort = tlsPort
+	} else {
+		readinessPort = asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+	}
+
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(*readinessPort),
+				},
+			},
+		},
+		InitialDelaySeconds: 2,
+		PeriodSeconds:       5,
+	}
+}
+
+func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
+	for idx := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[idx]
+
+		if container.Name != asdbv1.AerospikeServerContainerName {
+			continue
+		}
+
+		// ignore if readiness probe is not set. Avoid rolling restart for old versions of operator
+		if container.ReadinessProbe == nil {
+			return false
+		}
+
+		if container.ReadinessProbe.TCPSocket != nil &&
+			container.ReadinessProbe.TCPSocket.String() != r.getReadinessProbe().TCPSocket.String() {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
@@ -576,6 +622,9 @@ func (r *SingleClusterReconciler) updateSTS(
 	// Our Pod Spec does not contain image for the Aerospike Server
 	// Container.
 	r.updateContainerImages(statefulSet)
+
+	// Updates the readiness probe TCP Port if changed for the aerospike server container
+	r.updateReadinessProbe(statefulSet)
 
 	// This should be called before updating storage
 	r.initializeSTSStorage(statefulSet, rackState)
@@ -1074,6 +1123,20 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 
 	updateImage(statefulset.Spec.Template.Spec.Containers)
 	updateImage(statefulset.Spec.Template.Spec.InitContainers)
+}
+
+func (r *SingleClusterReconciler) updateReadinessProbe(statefulSet *appsv1.StatefulSet) {
+	for idx := range statefulSet.Spec.Template.Spec.Containers {
+		container := &statefulSet.Spec.Template.Spec.Containers[idx]
+
+		if container.Name != asdbv1.AerospikeServerContainerName {
+			continue
+		}
+
+		container.ReadinessProbe = r.getReadinessProbe()
+
+		break
+	}
 }
 
 func (r *SingleClusterReconciler) updateAerospikeInitContainerImage() error {
