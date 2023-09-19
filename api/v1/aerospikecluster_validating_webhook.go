@@ -166,6 +166,11 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
+	// Validate MaxUnavailable for PodDisruptionBudget
+	if err := c.validateMaxUnavailable(); err != nil {
+		return err
+	}
+
 	// Validate Image version
 	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
@@ -604,22 +609,9 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 
 	// Validate batch upgrade/restart param
 	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
-		// Just validate if RollingUpdateBatchSize is valid number or string.
-		randomNumber := 100
-
-		count, err := intstr.GetScaledValueFromIntOrPercent(
-			c.Spec.RackConfig.RollingUpdateBatchSize, randomNumber, false,
-		)
-		if err != nil {
+		if err := validateIntOrStringField(c.Spec.RackConfig.RollingUpdateBatchSize,
+			"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
 			return err
-		}
-
-		// Only negative is not allowed. Any big number can be given.
-		if count < 0 {
-			return fmt.Errorf(
-				"can not use negative rackConfig.RollingUpdateBatchSize  %s",
-				c.Spec.RackConfig.RollingUpdateBatchSize.String(),
-			)
 		}
 
 		if len(c.Spec.RackConfig.Racks) < 2 {
@@ -2171,6 +2163,44 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 		); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func validateIntOrStringField(intOrStr *intstr.IntOrString, fieldPath string) error {
+	randomNumber := 100
+	// Just validate if MaxUnavailable is valid number or string.
+	count, err := intstr.GetScaledValueFromIntOrPercent(intOrStr, randomNumber, false)
+	if err != nil {
+		return err
+	}
+
+	// Only negative is not allowed. Any big number can be given.
+	if count < 0 {
+		return fmt.Errorf("can not use negative %s: %s", fieldPath, intOrStr.String())
+	}
+
+	if intOrStr.Type == intstr.String && count > 100 {
+		return fmt.Errorf("%s: %s must not be greater than 100 percent", fieldPath, intOrStr.String())
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateMaxUnavailable() error {
+	// safe check for corner cases when mutation webhook somehow didn't work
+	if c.Spec.MaxUnavailable == nil {
+		return fmt.Errorf("maxUnavailable cannot be nil. Mutation webhook didn't work")
+	}
+
+	if err := validateIntOrStringField(c.Spec.MaxUnavailable, "spec.maxUnavailable"); err != nil {
+		return err
+	}
+
+	// TODO: Do we need such types of check? Maybe > size/2 etc
+	if c.Spec.MaxUnavailable.IntValue() > int(c.Spec.Size) {
+		return fmt.Errorf("maxUnavailable %s cannot be greater than size", c.Spec.MaxUnavailable.String())
 	}
 
 	return nil
