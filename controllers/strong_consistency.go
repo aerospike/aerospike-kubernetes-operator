@@ -3,8 +3,8 @@ package controllers
 import (
 	corev1 "k8s.io/api/core/v1"
 
+	as "github.com/aerospike/aerospike-client-go/v6"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 func (r *SingleClusterReconciler) getAndSetRoster(

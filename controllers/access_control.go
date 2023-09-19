@@ -13,8 +13,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 
+	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // logger type alias.
