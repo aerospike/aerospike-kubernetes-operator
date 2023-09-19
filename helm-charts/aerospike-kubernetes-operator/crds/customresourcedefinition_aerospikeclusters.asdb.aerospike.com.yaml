@@ -280,6 +280,14 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              maxUnavailable:
+                anyOf:
+                - type: integer
+                - type: string
+                description: MaxUnavailable is the percentage/number of pods that
+                  can be allowed to go down or unavailable before application disruption.
+                  This value is used to create PodDisruptionBudget. Defaults to 1.
+                x-kubernetes-int-or-string: true
               operatorClientCert:
                 description: Certificates to connect to Aerospike.
                 properties:
@@ -8907,6 +8915,14 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              maxUnavailable:
+                anyOf:
+                - type: integer
+                - type: string
+                description: MaxUnavailable is the percentage/number of pods that
+                  can be allowed to go down or unavailable before application disruption.
+                  This value is used to create PodDisruptionBudget. Defaults to 1.
+                x-kubernetes-int-or-string: true
               multiPodPerHost:
                 description: "If set true then multiple pods can be created per Kubernetes
                   Node. This will create a NodePort service for each Pod. NodePort,

@@ -147,6 +147,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
+	if r.isReadinessPortUpdated(pod) {
+		restartType = mergeRestartType(restartType, podRestart)
+
+		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart",
+			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
+	}
+
 	return restartType
 }
 
