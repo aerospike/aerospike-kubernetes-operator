@@ -47,7 +47,7 @@ pipeline {
                                         recursiveSubmodules: true,
                                         reference: '',
                                         trackingSubmodules: false]],
-                            userRemoteConfigs: scm.userRemoteConfig,
+                            userRemoteConfigs: scm.userRemoteConfigs
                         ])
                     }
                 }
