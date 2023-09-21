@@ -688,7 +688,6 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		)
 
 		podNames := getPodNames(podsBatch)
-
 		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
 			return nil, reconcileError(err)
 		}
@@ -954,7 +953,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	var podsBatchList [][]*corev1.Pod
 
 	if len(failedPods) != 0 {
-		// creating a single batch of all failed pods in a rack, irrespective of batch size
+		// Creating a single batch of all failed pods in a rack, irrespective of batch size
 		r.Log.Info("Skipping batchSize for failed pods")
 
 		podsBatchList = make([][]*corev1.Pod, 1)
@@ -978,13 +977,11 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		)
 
 		podNames := getPodNames(podsBatch)
-
 		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
 			return nil, reconcileError(err)
 		}
 
-		res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap)
-		if !res.isSuccess {
+		if res := r.rollingRestartPods(rackState, podsBatch, ignorablePods, restartTypeMap); !res.isSuccess {
 			return found, res
 		}
 

@@ -89,6 +89,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
+	if err := r.createOrUpdateSTSHeadlessSvc(); err != nil {
+		r.Log.Error(err, "Failed to create headless service")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
+			"Failed to create Service(Headless) %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return reconcile.Result{}, err
+	}
+
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
 		if res.err != nil {
@@ -100,17 +111,6 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		return res.getResult()
-	}
-
-	if err := r.createOrUpdateSTSHeadlessSvc(); err != nil {
-		r.Log.Error(err, "Failed to create headless service")
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
-			"Failed to create Service(Headless) %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
-		)
-
-		return reconcile.Result{}, err
 	}
 
 	if err := r.createOrUpdateSTSLoadBalancerSvc(); err != nil {

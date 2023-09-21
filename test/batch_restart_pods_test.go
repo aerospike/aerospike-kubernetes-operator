@@ -434,9 +434,8 @@ func isBatchRestart(aeroCluster *asdbv1.AerospikeCluster) bool {
 	// Operator should restart batch of pods which will make multiple pods unready
 	for i := 0; i < 100; i++ {
 		readyPods := getReadyPods(aeroCluster)
-		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
-		fmt.Printf("unreadyPods %d\n", unreadyPods)
 
+		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
 		if unreadyPods > 1 {
 			return true
 		}

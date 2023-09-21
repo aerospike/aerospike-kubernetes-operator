@@ -25,15 +25,20 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	r.Log.Info("Create or Update headless service for statefulSet")
 
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
+	service := &corev1.Service{}
 
-	err := r.updateServicePorts(serviceName, r.aeroCluster.Namespace)
-	if err == nil {
-		return nil
-	}
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: serviceName, Namespace: r.aeroCluster.Namespace,
+		}, service,
+	)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
 
-	if errors.IsNotFound(err) {
 		ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-		service := &corev1.Service{
+		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				// Headless service has the same name as AerospikeCluster
 				Name:      serviceName,
@@ -73,9 +78,11 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		}
 
 		r.Log.Info("Created new headless service")
+
+		return nil
 	}
 
-	return nil
+	return r.updateServicePorts(service)
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
@@ -147,8 +154,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	}
 
 	if len(service.Spec.Ports) == 1 && service.Spec.Ports[0].Port == servicePort.Port &&
-		service.Spec.Ports[0].TargetPort == servicePort.TargetPort &&
-		service.Spec.Ports[0].Name == servicePort.Name {
+		service.Spec.Ports[0].TargetPort == servicePort.TargetPort {
 		return nil
 	}
 
@@ -164,7 +170,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	}
 
 	r.Log.Info(
-		"LoadBalancer Service already exist for cluster. Using existing service",
+		"LoadBalancer Service already exist for cluster. Updated existing service",
 		"name", utils.NamespacedName(service.Namespace, service.Name),
 	)
 
@@ -172,14 +178,20 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace string) error {
-	err := r.updateServicePorts(pName, pNamespace)
-	if err == nil {
-		return nil
-	}
+	service := &corev1.Service{}
 
-	if errors.IsNotFound(err) {
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: pName, Namespace: pNamespace,
+		}, service,
+	)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
 		// NodePort will be allocated automatically
-		service := &corev1.Service{
+		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pName,
 				Namespace: pNamespace,
@@ -211,9 +223,11 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 				"failed to create new service for pod %s: %v", pName, err,
 			)
 		}
+
+		return nil
 	}
 
-	return nil
+	return r.updateServicePorts(service)
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -240,15 +254,7 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
-func (r *SingleClusterReconciler) updateServicePorts(sName, sNamespace string) error {
-	service := &corev1.Service{}
-	if err := r.Client.Get(
-		context.TODO(),
-		types.NamespacedName{Name: sName, Namespace: sNamespace}, service,
-	); err != nil {
-		return err
-	}
-
+func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) error {
 	servicePorts := r.getServicePorts()
 
 	servicePortsMap := make(map[string]int32)
@@ -270,7 +276,7 @@ func (r *SingleClusterReconciler) updateServicePorts(sName, sNamespace string) e
 		context.TODO(), service, updateOption,
 	); err != nil {
 		return fmt.Errorf(
-			"failed to update service %s: %v", sName, err,
+			"failed to update service %s: %v", service.Name, err,
 		)
 	}
 
