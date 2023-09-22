@@ -112,6 +112,11 @@ func rollingRestartClusterByEnablingTLS(
 		return err
 	}
 
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
 	return validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
 }
 
@@ -155,8 +160,13 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
 	// Port should be updated to service non-tls port
-	return validateReadinessProbe(ctx, k8sClient, aeroCluster, servicePort)
+	return validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceNonTLSPort)
 }
 
 func scaleUpClusterTestWithNSDeviceHandling(

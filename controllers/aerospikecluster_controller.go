@@ -6,8 +6,11 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -37,6 +40,8 @@ var (
 	}
 )
 
+var PDBbGvk = policyv1beta1.SchemeGroupVersion.WithKind("PodDisruptionBudget")
+
 // AerospikeClusterReconciler reconciles AerospikeClusters
 type AerospikeClusterReconciler struct {
 	client.Client
@@ -49,6 +54,10 @@ type AerospikeClusterReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := r.setupPdbAPI(r.KubeConfig); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&asdbv1.AerospikeCluster{}).
 		Owns(
@@ -70,6 +79,27 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})).
 		Complete(r)
+}
+
+// setupPdbAPI sets up the pdb api version to use as per the k8s version.
+// TODO: Move to v1 when minimum supported k8s version is 1.21
+func (r *AerospikeClusterReconciler) setupPdbAPI(config *rest.Config) error {
+	discoveryClient := discovery.NewDiscoveryClientForConfigOrDie(config)
+
+	resources, err := discoveryClient.ServerResourcesForGroupVersion("policy/v1")
+	if err != nil {
+		r.Log.Info("Could not get ServerResourcesForGroupVersion for policy/v1, falling back to policy/v1beta1")
+		return nil
+	}
+
+	for i := range resources.APIResources {
+		if resources.APIResources[i].Kind == "PodDisruptionBudget" {
+			PDBbGvk = policyv1.SchemeGroupVersion.WithKind("PodDisruptionBudget")
+			return nil
+		}
+	}
+
+	return nil
 }
 
 // RackState contains the rack configuration and rack size.

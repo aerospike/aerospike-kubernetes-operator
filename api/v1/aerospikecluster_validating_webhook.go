@@ -2198,9 +2198,44 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 		return err
 	}
 
-	// TODO: Do we need such types of check? Maybe > size/2 etc
-	if c.Spec.MaxUnavailable.IntValue() > int(c.Spec.Size) {
-		return fmt.Errorf("maxUnavailable %s cannot be greater than size", c.Spec.MaxUnavailable.String())
+	maxUnavailable := int(c.Spec.Size)
+
+	// If Size is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
+	if maxUnavailable == 1 {
+		return nil
+	}
+
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+
+		for _, nsInterface := range nsList {
+			rfInterface, exists := nsInterface.(map[string]interface{})["replication-factor"]
+			if !exists {
+				// Default RF is 2 if not given
+				maxUnavailable = 2
+				continue
+			}
+
+			rf, err := GetIntType(rfInterface)
+			if err != nil {
+				return fmt.Errorf("namespace replication-factor %v", err)
+			}
+
+			// If RF is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
+			if rf == 1 {
+				continue
+			}
+
+			if rf < maxUnavailable {
+				maxUnavailable = rf
+			}
+		}
+	}
+
+	if c.Spec.MaxUnavailable.IntValue() >= maxUnavailable {
+		return fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v",
+			c.Spec.MaxUnavailable.String(), maxUnavailable)
 	}
 
 	return nil

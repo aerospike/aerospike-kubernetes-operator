@@ -3,52 +3,64 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 
-	v1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 func (r *SingleClusterReconciler) createOrUpdatePDB() error {
-	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-	pdb := &v1.PodDisruptionBudget{}
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		return err
+	}
 
-	err := r.Client.Get(
+	for podIdx := range podList.Items {
+		pod := &podList.Items[podIdx]
+
+		for containerIdx := range pod.Spec.Containers {
+			if pod.Spec.Containers[containerIdx].Name != asdbv1.AerospikeServerContainerName {
+				continue
+			}
+
+			if pod.Spec.Containers[containerIdx].ReadinessProbe == nil {
+				r.Log.Info("Pod found without ReadinessProbe, skipping PodDisruptionBudget",
+					"name", pod.Name)
+				return nil
+			}
+		}
+	}
+
+	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+	// TODO: Move to concrete object when minimum supported k8s version is 1.21
+	pdb := &unstructured.Unstructured{}
+	pdb.SetGroupVersionKind(PDBbGvk)
+
+	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, pdb,
-	)
-	if err != nil {
+	); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 
 		r.Log.Info("Create PodDisruptionBudget")
 
-		pdb = &v1.PodDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      r.aeroCluster.Name,
-				Namespace: r.aeroCluster.Namespace,
-				Labels:    ls,
+		pdb.SetName(r.aeroCluster.Name)
+		pdb.SetNamespace(r.aeroCluster.Namespace)
+		pdb.SetLabels(ls)
+		pdb.Object["spec"] = map[string]interface{}{
+			"maxUnavailable": r.aeroCluster.Spec.MaxUnavailable,
+			"selector": &metav1.LabelSelector{
+				MatchLabels: ls,
 			},
-			Spec: v1.PodDisruptionBudgetSpec{
-				MaxUnavailable: r.aeroCluster.Spec.MaxUnavailable,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: ls,
-				},
-			},
-		}
-
-		// This will be true only for old existing CRs. For new operator versions, this field will be
-		// set by default to 1 by mutating webhook.
-		if pdb.Spec.MaxUnavailable == nil {
-			maxUnavailable := intstr.FromInt(1)
-			pdb.Spec.MaxUnavailable = &maxUnavailable
 		}
 
 		// Set AerospikeCluster instance as the owner and controller
@@ -78,9 +90,23 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
-	if pdb.Spec.MaxUnavailable.String() != r.aeroCluster.Spec.MaxUnavailable.String() {
-		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
-		if err = r.Client.Update(
+	var value string
+
+	maxUnavailable := pdb.Object["spec"].(map[string]interface{})["maxUnavailable"]
+
+	// Type casting is required because of unstructured object
+	if val, ok := maxUnavailable.(string); ok {
+		value = val
+	} else {
+		value = strconv.Itoa(int(maxUnavailable.(int64)))
+	}
+
+	if value != r.aeroCluster.Spec.MaxUnavailable.String() {
+		spec := pdb.Object["spec"].(map[string]interface{})
+		spec["maxUnavailable"] = r.aeroCluster.Spec.MaxUnavailable
+		pdb.Object["spec"] = spec
+
+		if err := r.Client.Update(
 			context.TODO(), pdb, updateOption,
 		); err != nil {
 			return fmt.Errorf(

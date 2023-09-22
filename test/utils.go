@@ -35,11 +35,6 @@ var (
 	pkgLog       = ctrl.Log.WithName("test")
 )
 
-const (
-	servicePort    = 3000
-	serviceTLSPort = 4333
-)
-
 var secrets map[string][]byte
 var cacertSecrets map[string][]byte
 
