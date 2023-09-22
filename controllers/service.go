@@ -280,6 +280,11 @@ func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) er
 		)
 	}
 
+	r.Log.Info(
+		"Service already exist. Updated existing service",
+		"name", utils.NamespacedName(service.Namespace, service.Name),
+	)
+
 	return nil
 }
 

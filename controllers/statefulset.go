@@ -549,6 +549,17 @@ func (r *SingleClusterReconciler) updateSTSStorage(
 	sortContainerVolumeAttachments(st.Spec.Template.Spec.Containers)
 }
 
+func (r *SingleClusterReconciler) updateSTSPorts(
+	st *appsv1.StatefulSet,
+) {
+	ports := getSTSContainerPort(
+		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		r.aeroCluster.Spec.AerospikeConfig,
+	)
+
+	st.Spec.Template.Spec.Containers[0].Ports = ports
+}
+
 func sortContainerVolumeAttachments(containers []corev1.Container) {
 	for idx := range containers {
 		sort.Slice(
@@ -571,6 +582,9 @@ func (r *SingleClusterReconciler) updateSTS(
 ) error {
 	// Update settings from pod spec.
 	r.updateSTSFromPodSpec(statefulSet, rackState)
+
+	// Updating ports when switching between tls and non-tls.
+	r.updateSTSPorts(statefulSet)
 
 	// Update the images for all containers from the spec.
 	// Our Pod Spec does not contain image for the Aerospike Server
