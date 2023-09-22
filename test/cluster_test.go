@@ -374,6 +374,13 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				err = deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Validating Readiness probe")
+				err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
+				Expect(err).ToNot(HaveOccurred())
+
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 			},
 		)
