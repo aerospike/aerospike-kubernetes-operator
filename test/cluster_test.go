@@ -709,11 +709,17 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, tlsPort)
+					Expect(err).ToNot(HaveOccurred())
+
 					By("RollingRestart By changing tls to non-tls")
 
 					err = rollingRestartClusterByDisablingTLS(
 						k8sClient, ctx, clusterNamespacedName,
 					)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, nontlsPort)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Upgrade/Downgrade")

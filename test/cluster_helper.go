@@ -381,6 +381,46 @@ func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
+func validateServiceUpdate(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, port int32) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	serviceNamespacesNames := make([]types.NamespacedName, 0)
+	for podName := range aeroCluster.Status.Pods {
+		serviceNamespacesNames = append(serviceNamespacesNames,
+			types.NamespacedName{Name: podName, Namespace: clusterNamespacedName.Namespace})
+	}
+
+	serviceNamespacesNames = append(serviceNamespacesNames, clusterNamespacedName)
+
+	for _, serviceNamespacesName := range serviceNamespacesNames {
+		service := &corev1.Service{}
+
+		err = k8sClient.Get(ctx, serviceNamespacesName, service)
+		if err != nil {
+			return err
+		}
+
+		portChanged := false
+
+		for _, p := range service.Spec.Ports {
+			if p.Port == port {
+				portChanged = true
+				break
+			}
+		}
+
+		if !portChanged {
+			return fmt.Errorf("service %s port not configured correctly", serviceNamespacesName.Name)
+		}
+	}
+
+	return nil
+}
+
 func validateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, updatedKeys []string,

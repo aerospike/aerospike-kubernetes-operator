@@ -59,7 +59,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		ignorablePodNames,
 	)
 
-	// handle failed racks
+	// Handle failed racks
 	for idx := range rackStateList {
 		var podList []*corev1.Pod
 
