@@ -40,7 +40,13 @@ pipeline {
                         checkout([
                             $class: 'GitSCM',
                             branches: scm.branches,
-                            extensions: scm.extensions + [[$class: 'CleanBeforeCheckout']],
+                            extensions: scm.extensions + [[$class: 'CleanBeforeCheckout']] +
+                                        [[$class: 'SubmoduleOption',
+                                        disableSubmodules: false,
+                                        parentCredentials: false,
+                                        recursiveSubmodules: true,
+                                        reference: '',
+                                        trackingSubmodules: false]],
                             userRemoteConfigs: scm.userRemoteConfigs
                         ])
                     }
