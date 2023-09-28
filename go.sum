@@ -35,6 +35,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/aerospike/aerospike-management-lib v0.0.0-20230814122406-a5247ec7486a h1:A6KnC0czL5xt3HGcTQL1KAQgtme4zlo2hncLg/B4XqI=
 github.com/aerospike/aerospike-management-lib v0.0.0-20230814122406-a5247ec7486a/go.mod h1:An7udaZ/C3TiDGI24gc4nOEomeMDD6ObBnLYpjjH/+A=
+github.com/aerospike/aerospike-management-lib v0.0.0-20230914182119-58c99a4c1655 h1:eS4ARHGHXWfMdozWMTKZQb3Z7P0FzSqxFQqju+z3ekM=
+github.com/aerospike/aerospike-management-lib v0.0.0-20230914182119-58c99a4c1655/go.mod h1:An7udaZ/C3TiDGI24gc4nOEomeMDD6ObBnLYpjjH/+A=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=

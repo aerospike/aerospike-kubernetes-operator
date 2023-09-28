@@ -40,7 +40,7 @@ func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy
 	return deployment.ValidateSCClusterState(r.Log, allHostConns, policy, ignorableNamespaces)
 }
 
-func (r *SingleClusterReconciler) addedSCNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
+func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][]string) []string {
 	var (
 		specSCNamespaces     = sets.NewString()
 		newAddedSCNamespaces = sets.NewString()
@@ -56,33 +56,26 @@ func (r *SingleClusterReconciler) addedSCNamespaces(allHostConns []*deployment.H
 		}
 	}
 
-	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
-	if err != nil {
-		return nil, err
-	}
-
 	// Check if SC namespaces are present in all node's namespaces, if not then it's a new SC namespace
 	for _, namespaces := range nodesNamespaces {
 		nodeNamespaces := sets.NewString(namespaces...)
 		newAddedSCNamespaces.Insert(specSCNamespaces.Difference(nodeNamespaces).List()...)
 	}
 
-	return newAddedSCNamespaces.List(), nil
+	return newAddedSCNamespaces.List()
 }
 
 func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deployment.HostConn) (
 	sets.Set[string], error) {
-	removedNSes, err := r.removedNamespaces(allHostConns)
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
 	if err != nil {
 		return nil, err
 	}
 
-	addSCNamespaces, err := r.addedSCNamespaces(allHostConns)
-	if err != nil {
-		return nil, err
-	}
+	removedNamespaces := r.removedNamespaces(nodesNamespaces)
+	addSCNamespaces := r.addedSCNamespaces(nodesNamespaces)
 
-	ignorableNamespaces := sets.New[string](removedNSes...)
+	ignorableNamespaces := sets.New[string](removedNamespaces...)
 	ignorableNamespaces.Insert(addSCNamespaces...)
 
 	return ignorableNamespaces, nil

@@ -79,11 +79,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 func (r *SingleClusterReconciler) quiescePods(
 	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) error {
-	removedNSes, err := r.removedNamespaces(allHostConns)
-	if err != nil {
-		return err
-	}
-
 	podList := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
@@ -95,7 +90,12 @@ func (r *SingleClusterReconciler) quiescePods(
 		return err
 	}
 
-	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, removedNSes)
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	if err != nil {
+		return err
+	}
+
+	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, r.removedNamespaces(nodesNamespaces))
 }
 
 // TODO: Check only for migration
