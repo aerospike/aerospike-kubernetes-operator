@@ -20,12 +20,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // SingleClusterReconciler reconciles a single AerospikeCluster
