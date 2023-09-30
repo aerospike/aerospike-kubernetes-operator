@@ -553,7 +553,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					delete(serviceNetwork, "tls-port")
 					delete(serviceNetwork, "tls-name")
 					delete(serviceNetwork, "tls-authenticate-client")
-					serviceNetwork["port"] = float64(3000)
+					serviceNetwork["port"] = float64(serviceNonTLSPort)
 					network[asdbv1.ServicePortName] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -709,7 +709,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, tlsPort)
+					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort})
 					Expect(err).ToNot(HaveOccurred())
 
 					By("RollingRestart By changing tls to non-tls")
@@ -719,7 +719,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, nontlsPort)
+					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceNonTLSPort})
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Upgrade/Downgrade")
@@ -1322,7 +1322,7 @@ func negativeDeployClusterValidationTest(
 									)
 									networkConf := map[string]interface{}{
 										"service": map[string]interface{}{
-											"port":             3000,
+											"port":             serviceNonTLSPort,
 											"access-addresses": []string{"<access_addresses>"},
 										},
 									}
@@ -1853,7 +1853,7 @@ func negativeUpdateClusterValidationTest(
 
 									networkConf := map[string]interface{}{
 										"service": map[string]interface{}{
-											"port":             3000,
+											"port":             serviceNonTLSPort,
 											"access-addresses": []string{"<access_addresses>"},
 										},
 									}
