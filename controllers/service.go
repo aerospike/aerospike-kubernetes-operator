@@ -3,11 +3,11 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -21,10 +21,8 @@ func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 	return aeroCluster.Name
 }
 
-func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
-	r.Log.Info("Create headless service for statefulSet")
-
-	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
+	r.Log.Info("Create or Update headless service for statefulSet")
 
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
@@ -35,63 +33,59 @@ func (r *SingleClusterReconciler) createSTSHeadlessSvc() error {
 		}, service,
 	)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			service = &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					// Headless service has the same name as AerospikeCluster
-					Name:      serviceName,
-					Namespace: r.aeroCluster.Namespace,
-					// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-					Annotations: map[string]string{
-						"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-					},
-					Labels: ls,
-				},
-				Spec: corev1.ServiceSpec{
-					// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
-					// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
-					PublishNotReadyAddresses: true,
-					ClusterIP:                "None",
-					Selector:                 ls,
-				},
-			}
-
-			r.appendServicePorts(service)
-
-			// Set AerospikeCluster instance as the owner and controller
-			err = controllerutil.SetControllerReference(
-				r.aeroCluster, service, r.Scheme,
-			)
-			if err != nil {
-				return err
-			}
-
-			if err = r.Client.Create(
-				context.TODO(), service, createOption,
-			); err != nil {
-				return fmt.Errorf(
-					"failed to create headless service for statefulset: %v",
-					err,
-				)
-			}
-
-			r.Log.Info("Created new headless service")
-
-			return nil
+		if !errors.IsNotFound(err) {
+			return err
 		}
 
-		return err
+		ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				// Headless service has the same name as AerospikeCluster
+				Name:      serviceName,
+				Namespace: r.aeroCluster.Namespace,
+				// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+				Annotations: map[string]string{
+					"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+				},
+				Labels: ls,
+			},
+			Spec: corev1.ServiceSpec{
+				// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
+				// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
+				PublishNotReadyAddresses: true,
+				ClusterIP:                "None",
+				Selector:                 ls,
+			},
+		}
+
+		service.Spec.Ports = r.getServicePorts()
+
+		// Set AerospikeCluster instance as the owner and controller
+		err = controllerutil.SetControllerReference(
+			r.aeroCluster, service, r.Scheme,
+		)
+		if err != nil {
+			return err
+		}
+
+		if err = r.Client.Create(
+			context.TODO(), service, createOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to create headless service for statefulset: %v",
+				err,
+			)
+		}
+
+		r.Log.Info("Created new headless service")
+
+		return nil
 	}
 
-	r.Log.Info(
-		"Service already exist for statefulSet. Using existing service", "name",
-		utils.NamespacedName(service.Namespace, service.Name),
-	)
-
-	return nil
+	return r.updateServicePorts(service)
 }
 
-func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
+func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
 	if loadBalancer == nil {
 		r.Log.Info("LoadBalancer is not configured. Skipping...")
@@ -100,6 +94,7 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 
 	serviceName := r.aeroCluster.Name + "-lb"
 	service := &corev1.Service{}
+	servicePort := r.getLBServicePort(loadBalancer)
 
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
@@ -109,26 +104,6 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Creating LoadBalancer service for cluster")
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-
-			var targetPort int32
-			if loadBalancer.TargetPort >= 1024 {
-				// if target port is specified in CR.
-				targetPort = loadBalancer.TargetPort
-			} else if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(
-				r.aeroCluster.Spec.AerospikeConfig,
-			); tlsName != "" && tlsPort != nil {
-				targetPort = int32(*tlsPort)
-			} else {
-				targetPort = int32(*asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
-			}
-
-			var port int32
-			if loadBalancer.Port >= 1024 {
-				// if port is specified in CR.
-				port = loadBalancer.Port
-			} else {
-				port = targetPort
-			}
 
 			service = &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
@@ -141,11 +116,7 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 					Type:     corev1.ServiceTypeLoadBalancer,
 					Selector: ls,
 					Ports: []corev1.ServicePort{
-						{
-							Port:       port,
-							Name:       loadBalancer.PortName,
-							TargetPort: intstr.FromInt(int(targetPort)),
-						},
+						servicePort,
 					},
 				},
 			}
@@ -182,58 +153,81 @@ func (r *SingleClusterReconciler) createSTSLoadBalancerSvc() error {
 		return err
 	}
 
+	if len(service.Spec.Ports) == 1 && service.Spec.Ports[0].Port == servicePort.Port &&
+		service.Spec.Ports[0].TargetPort == servicePort.TargetPort {
+		return nil
+	}
+
+	service.Spec.Ports = []corev1.ServicePort{
+		servicePort,
+	}
+	if err := r.Client.Update(
+		context.TODO(), service, updateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update service %s: %v", serviceName, err,
+		)
+	}
+
 	r.Log.Info(
-		"LoadBalancer Service already exist for cluster. Using existing service",
+		"LoadBalancer Service already exist for cluster. Updated existing service",
 		"name", utils.NamespacedName(service.Namespace, service.Name),
 	)
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) createPodService(pName, pNamespace string) error {
+func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
-	if err := r.Client.Get(
-		context.TODO(),
-		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
-	); err == nil {
-		return errors.NewAlreadyExists(schema.GroupResource{Resource: "Service"}, service.Name)
-	}
 
-	// NodePort will be allocated automatically
-	service = &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pName,
-			Namespace: pNamespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeNodePort,
-			Selector: map[string]string{
-				"statefulset.kubernetes.io/pod-name": pName,
-			},
-			ExternalTrafficPolicy: "Local",
-		},
-	}
-
-	r.appendServicePorts(service)
-
-	// Set AerospikeCluster instance as the owner and controller.
-	// It is created before Pod, so Pod cannot be the owner
-	err := controllerutil.SetControllerReference(
-		r.aeroCluster, service, r.Scheme,
+	err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: pName, Namespace: pNamespace,
+		}, service,
 	)
 	if err != nil {
-		return err
-	}
+		if !errors.IsNotFound(err) {
+			return err
+		}
 
-	if err := r.Client.Create(
-		context.TODO(), service, createOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to create new service for pod %s: %v", pName, err,
+		// NodePort will be allocated automatically
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pName,
+				Namespace: pNamespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeNodePort,
+				Selector: map[string]string{
+					"statefulset.kubernetes.io/pod-name": pName,
+				},
+				ExternalTrafficPolicy: "Local",
+			},
+		}
+
+		service.Spec.Ports = r.getServicePorts()
+
+		// Set AerospikeCluster instance as the owner and controller.
+		// It is created before Pod, so Pod cannot be the owner
+		err := controllerutil.SetControllerReference(
+			r.aeroCluster, service, r.Scheme,
 		)
+		if err != nil {
+			return err
+		}
+
+		if err := r.Client.Create(
+			context.TODO(), service, createOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to create new service for pod %s: %v", pName, err,
+			)
+		}
+
+		return nil
 	}
 
-	return nil
+	return r.updateServicePorts(service)
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -260,38 +254,49 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
-func (r *SingleClusterReconciler) updatePodServicePorts(pName, pNamespace string) error {
-	service := &corev1.Service{}
-	if err := r.Client.Get(
-		context.TODO(),
-		types.NamespacedName{Name: pName, Namespace: pNamespace}, service,
-	); err != nil {
-		return err
+func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) error {
+	servicePorts := r.getServicePorts()
+
+	servicePortsMap := make(map[string]int32)
+	for _, port := range servicePorts {
+		servicePortsMap[port.Name] = port.Port
 	}
 
-	// Resetting ports here based on current spec config.
-	// kubernetes is able to set previously assigned nodePort value to the services if any
-	service.Spec.Ports = nil
-	r.appendServicePorts(service)
+	specPortsMap := make(map[string]int32)
+	for _, port := range service.Spec.Ports {
+		specPortsMap[port.Name] = port.Port
+	}
 
+	if reflect.DeepEqual(servicePortsMap, specPortsMap) {
+		return nil
+	}
+
+	service.Spec.Ports = servicePorts
 	if err := r.Client.Update(
 		context.TODO(), service, updateOption,
 	); err != nil {
 		return fmt.Errorf(
-			"failed to update service for pod %s: %v", pName, err,
+			"failed to update service %s: %v", service.Name, err,
 		)
 	}
+
+	r.Log.Info(
+		"Service already exist. Updated existing service",
+		"name", utils.NamespacedName(service.Namespace, service.Name),
+	)
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
+func (r *SingleClusterReconciler) getServicePorts() []corev1.ServicePort {
+	servicePorts := make([]corev1.ServicePort, 0)
+
 	if svcPort := asdbv1.GetServicePort(
 		r.aeroCluster.Spec.
 			AerospikeConfig,
 	); svcPort != nil {
-		service.Spec.Ports = append(
-			service.Spec.Ports, corev1.ServicePort{
+		servicePorts = append(
+			servicePorts, corev1.ServicePort{
 				Name: asdbv1.ServicePortName,
 				Port: int32(*svcPort),
 			},
@@ -301,12 +306,42 @@ func (r *SingleClusterReconciler) appendServicePorts(service *corev1.Service) {
 	if _, tlsPort := asdbv1.GetServiceTLSNameAndPort(
 		r.aeroCluster.Spec.AerospikeConfig,
 	); tlsPort != nil {
-		service.Spec.Ports = append(
-			service.Spec.Ports, corev1.ServicePort{
+		servicePorts = append(
+			servicePorts, corev1.ServicePort{
 				Name: asdbv1.ServiceTLSPortName,
 				Port: int32(*tlsPort),
 			},
 		)
+	}
+
+	return servicePorts
+}
+
+func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBalancerSpec) corev1.ServicePort {
+	var targetPort int32
+	if loadBalancer.TargetPort >= 1024 {
+		// if target port is specified in CR.
+		targetPort = loadBalancer.TargetPort
+	} else if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(
+		r.aeroCluster.Spec.AerospikeConfig,
+	); tlsName != "" && tlsPort != nil {
+		targetPort = int32(*tlsPort)
+	} else {
+		targetPort = int32(*asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
+	}
+
+	var port int32
+	if loadBalancer.Port >= 1024 {
+		// If port is specified in CR.
+		port = loadBalancer.Port
+	} else {
+		port = targetPort
+	}
+
+	return corev1.ServicePort{
+		Port:       port,
+		Name:       loadBalancer.PortName,
+		TargetPort: intstr.FromInt(int(targetPort)),
 	}
 }
 
@@ -344,44 +379,19 @@ func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetwo
 	return networkSet.Len() > 2
 }
 
-func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []*corev1.Pod) error {
-	if (!podServiceNeeded(r.aeroCluster.Status.PodSpec.MultiPodPerHost, &r.aeroCluster.Status.AerospikeNetworkPolicy) ||
-		isServiceTLSChanged(r.aeroCluster.Spec.AerospikeConfig, r.aeroCluster.Status.AerospikeConfig)) &&
-		podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []string) error {
+	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		// Create services for all pods if network policy is changed and rely on nodePort service
 		for idx := range pods {
-			if err := r.createPodService(
-				pods[idx].Name, r.aeroCluster.Namespace,
+			if err := r.createOrUpdatePodService(
+				pods[idx], r.aeroCluster.Namespace,
 			); err != nil {
-				if !errors.IsAlreadyExists(err) {
-					return err
-				}
-
-				if err := r.updatePodServicePorts(
-					pods[idx].Name, r.aeroCluster.Namespace,
-				); err != nil {
-					return err
-				}
+				return err
 			}
 		}
 	}
 
 	return nil
-}
-
-func isServiceTLSChanged(specAeroConf, statusAeroConf *asdbv1.AerospikeConfigSpec) bool {
-	if statusAeroConf == nil {
-		// If aerospikeconfig status is nil, assuming network service config has been changed
-		return true
-	}
-
-	specTLSName, _ := asdbv1.GetServiceTLSNameAndPort(specAeroConf)
-	statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(statusAeroConf)
-
-	specSVCPort := asdbv1.GetServicePort(specAeroConf)
-	statusSVCPort := asdbv1.GetServicePort(statusAeroConf)
-
-	return specTLSName != statusTLSName || specSVCPort != statusSVCPort
 }
 
 func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
