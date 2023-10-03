@@ -247,6 +247,11 @@ enable-pre-commit:
 	pip3 install pre-commit
 	pre-commit install
 
+.PHONY: submodules
+submodules: ## Pull and update git submodules recursively
+	git pull --recurse-submodules
+	git submodule update --init --recursive
+
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
 # CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:3.0.0 make bundle

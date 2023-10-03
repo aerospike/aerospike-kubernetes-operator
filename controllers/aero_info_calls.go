@@ -19,10 +19,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // ------------------------------------------------------------------------------------

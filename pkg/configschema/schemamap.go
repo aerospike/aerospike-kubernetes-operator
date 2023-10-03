@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-//go:embed json
+//go:embed schemas/json/aerospike
 var schemas embed.FS
 
 type SchemaMap map[string]string
@@ -22,12 +22,16 @@ func NewSchemaMap() (SchemaMap, error) {
 			}
 
 			if !d.IsDir() {
+				baseName := filepath.Base(path)
+				if baseName == "README.md" {
+					return nil
+				}
+
 				content, err := fs.ReadFile(schemas, path)
 				if err != nil {
 					return err
 				}
 
-				baseName := filepath.Base(path)
 				key := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 				schema[key] = string(content)
 			}

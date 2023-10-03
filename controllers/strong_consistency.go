@@ -6,7 +6,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
+	as "github.com/aerospike/aerospike-client-go/v6"
 )
 
 func (r *SingleClusterReconciler) getAndSetRoster(

@@ -53,6 +53,9 @@ const aerospikeNs string = "aerospike"
 const zoneKey = "topology.kubernetes.io/zone"
 const regionKey = "topology.kubernetes.io/region"
 
+const serviceTLSPort = 4333
+const serviceNonTLSPort = 3000
+
 // list of all the namespaces used in test-suite
 var testNamespaces = []string{namespace, multiClusterNs1, multiClusterNs2, aerospikeNs}
 
@@ -408,8 +411,8 @@ func getNetworkTLSConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
-			"tls-port": 4333,
-			"port":     3000,
+			"tls-port": serviceTLSPort,
+			"port":     serviceNonTLSPort,
 		},
 		"fabric": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
@@ -436,7 +439,7 @@ func getNetworkTLSConfig() map[string]interface{} {
 func getNetworkConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
-			"port": 3000,
+			"port": serviceNonTLSPort,
 		},
 		"fabric": map[string]interface{}{
 			"port": 3001,
