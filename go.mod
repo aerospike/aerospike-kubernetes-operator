@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aerospike/aerospike-client-go/v6 v6.14.0
-	github.com/aerospike/aerospike-management-lib v0.0.0-20230919064932-78dffc17b22f
+	github.com/aerospike/aerospike-management-lib v0.0.0-20231003114052-c91758138c9f
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.2.3

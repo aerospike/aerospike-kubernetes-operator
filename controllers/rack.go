@@ -773,7 +773,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if pod is not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isPodRunningAndReady {
-		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods, true); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePods); !res.isSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}

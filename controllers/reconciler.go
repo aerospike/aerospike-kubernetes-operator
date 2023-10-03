@@ -705,12 +705,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, error) {
 	return false, nil
 }
 
-func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
-	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
-	if err != nil {
-		return nil, err
-	}
-
+func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
 	statusNamespaces := sets.NewString()
 	for _, namespaces := range nodesNamespaces {
 		statusNamespaces.Insert(namespaces...)
@@ -727,7 +722,7 @@ func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.H
 
 	removedNamespaces := statusNamespaces.Difference(specNamespaces)
 
-	return removedNamespaces.List(), nil
+	return removedNamespaces.List()
 }
 
 func (r *SingleClusterReconciler) IsStatusEmpty() bool {

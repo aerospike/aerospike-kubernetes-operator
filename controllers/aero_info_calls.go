@@ -34,7 +34,7 @@ import (
 // The ignorablePods list should be a list of failed or pending pods that are going to be
 // deleted eventually and are safe to ignore in stability checks.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePods []corev1.Pod, setRoster bool,
+	pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) reconcileResult {
 	if len(pods) == 0 {
 		return reconcileSuccess()
@@ -63,16 +63,10 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return res
 	}
 
-	if setRoster {
-		// Setup roster after migration.
-		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
-			r.Log.Error(err, "Failed to set roster for cluster")
-			return reconcileRequeueAfter(1)
-		}
-	} else {
-		if err := r.validateSCClusterState(policy, ignorablePods); err != nil {
-			return reconcileError(err)
-		}
+	// Setup roster after migration.
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster")
+		return reconcileRequeueAfter(1)
 	}
 
 	if err := r.quiescePods(policy, allHostConns, pods, ignorablePods); err != nil {
@@ -85,11 +79,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 func (r *SingleClusterReconciler) quiescePods(
 	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePods []corev1.Pod,
 ) error {
-	removedNSes, err := r.removedNamespaces(allHostConns)
-	if err != nil {
-		return err
-	}
-
 	podList := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
@@ -101,7 +90,12 @@ func (r *SingleClusterReconciler) quiescePods(
 		return err
 	}
 
-	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, removedNSes)
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	if err != nil {
+		return err
+	}
+
+	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, r.removedNamespaces(nodesNamespaces))
 }
 
 // TODO: Check only for migration
