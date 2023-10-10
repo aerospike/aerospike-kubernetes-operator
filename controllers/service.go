@@ -22,8 +22,6 @@ func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
-	r.Log.Info("Create or Update headless service for statefulSet")
-
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 
@@ -36,6 +34,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		if !errors.IsNotFound(err) {
 			return err
 		}
+
+		r.Log.Info("Creating headless service for statefulSet")
 
 		ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 		service = &corev1.Service{
@@ -77,10 +77,14 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 			)
 		}
 
-		r.Log.Info("Created new headless service")
+		r.Log.Info("Created new headless service",
+			"name", utils.NamespacedName(service.Namespace, service.Name))
 
 		return nil
 	}
+
+	r.Log.Info("Headless service already exist, checking for update",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return r.updateServicePorts(service)
 }
@@ -142,10 +146,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 				return nErr
 			}
 
-			r.Log.Info(
-				"Created new LoadBalancer service.", "serviceName",
-				service.GetName(),
-			)
+			r.Log.Info("Created new LoadBalancer service",
+				"name", service.GetName())
 
 			return nil
 		}
@@ -153,8 +155,13 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 		return err
 	}
 
+	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
+
 	if len(service.Spec.Ports) == 1 && service.Spec.Ports[0].Port == servicePort.Port &&
 		service.Spec.Ports[0].TargetPort == servicePort.TargetPort {
+		r.Log.Info("LoadBalancer service update not required, skipping",
+			"name", utils.NamespacedName(service.Namespace, service.Name))
 		return nil
 	}
 
@@ -169,10 +176,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 		)
 	}
 
-	r.Log.Info(
-		"LoadBalancer Service already exist for cluster. Updated existing service",
-		"name", utils.NamespacedName(service.Namespace, service.Name),
-	)
+	r.Log.Info("LoadBalancer service updated",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return nil
 }
@@ -190,6 +195,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 			return err
 		}
 
+		r.Log.Info("Creating new service for pod")
 		// NodePort will be allocated automatically
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -224,8 +230,14 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 			)
 		}
 
+		r.Log.Info("Created new service for pod",
+			"name", utils.NamespacedName(service.Namespace, service.Name))
+
 		return nil
 	}
+
+	r.Log.Info("Service already exist, checking for update",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return r.updateServicePorts(service)
 }
@@ -268,6 +280,9 @@ func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) er
 	}
 
 	if reflect.DeepEqual(servicePortsMap, specPortsMap) {
+		r.Log.Info("Service update not required, skipping",
+			"name", utils.NamespacedName(service.Namespace, service.Name))
+
 		return nil
 	}
 
@@ -280,10 +295,8 @@ func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) er
 		)
 	}
 
-	r.Log.Info(
-		"Service already exist. Updated existing service",
-		"name", utils.NamespacedName(service.Namespace, service.Name),
-	)
+	r.Log.Info("Service updated",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return nil
 }
