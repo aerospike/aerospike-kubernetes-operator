@@ -240,8 +240,8 @@ func waitForAerospikeCluster(
 ) error {
 	var isValid bool
 
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(ctx,
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(

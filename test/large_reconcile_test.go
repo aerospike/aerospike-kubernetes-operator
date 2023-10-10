@@ -282,12 +282,12 @@ func waitForClusterScaleDown(
 	aeroCluster *asdbv1.AerospikeCluster, replicas int,
 	retryInterval, timeout time.Duration,
 ) error {
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(ctx,
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
-				goctx.TODO(), types.NamespacedName{
+				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
@@ -327,12 +327,12 @@ func waitForClusterRollingRestart(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 	replicas int, tempConf int, retryInterval, timeout time.Duration,
 ) error {
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(goctx.TODO(),
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
-				goctx.TODO(), types.NamespacedName{
+				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
@@ -368,12 +368,12 @@ func waitForClusterUpgrade(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 	replicas int, tempImage string, retryInterval, timeout time.Duration,
 ) error {
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(goctx.TODO(),
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
-				goctx.TODO(), types.NamespacedName{
+				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
