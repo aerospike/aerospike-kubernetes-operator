@@ -4,15 +4,15 @@ go 1.19
 
 require (
 	github.com/aerospike/aerospike-client-go/v6 v6.14.0
-	github.com/aerospike/aerospike-management-lib v0.0.0-20231010113547-53db625da005
+	github.com/aerospike/aerospike-management-lib v0.0.0-20231011110147-0000ef4d1c30
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.2.4
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.7
-	github.com/stretchr/testify v1.8.1
-	golang.org/x/oauth2 v0.5.0 // indirect
-	golang.org/x/term v0.10.0 // indirect
+	github.com/stretchr/testify v1.8.3
+	golang.org/x/oauth2 v0.7.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
 	k8s.io/api v0.26.2
 	k8s.io/apimachinery v0.27.2
 	k8s.io/client-go v0.26.2
@@ -22,12 +22,15 @@ require (
 
 require (
 	github.com/sirupsen/logrus v1.9.0
-	golang.org/x/crypto v0.11.0
+	golang.org/x/crypto v0.14.0
 	gomodules.xyz/jsonpatch/v2 v2.3.0
 )
 
 // Pinned this dependcy to fix vulnerbaility in `net` pkg
-replace golang.org/x/net => golang.org/x/net v0.13.0
+replace golang.org/x/net => golang.org/x/net v0.17.0
+
+// Pinned this dependcy to fix vulnerbaility in `net` pkg
+replace google.golang.org/grpc => google.golang.org/grpc v1.56.3
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -76,12 +79,12 @@ require (
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sync v0.2.0 // indirect
-	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
+	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/grpc v1.54.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
