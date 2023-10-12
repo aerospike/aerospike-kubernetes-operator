@@ -318,6 +318,11 @@ func isClusterStateValid(
 		)
 	}
 
+	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {
+		pkgLog.Info("Cluster API version label is not correct")
+		return false
+	}
+
 	return true
 }
 

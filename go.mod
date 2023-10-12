@@ -29,7 +29,7 @@ require (
 // Pinned this dependcy to fix vulnerbaility in `net` pkg
 replace golang.org/x/net => golang.org/x/net v0.17.0
 
-// Pinned this dependcy to fix vulnerbaility in `net` pkg
+// Pinned this dependcy to fix vulnerbaility in `grpc` pkg
 replace google.golang.org/grpc => google.golang.org/grpc v1.56.3
 
 require (
