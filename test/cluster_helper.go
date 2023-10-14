@@ -516,8 +516,8 @@ func validateMigrateFillDelay(
 	}
 
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
-	err = wait.Poll(
-		retryInterval, getTimeout(1), func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(ctx,
+		retryInterval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				return false, err

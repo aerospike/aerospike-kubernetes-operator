@@ -240,8 +240,8 @@ func waitForAerospikeCluster(
 ) error {
 	var isValid bool
 
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(ctx,
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
@@ -316,6 +316,11 @@ func isClusterStateValid(
 			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
 			aeroCluster.Spec.Image,
 		)
+	}
+
+	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {
+		pkgLog.Info("Cluster API version label is not correct")
+		return false
 	}
 
 	return true

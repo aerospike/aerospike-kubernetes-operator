@@ -739,14 +739,6 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 			r.Log.Error(err, "Problem patching Initialised volumes")
 			return err
 		}
-
-		if err := r.updateAerospikeInitContainerImage(); err != nil {
-			r.Log.Error(
-				err, "Failed to update Aerospike Init container",
-			)
-
-			return err
-		}
 	}
 
 	if err := r.AddAPIVersionLabel(ctx); err != nil {
