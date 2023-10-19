@@ -16,7 +16,7 @@ var _ = Describe(
 	"PodDisruptionBudget", func() {
 		ctx := context.TODO()
 		aeroCluster := &asdbv1.AerospikeCluster{}
-		maxAvailable := intstr.FromInt(2)
+		maxAvailable := intstr.FromInt(0)
 		clusterNamespacedName := getNamespacedName("pdb-test-cluster", namespace)
 
 		BeforeEach(func() {
@@ -29,34 +29,54 @@ var _ = Describe(
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 		})
 
-		It("Validate create PDB with default maxUnavailable", func() {
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			validatePDB(ctx, aeroCluster, 1)
+		Context("Valid Operations", func() {
+			It("Validate create PDB with default maxUnavailable", func() {
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validatePDB(ctx, aeroCluster, 1)
+			})
+
+			It("Validate create PDB with specified maxUnavailable", func() {
+				aeroCluster.Spec.MaxUnavailable = &maxAvailable
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validatePDB(ctx, aeroCluster, 0)
+			})
+
+			It("Validate update PDB", func() {
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validatePDB(ctx, aeroCluster, 1)
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Update maxUnavailable
+				By("Update maxUnavailable to 0")
+				aeroCluster.Spec.MaxUnavailable = &maxAvailable
+
+				err = updateCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validatePDB(ctx, aeroCluster, 0)
+			})
 		})
 
-		It("Validate create PDB with specified maxUnavailable", func() {
-			aeroCluster.Spec.MaxUnavailable = &maxAvailable
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			validatePDB(ctx, aeroCluster, 2)
-		})
+		Context("Invalid Operations", func() {
+			value := intstr.FromInt(3)
 
-		It("Validate update PDB", func() {
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			validatePDB(ctx, aeroCluster, 1)
+			It("Should fail if maxUnavailable is greater than size", func() {
+				aeroCluster.Spec.MaxUnavailable = &value
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Update maxUnavailable
-			By("Update maxUnavailable to 2")
-			aeroCluster.Spec.MaxUnavailable = &maxAvailable
-
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			validatePDB(ctx, aeroCluster, 2)
+			It("Should fail if maxUnavailable is greater than RF", func() {
+				aeroCluster.Spec.Size = 3
+				value := intstr.FromInt(3)
+				aeroCluster.Spec.MaxUnavailable = &value
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 
