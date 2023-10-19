@@ -73,6 +73,8 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// CleanLocalPVC is a flag which allows operator to delete local PVC in case of kubernetes node crash
+	CleanLocalPVC bool `json:"cleanLocalPVC,omitempty"`
 }
 
 type SeedsFinderServices struct {

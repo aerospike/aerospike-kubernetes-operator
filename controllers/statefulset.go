@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -586,13 +587,33 @@ func (r *SingleClusterReconciler) updateSTS(
 	// Save the updated stateful set.
 	// Can we optimize this? Update stateful set only if there is any change
 	// in it.
-	err := r.Client.Update(context.TODO(), statefulSet, updateOption)
+	/*	currentSTS, err := r.getSTS(rackState)
+		if err != nil {
+			return err
+		}
+
+		if reflect.DeepEqual(currentSTS.Spec, statefulSet.Spec) {
+			r.Log.Info("statefulset update not needed, no change in spec", "stsName", currentSTS.Name)
+			return nil
+		}
+
+	*/
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		found, err := r.getSTS(rackState)
+		if err != nil {
+			return err
+		}
+		r.Log.Info("print both sts spec", "getsts", found.Spec, "statefulSet", statefulSet.Spec)
+		if reflect.DeepEqual(found.Spec, statefulSet.Spec) {
+			r.Log.Info("StatefulSet update not needed, no change in spec", "stsName", found.Name)
+			return nil
+		}
+		found.Spec = statefulSet.Spec
+		return r.Client.Update(context.TODO(), found, updateOption)
+	})
 	if err != nil {
-		return fmt.Errorf(
-			"failed to update StatefulSet %s: %v",
-			statefulSet.Name,
-			err,
-		)
+		return err
 	}
 
 	r.Log.V(1).Info(
@@ -762,6 +783,10 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 
 		// Add volume in statefulSet template
 		k8sVolume := createVolumeForVolumeAttachment(volume)
+		if k8sVolume.Secret != nil {
+			perm := corev1.SecretVolumeSourceDefaultMode
+			k8sVolume.Secret.DefaultMode = &perm
+		}
 		st.Spec.Template.Spec.Volumes = append(
 			st.Spec.Template.Spec.Volumes, k8sVolume,
 		)
@@ -1185,6 +1210,7 @@ func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
 func getDefaultSTSVolumes(
 	aeroCluster *asdbv1.AerospikeCluster, rackState *RackState,
 ) []corev1.Volume {
+	var defaultMode int32 = 420
 	return []corev1.Volume{
 		{
 			Name: confDirName,
@@ -1201,6 +1227,7 @@ func getDefaultSTSVolumes(
 							aeroCluster, rackState.Rack.ID,
 						).Name,
 					},
+					DefaultMode: &defaultMode,
 				},
 			},
 		},

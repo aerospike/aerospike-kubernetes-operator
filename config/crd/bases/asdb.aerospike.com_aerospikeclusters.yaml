@@ -278,6 +278,10 @@ spec:
                     - customInterface
                     type: string
                 type: object
+              cleanLocalPVC:
+                description: CleanLocalPVC is a flag which allows operator to delete
+                  local PVC in case of kubernetes node crash
+                type: boolean
               image:
                 description: Aerospike server image
                 type: string

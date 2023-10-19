@@ -261,6 +261,12 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 		}
 
+		if r.aeroCluster.Spec.CleanLocalPVC {
+			if err := r.deleteLocalPVCs(pod); err != nil {
+				return reconcileError(err)
+			}
+		}
+
 		if err := r.Client.Delete(context.TODO(), pod); err != nil {
 			r.Log.Error(err, "Failed to delete pod")
 			return reconcileError(err)
@@ -399,6 +405,12 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 	// Delete pods
 	for _, p := range podsToUpdate {
+		if r.aeroCluster.Spec.CleanLocalPVC {
+			if err := r.deleteLocalPVCs(p); err != nil {
+				return reconcileError(err)
+			}
+		}
+
 		if err := r.Client.Delete(context.TODO(), p); err != nil {
 			return reconcileError(err)
 		}

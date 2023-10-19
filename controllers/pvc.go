@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -101,6 +103,38 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 	}
 
 	return deletedPVCs, nil
+}
+
+func (r *SingleClusterReconciler) deleteLocalPVCs(pod *corev1.Pod) error {
+	if pod.Status.Phase == corev1.PodPending && utils.IsPodNeedsToMigrate(pod) {
+		rackID, err := strconv.Atoi(pod.Labels[asdbv1.AerospikeRackIDLabel])
+		if err != nil {
+			return err
+		}
+
+		pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackID)
+		if err != nil {
+			return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
+		}
+
+		for _, pvc := range pvcItems {
+			pv := &corev1.PersistentVolume{}
+			pvName := types.NamespacedName{Name: pvc.Spec.VolumeName}
+
+			if err := r.Client.Get(context.TODO(), pvName, pv); err != nil {
+				return err
+			}
+			if pv.Spec.Local != nil {
+				if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
+					return fmt.Errorf(
+						"could not delete pvc %s: %v", pvc.Name, err,
+					)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.PersistentVolumeClaim) error {
