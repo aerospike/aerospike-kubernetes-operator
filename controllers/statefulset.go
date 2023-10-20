@@ -782,10 +782,13 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		)
 
 		// Add volume in statefulSet template
+		perm := corev1.SecretVolumeSourceDefaultMode
 		k8sVolume := createVolumeForVolumeAttachment(volume)
-		if k8sVolume.Secret != nil {
-			perm := corev1.SecretVolumeSourceDefaultMode
+		switch {
+		case k8sVolume.Secret != nil:
 			k8sVolume.Secret.DefaultMode = &perm
+		case k8sVolume.ConfigMap != nil:
+			k8sVolume.ConfigMap.DefaultMode = &perm
 		}
 		st.Spec.Template.Spec.Volumes = append(
 			st.Spec.Template.Spec.Volumes, k8sVolume,
@@ -1210,7 +1213,7 @@ func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
 func getDefaultSTSVolumes(
 	aeroCluster *asdbv1.AerospikeCluster, rackState *RackState,
 ) []corev1.Volume {
-	var defaultMode int32 = 420
+	defaultMode := corev1.SecretVolumeSourceDefaultMode
 	return []corev1.Volume{
 		{
 			Name: confDirName,
