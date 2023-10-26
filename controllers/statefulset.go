@@ -550,6 +550,17 @@ func (r *SingleClusterReconciler) updateSTSStorage(
 	sortContainerVolumeAttachments(st.Spec.Template.Spec.Containers)
 }
 
+func (r *SingleClusterReconciler) updateSTSPorts(
+	st *appsv1.StatefulSet,
+) {
+	ports := getSTSContainerPort(
+		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		r.aeroCluster.Spec.AerospikeConfig,
+	)
+
+	st.Spec.Template.Spec.Containers[0].Ports = ports
+}
+
 func sortContainerVolumeAttachments(containers []corev1.Container) {
 	for idx := range containers {
 		sort.Slice(
@@ -572,6 +583,9 @@ func (r *SingleClusterReconciler) updateSTS(
 ) error {
 	// Update settings from pod spec.
 	r.updateSTSFromPodSpec(statefulSet, rackState)
+
+	// Updating ports when switching between tls and non-tls.
+	r.updateSTSPorts(statefulSet)
 
 	// Update the images for all containers from the spec.
 	// Our Pod Spec does not contain image for the Aerospike Server
@@ -1104,53 +1118,44 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 	updateImage(statefulset.Spec.Template.Spec.InitContainers)
 }
 
-func (r *SingleClusterReconciler) updateAerospikeInitContainerImage() error {
-	stsList, err := r.getClusterSTSList()
-	if err != nil {
-		return err
-	}
-
-	for stsIdx := range stsList.Items {
-		statefulSet := stsList.Items[stsIdx]
-		for idx := range statefulSet.Spec.Template.Spec.InitContainers {
-			container := &statefulSet.Spec.Template.Spec.InitContainers[idx]
-			if container.Name != asdbv1.AerospikeInitContainerName {
-				continue
-			}
-
-			desiredImage, err := utils.GetDesiredImage(
-				r.aeroCluster, container.Name,
-			)
-			if err != nil {
-				return err
-			}
-
-			if !utils.IsImageEqual(container.Image, desiredImage) {
-				r.Log.Info(
-					"Updating image in statefulset spec",
-					"statefulset", statefulSet.Name,
-					"container", container.Name,
-					"desiredImage", desiredImage,
-					"currentImage", container.Image,
-				)
-
-				statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
-
-				if err := r.Client.Update(context.TODO(), &statefulSet, updateOption); err != nil {
-					return fmt.Errorf(
-						"failed to update StatefulSet %s: %v",
-						statefulSet.Name,
-						err,
-					)
-				}
-
-				r.Log.V(1).Info(
-					"Saved StatefulSet", "statefulSet", statefulSet,
-				)
-			}
-
-			break
+func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet *appsv1.StatefulSet) error {
+	for idx := range statefulSet.Spec.Template.Spec.InitContainers {
+		container := &statefulSet.Spec.Template.Spec.InitContainers[idx]
+		if container.Name != asdbv1.AerospikeInitContainerName {
+			continue
 		}
+
+		desiredImage, err := utils.GetDesiredImage(
+			r.aeroCluster, container.Name,
+		)
+		if err != nil {
+			return err
+		}
+
+		if !utils.IsImageEqual(container.Image, desiredImage) {
+			r.Log.Info(
+				"Updating image in statefulset spec", "container",
+				container.Name, "desiredImage", desiredImage,
+				"currentImage",
+				container.Image,
+			)
+
+			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+
+			if err := r.Client.Update(context.TODO(), statefulSet, updateOption); err != nil {
+				return fmt.Errorf(
+					"failed to update StatefulSet %s: %v",
+					statefulSet.Name,
+					err,
+				)
+			}
+
+			r.Log.V(1).Info(
+				"Saved StatefulSet", "statefulSet", *statefulSet,
+			)
+		}
+
+		break
 	}
 
 	return nil

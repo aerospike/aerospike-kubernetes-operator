@@ -77,11 +77,11 @@ pipeline {
                                sh "set +x; ./snyk-linux auth \$(cat ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/third-party-credentials/snyk); set -x"
 
                                // Scan the dependencies
-                               sh "./snyk-linux test  --severity-threshold=high"
+                               sh "./snyk-linux test  --severity-threshold=high --fail-on=all"
 
                                // Scan the operator images
-                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk"
-                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk"
+                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
+                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
                            }
                         }
                     }
@@ -119,7 +119,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "3.0.0"
+    def prefix = "3.1.0"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")

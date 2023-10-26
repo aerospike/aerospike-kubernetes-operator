@@ -20,12 +20,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	as "github.com/ashishshinde/aerospike-client-go/v6"
 )
 
 // SingleClusterReconciler reconciles a single AerospikeCluster
@@ -89,6 +89,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
+	if err := r.createOrUpdateSTSHeadlessSvc(); err != nil {
+		r.Log.Error(err, "Failed to create headless service")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
+			"Failed to create Service(Headless) %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return reconcile.Result{}, err
+	}
+
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
 		if res.err != nil {
@@ -102,7 +113,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return res.getResult()
 	}
 
-	if err := r.createSTSLoadBalancerSvc(); err != nil {
+	if err := r.createOrUpdateSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
@@ -694,12 +705,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, error) {
 	return false, nil
 }
 
-func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.HostConn) ([]string, error) {
-	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
-	if err != nil {
-		return nil, err
-	}
-
+func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
 	statusNamespaces := sets.NewString()
 	for _, namespaces := range nodesNamespaces {
 		statusNamespaces.Insert(namespaces...)
@@ -716,7 +722,7 @@ func (r *SingleClusterReconciler) removedNamespaces(allHostConns []*deployment.H
 
 	removedNamespaces := statusNamespaces.Difference(specNamespaces)
 
-	return removedNamespaces.List(), nil
+	return removedNamespaces.List()
 }
 
 func (r *SingleClusterReconciler) IsStatusEmpty() bool {
@@ -731,14 +737,6 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
 			r.Log.Error(err, "Problem patching Initialised volumes")
-			return err
-		}
-
-		if err := r.updateAerospikeInitContainerImage(); err != nil {
-			r.Log.Error(
-				err, "Failed to update Aerospike Init container",
-			)
-
 			return err
 		}
 	}

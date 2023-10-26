@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -74,6 +75,11 @@ func rollingRestartClusterByEnablingTLS(
 		return err
 	}
 
+	err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort, serviceNonTLSPort})
+	if err != nil {
+		return err
+	}
+
 	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
@@ -108,6 +114,11 @@ func rollingRestartClusterByDisablingTLS(
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort, serviceNonTLSPort})
 	if err != nil {
 		return err
 	}
@@ -381,6 +392,45 @@ func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
+func validateServiceUpdate(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, ports []int32) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	serviceNamespacesNames := make([]types.NamespacedName, 0)
+	for podName := range aeroCluster.Status.Pods {
+		serviceNamespacesNames = append(serviceNamespacesNames,
+			types.NamespacedName{Name: podName, Namespace: clusterNamespacedName.Namespace})
+	}
+
+	serviceNamespacesNames = append(serviceNamespacesNames, clusterNamespacedName)
+
+	for _, serviceNamespacesName := range serviceNamespacesNames {
+		service := &corev1.Service{}
+
+		err = k8sClient.Get(ctx, serviceNamespacesName, service)
+		if err != nil {
+			return err
+		}
+
+		portSet := sets.NewInt32(ports...)
+
+		for _, p := range service.Spec.Ports {
+			if portSet.Has(p.Port) {
+				portSet.Delete(p.Port)
+			}
+		}
+
+		if portSet.Len() > 0 {
+			return fmt.Errorf("service %s port not configured correctly", serviceNamespacesName.Name)
+		}
+	}
+
+	return nil
+}
+
 func validateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, updatedKeys []string,
@@ -466,8 +516,8 @@ func validateMigrateFillDelay(
 	}
 
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
-	err = wait.Poll(
-		retryInterval, getTimeout(1), func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(ctx,
+		retryInterval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				return false, err

@@ -163,7 +163,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}
 
@@ -382,7 +382,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods, false); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
 			return res
 		}
 

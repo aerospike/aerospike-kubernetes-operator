@@ -53,6 +53,9 @@ const aerospikeNs string = "aerospike"
 const zoneKey = "topology.kubernetes.io/zone"
 const regionKey = "topology.kubernetes.io/region"
 
+const serviceTLSPort = 4333
+const serviceNonTLSPort = 3000
+
 // list of all the namespaces used in test-suite
 var testNamespaces = []string{namespace, multiClusterNs1, multiClusterNs2, aerospikeNs}
 
@@ -237,8 +240,8 @@ func waitForAerospikeCluster(
 ) error {
 	var isValid bool
 
-	err := wait.Poll(
-		retryInterval, timeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(ctx,
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
 			err = k8sClient.Get(
@@ -313,6 +316,11 @@ func isClusterStateValid(
 			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
 			aeroCluster.Spec.Image,
 		)
+	}
+
+	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {
+		pkgLog.Info("Cluster API version label is not correct")
+		return false
 	}
 
 	return true
@@ -408,8 +416,8 @@ func getNetworkTLSConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
-			"tls-port": 4333,
-			"port":     3000,
+			"tls-port": serviceTLSPort,
+			"port":     serviceNonTLSPort,
 		},
 		"fabric": map[string]interface{}{
 			"tls-name": "aerospike-a-0.test-runner",
@@ -436,7 +444,7 @@ func getNetworkTLSConfig() map[string]interface{} {
 func getNetworkConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
-			"port": 3000,
+			"port": serviceNonTLSPort,
 		},
 		"fabric": map[string]interface{}{
 			"port": 3001,
