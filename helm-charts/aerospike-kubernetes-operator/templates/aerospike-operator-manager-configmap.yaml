@@ -10,7 +10,7 @@ metadata:
 data:
   controller_manager_config.yaml: |
     apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
-    kind: ControllerManagerConfig
+    kind: ControllerManagerConfiguration
     health:
       healthProbeBindAddress: ":{{ .Values.healthPort }}"
     metrics:
