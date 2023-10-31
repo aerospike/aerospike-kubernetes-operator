@@ -598,31 +598,16 @@ func (r *SingleClusterReconciler) updateSTS(
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(statefulSet, rackState)
 
-	// Save the updated stateful set.
-	// Can we optimize this? Update stateful set only if there is any change
-	// in it.
-	/*	currentSTS, err := r.getSTS(rackState)
-		if err != nil {
-			return err
-		}
-
-		if reflect.DeepEqual(currentSTS.Spec, statefulSet.Spec) {
-			r.Log.Info("statefulset update not needed, no change in spec", "stsName", currentSTS.Name)
-			return nil
-		}
-
-	*/
-
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		found, err := r.getSTS(rackState)
 		if err != nil {
 			return err
 		}
-		r.Log.Info("print both sts spec", "getsts", found.Spec, "statefulSet", statefulSet.Spec)
+
 		if reflect.DeepEqual(found.Spec, statefulSet.Spec) {
-			r.Log.Info("StatefulSet update not needed, no change in spec", "stsName", found.Name)
 			return nil
 		}
+		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
 		return r.Client.Update(context.TODO(), found, updateOption)
 	})
@@ -798,12 +783,14 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		// Add volume in statefulSet template
 		perm := corev1.SecretVolumeSourceDefaultMode
 		k8sVolume := createVolumeForVolumeAttachment(volume)
+
 		switch {
 		case k8sVolume.Secret != nil:
 			k8sVolume.Secret.DefaultMode = &perm
 		case k8sVolume.ConfigMap != nil:
 			k8sVolume.ConfigMap.DefaultMode = &perm
 		}
+
 		st.Spec.Template.Spec.Volumes = append(
 			st.Spec.Template.Spec.Volumes, k8sVolume,
 		)
@@ -1219,6 +1206,7 @@ func getDefaultSTSVolumes(
 	aeroCluster *asdbv1.AerospikeCluster, rackState *RackState,
 ) []corev1.Volume {
 	defaultMode := corev1.SecretVolumeSourceDefaultMode
+
 	return []corev1.Volume{
 		{
 			Name: confDirName,

@@ -48,10 +48,7 @@ type AerospikeClusterReconciler struct {
 }
 
 func stsPodPendingPredicate(e event.UpdateEvent) bool {
-	if e.ObjectOld == nil {
-		return false
-	}
-	if e.ObjectNew == nil {
+	if e.ObjectOld == nil || e.ObjectNew == nil {
 		return false
 	}
 
@@ -59,6 +56,7 @@ func stsPodPendingPredicate(e event.UpdateEvent) bool {
 	if !ok {
 		return false
 	}
+
 	newSTS, ok := e.ObjectNew.(*appsv1.StatefulSet)
 	if !ok {
 		return false
@@ -76,7 +74,7 @@ type StatusPendingPredicate struct {
 	predicate.Funcs
 }
 
-// Update implements default UpdateEvent filter for validating available replicas change.
+// Update implements default UpdateEvent filter for statefulSets.
 func (StatusPendingPredicate) Update(e event.UpdateEvent) bool {
 	return stsPodPendingPredicate(e)
 }
@@ -91,9 +89,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					CreateFunc: func(e event.CreateEvent) bool {
 						return false
 					},
-					UpdateFunc: func(e event.UpdateEvent) bool {
-						return stsPodPendingPredicate(e)
-					},
+					UpdateFunc: stsPodPendingPredicate,
 				},
 			),
 		).
@@ -102,7 +98,8 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				MaxConcurrentReconciles: maxConcurrentReconciles,
 			},
 		).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}, StatusPendingPredicate{})).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
+			StatusPendingPredicate{})).
 		Complete(r)
 }
 

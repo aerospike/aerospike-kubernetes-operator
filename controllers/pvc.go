@@ -3,12 +3,12 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
 	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -117,17 +117,18 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(pod *corev1.Pod) error {
 			return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
 		}
 
-		for _, pvc := range pvcItems {
+		for idx := range pvcItems {
 			pv := &corev1.PersistentVolume{}
-			pvName := types.NamespacedName{Name: pvc.Spec.VolumeName}
+			pvName := types.NamespacedName{Name: pvcItems[idx].Spec.VolumeName}
 
 			if err := r.Client.Get(context.TODO(), pvName, pv); err != nil {
 				return err
 			}
+
 			if pv.Spec.Local != nil {
-				if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
+				if err := r.Client.Delete(context.TODO(), &pvcItems[idx]); err != nil {
 					return fmt.Errorf(
-						"could not delete pvc %s: %v", pvc.Name, err,
+						"could not delete pvc %s: %v", pvcItems[idx].Name, err,
 					)
 				}
 			}
