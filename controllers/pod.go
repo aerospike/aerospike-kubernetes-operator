@@ -405,12 +405,6 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 	// Delete pods
 	for _, p := range podsToUpdate {
-		if r.aeroCluster.Spec.CleanLocalPVC {
-			if err := r.deleteLocalPVCs(p); err != nil {
-				return reconcileError(err)
-			}
-		}
-
 		if err := r.Client.Delete(context.TODO(), p); err != nil {
 			return reconcileError(err)
 		}

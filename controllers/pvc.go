@@ -3,10 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -107,21 +107,33 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 func (r *SingleClusterReconciler) deleteLocalPVCs(pod *corev1.Pod) error {
 	if pod.Status.Phase == corev1.PodPending && utils.IsPodNeedsToMigrate(pod) {
-		rackID, err := strconv.Atoi(pod.Labels[asdbv1.AerospikeRackIDLabel])
+		rackID, err := utils.GetRackIDFromPodName(pod.Name)
 		if err != nil {
 			return err
 		}
 
-		pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackID)
+		pvcItems, err := r.getPodsPVCList([]string{pod.Name}, *rackID)
 		if err != nil {
 			return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
 		}
 
 		for idx := range pvcItems {
 			pv := &corev1.PersistentVolume{}
-			pvName := types.NamespacedName{Name: pvcItems[idx].Spec.VolumeName}
 
+			volumeName := pvcItems[idx].Spec.VolumeName
+			if volumeName == "" {
+				r.Log.Info("PVC is not bounded with any volume, no need to delete PVC", pvcItems[idx].Name)
+
+				continue
+			}
+
+			pvName := types.NamespacedName{Name: volumeName}
 			if err := r.Client.Get(context.TODO(), pvName, pv); err != nil {
+				if errors.IsNotFound(err) {
+					r.Log.Info("Volume bounded with PVC not found, no need to delete PVC", pvcItems[idx].Name)
+					continue
+				}
+
 				return err
 			}
 

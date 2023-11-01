@@ -604,7 +604,10 @@ func (r *SingleClusterReconciler) updateSTS(
 			return err
 		}
 
+		// Updating statefulSet object only if there is a difference in spec.
 		if reflect.DeepEqual(found.Spec, statefulSet.Spec) {
+			r.Log.Info("Skipping StatefulSet update, no change in spec")
+
 			return nil
 		}
 		// Save the updated stateful set.
@@ -781,15 +784,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		)
 
 		// Add volume in statefulSet template
-		perm := corev1.SecretVolumeSourceDefaultMode
 		k8sVolume := createVolumeForVolumeAttachment(volume)
-
-		switch {
-		case k8sVolume.Secret != nil:
-			k8sVolume.Secret.DefaultMode = &perm
-		case k8sVolume.ConfigMap != nil:
-			k8sVolume.ConfigMap.DefaultMode = &perm
-		}
 
 		st.Spec.Template.Spec.Volumes = append(
 			st.Spec.Template.Spec.Volumes, k8sVolume,
@@ -1360,6 +1355,19 @@ func createPVCForVolumeAttachment(
 }
 
 func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
+	perm := corev1.SecretVolumeSourceDefaultMode
+
+	switch {
+	case volume.Source.Secret != nil:
+		if volume.Source.Secret.DefaultMode == nil {
+			volume.Source.Secret.DefaultMode = &perm
+		}
+	case volume.Source.ConfigMap != nil:
+		if volume.Source.ConfigMap.DefaultMode == nil {
+			volume.Source.ConfigMap.DefaultMode = &perm
+		}
+	}
+
 	return corev1.Volume{
 		Name: volume.Name,
 		// Add all type of source,
@@ -1476,8 +1484,18 @@ func getSTSContainerPort(
 	multiPodPerHost bool, aeroConf *asdbv1.AerospikeConfigSpec,
 ) []corev1.ContainerPort {
 	ports := make([]corev1.ContainerPort, 0, len(defaultContainerPorts))
+	portNames := make([]string, 0, len(defaultContainerPorts))
 
-	for portName, portInfo := range defaultContainerPorts {
+	// Sorting defaultContainerPorts to fetch map in ordered manner.
+	// Helps in comparing STS before updating.
+	for portName := range defaultContainerPorts {
+		portNames = append(portNames, portName)
+	}
+
+	sort.Strings(portNames)
+
+	for _, portName := range portNames {
+		portInfo := defaultContainerPorts[portName]
 		configPort := asdbv1.GetPortFromConfig(
 			aeroConf, portInfo.connectionType, portInfo.configParam,
 		)
@@ -1497,6 +1515,10 @@ func getSTSContainerPort(
 		// the container is running and the hostPort is the port requested by the user
 		if (!multiPodPerHost) && portInfo.exposedOnHost {
 			containerPort.HostPort = containerPort.ContainerPort
+		}
+
+		if containerPort.Protocol == "" {
+			containerPort.Protocol = corev1.ProtocolTCP
 		}
 
 		ports = append(ports, containerPort)

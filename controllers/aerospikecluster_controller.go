@@ -70,12 +70,12 @@ func stsPodPendingPredicate(e event.UpdateEvent) bool {
 	return false
 }
 
-type StatusPendingPredicate struct {
+type statusPendingPredicate struct {
 	predicate.Funcs
 }
 
 // Update implements default UpdateEvent filter for statefulSets.
-func (StatusPendingPredicate) Update(e event.UpdateEvent) bool {
+func (statusPendingPredicate) Update(e event.UpdateEvent) bool {
 	return stsPodPendingPredicate(e)
 }
 
@@ -99,7 +99,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			},
 		).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
-			StatusPendingPredicate{})).
+			statusPendingPredicate{})).
 		Complete(r)
 }
 
