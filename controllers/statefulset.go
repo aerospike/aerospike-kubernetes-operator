@@ -1468,7 +1468,7 @@ func getSTSContainerPort(
 	portNames := make([]string, 0, len(defaultContainerPorts))
 
 	// Sorting defaultContainerPorts to fetch map in ordered manner.
-	// Helps in comparing STS before updating.
+	// Helps reduce unnecessary sts object updates.
 	for portName := range defaultContainerPorts {
 		portNames = append(portNames, portName)
 	}

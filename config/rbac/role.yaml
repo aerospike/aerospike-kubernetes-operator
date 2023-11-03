@@ -82,12 +82,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - persistentvolumes
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - delete
