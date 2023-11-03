@@ -652,6 +652,11 @@ func (in *AerospikeStorageSpec) DeepCopyInto(out *AerospikeStorageSpec) {
 	*out = *in
 	in.FileSystemVolumePolicy.DeepCopyInto(&out.FileSystemVolumePolicy)
 	in.BlockVolumePolicy.DeepCopyInto(&out.BlockVolumePolicy)
+	if in.LocalStorageClasses != nil {
+		in, out := &in.LocalStorageClasses, &out.LocalStorageClasses
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]VolumeSpec, len(*in))

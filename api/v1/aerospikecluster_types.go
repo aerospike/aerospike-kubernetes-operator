@@ -73,8 +73,6 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
-	// CleanLocalPVC is a flag which allows operator to delete local PVC in case of kubernetes node crash
-	CleanLocalPVC bool `json:"cleanLocalPVC,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -556,6 +554,12 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 
 	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
+
+	// CleanLocalPVC is a flag which allows operator to delete local PVC in case of kubernetes node crash
+	CleanLocalPVC bool `json:"cleanLocalPVC,omitempty"`
+
+	// LocalStorageClasses contains list of storage classes which provisions local volumes.
+	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name

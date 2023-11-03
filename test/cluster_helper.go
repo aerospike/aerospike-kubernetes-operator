@@ -1373,14 +1373,11 @@ func getStorageVolumeForAerospike(name, path string) asdbv1.VolumeSpec {
 }
 
 func getStorageVolumeForSecret() asdbv1.VolumeSpec {
-	perm := corev1.SecretVolumeSourceDefaultMode
-
 	return asdbv1.VolumeSpec{
 		Name: aerospikeConfigSecret,
 		Source: asdbv1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName:  tlsSecretName,
-				DefaultMode: &perm,
+				SecretName: tlsSecretName,
 			},
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{

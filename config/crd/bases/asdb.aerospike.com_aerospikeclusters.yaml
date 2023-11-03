@@ -278,10 +278,6 @@ spec:
                     - customInterface
                     type: string
                 type: object
-              cleanLocalPVC:
-                description: CleanLocalPVC is a flag which allows operator to delete
-                  local PVC in case of kubernetes node crash
-                type: boolean
               image:
                 description: Aerospike server image
                 type: string
@@ -5657,6 +5653,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanLocalPVC:
+                              description: CleanLocalPVC is a flag which allows operator
+                                to delete local PVC in case of kubernetes node crash
+                              type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
@@ -5713,6 +5713,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains list of storage
+                                classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -7345,6 +7351,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanLocalPVC:
+                              description: CleanLocalPVC is a flag which allows operator
+                                to delete local PVC in case of kubernetes node crash
+                              type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
@@ -7401,6 +7411,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains list of storage
+                                classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -8049,6 +8065,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanLocalPVC:
+                    description: CleanLocalPVC is a flag which allows operator to
+                      delete local PVC in case of kubernetes node crash
+                    type: boolean
                   cleanupThreads:
                     description: CleanupThreads contains maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
@@ -8105,6 +8125,12 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  localStorageClasses:
+                    description: LocalStorageClasses contains list of storage classes
+                      which provisions local volumes.
+                    items:
+                      type: string
+                    type: array
                   volumes:
                     description: Volumes list to attach to created pods.
                     items:
@@ -14334,6 +14360,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanLocalPVC:
+                              description: CleanLocalPVC is a flag which allows operator
+                                to delete local PVC in case of kubernetes node crash
+                              type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
@@ -14390,6 +14420,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains list of storage
+                                classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -16022,6 +16058,10 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            cleanLocalPVC:
+                              description: CleanLocalPVC is a flag which allows operator
+                                to delete local PVC in case of kubernetes node crash
+                              type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
@@ -16078,6 +16118,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains list of storage
+                                classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -16775,6 +16821,10 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  cleanLocalPVC:
+                    description: CleanLocalPVC is a flag which allows operator to
+                      delete local PVC in case of kubernetes node crash
+                    type: boolean
                   cleanupThreads:
                     description: CleanupThreads contains maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
@@ -16831,6 +16881,12 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  localStorageClasses:
+                    description: LocalStorageClasses contains list of storage classes
+                      which provisions local volumes.
+                    items:
+                      type: string
+                    type: array
                   volumes:
                     description: Volumes list to attach to created pods.
                     items:

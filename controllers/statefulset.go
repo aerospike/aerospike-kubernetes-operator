@@ -604,18 +604,16 @@ func (r *SingleClusterReconciler) updateSTS(
 			return err
 		}
 
-		// Updating statefulSet object only if there is a difference in spec.
-		if reflect.DeepEqual(found.Spec, statefulSet.Spec) {
-			r.Log.Info("Skipping StatefulSet update, no change in spec")
-
-			return nil
-		}
 		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
 		return r.Client.Update(context.TODO(), found, updateOption)
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"failed to update StatefulSet %s: %v",
+			statefulSet.Name,
+			err,
+		)
 	}
 
 	r.Log.V(1).Info(
@@ -785,7 +783,6 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 
 		// Add volume in statefulSet template
 		k8sVolume := createVolumeForVolumeAttachment(volume)
-
 		st.Spec.Template.Spec.Volumes = append(
 			st.Spec.Template.Spec.Volumes, k8sVolume,
 		)
@@ -1200,8 +1197,6 @@ func getDefaultAerospikeInitContainerVolumeMounts() []corev1.VolumeMount {
 func getDefaultSTSVolumes(
 	aeroCluster *asdbv1.AerospikeCluster, rackState *RackState,
 ) []corev1.Volume {
-	defaultMode := corev1.SecretVolumeSourceDefaultMode
-
 	return []corev1.Volume{
 		{
 			Name: confDirName,
@@ -1218,7 +1213,6 @@ func getDefaultSTSVolumes(
 							aeroCluster, rackState.Rack.ID,
 						).Name,
 					},
-					DefaultMode: &defaultMode,
 				},
 			},
 		},
@@ -1355,19 +1349,6 @@ func createPVCForVolumeAttachment(
 }
 
 func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
-	perm := corev1.SecretVolumeSourceDefaultMode
-
-	switch {
-	case volume.Source.Secret != nil:
-		if volume.Source.Secret.DefaultMode == nil {
-			volume.Source.Secret.DefaultMode = &perm
-		}
-	case volume.Source.ConfigMap != nil:
-		if volume.Source.ConfigMap.DefaultMode == nil {
-			volume.Source.ConfigMap.DefaultMode = &perm
-		}
-	}
-
 	return corev1.Volume{
 		Name: volume.Name,
 		// Add all type of source,
@@ -1515,10 +1496,6 @@ func getSTSContainerPort(
 		// the container is running and the hostPort is the port requested by the user
 		if (!multiPodPerHost) && portInfo.exposedOnHost {
 			containerPort.HostPort = containerPort.ContainerPort
-		}
-
-		if containerPort.Protocol == "" {
-			containerPort.Protocol = corev1.ProtocolTCP
 		}
 
 		ports = append(ports, containerPort)

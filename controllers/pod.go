@@ -261,8 +261,8 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 		}
 
-		if r.aeroCluster.Spec.CleanLocalPVC {
-			if err := r.deleteLocalPVCs(pod); err != nil {
+		if rackState.Rack.Storage.CleanLocalPVC {
+			if err := r.deleteLocalPVCs(pod, rackState.Rack.Storage.LocalStorageClasses); err != nil {
 				return reconcileError(err)
 			}
 		}

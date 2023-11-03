@@ -224,8 +224,8 @@ func IsPodReasonUnschedulable(pod *corev1.Pod) bool {
 func IsPodNeedsToMigrate(pod *corev1.Pod) bool {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
-			condition.Reason == corev1.PodReasonSchedulerError &&
-				strings.Contains(condition.Message, "nodeinfo not found for node name")) {
+			(condition.Reason == corev1.PodReasonSchedulerError &&
+				strings.Contains(condition.Message, "nodeinfo not found for node name"))) {
 			return true
 		}
 	}
