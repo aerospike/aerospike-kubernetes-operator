@@ -555,7 +555,7 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
 
-	// CleanLocalPVC is a flag which allows operator to delete local PVC in case of kubernetes node crash
+	// CleanLocalPVC is a flag which allows operator to delete local PVC in case of kubernetes node (drain or delete)
 	CleanLocalPVC bool `json:"cleanLocalPVC,omitempty"`
 
 	// LocalStorageClasses contains list of storage classes which provisions local volumes.

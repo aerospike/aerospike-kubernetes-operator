@@ -118,7 +118,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(pod *corev1.Pod, localStorageC
 		for idx := range pvcItems {
 			pvcStorageClass := pvcItems[idx].Spec.StorageClassName
 			if pvcStorageClass == nil {
-				r.Log.Info("PVC does not have storageclass set, no need to delete PVC", pvcItems[idx].Name)
+				r.Log.Info("PVC does not have storageClass set, no need to delete PVC", "pvcName", pvcItems[idx].Name)
 
 				continue
 			}

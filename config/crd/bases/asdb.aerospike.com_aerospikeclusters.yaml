@@ -5655,7 +5655,8 @@ spec:
                               type: object
                             cleanLocalPVC:
                               description: CleanLocalPVC is a flag which allows operator
-                                to delete local PVC in case of kubernetes node crash
+                                to delete local PVC in case of kubernetes node (drain
+                                or delete)
                               type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
@@ -7353,7 +7354,8 @@ spec:
                               type: object
                             cleanLocalPVC:
                               description: CleanLocalPVC is a flag which allows operator
-                                to delete local PVC in case of kubernetes node crash
+                                to delete local PVC in case of kubernetes node (drain
+                                or delete)
                               type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
@@ -8067,7 +8069,7 @@ spec:
                     type: object
                   cleanLocalPVC:
                     description: CleanLocalPVC is a flag which allows operator to
-                      delete local PVC in case of kubernetes node crash
+                      delete local PVC in case of kubernetes node (drain or delete)
                     type: boolean
                   cleanupThreads:
                     description: CleanupThreads contains maximum number of cleanup
@@ -14362,7 +14364,8 @@ spec:
                               type: object
                             cleanLocalPVC:
                               description: CleanLocalPVC is a flag which allows operator
-                                to delete local PVC in case of kubernetes node crash
+                                to delete local PVC in case of kubernetes node (drain
+                                or delete)
                               type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
@@ -16060,7 +16063,8 @@ spec:
                               type: object
                             cleanLocalPVC:
                               description: CleanLocalPVC is a flag which allows operator
-                                to delete local PVC in case of kubernetes node crash
+                                to delete local PVC in case of kubernetes node (drain
+                                or delete)
                               type: boolean
                             cleanupThreads:
                               description: CleanupThreads contains maximum number
@@ -16823,7 +16827,7 @@ spec:
                     type: object
                   cleanLocalPVC:
                     description: CleanLocalPVC is a flag which allows operator to
-                      delete local PVC in case of kubernetes node crash
+                      delete local PVC in case of kubernetes node (drain or delete)
                     type: boolean
                   cleanupThreads:
                     description: CleanupThreads contains maximum number of cleanup
