@@ -598,8 +598,8 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/aerospike/aerospike-client-go/v6 v6.14.0 h1:Z3FcGWJda1sagzdc6Akz4EJ13Pq55Uyn6qtFLrVUDd0=
 github.com/aerospike/aerospike-client-go/v6 v6.14.0/go.mod h1:/0Wm81GhMqem+9flWcpazPKoRfjFeG6WrQdXGiMNi0A=
-github.com/aerospike/aerospike-management-lib v0.0.0-20231107065921-cce7ceb25efe h1:HZfQw9Cpm+Xa/+EZChXKqsSISZ6WZ5l9WbBviTQVui4=
-github.com/aerospike/aerospike-management-lib v0.0.0-20231107065921-cce7ceb25efe/go.mod h1:LPOsGG8okRSH4hN9Y8VXFzsfIpBDj2WKEsI/f6wxwaw=
+github.com/aerospike/aerospike-management-lib v0.0.0-20231107182540-fef71e1f5946 h1:wwCzPj4qk4EfdISK6tzNoEwSLg9vbeqBloNmhfB8mNo=
+github.com/aerospike/aerospike-management-lib v0.0.0-20231107182540-fef71e1f5946/go.mod h1:LPOsGG8okRSH4hN9Y8VXFzsfIpBDj2WKEsI/f6wxwaw=
 github.com/ajstarks/deck v0.0.0-20200831202436-30c9fc6549a9/go.mod h1:JynElWSGnm/4RlzPXRlREEwqTHAN3T56Bv2ITsFT3gY=
 github.com/ajstarks/deck/generate v0.0.0-20210309230005-c3f852c02e19/go.mod h1:T13YZdzov6OU0A1+RfKZiZN9ca6VeKdBdyDV+BY97Tk=
 github.com/ajstarks/svgo v0.0.0-20180226025133-644b8db467af/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=
