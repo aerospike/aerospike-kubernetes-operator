@@ -277,6 +277,16 @@ spec:
                     - customInterface
                     type: string
                 type: object
+              ignorePodList:
+                description: IgnorePodList is the list of pods which are ignored by
+                  the operator while checking the cluster stability and are not considered
+                  part of cluster. This is only useful when there are some failed
+                  pods and operator is required to do some operation on the cluster.
+                  If pods in running state are defined in this list, they are not
+                  ignored
+                items:
+                  type: string
+                type: array
               image:
                 description: Aerospike server image
                 type: string
@@ -8886,6 +8896,16 @@ spec:
                     - customInterface
                     type: string
                 type: object
+              ignorePodList:
+                description: IgnorePodList is the list of pods which are ignored by
+                  the operator while checking the cluster stability and are not considered
+                  part of cluster. This is only useful when there are some failed
+                  pods and operator is required to do some operation on the cluster.
+                  If pods in running state are defined in this list, they are not
+                  ignored
+                items:
+                  type: string
+                type: array
               image:
                 description: Aerospike server image
                 type: string

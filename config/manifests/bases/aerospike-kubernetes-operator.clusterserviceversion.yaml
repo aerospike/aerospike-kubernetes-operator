@@ -47,6 +47,13 @@ spec:
           the Aerospike cluster.
         displayName: Aerospike Network Policy
         path: aerospikeNetworkPolicy
+      - description: IgnorePodList is the list of pods which are ignored by the operator
+          while checking the cluster stability and are not considered part of cluster.
+          This is only useful when there are some failed pods and operator is required
+          to do some operation on the cluster. If pods in running state are defined
+          in this list, they are not ignored
+        displayName: Ignore Pod List
+        path: ignorePodList
       - description: Aerospike server image
         displayName: Server Image
         path: image
@@ -60,6 +67,10 @@ spec:
           cluster. Pods will be deployed in given racks based on given configuration
         displayName: Rack Config
         path: rackConfig
+      - description: RosterNodeBlockList is a list of blocked nodeIDs from roster
+          in a strong-consistency setup
+        displayName: Roster NodeB lockList
+        path: rosterNodeBlockList
       - description: SeedsFinderServices creates additional Kubernetes service that
           allow clients to discover Aerospike cluster nodes.
         displayName: Seeds Finder Services

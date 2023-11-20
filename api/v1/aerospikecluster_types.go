@@ -72,7 +72,13 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster NodeB lockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
+	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
+	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Pod List"
+	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -615,6 +621,10 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
+	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
+	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored
+	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -937,6 +947,17 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.RosterNodeBlockList = rosterNodeBlockList
 	}
 
+	// IgnorePodList
+	if len(spec.IgnorePodList) != 0 {
+		var ignorePodList []string
+
+		lib.DeepCopy(
+			&ignorePodList, &spec.IgnorePodList,
+		)
+
+		status.IgnorePodList = ignorePodList
+	}
+
 	return &status, nil
 }
 
@@ -1025,6 +1046,17 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		)
 
 		spec.RosterNodeBlockList = rosterNodeBlockList
+	}
+
+	// IgnorePodList
+	if len(status.IgnorePodList) != 0 {
+		var ignorePodList []string
+
+		lib.DeepCopy(
+			&ignorePodList, &status.IgnorePodList,
+		)
+
+		spec.IgnorePodList = ignorePodList
 	}
 
 	return &spec, nil
