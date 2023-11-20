@@ -645,7 +645,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. User given pods in ignorePodList that are currently not running and can be ignored in stability checks.
+// 2. User given pods in ignorePodList that are currently not running and can be ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) (
 	sets.Set[string], error,
 ) {
@@ -726,9 +726,14 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod) bool {
+func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod, ignorablePodNames sets.Set[string],
+) bool {
 	for idx := range podList {
 		pod := &podList[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
 		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
 		// scaleDown, rollingRestart should work even if node is crashed
 		// If node was crashed due to wrong config then only rollingRestart can bring it back.

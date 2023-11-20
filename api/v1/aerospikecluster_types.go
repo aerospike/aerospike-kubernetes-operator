@@ -76,7 +76,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
 	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
-	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored
+	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Pod List"
 	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
@@ -623,7 +623,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
 	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
-	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored
+	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored.
 	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
 

@@ -46,6 +46,11 @@ var _ = Describe(
 		// 	},
 		// )
 		Context(
+			"DeployClusterWithSyslog", func() {
+				clusterWithIgnorePodList(ctx)
+			},
+		)
+		Context(
 			"CommonNegativeClusterValidationTest", func() {
 				NegativeClusterValidationTest(ctx)
 			},
@@ -118,6 +123,92 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					// verify that migrate-fill-delay is reverted to original value after scaling down
 					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay)
 					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+func clusterWithIgnorePodList(ctx goctx.Context) {
+	Context(
+		"UpdateClusterWithIgnorePodList", func() {
+			clusterNamespacedName := getNamespacedName(
+				"ignore-pod-cluster", namespace,
+			)
+
+			var (
+				aeroCluster *asdbv1.AerospikeCluster
+				err         error
+			)
+
+			BeforeEach(
+				func() {
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
+					racks := getDummyRackConf(1, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
+					err = deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					err = deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should allow cluster operations with failed pods", func() {
+					By("Fail 2-0 aerospike pod")
+					pod := &v1.Pod{}
+					ignorePodName := clusterNamespacedName.Name + "-2-0"
+
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					// This will lead to pod 2-0 pod in failed state
+					pod.Spec.Containers[0].Image = "wrong-image"
+					err = k8sClient.Update(ctx, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Set IgnorePodList and scale down 1 pod")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
+					aeroCluster.Spec.Size--
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Rolling restart cluster")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = int64(18000)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Upgrade version")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.Image = baseImage + ":6.4.0.4"
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Scale up")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
+					aeroCluster.Spec.Size++
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verify pod 2-0 is still in failed state")
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeFalse())
+					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
 				},
 			)
 		},

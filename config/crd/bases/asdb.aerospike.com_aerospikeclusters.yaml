@@ -283,7 +283,7 @@ spec:
                   part of cluster. This is only useful when there are some failed
                   pods and operator is required to do some operation on the cluster.
                   If pods in running state are defined in this list, they are not
-                  ignored
+                  ignored.
                 items:
                   type: string
                 type: array
@@ -8902,7 +8902,7 @@ spec:
                   part of cluster. This is only useful when there are some failed
                   pods and operator is required to do some operation on the cluster.
                   If pods in running state are defined in this list, they are not
-                  ignored
+                  ignored.
                 items:
                   type: string
                 type: array

@@ -495,7 +495,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Scale up after upgrading, so that new pods come up with new image
 	currentSize = *found.Spec.Replicas
 	if currentSize < desiredSize {
-		found, res = r.scaleUpRack(found, rackState)
+		found, res = r.scaleUpRack(found, rackState, ignorablePodNames)
 		if !res.isSuccess {
 			r.Log.Error(
 				res.err, "Failed to scaleUp StatefulSet pods", "stsName",
@@ -531,7 +531,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackState *RackState) (
+func (r *SingleClusterReconciler) scaleUpRack(
+	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+) (
 	*appsv1.StatefulSet, reconcileResult,
 ) {
 	desiredSize := int32(rackState.Size)
@@ -552,7 +554,7 @@ func (r *SingleClusterReconciler) scaleUpRack(found *appsv1.StatefulSet, rackSta
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
 
-	if r.isAnyPodInImageFailedState(podList.Items) {
+	if r.isAnyPodInImageFailedState(podList.Items, ignorablePodNames) {
 		return found, reconcileError(fmt.Errorf("cannot scale up AerospikeCluster. A pod is already in failed state"))
 	}
 
@@ -758,7 +760,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
 
-	if r.isAnyPodInImageFailedState(oldPodList.Items) {
+	if r.isAnyPodInImageFailedState(oldPodList.Items, ignorablePodNames) {
 		return found, reconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
@@ -920,7 +922,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		pods = append(pods, *podList[idx])
 	}
 
-	if len(failedPods) != 0 && r.isAnyPodInImageFailedState(pods) {
+	if len(failedPods) != 0 && r.isAnyPodInImageFailedState(pods, ignorablePodNames) {
 		return found, reconcileError(
 			fmt.Errorf(
 				"cannot Rolling restart AerospikeCluster. " +
