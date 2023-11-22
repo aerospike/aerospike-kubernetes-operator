@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -350,7 +351,9 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePods []corev1.Pod, failedPods []*corev1.Pod) (*appsv1.StatefulSet, reconcileResult) {
-	var res reconcileResult
+	var (
+		res reconcileResult
+	)
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
 	// We may change config, let some pods restart with new config and then change config back to original value.
@@ -396,7 +399,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, res
 		}
 	} else {
-		var needRollingRestartRack, restartTypeMap, nErr = r.needRollingRestartRack(rackState)
+		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap, dynamicCmds, nErr = r.needRollingRestartRack(rackState)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
@@ -421,9 +424,91 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 				return found, res
 			}
 		}
+
+		if needDynamicUpdateRack {
+			res = r.updateDynamicConfig(rackState, ignorablePods, restartTypeMap, failedPods, dynamicCmds)
+			if !res.isSuccess {
+				if res.err != nil {
+					r.Log.Error(
+						res.err, "Failed to do rolling restart", "stsName",
+						found.Name,
+					)
+
+					r.Recorder.Eventf(
+						r.aeroCluster, corev1.EventTypeWarning,
+						"RackRollingRestartFailed",
+						"[rack-%d] Failed to do rolling restart {STS: %s/%s}",
+						rackState.Rack.ID, found.Namespace, found.Name,
+					)
+				}
+			}
+		}
 	}
 
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
+	ignorablePods []corev1.Pod, restartTypeMap map[string]RestartType,
+	failedPods []*corev1.Pod, dynamicCmds []string) reconcileResult {
+	r.Log.Info("Update dynamic config in Aerospike pods")
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
+		"[rack-%d] Started Dynamic update", rackState.Rack.ID,
+	)
+
+	var (
+		err     error
+		podList []*corev1.Pod
+	)
+
+	failedPodNames := sets.Set[string]{}
+
+	for idx := range failedPods {
+		sets.Insert(failedPodNames, failedPods[idx].Name)
+	}
+
+	// List the pods for this aeroCluster's statefulset
+	podList, err = r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+
+	// Find pods which needs restart
+	podsToUpdate := make([]*corev1.Pod, 0, len(podList))
+
+	for idx := range podList {
+		pod := podList[idx]
+
+		restartType := restartTypeMap[pod.Name]
+		if restartType != noRestartUpdateConf || failedPodNames.Has(pod.Name) {
+			r.Log.Info("This Pod doesn't need any update, Skip this", "pod", pod.Name)
+			continue
+		}
+
+		podsToUpdate = append(podsToUpdate, pod)
+	}
+
+	podNames := getPodNames(podsToUpdate)
+	if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
+		return reconcileError(err)
+	}
+
+	if res := r.setDynamicConfig(r.getClientPolicy(), dynamicCmds, podsToUpdate, ignorablePods); !res.isSuccess {
+		return res
+	}
+
+	if res := r.updatePods(rackState, podsToUpdate); !res.isSuccess {
+		return res
+	}
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
+		"[rack-%d] Finished Dynamic update", rackState.Rack.ID,
+	)
+
+	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) reconcileRack(
@@ -951,7 +1036,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		pod := podList[idx]
 
 		restartType := restartTypeMap[pod.Name]
-		if restartType == noRestart {
+		if restartType == noRestart || restartType == noRestartUpdateConf {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
@@ -1016,25 +1101,30 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 }
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
-	needRestart bool, restartTypeMap map[string]RestartType, err error,
+	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType, dynamicCmds []string, err error,
 ) {
+	needRestart = false
+	needUpdateConf = false
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to list pods: %v", err)
+		return needRestart, needUpdateConf, nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	restartTypeMap, err = r.getRollingRestartTypeMap(rackState, podList)
+	restartTypeMap, dynamicCmds, err = r.getRollingRestartTypeMap(rackState, podList)
 	if err != nil {
-		return false, nil, err
+		return needRestart, needUpdateConf, nil, nil, err
 	}
 
 	for _, restartType := range restartTypeMap {
-		if restartType != noRestart {
-			return true, restartTypeMap, nil
+		if restartType != noRestart && restartType != noRestartUpdateConf {
+			needRestart = true
+		}
+		if restartType == noRestartUpdateConf {
+			needUpdateConf = true
 		}
 	}
 
-	return false, nil, nil
+	return needRestart, needUpdateConf, restartTypeMap, dynamicCmds, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (

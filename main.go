@@ -137,9 +137,6 @@ func main() {
 	schemaMapLogger := ctrl.Log.WithName("schema-map")
 	asconfig.InitFromMap(schemaMapLogger, schemaMap)
 
-	dynamic, _ := asconfig.GetDynamic("6.4.0")
-	setupLog.Info("printing dynamic values", "dynamic", dynamic)
-
 	eventBroadcaster := record.NewBroadcasterWithCorrelatorOptions(
 		record.CorrelatorOptions{
 			BurstSize: getEventBurstSize(),
