@@ -32,7 +32,7 @@ const (
 	prevServerVersion   = "6.3.0.0"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "6.4.0.0"
+	latestServerVersion = "7.0.0.0"
 	invalidVersion      = "3.0.0.4"
 )
 
@@ -1231,13 +1231,11 @@ func createHDDAndDataInMemStorageCluster(
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"type":           "device",
-				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
-				"filesize":       2000955200,
-				"data-in-memory": true,
+				"type":     "memory",
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
+				"filesize": 2000955200,
 			},
 		},
 	}
@@ -1254,10 +1252,10 @@ func createDataInMemWithoutPersistentStorageCluster(
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"type": "memory",
+				"type":      "memory",
+				"data-size": 1073741824,
 			},
 		},
 	}
@@ -1389,7 +1387,6 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 func getSCNamespaceConfig(name, path string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"strong-consistency": true,
 		"storage-engine": map[string]interface{}{
@@ -1402,10 +1399,10 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
-			"type": "memory",
+			"type":      "memory",
+			"data-size": 1073741824,
 		},
 	}
 }
@@ -1417,7 +1414,6 @@ func getNonSCNamespaceConfig(name, path string) map[string]interface{} {
 func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": rf,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",

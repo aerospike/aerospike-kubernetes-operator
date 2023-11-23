@@ -158,10 +158,10 @@ var _ = Describe("BatchRestart", func() {
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "bar",
-							"memory-size":        1000955200,
 							"replication-factor": 2,
 							"storage-engine": map[string]interface{}{
-								"type": "memory",
+								"type":      "memory",
+								"data-size": 1073741824,
 							},
 						},
 					},
@@ -182,10 +182,10 @@ var _ = Describe("BatchRestart", func() {
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               "bar",
-							"memory-size":        1000955200,
 							"replication-factor": 2,
 							"storage-engine": map[string]interface{}{
-								"type": "memory",
+								"type":      "memory",
+								"data-size": 1073741824,
 							},
 						},
 					},

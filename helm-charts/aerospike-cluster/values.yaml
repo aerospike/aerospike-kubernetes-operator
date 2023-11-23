@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 6.4.0.0
+  tag: 7.0.0.0
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containining credentials can be added
@@ -53,10 +53,10 @@ aerospikeConfig:
 
   # namespaces:
   #   - name: test
-  #     memory-size: 1073741824 # 1GiB
   #     replication-factor: 2
   #     storage-engine:
   #       type: memory
+  #       data-size: 1073741824 # 1GiB
 
 
 ## Aerospike secrets

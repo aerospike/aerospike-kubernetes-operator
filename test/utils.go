@@ -253,7 +253,7 @@ func waitForAerospikeCluster(
 				if errors.IsNotFound(err) {
 					pkgLog.Info(
 						"Waiting for availability of %s AerospikeCluster\n",
-						aeroCluster.Name,
+						"name", aeroCluster.Name,
 					)
 					return false, nil
 				}
@@ -467,7 +467,6 @@ func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
 	namespaces := []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"memory-size":        1000955200,
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
 				"type": "memory",

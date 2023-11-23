@@ -128,7 +128,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
+		"6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
 	}
 
 	for _, v := range versions {
@@ -600,7 +600,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 	}
 	dynamicNs := map[string]interface{}{
 		"name":               "dynamicns",
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
@@ -1223,7 +1222,6 @@ func negativeDeployClusterValidationTest(
 											)
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
@@ -1763,7 +1761,6 @@ func negativeUpdateClusterValidationTest(
 
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
