@@ -72,7 +72,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster NodeB lockList"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
 	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required

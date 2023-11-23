@@ -30,10 +30,11 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits util the input pods is safe to stop,
-// skipping pods that are not running and present in ignorablePods for stability check.
-// The ignorablePods list should be a list of failed or pending pods that are going to be
-// deleted eventually and are safe to ignore in stability checks.
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
+// skipping pods that are not running and present in ignorablePodNames for stability check.
+// The ignorablePodNames is the list of failed or pending pods that are either::
+// 1. going to be deleted eventually and are safe to ignore in stability checks
+// 2. given in ignorePodList by the user and are safe to ignore in stability checks
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {

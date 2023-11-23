@@ -46,7 +46,7 @@ var _ = Describe(
 		// 	},
 		// )
 		Context(
-			"DeployClusterWithSyslog", func() {
+			"DeployClusterWithIgnorePodList", func() {
 				clusterWithIgnorePodList(ctx)
 			},
 		)
@@ -191,14 +191,14 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					By("Upgrade version")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					aeroCluster.Spec.Image = baseImage + ":6.4.0.4"
+					newImage := baseImage + ":6.4.0.4"
+					aeroCluster.Spec.Image = newImage
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Scale up")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
 					aeroCluster.Spec.Size++
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -209,6 +209,20 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeFalse())
 					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
+
+					By("Remove pod from IgnorePodList and verify pod 2-0 is in running state")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.IgnorePodList = []string{}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeTrue())
+					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeTrue())
+					Expect(pod.Spec.Containers[0].Image).To(Equal(newImage))
 				},
 			)
 		},

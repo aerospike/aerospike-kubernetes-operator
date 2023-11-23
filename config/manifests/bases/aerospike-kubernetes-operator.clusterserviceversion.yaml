@@ -51,7 +51,7 @@ spec:
           while checking the cluster stability and are not considered part of cluster.
           This is only useful when there are some failed pods and operator is required
           to do some operation on the cluster. If pods in running state are defined
-          in this list, they are not ignored
+          in this list, they are not ignored.
         displayName: Ignore Pod List
         path: ignorePodList
       - description: Aerospike server image
@@ -69,7 +69,7 @@ spec:
         path: rackConfig
       - description: RosterNodeBlockList is a list of blocked nodeIDs from roster
           in a strong-consistency setup
-        displayName: Roster NodeB lockList
+        displayName: Roster Node BlockList
         path: rosterNodeBlockList
       - description: SeedsFinderServices creates additional Kubernetes service that
           allow clients to discover Aerospike cluster nodes.
