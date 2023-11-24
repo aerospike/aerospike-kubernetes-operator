@@ -958,7 +958,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
@@ -972,7 +972,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
@@ -987,7 +987,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"Should fail if both CaCertsFilename and CaCertsSource is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
@@ -1002,7 +1002,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientCertPath: should fail if clientCertPath is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
@@ -1366,7 +1366,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
@@ -1380,7 +1380,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for no tls path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1399,7 +1399,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1421,7 +1421,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1442,7 +1442,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1917,7 +1917,7 @@ func negativeUpdateClusterValidationTest(
 		"InvalidAerospikeConfigSecret", func() {
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost560(
+					aeroCluster := createAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 

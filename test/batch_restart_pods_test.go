@@ -20,9 +20,9 @@ import (
 const batchClusterName = "batch-restart"
 
 var (
-	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "6.0.0.99")
-	availableImage1  = fmt.Sprintf("%s:%s", baseImage, "6.0.0.1")
-	availableImage2  = fmt.Sprintf("%s:%s", baseImage, "6.0.0.2")
+	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "7.0.0.99")
+	availableImage1  = fmt.Sprintf("%s:%s", baseImage, "7.0.0.0_1")
+	availableImage2  = fmt.Sprintf("%s:%s", baseImage, "7.0.0.0_2")
 )
 
 func percent(val string) *intstr.IntOrString {
@@ -244,8 +244,8 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 	// Test steps
 	// 1: update cluster to demand huge resources. It will unschedule batch of pods
-	// 2: verify if more than 1 pods are in unscheduled state.
-	//    In default mode, there can not be more than 1 unscheduled pods
+	// 2: verify if more than 1 pod are in unscheduled state.
+	//    In default mode, there cannot be more than 1 unscheduled pods
 	// 3: update cluster to demand limited resources. It will schedule old unscheduled pods
 
 	// Restart full rack at a time
@@ -331,7 +331,8 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 	// Restart 1 node at a time
@@ -350,8 +351,8 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 
 	// Test steps
 	// 1: update cluster with unavailable image. It will unschedule batch of pods
-	// 2: verify if more than 1 pods are in unscheduled state.
-	//    In default mode, there can not be more than 1 unscheduled pods
+	// 2: verify if more than 1 pod are in unscheduled state.
+	//    In default mode, there cannot be more than 1 unscheduled pods
 	// 3: update cluster to demand limited resources. It will schedule old unscheduled pods
 
 	// Restart full rack at a time

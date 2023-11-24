@@ -469,7 +469,8 @@ func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
 			"name":               "test",
 			"replication-factor": 1,
 			"storage-engine": map[string]interface{}{
-				"type": "memory",
+				"type":      "memory",
+				"data-size": 1073741824,
 			},
 		},
 	}
@@ -563,20 +564,35 @@ func getAeroClusterConfig(
 		return nil, err
 	}
 
-	cmpVal, err := asconfig.CompareVersions(version, "5.7.0")
+	cmpVal1, err := asconfig.CompareVersions(version, "5.7.0")
 	if err != nil {
 		return nil, err
 	}
 
-	if cmpVal >= 0 {
+	cmpVal2, err := asconfig.CompareVersions(version, "7.0.0")
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case cmpVal2 >= 0:
+		return createAerospikeClusterPost640(
+			namespace, 2, image,
+		), nil
+
+	case cmpVal1 >= 0:
 		return createAerospikeClusterPost560(
 			namespace, 2, image,
 		), nil
-	}
 
-	return createAerospikeClusterPost460(
-		namespace, 2, image,
-	), nil
+	case cmpVal1 < 0:
+		return createAerospikeClusterPost460(
+			namespace, 2, image,
+		), nil
+
+	default:
+		return nil, fmt.Errorf("invalid image version %s", version)
+	}
 }
 
 func getAerospikeStorageConfig(
