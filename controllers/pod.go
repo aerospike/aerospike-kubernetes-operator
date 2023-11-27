@@ -761,8 +761,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 		}
 	}
 
-	if err := r.cleanupPods(danglingPods, rackState); err != nil {
-		return fmt.Errorf("failed dangling pod cleanup: %v", err)
+	if len(danglingPods) > 0 {
+		if err := r.cleanupPods(danglingPods, rackState); err != nil {
+			return fmt.Errorf("failed dangling pod cleanup: %v", err)
+		}
 	}
 
 	return nil
@@ -1305,44 +1307,11 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		return asConfCmds, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	specToStatusDiffs := asconfig.ConfDiff(r.Log, *asConfSpec.ToMap(), *asConfStatus.ToMap(), false, false, true)
+	flatStatusConf := *asConfStatus.GetFlatMap()
+	flatSpecConf := *asConfSpec.GetFlatMap()
+
+	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, false, true, version[1])
 	r.Log.Info("print diff", "difference", fmt.Sprintf("%v", specToStatusDiffs))
-
-	statusToSpecDiffs := asconfig.ConfDiff(r.Log, *asConfStatus.ToMap(), *asConfSpec.ToMap(), false, false, true)
-	r.Log.Info("print statusToSpecDiffs", "difference", fmt.Sprintf("%v", statusToSpecDiffs))
-	if len(statusToSpecDiffs) > 0 {
-		defaultMap, err := asconfig.GetDefault("6.4.0")
-		if err != nil {
-			return asConfCmds, err
-		}
-		r.Log.Info("printing default values", "dynamic", defaultMap)
-		deleteKeys := make([]string, 0)
-		for statusDiffKey := range statusToSpecDiffs {
-			if _, ok := specToStatusDiffs[statusDiffKey]; ok {
-				continue
-			}
-
-			setDefault := true
-			for diffKey := range specToStatusDiffs {
-				if strings.HasPrefix(diffKey, statusDiffKey) {
-					setDefault = false
-					break
-				}
-
-				if strings.HasPrefix(statusDiffKey, diffKey) {
-					deleteKeys = append(deleteKeys, diffKey)
-					break
-				}
-			}
-			if setDefault {
-				specToStatusDiffs[statusDiffKey] = getDefaultValue(defaultMap, statusDiffKey)
-			}
-		}
-		for _, k := range deleteKeys {
-			r.Log.Info("deleting diff as value is nil", "key", k)
-			delete(specToStatusDiffs, k)
-		}
-	}
 
 	if len(specToStatusDiffs) > 1 {
 		r.Log.V(1).Info("Multiple config change in single go is not supported, falling back to rolling restart if needed", "diff", fmt.Sprintf("%v", specToStatusDiffs))
@@ -1354,12 +1323,22 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	r.Log.Info("printing dynamic values", "dynamic", dynamic)
 
 	isDynamic := true
-	for diff := range specToStatusDiffs {
+	for diff, value := range specToStatusDiffs {
 		isDynamic = isFieldDynamic(dynamic, diff)
 		r.Log.Info("isDynamic", "isDynamic", isDynamic)
 		if !isDynamic {
 			r.Log.Info("Static field has been changed, cannot change config dynamically", "key", diff)
 			return asConfCmds, nil
+		}
+		if fmt.Sprintf("%T", value) == "[]string" {
+			if statusValue, ok := flatStatusConf[diff]; ok {
+				statusSet := sets.NewString(statusValue.([]string)...)
+				diffSet := sets.NewString(value.([]string)...)
+				if len(statusSet.Difference(diffSet)) > 0 {
+					r.Log.Info("Can not remove value from list dynamically", "key", diff, "statusset", fmt.Sprint(statusSet.List()), "diffSet", fmt.Sprint(diffSet.List()))
+					return asConfCmds, nil
+				}
+			}
 		}
 	}
 
@@ -1374,90 +1353,6 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	return asConfCmds, nil
 }
 
-/*
-
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) (RestartType, error) {
-	var rackStatus asdbv1.Rack
-	for idx, _ := range r.aeroCluster.Status.RackConfig.Racks {
-		if r.aeroCluster.Status.RackConfig.Racks[idx].ID == rackState.Rack.ID {
-			rackStatus = r.aeroCluster.Status.RackConfig.Racks[idx]
-		}
-	}
-
-	version := strings.Split(r.aeroCluster.Spec.Image, ":")
-	asConfStatus, err := asconfig.NewMapAsConfig(r.Log, version[1], rackStatus.AerospikeConfig.Value)
-	if err != nil {
-		return quickRestart, fmt.Errorf("failed to load config map by lib: %v", err)
-	}
-
-	asConfSpec, err := asconfig.NewMapAsConfig(r.Log, version[1], rackState.Rack.AerospikeConfig.Value)
-	if err != nil {
-		return quickRestart, fmt.Errorf("failed to load config map by lib: %v", err)
-	}
-
-	diffs := asconfig.ConfDiff(r.Log, *asConfSpec.ToMap(), *asConfStatus.ToMap(), false, false, true)
-	r.Log.Info("print diff", "difference", fmt.Sprintf("%v", diffs))
-
-	statusDiffs := asconfig.ConfDiff(r.Log, *asConfStatus.ToMap(), *asConfSpec.ToMap(), false, false, true)
-	r.Log.Info("print statusDiffs", "difference", fmt.Sprintf("%v", statusDiffs))
-	if len(statusDiffs) > 0 {
-		for k := range statusDiffs {
-			if _, ok := diffs[k]; !ok {
-				diffs[k] = nil
-			}
-		}
-	}
-
-	if len(diffs) > 1 {
-		return quickRestart, fmt.Errorf("multiple config change in single go is not supported")
-	}
-
-	dynamic, _ := asconfig.GetDynamic("6.4.0")
-	r.Log.Info("printing dynamic values", "dynamic", dynamic)
-
-	isDynamic := true
-	for diff := range diffs {
-		isDynamic = isFieldDynamic(dynamic, diff)
-		r.Log.Info("isDynamic", "isDynamic", isDynamic)
-		if !isDynamic {
-			return quickRestart, nil
-		}
-	}
-
-	r.setDynamicConfig(r.getClientPolicy())
-
-	asConfCmds := make([]string, 0)
-	for diff, value := range diffs {
-		asConfCmds = append(asConfCmds, asconfig.createASConfCommand(diff, value)...)
-	}
-
-	// run asinfo command list in server
-
-	return quickRestart, nil
-}
-
-func isFieldDynamic(dynamic map[string]bool, diff string) bool {
-	tokens := strings.Split(diff, ".")
-	key := ""
-	prevToken := ""
-	for _, token := range tokens {
-		if strings.Contains(token, "map[") && strings.Contains(prevToken, "slOF") {
-			key = key + "_."
-		} else if strings.Contains(token, "map[") {
-			openBracket := strings.Index(token, "[")
-			closeBracket := strings.Index(token, "]")
-			key = key + token[openBracket+1:closeBracket] + "."
-		}
-		prevToken = token
-	}
-	key = strings.TrimSuffix(key, ".")
-	println(key)
-
-	return dynamic[key]
-}
-
-*/
-
 func isFieldDynamic(dynamic map[string]bool, diff string) bool {
 	tokens := strings.Split(diff, ".")
 	key := ""
@@ -1472,20 +1367,4 @@ func isFieldDynamic(dynamic map[string]bool, diff string) bool {
 	println(key)
 
 	return dynamic[key]
-}
-
-func getDefaultValue(defaultMap map[string]interface{}, diff string) interface{} {
-	tokens := strings.Split(diff, ".")
-	key := ""
-	for _, token := range tokens {
-		if token[0] == '{' && token[len(token)-1] == '}' {
-			key = key + "_."
-		} else {
-			key = key + token + "."
-		}
-	}
-	key = strings.TrimSuffix(key, ".")
-	println(key)
-
-	return defaultMap[key]
 }

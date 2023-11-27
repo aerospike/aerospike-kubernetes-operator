@@ -1116,11 +1116,11 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
 	}
 
 	for _, restartType := range restartTypeMap {
-		if restartType != noRestart && restartType != noRestartUpdateConf {
-			needRestart = true
-		}
-		if restartType == noRestartUpdateConf {
+		switch restartType {
+		case noRestartUpdateConf:
 			needUpdateConf = true
+		case podRestart, quickRestart:
+			needRestart = true
 		}
 	}
 
