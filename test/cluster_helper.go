@@ -321,7 +321,6 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 
 	// Change namespace storage-engine
 	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-	namespaceConfig["storage-engine"].(map[string]interface{})["data-in-memory"] = true
 	namespaceConfig["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
@@ -1463,6 +1462,17 @@ func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 		"storage-engine": map[string]interface{}{
 			"type":      "memory",
 			"data-size": 1073741824,
+		},
+	}
+}
+
+func getNonSCInMemoryNamespaceConfigPre700(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"memory-size":        1073741824,
+		"storage-engine": map[string]interface{}{
+			"type": "memory",
 		},
 	}
 }

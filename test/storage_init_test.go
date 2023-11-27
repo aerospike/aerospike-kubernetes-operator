@@ -20,6 +20,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 const (
@@ -761,7 +762,7 @@ func getStorageInitAerospikeCluster(
 	image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
-	return &asdbv1.AerospikeCluster{
+	aerospike := &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
 			Namespace: clusterNamespacedName.Namespace,
@@ -802,20 +803,23 @@ func getStorageInitAerospikeCluster(
 					"network":  getNetworkConfig(),
 					"security": map[string]interface{}{},
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"replication-factor": storageInitTestClusterSize,
-							"migrate-sleep":      0,
-							"storage-engine": map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						},
+						getNonSCInMemoryNamespaceConfig("test"),
 					},
 				},
 			},
 		},
 	}
+
+	version, _ := asdbv1.GetImageVersion(image)
+	ov, _ := asconfig.CompareVersions(version, "7.0.0")
+
+	if ov < 0 {
+		aerospike.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+			getNonSCInMemoryNamespaceConfigPre700("test"),
+		}
+	}
+
+	return aerospike
 }
 
 func getLongInitStorageConfig(
