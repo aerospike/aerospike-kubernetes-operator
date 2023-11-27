@@ -350,7 +350,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
 	// We may change config, let some pods restart with new config and then change config back to original value.
-	// Now rack.spec, rack.status will be same but few pods will have changed config.
+	// Now rack.spec, rack.status will be same, but few pods will have changed config.
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
@@ -367,7 +367,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	}
 
 	// Upgrade
-	upgradeNeeded, err := r.isRackUpgradeNeeded(rackState.Rack.ID)
+	upgradeNeeded, err := r.isRackUpgradeNeeded(rackState.Rack.ID, ignorablePodNames)
 	if err != nil {
 		return found, reconcileError(err)
 	}
@@ -392,7 +392,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, res
 		}
 	} else {
-		var needRollingRestartRack, restartTypeMap, nErr = r.needRollingRestartRack(rackState)
+		var needRollingRestartRack, restartTypeMap, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
@@ -513,7 +513,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
-	// All regular operation are complete. Take time and cleanup dangling nodes that have not been cleaned up
+	// All regular operations are complete. Take time and cleanup dangling nodes that have not been cleaned up
 	// previously due to errors.
 	if err := r.cleanupDanglingPodsRack(found, rackState); err != nil {
 		return reconcileError(err)
@@ -654,7 +654,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		)
 	}
 
-	// Find pods which needs to be updated
+	// Find pods which need to be updated
 	podsToUpgrade := make([]*corev1.Pod, 0, len(podList))
 
 	for idx := range podList {
@@ -942,7 +942,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		"Statefulset spec updated - doing rolling restart",
 	)
 
-	// Find pods which needs restart
+	// Find pods which need restart
 	podsToRestart := make([]*corev1.Pod, 0, len(podList))
 
 	for idx := range podList {
@@ -1013,7 +1013,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	return found, reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
+func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
 	needRestart bool, restartTypeMap map[string]RestartType, err error,
 ) {
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
@@ -1021,7 +1021,7 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
 		return false, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	restartTypeMap, err = r.getRollingRestartTypeMap(rackState, podList)
+	restartTypeMap, err = r.getRollingRestartTypeMap(rackState, podList, ignorablePodNames)
 	if err != nil {
 		return false, nil, err
 	}
@@ -1035,7 +1035,7 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
 	return false, nil, nil
 }
 
-func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
+func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int, ignorablePodNames sets.Set[string]) (
 	bool, error,
 ) {
 	podList, err := r.getRackPodList(rackID)
@@ -1045,6 +1045,11 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int) (
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
+
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
 		if !r.isPodOnDesiredImage(pod, true) {
 			r.Log.Info("Pod needs upgrade/downgrade", "podName", pod.Name)
 			return true, nil

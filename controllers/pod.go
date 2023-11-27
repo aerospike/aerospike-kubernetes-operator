@@ -51,7 +51,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(
-	rackState *RackState, pods []*corev1.Pod,
+	rackState *RackState, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) (map[string]RestartType, error) {
 	var addedNSDevices []string
 
@@ -65,9 +65,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	for idx := range pods {
+		if ignorablePodNames.Has(pods[idx].Name) {
+			continue
+		}
+
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
-			// Fetching all block devices that has been added in namespaces.
+			// Fetching all block devices that have been added in namespaces.
 			addedNSDevices, err = r.getNSAddedDevices(rackState)
 			if err != nil {
 				return nil, err
