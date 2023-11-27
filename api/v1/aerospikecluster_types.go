@@ -74,9 +74,10 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
-	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
-	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
-	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored.
+	// IgnorePodList is a list of pods that the operator will ignore while assessing cluster stability.
+	// Pods specified in this list are not considered part of the cluster. This is particularly useful when
+	// there are failed pods and the operator needs to perform certain operations on the cluster. Note that
+	// running pods included in this list will not be ignored.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Pod List"
 	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
@@ -621,9 +622,10 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
-	// IgnorePodList is the list of pods which are ignored by the operator while checking the cluster stability and
-	// are not considered part of cluster. This is only useful when there are some failed pods and operator is required
-	// to do some operation on the cluster. If pods in running state are defined in this list, they are not ignored.
+	// IgnorePodList is a list of pods that the operator will ignore while assessing cluster stability.
+	// Pods specified in this list are not considered part of the cluster. This is particularly useful when
+	// there are failed pods and the operator needs to perform certain operations on the cluster. Note that
+	// running pods included in this list will not be ignored.
 	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
 

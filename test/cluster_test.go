@@ -139,36 +139,15 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 			var (
 				aeroCluster *asdbv1.AerospikeCluster
 				err         error
-			)
 
-			BeforeEach(
-				func() {
-					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
-					racks := getDummyRackConf(1, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
-					err = deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
-
-			AfterEach(
-				func() {
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
-
-			It(
-				"Should allow cluster operations with failed pods", func() {
-					By("Fail 2-0 aerospike pod")
+				testClusterLifecycle = func(ignorePodName string) {
+					By(fmt.Sprintf("Fail %s aerospike pod", ignorePodName))
 					pod := &v1.Pod{}
-					ignorePodName := clusterNamespacedName.Name + "-2-0"
 
 					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 
-					// This will lead to pod 2-0 pod in failed state
 					pod.Spec.Containers[0].Image = "wrong-image"
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
@@ -203,14 +182,15 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					By("Verify pod 2-0 is still in failed state")
+					By(fmt.Sprintf("Verify pod %s is still in failed state", ignorePodName))
 					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeFalse())
 					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
 
-					By("Remove pod from IgnorePodList and verify pod 2-0 is in running state")
+					By(fmt.Sprintf(
+						"Remove pod from IgnorePodList and verify pod %s is in running state", ignorePodName))
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					aeroCluster.Spec.IgnorePodList = []string{}
@@ -223,6 +203,68 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeTrue())
 					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeTrue())
 					Expect(pod.Spec.Containers[0].Image).To(Equal(newImage))
+				}
+			)
+
+			BeforeEach(
+				func() {
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
+					racks := getDummyRackConf(1, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
+					err = deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					err = deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should allow cluster operations with random failed pod", func() {
+					// test with failed pod in between statefulset replicas
+					testClusterLifecycle(clusterNamespacedName.Name + "-2-0")
+				},
+			)
+
+			It(
+				"Should allow cluster operations with sequential(last replica) failed pod", func() {
+					// test with last replica of statefulset as failed pod
+					testClusterLifecycle(clusterNamespacedName.Name + "-1-1")
+				},
+			)
+
+			It(
+				"Should allow rack deletion with failed pods in different rack", func() {
+					By("Fail 1-1 aerospike pod")
+					ignorePodName := clusterNamespacedName.Name + "-1-1"
+					pod := &v1.Pod{}
+
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					pod.Spec.Containers[0].Image = "wrong-image"
+					err = k8sClient.Update(ctx, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Delete rack with id 2")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: getDummyRackConf(1)}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By(fmt.Sprintf("Verify pod %s is still in failed state", ignorePodName))
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(*pod.Status.ContainerStatuses[0].Started).To(BeFalse())
+					Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
 				},
 			)
 		},

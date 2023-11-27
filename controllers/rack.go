@@ -661,6 +661,11 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		pod := podList[idx]
 		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
 
+		if ignorablePodNames.Has(pod.Name) {
+			r.Log.Info("Pod found in ignore pod list, skipping", "podName", pod.Name)
+			continue
+		}
+
 		if r.isPodUpgraded(pod) {
 			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
 			continue
@@ -947,6 +952,11 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 
 	for idx := range podList {
 		pod := podList[idx]
+
+		if ignorablePodNames.Has(pod.Name) {
+			r.Log.Info("Pod found in ignore pod list, skipping", "podName", pod.Name)
+			continue
+		}
 
 		restartType := restartTypeMap[pod.Name]
 		if restartType == noRestart {
