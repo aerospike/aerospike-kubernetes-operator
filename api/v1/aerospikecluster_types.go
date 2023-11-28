@@ -283,6 +283,8 @@ type RackConfig struct { //nolint:govet // for readability
 	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
+
+	MaxUnavailable int `json:"maxUnavailable,omitempty"`
 }
 
 // Rack specifies single rack config

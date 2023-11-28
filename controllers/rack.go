@@ -45,7 +45,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		rackIDsToDelete = append(rackIDsToDelete, racksToDelete[idx].ID)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(racksToDelete)
+	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, rackStateList)
 	if err != nil {
 		return reconcileError(err)
 	}

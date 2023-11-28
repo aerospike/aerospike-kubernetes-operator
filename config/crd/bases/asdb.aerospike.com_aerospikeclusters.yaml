@@ -4603,6 +4603,8 @@ spec:
                   Aerospike cluster. Pods will be deployed in given racks based on
                   given configuration
                 properties:
+                  maxUnavailable:
+                    type: integer
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled
@@ -13350,6 +13352,8 @@ spec:
                   given configuration
                 nullable: true
                 properties:
+                  maxUnavailable:
+                    type: integer
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled

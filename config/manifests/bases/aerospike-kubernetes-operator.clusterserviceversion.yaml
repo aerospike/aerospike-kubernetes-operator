@@ -47,11 +47,11 @@ spec:
           the Aerospike cluster.
         displayName: Aerospike Network Policy
         path: aerospikeNetworkPolicy
-      - description: IgnorePodList is the list of pods which are ignored by the operator
-          while checking the cluster stability and are not considered part of cluster.
-          This is only useful when there are some failed pods and operator is required
-          to do some operation on the cluster. If pods in running state are defined
-          in this list, they are not ignored.
+      - description: IgnorePodList is a list of pods that the operator will ignore
+          while assessing cluster stability. Pods specified in this list are not considered
+          part of the cluster. This is particularly useful when there are failed pods
+          and the operator needs to perform certain operations on the cluster. Note
+          that running pods included in this list will not be ignored.
         displayName: Ignore Pod List
         path: ignorePodList
       - description: Aerospike server image

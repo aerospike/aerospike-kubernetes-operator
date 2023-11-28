@@ -650,7 +650,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
 // 2. User given pods in ignorePodList that are currently not running and can be ignored from stability checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) (
+func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configureRacks []RackState) (
 	sets.Set[string], error,
 ) {
 	ignorablePodNames := sets.Set[string]{}
@@ -669,17 +669,21 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) 
 		}
 	}
 
-	podList, err := r.getClusterPodList()
-	if err != nil {
-		return nil, err
-	}
+	for idx := range configureRacks {
+		rack := &configureRacks[idx]
+		failedAllowed := r.aeroCluster.Spec.RackConfig.MaxUnavailable
 
-	userIgnorePodSet := sets.NewString(r.aeroCluster.Spec.IgnorePodList...)
+		podList, err := r.getRackPodList(rack.Rack.ID)
+		if err != nil {
+			return nil, err
+		}
 
-	for podIdx := range podList.Items {
-		pod := &podList.Items[podIdx]
-		if userIgnorePodSet.Has(pod.Name) && !utils.IsPodRunningAndReady(pod) {
-			ignorablePodNames.Insert(pod.Name)
+		for podIdx := range podList.Items {
+			pod := &podList.Items[podIdx]
+			if !utils.IsPodRunningAndReady(pod) && failedAllowed > 0 {
+				ignorablePodNames.Insert(pod.Name)
+				failedAllowed--
+			}
 		}
 	}
 

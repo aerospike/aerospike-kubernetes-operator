@@ -124,7 +124,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(nil)
+	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
 		r.Log.Error(err, "Failed to determine pods to be ignored")
 
