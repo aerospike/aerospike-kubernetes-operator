@@ -14,14 +14,11 @@ import (
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -68,34 +65,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	var webhookServer *webhook.Server
-
-	legacyOlmCertDir := "/apiserver.local.config/certificates"
-	// If legacy directory is present then OLM < 0.17 is used and webhook server should be configured as follows
-	info, err := os.Stat(legacyOlmCertDir)
-	if err == nil && info.IsDir() {
-		setupLog.Info(
-			"legacy OLM < 0.17 directory is present - initializing webhook" +
-				" server ",
-		)
-
-		webhookServer = &webhook.Server{
-			CertDir:  "/apiserver.local.config/certificates",
-			CertName: "apiserver.crt",
-			KeyName:  "apiserver.key",
-		}
-	}
-
 	// Create a new controller option for controller manager
 	options := ctrl.Options{
-		NewClient: newClient,
-		Scheme:    scheme,
-		// if webhookServer is nil, which will be the case of OLM >= 0.17,
-		// the manager will create a server for you using Host, Port
-		// and the default CertDir, KeyName, and CertName.
-		WebhookServer: webhookServer,
+		Scheme: scheme,
 	}
 
+	//nolint:staticcheck // Remove it when this function is removed by controller-runtime
+	// For future ref: Need to implement custom config loader when this function is removed by controller-runtime
+	// Issue: https://github.com/kubernetes-sigs/controller-runtime/issues/895
 	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
 	if err != nil {
 		setupLog.Error(err, "unable to load the config file")
@@ -103,7 +80,6 @@ func main() {
 	}
 
 	// Add support for multiple namespaces given in WATCH_NAMESPACE (e.g. ns1,ns2)
-	// For more Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
 	if strings.Contains(watchNs, ",") {
 		nsList := strings.Split(watchNs, ",")
 
@@ -112,9 +88,9 @@ func main() {
 			newNsList = append(newNsList, strings.TrimSpace(ns))
 		}
 
-		options.NewCache = cache.MultiNamespacedCacheBuilder(newNsList)
+		options.Cache.Namespaces = newNsList
 	} else {
-		options.Namespace = watchNs
+		options.Cache.Namespaces = []string{watchNs}
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
@@ -125,6 +101,17 @@ func main() {
 
 	kubeConfig := ctrl.GetConfigOrDie()
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
+
+	// This client will read/write directly from api-server
+	client, err := crClient.New(kubeConfig, crClient.Options{
+		HTTPClient: mgr.GetHTTPClient(),
+		Scheme:     mgr.GetScheme(),
+		Mapper:     mgr.GetRESTMapper(),
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to initialize Kubernetes client")
+		os.Exit(1)
+	}
 
 	setupLog.Info("Init aerospike-server config schemas")
 
@@ -148,7 +135,7 @@ func main() {
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 
 	if err = (&aerospikecluster.AerospikeClusterReconciler{
-		Client:     mgr.GetClient(),
+		Client:     client,
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
 		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
@@ -225,13 +212,4 @@ func getEventBurstSize() int {
 	}
 
 	return eventBurstSize
-}
-
-// newClient creates the default caching client
-// this will read/write directly from api-server
-func newClient(
-	_ cache.Cache, config *rest.Config, options crClient.Options,
-	_ ...crClient.Object,
-) (crClient.Client, error) {
-	return crClient.New(config, options)
 }

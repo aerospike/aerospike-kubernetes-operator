@@ -1,8 +1,8 @@
 package controllers
 
 import (
+	sets "github.com/deckarep/golang-set/v2"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -42,8 +42,8 @@ func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy
 
 func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][]string) []string {
 	var (
-		specSCNamespaces     = sets.NewString()
-		newAddedSCNamespaces = sets.NewString()
+		specSCNamespaces     = sets.NewSet[string]()
+		newAddedSCNamespaces = sets.NewSet[string]()
 	)
 
 	// Look inside only 1st rack. SC namespaces should be same across all the racks
@@ -52,17 +52,17 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 
 	for _, nsConfInterface := range nsList {
 		if asdbv1.IsNSSCEnabled(nsConfInterface.(map[string]interface{})) {
-			specSCNamespaces.Insert(nsConfInterface.(map[string]interface{})["name"].(string))
+			specSCNamespaces.Add(nsConfInterface.(map[string]interface{})["name"].(string))
 		}
 	}
 
 	// Check if SC namespaces are present in all node's namespaces, if not then it's a new SC namespace
 	for _, namespaces := range nodesNamespaces {
-		nodeNamespaces := sets.NewString(namespaces...)
-		newAddedSCNamespaces.Insert(specSCNamespaces.Difference(nodeNamespaces).List()...)
+		nodeNamespaces := sets.NewSet[string](namespaces...)
+		newAddedSCNamespaces.Append(specSCNamespaces.Difference(nodeNamespaces).ToSlice()...)
 	}
 
-	return newAddedSCNamespaces.List()
+	return newAddedSCNamespaces.ToSlice()
 }
 
 func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deployment.HostConn) (
@@ -75,8 +75,8 @@ func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deploym
 	removedNamespaces := r.removedNamespaces(nodesNamespaces)
 	addSCNamespaces := r.addedSCNamespaces(nodesNamespaces)
 
-	ignorableNamespaces := sets.New[string](removedNamespaces...)
-	ignorableNamespaces.Insert(addSCNamespaces...)
+	ignorableNamespaces := sets.NewSet[string](removedNamespaces...)
+	ignorableNamespaces.Append(addSCNamespaces...)
 
 	return ignorableNamespaces, nil
 }

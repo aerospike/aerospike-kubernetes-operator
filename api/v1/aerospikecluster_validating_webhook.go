@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -51,25 +52,25 @@ var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 var _ webhook.Validator = &AerospikeCluster{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (c *AerospikeCluster) ValidateCreate() error {
+func (c *AerospikeCluster) ValidateCreate() (admission.Warnings, error) {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	aslog.Info("Validate create")
 
-	return c.validate(aslog)
+	return nil, c.validate(aslog)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (c *AerospikeCluster) ValidateDelete() error {
+func (c *AerospikeCluster) ValidateDelete() (admission.Warnings, error) {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	aslog.Info("Validate delete")
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate validate update
-func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
+func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warnings, error) {
 	aslog := logf.Log.WithName(ClusterNamespacedName(c))
 
 	aslog.Info("Validate update")
@@ -77,39 +78,39 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 	old := oldObj.(*AerospikeCluster)
 
 	if err := c.validate(aslog); err != nil {
-		return err
+		return nil, err
 	}
 
 	outgoingVersion, err := GetImageVersion(old.Spec.Image)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	incomingVersion, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := deployment.IsValidUpgrade(
 		outgoingVersion, incomingVersion,
 	); err != nil {
-		return fmt.Errorf("failed to start upgrade: %v", err)
+		return nil, fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
 	// Volume storage update is not allowed but cascadeDelete policy is allowed
 	if err := old.Spec.Storage.validateStorageSpecChange(&c.Spec.Storage); err != nil {
-		return fmt.Errorf("storage config cannot be updated: %v", err)
+		return nil, fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
 	// MultiPodPerHost cannot be updated
 	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
-		return fmt.Errorf("cannot update MultiPodPerHost setting")
+		return nil, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
 	if err := validateNetworkPolicyUpdate(
 		&old.Spec.AerospikeNetworkPolicy, &c.Spec.AerospikeNetworkPolicy,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Validate AerospikeConfig update
@@ -118,7 +119,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
 		c.Status.AerospikeConfig,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Validate Load Balancer update
@@ -126,11 +127,11 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) error {
 		aslog, c.Spec.SeedsFinderServices.LoadBalancer,
 		old.Spec.SeedsFinderServices.LoadBalancer,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Validate RackConfig update
-	return c.validateRackUpdate(aslog, old)
+	return nil, c.validateRackUpdate(aslog, old)
 }
 
 func (c *AerospikeCluster) validate(aslog logr.Logger) error {
