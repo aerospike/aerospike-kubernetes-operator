@@ -1390,7 +1390,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus, incomingVersion)
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
@@ -1548,7 +1548,7 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) e
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec, incomingVersion string) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1583,7 +1583,12 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 
 			if singleConf["name"] == oldSingleConf["name"] {
 				// replication-factor update not allowed
-				if isValueUpdated(
+				val, err := asconfig.CompareVersions(incomingVersion, Version6)
+				if err != nil {
+					return fmt.Errorf("failed to check image version: %v", err)
+				}
+
+				if (IsNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(

@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/aerospike/aerospike-client-go/v6 v6.14.0
-	github.com/aerospike/aerospike-management-lib v0.0.0-20231123132657-411276438ef6
+	github.com/aerospike/aerospike-management-lib v0.0.0-20231128061131-bbea48f24eab
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.2.4
@@ -37,6 +37,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/deckarep/golang-set/v2 v2.3.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect

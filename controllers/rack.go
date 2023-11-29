@@ -399,7 +399,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, res
 		}
 	} else {
-		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap, dynamicCmds, nErr = r.needRollingRestartRack(rackState)
+		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap,
+			dynamicCmds, nErr = r.needRollingRestartRack(rackState)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
@@ -1103,8 +1104,6 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
 	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType, dynamicCmds []string, err error,
 ) {
-	needRestart = false
-	needUpdateConf = false
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return needRestart, needUpdateConf, nil, nil, fmt.Errorf("failed to list pods: %v", err)
@@ -1117,6 +1116,8 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState) (
 
 	for _, restartType := range restartTypeMap {
 		switch restartType {
+		case noRestart:
+			// Do nothing
 		case noRestartUpdateConf:
 			needUpdateConf = true
 		case podRestart, quickRestart:
