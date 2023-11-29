@@ -277,16 +277,6 @@ spec:
                     - customInterface
                     type: string
                 type: object
-              ignorePodList:
-                description: IgnorePodList is a list of pods that the operator will
-                  ignore while assessing cluster stability. Pods specified in this
-                  list are not considered part of the cluster. This is particularly
-                  useful when there are failed pods and the operator needs to perform
-                  certain operations on the cluster. Note that running pods included
-                  in this list will not be ignored.
-                items:
-                  type: string
-                type: array
               image:
                 description: Aerospike server image
                 type: string
@@ -4608,11 +4598,14 @@ spec:
                     - type: integer
                     - type: string
                     description: MaxIgnorableFailedPods is the maximum percentage/number
-                      of rack failed pods that will be ignored while assessing cluster
-                      stability. Failed pods identified using this value are not considered
-                      part of the cluster. This is particularly useful when there
-                      are failed pods and the operator needs to perform certain operations
-                      on the cluster.
+                      of rack pods that are in pending state due to scheduling issues.
+                      They are ignored while assessing cluster stability. Failed/pending
+                      pods identified using this value are not considered part of
+                      the cluster. This is particularly useful when there are failed/pending
+                      pods that cannot be recovered by updating the CR and the operator
+                      needs to perform certain operations on the cluster like Aerospike
+                      config change. Reset this value to 0 after the deployment is
+                      done, to avoid unintended consequences.
                     x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
@@ -13366,11 +13359,14 @@ spec:
                     - type: integer
                     - type: string
                     description: MaxIgnorableFailedPods is the maximum percentage/number
-                      of rack failed pods that will be ignored while assessing cluster
-                      stability. Failed pods identified using this value are not considered
-                      part of the cluster. This is particularly useful when there
-                      are failed pods and the operator needs to perform certain operations
-                      on the cluster.
+                      of rack pods that are in pending state due to scheduling issues.
+                      They are ignored while assessing cluster stability. Failed/pending
+                      pods identified using this value are not considered part of
+                      the cluster. This is particularly useful when there are failed/pending
+                      pods that cannot be recovered by updating the CR and the operator
+                      needs to perform certain operations on the cluster like Aerospike
+                      config change. Reset this value to 0 after the deployment is
+                      done, to avoid unintended consequences.
                     x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature

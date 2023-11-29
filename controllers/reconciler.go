@@ -179,8 +179,8 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicy()
 
-	// revert migrate-fill-delay to original value if it was set to 0 during scale down
-	// Passing first rack from the list as all the racks will have same migrate-fill-delay
+	// Revert migrate-fill-delay to original value if it was set to 0 during scale down.
+	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
 	// Redundant safe check to revert migrate-fill-delay if previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
@@ -215,6 +215,39 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 		return reconcile.Result{}, err
 	}
+
+	podList, gErr := r.getClusterPodList()
+	if gErr != nil {
+		r.Log.Error(gErr, "Failed to get cluster pod list")
+		return reconcile.Result{}, gErr
+	}
+
+	r.Log.Info("Try to recover failed/pending pods if any")
+
+	var anyPodFailed bool
+	// Try to recover failed/pending pods by deleting them
+	for idx := range podList.Items {
+		if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
+			anyPodFailed = true
+
+			if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
+				return reconcile.Result{}, err
+			}
+
+			if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
+				r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
+				return reconcile.Result{}, err
+			}
+
+			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+		}
+	}
+
+	if anyPodFailed {
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	r.Log.Info("Reconcile completed successfully")
 
 	return reconcile.Result{}, nil
 }

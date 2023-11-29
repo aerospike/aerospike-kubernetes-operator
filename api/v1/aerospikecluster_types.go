@@ -74,12 +74,6 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
-	// IgnorePodList is a list of pods that the operator will ignore while assessing cluster stability.
-	// Pods specified in this list are not considered part of the cluster. This is particularly useful when
-	// there are failed pods and the operator needs to perform certain operations on the cluster. Note that
-	// running pods included in this list will not be ignored.
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Pod List"
-	IgnorePodList []string `json:"ignorePodList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -283,10 +277,12 @@ type RackConfig struct { //nolint:govet // for readability
 	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
-	// MaxIgnorableFailedPods is the maximum percentage/number of rack failed pods that will be ignored while assessing
-	// cluster stability. Failed pods identified using this value are not considered part of the cluster.
-	// This is particularly useful when there are failed pods and the operator needs to perform certain operations on
-	// the cluster.
+	// MaxIgnorableFailedPods is the maximum percentage/number of rack pods that are in pending state due to scheduling
+	// issues. They are ignored while assessing cluster stability. Failed/pending pods identified using this value are
+	// not considered part of the cluster.
+	// This is particularly useful when there are failed/pending pods that cannot be recovered by updating the CR and
+	// the operator needs to perform certain operations on the cluster like Aerospike config change.
+	// Reset this value to 0 after the deployment is done, to avoid unintended consequences.
 	// +optional
 	MaxIgnorableFailedPods *intstr.IntOrString `json:"maxIgnorableFailedPods,omitempty"`
 }
@@ -955,17 +951,6 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.RosterNodeBlockList = rosterNodeBlockList
 	}
 
-	// IgnorePodList
-	if len(spec.IgnorePodList) != 0 {
-		var ignorePodList []string
-
-		lib.DeepCopy(
-			&ignorePodList, &spec.IgnorePodList,
-		)
-
-		status.IgnorePodList = ignorePodList
-	}
-
 	return &status, nil
 }
 
@@ -1054,17 +1039,6 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		)
 
 		spec.RosterNodeBlockList = rosterNodeBlockList
-	}
-
-	// IgnorePodList
-	if len(status.IgnorePodList) != 0 {
-		var ignorePodList []string
-
-		lib.DeepCopy(
-			&ignorePodList, &status.IgnorePodList,
-		)
-
-		spec.IgnorePodList = ignorePodList
 	}
 
 	return &spec, nil
