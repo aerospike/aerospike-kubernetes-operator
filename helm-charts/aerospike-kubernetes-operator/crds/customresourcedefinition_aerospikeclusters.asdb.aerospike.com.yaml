@@ -4603,6 +4603,17 @@ spec:
                   Aerospike cluster. Pods will be deployed in given racks based on
                   given configuration
                 properties:
+                  maxIgnorableFailedPods:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxIgnorableFailedPods is the maximum percentage/number
+                      of rack failed pods that will be ignored while assessing cluster
+                      stability. Failed pods identified using this value are not considered
+                      part of the cluster. This is particularly useful when there
+                      are failed pods and the operator needs to perform certain operations
+                      on the cluster.
+                    x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled
@@ -13350,6 +13361,17 @@ spec:
                   given configuration
                 nullable: true
                 properties:
+                  maxIgnorableFailedPods:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxIgnorableFailedPods is the maximum percentage/number
+                      of rack failed pods that will be ignored while assessing cluster
+                      stability. Failed pods identified using this value are not considered
+                      part of the cluster. This is particularly useful when there
+                      are failed pods and the operator needs to perform certain operations
+                      on the cluster.
+                    x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled

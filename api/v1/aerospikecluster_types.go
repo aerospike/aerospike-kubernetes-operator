@@ -283,9 +283,12 @@ type RackConfig struct { //nolint:govet // for readability
 	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
-
+	// MaxIgnorableFailedPods is the maximum percentage/number of rack failed pods that will be ignored while assessing
+	// cluster stability. Failed pods identified using this value are not considered part of the cluster.
+	// This is particularly useful when there are failed pods and the operator needs to perform certain operations on
+	// the cluster.
 	// +optional
-	MaxIgnorableFailedPods int `json:"maxIgnorableFailedPods,omitempty"`
+	MaxIgnorableFailedPods *intstr.IntOrString `json:"maxIgnorableFailedPods,omitempty"`
 }
 
 // Rack specifies single rack config

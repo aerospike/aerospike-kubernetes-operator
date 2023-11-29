@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -671,7 +672,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 
 	for idx := range configureRacks {
 		rack := &configureRacks[idx]
-		failedAllowed := r.aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods
+
+		failedAllowed, err := intstr.GetScaledValueFromIntOrPercent(
+			r.aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods, rack.Size, false,
+		)
+		if err != nil {
+			return nil, err
+		}
 
 		podList, err := r.getRackPodList(rack.Rack.ID)
 		if err != nil {
