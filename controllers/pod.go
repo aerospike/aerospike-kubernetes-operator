@@ -673,12 +673,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	for idx := range configureRacks {
 		rack := &configureRacks[idx]
 
-		failedAllowed, err := intstr.GetScaledValueFromIntOrPercent(
+		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods, rack.Size, false,
 		)
-		if err != nil {
-			return nil, err
-		}
 
 		podList, err := r.getRackPodList(rack.Rack.ID)
 		if err != nil {
