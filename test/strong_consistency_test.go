@@ -139,10 +139,10 @@ var _ = Describe("SCMode", func() {
 			addedNs := "newns"
 			conf := map[string]interface{}{
 				"name":               addedNs,
-				"memory-size":        1000955200,
 				"replication-factor": 2,
 				"storage-engine": map[string]interface{}{
-					"type": "memory",
+					"type":      "memory",
+					"data-size": 1073741824,
 				},
 			}
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
@@ -306,11 +306,11 @@ var _ = Describe("SCMode", func() {
 					"namespaces": []interface{}{
 						map[string]interface{}{
 							"name":               sc1Name,
-							"memory-size":        1000955200,
 							"replication-factor": 2,
 							"strong-consistency": true,
 							"storage-engine": map[string]interface{}{
-								"type": "memory",
+								"type":      "memory",
+								"data-size": 1073741824,
 							},
 						},
 					},
@@ -456,10 +456,10 @@ func getSCAndNonSCAerospikeConfig() *asdbv1.AerospikeConfigSpec {
 	conf := getSCAerospikeConfig()
 	nonSCConf := map[string]interface{}{
 		"name":               "bar",
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
-			"type": "memory",
+			"type":      "memory",
+			"data-size": 1073741824,
 		},
 	}
 	conf.Value["namespaces"] = append(conf.Value["namespaces"].([]interface{}), nonSCConf)

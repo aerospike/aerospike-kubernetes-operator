@@ -128,7 +128,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
+		"6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
 	}
 
 	for _, v := range versions {
@@ -600,7 +600,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 	}
 	dynamicNs := map[string]interface{}{
 		"name":               "dynamicns",
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
@@ -959,7 +958,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
@@ -973,7 +972,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
@@ -988,7 +987,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"Should fail if both CaCertsFilename and CaCertsSource is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
@@ -1003,7 +1002,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientCertPath: should fail if clientCertPath is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
@@ -1223,7 +1222,6 @@ func negativeDeployClusterValidationTest(
 											)
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
@@ -1368,7 +1366,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
@@ -1382,7 +1380,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for no tls path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1401,7 +1399,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1423,7 +1421,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1444,7 +1442,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1763,7 +1761,6 @@ func negativeUpdateClusterValidationTest(
 
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
@@ -1920,7 +1917,7 @@ func negativeUpdateClusterValidationTest(
 		"InvalidAerospikeConfigSecret", func() {
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost560(
+					aeroCluster := createAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 
