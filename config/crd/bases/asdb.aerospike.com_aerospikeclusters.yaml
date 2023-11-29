@@ -4603,7 +4603,7 @@ spec:
                   Aerospike cluster. Pods will be deployed in given racks based on
                   given configuration
                 properties:
-                  maxUnavailable:
+                  maxIgnorableFailedPods:
                     type: integer
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
@@ -13352,7 +13352,7 @@ spec:
                   given configuration
                 nullable: true
                 properties:
-                  maxUnavailable:
+                  maxIgnorableFailedPods:
                     type: integer
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature

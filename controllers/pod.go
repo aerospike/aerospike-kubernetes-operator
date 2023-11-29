@@ -671,25 +671,46 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 
 	for idx := range configureRacks {
 		rack := &configureRacks[idx]
-		failedAllowed := r.aeroCluster.Spec.RackConfig.MaxUnavailable
+		failedAllowed := r.aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods
 
 		podList, err := r.getRackPodList(rack.Rack.ID)
 		if err != nil {
 			return nil, err
 		}
 
+		var (
+			failedPod  []string
+			pendingPod []string
+		)
+
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
-			if !utils.IsPodRunningAndReady(pod) && failedAllowed > 0 {
-				ignorablePodNames.Insert(pod.Name)
-				failedAllowed--
+
+			if !utils.IsPodRunningAndReady(pod) {
+				if utils.IsPodReasonUnschedulable(pod) {
+					pendingPod = append(pendingPod, pod.Name)
+					continue
+				}
+
+				failedPod = append(failedPod, pod.Name)
 			}
+		}
+
+		// prepend pendingPod to failedPod
+		failedPod = append(pendingPod, failedPod...)
+
+		for podIdx := range failedPod {
+			if failedAllowed <= 0 {
+				break
+			}
+
+			ignorablePodNames.Insert(failedPod[podIdx])
+			failedAllowed--
 		}
 	}
 
 	return ignorablePodNames, nil
 }
-
 func (r *SingleClusterReconciler) getPodsPVCList(
 	podNames []string, rackID int,
 ) ([]corev1.PersistentVolumeClaim, error) {

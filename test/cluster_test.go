@@ -170,7 +170,7 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					By("Upgrade version")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					newImage := baseImage + ":6.4.0.4"
+					newImage := baseImage + ":7.0.0.0_2"
 					aeroCluster.Spec.Image = newImage
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())

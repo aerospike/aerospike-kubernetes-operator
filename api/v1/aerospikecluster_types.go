@@ -284,7 +284,8 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
 
-	MaxUnavailable int `json:"maxUnavailable,omitempty"`
+	// +optional
+	MaxIgnorableFailedPods int `json:"maxIgnorableFailedPods,omitempty"`
 }
 
 // Rack specifies single rack config
