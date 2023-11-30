@@ -848,8 +848,8 @@ func (in *RackConfig) DeepCopyInto(out *RackConfig) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
-	if in.MaxIgnorableFailedPods != nil {
-		in, out := &in.MaxIgnorableFailedPods, &out.MaxIgnorableFailedPods
+	if in.MaxIgnorablePods != nil {
+		in, out := &in.MaxIgnorablePods, &out.MaxIgnorablePods
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}

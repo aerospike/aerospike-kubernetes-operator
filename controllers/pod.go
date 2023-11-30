@@ -650,7 +650,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. User given pods in ignorePodList that are currently not running and can be ignored from stability checks.
+// 2. Failed/pending pods identified using maxIgnorablePods field and can be ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configureRacks []RackState) (
 	sets.Set[string], error,
 ) {
@@ -674,7 +674,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 		rack := &configureRacks[idx]
 
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
-			r.aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods, rack.Size, false,
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, rack.Size, false,
 		)
 
 		podList, err := r.getRackPodList(rack.Rack.ID)

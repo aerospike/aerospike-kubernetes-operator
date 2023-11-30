@@ -638,10 +638,10 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 		}
 	}
 
-	// Validate MaxIgnorableFailedPods param
-	if c.Spec.RackConfig.MaxIgnorableFailedPods != nil {
-		if err := validateIntOrStringField(c.Spec.RackConfig.MaxIgnorableFailedPods,
-			"spec.rackConfig.maxIgnorableFailedPods"); err != nil {
+	// Validate MaxIgnorablePods param
+	if c.Spec.RackConfig.MaxIgnorablePods != nil {
+		if err := validateIntOrStringField(c.Spec.RackConfig.MaxIgnorablePods,
+			"spec.rackConfig.maxIgnorablePods"); err != nil {
 			return err
 		}
 	}

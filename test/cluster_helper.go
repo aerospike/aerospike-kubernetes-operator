@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -539,6 +540,27 @@ func validateMigrateFillDelay(
 	)
 
 	return err
+}
+
+func validateDirtyVolumes(
+	ctx goctx.Context, k8sClient client.Client,
+	clusterNamespacedName types.NamespacedName, expectedVolumes []string,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	for podName := range aeroCluster.Status.Pods {
+		if !reflect.DeepEqual(aeroCluster.Status.Pods[podName].DirtyVolumes, expectedVolumes) {
+			return fmt.Errorf(
+				"dirtyVolumes mismatch, expected: %v, found %v", expectedVolumes,
+				aeroCluster.Status.Pods[podName].DirtyVolumes,
+			)
+		}
+	}
+
+	return nil
 }
 
 func upgradeClusterTest(
