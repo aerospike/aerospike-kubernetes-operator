@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
@@ -155,7 +156,8 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					By("Set IgnorePodList and scale down 1 pod")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods = &val
 					aeroCluster.Spec.Size--
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -193,7 +195,7 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 						"Remove pod from IgnorePodList and verify pod %s is in running state", ignorePodName))
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					aeroCluster.Spec.IgnorePodList = []string{}
+					aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods = nil
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -254,7 +256,8 @@ func clusterWithIgnorePodList(ctx goctx.Context) {
 					By("Delete rack with id 2")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					aeroCluster.Spec.IgnorePodList = []string{ignorePodName}
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorableFailedPods = &val
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: getDummyRackConf(1)}
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
