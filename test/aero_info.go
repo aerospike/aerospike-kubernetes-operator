@@ -288,40 +288,6 @@ func getNodeList(ctx goctx.Context, k8sClient client.Client) (
 	return nodeList, nil
 }
 
-func cordonNodes(ctx goctx.Context, k8sClient client.Client, nodes []corev1.Node) error {
-	for idx := range nodes {
-		// fetch the latest node object to avoid object conflict
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nodes[idx].Name}, &nodes[idx]); err != nil {
-			return err
-		}
-
-		nodes[idx].Spec.Unschedulable = true
-
-		if err := k8sClient.Update(ctx, &nodes[idx]); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func uncordonNodes(ctx goctx.Context, k8sClient client.Client, nodes []corev1.Node) error {
-	for idx := range nodes {
-		// fetch the latest node object to avoid object conflict
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nodes[idx].Name}, &nodes[idx]); err != nil {
-			return err
-		}
-
-		nodes[idx].Spec.Unschedulable = false
-
-		if err := k8sClient.Update(ctx, &nodes[idx]); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
 

@@ -650,7 +650,8 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and can be ignored from stability checks.
+// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
+// can be ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
 	sets.Set[string], error,
 ) {

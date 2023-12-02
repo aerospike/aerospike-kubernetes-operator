@@ -318,6 +318,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int) {
 	By("Deploying cluster")
+
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(size))
 
 	// Add a nonsc namespace. This will be used to test dirty volumes
