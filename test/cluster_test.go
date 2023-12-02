@@ -133,78 +133,40 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 }
 
 func clusterWithMaxIgnorablePod(ctx goctx.Context) {
+	var (
+		aeroCluster *asdbv1.AerospikeCluster
+		err         error
+		nodeList    = &v1.NodeList{}
+		podList     = &v1.PodList{}
+		nodeToDrain int
+	)
+
+	clusterNamespacedName := getNamespacedName(
+		"ignore-pod-cluster", namespace,
+	)
+
+	AfterEach(
+		func() {
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndPendingPod", func() {
-			clusterNamespacedName := getNamespacedName(
-				"ignore-pod-cluster", namespace,
-			)
-
-			var (
-				aeroCluster *asdbv1.AerospikeCluster
-				err         error
-				nodeList    = &v1.NodeList{}
-				podList     = &v1.PodList{}
-				nodeToDrain int
-			)
-
 			BeforeEach(
 				func() {
 					nodeList, err = getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
-					nodeToDrain = len(nodeList.Items) / 2
 					size := len(nodeList.Items) - nodeToDrain
 
-					err = cordonNodes(ctx, k8sClient, nodeList.Items[:nodeToDrain])
-					Expect(err).ToNot(HaveOccurred())
+					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, size)
 
-					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, int32(size))
-					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-					nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-
-					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
-						asdbv1.VolumeSpec{
-							Name: "bar",
-							Source: asdbv1.VolumeSource{
-								PersistentVolume: &asdbv1.PersistentVolumeSpec{
-									Size:         resource.MustParse("1Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   v1.PersistentVolumeBlock,
-								},
-							},
-							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-								Path: "/test/dev/xvdf1",
-							},
-						},
-					)
-					racks := getDummyRackConf(1, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{scNamespace}, Racks: racks}
-					aeroCluster.Spec.PodSpec.MultiPodPerHost = false
-					err = deployCluster(k8sClient, ctx, aeroCluster)
+					By("Scale up 1 pod to make that pod pending due to lack of k8s nodes")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-
-					// make the node unschedulable and delete the pod to make it pending
-					By(fmt.Sprintf("Drain the node %s", nodeList.Items[nodeToDrain].Name))
-					err = cordonNodes(ctx, k8sClient, []v1.Node{nodeList.Items[nodeToDrain]})
-					Expect(err).ToNot(HaveOccurred())
-
-					podList, err = getPodList(aeroCluster, k8sClient)
-					Expect(err).ToNot(HaveOccurred())
-					for idx := range podList.Items {
-						if podList.Items[idx].Spec.NodeName == nodeList.Items[nodeToDrain].Name {
-							Expect(k8sClient.Delete(ctx, &podList.Items[idx])).NotTo(HaveOccurred())
-						}
-					}
-				},
-			)
-
-			AfterEach(
-				func() {
-					// Uncordon all nodes
-					err = uncordonNodes(ctx, k8sClient, nodeList.Items)
-					Expect(err).ToNot(HaveOccurred())
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
+					aeroCluster.Spec.Size++
+					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -257,34 +219,6 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					}
 				},
 			)
-
-			It(
-				"Should allow namespace addition and removal with pending pod", func() {
-					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
-					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-					nsList = nsList[:len(nsList)-1]
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					err = validateDirtyVolumes(ctx, k8sClient, clusterNamespacedName, []string{"bar"})
-					Expect(err).ToNot(HaveOccurred())
-
-					By("RollingRestart by re-using previously removed namespace storage")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					nsList = aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-					nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
 		},
 	)
 
@@ -294,26 +228,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				"ignore-pod-cluster", namespace,
 			)
 
-			var (
-				aeroCluster *asdbv1.AerospikeCluster
-			)
-
 			BeforeEach(
 				func() {
-					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
-					racks := getDummyRackConf(1, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{scNamespace}, Racks: racks}
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
-
-			AfterEach(
-				func() {
-					err := deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, 4)
 				},
 			)
 
@@ -355,8 +272,80 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					}, 4*time.Minute).Should(BeNil())
 				},
 			)
+
+			It(
+				"Should allow namespace addition and removal with failed pod", func() {
+					By("Fail 1-1 aerospike pod")
+					ignorePodName := clusterNamespacedName.Name + "-1-1"
+					pod := &v1.Pod{}
+
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					pod.Spec.Containers[0].Image = "wrong-image"
+					err = k8sClient.Update(ctx, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList = nsList[:len(nsList)-1]
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = validateDirtyVolumes(ctx, k8sClient, clusterNamespacedName, []string{"bar"})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart by re-using previously removed namespace storage")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					nsList = aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList = append(nsList, getNonSCNamespaceConfig("barnew", "/test/dev/xvdf1"))
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
 		},
 	)
+}
+
+func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int) {
+	By("Deploying cluster")
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(size))
+
+	// Add a nonsc namespace. This will be used to test dirty volumes
+	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+		asdbv1.VolumeSpec{
+			Name: "bar",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					Size:         resource.MustParse("1Gi"),
+					StorageClass: storageClass,
+					VolumeMode:   v1.PersistentVolumeBlock,
+				},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: "/test/dev/xvdf1",
+			},
+		},
+	)
+	racks := getDummyRackConf(1, 2)
+	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+		Namespaces: []string{scNamespace}, Racks: racks}
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+	err := deployCluster(k8sClient, ctx, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
 }
 
 // Test cluster deployment with all image post 4.9.0

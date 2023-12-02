@@ -420,31 +420,44 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	}
 
 	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
-		if err != nil {
-			return found, reconcileError(fmt.Errorf("failed to list pods: %v", err))
-		}
-		// Filter ignoredPods to update their dirtyVolumes in the status.
-		// IgnoredPods are skipped from upgrade/rolling restart, and as a result in case of device removal, dirtyVolumes
-		// are not updated in their pod status. This makes devices un-reusable as they cannot be cleaned up during init phase.
-		// So, explicitly add dirtyVolumes for ignoredPods, so that they can be cleaned in the init phase.
-		var ignoredPod []*corev1.Pod
-
-		for idx := range podList {
-			pod := podList[idx]
-			if ignorablePodNames.Has(pod.Name) {
-				ignoredPod = append(ignoredPod, pod)
-			}
-		}
-
-		if len(ignoredPod) > 0 {
-			if err := r.handleNSOrDeviceRemoval(rackState, ignoredPod); err != nil {
-				return found, reconcileError(err)
-			}
+		if res := r.handleNSOrDeviceRemovalForIgnorablePods(rackState, ignorablePodNames); !res.isSuccess {
+			return found, res
 		}
 	}
 
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
+	rackState *RackState, ignorablePodNames sets.Set[string],
+) reconcileResult {
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+	// Filter ignoredPods to update their dirtyVolumes in the status.
+	// IgnoredPods are skipped from upgrade/rolling restart, and as a result in case of device removal, dirtyVolumes
+	// are not updated in their pod status. This makes devices un-reusable as they cannot be cleaned up during init phase.
+	// So, explicitly add dirtyVolumes for ignoredPods, so that they can be cleaned in the init phase.
+	var ignoredPod []*corev1.Pod
+
+	for idx := range podList {
+		pod := podList[idx]
+		// Pods, that are not in status are not even initialized, so no need to update dirtyVolumes.
+		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; ok {
+			if ignorablePodNames.Has(pod.Name) {
+				ignoredPod = append(ignoredPod, pod)
+			}
+		}
+	}
+
+	if len(ignoredPod) > 0 {
+		if err := r.handleNSOrDeviceRemoval(rackState, ignoredPod); err != nil {
+			return reconcileError(err)
+		}
+	}
+
+	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) reconcileRack(
