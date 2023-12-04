@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Version of Operator (build arg)
-ARG VERSION="3.1.0"
+ARG VERSION="3.2.0"
 
 # User to run container as
 ARG USER="root"
