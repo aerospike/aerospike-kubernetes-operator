@@ -124,9 +124,16 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
+	if err != nil {
+		r.Log.Error(err, "Failed to determine pods to be ignored")
+
+		return reconcile.Result{}, err
+	}
+
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
-	allHostConns, err := r.newAllHostConn()
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		e := fmt.Errorf(
 			"failed to get hostConn for aerospike cluster nodes: %v", err,
@@ -146,7 +153,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(); err != nil {
+	if err := r.validateAndReconcileAccessControl(ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -172,12 +179,12 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicy()
 
-	// revert migrate-fill-delay to original value if it was set to 0 during scale down
-	// Passing first rack from the list as all the racks will have same migrate-fill-delay
+	// Revert migrate-fill-delay to original value if it was set to 0 during scale down.
+	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
 	// Redundant safe check to revert migrate-fill-delay if previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, nil,
+		false, ignorablePodNames,
 	); !res.isSuccess {
 		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
 		return reconcile.Result{}, res.err
@@ -191,7 +198,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		// Setup roster
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, nil); err != nil {
+		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			return reconcile.Result{}, err
 		}
@@ -209,10 +216,55 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	// Try to recover pods only when MaxIgnorablePods is set
+	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
+		if res := r.recoverIgnorablePods(); !res.isSuccess {
+			return res.getResult()
+		}
+	}
+
+	r.Log.Info("Reconcile completed successfully")
+
 	return reconcile.Result{}, nil
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl() error {
+func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
+	podList, gErr := r.getClusterPodList()
+	if gErr != nil {
+		r.Log.Error(gErr, "Failed to get cluster pod list")
+		return reconcileError(gErr)
+	}
+
+	r.Log.Info("Try to recover failed/pending pods if any")
+
+	var anyPodFailed bool
+	// Try to recover failed/pending pods by deleting them
+	for idx := range podList.Items {
+		if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
+			anyPodFailed = true
+
+			if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
+				return reconcileError(err)
+			}
+
+			if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
+				r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
+				return reconcileError(err)
+			}
+
+			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+		}
+	}
+
+	if anyPodFailed {
+		r.Log.Info("Found failed/pending pod(s), requeuing")
+		return reconcileRequeueAfter(0)
+	}
+
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(ignorablePodNames sets.Set[string]) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
@@ -231,7 +283,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl() error {
 	}
 
 	// Create client
-	conns, err := r.newAllHostConn()
+	conns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return fmt.Errorf("failed to get host info: %v", err)
 	}

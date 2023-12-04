@@ -804,13 +804,16 @@ var _ = Describe(
 			)
 			BeforeEach(
 				func() {
-					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+					nodes, err := getNodeList(ctx, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = false
 
 					By("Deploying cluster")
-					err := deployCluster(k8sClient, ctx, aeroCluster)
+					err = deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -831,22 +834,19 @@ var _ = Describe(
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				nodes, err := getNodeList(ctx, k8sClient)
-				Expect(err).ToNot(HaveOccurred())
-
-				aeroCluster.Spec.Size = int32(len(nodes.Items) + 1)
+				aeroCluster.Spec.Size++
 
 				// scaleup, no need to wait for long
-				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*2)
+				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 				Expect(err).To(HaveOccurred())
 
 				By("Scaling down the cluster size, failed pods should recover")
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.Size = int32(len(nodes.Items) - 1)
+				aeroCluster.Spec.Size--
 
-				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*10)
+				err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*2)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

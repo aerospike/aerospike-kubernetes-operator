@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -51,7 +52,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(
-	rackState *RackState, pods []*corev1.Pod,
+	rackState *RackState, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) (map[string]RestartType, error) {
 	var addedNSDevices []string
 
@@ -65,9 +66,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	for idx := range pods {
+		if ignorablePodNames.Has(pods[idx].Name) {
+			continue
+		}
+
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
-			// Fetching all block devices that has been added in namespaces.
+			// Fetching all block devices that have been added in namespaces.
 			addedNSDevices, err = r.getNSAddedDevices(rackState)
 			if err != nil {
 				return nil, err
@@ -146,10 +151,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePods []corev1.Pod,
+	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart)
+	failedPods, activePods := getFailedAndActivePods(podsToRestart, ignorablePodNames)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -163,7 +168,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.isSuccess {
 			return res
 		}
 
@@ -345,9 +350,14 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+func getFailedAndActivePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+) (failedPods, activePods []*corev1.Pod) {
 	for idx := range pods {
 		pod := pods[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
 		if err := utils.CheckPodFailed(pod); err != nil {
 			failedPods = append(failedPods, pod)
 			continue
@@ -360,9 +370,9 @@ func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev
 }
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePods []corev1.Pod,
+	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate, ignorablePodNames)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -376,7 +386,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.isSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.isSuccess {
 			return res
 		}
 
@@ -415,7 +425,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) reconcileResult {
 	podNames := getPodNames(podsToCheck)
-	updatedPods := map[string]bool{}
+	updatedPods := sets.Set[string]{}
 
 	const (
 		maxRetries    = 6
@@ -428,7 +438,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 		)
 
 		for _, pod := range podsToCheck {
-			if updatedPods[pod.Name] {
+			if updatedPods.Has(pod.Name) {
 				continue
 			}
 
@@ -451,7 +461,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 				break
 			}
 
-			updatedPods[pod.Name] = true
+			updatedPods.Insert(pod.Name)
 
 			r.Log.Info("Pod is upgraded/downgraded", "podName", pod.Name)
 		}
@@ -638,12 +648,14 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	return nil
 }
 
-// getIgnorablePods returns pods from racksToDelete that are currently not running and can be ignored in stability
-// checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) (
-	[]corev1.Pod, error,
+// getIgnorablePods returns pods:
+// 1. From racksToDelete that are currently not running and can be ignored in stability checks.
+// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
+// can be ignored from stability checks.
+func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
+	sets.Set[string], error,
 ) {
-	var ignorablePods []corev1.Pod
+	ignorablePodNames := sets.Set[string]{}
 
 	for rackIdx := range racksToDelete {
 		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID)
@@ -654,14 +666,56 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack) 
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
-				ignorablePods = append(ignorablePods, pod)
+				ignorablePodNames.Insert(pod.Name)
 			}
 		}
 	}
 
-	return ignorablePods, nil
-}
+	for idx := range configuredRacks {
+		rack := &configuredRacks[idx]
 
+		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, rack.Size, false,
+		)
+
+		podList, err := r.getRackPodList(rack.Rack.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		var (
+			failedPod  []string
+			pendingPod []string
+		)
+
+		for podIdx := range podList.Items {
+			pod := &podList.Items[podIdx]
+
+			if !utils.IsPodRunningAndReady(pod) {
+				if utils.IsPodReasonUnschedulable(pod) {
+					pendingPod = append(pendingPod, pod.Name)
+					continue
+				}
+
+				failedPod = append(failedPod, pod.Name)
+			}
+		}
+
+		// prepend pendingPod to failedPod
+		failedPod = append(pendingPod, failedPod...)
+
+		for podIdx := range failedPod {
+			if failedAllowed <= 0 {
+				break
+			}
+
+			ignorablePodNames.Insert(failedPod[podIdx])
+			failedAllowed--
+		}
+	}
+
+	return ignorablePodNames, nil
+}
 func (r *SingleClusterReconciler) getPodsPVCList(
 	podNames []string, rackID int,
 ) ([]corev1.PersistentVolumeClaim, error) {
@@ -706,9 +760,14 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod) bool {
+func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod, ignorablePodNames sets.Set[string],
+) bool {
 	for idx := range podList {
 		pod := &podList[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
 		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
 		// scaleDown, rollingRestart should work even if node is crashed
 		// If node was crashed due to wrong config then only rollingRestart can bring it back.

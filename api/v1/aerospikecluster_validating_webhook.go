@@ -605,22 +605,9 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 
 	// Validate batch upgrade/restart param
 	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
-		// Just validate if RollingUpdateBatchSize is valid number or string.
-		randomNumber := 100
-
-		count, err := intstr.GetScaledValueFromIntOrPercent(
-			c.Spec.RackConfig.RollingUpdateBatchSize, randomNumber, false,
-		)
-		if err != nil {
+		if err := validateIntOrStringField(c.Spec.RackConfig.RollingUpdateBatchSize,
+			"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
 			return err
-		}
-
-		// Only negative is not allowed. Any big number can be given.
-		if count < 0 {
-			return fmt.Errorf(
-				"can not use negative rackConfig.RollingUpdateBatchSize  %s",
-				c.Spec.RackConfig.RollingUpdateBatchSize.String(),
-			)
 		}
 
 		if len(c.Spec.RackConfig.Racks) < 2 {
@@ -651,6 +638,13 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 		}
 	}
 
+	// Validate MaxIgnorablePods param
+	if c.Spec.RackConfig.MaxIgnorablePods != nil {
+		if err := validateIntOrStringField(c.Spec.RackConfig.MaxIgnorablePods,
+			"spec.rackConfig.maxIgnorablePods"); err != nil {
+			return err
+		}
+	}
 	// TODO: should not use batch if racks are less than replication-factor
 	return nil
 }
@@ -2172,6 +2166,26 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 		); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error {
+	randomNumber := 100
+	// Just validate if value is valid number or string.
+	count, err := intstr.GetScaledValueFromIntOrPercent(value, randomNumber, false)
+	if err != nil {
+		return err
+	}
+
+	// Only negative is not allowed. Any big number can be given.
+	if count < 0 {
+		return fmt.Errorf("can not use negative %s: %s", fieldPath, value.String())
+	}
+
+	if value.Type == intstr.String && count > 100 {
+		return fmt.Errorf("%s: %s must not be greater than 100 percent", fieldPath, value.String())
 	}
 
 	return nil
