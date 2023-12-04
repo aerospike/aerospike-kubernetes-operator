@@ -138,7 +138,6 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 		err         error
 		nodeList    = &v1.NodeList{}
 		podList     = &v1.PodList{}
-		nodeToDrain int
 	)
 
 	clusterNamespacedName := getNamespacedName(
@@ -158,7 +157,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				func() {
 					nodeList, err = getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
-					size := len(nodeList.Items) - nodeToDrain
+					size := len(nodeList.Items)
 
 					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, size)
 
