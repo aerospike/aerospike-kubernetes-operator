@@ -29,7 +29,7 @@ const (
 	// noRestart needed.
 	noRestart RestartType = iota
 
-	// noRestartUpdateConf indicates that restart is not needed but conf file has to be updated/
+	// noRestartUpdateConf indicates that restart is not needed but conf file has to be updated.
 	noRestartUpdateConf
 
 	// podRestart indicates that restart requires a restart of the pod.
@@ -58,15 +58,19 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 }
 
 // Fetching RestartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeMap(
-	rackState *RackState, pods []*corev1.Pod,
-) (restartTypeMap map[string]RestartType, dynamicCmds []string, err error) {
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState) (
+	restartTypeMap map[string]RestartType, dynamicCmds []string, err error) {
 	var (
 		addedNSDevices          []string
 		onlyDynamicConfigChange bool
 	)
 
 	restartTypeMap = make(map[string]RestartType)
+
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
+	}
 
 	confMap, err := r.getConfigMap(rackState.Rack.ID)
 	if err != nil {
@@ -126,10 +130,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
+		podRestartType := quickRestart
 		// checking if volumes added in namespace is part of dirtyVolumes.
 		// if yes, then podRestart is needed.
-		podRestartType := r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
-		if podRestartType == quickRestart && onlyDynamicConfigChange {
+		if len(addedNSDevices) > 0 {
+			podRestartType = r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
+		} else if onlyDynamicConfigChange {
 			podRestartType = noRestartUpdateConf
 		}
 
@@ -1306,7 +1312,13 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 	for diff, value := range specToStatusDiffs {
 		r.Log.Info("creating command", "diff", diff, "value", value)
-		asConfCmds = append(asConfCmds, asconfig.CreateASConfCommand(diff, value)...)
+
+		cmds, err := asconfig.CreateASConfCommand(diff, value)
+		if err != nil {
+			return asConfCmds, fmt.Errorf("failed to create asconfig command: %v", err)
+		}
+
+		asConfCmds = append(asConfCmds, cmds...)
 	}
 
 	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
