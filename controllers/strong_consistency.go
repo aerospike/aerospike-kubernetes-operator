@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	sets "github.com/deckarep/golang-set/v2"
-	corev1 "k8s.io/api/core/v1"
+	gosets "github.com/deckarep/golang-set/v2"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -11,9 +11,9 @@ import (
 
 func (r *SingleClusterReconciler) getAndSetRoster(
 	policy *as.ClientPolicy, rosterNodeBlockList []string,
-	ignorablePods []corev1.Pod,
+	ignorablePodNames sets.Set[string],
 ) error {
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return err
 	}
@@ -26,8 +26,9 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 	return deployment.GetAndSetRoster(r.Log, allHostConns, policy, rosterNodeBlockList, ignorableNamespaces)
 }
 
-func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePods []corev1.Pod) error {
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePodNames sets.Set[string],
+) error {
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return err
 	}
@@ -42,8 +43,8 @@ func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy
 
 func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][]string) []string {
 	var (
-		specSCNamespaces     = sets.NewSet[string]()
-		newAddedSCNamespaces = sets.NewSet[string]()
+		specSCNamespaces     = gosets.NewSet[string]()
+		newAddedSCNamespaces = gosets.NewSet[string]()
 	)
 
 	// Look inside only 1st rack. SC namespaces should be same across all the racks
@@ -58,7 +59,7 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 
 	// Check if SC namespaces are present in all node's namespaces, if not then it's a new SC namespace
 	for _, namespaces := range nodesNamespaces {
-		nodeNamespaces := sets.NewSet[string](namespaces...)
+		nodeNamespaces := gosets.NewSet[string](namespaces...)
 		newAddedSCNamespaces.Append(specSCNamespaces.Difference(nodeNamespaces).ToSlice()...)
 	}
 
@@ -66,7 +67,7 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 }
 
 func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deployment.HostConn) (
-	sets.Set[string], error) {
+	gosets.Set[string], error) {
 	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
 	if err != nil {
 		return nil, err
@@ -75,7 +76,7 @@ func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deploym
 	removedNamespaces := r.removedNamespaces(nodesNamespaces)
 	addSCNamespaces := r.addedSCNamespaces(nodesNamespaces)
 
-	ignorableNamespaces := sets.NewSet[string](removedNamespaces...)
+	ignorableNamespaces := gosets.NewSet[string](removedNamespaces...)
 	ignorableNamespaces.Append(addSCNamespaces...)
 
 	return ignorableNamespaces, nil

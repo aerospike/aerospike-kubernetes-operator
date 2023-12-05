@@ -1363,7 +1363,6 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 						map[string]interface{}{
 							"name":               "test",
 							"replication-factor": networkTestPolicyClusterSize,
-							"memory-size":        3000000000,
 							"migrate-sleep":      0,
 							"storage-engine": map[string]interface{}{
 								"type":     "device",

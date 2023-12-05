@@ -355,7 +355,6 @@ func getAerospikeClusterConfig() *asdbv1.AerospikeConfigSpec {
 				map[string]interface{}{
 					"name":               "test",
 					"replication-factor": 1,
-					"memory-size":        3000000000,
 					"migrate-sleep":      0,
 					"storage-engine": map[string]interface{}{
 						"type": "device",
@@ -368,7 +367,6 @@ func getAerospikeClusterConfig() *asdbv1.AerospikeConfigSpec {
 				map[string]interface{}{
 					"name":               "test1",
 					"replication-factor": 1,
-					"memory-size":        3000000000,
 					"migrate-sleep":      0,
 					"storage-engine": map[string]interface{}{
 						"type": "device",

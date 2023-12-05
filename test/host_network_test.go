@@ -22,7 +22,7 @@ var _ = Describe(
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := createAerospikeClusterPost560(
+				aeroCluster := createAerospikeClusterPost640(
 					clusterNamespacedName, 2, latestImage,
 				)
 				aeroCluster.Spec.PodSpec.HostNetwork = true

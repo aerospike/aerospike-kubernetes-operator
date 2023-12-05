@@ -3,14 +3,17 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 var _ = Describe(
@@ -45,6 +48,11 @@ var _ = Describe(
 		// 		DeployClusterWithSyslog(ctx)
 		// 	},
 		// )
+		Context(
+			"DeployClusterWithMaxIgnorablePod", func() {
+				clusterWithMaxIgnorablePod(ctx)
+			},
+		)
 		Context(
 			"CommonNegativeClusterValidationTest", func() {
 				NegativeClusterValidationTest(ctx)
@@ -124,11 +132,227 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 	)
 }
 
+func clusterWithMaxIgnorablePod(ctx goctx.Context) {
+	var (
+		aeroCluster *asdbv1.AerospikeCluster
+		err         error
+		nodeList    = &v1.NodeList{}
+		podList     = &v1.PodList{}
+	)
+
+	clusterNamespacedName := getNamespacedName(
+		"ignore-pod-cluster", namespace,
+	)
+
+	AfterEach(
+		func() {
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
+	Context(
+		"UpdateClusterWithMaxIgnorablePodAndPendingPod", func() {
+			BeforeEach(
+				func() {
+					nodeList, err = getNodeList(ctx, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+					size := len(nodeList.Items)
+
+					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, size)
+
+					By("Scale up 1 pod to make that pod pending due to lack of k8s nodes")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.Size++
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should allow cluster operations with pending pod", func() {
+					By("Set MaxIgnorablePod and Rolling restart cluster")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = int64(18000)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Upgrade version")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					newImage := baseImage + ":7.0.0.0_2"
+					aeroCluster.Spec.Image = newImage
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verify pending pod")
+					podList, err = getPodList(aeroCluster, k8sClient)
+
+					var counter int
+
+					for idx := range podList.Items {
+						if podList.Items[idx].Status.Phase == v1.PodPending {
+							counter++
+						}
+					}
+					// There should be only one pending pod
+					Expect(counter).To(Equal(1))
+
+					By("Scale down 1 pod")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.Size--
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verify if all pods are running")
+					podList, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					for idx := range podList.Items {
+						Expect(utils.IsPodRunningAndReady(&podList.Items[idx])).To(BeTrue())
+					}
+				},
+			)
+		},
+	)
+
+	Context(
+		"UpdateClusterWithMaxIgnorablePodAndFailedPod", func() {
+			clusterNamespacedName := getNamespacedName(
+				"ignore-pod-cluster", namespace,
+			)
+
+			BeforeEach(
+				func() {
+					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, 4)
+				},
+			)
+
+			It(
+				"Should allow rack deletion with failed pods in different rack", func() {
+					By("Fail 1-1 aerospike pod")
+					ignorePodName := clusterNamespacedName.Name + "-1-1"
+					pod := &v1.Pod{}
+
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					pod.Spec.Containers[0].Image = "wrong-image"
+					err = k8sClient.Update(ctx, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Delete rack with id 2")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+					aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By(fmt.Sprintf("Verify if failed pod %s is automatically recovered", ignorePodName))
+					Eventually(func() bool {
+						err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+							Namespace: clusterNamespacedName.Namespace}, pod)
+
+						return *pod.Status.ContainerStatuses[0].Started && pod.Status.ContainerStatuses[0].Ready
+					}, 1*time.Minute).Should(BeTrue())
+
+					Eventually(func() error {
+						return InterceptGomegaFailure(func() {
+							validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+						})
+					}, 4*time.Minute).Should(BeNil())
+				},
+			)
+
+			It(
+				"Should allow namespace addition and removal with failed pod", func() {
+					By("Fail 1-1 aerospike pod")
+					ignorePodName := clusterNamespacedName.Name + "-1-1"
+					pod := &v1.Pod{}
+
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
+						Namespace: clusterNamespacedName.Namespace}, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					pod.Spec.Containers[0].Image = "wrong-image"
+					err = k8sClient.Update(ctx, pod)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					val := intstr.FromInt(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList = nsList[:len(nsList)-1]
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = validateDirtyVolumes(ctx, k8sClient, clusterNamespacedName, []string{"bar"})
+					Expect(err).ToNot(HaveOccurred())
+
+					By("RollingRestart by re-using previously removed namespace storage")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					nsList = aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList = append(nsList, getNonSCNamespaceConfig("barnew", "/test/dev/xvdf1"))
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int) {
+	By("Deploying cluster")
+
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(size))
+
+	// Add a nonsc namespace. This will be used to test dirty volumes
+	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+		asdbv1.VolumeSpec{
+			Name: "bar",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					Size:         resource.MustParse("1Gi"),
+					StorageClass: storageClass,
+					VolumeMode:   v1.PersistentVolumeBlock,
+				},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: "/test/dev/xvdf1",
+			},
+		},
+	)
+	racks := getDummyRackConf(1, 2)
+	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+		Namespaces: []string{scNamespace}, Racks: racks}
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+	err := deployCluster(k8sClient, ctx, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
+}
+
 // Test cluster deployment with all image post 4.9.0
 func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 	// post 4.9.0, need feature-key file
 	versions := []string{
-		"6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
+		"6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
 	}
 
 	for _, v := range versions {
@@ -600,7 +824,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 	}
 	dynamicNs := map[string]interface{}{
 		"name":               "dynamicns",
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
@@ -959,7 +1182,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
@@ -973,7 +1196,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
@@ -988,7 +1211,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"Should fail if both CaCertsFilename and CaCertsSource is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
@@ -1003,7 +1226,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientCertPath: should fail if clientCertPath is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
@@ -1223,7 +1446,6 @@ func negativeDeployClusterValidationTest(
 											)
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
@@ -1368,7 +1590,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
@@ -1382,7 +1604,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for no tls path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1401,7 +1623,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1423,7 +1645,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1444,7 +1666,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
 						func() {
-							aeroCluster := createAerospikeClusterPost560(
+							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
@@ -1763,7 +1985,6 @@ func negativeUpdateClusterValidationTest(
 
 											secondNs := map[string]interface{}{
 												"name":               "ns1",
-												"memory-size":        1000955200,
 												"replication-factor": 2,
 												"storage-engine": map[string]interface{}{
 													"type":    "device",
@@ -1920,7 +2141,7 @@ func negativeUpdateClusterValidationTest(
 		"InvalidAerospikeConfigSecret", func() {
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost560(
+					aeroCluster := createAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 

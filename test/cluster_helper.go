@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -29,10 +30,10 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "6.3.0.0"
+	prevServerVersion   = "6.4.0.0"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "6.4.0.0"
+	latestServerVersion = "7.0.0.0"
 	invalidVersion      = "3.0.0.4"
 )
 
@@ -321,7 +322,6 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 
 	// Change namespace storage-engine
 	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-	namespaceConfig["storage-engine"].(map[string]interface{})["data-in-memory"] = true
 	namespaceConfig["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
@@ -540,6 +540,27 @@ func validateMigrateFillDelay(
 	)
 
 	return err
+}
+
+func validateDirtyVolumes(
+	ctx goctx.Context, k8sClient client.Client,
+	clusterNamespacedName types.NamespacedName, expectedVolumes []string,
+) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	for podName := range aeroCluster.Status.Pods {
+		if !reflect.DeepEqual(aeroCluster.Status.Pods[podName].DirtyVolumes, expectedVolumes) {
+			return fmt.Errorf(
+				"dirtyVolumes mismatch, expected: %v, found %v", expectedVolumes,
+				aeroCluster.Status.Pods[podName].DirtyVolumes,
+			)
+		}
+	}
+
+	return nil
 }
 
 func upgradeClusterTest(
@@ -781,7 +802,7 @@ func createAerospikeClusterPost460(
 					},
 					"network": getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
+						getNonSCNamespaceConfigPre700("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -842,7 +863,7 @@ func createAerospikeClusterPost560(
 					"security": map[string]interface{}{},
 					"network":  getNetworkTLSConfig(),
 					"namespaces": []interface{}{
-						getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
+						getNonSCNamespaceConfigPre700("test", "/test/dev/xvdf"),
 					},
 				},
 			},
@@ -855,6 +876,17 @@ func createAerospikeClusterPost560(
 	return aeroCluster
 }
 
+func createAerospikeClusterPost640(
+	clusterNamespacedName types.NamespacedName, size int32, image string,
+) *asdbv1.AerospikeCluster {
+	// create Aerospike custom resource
+	aeroCluster := createAerospikeClusterPost560(clusterNamespacedName, size, image)
+	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
+	}
+
+	return aeroCluster
+}
 func createDummyRackAwareWithStorageAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
@@ -1039,12 +1071,61 @@ func UpdateClusterImage(
 		return err
 	}
 
-	ov, err := asconfig.CompareVersions(outgoingVersion, "5.7.0")
+	ov, err := asconfig.CompareVersions(outgoingVersion, "7.0.0")
 	if err != nil {
 		return err
 	}
 
-	nv, err := asconfig.CompareVersions(incomingVersion, "5.7.0")
+	nv, err := asconfig.CompareVersions(incomingVersion, "7.0.0")
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case nv >= 0 && ov >= 0, nv < 0 && ov < 0:
+		aerocluster.Spec.Image = image
+
+	case nv >= 0 && ov < 0:
+		aerocluster.Spec.Image = image
+
+		namespaces := aerocluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+		for idx := range namespaces {
+			ns := namespaces[idx].(map[string]interface{})
+			delete(ns, "memory-size")
+
+			storageEngine := ns["storage-engine"].(map[string]interface{})
+			if storageEngine["type"] == "memory" {
+				storageEngine["data-size"] = 1073741824
+				ns["storage-engine"] = storageEngine
+			}
+
+			namespaces[idx] = ns
+		}
+
+	default:
+		aerocluster.Spec.Image = image
+
+		namespaces := aerocluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+		for idx := range namespaces {
+			ns := namespaces[idx].(map[string]interface{})
+			ns["memory-size"] = 1073741824
+
+			storageEngine := ns["storage-engine"].(map[string]interface{})
+			if storageEngine["type"] == "memory" {
+				delete(storageEngine, "data-size")
+				ns["storage-engine"] = storageEngine
+			}
+
+			namespaces[idx] = ns
+		}
+	}
+
+	ov, err = asconfig.CompareVersions(outgoingVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+
+	nv, err = asconfig.CompareVersions(incomingVersion, "5.7.0")
 	if err != nil {
 		return err
 	}
@@ -1231,13 +1312,11 @@ func createHDDAndDataInMemStorageCluster(
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"type":           "device",
-				"files":          []interface{}{"/opt/aerospike/data/test.dat"},
-				"filesize":       2000955200,
-				"data-in-memory": true,
+				"type":     "memory",
+				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
+				"filesize": 2000955200,
 			},
 		},
 	}
@@ -1254,10 +1333,10 @@ func createDataInMemWithoutPersistentStorageCluster(
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"memory-size":        2000955200,
 			"replication-factor": repFact,
 			"storage-engine": map[string]interface{}{
-				"type": "memory",
+				"type":      "memory",
+				"data-size": 1073741824,
 			},
 		},
 	}
@@ -1389,7 +1468,6 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 func getSCNamespaceConfig(name, path string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": 2,
 		"strong-consistency": true,
 		"storage-engine": map[string]interface{}{
@@ -1402,8 +1480,19 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": 2,
+		"storage-engine": map[string]interface{}{
+			"type":      "memory",
+			"data-size": 1073741824,
+		},
+	}
+}
+
+func getNonSCInMemoryNamespaceConfigPre700(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"memory-size":        1073741824,
 		"storage-engine": map[string]interface{}{
 			"type": "memory",
 		},
@@ -1414,10 +1503,17 @@ func getNonSCNamespaceConfig(name, path string) map[string]interface{} {
 	return getNonSCNamespaceConfigWithRF(name, path, 2)
 }
 
+// getNonSCNamespaceConfigPre700 returns a namespace config for Aerospike version < 7.0.0
+func getNonSCNamespaceConfigPre700(name, path string) map[string]interface{} {
+	config := getNonSCNamespaceConfigWithRF(name, path, 2)
+	config["memory-size"] = 2000955200
+
+	return config
+}
+
 func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
-		"memory-size":        1000955200,
 		"replication-factor": rf,
 		"storage-engine": map[string]interface{}{
 			"type":    "device",

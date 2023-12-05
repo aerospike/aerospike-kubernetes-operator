@@ -4593,6 +4593,24 @@ spec:
                   Aerospike cluster. Pods will be deployed in given racks based on
                   given configuration
                 properties:
+                  maxIgnorablePods:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxIgnorablePods is the maximum number/percentage
+                      of pending/failed pods in a rack that are ignored while assessing
+                      cluster stability. Pods identified using this value are not
+                      considered part of the cluster. Additionally, in SC mode clusters,
+                      these pods are removed from the roster. This is particularly
+                      useful when some pods are stuck in pending/failed state due
+                      to any scheduling issues and cannot be fixed by simply updating
+                      the CR. It enables the operator to perform specific operations
+                      on the cluster, like changing Aerospike configurations, without
+                      being hindered by these problematic pods. Remember to set MaxIgnorablePods
+                      back to 0 once the required operation is done. This makes sure
+                      that later on, all pods are properly counted when evaluating
+                      the cluster stability.
+                    x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled
@@ -13330,6 +13348,24 @@ spec:
                   given configuration
                 nullable: true
                 properties:
+                  maxIgnorablePods:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxIgnorablePods is the maximum number/percentage
+                      of pending/failed pods in a rack that are ignored while assessing
+                      cluster stability. Pods identified using this value are not
+                      considered part of the cluster. Additionally, in SC mode clusters,
+                      these pods are removed from the roster. This is particularly
+                      useful when some pods are stuck in pending/failed state due
+                      to any scheduling issues and cannot be fixed by simply updating
+                      the CR. It enables the operator to perform specific operations
+                      on the cluster, like changing Aerospike configurations, without
+                      being hindered by these problematic pods. Remember to set MaxIgnorablePods
+                      back to 0 once the required operation is done. This makes sure
+                      that later on, all pods are properly counted when evaluating
+                      the cluster stability.
+                    x-kubernetes-int-or-string: true
                   namespaces:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled

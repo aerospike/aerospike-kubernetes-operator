@@ -18,6 +18,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -29,24 +30,25 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits util the input pods is safe to stop,
-// skipping pods that are not running and present in ignorablePods for stability check.
-// The ignorablePods list should be a list of failed or pending pods that are going to be
-// deleted eventually and are safe to ignore in stability checks.
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
+// skipping pods that are not running and present in ignorablePodNames for stability check.
+// The ignorablePodNames is the list of failed or pending pods that are either::
+// 1. going to be deleted eventually and are safe to ignore in stability checks
+// 2. given in ignorePodList by the user and are safe to ignore in stability checks
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePods []corev1.Pod,
+	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	if len(pods) == 0 {
 		return reconcileSuccess()
 	}
 
 	// Remove a node only if cluster is stable
-	if err := r.waitForAllSTSToBeReady(); err != nil {
+	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
 		return reconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return reconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -64,12 +66,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods); err != nil {
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return reconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorablePods); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, ignorablePodNames); err != nil {
 		return reconcileError(err)
 	}
 
@@ -77,7 +79,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 func (r *SingleClusterReconciler) quiescePods(
-	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePods []corev1.Pod,
+	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) error {
 	podList := make([]corev1.Pod, 0, len(pods))
 
@@ -85,7 +87,7 @@ func (r *SingleClusterReconciler) quiescePods(
 		podList = append(podList, *pods[idx])
 	}
 
-	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePods)
+	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePodNames)
 	if err != nil {
 		return err
 	}
@@ -173,15 +175,9 @@ func (r *SingleClusterReconciler) alumniReset(pod *corev1.Pod) error {
 	return asConn.AlumniReset(r.getClientPolicy())
 }
 
-func (r *SingleClusterReconciler) newAllHostConn() (
-	[]*deployment.HostConn, error,
-) {
-	return r.newAllHostConnWithOption(nil)
-}
-
 // newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and
 // present in ignorablePods.
-func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev1.Pod) (
+func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePodNames sets.Set[string]) (
 	[]*deployment.HostConn, error,
 ) {
 	podList, err := r.getClusterPodList()
@@ -193,12 +189,12 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePods []corev
 		return nil, fmt.Errorf("pod list empty")
 	}
 
-	return r.newPodsHostConnWithOption(podList.Items, ignorablePods)
+	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
 }
 
 // newPodsHostConnWithOption returns connections to all pods given skipping pods that are not running and
 // present in ignorablePods.
-func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods, ignorablePods []corev1.Pod) (
+func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, ignorablePodNames sets.Set[string]) (
 	[]*deployment.HostConn, error,
 ) {
 	hostConns := make([]*deployment.HostConn, 0, len(pods))
@@ -211,8 +207,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods, ignorablePods 
 
 		// Checking if all the container in the pod are ready or not
 		if !utils.IsPodRunningAndReady(pod) {
-			ignorablePod := utils.GetPod(pod.Name, ignorablePods)
-			if ignorablePod != nil {
+			if ignorablePodNames.Has(pod.Name) {
 				// This pod is not running and ignorable.
 				r.Log.Info(
 					"Ignoring info call on non-running pod ", "pod", pod.Name,
@@ -259,7 +254,7 @@ func hostID(hostName string, hostPort int) string {
 
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	policy *as.ClientPolicy,
-	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePods []corev1.Pod,
+	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	migrateFillDelay, err := asdbv1.GetMigrateFillDelay(asConfig)
 	if err != nil {
@@ -286,7 +281,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return reconcileError(
 			fmt.Errorf(
@@ -304,10 +299,10 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 func (r *SingleClusterReconciler) setDynamicConfig(
 	policy *as.ClientPolicy,
-	cmds []string, pods []*corev1.Pod, ignorablePods []corev1.Pod,
+	cmds []string, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return reconcileError(
 			fmt.Errorf(
@@ -322,7 +317,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		podList = append(podList, *pods[idx])
 	}
 
-	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePods)
+	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePodNames)
 	if err != nil {
 		return reconcileError(
 			fmt.Errorf(

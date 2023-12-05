@@ -72,6 +72,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Seeds Finder Services"
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 }
 
@@ -276,6 +277,17 @@ type RackConfig struct { //nolint:govet // for readability
 	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
+	// MaxIgnorablePods is the maximum number/percentage of pending/failed pods in a rack that are ignored while
+	// assessing cluster stability. Pods identified using this value are not considered part of the cluster.
+	// Additionally, in SC mode clusters, these pods are removed from the roster.
+	// This is particularly useful when some pods are stuck in pending/failed state due to any scheduling issues and
+	// cannot be fixed by simply updating the CR.
+	// It enables the operator to perform specific operations on the cluster, like changing Aerospike configurations,
+	// without being hindered by these problematic pods.
+	// Remember to set MaxIgnorablePods back to 0 once the required operation is done.
+	// This makes sure that later on, all pods are properly counted when evaluating the cluster stability.
+	// +optional
+	MaxIgnorablePods *intstr.IntOrString `json:"maxIgnorablePods,omitempty"`
 }
 
 // Rack specifies single rack config

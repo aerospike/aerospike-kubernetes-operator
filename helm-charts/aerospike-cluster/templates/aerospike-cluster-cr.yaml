@@ -16,7 +16,7 @@ spec:
   size: {{ .Values.replicas | default 3 }}
 
   # Aerospike server docker image
-  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "6.4.0.0" }}
+  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "7.0.0.0" }}
 
   # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}
@@ -43,10 +43,11 @@ spec:
 
     namespaces:
       - name: test
-        memory-size: 1073741824 # 1GiB
         replication-factor: 2
         storage-engine:
           type: memory
+          data-size: 1073741824 # 1GiB
+
   {{- end }}
 
   # Aerospike network policy

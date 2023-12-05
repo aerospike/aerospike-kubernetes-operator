@@ -20,7 +20,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:6.4.0.0
+  image: aerospike/aerospike-server-enterprise:7.0.0.0
   podSpec:
     multiPodPerHost: true
 
@@ -49,7 +49,7 @@ spec:
         port: 3002
     namespaces:
       - name: test
-        memory-size: 3000000000
         replication-factor: 2
         storage-engine:
           type: memory
+          data-size: 1073741824

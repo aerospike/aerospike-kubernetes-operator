@@ -54,9 +54,11 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	clusterName := "warm-restart-cluster"
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
-	aeroCluster := createAerospikeClusterPost560(
-		clusterNamespacedName, 2, image,
+	aeroCluster, err := getAeroClusterConfig(
+		clusterNamespacedName, image,
 	)
+	Expect(err).ToNot(HaveOccurred())
+
 	// Add a volume of type empty dir to figure if pod restarted.
 	aeroCluster.Spec.Storage.Volumes = append(
 		aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
@@ -67,7 +69,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: tempTestDir},
 		},
 	)
-	err := deployCluster(k8sClient, ctx, aeroCluster)
+	err = deployCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
 	defer func(

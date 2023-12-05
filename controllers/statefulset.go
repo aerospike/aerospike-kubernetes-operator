@@ -192,7 +192,7 @@ func (r *SingleClusterReconciler) createSTS(
 		"StatefulSet.Name", st.Name,
 	)
 
-	if err := r.waitForSTSToBeReady(st); err != nil {
+	if err := r.waitForSTSToBeReady(st, nil); err != nil {
 		return st, fmt.Errorf(
 			"failed to wait for statefulset to be ready: %v", err,
 		)
@@ -209,7 +209,9 @@ func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	return r.Client.Delete(context.TODO(), st)
 }
 
-func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) error {
+func (r *SingleClusterReconciler) waitForSTSToBeReady(
+	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+) error {
 	const (
 		podStatusMaxRetry      = 18
 		podStatusRetryInterval = time.Second * 10
@@ -223,6 +225,9 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(st *appsv1.StatefulSet) er
 	var podIndex int32
 	for podIndex = 0; podIndex < *st.Spec.Replicas; podIndex++ {
 		podName := getSTSPodName(st.Name, podIndex)
+		if ignorablePodNames.Has(podName) {
+			continue
+		}
 
 		var isReady bool
 
@@ -1003,7 +1008,7 @@ func updateSTSContainers(
 	return stsContainers[:idx]
 }
 
-func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
+func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
 	r.Log.Info("Waiting for cluster to be ready")
 
 	allRackIDs := sets.NewInt()
@@ -1032,7 +1037,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady() error {
 			continue
 		}
 
-		if err := r.waitForSTSToBeReady(st); err != nil {
+		if err := r.waitForSTSToBeReady(st, ignorablePodNames); err != nil {
 			return err
 		}
 	}
