@@ -3,11 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strconv"
 
+	v1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -38,9 +37,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	}
 
 	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-	// TODO: Move to concrete object when minimum supported k8s version is 1.21
-	pdb := &unstructured.Unstructured{}
-	pdb.SetGroupVersionKind(PDBbGvk)
+	pdb := &v1.PodDisruptionBudget{}
 
 	if err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
@@ -56,11 +53,9 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		pdb.SetName(r.aeroCluster.Name)
 		pdb.SetNamespace(r.aeroCluster.Namespace)
 		pdb.SetLabels(ls)
-		pdb.Object["spec"] = map[string]interface{}{
-			"maxUnavailable": r.aeroCluster.Spec.MaxUnavailable,
-			"selector": &metav1.LabelSelector{
-				MatchLabels: ls,
-			},
+		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
+		pdb.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: ls,
 		}
 
 		// Set AerospikeCluster instance as the owner and controller
@@ -90,21 +85,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
-	var value string
-
-	maxUnavailable := pdb.Object["spec"].(map[string]interface{})["maxUnavailable"]
-
-	// Type casting is required because of unstructured object
-	if val, ok := maxUnavailable.(string); ok {
-		value = val
-	} else {
-		value = strconv.Itoa(int(maxUnavailable.(int64)))
-	}
-
-	if value != r.aeroCluster.Spec.MaxUnavailable.String() {
-		spec := pdb.Object["spec"].(map[string]interface{})
-		spec["maxUnavailable"] = r.aeroCluster.Spec.MaxUnavailable
-		pdb.Object["spec"] = spec
+	if pdb.Spec.MaxUnavailable.String() != r.aeroCluster.Spec.MaxUnavailable.String() {
+		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
 
 		if err := r.Client.Update(
 			context.TODO(), pdb, updateOption,
