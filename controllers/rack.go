@@ -424,7 +424,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
-						res.err, "Failed to do rolling restart", "stsName",
+						res.err, "Failed to do dynamic update", "stsName",
 						found.Name,
 					)
 
@@ -435,6 +435,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 						rackState.Rack.ID, found.Namespace, found.Name,
 					)
 				}
+
+				return found, res
 			}
 		}
 	}
@@ -1296,9 +1298,7 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1.Vo
 		return true
 	}
 
-	var volumeCopy asdbv1.VolumeSpec
-
-	lib.DeepCopy(&volumeCopy, volume)
+	volumeCopy := lib.DeepCopy(*volume).(asdbv1.VolumeSpec)
 
 	if volumeCopy.Source.Secret != nil {
 		setDefaultsSecretVolumeSource(volumeCopy.Source.Secret)

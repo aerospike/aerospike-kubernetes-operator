@@ -384,18 +384,17 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 	}
 
 	// AerospikeAccessControl
-	statusAerospikeAccessControl := &asdbv1.AerospikeAccessControlSpec{}
-	lib.DeepCopy(
-		statusAerospikeAccessControl, r.aeroCluster.Spec.AerospikeAccessControl,
-	)
+	statusAerospikeAccessControl := lib.DeepCopy(
+		*r.aeroCluster.Spec.AerospikeAccessControl,
+	).(asdbv1.AerospikeAccessControlSpec)
 
-	newAeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
+	newAeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = &statusAerospikeAccessControl
 
 	if err := r.patchStatus(newAeroCluster); err != nil {
 		return fmt.Errorf("error updating status: %w", err)
 	}
 
-	r.aeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
+	r.aeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = &statusAerospikeAccessControl
 
 	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
 
@@ -539,7 +538,7 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCl
 	//  Seems like a bug in encoding/json/Unmarshall.
 	//
 	// Workaround by force copying new object's status to old object's status.
-	lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	oldAeroCluster.Status = lib.DeepCopy(newAeroCluster.Status).(asdbv1.AerospikeClusterStatus)
 
 	return nil
 }

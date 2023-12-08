@@ -18,7 +18,6 @@ package v1
 
 import (
 	"fmt"
-	lib "github.com/aerospike/aerospike-management-lib"
 	"reflect"
 	"strings"
 
@@ -31,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 //nolint:lll // for readability
@@ -240,15 +240,12 @@ func (c *AerospikeCluster) updateRacksPodSpecFromGlobal(asLog logr.Logger) {
 
 func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logger) error {
 	for idx := range c.Spec.RackConfig.Racks {
-		asLog.Info("#########printing spec aerospike config", "spec", c.Spec.AerospikeConfig.Value)
 		rack := &c.Spec.RackConfig.Racks[idx]
 
 		var (
 			m   map[string]interface{}
 			err error
 		)
-
-		asconf := AerospikeConfigSpec{Value: map[string]interface{}{}}
 
 		if rack.InputAerospikeConfig != nil {
 			// Merge this rack's and global config.
@@ -260,8 +257,6 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 				return err
 			}
 
-			asconf.Value = m
-
 			asLog.V(1).Info(
 				"Merged rack config from global aerospikeConfig", "rack id",
 				rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig",
@@ -269,42 +264,34 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 			)
 		} else {
 			// Use the global config.
-			lib.DeepCopy(&asconf.Value, &c.Spec.AerospikeConfig.Value)
-			//m = c.Spec.AerospikeConfig.Value
+			m = lib.DeepCopy(c.Spec.AerospikeConfig.Value).(map[string]interface{})
 		}
 
 		asLog.V(1).Info(
 			"Update rack aerospikeConfig from default aerospikeConfig",
-			"rackAerospikeConfig", asconf.Value,
+			"rackAerospikeConfig", m,
 		)
 
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := c.setDefaultAerospikeConfigs(asLog, asconf, rack.ID); err != nil {
+		if err := c.setDefaultAerospikeConfigs(asLog, AerospikeConfigSpec{Value: m}, rack.ID); err != nil {
 			return err
 		}
 
-		asLog.V(1).Info(
-			"Update rack aerospikeConfig from default aerospikeConfig",
-			"rackAerospikeConfig", asconf.Value,
-		)
-
-		c.Spec.RackConfig.Racks[idx].AerospikeConfig = asconf
-
+		c.Spec.RackConfig.Racks[idx].AerospikeConfig.Value = m
 	}
 
 	return nil
 }
 
-func (c *AerospikeCluster) setDefaultAerospikeConfigs(asLog logr.Logger, configSpec AerospikeConfigSpec, rackID int) error {
+func (c *AerospikeCluster) setDefaultAerospikeConfigs(asLog logr.Logger,
+	configSpec AerospikeConfigSpec, rackID int) error {
 	config := configSpec.Value
 
 	// namespace conf
 	if err := setDefaultNsConf(asLog, configSpec, c.Spec.RackConfig.Namespaces, rackID); err != nil {
 		return err
 	}
-
-	asLog.Info("after setDefaultNsConf", "c.Spec.AerospikeConfig", c.Spec.AerospikeConfig.Value, "rackID", rackID)
 
 	// service conf
 	if err := setDefaultServiceConf(asLog, configSpec, c.Name); err != nil {

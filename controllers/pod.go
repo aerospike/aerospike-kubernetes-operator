@@ -1403,5 +1403,9 @@ func isFieldDynamic(dynamic map[string]bool, diff string) bool {
 		return true
 	}
 
+	if strings.Contains(key, "rack-id") {
+		return false
+	}
+
 	return dynamic[key]
 }
