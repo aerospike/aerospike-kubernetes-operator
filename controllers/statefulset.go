@@ -961,7 +961,7 @@ func updateSTSContainers(
 
 		// Create a copy because updating stateful sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		specContainerCopy := lib.DeepCopy(specContainer).(corev1.Container)
+		specContainerCopy := lib.DeepCopy(*specContainer).(corev1.Container)
 
 		for stsIdx := range stsContainers {
 			if specContainer.Name != stsContainers[stsIdx].Name {
