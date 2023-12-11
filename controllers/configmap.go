@@ -167,10 +167,9 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 func createPodSpecForRack(
 	aeroCluster *asdbv1.AerospikeCluster, rack *asdbv1.Rack,
 ) *asdbv1.AerospikePodSpec {
-	rackFullPodSpec := asdbv1.AerospikePodSpec{}
-	lib.DeepCopy(
-		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
-	)
+	rackFullPodSpec := lib.DeepCopy(
+		aeroCluster.Spec.PodSpec,
+	).(asdbv1.AerospikePodSpec)
 
 	rackFullPodSpec.Affinity = rack.PodSpec.Affinity
 	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations

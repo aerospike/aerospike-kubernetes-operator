@@ -296,3 +296,39 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 	return reconcileSuccess()
 }
+
+func (r *SingleClusterReconciler) setDynamicConfig(
+	policy *as.ClientPolicy,
+	cmds []string, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+) reconcileResult {
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	podList := make([]corev1.Pod, 0, len(pods))
+
+	for idx := range pods {
+		podList = append(podList, *pods[idx])
+	}
+
+	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePodNames)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	if err := deployment.SetConfigCommandsOnHosts(r.Log, policy, allHostConns, selectedHostConns, cmds); err != nil {
+		return reconcileError(err)
+	}
+
+	return reconcileSuccess()
+}

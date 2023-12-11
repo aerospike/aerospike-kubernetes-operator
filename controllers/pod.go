@@ -20,6 +20,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 // RestartType is the type of pod restart to use.
@@ -29,6 +30,9 @@ const (
 	// noRestart needed.
 	noRestart RestartType = iota
 
+	// noRestartUpdateConf indicates that restart is not needed but conf file has to be updated.
+	noRestartUpdateConf
+
 	// podRestart indicates that restart requires a restart of the pod.
 	podRestart
 
@@ -37,7 +41,7 @@ const (
 )
 
 // mergeRestartType generates the updated restart type based on precedence.
-// podRestart > quickRestart > noRestart
+// podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
 	if current == podRestart || incoming == podRestart {
 		return podRestart
@@ -47,20 +51,31 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 		return quickRestart
 	}
 
+	if current == noRestartUpdateConf || incoming == noRestartUpdateConf {
+		return noRestartUpdateConf
+	}
+
 	return noRestart
 }
 
 // Fetching RestartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeMap(
-	rackState *RackState, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
-) (map[string]RestartType, error) {
-	var addedNSDevices []string
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
+	restartTypeMap map[string]RestartType, dynamicCmds []string, err error) {
+	var (
+		addedNSDevices          []string
+		onlyDynamicConfigChange bool
+	)
 
-	restartTypeMap := make(map[string]RestartType)
+	restartTypeMap = make(map[string]RestartType)
+
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
+	}
 
 	confMap, err := r.getConfigMap(rackState.Rack.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
@@ -71,24 +86,39 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 		}
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
-		if addedNSDevices == nil && podStatus.AerospikeConfigHash != requiredConfHash {
-			// Fetching all block devices that have been added in namespaces.
-			addedNSDevices, err = r.getNSAddedDevices(rackState)
-			if err != nil {
-				return nil, err
+		if podStatus.AerospikeConfigHash != requiredConfHash {
+			if addedNSDevices == nil {
+				// Fetching all block devices that have been added in namespaces.
+				addedNSDevices, err = r.getNSAddedDevices(rackState)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+
+			if dynamicCmds == nil {
+				// Fetching all dynamic config commands.
+				dynamicCmds, err = r.handleDynamicConfigChange(rackState)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 
-		restartType := r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices)
+		if len(dynamicCmds) > 0 {
+			onlyDynamicConfigChange = true
+		}
+
+		restartType := r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices, onlyDynamicConfigChange)
 
 		restartTypeMap[pods[idx].Name] = restartType
 	}
 
-	return restartTypeMap, nil
+	return restartTypeMap, dynamicCmds, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
-	rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap, addedNSDevices []string,
+	rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap,
+	addedNSDevices []string, onlyDynamicConfigChange bool,
 ) RestartType {
 	restartType := noRestart
 
@@ -105,9 +135,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
+		podRestartType := quickRestart
 		// checking if volumes added in namespace is part of dirtyVolumes.
 		// if yes, then podRestart is needed.
-		podRestartType := r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
+		if len(addedNSDevices) > 0 {
+			podRestartType = r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
+		} else if onlyDynamicConfigChange {
+			podRestartType = noRestartUpdateConf
+		}
 
 		restartType = mergeRestartType(restartType, podRestartType)
 
@@ -180,14 +215,25 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) restartASDInPod(
-	rackState *RackState, pod *corev1.Pod,
-) error {
+func (r *SingleClusterReconciler) restartOrUpdateAerospikeServer(rackState *RackState,
+	pod *corev1.Pod, operation RestartType) error {
 	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
 	initBinary := "/etc/aerospike/akoinit"
+
+	var subCommand string
+
+	switch operation {
+	case noRestart, podRestart:
+		return fmt.Errorf("invalid operation for akoinit")
+	case quickRestart:
+		subCommand = "quick-restart"
+	case noRestartUpdateConf:
+		subCommand = "update-conf"
+	}
+
 	cmd := []string{
 		initBinary,
-		"quick-restart",
+		subCommand,
 		"--cm-name",
 		cmName.Name,
 		"--cm-namespace",
@@ -226,7 +272,7 @@ func (r *SingleClusterReconciler) restartASDInPod(
 			}
 		} else {
 			r.Log.V(1).Info(
-				"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
+				"Failed to perform", "operation", subCommand, "err", err, "podName", pod.Name, "stdout",
 				stdout, "stderr", stderr,
 			)
 
@@ -234,11 +280,19 @@ func (r *SingleClusterReconciler) restartASDInPod(
 		}
 	}
 
-	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name,
-	)
-	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
+	if subCommand == "quick-restart" {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
+			"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name,
+		)
+		r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
+	} else {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
+			"[rack-%d] Updated Pod %s", rackState.Rack.ID, pod.Name,
+		)
+		r.Log.V(1).Info("Pod conf updated", "podName", pod.Name)
+	}
 
 	return nil
 }
@@ -261,9 +315,47 @@ func (r *SingleClusterReconciler) restartPods(
 
 		if restartType == quickRestart {
 			// If ASD restart fails then go ahead and restart the pod
-			if err := r.restartASDInPod(rackState, pod); err == nil {
+			if err := r.restartOrUpdateAerospikeServer(rackState, pod, quickRestart); err == nil {
 				continue
 			}
+		}
+
+		if err := r.Client.Delete(context.TODO(), pod); err != nil {
+			r.Log.Error(err, "Failed to delete pod")
+			return reconcileError(err)
+		}
+
+		restartedPods = append(restartedPods, pod)
+
+		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+	}
+
+	if len(restartedPods) > 0 {
+		return r.ensurePodsRunningAndReady(restartedPods)
+	}
+
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) updatePods(
+	rackState *RackState, podsToUpdate []*corev1.Pod,
+) reconcileResult {
+	restartedPods := make([]*corev1.Pod, 0, len(podsToUpdate))
+
+	for idx := range podsToUpdate {
+		pod := podsToUpdate[idx]
+
+		r.Log.Info("updating pod", "pod", pod.Name)
+		// If update Conf fails then go ahead and restart the asd
+		var err error
+		if err = r.restartOrUpdateAerospikeServer(rackState, pod, noRestartUpdateConf); err == nil {
+			continue
+		}
+
+		r.Log.Info("Restarting pod as updating failed", "pod", pod.Name, "err", err)
+		// If ASD restart fails then go ahead and restart the pod
+		if err := r.restartOrUpdateAerospikeServer(rackState, pod, quickRestart); err == nil {
+			continue
 		}
 
 		if err := r.Client.Delete(context.TODO(), pod); err != nil {
@@ -641,8 +733,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 		}
 	}
 
-	if err := r.cleanupPods(danglingPods, rackState); err != nil {
-		return fmt.Errorf("failed dangling pod cleanup: %v", err)
+	if len(danglingPods) > 0 {
+		if err := r.cleanupPods(danglingPods, rackState); err != nil {
+			return fmt.Errorf("failed dangling pod cleanup: %v", err)
+		}
 	}
 
 	return nil
@@ -1012,7 +1106,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 }
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
-	removedDevices []string, removedFiles []string, pod *corev1.Pod,
+	removedDevices, removedFiles []string, pod *corev1.Pod,
 ) error {
 	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
@@ -1211,4 +1305,107 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	}
 
 	return confMap, nil
+}
+
+func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) ([]string, error) {
+	var rackStatus asdbv1.Rack
+
+	asConfCmds := make([]string, 0)
+
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		if r.aeroCluster.Status.RackConfig.Racks[idx].ID == rackState.Rack.ID {
+			rackStatus = r.aeroCluster.Status.RackConfig.Racks[idx]
+		}
+	}
+
+	version := strings.Split(r.aeroCluster.Spec.Image, ":")
+
+	asConfStatus, err := asconfig.NewMapAsConfig(r.Log, version[1], rackStatus.AerospikeConfig.Value)
+	if err != nil {
+		return asConfCmds, fmt.Errorf("failed to load config map by lib: %v", err)
+	}
+
+	asConfSpec, err := asconfig.NewMapAsConfig(r.Log, version[1], rackState.Rack.AerospikeConfig.Value)
+	if err != nil {
+		return asConfCmds, fmt.Errorf("failed to load config map by lib: %v", err)
+	}
+
+	flatStatusConf := *asConfStatus.GetFlatMap()
+	flatSpecConf := *asConfSpec.GetFlatMap()
+
+	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, false, true, version[1])
+	r.Log.Info("print diff", "difference", fmt.Sprintf("%v", specToStatusDiffs))
+
+	if len(specToStatusDiffs) > 1 {
+		r.Log.V(1).Info("Multiple config change in single go is not supported,"+
+			"falling back to rolling restart if needed", "diff", fmt.Sprintf("%v", specToStatusDiffs))
+
+		return asConfCmds, nil
+	}
+
+	dynamic, _ := asconfig.GetDynamic("6.4.0")
+	r.Log.Info("printing dynamic values", "dynamic", dynamic)
+
+	for diff, value := range specToStatusDiffs {
+		isDynamic := isFieldDynamic(dynamic, diff)
+		r.Log.Info("isDynamic", "isDynamic", isDynamic)
+
+		if !isDynamic {
+			r.Log.Info("Static field has been changed, cannot change config dynamically", "key", diff)
+			return asConfCmds, nil
+		}
+
+		if fmt.Sprintf("%T", value) == "[]string" {
+			if statusValue, ok := flatStatusConf[diff]; ok {
+				statusSet := sets.NewString(statusValue.([]string)...)
+				diffSet := sets.NewString(value.([]string)...)
+
+				if len(statusSet.Difference(diffSet)) > 0 {
+					r.Log.Info("Can not remove value from list dynamically", "key", diff,
+						"statusset", fmt.Sprint(statusSet.List()), "diffSet", fmt.Sprint(diffSet.List()))
+					return asConfCmds, nil
+				}
+			}
+		}
+	}
+
+	for diff, value := range specToStatusDiffs {
+		r.Log.Info("creating command", "diff", diff, "value", value)
+
+		cmds, err := asconfig.CreateASConfCommand(diff, value)
+		if err != nil {
+			return asConfCmds, fmt.Errorf("failed to create asconfig command: %v", err)
+		}
+
+		asConfCmds = append(asConfCmds, cmds...)
+	}
+
+	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
+	// run asinfo command list in server
+
+	return asConfCmds, nil
+}
+
+func isFieldDynamic(dynamic map[string]bool, diff string) bool {
+	var key string
+
+	tokens := strings.Split(diff, ".")
+	for _, token := range tokens {
+		if token[0] == '{' && token[len(token)-1] == '}' {
+			key += "_."
+		} else {
+			key = key + token + "."
+		}
+	}
+
+	key = strings.TrimSuffix(key, ".")
+	if strings.Contains(key, "replication-factor") {
+		return true
+	}
+
+	if strings.Contains(key, "rack-id") {
+		return false
+	}
+
+	return dynamic[key]
 }

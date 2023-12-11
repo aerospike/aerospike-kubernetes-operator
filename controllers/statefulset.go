@@ -133,7 +133,7 @@ func (r *SingleClusterReconciler) createSTS(
 						{
 							Name:            asdbv1.AerospikeInitContainerName,
 							Image:           asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{
@@ -790,13 +790,13 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
-	affinity := &corev1.Affinity{}
+	var affinity corev1.Affinity
 
 	// Use rack affinity, if given
 	if rackState.Rack.PodSpec.Affinity != nil {
-		lib.DeepCopy(affinity, rackState.Rack.PodSpec.Affinity)
+		affinity = lib.DeepCopy(*rackState.Rack.PodSpec.Affinity).(corev1.Affinity)
 	} else if r.aeroCluster.Spec.PodSpec.Affinity != nil {
-		lib.DeepCopy(affinity, r.aeroCluster.Spec.PodSpec.Affinity)
+		affinity = lib.DeepCopy(*r.aeroCluster.Spec.PodSpec.Affinity).(corev1.Affinity)
 	}
 
 	// Set our rules in PodAntiAffinity
@@ -896,7 +896,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 		}
 	}
 
-	st.Spec.Template.Spec.Affinity = affinity
+	st.Spec.Template.Spec.Affinity = &affinity
 
 	// Use rack nodeSelector, if given
 	if len(rackState.Rack.PodSpec.NodeSelector) != 0 {
@@ -961,8 +961,7 @@ func updateSTSContainers(
 
 		// Create a copy because updating stateful sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		specContainerCopy := &corev1.Container{}
-		lib.DeepCopy(specContainerCopy, specContainer)
+		specContainerCopy := lib.DeepCopy(*specContainer).(corev1.Container)
 
 		for stsIdx := range stsContainers {
 			if specContainer.Name != stsContainers[stsIdx].Name {
@@ -972,7 +971,7 @@ func updateSTSContainers(
 			// Retain volume mounts and devices to make sure external storage will not lose.
 			specContainerCopy.VolumeMounts = stsContainers[stsIdx].VolumeMounts
 			specContainerCopy.VolumeDevices = stsContainers[stsIdx].VolumeDevices
-			stsContainers[stsIdx] = *specContainerCopy
+			stsContainers[stsIdx] = specContainerCopy
 			found = true
 
 			break
@@ -980,7 +979,7 @@ func updateSTSContainers(
 
 		if !found {
 			// Add to stateful set containers.
-			stsContainers = append(stsContainers, *specContainerCopy)
+			stsContainers = append(stsContainers, specContainerCopy)
 		}
 	}
 

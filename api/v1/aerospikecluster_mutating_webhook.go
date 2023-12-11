@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2023.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 //nolint:lll // for readability
@@ -88,9 +89,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
-	if err := c.setDefaultAerospikeConfigs(
-		asLog, *c.Spec.AerospikeConfig,
-	); err != nil {
+	if err := c.setDefaultAerospikeConfigs(asLog, *c.Spec.AerospikeConfig, DefaultRackID); err != nil {
 		return err
 	}
 
@@ -254,18 +253,18 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 				c.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value,
 			)
 
+			if err != nil {
+				return err
+			}
+
 			asLog.V(1).Info(
 				"Merged rack config from global aerospikeConfig", "rack id",
 				rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig",
 				c.Spec.AerospikeConfig,
 			)
-
-			if err != nil {
-				return err
-			}
 		} else {
 			// Use the global config.
-			m = c.Spec.AerospikeConfig.Value
+			m = lib.DeepCopy(c.Spec.AerospikeConfig.Value).(map[string]interface{})
 		}
 
 		asLog.V(1).Info(
@@ -275,9 +274,7 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := c.setDefaultAerospikeConfigs(
-			asLog, AerospikeConfigSpec{Value: m},
-		); err != nil {
+		if err := c.setDefaultAerospikeConfigs(asLog, AerospikeConfigSpec{Value: m}, rack.ID); err != nil {
 			return err
 		}
 
@@ -287,15 +284,12 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 	return nil
 }
 
-func (c *AerospikeCluster) setDefaultAerospikeConfigs(
-	asLog logr.Logger, configSpec AerospikeConfigSpec,
-) error {
+func (c *AerospikeCluster) setDefaultAerospikeConfigs(asLog logr.Logger,
+	configSpec AerospikeConfigSpec, rackID int) error {
 	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(
-		asLog, configSpec, c.Spec.RackConfig.Namespaces,
-	); err != nil {
+	if err := setDefaultNsConf(asLog, configSpec, c.Spec.RackConfig.Namespaces, rackID); err != nil {
 		return err
 	}
 
@@ -362,10 +356,7 @@ func (n *AerospikeNetworkPolicy) setNetworkNamespace(namespace string) {
 // Helper
 // *****************************************************************************
 
-func setDefaultNsConf(
-	asLog logr.Logger, configSpec AerospikeConfigSpec,
-	rackEnabledNsList []string,
-) error {
+func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec, rackEnabledNsList []string, rackID int) error {
 	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
@@ -399,21 +390,10 @@ func setDefaultNsConf(
 			)
 		}
 
-		// Add dummy rack-id only for rackEnabled namespaces
-		defaultConfs := map[string]interface{}{"rack-id": DefaultRackID}
-
 		if nsName, ok := nsMap["name"]; ok {
 			if _, ok := nsName.(string); ok {
 				if isNameExist(rackEnabledNsList, nsName.(string)) {
-					// Add dummy rack-id, should be replaced with actual rack-id by init-container script
-					if err := setDefaultsInConfigMap(
-						asLog, nsMap, defaultConfs,
-					); err != nil {
-						return fmt.Errorf(
-							"failed to set default aerospikeConfig.namespaces rack config: %v",
-							err,
-						)
-					}
+					nsMap["rack-id"] = rackID
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
 					// but left namespace defaults. This key should be removed then only controller will detect

@@ -27,7 +27,7 @@ func (c *AerospikeConfigSpec) DeepCopy() *AerospikeConfigSpec {
 	dst := &AerospikeConfigSpec{
 		Value: map[string]interface{}{},
 	}
-	lib.DeepCopy(dst, c)
+	dst.Value = lib.DeepCopy(c.Value).(map[string]interface{})
 
 	return dst
 }
