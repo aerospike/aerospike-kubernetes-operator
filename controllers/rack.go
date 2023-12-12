@@ -350,7 +350,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
 	// We may change config, let some pods restart with new config and then change config back to original value.
-	// Now rack.spec, rack.status will be same, but few pods will have changed config.
+	// Now rack.spec, rack.status will be the same, but few pods will have changed config.
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
@@ -420,7 +420,14 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	}
 
 	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		if res := r.handleNSOrDeviceRemovalForIgnorablePods(rackState, ignorablePodNames); !res.isSuccess {
+		if res = r.handleNSOrDeviceRemovalForIgnorablePods(rackState, ignorablePodNames); !res.isSuccess {
+			return found, res
+		}
+	}
+
+	if r.aeroCluster.Spec.K8sNodeBlockList != nil {
+		found, res = r.handleK8sNodeBlockListPods(found, rackState, ignorablePodNames)
+		if !res.isSuccess {
 			return found, res
 		}
 	}
@@ -502,9 +509,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	if failedPods == nil {
-		// revert migrate-fill-delay to original value if it was set to 0 during scale down
-		// Reset will be done if there is Scale down or Rack redistribution
-		// This check won't cover scenario where scale down operation was done and then reverted to previous value
+		// Revert migrate-fill-delay to original value if it was set to 0 during scale down.
+		// Reset will be done if there is scale-down or Rack redistribution.
+		// This check won't cover a scenario where scale-down operation was done and then reverted to previous value
 		// before the scale down could complete.
 		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
@@ -1059,6 +1066,49 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 	)
 
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1.StatefulSet, rackState *RackState,
+	ignorablePodNames sets.Set[string],
+) (*appsv1.StatefulSet, reconcileResult) {
+	if err := r.updateSTS(statefulSet, rackState); err != nil {
+		return statefulSet, reconcileError(
+			fmt.Errorf("upgrade rack : %v", err),
+		)
+	}
+
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return statefulSet, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
+
+	for idx := range podList {
+		pod := podList[idx]
+
+		if blockedK8sNodes.Has(pod.Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, migrating to a different node",
+				"podName", pod.Name)
+
+			if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePodNames); !res.isSuccess {
+				return statefulSet, res
+			}
+
+			restartTypeMap := map[string]RestartType{
+				pod.Name: podRestart,
+			}
+
+			if res := r.restartPods(rackState, []*corev1.Pod{pod}, restartTypeMap); !res.isSuccess {
+				return statefulSet, reconcileError(err)
+			}
+
+			// handle next pod on blocked node in subsequent Reconcile.
+			return statefulSet, reconcileRequeueAfter(1)
+		}
+	}
+
+	return statefulSet, reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (

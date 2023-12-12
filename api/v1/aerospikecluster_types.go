@@ -78,6 +78,9 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
+	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -568,8 +571,11 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
-	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
+	// CleanupThreads contains the maximum number of cleanup threads(dd or blkdiscard) per init container.
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
+
+	// LocalStorageClasses contains a list of storage classes which provisions local volumes.
+	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
@@ -633,6 +639,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
+	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -956,6 +964,16 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.RosterNodeBlockList = rosterNodeBlockList
 	}
 
+	if len(spec.K8sNodeBlockList) != 0 {
+		var k8sNodeBlockList []string
+
+		lib.DeepCopy(
+			&k8sNodeBlockList, &spec.K8sNodeBlockList,
+		)
+
+		status.K8sNodeBlockList = k8sNodeBlockList
+	}
+
 	return &status, nil
 }
 
@@ -1045,6 +1063,16 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		)
 
 		spec.RosterNodeBlockList = rosterNodeBlockList
+	}
+
+	if len(status.K8sNodeBlockList) != 0 {
+		var k8sNodeBlockList []string
+
+		lib.DeepCopy(
+			&k8sNodeBlockList, &status.K8sNodeBlockList,
+		)
+
+		spec.K8sNodeBlockList = k8sNodeBlockList
 	}
 
 	return &spec, nil

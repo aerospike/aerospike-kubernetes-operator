@@ -63,10 +63,20 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 		return nil, err
 	}
 
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
+			continue
+		}
+
+		if blockedK8sNodes.Has(pods[idx].Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, will be migrated to a different node",
+				"podName", pods[idx].Name)
+
+			restartTypeMap[pods[idx].Name] = podRestart
+
 			continue
 		}
 
@@ -260,6 +270,7 @@ func (r *SingleClusterReconciler) restartPods(
 	}
 
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
@@ -267,9 +278,18 @@ func (r *SingleClusterReconciler) restartPods(
 		restartType := restartTypeMap[pod.Name]
 
 		if restartType == quickRestart {
-			// If ASD restart fails then go ahead and restart the pod
+			// If ASD restart fails, then go ahead and restart the pod
 			if err := r.restartASDInPod(rackState, pod); err == nil {
 				continue
+			}
+		}
+
+		if blockedK8sNodes.Has(pod.Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+				"podName", pod.Name)
+
+			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+				return reconcileError(err)
 			}
 		}
 
@@ -414,16 +434,27 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return reconcileError(err)
 	}
 
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
+
 	// Delete pods
-	for _, p := range podsToUpdate {
-		if err := r.Client.Delete(context.TODO(), p); err != nil {
+	for _, pod := range podsToUpdate {
+		if blockedK8sNodes.Has(pod.Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+				"podName", pod.Name)
+
+			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+				return reconcileError(err)
+			}
+		}
+
+		if err := r.Client.Delete(context.TODO(), pod); err != nil {
 			return reconcileError(err)
 		}
 
-		r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
-			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name,
+			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, pod.Name,
 		)
 	}
 

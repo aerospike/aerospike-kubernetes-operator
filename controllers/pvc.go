@@ -103,6 +103,32 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 	return deletedPVCs, nil
 }
 
+func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *corev1.Pod) error {
+	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID)
+	if err != nil {
+		return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
+	}
+
+	for idx := range pvcItems {
+		pvcStorageClass := pvcItems[idx].Spec.StorageClassName
+		if pvcStorageClass == nil {
+			r.Log.Info("PVC does not have storageClass set, no need to delete PVC", "pvcName", pvcItems[idx].Name)
+
+			continue
+		}
+
+		if utils.ContainsString(rackState.Rack.Storage.LocalStorageClasses, *pvcStorageClass) {
+			if err := r.Client.Delete(context.TODO(), &pvcItems[idx]); err != nil {
+				return fmt.Errorf(
+					"could not delete pvc %s: %v", pvcItems[idx].Name, err,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.PersistentVolumeClaim) error {
 	if len(deletedPVCs) == 0 {
 		return nil

@@ -45,7 +45,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		r.aeroCluster.Status,
 	)
 
-	// Check DeletionTimestamp to see if cluster is being deleted
+	// Check DeletionTimestamp to see if the cluster is being deleted
 	if !r.aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
 		// The cluster is being deleted

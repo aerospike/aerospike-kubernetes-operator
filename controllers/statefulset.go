@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -651,11 +652,16 @@ func (r *SingleClusterReconciler) updateSTS(
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(statefulSet, rackState)
 
-	// Save the updated stateful set.
-	// Can we optimize this? Update stateful set only if there is any change
-	// in it.
-	err := r.Client.Update(context.TODO(), statefulSet, updateOption)
-	if err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		found, err := r.getSTS(rackState)
+		if err != nil {
+			return err
+		}
+
+		// Save the updated stateful set.
+		found.Spec = statefulSet.Spec
+		return r.Client.Update(context.TODO(), found, updateOption)
+	}); err != nil {
 		return fmt.Errorf(
 			"failed to update StatefulSet %s: %v",
 			statefulSet.Name,
@@ -915,6 +921,16 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 				Key:      "kubernetes.io/hostname",
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.NodeName},
+			},
+		)
+	}
+
+	if r.aeroCluster.Spec.K8sNodeBlockList != nil {
+		matchExpressions = append(
+			matchExpressions, corev1.NodeSelectorRequirement{
+				Key:      "kubernetes.io/hostname",
+				Operator: corev1.NodeSelectorOpNotIn,
+				Values:   r.aeroCluster.Spec.K8sNodeBlockList,
 			},
 		)
 	}
@@ -1526,8 +1542,18 @@ func getSTSContainerPort(
 	multiPodPerHost bool, aeroConf *asdbv1.AerospikeConfigSpec,
 ) []corev1.ContainerPort {
 	ports := make([]corev1.ContainerPort, 0, len(defaultContainerPorts))
+	portNames := make([]string, 0, len(defaultContainerPorts))
 
-	for portName, portInfo := range defaultContainerPorts {
+	// Sorting defaultContainerPorts to fetch map in ordered manner.
+	// Helps reduce unnecessary sts object updates.
+	for portName := range defaultContainerPorts {
+		portNames = append(portNames, portName)
+	}
+
+	sort.Strings(portNames)
+
+	for _, portName := range portNames {
+		portInfo := defaultContainerPorts[portName]
 		configPort := asdbv1.GetPortFromConfig(
 			aeroConf, portInfo.connectionType, portInfo.configParam,
 		)

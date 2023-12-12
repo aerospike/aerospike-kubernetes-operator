@@ -280,6 +280,12 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              k8sNodeBlockList:
+                description: K8sNodeBlockList is a list of Kubernetes nodes which
+                  are not used for Aerospike pods.
+                items:
+                  type: string
+                type: array
               maxUnavailable:
                 anyOf:
                 - type: integer
@@ -5739,7 +5745,7 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
-                              description: CleanupThreads contains maximum number
+                              description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
                             filesystemVolumePolicy:
@@ -5794,6 +5800,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains a list of
+                                storage classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -7427,7 +7439,7 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
-                              description: CleanupThreads contains maximum number
+                              description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
                             filesystemVolumePolicy:
@@ -7482,6 +7494,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains a list of
+                                storage classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -8131,7 +8149,7 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
-                    description: CleanupThreads contains maximum number of cleanup
+                    description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
                   filesystemVolumePolicy:
@@ -8186,6 +8204,12 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  localStorageClasses:
+                    description: LocalStorageClasses contains a list of storage classes
+                      which provisions local volumes.
+                    items:
+                      type: string
+                    type: array
                   volumes:
                     description: Volumes list to attach to created pods.
                     items:
@@ -8915,6 +8939,12 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              k8sNodeBlockList:
+                description: K8sNodeBlockList is a list of Kubernetes nodes which
+                  are not used for Aerospike pods.
+                items:
+                  type: string
+                type: array
               maxUnavailable:
                 anyOf:
                 - type: integer
@@ -14502,7 +14532,7 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
-                              description: CleanupThreads contains maximum number
+                              description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
                             filesystemVolumePolicy:
@@ -14557,6 +14587,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains a list of
+                                storage classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -16190,7 +16226,7 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
-                              description: CleanupThreads contains maximum number
+                              description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
                             filesystemVolumePolicy:
@@ -16245,6 +16281,12 @@ spec:
                                   - deleteFiles
                                   type: string
                               type: object
+                            localStorageClasses:
+                              description: LocalStorageClasses contains a list of
+                                storage classes which provisions local volumes.
+                              items:
+                                type: string
+                              type: array
                             volumes:
                               description: Volumes list to attach to created pods.
                               items:
@@ -16945,7 +16987,7 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
-                    description: CleanupThreads contains maximum number of cleanup
+                    description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
                   filesystemVolumePolicy:
@@ -17000,6 +17042,12 @@ spec:
                         - deleteFiles
                         type: string
                     type: object
+                  localStorageClasses:
+                    description: LocalStorageClasses contains a list of storage classes
+                      which provisions local volumes.
+                    items:
+                      type: string
+                    type: array
                   volumes:
                     description: Volumes list to attach to created pods.
                     items:
