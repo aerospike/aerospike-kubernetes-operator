@@ -122,14 +122,6 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	// Validate Load Balancer update
-	if err := validateLoadBalancerUpdate(
-		aslog, c.Spec.SeedsFinderServices.LoadBalancer,
-		old.Spec.SeedsFinderServices.LoadBalancer,
-	); err != nil {
-		return nil, err
-	}
-
 	// Validate RackConfig update
 	return nil, c.validateRackUpdate(aslog, old)
 }
@@ -1271,18 +1263,6 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	}
 
 	return rf, nil
-}
-
-func validateLoadBalancerUpdate(
-	aslog logr.Logger, newLBSpec, oldLBSpec *LoadBalancerSpec,
-) error {
-	aslog.Info("Validate LoadBalancer update")
-
-	if oldLBSpec != nil && oldLBSpec.PortName != newLBSpec.PortName {
-		return fmt.Errorf("cannot update existing LoadBalancer Service name")
-	}
-
-	return nil
 }
 
 func validateSecurityConfigUpdate(
