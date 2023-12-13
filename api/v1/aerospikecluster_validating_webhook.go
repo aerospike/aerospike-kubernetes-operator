@@ -1278,8 +1278,8 @@ func validateLoadBalancerUpdate(
 ) error {
 	aslog.Info("Validate LoadBalancer update")
 
-	if oldLBSpec != nil && !reflect.DeepEqual(oldLBSpec, newLBSpec) {
-		return fmt.Errorf("cannot update existing LoadBalancer Service")
+	if oldLBSpec != nil && oldLBSpec.PortName != newLBSpec.PortName {
+		return fmt.Errorf("cannot update existing LoadBalancer Service name")
 	}
 
 	return nil

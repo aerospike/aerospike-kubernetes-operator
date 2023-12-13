@@ -158,22 +158,65 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	if len(service.Spec.Ports) == 1 && service.Spec.Ports[0].Port == servicePort.Port &&
-		service.Spec.Ports[0].TargetPort == servicePort.TargetPort {
+	return r.updateLBService(service, &servicePort, loadBalancer)
+}
+
+func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servicePort *corev1.ServicePort,
+	loadBalancer *asdbv1.LoadBalancerSpec) error {
+	updateLBService := false
+	aerospikePortNameFound := false
+
+	for idx := range service.Spec.Ports {
+		if service.Spec.Ports[idx].Name == servicePort.Name {
+			aerospikePortNameFound = true
+
+			if service.Spec.Ports[idx].Port != servicePort.Port ||
+				service.Spec.Ports[idx].TargetPort != servicePort.TargetPort {
+				service.Spec.Ports[idx].Port = servicePort.Port
+				service.Spec.Ports[idx].TargetPort = servicePort.TargetPort
+				updateLBService = true
+			}
+
+			break
+		}
+	}
+
+	// If there is no port name set for in port added by operator, then set it and overwrite ports set by user.
+	if !aerospikePortNameFound {
+		service.Spec.Ports = []corev1.ServicePort{
+			*servicePort,
+		}
+
+		updateLBService = true
+	}
+
+	if !reflect.DeepEqual(service.ObjectMeta.Annotations, loadBalancer.Annotations) {
+		service.ObjectMeta.Annotations = loadBalancer.Annotations
+		updateLBService = true
+	}
+
+	if !reflect.DeepEqual(service.Spec.LoadBalancerSourceRanges, loadBalancer.LoadBalancerSourceRanges) {
+		service.Spec.LoadBalancerSourceRanges = loadBalancer.LoadBalancerSourceRanges
+		updateLBService = true
+	}
+
+	if !reflect.DeepEqual(service.Spec.ExternalTrafficPolicy, loadBalancer.ExternalTrafficPolicy) {
+		service.Spec.ExternalTrafficPolicy = loadBalancer.ExternalTrafficPolicy
+		updateLBService = true
+	}
+
+	if updateLBService {
+		if err := r.Client.Update(
+			context.TODO(), service, updateOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to update service %s: %v", service.Name, err,
+			)
+		}
+	} else {
 		r.Log.Info("LoadBalancer service update not required, skipping",
 			"name", utils.NamespacedName(service.Namespace, service.Name))
 		return nil
-	}
-
-	service.Spec.Ports = []corev1.ServicePort{
-		servicePort,
-	}
-	if err := r.Client.Update(
-		context.TODO(), service, updateOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to update service %s: %v", serviceName, err,
-		)
 	}
 
 	r.Log.Info("LoadBalancer service updated",
@@ -351,9 +394,17 @@ func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBala
 		port = targetPort
 	}
 
+	var portName string
+	if loadBalancer.PortName == "" {
+		// If port is specified in CR.
+		portName = "aerospikeport"
+	} else {
+		portName = loadBalancer.PortName
+	}
+
 	return corev1.ServicePort{
 		Port:       port,
-		Name:       loadBalancer.PortName,
+		Name:       portName,
 		TargetPort: intstr.FromInt(int(targetPort)),
 	}
 }
