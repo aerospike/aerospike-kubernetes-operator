@@ -60,7 +60,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	restartTypeMap map[string]RestartType, dynamicCmds []string, err error) {
+	restartTypeMap map[string]RestartType, dynamicDiffs map[string]interface{}, err error) {
 	var (
 		addedNSDevices          []string
 		onlyDynamicConfigChange bool
@@ -95,16 +95,16 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				}
 			}
 
-			if dynamicCmds == nil {
-				// Fetching all dynamic config commands.
-				dynamicCmds, err = r.handleDynamicConfigChange(rackState)
+			if dynamicDiffs == nil {
+				// Fetching all dynamic diffs.
+				dynamicDiffs, err = r.handleDynamicConfigChange(rackState)
 				if err != nil {
 					return nil, nil, err
 				}
 			}
 		}
 
-		if len(dynamicCmds) > 0 {
+		if len(dynamicDiffs) > 0 {
 			onlyDynamicConfigChange = true
 		}
 
@@ -113,7 +113,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		restartTypeMap[pods[idx].Name] = restartType
 	}
 
-	return restartTypeMap, dynamicCmds, nil
+	return restartTypeMap, dynamicDiffs, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
@@ -1307,10 +1307,8 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) ([]string, error) {
+func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) (map[string]interface{}, error) {
 	var rackStatus asdbv1.Rack
-
-	asConfCmds := make([]string, 0)
 
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
 		if r.aeroCluster.Status.RackConfig.Racks[idx].ID == rackState.Rack.ID {
@@ -1322,12 +1320,12 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 	asConfStatus, err := asconfig.NewMapAsConfig(r.Log, version[1], rackStatus.AerospikeConfig.Value)
 	if err != nil {
-		return asConfCmds, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
 	asConfSpec, err := asconfig.NewMapAsConfig(r.Log, version[1], rackState.Rack.AerospikeConfig.Value)
 	if err != nil {
-		return asConfCmds, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
 	flatStatusConf := *asConfStatus.GetFlatMap()
@@ -1340,10 +1338,10 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		r.Log.V(1).Info("Multiple config change in single go is not supported,"+
 			"falling back to rolling restart if needed", "diff", fmt.Sprintf("%v", specToStatusDiffs))
 
-		return asConfCmds, nil
+		return nil, nil
 	}
 
-	dynamic, _ := asconfig.GetDynamic("6.4.0")
+	dynamic, _ := asconfig.GetDynamic("7.0.0")
 	r.Log.Info("printing dynamic values", "dynamic", dynamic)
 
 	for diff, value := range specToStatusDiffs {
@@ -1352,7 +1350,7 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 		if !isDynamic {
 			r.Log.Info("Static field has been changed, cannot change config dynamically", "key", diff)
-			return asConfCmds, nil
+			return nil, nil
 		}
 
 		if fmt.Sprintf("%T", value) == "[]string" {
@@ -1363,27 +1361,13 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 				if len(statusSet.Difference(diffSet)) > 0 {
 					r.Log.Info("Can not remove value from list dynamically", "key", diff,
 						"statusset", fmt.Sprint(statusSet.List()), "diffSet", fmt.Sprint(diffSet.List()))
-					return asConfCmds, nil
+					return nil, nil
 				}
 			}
 		}
 	}
 
-	for diff, value := range specToStatusDiffs {
-		r.Log.Info("creating command", "diff", diff, "value", value)
-
-		cmds, err := asconfig.CreateASConfCommand(diff, value)
-		if err != nil {
-			return asConfCmds, fmt.Errorf("failed to create asconfig command: %v", err)
-		}
-
-		asConfCmds = append(asConfCmds, cmds...)
-	}
-
-	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
-	// run asinfo command list in server
-
-	return asConfCmds, nil
+	return specToStatusDiffs, nil
 }
 
 func isFieldDynamic(dynamic map[string]bool, diff string) bool {

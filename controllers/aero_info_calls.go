@@ -24,6 +24,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 // ------------------------------------------------------------------------------------
@@ -299,7 +300,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 func (r *SingleClusterReconciler) setDynamicConfig(
 	policy *as.ClientPolicy,
-	cmds []string, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	diffs map[string]interface{}, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
@@ -326,7 +327,14 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		)
 	}
 
-	if err := deployment.SetConfigCommandsOnHosts(r.Log, policy, allHostConns, selectedHostConns, cmds); err != nil {
+	asConfCmds, err := info.CreateConfigSetCmdList(diffs)
+	if err != nil {
+		return reconcileError(err)
+	}
+
+	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
+
+	if err := deployment.SetConfigCommandsOnHosts(r.Log, policy, allHostConns, selectedHostConns, asConfCmds); err != nil {
 		return reconcileError(err)
 	}
 
