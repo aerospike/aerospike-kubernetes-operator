@@ -81,7 +81,9 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			)
 		}
 
-		failedPods, _ := getFailedAndActivePods(podList, ignorablePodNames)
+		failedPods, _ := getFailedAndActivePods(podList)
+		// remove ignorable pods from failedPods
+		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
 			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 
@@ -107,7 +109,9 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			)
 		}
 
-		failedPods, _ = getFailedAndActivePods(podList, ignorablePodNames)
+		failedPods, _ = getFailedAndActivePods(podList)
+		// remove ignorable pods from failedPods
+		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
 			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
 
@@ -426,7 +430,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	}
 
 	if r.aeroCluster.Spec.K8sNodeBlockList != nil {
-		found, res = r.handleK8sNodeBlockListPods(found, rackState, ignorablePodNames)
+		found, res = r.handleK8sNodeBlockListPods(found, rackState, ignorablePodNames, failedPods)
 		if !res.isSuccess {
 			return found, res
 		}
@@ -1069,7 +1073,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 }
 
 func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1.StatefulSet, rackState *RackState,
-	ignorablePodNames sets.Set[string],
+	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, reconcileResult) {
 	if err := r.updateSTS(statefulSet, rackState); err != nil {
 		return statefulSet, reconcileError(
@@ -1077,12 +1081,26 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 		)
 	}
 
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
-	if err != nil {
-		return statefulSet, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	var (
+		podList []*corev1.Pod
+		err     error
+	)
+
+	if len(failedPods) != 0 {
+		podList = failedPods
+	} else {
+		// List the pods for this aeroCluster's statefulset
+		podList, err = r.getOrderedRackPodList(rackState.Rack.ID)
+		if err != nil {
+			return statefulSet, reconcileError(fmt.Errorf("failed to list pods: %v", err))
+		}
 	}
 
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
+
+	var podsToRestart []*corev1.Pod
+
+	restartTypeMap := make(map[string]RestartType)
 
 	for idx := range podList {
 		pod := podList[idx]
@@ -1091,19 +1109,35 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 			r.Log.Info("Pod found in blocked nodes list, migrating to a different node",
 				"podName", pod.Name)
 
-			if res := r.waitForMultipleNodesSafeStopReady([]*corev1.Pod{pod}, ignorablePodNames); !res.isSuccess {
-				return statefulSet, res
-			}
+			podsToRestart = append(podsToRestart, pod)
 
-			restartTypeMap := map[string]RestartType{
+			restartTypeMap = map[string]RestartType{
 				pod.Name: podRestart,
 			}
+		}
+	}
 
-			if res := r.restartPods(rackState, []*corev1.Pod{pod}, restartTypeMap); !res.isSuccess {
-				return statefulSet, reconcileError(err)
-			}
+	podsBatchList := r.getPodsBatchToRestart(podsToRestart, len(podList))
 
-			// handle next pod on blocked node in subsequent Reconcile.
+	// Restart batch of pods
+	if len(podsBatchList) > 0 {
+		// Handle one batch
+		podsBatch := podsBatchList[0]
+
+		r.Log.Info(
+			"Calculated batch for Pod migration to different nodes",
+			"rackPodList", getPodNames(podList),
+			"rearrangedPods", getPodNames(podsToRestart),
+			"podsBatch", getPodNames(podsBatch),
+			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
+		)
+
+		if res := r.rollingRestartPods(rackState, podsBatch, ignorablePodNames, restartTypeMap); !res.isSuccess {
+			return statefulSet, res
+		}
+
+		// Handle next batch in subsequent Reconcile.
+		if len(podsBatchList) > 1 {
 			return statefulSet, reconcileRequeueAfter(1)
 		}
 	}

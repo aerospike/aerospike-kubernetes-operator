@@ -171,7 +171,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart, ignorablePodNames)
+	failedPods, activePods := getFailedAndActivePods(podsToRestart)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -377,13 +377,9 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
-) (failedPods, activePods []*corev1.Pod) {
+func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
 	for idx := range pods {
 		pod := pods[idx]
-		if ignorablePodNames.Has(pod.Name) {
-			continue
-		}
 
 		if err := utils.CheckPodFailed(pod); err != nil {
 			failedPods = append(failedPods, pod)
@@ -396,10 +392,26 @@ func getFailedAndActivePods(pods []*corev1.Pod, ignorablePodNames sets.Set[strin
 	return failedPods, activePods
 }
 
+func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+) []*corev1.Pod {
+	nonIgnorablePods := make([]*corev1.Pod, 0, len(pods))
+
+	for idx := range pods {
+		pod := pods[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
+		nonIgnorablePods = append(nonIgnorablePods, pod)
+	}
+
+	return nonIgnorablePods
+}
+
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate, ignorablePodNames)
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {

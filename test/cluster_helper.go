@@ -759,7 +759,7 @@ func deployClusterWithTO(
 	if err != nil {
 		return err
 	}
-	// Wait for aerocluster to reach desired cluster size.
+	// Wait for aerocluster to reach the desired cluster size.
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		timeout,

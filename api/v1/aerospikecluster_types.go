@@ -25,6 +25,21 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+// +kubebuilder:validation:Enum=AerospikeClusterInProgress;AerospikeClusterCompleted;AerospikeClusterError
+type AerospikeClusterPhase string
+
+// These are the valid phases of Aerospike cluster.
+const (
+	// AerospikeClusterInProgress means the Aerospike cluster operations are in-progress state.
+	// This phase denotes that changes are gradually rolling out to the cluster.
+	AerospikeClusterInProgress AerospikeClusterPhase = "InProgress"
+	// AerospikeClusterCompleted means the Aerospike cluster has been deployed/upgraded successfully and is ready to use.
+	AerospikeClusterCompleted AerospikeClusterPhase = "Completed"
+	// AerospikeClusterError means the Aerospike cluster is in error state because of some reason like misconfiguration,
+	// infra issues, etc.
+	AerospikeClusterError AerospikeClusterPhase = "Error"
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -660,7 +675,10 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
 	// status. The map key is the name of the pod.
 	// +patchStrategy=strategic
-	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
+	Pods map[string]AerospikePodStatus `json:"pods,omitempty" patchStrategy:"strategic"`
+
+	// Phase denotes the current phase of Aerospike cluster operation.
+	Phase AerospikeClusterPhase `json:"phase,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
@@ -848,9 +866,10 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 //+kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
-// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`
+// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.multiPodPerHost`
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}

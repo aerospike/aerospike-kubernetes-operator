@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.image
       name: Image
       type: string
-    - jsonPath: .spec.podSpec.MultiPodPerHost
+    - jsonPath: .spec.podSpec.multiPodPerHost
       name: MultiPodPerHost
       type: boolean
     - jsonPath: .spec.podSpec.hostNetwork
@@ -30,6 +30,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
     name: v1
     schema:
       openAPIV3Schema:
@@ -9012,6 +9015,14 @@ spec:
                       list by the operator
                     type: string
                 type: object
+              phase:
+                description: Phase denotes the current phase of Aerospike cluster
+                  operation.
+                enum:
+                - AerospikeClusterInProgress
+                - AerospikeClusterCompleted
+                - AerospikeClusterError
+                type: string
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
@@ -17537,8 +17548,6 @@ spec:
                 - skipWorkDirValidate
                 - skipXdrDlogFileValidate
                 type: object
-            required:
-            - pods
             type: object
         type: object
     served: true

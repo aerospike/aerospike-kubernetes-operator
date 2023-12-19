@@ -69,7 +69,17 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, nil
 	}
 
-	// The cluster is not being deleted, add finalizer in not added already
+	// Set the status to AerospikeClusterInProgress before starting any operations
+	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterInProgress {
+		r.aeroCluster.Status.Phase = asdbv1.AerospikeClusterInProgress
+
+		if err := r.Client.Status().Update(context.Background(), r.aeroCluster); err != nil {
+			r.Log.Error(err, "Failed to set cluster status to AerospikeClusterInProgress")
+			return reconcile.Result{}, err
+		}
+	}
+
+	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
 		return reconcile.Result{}, err
@@ -364,6 +374,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	}
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
+	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {

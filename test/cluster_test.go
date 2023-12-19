@@ -243,7 +243,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 
-					pod.Spec.Containers[0].Image = "wrong-image"
+					pod.Spec.Containers[0].Image = wrongImage
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -282,7 +282,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 
-					pod.Spec.Containers[0].Image = "wrong-image"
+					pod.Spec.Containers[0].Image = wrongImage
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
