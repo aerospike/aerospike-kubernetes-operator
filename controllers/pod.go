@@ -1331,8 +1331,8 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	flatStatusConf := *asConfStatus.GetFlatMap()
 	flatSpecConf := *asConfSpec.GetFlatMap()
 
-	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, false, true, version[1])
-	r.Log.Info("print diff", "difference", fmt.Sprintf("%v", specToStatusDiffs))
+	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, false, true, "7.0.0")
+	r.Log.Info("print diff outside", "difference", fmt.Sprintf("%v", specToStatusDiffs))
 
 	if len(specToStatusDiffs) > 1 {
 		r.Log.V(1).Info("Multiple config change in single go is not supported,"+
@@ -1387,8 +1387,13 @@ func isFieldDynamic(dynamic map[string]bool, diff string) bool {
 		return true
 	}
 
-	if strings.Contains(key, "rack-id") {
-		return false
+	// Marking these fields as static as corresponding set-config commands are not straight forward.
+	staticFields := []string{"rack-id", "report-data-op"}
+
+	for _, field := range staticFields {
+		if strings.Contains(key, field) {
+			return false
+		}
 	}
 
 	return dynamic[key]

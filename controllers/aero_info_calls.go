@@ -24,7 +24,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/deployment"
-	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 // ------------------------------------------------------------------------------------
@@ -327,7 +326,13 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		)
 	}
 
-	asConfCmds, err := info.CreateConfigSetCmdList(diffs)
+	if len(selectedHostConns) == 0 {
+		r.Log.Info("No pods selected for dynamic config change")
+
+		return reconcileSuccess()
+	}
+
+	asConfCmds, err := deployment.CreateConfigSetCmdList(diffs, selectedHostConns[0].ASConn, r.getClientPolicy())
 	if err != nil {
 		return reconcileError(err)
 	}
