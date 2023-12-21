@@ -25,7 +25,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-// +kubebuilder:validation:Enum=AerospikeClusterInProgress;AerospikeClusterCompleted;AerospikeClusterError
+// +kubebuilder:validation:Enum=InProgress;Completed;Error
 type AerospikeClusterPhase string
 
 // These are the valid phases of Aerospike cluster.
@@ -675,7 +675,8 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
 	// status. The map key is the name of the pod.
 	// +patchStrategy=strategic
-	Pods map[string]AerospikePodStatus `json:"pods,omitempty" patchStrategy:"strategic"`
+	// +optional
+	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
 
 	// Phase denotes the current phase of Aerospike cluster operation.
 	Phase AerospikeClusterPhase `json:"phase,omitempty"`
