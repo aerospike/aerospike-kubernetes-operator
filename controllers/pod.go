@@ -1341,18 +1341,13 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		return nil, nil
 	}
 
-	dynamic, _ := asconfig.GetDynamic("7.0.0")
-	r.Log.Info("printing dynamic values", "dynamic", dynamic)
+	isDynamic := asconfig.IsAllDynamicConfig(specToStatusDiffs, "7.0.0")
+	if !isDynamic {
+		r.Log.Info("Static field has been changed, cannot change config dynamically")
+		return nil, nil
+	}
 
 	for diff, value := range specToStatusDiffs {
-		isDynamic := isFieldDynamic(dynamic, diff)
-		r.Log.Info("isDynamic", "isDynamic", isDynamic)
-
-		if !isDynamic {
-			r.Log.Info("Static field has been changed, cannot change config dynamically", "key", diff)
-			return nil, nil
-		}
-
 		if fmt.Sprintf("%T", value) == "[]string" {
 			if statusValue, ok := flatStatusConf[diff]; ok {
 				statusSet := sets.NewString(statusValue.([]string)...)
@@ -1368,33 +1363,4 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	}
 
 	return specToStatusDiffs, nil
-}
-
-func isFieldDynamic(dynamic map[string]bool, diff string) bool {
-	var key string
-
-	tokens := strings.Split(diff, ".")
-	for _, token := range tokens {
-		if token[0] == '{' && token[len(token)-1] == '}' {
-			key += "_."
-		} else {
-			key = key + token + "."
-		}
-	}
-
-	key = strings.TrimSuffix(key, ".")
-	if strings.Contains(key, "replication-factor") {
-		return true
-	}
-
-	// Marking these fields as static as corresponding set-config commands are not straight forward.
-	staticFields := []string{"rack-id", "report-data-op"}
-
-	for _, field := range staticFields {
-		if strings.Contains(key, field) {
-			return false
-		}
-	}
-
-	return dynamic[key]
 }
