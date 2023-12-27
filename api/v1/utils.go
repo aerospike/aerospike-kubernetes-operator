@@ -10,7 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 const (
@@ -188,7 +188,7 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 func IsSecurityEnabled(
 	version string, aerospikeConfig *AerospikeConfigSpec,
 ) (bool, error) {
-	retval, err := asconfig.CompareVersions(version, "5.7.0")
+	retval, err := lib.CompareVersions(version, "5.7.0")
 	if err != nil {
 		return false, err
 	}
