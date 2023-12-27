@@ -299,7 +299,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 func (r *SingleClusterReconciler) setDynamicConfig(
 	policy *as.ClientPolicy,
-	diffs map[string]interface{}, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	diffs map[string]map[string]interface{}, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)

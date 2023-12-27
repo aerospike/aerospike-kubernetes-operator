@@ -60,7 +60,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	restartTypeMap map[string]RestartType, dynamicDiffs map[string]interface{}, err error) {
+	restartTypeMap map[string]RestartType, dynamicDiffs map[string]map[string]interface{}, err error) {
 	var (
 		addedNSDevices          []string
 		onlyDynamicConfigChange bool
@@ -1307,7 +1307,8 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) (map[string]interface{}, error) {
+func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) (
+	map[string]map[string]interface{}, error) {
 	var rackStatus asdbv1.Rack
 
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
@@ -1331,7 +1332,7 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	flatStatusConf := *asConfStatus.GetFlatMap()
 	flatSpecConf := *asConfSpec.GetFlatMap()
 
-	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, false, true, "7.0.0")
+	specToStatusDiffs := asconfig.ConfDiff(r.Log, flatSpecConf, flatStatusConf, true, "7.0.0")
 	r.Log.Info("print diff outside", "difference", fmt.Sprintf("%v", specToStatusDiffs))
 
 	if len(specToStatusDiffs) > 1 {
@@ -1343,23 +1344,8 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 	isDynamic := asconfig.IsAllDynamicConfig(specToStatusDiffs, "7.0.0")
 	if !isDynamic {
-		r.Log.Info("Static field has been changed, cannot change config dynamically")
+		r.Log.Info("Static field has been modified, cannot change config dynamically")
 		return nil, nil
-	}
-
-	for diff, value := range specToStatusDiffs {
-		if fmt.Sprintf("%T", value) == "[]string" {
-			if statusValue, ok := flatStatusConf[diff]; ok {
-				statusSet := sets.NewString(statusValue.([]string)...)
-				diffSet := sets.NewString(value.([]string)...)
-
-				if len(statusSet.Difference(diffSet)) > 0 {
-					r.Log.Info("Can not remove value from list dynamically", "key", diff,
-						"statusset", fmt.Sprint(statusSet.List()), "diffSet", fmt.Sprint(diffSet.List()))
-					return nil, nil
-				}
-			}
-		}
 	}
 
 	return specToStatusDiffs, nil

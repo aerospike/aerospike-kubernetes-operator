@@ -452,7 +452,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	failedPods []*corev1.Pod, dynamicDiffs map[string]interface{}) reconcileResult {
+	failedPods []*corev1.Pod, dynamicDiffs map[string]map[string]interface{}) reconcileResult {
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
@@ -1148,7 +1148,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
 	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType,
-	dynamicDiffs map[string]interface{}, err error,
+	dynamicDiffs map[string]map[string]interface{}, err error,
 ) {
 	restartTypeMap, dynamicDiffs, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
