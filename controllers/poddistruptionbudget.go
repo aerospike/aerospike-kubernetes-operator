@@ -75,7 +75,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			)
 		}
 
-		r.Log.Info("Created new PodDisruptionBudget")
+		r.Log.Info("Created new PodDisruptionBudget", "name",
+			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name))
 
 		return nil
 	}
@@ -97,7 +98,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			)
 		}
 
-		r.Log.Info("Updated PodDisruptionBudget")
+		r.Log.Info("Updated PodDisruptionBudget", "name",
+			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name))
 	}
 
 	return nil

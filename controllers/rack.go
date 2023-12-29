@@ -429,7 +429,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 		}
 	}
 
-	if r.aeroCluster.Spec.K8sNodeBlockList != nil {
+	// handle k8sNodeBlockList pods only if it is changed
+	if !reflect.DeepEqual(r.aeroCluster.Spec.K8sNodeBlockList, r.aeroCluster.Status.K8sNodeBlockList) {
 		found, res = r.handleK8sNodeBlockListPods(found, rackState, ignorablePodNames, failedPods)
 		if !res.isSuccess {
 			return found, res

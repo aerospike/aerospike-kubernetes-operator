@@ -45,7 +45,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		r.aeroCluster.Status,
 	)
 
-	// Set the status phase to Error if the recError is not nil
+	// Set the status phase to Error if the recErr is not nil
 	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
 		if recErr != nil {
