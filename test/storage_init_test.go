@@ -20,7 +20,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 const (
@@ -811,7 +811,7 @@ func getStorageInitAerospikeCluster(
 	}
 
 	version, _ := asdbv1.GetImageVersion(image)
-	ov, _ := asconfig.CompareVersions(version, "7.0.0")
+	ov, _ := lib.CompareVersions(version, "7.0.0")
 
 	if ov < 0 {
 		aerospike.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
