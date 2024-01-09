@@ -1578,7 +1578,7 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 
 			if singleConf["name"] == oldSingleConf["name"] {
 				// replication-factor update not allowed
-				val, err := asconfig.CompareVersions(incomingVersion, Version6)
+				val, err := lib.CompareVersions(incomingVersion, Version6)
 				if err != nil {
 					return fmt.Errorf("failed to check image version: %v", err)
 				}

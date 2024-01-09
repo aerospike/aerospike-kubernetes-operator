@@ -15,10 +15,12 @@ package controllers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -312,8 +314,10 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	}
 
 	podList := make([]corev1.Pod, 0, len(pods))
+	podIPNameMap := make(map[string]string, len(pods))
 
 	for idx := range pods {
+		podIPNameMap[pods[idx].Status.PodIP] = pods[idx].Name
 		podList = append(podList, *pods[idx])
 	}
 
@@ -332,15 +336,26 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		return reconcileSuccess()
 	}
 
-	asConfCmds, err := deployment.CreateConfigSetCmdList(diffs, selectedHostConns[0].ASConn, r.getClientPolicy())
+	asConfCmds, err := deployment.CreateConfigSetCmdList(r.Log, diffs, selectedHostConns[0].ASConn, r.getClientPolicy())
 	if err != nil {
+		// Assuming error returned here will not be a server error.
 		return reconcileError(err)
 	}
 
 	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
 
-	if err := deployment.SetConfigCommandsOnHosts(r.Log, policy, allHostConns, selectedHostConns, asConfCmds); err != nil {
-		return reconcileError(err)
+	for _, host := range selectedHostConns {
+		if err := deployment.SetConfigCommandsOnHost(r.Log, policy, allHostConns, host, asConfCmds); err != nil {
+			if strings.HasPrefix(err.Error(), "ServerError:") {
+				return reconcileError(reconcile.TerminalError(err))
+			}
+
+			return reconcileError(err)
+		}
+
+		if err := r.updatePod(podIPNameMap[host.ASConn.AerospikeHostName]); err != nil {
+			return reconcileError(err)
+		}
 	}
 
 	return reconcileSuccess()

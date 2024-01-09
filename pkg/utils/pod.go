@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
@@ -148,17 +149,15 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 }
 
 // Exec executes a non interactive command on a pod.
-func Exec(
-	pod *corev1.Pod, container string, cmd []string,
-	kubeClient *kubernetes.Clientset, kubeConfig *rest.Config,
-) (stdoutStr, stderrStr string, err error) {
+func Exec(podNamespacedName types.NamespacedName, container string, cmd []string, kubeClient *kubernetes.Clientset,
+	kubeConfig *rest.Config) (stdoutStr, stderrStr string, err error) {
 	request := kubeClient.
 		CoreV1().
 		RESTClient().
 		Post().
 		Resource("pods").
-		Namespace(pod.Namespace).
-		Name(pod.Name).
+		Namespace(podNamespacedName.Namespace).
+		Name(podNamespacedName.Name).
 		SubResource("exec").
 		VersionedParams(
 			&corev1.PodExecOptions{

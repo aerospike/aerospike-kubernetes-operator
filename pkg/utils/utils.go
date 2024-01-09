@@ -10,6 +10,7 @@ import (
 	//nolint:staticcheck // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
@@ -35,6 +36,15 @@ func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
 // NamespacedName return namespaced name
 func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
+}
+
+func GetNamespacedNameForPod(
+	pod *corev1.Pod,
+) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      pod.Name,
+		Namespace: pod.Namespace,
+	}
 }
 
 // IsImageEqual returns true if image name image1 is equal to image name image2.

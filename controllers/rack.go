@@ -501,10 +501,6 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		return res
 	}
 
-	if res := r.updatePods(rackState, podsToUpdate); !res.isSuccess {
-		return res
-	}
-
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
 		"[rack-%d] Finished Dynamic update", rackState.Rack.ID,

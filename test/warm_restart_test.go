@@ -108,6 +108,7 @@ func createMarkerFile(
 	}
 
 	for podIndex := range podList.Items {
+		pod := &podList.Items[podIndex]
 		cmd := []string{
 			"bash",
 			"-c",
@@ -115,13 +116,13 @@ func createMarkerFile(
 		}
 
 		_, _, err := utils.Exec(
-			&podList.Items[podIndex], asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
+			utils.GetNamespacedNameForPod(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
 		if err != nil {
 			return fmt.Errorf(
-				"error reading ASD Pid from pod %s - %v", podList.Items[podIndex].Name, err,
+				"error reading ASD Pid from pod %s - %v", pod.Name, err,
 			)
 		}
 	}
@@ -141,6 +142,7 @@ func isMarkerPresent(
 	podToMarkerPresent := make(map[string]bool)
 
 	for podIndex := range podList.Items {
+		pod := &podList.Items[podIndex]
 		cmd := []string{
 			"bash",
 			"-c",
@@ -148,7 +150,7 @@ func isMarkerPresent(
 		}
 
 		_, _, err := utils.Exec(
-			&podList.Items[podIndex], asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
+			utils.GetNamespacedNameForPod(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
