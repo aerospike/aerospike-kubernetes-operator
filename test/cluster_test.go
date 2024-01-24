@@ -261,7 +261,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						err = k8sClient.Get(ctx, types.NamespacedName{Name: ignorePodName,
 							Namespace: clusterNamespacedName.Namespace}, pod)
 
-						return *pod.Status.ContainerStatuses[0].Started && pod.Status.ContainerStatuses[0].Ready
+						return len(pod.Status.ContainerStatuses) != 0 && *pod.Status.ContainerStatuses[0].Started &&
+							pod.Status.ContainerStatuses[0].Ready
 					}, 1*time.Minute).Should(BeTrue())
 
 					Eventually(func() error {

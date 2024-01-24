@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/aerospike/aerospike-management-lib/asconfig"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // PrivilegeScope enumerates valid scopes for privileges.
@@ -213,7 +213,7 @@ func isRoleSpecValid(
 
 		_, ok := PredefinedRoles[roleSpec.Name]
 		if ok {
-			cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+			cmp, err := lib.CompareVersions(version, "6.0.0.0")
 			if err != nil {
 				return false, err
 			}
@@ -319,7 +319,7 @@ func isPrivilegeValid(
 	}
 
 	// Check if new privileges are used in an older version.
-	cmp, err := asconfig.CompareVersions(version, "6.0.0.0")
+	cmp, err := lib.CompareVersions(version, "6.0.0.0")
 	if err != nil {
 		return false, err
 	}

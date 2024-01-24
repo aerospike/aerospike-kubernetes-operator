@@ -158,22 +158,49 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	if len(service.Spec.Ports) == 1 && service.Spec.Ports[0].Port == servicePort.Port &&
-		service.Spec.Ports[0].TargetPort == servicePort.TargetPort {
+	return r.updateLBService(service, &servicePort, loadBalancer)
+}
+
+func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servicePort *corev1.ServicePort,
+	loadBalancer *asdbv1.LoadBalancerSpec) error {
+	updateLBService := false
+
+	if len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != servicePort.Port ||
+		service.Spec.Ports[0].TargetPort != servicePort.TargetPort ||
+		service.Spec.Ports[0].Name != servicePort.Name {
+		updateLBService = true
+		service.Spec.Ports = []corev1.ServicePort{
+			*servicePort,
+		}
+	}
+
+	if !reflect.DeepEqual(service.ObjectMeta.Annotations, loadBalancer.Annotations) {
+		service.ObjectMeta.Annotations = loadBalancer.Annotations
+		updateLBService = true
+	}
+
+	if !reflect.DeepEqual(service.Spec.LoadBalancerSourceRanges, loadBalancer.LoadBalancerSourceRanges) {
+		service.Spec.LoadBalancerSourceRanges = loadBalancer.LoadBalancerSourceRanges
+		updateLBService = true
+	}
+
+	if !reflect.DeepEqual(service.Spec.ExternalTrafficPolicy, loadBalancer.ExternalTrafficPolicy) {
+		service.Spec.ExternalTrafficPolicy = loadBalancer.ExternalTrafficPolicy
+		updateLBService = true
+	}
+
+	if updateLBService {
+		if err := r.Client.Update(
+			context.TODO(), service, updateOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to update service %s: %v", service.Name, err,
+			)
+		}
+	} else {
 		r.Log.Info("LoadBalancer service update not required, skipping",
 			"name", utils.NamespacedName(service.Namespace, service.Name))
 		return nil
-	}
-
-	service.Spec.Ports = []corev1.ServicePort{
-		servicePort,
-	}
-	if err := r.Client.Update(
-		context.TODO(), service, updateOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to update service %s: %v", serviceName, err,
-		)
 	}
 
 	r.Log.Info("LoadBalancer service updated",

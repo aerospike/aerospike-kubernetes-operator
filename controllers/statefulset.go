@@ -1414,7 +1414,7 @@ func createPVCForVolumeAttachment(
 		Spec: corev1.PersistentVolumeClaimSpec{
 			VolumeMode:  &pv.VolumeMode,
 			AccessModes: accessModes,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: pv.Size,
 				},

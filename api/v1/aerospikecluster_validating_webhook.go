@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 
+	lib "github.com/aerospike/aerospike-management-lib"
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -122,14 +123,6 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	// Validate Load Balancer update
-	if err := validateLoadBalancerUpdate(
-		aslog, c.Spec.SeedsFinderServices.LoadBalancer,
-		old.Spec.SeedsFinderServices.LoadBalancer,
-	); err != nil {
-		return nil, err
-	}
-
 	// Validate RackConfig update
 	return nil, c.validateRackUpdate(aslog, old)
 }
@@ -178,7 +171,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	val, err := asconfig.CompareVersions(version, baseVersion)
+	val, err := lib.CompareVersions(version, baseVersion)
 	if err != nil {
 		return fmt.Errorf("failed to check image version: %v", err)
 	}
@@ -701,7 +694,7 @@ const maxEnterpriseClusterSzGt5_0 = 256
 const versionForSzCheck = "5.0.0"
 
 func validateClusterSize(_ logr.Logger, version string, sz int) error {
-	val, err := asconfig.CompareVersions(version, versionForSzCheck)
+	val, err := lib.CompareVersions(version, versionForSzCheck)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to validate cluster size limit from version: %v", err,
@@ -1278,27 +1271,15 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	return rf, nil
 }
 
-func validateLoadBalancerUpdate(
-	aslog logr.Logger, newLBSpec, oldLBSpec *LoadBalancerSpec,
-) error {
-	aslog.Info("Validate LoadBalancer update")
-
-	if oldLBSpec != nil && !reflect.DeepEqual(oldLBSpec, newLBSpec) {
-		return fmt.Errorf("cannot update existing LoadBalancer Service")
-	}
-
-	return nil
-}
-
 func validateSecurityConfigUpdate(
 	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec,
 ) error {
-	nv, err := asconfig.CompareVersions(newVersion, "5.7.0")
+	nv, err := lib.CompareVersions(newVersion, "5.7.0")
 	if err != nil {
 		return err
 	}
 
-	ov, err := asconfig.CompareVersions(oldVersion, "5.7.0")
+	ov, err := lib.CompareVersions(oldVersion, "5.7.0")
 	if err != nil {
 		return err
 	}
@@ -1783,7 +1764,7 @@ func validateRequiredFileStorageForMetadata(
 	}
 
 	if !validationPolicy.SkipXdrDlogFileValidate {
-		val, err := asconfig.CompareVersions(version, "5.0.0")
+		val, err := lib.CompareVersions(version, "5.0.0")
 		if err != nil {
 			return fmt.Errorf("failed to check image version: %v", err)
 		}

@@ -25,7 +25,6 @@ import (
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
 
@@ -1134,12 +1133,12 @@ func UpdateClusterImage(
 		return err
 	}
 
-	ov, err := asconfig.CompareVersions(outgoingVersion, "7.0.0")
+	ov, err := lib.CompareVersions(outgoingVersion, "7.0.0")
 	if err != nil {
 		return err
 	}
 
-	nv, err := asconfig.CompareVersions(incomingVersion, "7.0.0")
+	nv, err := lib.CompareVersions(incomingVersion, "7.0.0")
 	if err != nil {
 		return err
 	}
@@ -1183,12 +1182,12 @@ func UpdateClusterImage(
 		}
 	}
 
-	ov, err = asconfig.CompareVersions(outgoingVersion, "5.7.0")
+	ov, err = lib.CompareVersions(outgoingVersion, "5.7.0")
 	if err != nil {
 		return err
 	}
 
-	nv, err = asconfig.CompareVersions(incomingVersion, "5.7.0")
+	nv, err = lib.CompareVersions(incomingVersion, "5.7.0")
 	if err != nil {
 		return err
 	}

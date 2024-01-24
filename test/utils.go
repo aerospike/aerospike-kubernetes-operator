@@ -26,7 +26,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var (
@@ -496,7 +496,7 @@ func (acs *AerospikeConfSpec) getVersion() string {
 }
 
 func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) error {
-	cmpVal, err := asconfig.CompareVersions(acs.version, "5.7.0")
+	cmpVal, err := lib.CompareVersions(acs.version, "5.7.0")
 	if err != nil {
 		return err
 	}
@@ -517,7 +517,7 @@ func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) error {
 }
 
 func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) error {
-	cmpVal, err := asconfig.CompareVersions(acs.version, "5.6.0")
+	cmpVal, err := lib.CompareVersions(acs.version, "5.6.0")
 	if err != nil {
 		return err
 	}
@@ -571,12 +571,12 @@ func getAeroClusterConfig(
 		return nil, err
 	}
 
-	cmpVal1, err := asconfig.CompareVersions(version, "5.7.0")
+	cmpVal1, err := lib.CompareVersions(version, "5.7.0")
 	if err != nil {
 		return nil, err
 	}
 
-	cmpVal2, err := asconfig.CompareVersions(version, "7.0.0")
+	cmpVal2, err := lib.CompareVersions(version, "7.0.0")
 	if err != nil {
 		return nil, err
 	}
