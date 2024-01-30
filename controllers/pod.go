@@ -15,12 +15,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 )
 
 // RestartType is the type of pod restart to use.
@@ -60,13 +63,11 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	restartTypeMap map[string]RestartType, dynamicDiffs map[string]map[string]interface{}, err error) {
-	var (
-		addedNSDevices          []string
-		onlyDynamicConfigChange bool
-	)
+	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]libcommons.DynamicConfigMap, err error) {
+	var addedNSDevices []string
 
 	restartTypeMap = make(map[string]RestartType)
+	dynamicConfDiffPerPod = make(map[string]libcommons.DynamicConfigMap)
 
 	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -95,25 +96,25 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				}
 			}
 
-			if dynamicDiffs == nil {
-				// Fetching all dynamic diffs.
-				dynamicDiffs, err = r.handleDynamicConfigChange(rackState)
+			// If dynamic commands have failed in previous retry, then we should not try to update config dynamically.
+			if !podStatus.DynamicConfigFailed {
+				// Fetching all dynamic config change.
+				dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx])
 				if err != nil {
 					return nil, nil, err
 				}
 			}
 		}
 
-		if len(dynamicDiffs) > 0 {
-			onlyDynamicConfigChange = true
+		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
+			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0)
+
+		if podStatus.DynamicConfigFailed {
+			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
-
-		restartType := r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices, onlyDynamicConfigChange)
-
-		restartTypeMap[pods[idx].Name] = restartType
 	}
 
-	return restartTypeMap, dynamicDiffs, nil
+	return restartTypeMap, dynamicConfDiffPerPod, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
@@ -141,13 +142,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		if len(addedNSDevices) > 0 {
 			podRestartType = r.handleNSOrDeviceAddition(addedNSDevices, pod.Name)
 		} else if onlyDynamicConfigChange {
+			// If only dynamic config change is there, then we can update config dynamically.
 			podRestartType = noRestartUpdateConf
 		}
 
 		restartType = mergeRestartType(restartType, podRestartType)
 
 		r.Log.Info(
-			"AerospikeConfig changed. Need rolling restart",
+			"AerospikeConfig changed. Need rolling restart or update config dynamically",
 			"requiredHash", requiredConfHash,
 			"currentHash", podStatus.AerospikeConfigHash,
 		)
@@ -328,6 +330,19 @@ func (r *SingleClusterReconciler) restartPods(
 		if restartType == quickRestart {
 			// If ASD restart fails then go ahead and restart the pod
 			if err := r.restartOrUpdateAerospikeServer(pod.Name, quickRestart); err == nil {
+				var patches []jsonpatch.PatchOperation
+
+				patch := jsonpatch.PatchOperation{
+					Operation: "replace",
+					Path:      "/status/pods/" + pod.Name + "/dynamicConfigFailed",
+					Value:     false,
+				}
+				patches = append(patches, patch)
+
+				if err := r.patchPodStatus(context.TODO(), patches); err != nil {
+					return reconcileError(err)
+				}
+
 				continue
 			}
 		}
@@ -671,22 +686,7 @@ func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
 		patches = append(patches, patch)
 	}
 
-	jsonPatchJSON, err := json.Marshal(patches)
-	if err != nil {
-		return fmt.Errorf("error creating json-patch : %v", err)
-	}
-
-	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
-
-	// Since the pod status is updated from pod init container,
-	// set the field owner to "pod" for pod status updates.
-	if err = r.Client.Status().Patch(
-		context.TODO(), r.aeroCluster, constantPatch, client.FieldOwner("pod"),
-	); err != nil {
-		return fmt.Errorf("error updating status: %v", err)
-	}
-
-	return nil
+	return r.patchPodStatus(context.TODO(), patches)
 }
 
 func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSet, rackState *RackState) error {
@@ -1117,19 +1117,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		}
 		patches = append(patches, patch1)
 
-		jsonPatchJSON, err := json.Marshal(patches)
-		if err != nil {
+		if err := r.patchPodStatus(context.TODO(), patches); err != nil {
 			return err
-		}
-
-		constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
-
-		// Since the pod status is updated from pod init container,
-		// set the field owner to "pod" for pod status updates.
-		if err = r.Client.Status().Patch(
-			context.TODO(), r.aeroCluster, constantPatch, client.FieldOwner("pod"),
-		); err != nil {
-			return fmt.Errorf("error updating status: %v", err)
 		}
 	}
 
@@ -1296,29 +1285,26 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState) (
-	map[string]map[string]interface{}, error) {
-	var rackStatus asdbv1.Rack
+func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState, pod *corev1.Pod) (
+	libcommons.DynamicConfigMap, error) {
+	statusFromAnnotation := pod.Annotations["aerospikeConf"]
 
-	for idx := range r.aeroCluster.Status.RackConfig.Racks {
-		if r.aeroCluster.Status.RackConfig.Racks[idx].ID == rackState.Rack.ID {
-			rackStatus = r.aeroCluster.Status.RackConfig.Racks[idx]
-		}
-	}
-
-	version := strings.Split(r.aeroCluster.Spec.Image, ":")
-
-	asConfStatus, err := asconfig.NewMapAsConfig(r.Log, version[1], rackStatus.AerospikeConfig.Value)
+	asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	asConfSpec, err := asconfig.NewMapAsConfig(r.Log, version[1], rackState.Rack.AerospikeConfig.Value)
+	asConf, err := asconfig.NewMapAsConfig(r.Log, rackState.Rack.AerospikeConfig.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec.GetFlatMap(), *asConfStatus.GetFlatMap(),
+	asConfSpec, err := getFlatConfig(r.Log, asConf.ToConfFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+	}
+
+	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
 		true, "7.0.0")
 	if err != nil {
 		r.Log.Info("failed to get config diff, fallback to rolling restart: %v", err)
@@ -1327,11 +1313,6 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 	if len(specToStatusDiffs) > 0 {
 		r.Log.Info("print diff outside", "difference", fmt.Sprintf("%v", specToStatusDiffs))
-
-		if checkXDRDCOrNamespaceAdded(specToStatusDiffs) {
-			r.Log.Info("XDR DC or Namespace added, not supported dynamically")
-			return nil, nil
-		}
 
 		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, "7.0.0")
 		if err != nil {
@@ -1348,13 +1329,125 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	return specToStatusDiffs, nil
 }
 
-func checkXDRDCOrNamespaceAdded(diffs map[string]map[string]interface{}) bool {
-	for k := range diffs {
-		tokens := strings.Split(k, ".")
-		if tokens[0] == "xdr" && tokens[len(tokens)-1] == "name" {
-			return true
+func toPlural(k string, v any, m configMap) {
+	// convert asconfig fields/contexts that need to be plural
+	// in order to create valid asconfig yaml.
+	if plural := asconfig.PluralOf(k); plural != k {
+		// if the config item can be plural or singular and is not a slice
+		// then the item should not be converted to the plural form.
+		// If the management lib ever parses list entries as anything other
+		// than []string this might have to change.
+		if isListOrString(k) {
+			if _, ok := v.([]string); !ok {
+				return
+			}
+
+			if len(v.([]string)) == 1 {
+				// the management lib parses all config fields
+				// that are in singularToPlural as lists. If these
+				// fields are actually scalars then overwrite the list
+				// with the single value
+				m[k] = v.([]string)[0]
+				return
+			}
+		}
+
+		delete(m, k)
+		m[plural] = v
+	}
+}
+
+// isListOrString returns true for special config fields that may be a
+// single string value or a list with multiple strings in the schema files
+// NOTE: any time the schema changes to make a value
+// a string or a list (array) that value needs to be added here
+func isListOrString(name string) bool {
+	switch name {
+	case "feature-key-file", "tls-authenticate-client":
+		return true
+	default:
+		return false
+	}
+}
+
+type configMap = lib.Stats
+
+// mapping functions get mapped to each key value pair in a management lib Stats map
+// m is the map that k and v came from
+type mapping func(k string, v any, m configMap)
+
+// mutateMap maps functions to each key value pair in the management lib's Stats map
+// the functions are applied sequentially to each k,v pair.
+func mutateMap(in configMap, funcs []mapping) {
+	for k, v := range in {
+		switch v := v.(type) {
+		case configMap:
+			mutateMap(v, funcs)
+		case []configMap:
+			for _, lv := range v {
+				mutateMap(lv, funcs)
+			}
+		}
+
+		for _, f := range funcs {
+			f(k, in[k], in)
 		}
 	}
+}
 
-	return false
+func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
+	asConf, err := asconfig.FromConfFile(log, "", strings.NewReader(confStr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+	}
+
+	cmap := *asConf.ToMap()
+
+	mutateMap(cmap, []mapping{
+		toPlural,
+	})
+
+	asConf, err = asconfig.NewMapAsConfig(
+		log,
+		cmap,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return asConf.GetFlatMap(), nil
+}
+
+func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []jsonpatch.PatchOperation) error {
+	if len(patches) == 0 {
+		return nil
+	}
+
+	jsonPatchJSON, err := json.Marshal(patches)
+	if err != nil {
+		return err
+	}
+
+	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
+
+	// Since the pod status is updated from pod init container,
+	// set the field owner to "pod" for pod status updates.
+
+	err = retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		// Customize the error check for retrying, return true to retry, false to stop retrying
+		return true
+	}, func() error {
+		// Patch the resource
+		if err = r.Client.Status().Patch(
+			ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+		); err != nil {
+			return fmt.Errorf("error updating status: %v", err)
+		}
+
+		r.Log.Info("Pod status patched successfully")
+		return nil
+	})
+
+	return nil
 }

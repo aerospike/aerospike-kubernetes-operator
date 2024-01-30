@@ -14,17 +14,18 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -300,8 +301,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 }
 
 func (r *SingleClusterReconciler) setDynamicConfig(
-	policy *as.ClientPolicy,
-	diffs map[string]map[string]interface{}, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	dynamicConfDiffPerPod map[string]libcommons.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
@@ -336,24 +336,38 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		return reconcileSuccess()
 	}
 
-	asConfCmds, err := deployment.CreateConfigSetCmdList(r.Log, diffs, selectedHostConns[0].ASConn, r.getClientPolicy())
-	if err != nil {
-		// Assuming error returned here will not be a server error.
-		return reconcileError(err)
-	}
-
-	r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
-
 	for _, host := range selectedHostConns {
-		if err := deployment.SetConfigCommandsOnHost(r.Log, policy, allHostConns, host, asConfCmds); err != nil {
-			if strings.HasPrefix(err.Error(), "ServerError:") {
-				return reconcileError(reconcile.TerminalError(err))
+		podName := podIPNameMap[host.ASConn.AerospikeHostName]
+		asConfCmds, err := deployment.CreateConfigSetCmdList(r.Log, dynamicConfDiffPerPod[podName],
+			host.ASConn, r.getClientPolicy())
+
+		if err != nil {
+			// Assuming error returned here will not be a server error.
+			return reconcileError(err)
+		}
+
+		r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
+
+		if err := deployment.SetConfigCommandsOnHost(r.Log, r.getClientPolicy(), allHostConns, host, asConfCmds); err != nil {
+			var patches []jsonpatch.PatchOperation
+
+			patch := jsonpatch.PatchOperation{
+				Operation: "replace",
+				Path:      "/status/pods/" + podName + "/dynamicConfigFailed",
+				Value:     true,
+			}
+			patches = append(patches, patch)
+
+			if patchErr := r.patchPodStatus(
+				context.TODO(), patches,
+			); patchErr != nil {
+				return reconcileError(fmt.Errorf("error updating status: %v", patchErr))
 			}
 
 			return reconcileError(err)
 		}
 
-		if err := r.updatePod(podIPNameMap[host.ASConn.AerospikeHostName]); err != nil {
+		if err := r.updatePod(podName); err != nil {
 			return reconcileError(err)
 		}
 	}

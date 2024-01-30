@@ -13292,6 +13292,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    dynamicConfigFailed:
+                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.

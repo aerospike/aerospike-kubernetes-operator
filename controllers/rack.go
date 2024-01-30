@@ -18,6 +18,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/commons"
 )
 
 type scaledDownRack struct {
@@ -393,7 +394,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 		}
 	} else {
 		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap,
-			dynamicDiffs, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
+			dynamicConfDiffPerPod, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
@@ -420,7 +421,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 		}
 
 		if needDynamicUpdateRack {
-			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, failedPods, dynamicDiffs)
+			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, failedPods, dynamicConfDiffPerPod)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -452,7 +453,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	failedPods []*corev1.Pod, dynamicDiffs map[string]map[string]interface{}) reconcileResult {
+	failedPods []*corev1.Pod, dynamicConfDiffPerPod map[string]commons.DynamicConfigMap) reconcileResult {
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
@@ -497,7 +498,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		return reconcileError(err)
 	}
 
-	if res := r.setDynamicConfig(r.getClientPolicy(), dynamicDiffs, podsToUpdate, ignorablePodNames); !res.isSuccess {
+	if res := r.setDynamicConfig(dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.isSuccess {
 		return res
 	}
 
@@ -1144,9 +1145,9 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
 	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType,
-	dynamicDiffs map[string]map[string]interface{}, err error,
+	dynamicConfDiffPerPod map[string]commons.DynamicConfigMap, err error,
 ) {
-	restartTypeMap, dynamicDiffs, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
+	restartTypeMap, dynamicConfDiffPerPod, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
 		return needRestart, needUpdateConf, nil, nil, err
 	}
@@ -1162,7 +1163,7 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, i
 		}
 	}
 
-	return needRestart, needUpdateConf, restartTypeMap, dynamicDiffs, nil
+	return needRestart, needUpdateConf, restartTypeMap, dynamicConfDiffPerPod, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int, ignorablePodNames sets.Set[string]) (
