@@ -1434,12 +1434,12 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 	// Since the pod status is updated from pod init container,
 	// set the field owner to "pod" for pod status updates.
 
-	err = retry.OnError(retry.DefaultBackoff, func(err error) bool {
+	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
 		// Customize the error check for retrying, return true to retry, false to stop retrying
 		return true
 	}, func() error {
 		// Patch the resource
-		if err = r.Client.Status().Patch(
+		if err := r.Client.Status().Patch(
 			ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
 			return fmt.Errorf("error updating status: %v", err)
@@ -1448,6 +1448,4 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		r.Log.Info("Pod status patched successfully")
 		return nil
 	})
-
-	return nil
 }
