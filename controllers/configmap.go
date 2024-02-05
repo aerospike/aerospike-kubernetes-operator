@@ -186,15 +186,13 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 		"aerospikecluster", utils.ClusterNamespacedName(r.aeroCluster),
 	)
 
-	version := strings.Split(r.aeroCluster.Spec.Image, ":")
-
 	configMap := rack.AerospikeConfig.Value
 	log.V(1).Info(
 		"AerospikeConfig", "config", configMap, "image",
 		r.aeroCluster.Spec.Image,
 	)
 
-	asConf, err := asconfig.NewMapAsConfig(r.Log, version[1], configMap)
+	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to load config map by lib: %v", err)
 	}
