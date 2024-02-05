@@ -57,7 +57,7 @@ var _ = Describe(
 		)
 
 		It(
-			"Validate LB can not be updated", func() {
+			"Validate LB can be updated", func() {
 				By("DeployCluster")
 				clusterNamespacedName := getNamespacedName(
 					"load-balancer-invalid", namespace,
@@ -76,7 +76,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer.ExternalTrafficPolicy = "Cluster"
 				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).To(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				err = deleteCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
