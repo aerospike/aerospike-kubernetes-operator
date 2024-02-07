@@ -1686,7 +1686,7 @@ func validateAerospikeConfigSchema(
 ) error {
 	config := configSpec.Value
 
-	asConf, err := asconfig.NewMapAsConfig(aslog, version, config)
+	asConf, err := asconfig.NewMapAsConfig(aslog, config)
 	if err != nil {
 		return fmt.Errorf("failed to load config map by lib: %v", err)
 	}
