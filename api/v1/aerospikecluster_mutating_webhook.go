@@ -511,7 +511,7 @@ func setDefaultNetworkConf(
 		)
 	}
 	// Override these sections
-	// TODO: These values lines will be replaced with runtime info by script in init-container
+	// TODO: These values lines will be replaced with runtime info by akoinit binary in init-container
 	// See if we can get better way to make template
 	serviceDefaults := map[string]interface{}{}
 	srvPort := GetServicePort(configSpec)

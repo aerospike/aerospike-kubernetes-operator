@@ -29,8 +29,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			}
 
 			if pod.Spec.Containers[containerIdx].ReadinessProbe == nil {
-				r.Log.Info("Pod found without ReadinessProbe, skipping PodDisruptionBudget",
-					"name", pod.Name)
+				r.Log.Info("Pod found without ReadinessProbe, skipping PodDisruptionBudget. Refer Aerospike "+
+					"documentation for more details.", "name", pod.Name)
 				return nil
 			}
 		}

@@ -30,13 +30,20 @@ type AerospikeClusterPhase string
 
 // These are the valid phases of Aerospike cluster.
 const (
-	// AerospikeClusterInProgress means the Aerospike cluster operations are in-progress state.
+	// AerospikeClusterInProgress means the Aerospike cluster CR is being reconciled and operations are in-progress state.
 	// This phase denotes that changes are gradually rolling out to the cluster.
+	// For example, when the Aerospike server version is upgraded in CR, then InProgress phase is set until the upgrade
+	// is completed.
 	AerospikeClusterInProgress AerospikeClusterPhase = "InProgress"
-	// AerospikeClusterCompleted means the Aerospike cluster has been deployed/upgraded successfully and is ready to use.
+	// AerospikeClusterCompleted means the Aerospike cluster CR has been reconciled. This phase denotes that the cluster
+	// has been deployed/upgraded successfully and is ready to use.
+	// For example, when the Aerospike server version is upgraded in CR, then Completed phase is set after the upgrade is
+	// completed.
 	AerospikeClusterCompleted AerospikeClusterPhase = "Completed"
-	// AerospikeClusterError means the Aerospike cluster is in error state because of some reason like misconfiguration,
-	// infra issues, etc.
+	// AerospikeClusterError means the Aerospike cluster operation is in error state because of some reason like
+	// misconfiguration, infra issues, etc.
+	// For example, when the Aerospike server version is upgraded in CR, then Error phase is set if the upgrade fails
+	// due to the wrong image issue, etc.
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
@@ -54,6 +61,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	Size int32 `json:"size"`
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
 	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
+	// Refer Aerospike documentation for more details.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Max Unavailable"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 	// Aerospike server image
@@ -93,8 +101,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
-	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
+	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods. Pods are not scheduled on
+	// these nodes. Pods are migrated from these nodes if already present. This is useful for the maintenance of
+	// Kubernetes nodes.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
+	// +kubebuilder:validation:MinItems:=1
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 }
 

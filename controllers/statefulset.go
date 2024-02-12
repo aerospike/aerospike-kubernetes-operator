@@ -925,7 +925,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 		)
 	}
 
-	if r.aeroCluster.Spec.K8sNodeBlockList != nil {
+	if len(r.aeroCluster.Spec.K8sNodeBlockList) > 0 {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
 				Key:      "kubernetes.io/hostname",

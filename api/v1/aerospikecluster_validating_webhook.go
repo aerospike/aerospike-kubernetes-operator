@@ -2187,10 +2187,10 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 		return err
 	}
 
-	maxUnavailable := int(c.Spec.Size)
+	safeMaxUnavailable := int(c.Spec.Size)
 
 	// If Size is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
-	if maxUnavailable == 1 {
+	if safeMaxUnavailable == 1 {
 		return nil
 	}
 
@@ -2202,7 +2202,7 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 			rfInterface, exists := nsInterface.(map[string]interface{})["replication-factor"]
 			if !exists {
 				// Default RF is 2 if not given
-				maxUnavailable = 2
+				safeMaxUnavailable = 2
 				continue
 			}
 
@@ -2216,15 +2216,16 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 				continue
 			}
 
-			if rf < maxUnavailable {
-				maxUnavailable = rf
+			if rf < safeMaxUnavailable {
+				safeMaxUnavailable = rf
 			}
 		}
 	}
 
-	if c.Spec.MaxUnavailable.IntValue() >= maxUnavailable {
-		return fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v",
-			c.Spec.MaxUnavailable.String(), maxUnavailable)
+	if c.Spec.MaxUnavailable.IntValue() >= safeMaxUnavailable {
+		return fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v as it may result in "+
+			"data loss. Set it to a lower value",
+			c.Spec.MaxUnavailable.String(), safeMaxUnavailable)
 	}
 
 	return nil

@@ -24,7 +24,7 @@ var _ = Describe(
 			"Migrate pods from K8s blocked nodes", func() {
 				clusterName := "k8s-node-block-cluster"
 				clusterNamespacedName := getNamespacedName(clusterName, namespace)
-				podName := clusterName + "-0-0"
+				podName := clusterName + "-1-0"
 				aeroCluster := &asdbv1.AerospikeCluster{}
 				oldK8sNode := ""
 				oldPvcInfo := make(map[string]types.UID)
@@ -36,6 +36,16 @@ var _ = Describe(
 						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
+
+						batchSize := intstr.FromString("100%")
+						rackConf := asdbv1.RackConfig{
+							Racks:                  getDummyRackConf(1, 2),
+							RollingUpdateBatchSize: &batchSize,
+							Namespaces:             []string{"test"},
+						}
+
+						aeroCluster.Spec.RackConfig = rackConf
+
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = false
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())

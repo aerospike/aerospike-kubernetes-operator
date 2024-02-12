@@ -1078,7 +1078,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 ) (*appsv1.StatefulSet, reconcileResult) {
 	if err := r.updateSTS(statefulSet, rackState); err != nil {
 		return statefulSet, reconcileError(
-			fmt.Errorf("upgrade rack : %v", err),
+			fmt.Errorf("k8s node block list processing failed: %v", err),
 		)
 	}
 
@@ -1112,9 +1112,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 
 			podsToRestart = append(podsToRestart, pod)
 
-			restartTypeMap = map[string]RestartType{
-				pod.Name: podRestart,
-			}
+			restartTypeMap[pod.Name] = podRestart
 		}
 	}
 
