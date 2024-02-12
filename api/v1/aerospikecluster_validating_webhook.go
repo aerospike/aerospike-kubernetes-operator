@@ -1,5 +1,5 @@
 /*
-Copyright 2023.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,7 +40,6 @@ import (
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
@@ -92,7 +91,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	if err := deployment.IsValidUpgrade(
+	if err := asconfig.IsValidUpgrade(
 		outgoingVersion, incomingVersion,
 	); err != nil {
 		return nil, fmt.Errorf("failed to start upgrade: %v", err)
@@ -1557,12 +1556,12 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 			}
 
 			if singleConf["name"] == oldSingleConf["name"] {
-				// replication-factor update not allowed
 				val, err := lib.CompareVersions(incomingVersion, Version6)
 				if err != nil {
 					return fmt.Errorf("failed to check image version: %v", err)
 				}
 
+				// For versions 6.0 and later, replication-factor is dynamic for AP namespaces (non strong-consistency).
 				if (IsNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {

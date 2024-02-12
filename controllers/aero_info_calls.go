@@ -25,6 +25,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -338,7 +339,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 	for _, host := range selectedHostConns {
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
-		asConfCmds, err := deployment.CreateConfigSetCmdList(r.Log, dynamicConfDiffPerPod[podName],
+		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
 			host.ASConn, r.getClientPolicy())
 
 		if err != nil {
@@ -348,7 +349,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 		r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
 
-		if err := deployment.SetConfigCommandsOnHost(r.Log, r.getClientPolicy(), allHostConns, host, asConfCmds); err != nil {
+		if err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
+			[]*deployment.HostConn{host}, asConfCmds); err != nil {
 			var patches []jsonpatch.PatchOperation
 
 			patch := jsonpatch.PatchOperation{

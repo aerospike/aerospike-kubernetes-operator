@@ -10,6 +10,7 @@ import (
 	//nolint:staticcheck // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	"golang.org/x/crypto/ripemd160"
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -38,12 +39,19 @@ func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
-func GetNamespacedNameForPod(
-	pod *corev1.Pod,
+func GetNamespacedName(obj meta.Object) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}
+}
+
+func GetNamespacedNameForSTSOrConfigMap(
+	aeroCluster *asdbv1.AerospikeCluster, rackID int,
 ) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
+		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Namespace: aeroCluster.Namespace,
 	}
 }
 

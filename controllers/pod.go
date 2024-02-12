@@ -217,7 +217,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) restartOrUpdateAerospikeServer(podName string,
+func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
 	rackID, err := utils.GetRackIDFromPodName(podName)
 	if err != nil {
@@ -231,7 +231,7 @@ func (r *SingleClusterReconciler) restartOrUpdateAerospikeServer(podName string,
 		Namespace: r.aeroCluster.Namespace,
 	}
 
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, *rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, *rackID)
 	initBinary := "/etc/aerospike/akoinit"
 
 	var subCommand string
@@ -329,20 +329,7 @@ func (r *SingleClusterReconciler) restartPods(
 
 		if restartType == quickRestart {
 			// If ASD restart fails then go ahead and restart the pod
-			if err := r.restartOrUpdateAerospikeServer(pod.Name, quickRestart); err == nil {
-				var patches []jsonpatch.PatchOperation
-
-				patch := jsonpatch.PatchOperation{
-					Operation: "replace",
-					Path:      "/status/pods/" + pod.Name + "/dynamicConfigFailed",
-					Value:     false,
-				}
-				patches = append(patches, patch)
-
-				if err := r.patchPodStatus(context.TODO(), patches); err != nil {
-					return reconcileError(err)
-				}
-
+			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err == nil {
 				continue
 			}
 		}
@@ -367,7 +354,7 @@ func (r *SingleClusterReconciler) restartPods(
 func (r *SingleClusterReconciler) updatePod(podName string) error {
 	r.Log.Info("updating pod", "pod", podName)
 
-	if err := r.restartOrUpdateAerospikeServer(podName, noRestartUpdateConf); err != nil {
+	if err := r.restartASDOrUpdateAerospikeConf(podName, noRestartUpdateConf); err != nil {
 		return err
 	}
 
@@ -1275,7 +1262,7 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 }
 
 func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
 	confMap := &corev1.ConfigMap{}
 
 	if err := r.Client.Get(context.TODO(), cmName, confMap); err != nil {
@@ -1304,8 +1291,13 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
+	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
+	if err != nil {
+		return nil, err
+	}
+
 	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
-		true, "7.0.0")
+		true, version)
 	if err != nil {
 		r.Log.Info("failed to get config diff, fallback to rolling restart: %v", err)
 		return nil, nil
@@ -1314,7 +1306,7 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	if len(specToStatusDiffs) > 0 {
 		r.Log.Info("print diff outside", "difference", fmt.Sprintf("%v", specToStatusDiffs))
 
-		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, "7.0.0")
+		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
 		if err != nil {
 			r.Log.Info("failed to check if all config is dynamic, fallback to rolling restart: %v", err)
 			return nil, nil
@@ -1396,7 +1388,7 @@ func mutateMap(in configMap, funcs []mapping) {
 }
 
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
-	asConf, err := asconfig.FromConfFile(log, "", strings.NewReader(confStr))
+	asConf, err := asconfig.FromConfFile(log, strings.NewReader(confStr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
@@ -1431,14 +1423,13 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-	// Since the pod status is updated from pod init container,
-	// set the field owner to "pod" for pod status updates.
-
 	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
 		// Customize the error check for retrying, return true to retry, false to stop retrying
 		return true
 	}, func() error {
 		// Patch the resource
+		// Since the pod status is updated from pod init container,
+		// set the field owner to "pod" for pod status updates.
 		if err := r.Client.Status().Patch(
 			ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {

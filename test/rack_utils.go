@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -195,7 +196,7 @@ func getPodSpecAnnotations(
 
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -222,7 +223,7 @@ func getPodSpecLabels(
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -248,7 +249,7 @@ func validateRackEnabledCluster(
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
 			aeroCluster, rackStateList[rackStateIndex].Rack.ID,
 		)
 
@@ -454,15 +455,6 @@ func splitRacks(nodeCount, rackCount int) []int {
 	}
 
 	return topology
-}
-
-func getNamespacedNameForStatefulSet(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
 }
 
 func getNamespacedName(name, namespace string) types.NamespacedName {

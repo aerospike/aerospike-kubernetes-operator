@@ -69,7 +69,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, nil
 	}
 
-	// The cluster is not being deleted, add finalizer in not added already
+	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
 		return reconcile.Result{}, err

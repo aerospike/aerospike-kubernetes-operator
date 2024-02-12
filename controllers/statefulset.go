@@ -133,7 +133,7 @@ func (r *SingleClusterReconciler) createSTS(
 						{
 							Name:            asdbv1.AerospikeInitContainerName,
 							Image:           asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
-							ImagePullPolicy: corev1.PullAlways,
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{
@@ -145,7 +145,7 @@ func (r *SingleClusterReconciler) createSTS(
 									// TODO: Do we need this var?
 									{
 										Name: "CONFIG_MAP_NAME",
-										Value: getNamespacedNameForSTSConfigMap(
+										Value: utils.GetNamespacedNameForSTSOrConfigMap(
 											r.aeroCluster, rackState.Rack.ID,
 										).Name,
 									},
@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	found := &appsv1.StatefulSet{}
 	if err := r.Client.Get(
 		context.TODO(),
-		getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID),
+		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID),
 		found,
 	); err != nil {
 		return nil, err
@@ -1025,7 +1025,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 
 	for rackID := range allRackIDs {
 		st := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rackID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
 
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
@@ -1206,7 +1206,7 @@ func getDefaultSTSVolumes(
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: getNamespacedNameForSTSConfigMap(
+						Name: utils.GetNamespacedNameForSTSOrConfigMap(
 							aeroCluster, rackState.Rack.ID,
 						).Name,
 					},
@@ -1489,15 +1489,6 @@ func getSTSContainerPort(
 	}
 
 	return ports
-}
-
-func getNamespacedNameForSTS(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
 }
 
 func getSTSPodOrdinal(podName string) (*int32, error) {

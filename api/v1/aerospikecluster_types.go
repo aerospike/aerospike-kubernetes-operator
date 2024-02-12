@@ -828,6 +828,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// PodSpecHash is ripemd160 hash of PodSpec used by this pod
 	PodSpecHash string `json:"podSpecHash"`
 
+	// DynamicConfigFailed is true if aerospike config change failed to apply dynamically.
 	DynamicConfigFailed bool `json:"dynamicConfigFailed,omitempty"`
 }
 

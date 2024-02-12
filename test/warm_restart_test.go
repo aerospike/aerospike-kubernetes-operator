@@ -116,7 +116,7 @@ func createMarkerFile(
 		}
 
 		_, _, err := utils.Exec(
-			utils.GetNamespacedNameForPod(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
+			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 
@@ -150,7 +150,7 @@ func isMarkerPresent(
 		}
 
 		_, _, err := utils.Exec(
-			utils.GetNamespacedNameForPod(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
+			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 

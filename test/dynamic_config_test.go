@@ -106,6 +106,15 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).To(Equal(float64(18000)))
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"].(map[string]interface{})["report-data-op"].([]interface{})[0]).To(Equal("test"))
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(2))
+
 						By("Verify no warm/cold restarts in Pods")
 						noRestart, err := verifyNoRestart(ctx, aeroCluster, podPIDMap)
 						Expect(err).ToNot(HaveOccurred())
@@ -127,6 +136,15 @@ var _ = Describe(
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).To(BeNil())
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"]).To(BeNil())
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(1))
 
 						By("Verify no warm/cold restarts in Pods")
 						noRestart, err = verifyNoRestart(ctx, aeroCluster, podPIDMap)
@@ -152,6 +170,13 @@ var _ = Describe(
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"]).To(Equal(false))
 
 						By("Verify warm restarts in Pods")
 						noRestart, err := verifyNoRestart(ctx, aeroCluster, podPIDMap)
@@ -197,7 +222,7 @@ func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[s
 		}
 
 		stdout, _, execErr := utils.Exec(
-			utils.GetNamespacedNameForPod(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
+			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientset,
 			cfg,
 		)
 

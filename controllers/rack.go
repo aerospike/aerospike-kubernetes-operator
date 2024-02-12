@@ -62,7 +62,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -124,7 +124,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -184,7 +184,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err := r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -230,13 +230,13 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
 
 	// Bad config should not come here. It should be validated in validation hook
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 	if err := r.buildSTSConfigMap(cmName, rackState.Rack); err != nil {
 		r.Log.Error(err, "Failed to create configMap from AerospikeConfig")
 		return nil, reconcileError(err)
 	}
 
-	stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
+	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 
 	found, err := r.createSTS(stsName, rackState)
 	if err != nil {
@@ -293,7 +293,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
 
 		err := r.Client.Get(context.TODO(), stsName, found)
 		if err != nil {
@@ -325,7 +325,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		}
 
 		// Delete configMap
-		cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rack.ID)
+		cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
 		if err = r.deleteRackConfigMap(cmName); err != nil {
 			return reconcileError(err)
 		}
@@ -355,7 +355,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
-		getNamespacedNameForSTSConfigMap(
+		utils.GetNamespacedNameForSTSOrConfigMap(
 			r.aeroCluster, rackState.Rack.ID,
 		), rackState.Rack,
 	); err != nil {
@@ -431,8 +431,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
-						"RackRollingRestartFailed",
-						"[rack-%d] Failed to do rolling restart {STS: %s/%s}",
+						"RackDynamicConfigUpdateFailed",
+						"[rack-%d] Failed to update aerospike config dynamically {STS: %s/%s}",
 						rackState.Rack.ID, found.Namespace, found.Name,
 					)
 				}
@@ -491,11 +491,6 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		}
 
 		podsToUpdate = append(podsToUpdate, pod)
-	}
-
-	podNames := getPodNames(podsToUpdate)
-	if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
-		return reconcileError(err)
 	}
 
 	if res := r.setDynamicConfig(dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.isSuccess {

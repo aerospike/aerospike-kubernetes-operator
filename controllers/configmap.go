@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -86,15 +85,6 @@ func init() {
 	if err != nil {
 		// Error reading embedded script templates.
 		panic(fmt.Sprintf("error reading embedded script templates: %v", err))
-	}
-}
-
-func getNamespacedNameForSTSConfigMap(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
 	}
 }
 
@@ -310,7 +300,7 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	for idx := range rackStateList {
 		rackState := &rackStateList[idx]
 		size := rackState.Size
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 
 		for i := 0; i < size; i++ {
 			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))
