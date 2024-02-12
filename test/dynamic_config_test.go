@@ -111,8 +111,10 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).To(Equal(float64(18000)))
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"].(map[string]interface{})["report-data-op"].([]interface{})[0]).To(Equal("test"))
+						logs := aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"]
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).
+							To(Equal(float64(18000)))
+						Expect(logs.(map[string]interface{})["report-data-op"].([]interface{})[0]).To(Equal("test"))
 						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(2))
 
 						By("Verify no warm/cold restarts in Pods")
@@ -176,7 +178,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"]).To(Equal(false))
+						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"]).
+							To(Equal(false))
 
 						By("Verify warm restarts in Pods")
 						noRestart, err := verifyNoRestart(ctx, aeroCluster, podPIDMap)

@@ -21,7 +21,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 )
@@ -1321,61 +1320,18 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	return specToStatusDiffs, nil
 }
 
-func toPlural(k string, v any, m configMap) {
-	// convert asconfig fields/contexts that need to be plural
-	// in order to create valid asconfig yaml.
-	if plural := asconfig.PluralOf(k); plural != k {
-		// if the config item can be plural or singular and is not a slice
-		// then the item should not be converted to the plural form.
-		// If the management lib ever parses list entries as anything other
-		// than []string this might have to change.
-		if isListOrString(k) {
-			if _, ok := v.([]string); !ok {
-				return
-			}
-
-			if len(v.([]string)) == 1 {
-				// the management lib parses all config fields
-				// that are in singularToPlural as lists. If these
-				// fields are actually scalars then overwrite the list
-				// with the single value
-				m[k] = v.([]string)[0]
-				return
-			}
-		}
-
-		delete(m, k)
-		m[plural] = v
-	}
-}
-
-// isListOrString returns true for special config fields that may be a
-// single string value or a list with multiple strings in the schema files
-// NOTE: any time the schema changes to make a value
-// a string or a list (array) that value needs to be added here
-func isListOrString(name string) bool {
-	switch name {
-	case "feature-key-file", "tls-authenticate-client":
-		return true
-	default:
-		return false
-	}
-}
-
-type configMap = lib.Stats
-
 // mapping functions get mapped to each key value pair in a management lib Stats map
 // m is the map that k and v came from
-type mapping func(k string, v any, m configMap)
+type mapping func(k string, v any, m asconfig.Conf)
 
 // mutateMap maps functions to each key value pair in the management lib's Stats map
 // the functions are applied sequentially to each k,v pair.
-func mutateMap(in configMap, funcs []mapping) {
+func mutateMap(in asconfig.Conf, funcs []mapping) {
 	for k, v := range in {
 		switch v := v.(type) {
-		case configMap:
+		case asconfig.Conf:
 			mutateMap(v, funcs)
-		case []configMap:
+		case []asconfig.Conf:
 			for _, lv := range v {
 				mutateMap(lv, funcs)
 			}
@@ -1396,7 +1352,7 @@ func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	cmap := *asConf.ToMap()
 
 	mutateMap(cmap, []mapping{
-		toPlural,
+		asconfig.ToPlural,
 	})
 
 	asConf, err = asconfig.NewMapAsConfig(
