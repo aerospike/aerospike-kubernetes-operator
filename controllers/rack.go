@@ -120,6 +120,34 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		}
 	}
 
+	if r.aeroCluster.Status.Pods != nil {
+		securityDisabledPodNames := r.getsecurityDisabledPodNames()
+
+		// Setup access control.
+		if err := r.validateAndReconcileAccessControl(securityDisabledPodNames.Union(ignorablePodNames)); err != nil {
+			r.Log.Error(err, "Failed to Reconcile access control")
+			r.Recorder.Eventf(
+				r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
+				"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
+				r.aeroCluster.Name,
+			)
+
+			return reconcileError(err)
+		}
+
+		// Update the AerospikeCluster status.
+		if err := r.updateAccessControlStatus(); err != nil {
+			r.Log.Error(err, "Failed to update AerospikeCluster access control status")
+			r.Recorder.Eventf(
+				r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
+				"Failed to update AerospikeCluster access control status %s/%s",
+				r.aeroCluster.Namespace, r.aeroCluster.Name,
+			)
+
+			return reconcileError(err)
+		}
+	}
+
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}

@@ -827,6 +827,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 	// PodSpecHash is ripemd160 hash of PodSpec used by this pod
 	PodSpecHash string `json:"podSpecHash"`
+
+	// SecurityEnabled is true if security is enabled in the pod
+	SecurityEnabled bool `json:"securityEnabled"`
 }
 
 // +kubebuilder:object:root=true

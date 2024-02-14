@@ -919,3 +919,14 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 
 	return r.Client.Update(ctx, aeroCluster, updateOption)
 }
+
+func (r *SingleClusterReconciler) getsecurityDisabledPodNames() sets.Set[string] {
+	securityDisabledPods := sets.Set[string]{}
+	for podName := range r.aeroCluster.Status.Pods {
+		if !r.aeroCluster.Status.Pods[podName].SecurityEnabled {
+			securityDisabledPods.Insert(podName)
+		}
+	}
+
+	return securityDisabledPods
+}
