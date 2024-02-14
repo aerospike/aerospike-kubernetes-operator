@@ -158,14 +158,14 @@ func createPodSpecForRack(
 	aeroCluster *asdbv1.AerospikeCluster, rack *asdbv1.Rack,
 ) *asdbv1.AerospikePodSpec {
 	rackFullPodSpec := lib.DeepCopy(
-		aeroCluster.Spec.PodSpec,
-	).(asdbv1.AerospikePodSpec)
+		&aeroCluster.Spec.PodSpec,
+	).(*asdbv1.AerospikePodSpec)
 
 	rackFullPodSpec.Affinity = rack.PodSpec.Affinity
 	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
 	rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
 
-	return &rackFullPodSpec
+	return rackFullPodSpec
 }
 
 func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (

@@ -26,7 +26,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -302,7 +301,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 }
 
 func (r *SingleClusterReconciler) setDynamicConfig(
-	dynamicConfDiffPerPod map[string]libcommons.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)

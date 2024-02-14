@@ -1,5 +1,5 @@
 /*
-Copyright 2023.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -867,6 +867,8 @@ func init() {
 }
 
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
+//
+//nolint:dupl // not duplicate
 func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) {
 	status := AerospikeClusterStatusSpec{}
 
@@ -874,79 +876,81 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	status.Image = spec.Image
 
 	// Storage
-	statusStorage := lib.DeepCopy(spec.Storage).(AerospikeStorageSpec)
+	statusStorage := lib.DeepCopy(&spec.Storage).(*AerospikeStorageSpec)
 
-	status.Storage = statusStorage
+	status.Storage = *statusStorage
 
 	if spec.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
 		statusAerospikeAccessControl := lib.DeepCopy(
-			*spec.AerospikeAccessControl,
-		).(AerospikeAccessControlSpec)
+			spec.AerospikeAccessControl,
+		).(*AerospikeAccessControlSpec)
 
-		status.AerospikeAccessControl = &statusAerospikeAccessControl
+		status.AerospikeAccessControl = statusAerospikeAccessControl
 	}
 
 	if spec.AerospikeConfig != nil {
 		// AerospikeConfig
 		statusAerospikeConfig := lib.DeepCopy(
-			*spec.AerospikeConfig,
-		).(AerospikeConfigSpec)
+			spec.AerospikeConfig,
+		).(*AerospikeConfigSpec)
 
-		status.AerospikeConfig = &statusAerospikeConfig
+		status.AerospikeConfig = statusAerospikeConfig
 	}
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
 		statusValidationPolicy := lib.DeepCopy(
-			*spec.ValidationPolicy,
-		).(ValidationPolicySpec)
+			spec.ValidationPolicy,
+		).(*ValidationPolicySpec)
 
-		status.ValidationPolicy = &statusValidationPolicy
+		status.ValidationPolicy = statusValidationPolicy
 	}
 
 	// RackConfig
-	statusRackConfig := lib.DeepCopy(spec.RackConfig).(RackConfig)
-	status.RackConfig = statusRackConfig
+	statusRackConfig := lib.DeepCopy(&spec.RackConfig).(*RackConfig)
+	status.RackConfig = *statusRackConfig
 
 	// AerospikeNetworkPolicy
 	statusAerospikeNetworkPolicy := lib.DeepCopy(
-		spec.AerospikeNetworkPolicy,
-	).(AerospikeNetworkPolicy)
+		&spec.AerospikeNetworkPolicy,
+	).(*AerospikeNetworkPolicy)
 
-	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
+	status.AerospikeNetworkPolicy = *statusAerospikeNetworkPolicy
 
 	if spec.OperatorClientCertSpec != nil {
 		clientCertSpec := lib.DeepCopy(
-			*spec.OperatorClientCertSpec,
-		).(AerospikeOperatorClientCertSpec)
+			spec.OperatorClientCertSpec,
+		).(*AerospikeOperatorClientCertSpec)
 
-		status.OperatorClientCertSpec = &clientCertSpec
+		status.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
-	statusPodSpec := lib.DeepCopy(spec.PodSpec).(AerospikePodSpec)
-	status.PodSpec = statusPodSpec
+	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
+	status.PodSpec = *statusPodSpec
 
 	seedsFinderServices := lib.DeepCopy(
-		spec.SeedsFinderServices,
-	).(SeedsFinderServices)
+		&spec.SeedsFinderServices,
+	).(*SeedsFinderServices)
 
-	status.SeedsFinderServices = seedsFinderServices
+	status.SeedsFinderServices = *seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(spec.RosterNodeBlockList) != 0 {
 		rosterNodeBlockList := lib.DeepCopy(
-			spec.RosterNodeBlockList,
-		).([]string)
+			&spec.RosterNodeBlockList,
+		).(*[]string)
 
-		status.RosterNodeBlockList = rosterNodeBlockList
+		status.RosterNodeBlockList = *rosterNodeBlockList
 	}
 
 	return &status, nil
 }
 
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
+//
+//nolint:dupl // not duplicate
 func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
 	spec := AerospikeClusterSpec{}
 
@@ -954,8 +958,8 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	spec.Image = status.Image
 
 	// Storage
-	specStorage := lib.DeepCopy(status.Storage).(AerospikeStorageSpec)
-	spec.Storage = specStorage
+	specStorage := lib.DeepCopy(&status.Storage).(*AerospikeStorageSpec)
+	spec.Storage = *specStorage
 
 	if status.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
@@ -978,50 +982,50 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.ValidationPolicy != nil {
 		// ValidationPolicy
 		specValidationPolicy := lib.DeepCopy(
-			*status.ValidationPolicy,
-		).(ValidationPolicySpec)
+			status.ValidationPolicy,
+		).(*ValidationPolicySpec)
 
-		spec.ValidationPolicy = &specValidationPolicy
+		spec.ValidationPolicy = specValidationPolicy
 	}
 
 	// RackConfig
-	specRackConfig := lib.DeepCopy(status.RackConfig).(RackConfig)
+	specRackConfig := lib.DeepCopy(&status.RackConfig).(*RackConfig)
 
-	spec.RackConfig = specRackConfig
+	spec.RackConfig = *specRackConfig
 
 	// AerospikeNetworkPolicy
 	specAerospikeNetworkPolicy := lib.DeepCopy(
-		status.AerospikeNetworkPolicy,
-	).(AerospikeNetworkPolicy)
+		&status.AerospikeNetworkPolicy,
+	).(*AerospikeNetworkPolicy)
 
-	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
+	spec.AerospikeNetworkPolicy = *specAerospikeNetworkPolicy
 
 	if status.OperatorClientCertSpec != nil {
 		clientCertSpec := lib.DeepCopy(
-			*status.OperatorClientCertSpec,
-		).(AerospikeOperatorClientCertSpec)
+			status.OperatorClientCertSpec,
+		).(*AerospikeOperatorClientCertSpec)
 
-		spec.OperatorClientCertSpec = &clientCertSpec
+		spec.OperatorClientCertSpec = clientCertSpec
 	}
 
 	// Storage
-	specPodSpec := lib.DeepCopy(status.PodSpec).(AerospikePodSpec)
+	specPodSpec := lib.DeepCopy(&status.PodSpec).(*AerospikePodSpec)
 
-	spec.PodSpec = specPodSpec
+	spec.PodSpec = *specPodSpec
 
 	seedsFinderServices := lib.DeepCopy(
-		status.SeedsFinderServices,
-	).(SeedsFinderServices)
+		&status.SeedsFinderServices,
+	).(*SeedsFinderServices)
 
-	spec.SeedsFinderServices = seedsFinderServices
+	spec.SeedsFinderServices = *seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(status.RosterNodeBlockList) != 0 {
 		rosterNodeBlockList := lib.DeepCopy(
-			status.RosterNodeBlockList,
-		).([]string)
+			&status.RosterNodeBlockList,
+		).(*[]string)
 
-		spec.RosterNodeBlockList = rosterNodeBlockList
+		spec.RosterNodeBlockList = *rosterNodeBlockList
 	}
 
 	return &spec, nil

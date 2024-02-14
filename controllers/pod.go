@@ -21,8 +21,8 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	libcommons "github.com/aerospike/aerospike-management-lib/commons"
 )
 
 // RestartType is the type of pod restart to use.
@@ -62,11 +62,11 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]libcommons.DynamicConfigMap, err error) {
+	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error) {
 	var addedNSDevices []string
 
 	restartTypeMap = make(map[string]RestartType)
-	dynamicConfDiffPerPod = make(map[string]libcommons.DynamicConfigMap)
+	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
 	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -95,13 +95,30 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				}
 			}
 
-			// If dynamic commands have failed in previous retry, then we should not try to update config dynamically.
-			if !podStatus.DynamicConfigFailed {
-				// Fetching all dynamic config change.
-				dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx])
-				if err != nil {
-					return nil, nil, err
+			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
+
+			version, err := asdbv1.GetImageVersion(serverContainer.Image)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			v, err := lib.CompareVersions(version, "7.0.0")
+			if err != nil {
+				return nil, nil, err
+			}
+
+			// If version >= 7.0.0, then we can update config dynamically.
+			if v >= 0 {
+				// If dynamic commands have failed in previous retry, then we should not try to update config dynamically.
+				if !podStatus.DynamicConfigFailed {
+					// Fetching all dynamic config change.
+					dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
+					if err != nil {
+						return nil, nil, err
+					}
 				}
+			} else {
+				r.Log.Info("Dynamic config change not supported for version < 7.0.0", "currentVersion", version)
 			}
 		}
 
@@ -1271,8 +1288,8 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState, pod *corev1.Pod) (
-	libcommons.DynamicConfigMap, error) {
+func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState, pod *corev1.Pod, version string) (
+	asconfig.DynamicConfigMap, error) {
 	statusFromAnnotation := pod.Annotations["aerospikeConf"]
 
 	asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
@@ -1288,11 +1305,6 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	asConfSpec, err := getFlatConfig(r.Log, asConf.ToConfFile())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
-	}
-
-	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
-	if err != nil {
-		return nil, err
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,

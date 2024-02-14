@@ -1362,14 +1362,13 @@ func aerospikeClusterCreateUpdateWithTO(
 
 	// Apply the update.
 	if desired.Spec.AerospikeAccessControl != nil {
-		current.Spec = lib.DeepCopy(desired.Spec).(asdbv1.AerospikeClusterSpec)
+		current.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{}
+		current.Spec = *lib.DeepCopy(&desired.Spec).(*asdbv1.AerospikeClusterSpec)
 	} else {
 		current.Spec.AerospikeAccessControl = nil
 	}
 
-	current.Spec.AerospikeConfig.Value = lib.DeepCopy(
-		desired.Spec.AerospikeConfig.Value,
-	).(map[string]interface{})
+	current.Spec.AerospikeConfig.Value = desired.Spec.AerospikeConfig.DeepCopy().Value
 
 	if err := k8sClient.Update(ctx, current); err != nil {
 		return err

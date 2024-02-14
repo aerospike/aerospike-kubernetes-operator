@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
-	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 //nolint:lll // for readability
@@ -264,7 +263,7 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 			)
 		} else {
 			// Use the global config.
-			m = lib.DeepCopy(c.Spec.AerospikeConfig.Value).(map[string]interface{})
+			m = c.Spec.AerospikeConfig.DeepCopy().Value
 		}
 
 		asLog.V(1).Info(

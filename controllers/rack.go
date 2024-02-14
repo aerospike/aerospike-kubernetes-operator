@@ -18,7 +18,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/commons"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 type scaledDownRack struct {
@@ -453,7 +453,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	failedPods []*corev1.Pod, dynamicConfDiffPerPod map[string]commons.DynamicConfigMap) reconcileResult {
+	failedPods []*corev1.Pod, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap) reconcileResult {
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
@@ -1140,7 +1140,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
 	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType,
-	dynamicConfDiffPerPod map[string]commons.DynamicConfigMap, err error,
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error,
 ) {
 	restartTypeMap, dynamicConfDiffPerPod, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
@@ -1291,7 +1291,7 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1.Vo
 		return true
 	}
 
-	volumeCopy := lib.DeepCopy(*volume).(asdbv1.VolumeSpec)
+	volumeCopy := lib.DeepCopy(volume).(*asdbv1.VolumeSpec)
 
 	if volumeCopy.Source.Secret != nil {
 		setDefaultsSecretVolumeSource(volumeCopy.Source.Secret)

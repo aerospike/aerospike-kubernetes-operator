@@ -129,9 +129,9 @@ func createLoadBalancer() *asdbv1.LoadBalancerSpec {
 		),
 	)
 
-	result := lib.DeepCopy(lb).(asdbv1.LoadBalancerSpec)
+	result := lib.DeepCopy(&lb).(*asdbv1.LoadBalancerSpec)
 
-	return &result
+	return result
 }
 
 func loadBalancerName(aeroCluster *asdbv1.AerospikeCluster) types.NamespacedName {
