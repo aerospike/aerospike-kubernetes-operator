@@ -173,13 +173,19 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			It(
 				"Should allow cluster operations with pending pod", func() {
 					By("Set MaxIgnorablePod and Rolling restart cluster")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
-					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = int64(18000)
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+
+					// As pod is in pending state, CR object will be updated continuously
+					// This is put in eventually to retry Object Conflict error
+					Eventually(func() error {
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						val := intstr.FromInt(1)
+						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
+							int64(18000)
+
+						return updateCluster(k8sClient, ctx, aeroCluster)
+					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Upgrade version")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
