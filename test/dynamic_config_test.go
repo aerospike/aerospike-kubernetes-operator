@@ -118,9 +118,7 @@ var _ = Describe(
 						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(2))
 
 						By("Verify no warm/cold restarts in Pods")
-						noRestart, err := verifyNoRestart(ctx, aeroCluster, podPIDMap)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(noRestart).To(Equal(false))
+						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 
 						By("Modify dynamic config by removing fields")
 						aeroCluster, err = getCluster(
@@ -149,9 +147,7 @@ var _ = Describe(
 						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(1))
 
 						By("Verify no warm/cold restarts in Pods")
-						noRestart, err = verifyNoRestart(ctx, aeroCluster, podPIDMap)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(noRestart).To(Equal(false))
+						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 					},
 				)
 
@@ -182,9 +178,7 @@ var _ = Describe(
 							To(Equal(false))
 
 						By("Verify warm restarts in Pods")
-						noRestart, err := verifyNoRestart(ctx, aeroCluster, podPIDMap)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(noRestart).To(Equal(true))
+						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
 					},
 				)
 			},
@@ -193,19 +187,20 @@ var _ = Describe(
 	},
 )
 
-func verifyNoRestart(ctx goctx.Context, cluster *asdbv1.AerospikeCluster, pidMap map[string]podID) (bool, error) {
+func validateServerRestart(ctx goctx.Context, cluster *asdbv1.AerospikeCluster, pidMap map[string]podID,
+	shouldRestart bool) {
+	restarted := false
+
 	newPodPidMap, err := getPodIDs(ctx, cluster)
-	if err != nil {
-		return false, err
-	}
+	Expect(err).ToNot(HaveOccurred())
 
 	for podName, pid := range pidMap {
 		if newPodPidMap[podName].podUID != pid.podUID || newPodPidMap[podName].asdPID != pid.asdPID {
-			return true, nil
+			restarted = true
 		}
 	}
 
-	return false, nil
+	Expect(restarted).To(Equal(shouldRestart))
 }
 
 func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[string]podID, error) {
