@@ -346,7 +346,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			return reconcileError(err)
 		}
 
-		r.Log.Info("printing commands", "asConfCmds", fmt.Sprintf("%v", asConfCmds))
+		r.Log.Info("Generated dynamic commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
 
 		if err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {

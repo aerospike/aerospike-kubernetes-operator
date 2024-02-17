@@ -79,10 +79,11 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 18000
 						log := map[string]interface{}{
 							"report-data-op": []string{"test"},
 						}
+
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 18000
 
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"] = log
 						dc := map[string]interface{}{
@@ -106,16 +107,30 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+
+						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"service", &pod)
+						Expect(err).ToNot(HaveOccurred())
+						cv, ok := conf["proto-fd-max"]
+						Expect(ok).ToNot(BeFalse())
+
+						Expect(cv).To(Equal(int64(18000)))
+
+						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"security", &pod)
 						Expect(err).ToNot(HaveOccurred())
 
-						logs := aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"]
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).
-							To(Equal(float64(18000)))
-						Expect(logs.(map[string]interface{})["report-data-op"].([]interface{})[0]).To(Equal("test"))
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(2))
+						reportDataOp, ok := conf["log.report-data-op[0]"].(string)
+						Expect(ok).ToNot(BeFalse())
+
+						Expect(reportDataOp).To(Equal("test"))
+
+						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"xdr", &pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(conf["dcs"]).To(HaveLen(2))
 
 						By("Verify no warm/cold restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
@@ -137,17 +152,32 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						pod = aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+
+						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"service", &pod)
+						Expect(err).ToNot(HaveOccurred())
+						cv, ok = conf["proto-fd-max"]
+						Expect(ok).ToNot(BeFalse())
+
+						Expect(cv).To(Equal(int64(15000)))
+
+						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"security", &pod)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"]).To(BeNil())
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"]).To(BeNil())
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"]).To(HaveLen(1))
+						_, ok = conf["log.report-data-op[0]"].(string)
+						Expect(ok).ToNot(BeTrue())
+
+						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"xdr", &pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(conf["dcs"]).To(HaveLen(1))
 
 						By("Verify no warm/cold restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+
 					},
 				)
 
@@ -169,13 +199,16 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+
+						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"security", &pod)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"]).
-							To(Equal(false))
+						enableQuotas, ok := conf["enable-quotas"].(bool)
+						Expect(ok).ToNot(BeFalse())
+
+						Expect(enableQuotas).To(BeFalse())
 
 						By("Verify warm restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
@@ -183,7 +216,6 @@ var _ = Describe(
 				)
 			},
 		)
-
 	},
 )
 

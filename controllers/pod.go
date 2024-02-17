@@ -368,7 +368,7 @@ func (r *SingleClusterReconciler) restartPods(
 }
 
 func (r *SingleClusterReconciler) updatePod(podName string) error {
-	r.Log.Info("updating pod", "pod", podName)
+	r.Log.Info("Updating pod", "pod", podName)
 
 	if err := r.restartASDOrUpdateAerospikeConf(podName, noRestartUpdateConf); err != nil {
 		return err
@@ -1310,16 +1310,14 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
 		true, version)
 	if err != nil {
-		r.Log.Info("failed to get config diff, fallback to rolling restart: %v", err)
+		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart: %v", err)
 		return nil, nil
 	}
 
 	if len(specToStatusDiffs) > 0 {
-		r.Log.Info("print diff outside", "difference", fmt.Sprintf("%v", specToStatusDiffs))
-
 		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
 		if err != nil {
-			r.Log.Info("failed to check if all config is dynamic, fallback to rolling restart: %v", err)
+			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart: %v", err)
 			return nil, nil
 		}
 

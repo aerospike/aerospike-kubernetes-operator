@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,6 +28,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 var (
@@ -757,4 +759,30 @@ func getGitRepoRootPath() (string, error) {
 	}
 
 	return strings.TrimSpace(string(path)), nil
+}
+
+func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, configContext string, pod *asdbv1.AerospikePodStatus) (lib.Stats, error) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+
+	host, err := createHost(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	asinfo := info.NewAsInfo(
+		log, host, getClientPolicy(aeroCluster, k8sClient),
+	)
+
+	confs, err := getAsConfig(asinfo, configContext)
+	if err != nil {
+		return nil, err
+	}
+
+	svcConfs := confs[configContext].(lib.Stats)
+
+	return svcConfs, nil
 }

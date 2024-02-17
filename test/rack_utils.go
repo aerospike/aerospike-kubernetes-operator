@@ -92,21 +92,10 @@ func validateAerospikeConfigServiceUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod)
+		svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx, clusterNamespacedName, "service", &pod)
 		if err != nil {
 			return err
 		}
-
-		asinfo := info.NewAsInfo(
-			log, host, getClientPolicy(aeroCluster, k8sClient),
-		)
-
-		confs, err := getAsConfig(asinfo, "service")
-		if err != nil {
-			return err
-		}
-
-		svcConfs := confs["service"].(lib.Stats)
 
 		for k, v := range rack.InputAerospikeConfig.Value["service"].(map[string]interface{}) {
 			if vint, ok := v.(int); ok {
