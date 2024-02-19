@@ -19,6 +19,7 @@ package v1
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -114,7 +116,8 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
-		aslog, c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+		aslog, incomingVersion, outgoingVersion,
+		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
 		c.Status.AerospikeConfig,
 	); err != nil {
 		return nil, err
@@ -389,6 +392,16 @@ func (c *AerospikeCluster) validateRackUpdate(
 		return nil
 	}
 
+	outgoingVersion, err := GetImageVersion(old.Spec.Image)
+	if err != nil {
+		return err
+	}
+
+	incomingVersion, err := GetImageVersion(c.Spec.Image)
+	if err != nil {
+		return err
+	}
+
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
@@ -422,7 +435,8 @@ func (c *AerospikeCluster) validateRackUpdate(
 
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
-						aslog, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+						aslog, incomingVersion, outgoingVersion,
+						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
 						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
@@ -1252,10 +1266,96 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	return rf, nil
 }
 
+func validateSecurityConfigUpdate(
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec,
+) error {
+	nv, err := lib.CompareVersions(newVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+
+	ov, err := lib.CompareVersions(oldVersion, "5.7.0")
+	if err != nil {
+		return err
+	}
+
+	if nv >= 0 || ov >= 0 {
+		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec)
+	}
+
+	return validateEnableSecurityConfig(newSpec, oldSpec)
+}
+
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
+	newConf := newConfSpec.Value
+	oldConf := oldConfSpec.Value
+	oldSec, oldSecConfFound := oldConf["security"]
+	newSec, newSecConfFound := newConf["security"]
+
+	if oldSecConfFound && !newSecConfFound {
+		return fmt.Errorf("cannot remove cluster security config")
+	}
+
+	if oldSecConfFound && newSecConfFound {
+		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
+		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
+
+		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && !newEnableSecurityFlagFound {
+			return fmt.Errorf("cannot disable cluster security in running cluster")
+		}
+
+		if oldEnableSecurityFlagFound && newEnableSecurityFlagFound || !reflect.DeepEqual(
+			oldSecFlag, newSecFlag,
+		) {
+			if oldSecFlag.(bool) && !newSecFlag.(bool) {
+				return fmt.Errorf("cannot disable cluster security in running cluster")
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateSecurityContext(
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec,
+) error {
+	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
+	if err != nil {
+		if !errors.Is(err, internalerrors.ErrNotFound) {
+			return fmt.Errorf(
+				"validateEnableSecurityConfig got an error - oldVersion: %s: %w",
+				oldVersion, err,
+			)
+		}
+	}
+
+	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
+	if err != nil {
+		if !errors.Is(err, internalerrors.ErrNotFound) {
+			return fmt.Errorf(
+				"validateEnableSecurityConfig got an error: %w", err,
+			)
+		}
+	}
+
+	if !ivflag && ovflag {
+		return fmt.Errorf("cannot disable cluster security in running cluster")
+	}
+
+	return nil
+}
+
 func validateAerospikeConfigUpdate(
-	aslog logr.Logger, incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
+	aslog logr.Logger, incomingVersion, outgoingVersion string,
+	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
+
+	if err := validateSecurityConfigUpdate(
+		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
+	); err != nil {
+		return err
+	}
 
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value

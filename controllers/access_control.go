@@ -64,18 +64,11 @@ func AerospikeAdminCredentials(
 		desiredSecurityErr = incomingVersionErr
 	}
 
-	if currentSecurityErr == nil && desiredSecurityErr == nil {
-		// If security is enabled in either current or desired state, return security enabled credentials.
-		enabled = currentSecurityEnabled || desiredSecurityEnabled
-	} else if currentSecurityErr != nil && desiredSecurityErr != nil {
+	if currentSecurityErr != nil && desiredSecurityErr != nil {
 		return "", "", desiredSecurityErr
-	} else {
-		if currentSecurityErr != nil {
-			enabled = desiredSecurityEnabled
-		} else {
-			enabled = currentSecurityEnabled
-		}
 	}
+
+	enabled = currentSecurityEnabled || desiredSecurityEnabled
 
 	if !enabled {
 		// Return zero strings if this is not a security enabled cluster.

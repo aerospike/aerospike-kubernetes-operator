@@ -100,6 +100,34 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	if r.aeroCluster.Status.Pods != nil && r.enablingSecurity() {
+		securityEnabledPods, err := r.getsecurityEnabledPods()
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		if len(securityEnabledPods) > 0 {
+			ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
+			if err != nil {
+				r.Log.Error(err, "Failed to determine pods to be ignored")
+
+				return reconcile.Result{}, err
+			}
+
+			// Setup access control.
+			if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
+				r.Log.Error(err, "Failed to Reconcile access control")
+				r.Recorder.Eventf(
+					r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
+					"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
+					r.aeroCluster.Name,
+				)
+
+				return reconcile.Result{}, err
+			}
+		}
+	}
+
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
 		if res.err != nil {
@@ -144,7 +172,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, e
 	}
 
-	if err := deployment.InfoQuiesceUndo(
+	if err = deployment.InfoQuiesceUndo(
 		r.Log,
 		r.getClientPolicy(), allHostConns,
 	); err != nil {
@@ -152,25 +180,19 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(ignorablePodNames); err != nil {
+	// Assuming all pods must be security enabled or disabled.
+	if err := r.validateAndReconcileAccessControl(podList.Items, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
 			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
 			r.aeroCluster.Name,
-		)
-
-		return reconcile.Result{}, err
-	}
-
-	// Update the AerospikeCluster status.
-	if err := r.updateAccessControlStatus(); err != nil {
-		r.Log.Error(err, "Failed to update AerospikeCluster access control status")
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
-			"Failed to update AerospikeCluster access control status %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
 
 		return reconcile.Result{}, err
@@ -264,7 +286,8 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl(ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(securityEnabledPods []corev1.Pod,
+	ignorablePodNames sets.Set[string]) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
@@ -282,8 +305,10 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(ignorablePod
 		return nil
 	}
 
+	var conns []*deployment.HostConn
+
 	// Create client
-	conns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	conns, err = r.newPodsHostConnWithOption(securityEnabledPods, ignorablePodNames)
 	if err != nil {
 		return fmt.Errorf("failed to get host info: %v", err)
 	}
@@ -302,6 +327,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(ignorablePod
 
 	// Create policy using status, status has current connection info
 	clientPolicy := r.getClientPolicy()
+
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 
 	if err != nil {
@@ -315,15 +341,30 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(ignorablePod
 	err = r.reconcileAccessControl(
 		aeroClient, pp,
 	)
-	if err == nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
-			"Updated Access Control %s/%s", r.aeroCluster.Namespace,
-			r.aeroCluster.Name,
-		)
+
+	if err != nil {
+		return fmt.Errorf("failed to reconcile access control: %v", err)
 	}
 
-	return err
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
+		"Updated Access Control %s/%s", r.aeroCluster.Namespace,
+		r.aeroCluster.Name,
+	)
+
+	// Update the AerospikeCluster status.
+	if err := r.updateAccessControlStatus(); err != nil {
+		r.Log.Error(err, "Failed to update AerospikeCluster access control status")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
+			"Failed to update AerospikeCluster access control status %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return err
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) updateStatus() error {
@@ -920,13 +961,29 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 	return r.Client.Update(ctx, aeroCluster, updateOption)
 }
 
-func (r *SingleClusterReconciler) getsecurityDisabledPodNames() sets.Set[string] {
-	securityDisabledPods := sets.Set[string]{}
+func (r *SingleClusterReconciler) getsecurityEnabledPods() ([]corev1.Pod, error) {
+	securityEnabledPods := make([]corev1.Pod, 0, len(r.aeroCluster.Status.Pods))
+
 	for podName := range r.aeroCluster.Status.Pods {
-		if !r.aeroCluster.Status.Pods[podName].SecurityEnabled {
-			securityDisabledPods.Insert(podName)
+		if r.aeroCluster.Status.Pods[podName].SecurityEnabled {
+			pod := &corev1.Pod{}
+			podName := types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}
+
+			if err := r.Client.Get(context.TODO(), podName, pod); err != nil {
+				return securityEnabledPods, err
+			}
+
+			securityEnabledPods = append(securityEnabledPods, *pod)
 		}
 	}
 
-	return securityDisabledPods
+	return securityEnabledPods, nil
+}
+
+func (r *SingleClusterReconciler) enablingSecurity() bool {
+	if r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil {
+		return true
+	}
+
+	return false
 }
