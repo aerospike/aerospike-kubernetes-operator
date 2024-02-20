@@ -1300,16 +1300,8 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
-		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && !newEnableSecurityFlagFound {
+		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
 			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-
-		if oldEnableSecurityFlagFound && newEnableSecurityFlagFound || !reflect.DeepEqual(
-			oldSecFlag, newSecFlag,
-		) {
-			if oldSecFlag.(bool) && !newSecFlag.(bool) {
-				return fmt.Errorf("cannot disable cluster security in running cluster")
-			}
 		}
 	}
 
