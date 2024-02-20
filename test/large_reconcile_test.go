@@ -144,14 +144,16 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Change build back to original
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-						err = UpdateClusterImage(aeroCluster, latestImage)
-						Expect(err).ToNot(HaveOccurred())
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Eventually(func() error {
+							aeroCluster, err = getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
+
+							err = UpdateClusterImage(aeroCluster, latestImage)
+							Expect(err).ToNot(HaveOccurred())
+							return k8sClient.Update(goctx.TODO(), aeroCluster)
+						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						// Only 1 pod need upgrade
 						err = waitForClusterUpgrade(
