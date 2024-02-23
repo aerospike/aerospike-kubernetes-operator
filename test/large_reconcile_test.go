@@ -102,8 +102,8 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						tempConf := true
-						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = tempConf
+						tempConf := "cpu"
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["auto-pin"] = tempConf
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -113,7 +113,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = false
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["auto-pin"] = "none"
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -324,7 +324,7 @@ func waitForClusterScaleDown(
 
 func waitForClusterRollingRestart(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
-	replicas int, tempConf bool, retryInterval, timeout time.Duration,
+	replicas int, tempConf string, retryInterval, timeout time.Duration,
 ) error {
 	err := wait.PollUntilContextTimeout(goctx.TODO(),
 		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
@@ -342,8 +342,8 @@ func waitForClusterRollingRestart(
 				return false, err
 			}
 
-			enableQuotas := newCluster.Status.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"].(bool)
-			if enableQuotas == tempConf {
+			autoPin := newCluster.Status.AerospikeConfig.Value["service"].(map[string]interface{})["auto-pin"].(string)
+			if autoPin == tempConf {
 				err := fmt.Errorf(
 					"cluster status can not be updated with intermediate conf value %v,"+
 						" it should have only final value, as this is the new reconcile flow",

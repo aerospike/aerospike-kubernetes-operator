@@ -420,8 +420,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			}
 		}
 
-		if needDynamicUpdateRack {
-			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, failedPods, dynamicConfDiffPerPod)
+		if len(failedPods) == 0 && needDynamicUpdateRack {
+			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, dynamicConfDiffPerPod)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -453,7 +453,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	failedPods []*corev1.Pod, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap) reconcileResult {
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap) reconcileResult {
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
@@ -465,12 +465,6 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		err     error
 		podList []*corev1.Pod
 	)
-
-	failedPodNames := sets.Set[string]{}
-
-	for idx := range failedPods {
-		sets.Insert(failedPodNames, failedPods[idx].Name)
-	}
 
 	// List the pods for this aeroCluster's statefulset
 	podList, err = r.getOrderedRackPodList(rackState.Rack.ID)
@@ -485,7 +479,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		pod := podList[idx]
 
 		restartType := restartTypeMap[pod.Name]
-		if restartType != noRestartUpdateConf || failedPodNames.Has(pod.Name) {
+		if restartType != noRestartUpdateConf {
 			r.Log.Info("This Pod doesn't need any update, Skip this", "pod", pod.Name)
 			continue
 		}

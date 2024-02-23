@@ -1042,6 +1042,7 @@ func createDummyAerospikeCluster(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
+						"auto-pin":         "none",
 					},
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
