@@ -101,7 +101,7 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if r.aeroCluster.Status.Pods != nil && r.enablingSecurity() {
-		securityEnabledPods, err := r.getsecurityEnabledPods()
+		securityEnabledPods, err := r.getSecurityEnabledPods()
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -180,14 +180,9 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	podList, err := r.getClusterPodList()
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Setup access control.
 	// Assuming all pods must be security enabled or disabled.
-	if err := r.validateAndReconcileAccessControl(podList.Items, ignorablePodNames); err != nil {
+	if err := r.validateAndReconcileAccessControl(nil, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -286,7 +281,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl(securityEnabledPods []corev1.Pod,
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string]) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
@@ -308,9 +303,16 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(securityEnab
 	var conns []*deployment.HostConn
 
 	// Create client
-	conns, err = r.newPodsHostConnWithOption(securityEnabledPods, ignorablePodNames)
-	if err != nil {
-		return fmt.Errorf("failed to get host info: %v", err)
+	if selectedPods == nil {
+		conns, err = r.newAllHostConnWithOption(ignorablePodNames)
+		if err != nil {
+			return fmt.Errorf("failed to get host info: %v", err)
+		}
+	} else {
+		conns, err = r.newPodsHostConnWithOption(selectedPods, ignorablePodNames)
+		if err != nil {
+			return fmt.Errorf("failed to get host info: %v", err)
+		}
 	}
 
 	hosts := make([]*as.Host, 0, len(conns))
@@ -961,7 +963,7 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 	return r.Client.Update(ctx, aeroCluster, updateOption)
 }
 
-func (r *SingleClusterReconciler) getsecurityEnabledPods() ([]corev1.Pod, error) {
+func (r *SingleClusterReconciler) getSecurityEnabledPods() ([]corev1.Pod, error) {
 	securityEnabledPods := make([]corev1.Pod, 0, len(r.aeroCluster.Status.Pods))
 
 	for podName := range r.aeroCluster.Status.Pods {
@@ -981,9 +983,5 @@ func (r *SingleClusterReconciler) getsecurityEnabledPods() ([]corev1.Pod, error)
 }
 
 func (r *SingleClusterReconciler) enablingSecurity() bool {
-	if r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil {
-		return true
-	}
-
-	return false
+	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
 }
