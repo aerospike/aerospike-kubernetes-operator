@@ -24,12 +24,15 @@ var _ = Describe(
 			"Migrate pods from K8s blocked nodes", func() {
 				clusterName := "k8s-node-block-cluster"
 				clusterNamespacedName := getNamespacedName(clusterName, namespace)
-				podName := clusterName + "-1-0"
+				podName := clusterName + "-2-0"
 				aeroCluster := &asdbv1.AerospikeCluster{}
 				oldK8sNode := ""
 				oldPvcInfo := make(map[string]types.UID)
 
-				var err error
+				var (
+					err   error
+					zones []string
+				)
 
 				BeforeEach(
 					func() {
@@ -37,9 +40,22 @@ var _ = Describe(
 							clusterNamespacedName, 3,
 						)
 
+						// Zones are set to distribute the pods across different zone nodes.
+						zones, err = getZones(ctx, k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+
+						zone1 := zones[0]
+						zone2 := zones[0]
+						if len(zones) > 1 {
+							zone2 = zones[1]
+						}
+
 						batchSize := intstr.FromString("100%")
 						rackConf := asdbv1.RackConfig{
-							Racks:                  getDummyRackConf(1, 2),
+							Racks: []asdbv1.Rack{
+								{ID: 1, Zone: zone1},
+								{ID: 2, Zone: zone2},
+							},
 							RollingUpdateBatchSize: &batchSize,
 							Namespaces:             []string{"test"},
 						}
@@ -145,7 +161,7 @@ var _ = Describe(
 						By("Blocking the k8s node and setting maxIgnorablePod to 1")
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
-						maxIgnorablePods := intstr.FromInt(1)
+						maxIgnorablePods := intstr.FromInt32(1)
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorablePods
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						err = updateCluster(k8sClient, ctx, aeroCluster)
