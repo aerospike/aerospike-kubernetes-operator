@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
@@ -1205,8 +1206,8 @@ func getExpectedServicePortForPod(
 ) (int32, error) {
 	var port int32
 
-	if (networkType != asdbv1.AerospikeNetworkTypePod &&
-		networkType != asdbv1.AerospikeNetworkTypeCustomInterface) && aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if (networkType != asdbv1.AerospikeNetworkTypePod && networkType != asdbv1.AerospikeNetworkTypeCustomInterface) &&
+		ptr.Deref(aeroCluster.Spec.PodSpec.MultiPodPerHost, false) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -1346,7 +1347,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 				},
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: multiPodPerHost,
+				MultiPodPerHost: ptr.To(multiPodPerHost),
 			},
 			OperatorClientCertSpec: operatorClientCertSpec,
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{

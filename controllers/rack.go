@@ -559,8 +559,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Safe check to delete all dangling pod services which are no longer required
 	// There won't be any case of dangling pod service with MultiPodPerHost false, so ignore that case
-	if r.aeroCluster.Spec.PodSpec.MultiPodPerHost &&
-		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+	if !podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		if err := r.cleanupDanglingPodServices(rackState); err != nil {
 			return reconcileError(err)
 		}

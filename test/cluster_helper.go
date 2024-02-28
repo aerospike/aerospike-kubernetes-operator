@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -778,7 +779,7 @@ func createAerospikeClusterPost460(
 			},
 
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
@@ -841,7 +842,7 @@ func createAerospikeClusterPost560(
 			},
 
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
@@ -965,7 +966,7 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			},
 
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost:            true,
+				MultiPodPerHost:            ptr.To(true),
 				AerospikeInitContainerSpec: &asdbv1.AerospikeInitContainerSpec{},
 			},
 
@@ -1033,7 +1034,7 @@ func createDummyAerospikeCluster(
 			},
 
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost:            true,
+				MultiPodPerHost:            ptr.To(true),
 				AerospikeInitContainerSpec: &asdbv1.AerospikeInitContainerSpec{},
 			},
 
@@ -1224,7 +1225,7 @@ func createBasicTLSCluster(
 			},
 
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
@@ -1258,7 +1259,7 @@ func createSSDStorageCluster(
 	multiPodPerHost bool,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = append(
 		aeroCluster.Spec.Storage.Volumes, []asdbv1.VolumeSpec{
 			{
@@ -1289,7 +1290,7 @@ func createHDDAndDataInMemStorageCluster(
 	multiPodPerHost bool,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
 	aeroCluster.Spec.Storage.Volumes = append(
 		aeroCluster.Spec.Storage.Volumes, []asdbv1.VolumeSpec{
 			{
@@ -1328,7 +1329,7 @@ func createDataInMemWithoutPersistentStorageCluster(
 	multiPodPerHost bool,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.PodSpec.MultiPodPerHost = multiPodPerHost
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
@@ -1528,7 +1529,7 @@ func getNonRootPodSpec() asdbv1.AerospikePodSpec {
 
 	return asdbv1.AerospikePodSpec{
 		HostNetwork:     false,
-		MultiPodPerHost: true,
+		MultiPodPerHost: ptr.To(true),
 		SecurityContext: &corev1.PodSecurityContext{
 			RunAsUser:           &id,
 			RunAsGroup:          &id,

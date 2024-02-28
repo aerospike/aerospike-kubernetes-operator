@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -801,7 +802,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 
 	// Set our rules in PodAntiAffinity
 	// only enable in production, so it can be used in 1 node clusters while debugging (minikube)
-	if !r.aeroCluster.Spec.PodSpec.MultiPodPerHost {
+	if !ptr.Deref(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, false) {
 		if affinity.PodAntiAffinity == nil {
 			affinity.PodAntiAffinity = &corev1.PodAntiAffinity{}
 		}
@@ -1460,7 +1461,7 @@ func addVolumeDeviceInContainer(
 }
 
 func getSTSContainerPort(
-	multiPodPerHost bool, aeroConf *asdbv1.AerospikeConfigSpec,
+	multiPodPerHost *bool, aeroConf *asdbv1.AerospikeConfigSpec,
 ) []corev1.ContainerPort {
 	ports := make([]corev1.ContainerPort, 0, len(defaultContainerPorts))
 
@@ -1482,7 +1483,7 @@ func getSTSContainerPort(
 		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 		// where the hostIP is the IP address of the Kubernetes node where
 		// the container is running and the hostPort is the port requested by the user
-		if (!multiPodPerHost) && portInfo.exposedOnHost {
+		if !ptr.Deref(multiPodPerHost, false) && portInfo.exposedOnHost {
 			containerPort.HostPort = containerPort.ContainerPort
 		}
 

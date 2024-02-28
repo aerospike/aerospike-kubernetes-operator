@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -175,7 +176,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Set MaxIgnorablePod and Rolling restart cluster")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
+					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = int64(18000)
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -250,7 +251,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Delete rack with id 2")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
+					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 					aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1)
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -290,7 +291,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
+					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 					nsList = nsList[:len(nsList)-1]
@@ -344,7 +345,7 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 	racks := getDummyRackConf(1, 2)
 	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 		Namespaces: []string{scNamespace}, Racks: racks}
-	aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+	aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 	err := deployCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 }
@@ -979,7 +980,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 							)
 							Expect(err).ToNot(HaveOccurred())
 
-							aeroCluster.Spec.PodSpec.MultiPodPerHost = !aeroCluster.Spec.PodSpec.MultiPodPerHost
+							multiPodPerHost := !*aeroCluster.Spec.PodSpec.MultiPodPerHost
+							aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
 
 							err = k8sClient.Update(ctx, aeroCluster)
 							Expect(err).Should(HaveOccurred())
