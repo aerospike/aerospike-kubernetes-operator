@@ -73,15 +73,17 @@ var _ = Describe(
 						err = k8sClient.Update(goctx.TODO(), aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						// Change size to 4 immediately
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						// This is put in eventually to retry Object Conflict error and change size to 4 immediately
+						Eventually(func() error {
+							aeroCluster, err = getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.Size = 4
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+							aeroCluster.Spec.Size = 4
+
+							return k8sClient.Update(goctx.TODO(), aeroCluster)
+						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						// Cluster size should never go below 4,
 						// as only one node is removed at a time and before reducing 2nd node, we changed the size to 4
@@ -109,14 +111,16 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Change config back to original value
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						Eventually(func() error {
+							aeroCluster, err = getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax
+
+							return k8sClient.Update(goctx.TODO(), aeroCluster)
+						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						// Cluster status should never get updated with old conf "tempConf"
 						err = waitForClusterRollingRestart(
@@ -142,14 +146,16 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Change build back to original
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-						err = UpdateClusterImage(aeroCluster, latestImage)
-						Expect(err).ToNot(HaveOccurred())
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Eventually(func() error {
+							aeroCluster, err = getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
+
+							err = UpdateClusterImage(aeroCluster, latestImage)
+							Expect(err).ToNot(HaveOccurred())
+							return k8sClient.Update(goctx.TODO(), aeroCluster)
+						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						// Only 1 pod need upgrade
 						err = waitForClusterUpgrade(
