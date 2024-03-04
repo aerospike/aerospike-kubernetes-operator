@@ -160,6 +160,11 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return fmt.Errorf("invalid cluster size 0")
 	}
 
+	// Validate MaxUnavailable for PodDisruptionBudget
+	if err := c.validateMaxUnavailable(); err != nil {
+		return err
+	}
+
 	// Validate Image version
 	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
@@ -2167,6 +2172,60 @@ func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error
 
 	if value.Type == intstr.String && count > 100 {
 		return fmt.Errorf("%s: %s must not be greater than 100 percent", fieldPath, value.String())
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateMaxUnavailable() error {
+	// safe check for corner cases when mutation webhook somehow didn't work
+	if c.Spec.MaxUnavailable == nil {
+		return fmt.Errorf("maxUnavailable cannot be nil. Mutation webhook didn't work")
+	}
+
+	if err := validateIntOrStringField(c.Spec.MaxUnavailable, "spec.maxUnavailable"); err != nil {
+		return err
+	}
+
+	safeMaxUnavailable := int(c.Spec.Size)
+
+	// If Size is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
+	if safeMaxUnavailable == 1 {
+		return nil
+	}
+
+	for idx := range c.Spec.RackConfig.Racks {
+		rack := &c.Spec.RackConfig.Racks[idx]
+		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+
+		for _, nsInterface := range nsList {
+			rfInterface, exists := nsInterface.(map[string]interface{})["replication-factor"]
+			if !exists {
+				// Default RF is 2 if not given
+				safeMaxUnavailable = 2
+				continue
+			}
+
+			rf, err := GetIntType(rfInterface)
+			if err != nil {
+				return fmt.Errorf("namespace replication-factor %v", err)
+			}
+
+			// If RF is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
+			if rf == 1 {
+				continue
+			}
+
+			if rf < safeMaxUnavailable {
+				safeMaxUnavailable = rf
+			}
+		}
+	}
+
+	if c.Spec.MaxUnavailable.IntValue() >= safeMaxUnavailable {
+		return fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v as it may result in "+
+			"data loss. Set it to a lower value",
+			c.Spec.MaxUnavailable.String(), safeMaxUnavailable)
 	}
 
 	return nil

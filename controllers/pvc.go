@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -101,6 +102,34 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 	}
 
 	return deletedPVCs, nil
+}
+
+// deleteLocalPVCs deletes PVCs which are created using local storage classes
+// It considers the user given LocalStorageClasses list from spec to determine if a PVC is local or not.
+func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *corev1.Pod) error {
+	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID)
+	if err != nil {
+		return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
+	}
+
+	for idx := range pvcItems {
+		pvcStorageClass := pvcItems[idx].Spec.StorageClassName
+		if pvcStorageClass == nil {
+			r.Log.Info("PVC does not have storageClass set, no need to delete PVC", "pvcName", pvcItems[idx].Name)
+
+			continue
+		}
+
+		if utils.ContainsString(rackState.Rack.Storage.LocalStorageClasses, *pvcStorageClass) {
+			if err := r.Client.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
+				return fmt.Errorf(
+					"could not delete pvc %s: %v", pvcItems[idx].Name, err,
+				)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.PersistentVolumeClaim) error {

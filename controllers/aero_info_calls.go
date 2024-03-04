@@ -42,7 +42,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return reconcileSuccess()
 	}
 
-	// Remove a node only if cluster is stable
+	// Remove a node only if the cluster is stable
 	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
 		return reconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}

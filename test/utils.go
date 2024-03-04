@@ -325,6 +325,11 @@ func isClusterStateValid(
 		return false
 	}
 
+	if newCluster.Status.Phase != asdbv1.AerospikeClusterCompleted {
+		pkgLog.Info("Cluster phase is not set to Completed")
+		return false
+	}
+
 	return true
 }
 

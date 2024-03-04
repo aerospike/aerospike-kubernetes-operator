@@ -39,13 +39,25 @@ type SingleClusterReconciler struct {
 	Log         logr.Logger
 }
 
-func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
+func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	r.Log.V(1).Info(
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
 	)
 
-	// Check DeletionTimestamp to see if cluster is being deleted
+	// Set the status phase to Error if the recErr is not nil
+	// recErr is only set when reconcile failure should result in Error phase of the cluster
+	defer func() {
+		if recErr != nil {
+			r.Log.Error(recErr, "Reconcile failed")
+
+			if err := r.setStatusPhase(asdbv1.AerospikeClusterError); err != nil {
+				recErr = err
+			}
+		}
+	}()
+
+	// Check DeletionTimestamp to see if the cluster is being deleted
 	if !r.aeroCluster.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.V(1).Info("Deleting AerospikeCluster")
 		// The cluster is being deleted
@@ -69,7 +81,12 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, nil
 	}
 
-	// The cluster is not being deleted, add finalizer in not added already
+	// Set the status to AerospikeClusterInProgress before starting any operations
+	if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
 		return reconcile.Result{}, err
@@ -97,7 +114,9 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
 
-		return reconcile.Result{}, err
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	// Reconcile all racks
@@ -108,9 +127,24 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 				"Failed to reconcile Racks for cluster %s/%s",
 				r.aeroCluster.Namespace, r.aeroCluster.Name,
 			)
+
+			recErr = res.err
 		}
 
-		return res.getResult()
+		return res.result, recErr
+	}
+
+	if err := r.createOrUpdatePDB(); err != nil {
+		r.Log.Error(err, "Failed to create PodDisruptionBudget")
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetCreateFailed",
+			"Failed to create PodDisruptionBudget %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	if err := r.createOrUpdateSTSLoadBalancerSvc(); err != nil {
@@ -121,7 +155,9 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
 
-		return reconcile.Result{}, err
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
@@ -144,16 +180,19 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return reconcile.Result{}, e
 	}
 
-	if err := deployment.InfoQuiesceUndo(
+	if err = deployment.InfoQuiesceUndo(
 		r.Log,
 		r.getClientPolicy(), allHostConns,
 	); err != nil {
 		r.Log.Error(err, "Failed to check for Quiesced nodes")
-		return reconcile.Result{}, err
+
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(ignorablePodNames); err != nil {
+	if err = r.validateAndReconcileAccessControl(ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -161,11 +200,13 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			r.aeroCluster.Name,
 		)
 
-		return reconcile.Result{}, err
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	// Update the AerospikeCluster status.
-	if err := r.updateAccessControlStatus(); err != nil {
+	if err = r.updateAccessControlStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster access control status")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
@@ -173,7 +214,9 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
 
-		return reconcile.Result{}, err
+		recErr = err
+
+		return reconcile.Result{}, recErr
 	}
 
 	// Use policy from spec after setting up access control
@@ -187,25 +230,32 @@ func (r *SingleClusterReconciler) Reconcile() (ctrl.Result, error) {
 		false, ignorablePodNames,
 	); !res.isSuccess {
 		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
-		return reconcile.Result{}, res.err
+
+		recErr = res.err
+
+		return reconcile.Result{}, recErr
 	}
 
 	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
 		if !r.IsStatusEmpty() {
 			if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
-				return res.result, res.err
+				recErr = res.err
+
+				return res.result, recErr
 			}
 		}
 
 		// Setup roster
-		if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
-			return reconcile.Result{}, err
+			recErr = err
+
+			return reconcile.Result{}, recErr
 		}
 	}
 
 	// Update the AerospikeCluster status.
-	if err := r.updateStatus(); err != nil {
+	if err = r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
@@ -353,6 +403,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	}
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
+	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {
@@ -362,6 +413,19 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	r.aeroCluster = newAeroCluster
 
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPhase) error {
+	if r.aeroCluster.Status.Phase != phase {
+		r.aeroCluster.Status.Phase = phase
+
+		if err := r.Client.Status().Update(context.Background(), r.aeroCluster); err != nil {
+			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
+			return err
+		}
+	}
 
 	return nil
 }
