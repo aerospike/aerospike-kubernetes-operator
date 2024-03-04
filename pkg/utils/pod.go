@@ -212,7 +212,8 @@ func isPodError(reason string) bool {
 
 func IsPodReasonUnschedulable(pod *corev1.Pod) bool {
 	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodScheduled && condition.Reason == corev1.PodReasonUnschedulable {
+		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
+			condition.Reason == corev1.PodReasonSchedulerError) {
 			return true
 		}
 	}

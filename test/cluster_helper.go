@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
@@ -86,6 +87,12 @@ func rollingRestartClusterByEnablingTLS(
 		return err
 	}
 
+	// Port should be changed to service tls-port
+	err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
+	if err != nil {
+		return err
+	}
+
 	network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
 	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
 	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
@@ -100,7 +107,17 @@ func rollingRestartClusterByEnablingTLS(
 	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
 
-	return updateCluster(k8sClient, ctx, aeroCluster)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	return validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
 }
 
 func rollingRestartClusterByDisablingTLS(
@@ -129,10 +146,27 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
+	// port should remain same i.e. service tls-port
+	err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
+	if err != nil {
+		return err
+	}
+
 	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkConfig()
 	aeroCluster.Spec.OperatorClientCertSpec = nil
 
-	return updateCluster(k8sClient, ctx, aeroCluster)
+	err = updateCluster(k8sClient, ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	// Port should be updated to service non-tls port
+	return validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceNonTLSPort)
 }
 
 func scaleUpClusterTestWithNSDeviceHandling(
@@ -542,6 +576,35 @@ func validateMigrateFillDelay(
 	return err
 }
 
+// validate readiness port
+func validateReadinessProbe(ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+	requiredPort int) error {
+	for podName := range aeroCluster.Status.Pods {
+		pod := &corev1.Pod{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Namespace: aeroCluster.Namespace,
+			Name:      podName,
+		}, pod); err != nil {
+			return err
+		}
+
+		for idx := range pod.Spec.Containers {
+			container := &pod.Spec.Containers[idx]
+
+			if container.Name != asdbv1.AerospikeServerContainerName {
+				continue
+			}
+
+			if !reflect.DeepEqual(container.ReadinessProbe.TCPSocket.Port, intstr.FromInt(requiredPort)) {
+				return fmt.Errorf("readiness tcp port mismatch, expected: %v, found: %v",
+					intstr.FromInt(requiredPort), container.ReadinessProbe.TCPSocket.Port)
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateDirtyVolumes(
 	ctx goctx.Context, k8sClient client.Client,
 	clusterNamespacedName types.NamespacedName, expectedVolumes []string,
@@ -696,7 +759,7 @@ func deployClusterWithTO(
 	if err != nil {
 		return err
 	}
-	// Wait for aerocluster to reach desired cluster size.
+	// Wait for aerocluster to reach the desired cluster size.
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		timeout,
