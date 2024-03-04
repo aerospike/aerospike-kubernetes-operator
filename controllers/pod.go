@@ -78,10 +78,20 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		return nil, nil, err
 	}
 
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
+			continue
+		}
+
+		if blockedK8sNodes.Has(pods[idx].Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, will be migrated to a different node",
+				"podName", pods[idx].Name)
+
+			restartTypeMap[pods[idx].Name] = podRestart
+
 			continue
 		}
 
@@ -200,6 +210,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
+	if r.isReadinessPortUpdated(pod) {
+		restartType = mergeRestartType(restartType, podRestart)
+
+		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart",
+			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
+	}
+
 	return restartType
 }
 
@@ -207,7 +224,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart, ignorablePodNames)
+	failedPods, activePods := getFailedAndActivePods(podsToRestart)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -337,6 +354,7 @@ func (r *SingleClusterReconciler) restartPods(
 	}
 
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
@@ -344,9 +362,18 @@ func (r *SingleClusterReconciler) restartPods(
 		restartType := restartTypeMap[pod.Name]
 
 		if restartType == quickRestart {
-			// If ASD restart fails then go ahead and restart the pod
+			// If ASD restart fails, then go ahead and restart the pod
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err == nil {
 				continue
+			}
+		}
+
+		if blockedK8sNodes.Has(pod.Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+				"podName", pod.Name)
+
+			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+				return reconcileError(err)
 			}
 		}
 
@@ -446,13 +473,9 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return reconcileRequeueAfter(10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
-) (failedPods, activePods []*corev1.Pod) {
+func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
 	for idx := range pods {
 		pod := pods[idx]
-		if ignorablePodNames.Has(pod.Name) {
-			continue
-		}
 
 		if err := utils.CheckPodFailed(pod); err != nil {
 			failedPods = append(failedPods, pod)
@@ -465,10 +488,26 @@ func getFailedAndActivePods(pods []*corev1.Pod, ignorablePodNames sets.Set[strin
 	return failedPods, activePods
 }
 
+func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+) []*corev1.Pod {
+	nonIgnorablePods := make([]*corev1.Pod, 0, len(pods))
+
+	for idx := range pods {
+		pod := pods[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
+		nonIgnorablePods = append(nonIgnorablePods, pod)
+	}
+
+	return nonIgnorablePods
+}
+
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate, ignorablePodNames)
+	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -503,16 +542,27 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return reconcileError(err)
 	}
 
+	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
+
 	// Delete pods
-	for _, p := range podsToUpdate {
-		if err := r.Client.Delete(context.TODO(), p); err != nil {
+	for _, pod := range podsToUpdate {
+		if blockedK8sNodes.Has(pod.Spec.NodeName) {
+			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+				"podName", pod.Name)
+
+			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+				return reconcileError(err)
+			}
+		}
+
+		if err := r.Client.Delete(context.TODO(), pod); err != nil {
 			return reconcileError(err)
 		}
 
-		r.Log.V(1).Info("Pod deleted", "podName", p.Name)
+		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
-			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, p.Name,
+			"[rack-%d] Waiting to update Pod %s", rackState.Rack.ID, pod.Name,
 		)
 	}
 

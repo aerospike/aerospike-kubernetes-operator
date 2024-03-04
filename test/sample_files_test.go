@@ -139,7 +139,7 @@ func getSamplesFiles() ([]string, error) {
 		}
 
 		// Files/Dirs ignored are:
-		// 1.PMEM sample file as hardware is not available
+		// 1. PMEM sample file as hardware is not available
 		// 2. XDR related files as they are separately tested
 		// 3. All files which are not CR samples
 		if strings.Contains(path, "pmem_cluster_cr.yaml") || strings.Contains(path, "xdr_") ||

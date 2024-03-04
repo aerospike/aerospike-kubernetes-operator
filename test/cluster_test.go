@@ -173,13 +173,18 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			It(
 				"Should allow cluster operations with pending pod", func() {
 					By("Set MaxIgnorablePod and Rolling restart cluster")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					val := intstr.FromInt(1)
-					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-					aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = false
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+
+					// As pod is in pending state, CR object will be updated continuously
+					// This is put in eventually to retry Object Conflict error
+					Eventually(func() error {
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						val := intstr.FromInt(1)
+						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = false
+
+						return updateCluster(k8sClient, ctx, aeroCluster)
+					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Upgrade version")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -243,7 +248,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 
-					pod.Spec.Containers[0].Image = "wrong-image"
+					pod.Spec.Containers[0].Image = wrongImage
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -283,7 +288,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Namespace: clusterNamespacedName.Namespace}, pod)
 					Expect(err).ToNot(HaveOccurred())
 
-					pod.Spec.Containers[0].Image = "wrong-image"
+					pod.Spec.Containers[0].Image = wrongImage
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -373,6 +378,13 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				Expect(err).ToNot(HaveOccurred())
 
 				err = deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Validating Readiness probe")
+				err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
 				Expect(err).ToNot(HaveOccurred())
 
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)

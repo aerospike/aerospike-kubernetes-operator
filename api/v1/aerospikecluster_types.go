@@ -25,6 +25,28 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+// +kubebuilder:validation:Enum=InProgress;Completed;Error
+type AerospikeClusterPhase string
+
+// These are the valid phases of Aerospike cluster.
+const (
+	// AerospikeClusterInProgress means the Aerospike cluster CR is being reconciled and operations are in-progress state.
+	// This phase denotes that changes are gradually rolling out to the cluster.
+	// For example, when the Aerospike server version is upgraded in CR, then InProgress phase is set until the upgrade
+	// is completed.
+	AerospikeClusterInProgress AerospikeClusterPhase = "InProgress"
+	// AerospikeClusterCompleted means the Aerospike cluster CR has been reconciled. This phase denotes that the cluster
+	// has been deployed/upgraded successfully and is ready to use.
+	// For example, when the Aerospike server version is upgraded in CR, then Completed phase is set after the upgrade is
+	// completed.
+	AerospikeClusterCompleted AerospikeClusterPhase = "Completed"
+	// AerospikeClusterError means the Aerospike cluster operation is in error state because of some reason like
+	// misconfiguration, infra issues, etc.
+	// For example, when the Aerospike server version is upgraded in CR, then Error phase is set if the upgrade fails
+	// due to the wrong image issue, etc.
+	AerospikeClusterError AerospikeClusterPhase = "Error"
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -37,6 +59,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// Aerospike cluster size
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
 	Size int32 `json:"size"`
+	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
+	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
+	// Refer Aerospike documentation for more details.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Max Unavailable"
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 	// Aerospike server image
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
 	Image string `json:"image"`
@@ -74,6 +101,12 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods. Pods are not scheduled on
+	// these nodes. Pods are migrated from these nodes if already present. This is useful for the maintenance of
+	// Kubernetes nodes.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
+	// +kubebuilder:validation:MinItems:=1
+	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -564,8 +597,11 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// BlockVolumePolicy contains default policies for block volumes.
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
-	// CleanupThreads contains maximum number of cleanup threads(dd or blkdiscard) per init container.
+	// CleanupThreads contains the maximum number of cleanup threads(dd or blkdiscard) per init container.
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
+
+	// LocalStorageClasses contains a list of storage classes which provisions local volumes.
+	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
@@ -578,10 +614,12 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 // AerospikeClusterStatusSpec captures the current status of the cluster.
 type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Aerospike cluster size
-	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Cluster Size"
 	Size int32 `json:"size,omitempty"`
 	// Aerospike server image
 	Image string `json:"image,omitempty"`
+	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
+	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -627,6 +665,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
+	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
+	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -646,7 +686,11 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
 	// status. The map key is the name of the pod.
 	// +patchStrategy=strategic
+	// +optional
 	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
+
+	// Phase denotes the current phase of Aerospike cluster operation.
+	Phase AerospikeClusterPhase `json:"phase,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
@@ -834,15 +878,17 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-//+kubebuilder:storageversion
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Size",type=string,JSONPath=`.spec.size`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
-// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.MultiPodPerHost`
+// +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.multiPodPerHost`
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.2.1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
@@ -874,6 +920,7 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 
 	status.Size = spec.Size
 	status.Image = spec.Image
+	status.MaxUnavailable = spec.MaxUnavailable
 
 	// Storage
 	statusStorage := lib.DeepCopy(&spec.Storage).(*AerospikeStorageSpec)
@@ -945,6 +992,12 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.RosterNodeBlockList = *rosterNodeBlockList
 	}
 
+	if len(spec.K8sNodeBlockList) != 0 {
+		k8sNodeBlockList := lib.DeepCopy(&spec.K8sNodeBlockList).([]string)
+
+		status.K8sNodeBlockList = k8sNodeBlockList
+	}
+
 	return &status, nil
 }
 
@@ -956,6 +1009,7 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 
 	spec.Size = status.Size
 	spec.Image = status.Image
+	spec.MaxUnavailable = status.MaxUnavailable
 
 	// Storage
 	specStorage := lib.DeepCopy(&status.Storage).(*AerospikeStorageSpec)
@@ -1026,6 +1080,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		).(*[]string)
 
 		spec.RosterNodeBlockList = *rosterNodeBlockList
+	}
+
+	if len(status.K8sNodeBlockList) != 0 {
+		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).([]string)
+		spec.K8sNodeBlockList = k8sNodeBlockList
 	}
 
 	return &spec, nil
