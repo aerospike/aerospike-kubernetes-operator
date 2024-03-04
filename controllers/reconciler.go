@@ -119,32 +119,8 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	if r.aeroCluster.Status.Pods != nil && r.enablingSecurity() {
-		securityEnabledPods, err := r.getSecurityEnabledPods()
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		if len(securityEnabledPods) > 0 {
-			ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
-			if err != nil {
-				r.Log.Error(err, "Failed to determine pods to be ignored")
-
-				return reconcile.Result{}, err
-			}
-
-			// Setup access control.
-			if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
-				r.Log.Error(err, "Failed to Reconcile access control")
-				r.Recorder.Eventf(
-					r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
-					"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
-					r.aeroCluster.Name,
-				)
-
-				return reconcile.Result{}, err
-			}
-		}
+	if err := r.handleEnableSecurity(); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Reconcile all racks
@@ -1045,4 +1021,36 @@ func (r *SingleClusterReconciler) getSecurityEnabledPods() ([]corev1.Pod, error)
 
 func (r *SingleClusterReconciler) enablingSecurity() bool {
 	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
+}
+
+func (r *SingleClusterReconciler) handleEnableSecurity() error {
+	if r.aeroCluster.Status.Pods != nil && r.enablingSecurity() {
+		securityEnabledPods, err := r.getSecurityEnabledPods()
+		if err != nil {
+			return err
+		}
+
+		if len(securityEnabledPods) > 0 {
+			ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
+			if err != nil {
+				r.Log.Error(err, "Failed to determine pods to be ignored")
+
+				return err
+			}
+
+			// Setup access control.
+			if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
+				r.Log.Error(err, "Failed to Reconcile access control")
+				r.Recorder.Eventf(
+					r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
+					"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
+					r.aeroCluster.Name,
+				)
+
+				return err
+			}
+		}
+	}
+
+	return nil
 }

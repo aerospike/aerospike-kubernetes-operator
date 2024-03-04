@@ -51,12 +51,15 @@ spec:
         displayName: Server Image
         path: image
       - description: K8sNodeBlockList is a list of Kubernetes nodes which are not
-          used for Aerospike pods.
+          used for Aerospike pods. Pods are not scheduled on these nodes. Pods are
+          migrated from these nodes if already present. This is useful for the maintenance
+          of Kubernetes nodes.
         displayName: Kubernetes Node BlockList
         path: k8sNodeBlockList
       - description: MaxUnavailable is the percentage/number of pods that can be allowed
           to go down or unavailable before application disruption. This value is used
-          to create PodDisruptionBudget. Defaults to 1.
+          to create PodDisruptionBudget. Defaults to 1. Refer Aerospike documentation
+          for more details.
         displayName: Max Unavailable
         path: maxUnavailable
       - description: Certificates to connect to Aerospike.
