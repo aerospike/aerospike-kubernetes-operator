@@ -533,6 +533,11 @@ func (in *AerospikePodSpec) DeepCopyInto(out *AerospikePodSpec) {
 		}
 	}
 	in.SchedulingPolicy.DeepCopyInto(&out.SchedulingPolicy)
+	if in.MultiPodPerHost != nil {
+		in, out := &in.MultiPodPerHost, &out.MultiPodPerHost
+		*out = new(bool)
+		**out = **in
+	}
 	if in.InputDNSPolicy != nil {
 		in, out := &in.InputDNSPolicy, &out.InputDNSPolicy
 		*out = new(corev1.DNSPolicy)
