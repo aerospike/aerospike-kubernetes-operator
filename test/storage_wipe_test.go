@@ -231,8 +231,8 @@ func writeDataToCluster(
 	}
 
 	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
-	if err != nil {
-		return err
+	if asClient == nil {
+		return fmt.Errorf("aerospike client is nil %v", err)
 	}
 
 	defer asClient.Close()
