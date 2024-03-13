@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -601,7 +600,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 		}
 
 		// Try to delete corresponding pod service if it was created
-		if ptr.Deref(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, false) {
+		if asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails
 			if err := r.deletePodService(

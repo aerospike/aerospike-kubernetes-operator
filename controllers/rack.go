@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -572,7 +571,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Safe check to delete all dangling pod services which are no longer required
 	// There won't be any case of dangling pod service with MultiPodPerHost false, so ignore that case
-	if ptr.Deref(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, false) &&
+	if asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) &&
 		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		if err := r.cleanupDanglingPodServices(rackState); err != nil {
 			return reconcileError(err)

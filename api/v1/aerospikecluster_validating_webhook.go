@@ -1999,7 +1999,7 @@ func isPathParentOrSame(dir1, dir2 string) bool {
 }
 
 func (c *AerospikeCluster) validatePodSpec() error {
-	if c.Spec.PodSpec.HostNetwork && ptr.Deref(c.Spec.PodSpec.MultiPodPerHost, false) {
+	if c.Spec.PodSpec.HostNetwork && GetBool(c.Spec.PodSpec.MultiPodPerHost) {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
 	}
 

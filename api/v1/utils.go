@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -493,4 +494,9 @@ func getContainerNames(containers []v1.Container) []string {
 	}
 
 	return containerNames
+}
+
+// GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
+func GetBool(boolPtr *bool) bool {
+	return ptr.Deref(boolPtr, false)
 }

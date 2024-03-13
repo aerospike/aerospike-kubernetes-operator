@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -402,7 +401,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackStat
 }
 
 func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
-	if !ptr.Deref(multiPodPerHost, false) || networkPolicy == nil {
+	if !asdbv1.GetBool(multiPodPerHost) || networkPolicy == nil {
 		return false
 	}
 

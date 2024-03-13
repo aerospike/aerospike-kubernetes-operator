@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -257,7 +256,7 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 
 	initTemplateInput := initializeTemplateInput{
 		WorkDir:          workDir,
-		MultiPodPerHost:  ptr.Deref(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, false),
+		MultiPodPerHost:  asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
 		NetworkPolicy:    r.aeroCluster.Spec.AerospikeNetworkPolicy,
 		PodPort:          servicePortParam,
 		PodTLSPort:       serviceTLSPortParam,
