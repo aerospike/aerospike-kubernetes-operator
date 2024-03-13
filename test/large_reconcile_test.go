@@ -319,7 +319,8 @@ func waitForClusterScaleDown(
 				return false, err
 			}
 
-			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+			return isClusterStateValid(aeroCluster, newCluster, replicas,
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted}), nil
 		},
 	)
 	if err != nil {
@@ -360,7 +361,8 @@ func waitForClusterRollingRestart(
 				return false, err
 			}
 
-			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+			return isClusterStateValid(aeroCluster, newCluster, replicas,
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted}), nil
 		},
 	)
 	if err != nil {
@@ -401,7 +403,8 @@ func waitForClusterUpgrade(
 				return false, err
 			}
 
-			return isClusterStateValid(aeroCluster, newCluster, replicas), nil
+			return isClusterStateValid(aeroCluster, newCluster, replicas,
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted}), nil
 		},
 	)
 	if err != nil {

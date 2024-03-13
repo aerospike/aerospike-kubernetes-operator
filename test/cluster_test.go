@@ -119,7 +119,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 					err = waitForAerospikeCluster(
 						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-						getTimeout(2),
+						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 					)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -134,10 +134,12 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	var (
-		aeroCluster *asdbv1.AerospikeCluster
-		err         error
-		nodeList    = &v1.NodeList{}
-		podList     = &v1.PodList{}
+		aeroCluster    *asdbv1.AerospikeCluster
+		err            error
+		nodeList       = &v1.NodeList{}
+		podList        = &v1.PodList{}
+		expectedPhases = []asdbv1.AerospikeClusterPhase{
+			asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterCompleted}
 	)
 
 	clusterNamespacedName := getNamespacedName(
@@ -184,7 +186,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
 							int64(18000)
 
-						return updateCluster(k8sClient, ctx, aeroCluster)
+						// As pod is in pending state, CR object will be won't reach the final phase.
+						// So expectedPhases can be InProgress or Completed
+						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Upgrade version")
@@ -192,7 +196,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 					newImage := baseImage + ":7.0.0.0_2"
 					aeroCluster.Spec.Image = newImage
-					err = updateCluster(k8sClient, ctx, aeroCluster)
+					// As pod is in pending state, CR object will be won't reach the final phase.
+					// So expectedPhases can be InProgress or Completed
+					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Verify pending pod")
@@ -212,7 +218,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					aeroCluster.Spec.Size--
-					err = updateCluster(k8sClient, ctx, aeroCluster)
+					// As pod is in pending state, CR object will be won't reach the final phase.
+					// So expectedPhases can be InProgress or Completed
+					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Verify if all pods are running")
