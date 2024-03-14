@@ -3,9 +3,9 @@ type: application
 name: aerospike-kubernetes-operator
 
 # version tracks chart changes
-version: 3.2.1
+version: 3.2.2
 # appVersion tracks operator version
-appVersion: 3.2.1
+appVersion: 3.2.2
 
 description: A Helm chart for Aerospike Kubernetes Operator
 icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4

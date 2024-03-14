@@ -14,4 +14,4 @@ configMapGenerator:
 images:
 - name: controller
   newName: docker.io/aerospike/aerospike-kubernetes-operator-nightly
-  newTag: 3.2.1
+  newTag: 3.2.2
