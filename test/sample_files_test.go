@@ -179,7 +179,7 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 
 	if err := waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
+		getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	); err != nil {
 		return aeroCluster, err
 	}

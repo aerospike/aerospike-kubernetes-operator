@@ -761,7 +761,7 @@ func deployClusterWithTO(
 	// Wait for aerocluster to reach the desired cluster size.
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		timeout,
+		timeout, []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	)
 }
 
@@ -780,6 +780,21 @@ func updateCluster(
 	return updateClusterWithTO(k8sClient, ctx, aeroCluster, getTimeout(aeroCluster.Spec.Size))
 }
 
+func updateClusterWithExpectedPhases(
+	k8sClient client.Client, ctx goctx.Context,
+	aeroCluster *asdbv1.AerospikeCluster, expectedPhases []asdbv1.AerospikeClusterPhase,
+) error {
+	err := k8sClient.Update(ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
+
+	return waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size), expectedPhases,
+	)
+}
+
 func updateClusterWithTO(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster, timeout time.Duration,
@@ -791,7 +806,7 @@ func updateClusterWithTO(
 
 	return waitForAerospikeCluster(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		timeout,
+		timeout, []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	)
 }
 
@@ -1442,6 +1457,7 @@ func aerospikeClusterCreateUpdateWithTO(
 
 	return waitForAerospikeCluster(
 		k8sClient, ctx, desired, int(desired.Spec.Size), retryInterval, timeout,
+		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	)
 }
 
