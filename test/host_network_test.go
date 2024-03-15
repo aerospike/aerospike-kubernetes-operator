@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
@@ -26,7 +27,7 @@ var _ = Describe(
 					clusterNamespacedName, 2, latestImage,
 				)
 				aeroCluster.Spec.PodSpec.HostNetwork = true
-				aeroCluster.Spec.PodSpec.MultiPodPerHost = true
+				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
 				It(
 					"Should not work with MultiPodPerHost enabled", func() {
@@ -38,7 +39,7 @@ var _ = Describe(
 				It(
 					"Should verify hostNetwork flag updates", func() {
 						By("Deploying cluster, Should not advertise node address when off")
-						aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)

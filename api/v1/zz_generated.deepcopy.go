@@ -236,6 +236,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.MultiPodPerHost != nil {
+		in, out := &in.MultiPodPerHost, &out.MultiPodPerHost
+		*out = new(bool)
+		**out = **in
+	}
 	in.Storage.DeepCopyInto(&out.Storage)
 	if in.AerospikeAccessControl != nil {
 		in, out := &in.AerospikeAccessControl, &out.AerospikeAccessControl
@@ -548,6 +553,11 @@ func (in *AerospikePodSpec) DeepCopyInto(out *AerospikePodSpec) {
 		}
 	}
 	in.SchedulingPolicy.DeepCopyInto(&out.SchedulingPolicy)
+	if in.MultiPodPerHost != nil {
+		in, out := &in.MultiPodPerHost, &out.MultiPodPerHost
+		*out = new(bool)
+		**out = **in
+	}
 	if in.InputDNSPolicy != nil {
 		in, out := &in.InputDNSPolicy, &out.InputDNSPolicy
 		*out = new(corev1.DNSPolicy)

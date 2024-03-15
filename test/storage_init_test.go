@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -792,7 +793,7 @@ func getStorageInitAerospikeCluster(
 				SkipXdrDlogFileValidate: true,
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{

@@ -61,7 +61,7 @@ func newAsConn(
 	tlsName := getServiceTLSName(aeroCluster)
 
 	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
-	if aeroCluster.Spec.PodSpec.MultiPodPerHost && networkType != asdbv1.AerospikeNetworkTypePod &&
+	if asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) && networkType != asdbv1.AerospikeNetworkTypePod &&
 		networkType != asdbv1.AerospikeNetworkTypeCustomInterface {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {

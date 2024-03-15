@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,18 +27,19 @@ import (
 	"regexp"
 	"strings"
 
-	lib "github.com/aerospike/aerospike-management-lib"
 	validate "github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -104,7 +105,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	}
 
 	// MultiPodPerHost cannot be updated
-	if c.Spec.PodSpec.MultiPodPerHost != old.Spec.PodSpec.MultiPodPerHost {
+	if !ptr.Equal(c.Spec.PodSpec.MultiPodPerHost, old.Spec.PodSpec.MultiPodPerHost) {
 		return nil, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
@@ -1998,7 +1999,7 @@ func isPathParentOrSame(dir1, dir2 string) bool {
 }
 
 func (c *AerospikeCluster) validatePodSpec() error {
-	if c.Spec.PodSpec.HostNetwork && c.Spec.PodSpec.MultiPodPerHost {
+	if c.Spec.PodSpec.HostNetwork && GetBool(c.Spec.PodSpec.MultiPodPerHost) {
 		return fmt.Errorf("host networking cannot be enabled with multi pod per host")
 	}
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/utils/ptr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +64,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.RackConfig = rackConf
 
-						aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
