@@ -14255,6 +14255,10 @@ spec:
                       items:
                         type: string
                       type: array
+                    isSecurityEnabled:
+                      description: IsSecurityEnabled is true if security is enabled
+                        in the pod
+                      type: boolean
                     networkPolicyHash:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
@@ -14270,10 +14274,6 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
-                    securityEnabled:
-                      description: SecurityEnabled is true if security is enabled
-                        in the pod
-                      type: boolean
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.
@@ -14282,11 +14282,11 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
+                  - isSecurityEnabled
                   - networkPolicyHash
                   - podIP
                   - podPort
                   - podSpecHash
-                  - securityEnabled
                   type: object
                 description: Pods has Aerospike specific status of the pods. This
                   is map instead of the conventional map as list convention to allow
