@@ -233,7 +233,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
-	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
+	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 
 	// HostNetwork enables host networking for the pod.
 	// To enable hostNetwork multiPodPerHost must be false.
@@ -632,7 +632,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
 	// Deprecated: MultiPodPerHost is now part of podSpec
-	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
+	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions.

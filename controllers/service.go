@@ -400,8 +400,8 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackStat
 	return nil
 }
 
-func podServiceNeeded(multiPodPerHost bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
-	if !multiPodPerHost || networkPolicy == nil {
+func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
+	if !asdbv1.GetBool(multiPodPerHost) || networkPolicy == nil {
 		return false
 	}
 

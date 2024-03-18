@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -2130,7 +2131,7 @@ func getAerospikeClusterSpecWithAccessControl(
 				},
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),

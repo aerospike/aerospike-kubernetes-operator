@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
@@ -230,8 +231,8 @@ func writeDataToCluster(
 	}
 
 	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
-	if err != nil {
-		return err
+	if asClient == nil {
+		return fmt.Errorf("aerospike client is nil %v", err)
 	}
 
 	defer asClient.Close()
@@ -648,7 +649,7 @@ func getStorageWipeAerospikeCluster(
 				SkipXdrDlogFileValidate: true,
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			AerospikeConfig: aerospikeConfigSpec,
 		},
