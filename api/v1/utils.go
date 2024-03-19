@@ -63,7 +63,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.1.1"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.1.2"
 	AerospikeAppLabel                              = "app"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
