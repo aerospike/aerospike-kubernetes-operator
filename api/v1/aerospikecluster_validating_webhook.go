@@ -1273,7 +1273,7 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 }
 
 func validateSecurityConfigUpdate(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, isSecurityEnabledPodExist bool,
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, podStatus map[string]AerospikePodStatus,
 ) error {
 	nv, err := lib.CompareVersions(newVersion, "5.7.0")
 	if err != nil {
@@ -1283,6 +1283,15 @@ func validateSecurityConfigUpdate(
 	ov, err := lib.CompareVersions(oldVersion, "5.7.0")
 	if err != nil {
 		return err
+	}
+
+	isSecurityEnabledPodExist := false
+
+	for pod := range podStatus {
+		if podStatus[pod].IsSecurityEnabled {
+			isSecurityEnabledPodExist = true
+			break
+		}
 	}
 
 	if nv >= 0 || ov >= 0 {
@@ -1351,18 +1360,9 @@ func validateAerospikeConfigUpdate(
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 
-	isSecurityEnabledPodExist := false
-
-	for pod := range podStatus {
-		if podStatus[pod].IsSecurityEnabled {
-			isSecurityEnabledPodExist = true
-			break
-		}
-	}
-
 	if err := validateSecurityConfigUpdate(
 		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
-		isSecurityEnabledPodExist,
+		podStatus,
 	); err != nil {
 		return err
 	}
