@@ -63,7 +63,7 @@ const (
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.1.2"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.0-dev1"
 	AerospikeAppLabel                              = "app"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
@@ -205,7 +205,7 @@ func IsSecurityEnabled(
 			return false, nil
 		}
 
-		if errors.Is(err, internalerrors.ErrInvalidOrEmpty) && retval >= 0 {
+		if errors.Is(err, internalerrors.ErrInvalidOrEmpty) {
 			return true, nil
 		}
 

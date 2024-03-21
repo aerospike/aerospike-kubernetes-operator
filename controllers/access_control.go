@@ -37,38 +37,34 @@ func AerospikeAdminCredentials(
 	desiredState, currentState *asdbv1.AerospikeClusterSpec,
 	passwordProvider AerospikeUserPasswordProvider,
 ) (user, pass string, err error) {
-	var enabled bool
+	var (
+		enabled            bool
+		currentSecurityErr error
+		desiredSecurityErr error
+	)
 
-	outgoingVersion, err := asdbv1.GetImageVersion(currentState.Image)
-	if err != nil {
-		incomingVersion, newErr := asdbv1.GetImageVersion(desiredState.Image)
-		if newErr != nil {
-			return "", "", newErr
-		}
-
-		enabled, newErr = asdbv1.IsSecurityEnabled(
+	incomingVersion, incomingVersionErr := asdbv1.GetImageVersion(desiredState.Image)
+	if incomingVersionErr == nil {
+		enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(
 			incomingVersion, desiredState.AerospikeConfig,
 		)
-		if newErr != nil {
-			return "", "", newErr
-		}
 	} else {
-		enabled, err = asdbv1.IsSecurityEnabled(
-			outgoingVersion, currentState.AerospikeConfig,
-		)
-		if err != nil {
-			incomingVersion, newErr := asdbv1.GetImageVersion(desiredState.Image)
-			if newErr != nil {
-				return "", "", newErr
-			}
+		desiredSecurityErr = incomingVersionErr
+	}
 
-			// Its possible this is a new cluster and current state is empty.
-			enabled, newErr = asdbv1.IsSecurityEnabled(
-				incomingVersion, desiredState.AerospikeConfig,
+	if !enabled {
+		outgoingVersion, outgoingVersionErr := asdbv1.GetImageVersion(currentState.Image)
+		if outgoingVersionErr == nil {
+			// It is possible that this is a new cluster and current state is empty.
+			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(
+				outgoingVersion, currentState.AerospikeConfig,
 			)
-			if newErr != nil {
-				return "", "", newErr
-			}
+		} else {
+			currentSecurityErr = outgoingVersionErr
+		}
+
+		if currentSecurityErr != nil && desiredSecurityErr != nil {
+			return "", "", desiredSecurityErr
 		}
 	}
 

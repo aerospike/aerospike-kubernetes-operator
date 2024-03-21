@@ -14255,6 +14255,10 @@ spec:
                       items:
                         type: string
                       type: array
+                    isSecurityEnabled:
+                      description: IsSecurityEnabled is true if security is enabled
+                        in the pod
+                      type: boolean
                     networkPolicyHash:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
@@ -14278,6 +14282,7 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
+                  - isSecurityEnabled
                   - networkPolicyHash
                   - podIP
                   - podPort
