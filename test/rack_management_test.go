@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
@@ -810,7 +811,7 @@ var _ = Describe(
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
-					aeroCluster.Spec.PodSpec.MultiPodPerHost = false
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 
 					By("Deploying cluster")
 					err = deployCluster(k8sClient, ctx, aeroCluster)

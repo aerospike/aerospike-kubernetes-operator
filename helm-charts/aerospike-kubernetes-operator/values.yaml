@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 3.2.1
+  tag: 3.2.2
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -109,7 +109,7 @@ readinessProbe:
 kubeRBACProxy:
   image:
     repository: gcr.io/kubebuilder/kube-rbac-proxy
-    tag: v0.13.1
+    tag: v0.15.0
     pullPolicy: IfNotPresent
   port: 8443
   resources:

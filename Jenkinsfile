@@ -1,7 +1,7 @@
 pipeline {
     agent any
     tools {
-        go 'go-1.19'
+        go 'go-1.21'
     }
 
     environment {
@@ -119,7 +119,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "3.2.1"
+    def prefix = "3.2.2"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")

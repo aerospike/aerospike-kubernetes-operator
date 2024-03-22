@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	as "github.com/aerospike/aerospike-client-go/v6"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -1626,7 +1627,7 @@ var _ = Describe(
 						ctx := goctx.Background()
 
 						It(
-							"SecurityUpdateReject: should fail, Cannot update cluster security config",
+							"SecurityEnable: should enable security in running cluster",
 							func() {
 								var accessControl *asdbv1.AerospikeAccessControlSpec
 
@@ -1712,11 +1713,8 @@ var _ = Describe(
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
-								if err == nil || !strings.Contains(
-									err.Error(),
-									"cannot update cluster security config",
-								) {
-									Fail("SecurityUpdate should have failed")
+								if err != nil {
+									Fail("Security should have enabled successfully")
 								}
 
 								if aeroCluster != nil {
@@ -1890,7 +1888,7 @@ var _ = Describe(
 								)
 								if err == nil || !strings.Contains(
 									err.Error(),
-									"cannot update cluster security config",
+									"cannot disable cluster security in running cluster",
 								) {
 									Fail("SecurityUpdate should have failed")
 								}
@@ -2133,7 +2131,7 @@ func getAerospikeClusterSpecWithAccessControl(
 				},
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: true,
+				MultiPodPerHost: ptr.To(true),
 			},
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),

@@ -233,7 +233,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
-	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
+	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 
 	// HostNetwork enables host networking for the pod.
 	// To enable hostNetwork multiPodPerHost must be false.
@@ -632,7 +632,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
 	// Deprecated: MultiPodPerHost is now part of podSpec
-	MultiPodPerHost bool `json:"multiPodPerHost,omitempty"`
+	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods.
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
 	// AerospikeAccessControl has the Aerospike roles and users definitions.
@@ -874,6 +874,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 	// DynamicConfigFailed is true if aerospike config change failed to apply dynamically.
 	DynamicConfigFailed bool `json:"dynamicConfigFailed,omitempty"`
+
+	// IsSecurityEnabled is true if security is enabled in the pod
+	IsSecurityEnabled bool `json:"isSecurityEnabled"`
 }
 
 // +kubebuilder:object:root=true
@@ -888,7 +891,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.2.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.2.2"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability

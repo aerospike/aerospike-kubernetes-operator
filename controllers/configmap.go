@@ -245,7 +245,7 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 
 	initTemplateInput := initializeTemplateInput{
 		WorkDir:          workDir,
-		MultiPodPerHost:  r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
+		MultiPodPerHost:  asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
 		NetworkPolicy:    r.aeroCluster.Spec.AerospikeNetworkPolicy,
 		PodPort:          servicePortParam,
 		PodTLSPort:       serviceTLSPortParam,

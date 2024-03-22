@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	set "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -238,7 +239,7 @@ func getLabels() map[string]string {
 func waitForAerospikeCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster, replicas int,
-	retryInterval, timeout time.Duration,
+	retryInterval, timeout time.Duration, expectedPhases []asdbv1.AerospikeClusterPhase,
 ) error {
 	var isValid bool
 
@@ -262,7 +263,7 @@ func waitForAerospikeCluster(
 				return false, err
 			}
 
-			isValid = isClusterStateValid(aeroCluster, newCluster, replicas)
+			isValid = isClusterStateValid(aeroCluster, newCluster, replicas, expectedPhases)
 			return isValid, nil
 		},
 	)
@@ -279,7 +280,7 @@ func waitForAerospikeCluster(
 
 func isClusterStateValid(
 	aeroCluster *asdbv1.AerospikeCluster,
-	newCluster *asdbv1.AerospikeCluster, replicas int,
+	newCluster *asdbv1.AerospikeCluster, replicas int, expectedPhases []asdbv1.AerospikeClusterPhase,
 ) bool {
 	if int(newCluster.Status.Size) != replicas {
 		pkgLog.Info("Cluster size is not correct")
@@ -317,8 +318,9 @@ func isClusterStateValid(
 		}
 
 		pkgLog.Info(
-			"Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
-			aeroCluster.Spec.Image,
+			fmt.Sprintf("Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
+				aeroCluster.Spec.Image,
+			),
 		)
 	}
 
@@ -327,8 +329,10 @@ func isClusterStateValid(
 		return false
 	}
 
-	if newCluster.Status.Phase != asdbv1.AerospikeClusterCompleted {
-		pkgLog.Info("Cluster phase is not set to Completed")
+	// Validate phase
+	phaseSet := set.NewSet(expectedPhases...)
+	if !phaseSet.Contains(newCluster.Status.Phase) {
+		pkgLog.Info("Cluster phase is not correct")
 		return false
 	}
 
