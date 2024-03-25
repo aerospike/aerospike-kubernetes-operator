@@ -4,7 +4,7 @@ import (
 	gosets "github.com/deckarep/golang-set/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	as "github.com/aerospike/aerospike-client-go/v6"
+	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
