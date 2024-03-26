@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.8
 
 require (
-	github.com/aerospike/aerospike-management-lib v1.2.1-0.20240217101322-63da5d036614
+	github.com/aerospike/aerospike-management-lib v1.2.1-0.20240325134810-f8046fe9872e
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.3.0
@@ -32,7 +32,6 @@ require (
 )
 
 require (
-	github.com/aerospike/aerospike-client-go/v6 v6.14.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

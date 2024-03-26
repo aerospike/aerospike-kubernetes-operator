@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The aerospike-operator Authors.
+Copyright 2024 The aerospike-operator Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -338,7 +338,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 	for _, host := range selectedHostConns {
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
-		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
+		asConfCmds, err := asconfig.CreateSetConfigCmdList(dynamicConfDiffPerPod[podName],
 			host.ASConn, r.getClientPolicy())
 
 		if err != nil {
