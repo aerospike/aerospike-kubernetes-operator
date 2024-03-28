@@ -184,8 +184,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Expect(err).ToNot(HaveOccurred())
 						val := intstr.FromInt32(1)
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
-							int64(18000)
+						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
 
 						// As pod is in pending state, CR object will be won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed

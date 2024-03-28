@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -91,21 +92,10 @@ func validateAerospikeConfigServiceUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod)
+		svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx, clusterNamespacedName, "service", &pod)
 		if err != nil {
 			return err
 		}
-
-		asinfo := info.NewAsInfo(
-			log, host, getClientPolicy(aeroCluster, k8sClient),
-		)
-
-		confs, err := getAsConfig(asinfo, "service")
-		if err != nil {
-			return err
-		}
-
-		svcConfs := confs["service"].(lib.Stats)
 
 		for k, v := range rack.InputAerospikeConfig.Value["service"].(map[string]interface{}) {
 			if vint, ok := v.(int); ok {
@@ -195,7 +185,7 @@ func getPodSpecAnnotations(
 
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -222,7 +212,7 @@ func getPodSpecLabels(
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -248,7 +238,7 @@ func validateRackEnabledCluster(
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForStatefulSet(
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
 			aeroCluster, rackStateList[rackStateIndex].Rack.ID,
 		)
 
@@ -454,15 +444,6 @@ func splitRacks(nodeCount, rackCount int) []int {
 	}
 
 	return topology
-}
-
-func getNamespacedNameForStatefulSet(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
 }
 
 func getNamespacedName(name, namespace string) types.NamespacedName {

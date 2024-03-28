@@ -18,6 +18,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 type scaledDownRack struct {
@@ -61,7 +62,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -127,7 +128,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -187,7 +188,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
 
 		if err := r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -233,13 +234,13 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
 
 	// Bad config should not come here. It should be validated in validation hook
-	cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rackState.Rack.ID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 	if err := r.buildSTSConfigMap(cmName, rackState.Rack); err != nil {
 		r.Log.Error(err, "Failed to create configMap from AerospikeConfig")
 		return nil, reconcileError(err)
 	}
 
-	stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
+	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 
 	found, err := r.createSTS(stsName, rackState)
 	if err != nil {
@@ -296,7 +297,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
 
 		err := r.Client.Get(context.TODO(), stsName, found)
 		if err != nil {
@@ -328,7 +329,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		}
 
 		// Delete configMap
-		cmName := getNamespacedNameForSTSConfigMap(r.aeroCluster, rack.ID)
+		cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
 		if err = r.deleteRackConfigMap(cmName); err != nil {
 			return reconcileError(err)
 		}
@@ -358,7 +359,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
-		getNamespacedNameForSTSConfigMap(
+		utils.GetNamespacedNameForSTSOrConfigMap(
 			r.aeroCluster, rackState.Rack.ID,
 		), rackState.Rack,
 	); err != nil {
@@ -396,7 +397,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, res
 		}
 	} else {
-		var needRollingRestartRack, restartTypeMap, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
+		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap,
+			dynamicConfDiffPerPod, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
@@ -421,6 +423,27 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 				return found, res
 			}
 		}
+
+		if len(failedPods) == 0 && needDynamicUpdateRack {
+			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, dynamicConfDiffPerPod)
+			if !res.isSuccess {
+				if res.err != nil {
+					r.Log.Error(
+						res.err, "Failed to do dynamic update", "stsName",
+						found.Name,
+					)
+
+					r.Recorder.Eventf(
+						r.aeroCluster, corev1.EventTypeWarning,
+						"RackDynamicConfigUpdateFailed",
+						"[rack-%d] Failed to update aerospike config dynamically {STS: %s/%s}",
+						rackState.Rack.ID, found.Namespace, found.Name,
+					)
+				}
+
+				return found, res
+			}
+		}
 	}
 
 	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
@@ -438,6 +461,54 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 	}
 
 	return found, reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
+	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap) reconcileResult {
+	r.Log.Info("Update dynamic config in Aerospike pods")
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
+		"[rack-%d] Started Dynamic update", rackState.Rack.ID,
+	)
+
+	var (
+		err     error
+		podList []*corev1.Pod
+	)
+
+	// List the pods for this aeroCluster's statefulset
+	podList, err = r.getOrderedRackPodList(rackState.Rack.ID)
+	if err != nil {
+		return reconcileError(fmt.Errorf("failed to list pods: %v", err))
+	}
+
+	// Find pods which needs restart
+	podsToUpdate := make([]*corev1.Pod, 0, len(podList))
+
+	for idx := range podList {
+		pod := podList[idx]
+
+		restartType := restartTypeMap[pod.Name]
+		if restartType != noRestartUpdateConf {
+			r.Log.Info("This Pod doesn't need any update, Skip this", "pod", pod.Name)
+			continue
+		}
+
+		podsToUpdate = append(podsToUpdate, pod)
+	}
+
+	if res := r.setDynamicConfig(dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.isSuccess {
+		return res
+	}
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
+		"[rack-%d] Finished Dynamic update", rackState.Rack.ID,
+	)
+
+	return reconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
@@ -1009,7 +1080,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		}
 
 		restartType := restartTypeMap[pod.Name]
-		if restartType == noRestart {
+		if restartType == noRestart || restartType == noRestartUpdateConf {
 			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
 			continue
 		}
@@ -1145,25 +1216,26 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 }
 
 func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	needRestart bool, restartTypeMap map[string]RestartType, err error,
+	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType,
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error,
 ) {
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	restartTypeMap, dynamicConfDiffPerPod, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to list pods: %v", err)
-	}
-
-	restartTypeMap, err = r.getRollingRestartTypeMap(rackState, podList, ignorablePodNames)
-	if err != nil {
-		return false, nil, err
+		return needRestart, needUpdateConf, nil, nil, err
 	}
 
 	for _, restartType := range restartTypeMap {
-		if restartType != noRestart {
-			return true, restartTypeMap, nil
+		switch restartType {
+		case noRestart:
+			// Do nothing
+		case noRestartUpdateConf:
+			needUpdateConf = true
+		case podRestart, quickRestart:
+			needRestart = true
 		}
 	}
 
-	return false, nil, nil
+	return needRestart, needUpdateConf, restartTypeMap, dynamicConfDiffPerPod, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int, ignorablePodNames sets.Set[string]) (
@@ -1296,9 +1368,7 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1.Vo
 		return true
 	}
 
-	var volumeCopy asdbv1.VolumeSpec
-
-	lib.DeepCopy(&volumeCopy, volume)
+	volumeCopy := lib.DeepCopy(volume).(*asdbv1.VolumeSpec)
 
 	if volumeCopy.Source.Secret != nil {
 		setDefaultsSecretVolumeSource(volumeCopy.Source.Secret)

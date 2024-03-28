@@ -129,8 +129,7 @@ func createLoadBalancer() *asdbv1.LoadBalancerSpec {
 		),
 	)
 
-	result := &asdbv1.LoadBalancerSpec{}
-	lib.DeepCopy(result, lb)
+	result := lib.DeepCopy(&lb).(*asdbv1.LoadBalancerSpec)
 
 	return result
 }

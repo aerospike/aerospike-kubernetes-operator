@@ -332,7 +332,7 @@ func rollingRestartClusterTest(
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
 	}
 
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["indent-allocations"] = true
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -341,7 +341,7 @@ func rollingRestartClusterTest(
 
 	// Verify that the change has been applied on the cluster.
 	return validateAerospikeConfigServiceClusterUpdate(
-		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
+		log, k8sClient, ctx, clusterNamespacedName, []string{"indent-allocations"},
 	)
 }
 
@@ -1121,6 +1121,7 @@ func createDummyAerospikeCluster(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
+						"auto-pin":         "none",
 					},
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
@@ -1442,15 +1443,12 @@ func aerospikeClusterCreateUpdateWithTO(
 	// Apply the update.
 	if desired.Spec.AerospikeAccessControl != nil {
 		current.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{}
-		lib.DeepCopy(&current.Spec, &desired.Spec)
+		current.Spec = *lib.DeepCopy(&desired.Spec).(*asdbv1.AerospikeClusterSpec)
 	} else {
 		current.Spec.AerospikeAccessControl = nil
 	}
 
-	lib.DeepCopy(
-		&current.Spec.AerospikeConfig.Value,
-		&desired.Spec.AerospikeConfig.Value,
-	)
+	current.Spec.AerospikeConfig.Value = desired.Spec.AerospikeConfig.DeepCopy().Value
 
 	if err := k8sClient.Update(ctx, current); err != nil {
 		return err

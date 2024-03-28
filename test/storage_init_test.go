@@ -709,7 +709,7 @@ func writeDataToVolumeBlock(
 			magicBytes, path,
 		),
 	}
-	_, _, err := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
+	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientset, cfg)
 
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
@@ -726,7 +726,7 @@ func writeDataToVolumeFileSystem(
 	cmd := []string{
 		"bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, path),
 	}
-	_, _, err := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
+	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientset, cfg)
 
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
@@ -741,7 +741,7 @@ func hasDataBlock(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cmd := []string{
 		"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path),
 	}
-	stdout, _, _ := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
+	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientset, cfg)
 
 	return strings.HasPrefix(stdout, magicBytes)
 }
@@ -750,7 +750,7 @@ func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
 
 	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
-	stdout, _, _ := utils.Exec(pod, cName, cmd, k8sClientset, cfg)
+	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientset, cfg)
 
 	return strings.HasPrefix(stdout, magicBytes)
 }
