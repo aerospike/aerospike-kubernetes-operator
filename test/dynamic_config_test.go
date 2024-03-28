@@ -163,7 +163,7 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = false
+						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
 						dc := map[string]interface{}{
 							"name":      "dc2",
 							"auth-mode": "internal",
@@ -194,7 +194,7 @@ var _ = Describe(
 						enableQuotas, ok := conf["enable-quotas"].(bool)
 						Expect(ok).ToNot(BeFalse())
 
-						Expect(enableQuotas).To(BeFalse())
+						Expect(enableQuotas).To(BeTrue())
 
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"xdr", &pod)
@@ -221,6 +221,7 @@ func validateServerRestart(ctx goctx.Context, cluster *asdbv1.AerospikeCluster, 
 	for podName, pid := range pidMap {
 		if newPodPidMap[podName].podUID != pid.podUID || newPodPidMap[podName].asdPID != pid.asdPID {
 			restarted = true
+			break
 		}
 	}
 

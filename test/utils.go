@@ -791,7 +791,5 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 		return nil, err
 	}
 
-	svcConfs := confs[configContext].(lib.Stats)
-
-	return svcConfs, nil
+	return confs[configContext].(lib.Stats), nil
 }
