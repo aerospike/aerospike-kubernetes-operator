@@ -576,6 +576,16 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 		}
 	}
 
+	if role.ReadQuota != roleCreate.readQuota || role.WriteQuota != roleCreate.writeQuota {
+		if err := client.SetQuotas(
+			adminPolicy, roleCreate.name, roleCreate.readQuota, roleCreate.writeQuota,
+		); err != nil {
+			return fmt.Errorf(
+				"error setting quotas for role %s: %v", roleCreate.name, err,
+			)
+		}
+	}
+
 	logger.Info("Updated role", "role name", roleCreate.name)
 	recorder.Eventf(
 		aeroCluster, corev1.EventTypeNormal, "RoleUpdated",
