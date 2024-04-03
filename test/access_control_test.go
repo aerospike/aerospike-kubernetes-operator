@@ -1903,6 +1903,8 @@ var _ = Describe(
 												"read-write.test",
 												"read-write-udf.test.users",
 											},
+											ReadQuota:  2,
+											WriteQuota: 2,
 										},
 										{
 											Name: "roleToDrop",
@@ -1959,6 +1961,82 @@ var _ = Describe(
 									Expect(err).ToNot(HaveOccurred())
 								}
 								if err = aerospikeConfigSpec.setEnableQuotas(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, &accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("DisableQuota")
+
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+										},
+										{
+											Name: "roleToDrop",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: authSecretName,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: authSecretName,
+											Roles: []string{
+												"profiler",
+												"sys-admin",
+											},
+										},
+
+										{
+											Name:       "userToDrop",
+											SecretName: authSecretName,
+											Roles: []string{
+												"profiler",
+											},
+										},
+									},
+								}
+
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+								if err = aerospikeConfigSpec.setEnableQuotas(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -2154,12 +2232,10 @@ func validateAccessControl(
 
 	err = validateRoles(clientP, &aeroCluster.Spec)
 	if err != nil {
-		return fmt.Errorf("error creating client: %v", err)
+		return fmt.Errorf("error validating roles: %v", err)
 	}
 
-	err = validateUsers(clientP, aeroCluster)
-
-	return err
+	return validateUsers(clientP, aeroCluster)
 }
 
 func getRole(
