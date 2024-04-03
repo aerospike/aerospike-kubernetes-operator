@@ -996,9 +996,9 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	}
 
 	if len(spec.K8sNodeBlockList) != 0 {
-		k8sNodeBlockList := lib.DeepCopy(&spec.K8sNodeBlockList).([]string)
+		k8sNodeBlockList := lib.DeepCopy(&spec.K8sNodeBlockList).(*[]string)
 
-		status.K8sNodeBlockList = k8sNodeBlockList
+		status.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
 	return &status, nil
@@ -1086,8 +1086,8 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	}
 
 	if len(status.K8sNodeBlockList) != 0 {
-		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).([]string)
-		spec.K8sNodeBlockList = k8sNodeBlockList
+		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
+		spec.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
 	return &spec, nil

@@ -192,14 +192,15 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Upgrade version")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					newImage := baseImage + ":7.0.0.0_2"
-					aeroCluster.Spec.Image = newImage
-					// As pod is in pending state, CR object will be won't reach the final phase.
-					// So expectedPhases can be InProgress or Completed
-					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
-					Expect(err).ToNot(HaveOccurred())
+					Eventually(func() error {
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						newImage := baseImage + ":7.0.0.0_2"
+						aeroCluster.Spec.Image = newImage
+						// As pod is in pending state, CR object will be won't reach the final phase.
+						// So expectedPhases can be InProgress or Completed
+						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
+					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Verify pending pod")
 					podList, err = getPodList(aeroCluster, k8sClient)
