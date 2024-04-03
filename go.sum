@@ -2,6 +2,14 @@ github.com/aerospike/aerospike-client-go/v7 v7.1.0 h1:yvCTKdbpqZxHvv7sWsFHV1j49j
 github.com/aerospike/aerospike-client-go/v7 v7.1.0/go.mod h1:AkHiKvCbqa1c16gCNGju3c5X/yzwLVvblNczqjxNwNk=
 github.com/aerospike/aerospike-management-lib v1.2.1-0.20240319095728-1600222cec4c h1:wCscajyxCdQ9NeDxJdMbBascFym9MQV0aALTJ2dANOc=
 github.com/aerospike/aerospike-management-lib v1.2.1-0.20240319095728-1600222cec4c/go.mod h1:o1TV3BTsAiuZ5HtZi9E4FgXqWRwjDzlkS4bfvfaAHLU=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240401162054-2ce9f8971e6f h1:2Ds/Ce8W1BkZtwdb6ehiCkgpgg4ONb8a5O7b9CdXOw0=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240401162054-2ce9f8971e6f/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240401165331-8f1e1d9ec1f8 h1:TKyRLzQRPpzFGsHZl1HpMNlX5QaPe6eYfzLoRMbpnYo=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240401165331-8f1e1d9ec1f8/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240402140618-0adf93a70361 h1:czISeybCy2sbfaoCTrMzLLLVXgwHD6+w/1LvC4ZAxMk=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240402140618-0adf93a70361/go.mod h1:o1TV3BTsAiuZ5HtZi9E4FgXqWRwjDzlkS4bfvfaAHLU=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240402145824-a9f0013313d0 h1:RbRkHrSVrX5T3Eq/pngjyMLS9O5Bf7Kb3ZQ5loKv7uo=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240402145824-a9f0013313d0/go.mod h1:o1TV3BTsAiuZ5HtZi9E4FgXqWRwjDzlkS4bfvfaAHLU=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d h1:Byv0BzEl3/e6D5CLfI0j/7hiIEtvGVFPCZ7Ei2oq8iQ=
@@ -121,6 +129,7 @@ github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 h1:wSmWgpuccqS2IOfmY
 github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494/go.mod h1:yipyliwI08eQ6XwDm1fEwKPdF/xdbkiHtrU+1Hg+vc4=
 github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
 github.com/rogpeppe/go-internal v1.11.0/go.mod h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=
+github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
 github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=

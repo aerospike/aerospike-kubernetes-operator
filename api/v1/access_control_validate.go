@@ -8,17 +8,7 @@ import (
 	"strings"
 
 	lib "github.com/aerospike/aerospike-management-lib"
-)
-
-// PrivilegeScope enumerates valid scopes for privileges.
-type PrivilegeScope int
-
-const (
-	// Global scoped privileges.
-	Global PrivilegeScope = iota
-
-	// NamespaceSet is namespace and optional set scoped privilege.
-	NamespaceSet
+	acl "github.com/aerospike/aerospike-management-lib/accesscontrol"
 )
 
 const (
@@ -33,6 +23,9 @@ const (
 
 	// DefaultAdminPassword si default admin user password.
 	DefaultAdminPassword = "admin"
+
+	// Version6 server version 6 tag
+	Version6 = "6.0.0.0"
 )
 
 // roleNameForbiddenChars are characters forbidden in role name.
@@ -66,27 +59,6 @@ var Post6PredefinedRoles = map[string]struct{}{
 var requiredRoles = []string{
 	"sys-admin",
 	"user-admin",
-}
-
-// Privileges are all privilege string allowed in the spec and associated scopes.
-var Privileges = map[string][]PrivilegeScope{
-	"read":           {Global, NamespaceSet},
-	"write":          {Global, NamespaceSet},
-	"read-write":     {Global, NamespaceSet},
-	"read-write-udf": {Global, NamespaceSet},
-	"data-admin":     {Global},
-	"sys-admin":      {Global},
-	"user-admin":     {Global},
-	"truncate":       {Global, NamespaceSet},
-	"sindex-admin":   {Global},
-	"udf-admin":      {Global},
-}
-
-// Post6Privileges are post version 6.0 privilege strings allowed in the spec and associated scopes.
-var Post6Privileges = map[string][]PrivilegeScope{
-	"truncate":     {Global, NamespaceSet},
-	"sindex-admin": {Global},
-	"udf-admin":    {Global},
 }
 
 // IsAerospikeAccessControlValid validates the accessControl specification in the clusterSpec.
@@ -313,19 +285,19 @@ func isPrivilegeValid(
 ) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
-	_, ok := Privileges[parts[0]]
+	_, ok := acl.Privileges[parts[0]]
 	if !ok {
 		return false, fmt.Errorf("invalid privilege %s", privilege)
 	}
 
 	// Check if new privileges are used in an older version.
-	cmp, err := lib.CompareVersions(version, "6.0.0.0")
+	cmp, err := lib.CompareVersions(version, Version6)
 	if err != nil {
 		return false, err
 	}
 
 	if cmp < 0 {
-		if _, ok := Post6Privileges[parts[0]]; ok {
+		if _, ok := acl.Post6Privileges[parts[0]]; ok {
 			// Version < 6.0 using post 6.0 privilege.
 			return false, fmt.Errorf("invalid privilege %s", privilege)
 		}
@@ -339,9 +311,9 @@ func isPrivilegeValid(
 
 	if nParts > 1 {
 		// This privilege should necessarily have NamespaceSet scope.
-		scopes := Privileges[parts[0]]
+		scopes := acl.Privileges[parts[0]]
 
-		if !scopeContains(scopes, NamespaceSet) {
+		if !scopeContains(scopes, acl.NamespaceSet) {
 			return false, fmt.Errorf(
 				"privilege %s cannot have namespace or set scope", privilege,
 			)
@@ -396,7 +368,7 @@ func isNetAddressValid(address string) (bool, error) {
 }
 
 // scopeContains indicates if scopes contains the queryScope.
-func scopeContains(scopes []PrivilegeScope, queryScope PrivilegeScope) bool {
+func scopeContains(scopes []acl.PrivilegeScope, queryScope acl.PrivilegeScope) bool {
 	for _, scope := range scopes {
 		if scope == queryScope {
 			return true
