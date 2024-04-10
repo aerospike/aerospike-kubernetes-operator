@@ -992,9 +992,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					namespaceConfig["replication-factor"] = 3
 					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
 
-					err = k8sClient.Update(
-						ctx, aeroCluster,
-					)
+					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Scaling up along with modifying Namespace storage Dynamically")
