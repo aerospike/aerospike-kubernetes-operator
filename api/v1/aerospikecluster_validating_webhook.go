@@ -2198,7 +2198,7 @@ func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, fiel
 	// when old rackConfig is not valid for batch-size
 	if c.Status.AerospikeConfig != nil {
 		if err := validateRacksForBatchSize(c.Status.RackConfig); err != nil {
-			return fmt.Errorf("status invalid for %s: %v", fieldPath, err)
+			return fmt.Errorf("status invalid for %s: update, %v", fieldPath, err)
 		}
 	}
 

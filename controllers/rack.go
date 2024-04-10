@@ -805,7 +805,7 @@ func (r *SingleClusterReconciler) upgradeRack(statefulSet *appsv1.StatefulSet, r
 		podsBatchList[0] = podsToUpgrade
 	} else {
 		// Create batch of pods
-		podsBatchList = r.getPodBatchToRestart(podsToUpgrade, len(podList))
+		podsBatchList = r.getPodBatch(podsToUpgrade, len(podList))
 	}
 
 	if len(podsBatchList) > 0 {
@@ -896,7 +896,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	policy := r.getClientPolicy()
 	diffPods := *found.Spec.Replicas - desiredSize
 
-	podsBatchList := r.getPodBatchToScaleDown(oldPodList[:diffPods], len(oldPodList))
+	podsBatchList := r.getPodBatch(oldPodList[:diffPods], len(oldPodList))
 
 	// Handle one batch
 	podsBatch := podsBatchList[0]
@@ -958,8 +958,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		)
 	}
 
-	// No need for these checks if pod was not running.
-	// These checks will fail if there is any other pod in failed state.
+	// Consider these checks if any pod in the batch is running and ready.
+	// If all the pods are not running then we can safely ignore these checks.
+	// These checks will fail if there is any other pod in failed state outside the batch.
 	if isAnyPodRunningAndReady {
 		// Wait for pods to get terminated
 		if err = r.waitForSTSToBeReady(found, ignorablePodNames); err != nil {
@@ -1115,7 +1116,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		podsBatchList[0] = podsToRestart
 	} else {
 		// Create batch of pods
-		podsBatchList = r.getPodBatchToRestart(podsToRestart, len(podList))
+		podsBatchList = r.getPodBatch(podsToRestart, len(podList))
 	}
 
 	// Restart batch of pods
@@ -1204,7 +1205,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 		}
 	}
 
-	podsBatchList := r.getPodBatchToRestart(podsToRestart, len(podList))
+	podsBatchList := r.getPodBatch(podsToRestart, len(podList))
 
 	// Restart batch of pods
 	if len(podsBatchList) > 0 {
@@ -1861,26 +1862,13 @@ func getOriginalPath(path string) string {
 	return path
 }
 
-func (r *SingleClusterReconciler) getPodBatchToRestart(podList []*corev1.Pod, rackSize int) [][]*corev1.Pod {
+func (r *SingleClusterReconciler) getPodBatch(podList []*corev1.Pod, rackSize int) [][]*corev1.Pod {
 	// Error is already handled in validation
 	rollingUpdateBatchSize, _ := intstr.GetScaledValueFromIntOrPercent(
 		r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize, rackSize, false,
 	)
 
 	return chunkBy(podList, rollingUpdateBatchSize)
-}
-
-func (r *SingleClusterReconciler) getPodBatchToScaleDown(podList []*corev1.Pod, rackSize int) [][]*corev1.Pod {
-	// Error is already handled in validation
-	scaleDownBatchSize, _ := intstr.GetScaledValueFromIntOrPercent(
-		r.aeroCluster.Spec.RackConfig.ScaleDownBatchSize, rackSize, false,
-	)
-
-	if len(podList) < scaleDownBatchSize {
-		scaleDownBatchSize = len(podList)
-	}
-
-	return chunkBy(podList, scaleDownBatchSize)
 }
 
 func chunkBy[T any](items []*T, chunkSize int) (chunks [][]*T) {
