@@ -630,11 +630,11 @@ type nsConf struct {
 	replicationFactor      int
 }
 
-func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
+func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for idx := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[idx]
+	for idx := range rackConfig.Racks {
+		rack := &rackConfig.Racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -2155,29 +2155,46 @@ func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, fiel
 		return err
 	}
 
-	if len(c.Spec.RackConfig.Racks) < 2 {
-		return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
+	validateRacksForBatchSize := func(rackConfig RackConfig) error {
+		if len(rackConfig.Racks) < 2 {
+			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
+		}
+
+		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		for ns, nsConf := range nsConfsNamespaces {
+			if !isNameExist(rackConfig.Namespaces, ns) {
+				return fmt.Errorf(
+					"can not use %s when there is any non-rack enabled namespace %s", fieldPath, ns,
+				)
+			}
+
+			if nsConf.noOfRacksForNamespaces <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured in only one rack", fieldPath, ns,
+				)
+			}
+
+			if nsConf.replicationFactor <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured with replication-factor 1", fieldPath,
+					ns,
+				)
+			}
+		}
+
+		return nil
 	}
 
-	nsConfsNamespaces := c.getNsConfsForNamespaces()
-	for ns, nsConf := range nsConfsNamespaces {
-		if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
-			return fmt.Errorf(
-				"can not use %s when there is any non-rack enabled namespace %s", fieldPath, ns,
-			)
-		}
+	// validate rackConf from spec
+	if err := validateRacksForBatchSize(c.Spec.RackConfig); err != nil {
+		return err
+	}
 
-		if nsConf.noOfRacksForNamespaces <= 1 {
-			return fmt.Errorf(
-				"can not use %s when namespace `%s` is configured in only one rack", fieldPath, ns,
-			)
-		}
-
-		if nsConf.replicationFactor <= 1 {
-			return fmt.Errorf(
-				"can not use %s when namespace `%s` is configured with replication-factor 1", fieldPath,
-				ns,
-			)
+	// If the status is not nil, validate rackConf from status to restrict batch-size update
+	// when old rackConfig is not valid for batch-size
+	if c.Status.AerospikeConfig != nil {
+		if err := validateRacksForBatchSize(c.Status.RackConfig); err != nil {
+			return fmt.Errorf("status invalid for %s: %v", fieldPath, err)
 		}
 	}
 
