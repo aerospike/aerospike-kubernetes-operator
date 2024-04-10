@@ -112,12 +112,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				return nil, nil, err
 			}
 
-			v, err := lib.CompareVersions(version, "7.0.0")
+			v, err := lib.CompareVersions(version, "6.0.0")
 			if err != nil {
 				return nil, nil, err
 			}
 
-			// If version >= 7.0.0, then we can update config dynamically.
+			// If version >= 6.0.0, then we can update config dynamically.
 			if v >= 0 {
 				// If dynamic commands have failed in previous retry, then we should not try to update config dynamically.
 				if !podStatus.DynamicConfigFailed {
@@ -128,7 +128,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 					}
 				}
 			} else {
-				r.Log.Info("Dynamic config change not supported for version < 7.0.0", "currentVersion", version)
+				r.Log.Info("Dynamic config change not supported for version < 6.0.0", "currentVersion", version)
 			}
 		}
 
@@ -394,14 +394,14 @@ func (r *SingleClusterReconciler) restartPods(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) updatePod(podName string) error {
-	r.Log.Info("Updating pod", "pod", podName)
+func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName string) error {
+	r.Log.Info("Updating aerospike config file in pod", "pod", podName)
 
 	if err := r.restartASDOrUpdateAerospikeConf(podName, noRestartUpdateConf); err != nil {
 		return err
 	}
 
-	r.Log.V(1).Info("Pod Updated", "podName", podName)
+	r.Log.V(1).Info("Updated aerospike config file in pod", "podName", podName)
 
 	return nil
 }

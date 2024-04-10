@@ -397,14 +397,13 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			return found, res
 		}
 	} else {
-		var needRollingRestartRack, needDynamicUpdateRack, restartTypeMap,
-			dynamicConfDiffPerPod, nErr = r.needRollingRestartRack(rackState, ignorablePodNames)
+		var rollingRestartInfo, nErr = r.getRollingRestartInfo(rackState, ignorablePodNames)
 		if nErr != nil {
 			return found, reconcileError(nErr)
 		}
 
-		if needRollingRestartRack {
-			found, res = r.rollingRestartRack(found, rackState, ignorablePodNames, restartTypeMap, failedPods)
+		if rollingRestartInfo.needRestart {
+			found, res = r.rollingRestartRack(found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPods)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -424,8 +423,9 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 			}
 		}
 
-		if len(failedPods) == 0 && needDynamicUpdateRack {
-			res = r.updateDynamicConfig(rackState, ignorablePodNames, restartTypeMap, dynamicConfDiffPerPod)
+		if len(failedPods) == 0 && rollingRestartInfo.needUpdateConf {
+			res = r.updateDynamicConfig(rackState, ignorablePodNames,
+				rollingRestartInfo.restartTypeMap, rollingRestartInfo.dynamicConfDiffPerPod)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -469,8 +469,8 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
-		"[rack-%d] Started Dynamic update", rackState.Rack.ID,
+		r.aeroCluster, corev1.EventTypeNormal, "DynamicConfigUpdate",
+		"[rack-%d] Started dynamic config update", rackState.Rack.ID,
 	)
 
 	var (
@@ -504,8 +504,8 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "RackDynamicUpdate",
-		"[rack-%d] Finished Dynamic update", rackState.Rack.ID,
+		r.aeroCluster, corev1.EventTypeNormal, "DynamicConfigUpdate",
+		"[rack-%d] Finished Dynamic config update", rackState.Rack.ID,
 	)
 
 	return reconcileSuccess()
@@ -1215,14 +1215,21 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 	return statefulSet, reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	needRestart, needUpdateConf bool, restartTypeMap map[string]RestartType,
-	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error,
+type rollingRestartInfo struct {
+	restartTypeMap              map[string]RestartType
+	dynamicConfDiffPerPod       map[string]asconfig.DynamicConfigMap
+	needRestart, needUpdateConf bool
+}
+
+func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ignorablePodNames sets.Set[string]) (
+	info *rollingRestartInfo, err error,
 ) {
-	restartTypeMap, dynamicConfDiffPerPod, err = r.getRollingRestartTypeMap(rackState, ignorablePodNames)
+	restartTypeMap, dynamicConfDiffPerPod, err := r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
-		return needRestart, needUpdateConf, nil, nil, err
+		return nil, err
 	}
+
+	needRestart, needUpdateConf := false, false
 
 	for _, restartType := range restartTypeMap {
 		switch restartType {
@@ -1235,7 +1242,14 @@ func (r *SingleClusterReconciler) needRollingRestartRack(rackState *RackState, i
 		}
 	}
 
-	return needRestart, needUpdateConf, restartTypeMap, dynamicConfDiffPerPod, nil
+	info = &rollingRestartInfo{
+		needRestart:           needRestart,
+		needUpdateConf:        needUpdateConf,
+		restartTypeMap:        restartTypeMap,
+		dynamicConfDiffPerPod: dynamicConfDiffPerPod,
+	}
+
+	return info, nil
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(rackID int, ignorablePodNames sets.Set[string]) (

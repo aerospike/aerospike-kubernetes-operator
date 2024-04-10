@@ -463,10 +463,13 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 		return err
 	}
 
-	// AerospikeAccessControl
-	statusAerospikeAccessControl := lib.DeepCopy(
-		r.aeroCluster.Spec.AerospikeAccessControl,
-	).(*asdbv1.AerospikeAccessControlSpec)
+	var statusAerospikeAccessControl *asdbv1.AerospikeAccessControlSpec
+	if r.aeroCluster.Spec.AerospikeAccessControl != nil {
+		// AerospikeAccessControl
+		statusAerospikeAccessControl = lib.DeepCopy(
+			r.aeroCluster.Spec.AerospikeAccessControl,
+		).(*asdbv1.AerospikeAccessControlSpec)
+	}
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
 

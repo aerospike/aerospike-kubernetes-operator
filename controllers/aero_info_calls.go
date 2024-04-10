@@ -346,7 +346,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			return reconcileError(err)
 		}
 
-		r.Log.Info("Generated dynamic commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
+		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
 
 		if err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {
@@ -362,13 +362,13 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			if patchErr := r.patchPodStatus(
 				context.TODO(), patches,
 			); patchErr != nil {
-				return reconcileError(fmt.Errorf("error updating status: %v", patchErr))
+				return reconcileError(fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err))
 			}
 
 			return reconcileError(err)
 		}
 
-		if err := r.updatePod(podName); err != nil {
+		if err := r.updateAerospikeConfInPod(podName); err != nil {
 			return reconcileError(err)
 		}
 	}
