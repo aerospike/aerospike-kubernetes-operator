@@ -41,7 +41,6 @@ import (
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
@@ -93,7 +92,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	if err := deployment.IsValidUpgrade(
+	if err := asconfig.IsValidUpgrade(
 		outgoingVersion, incomingVersion,
 	); err != nil {
 		return nil, fmt.Errorf("failed to start upgrade: %v", err)
@@ -1359,7 +1358,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus, incomingVersion)
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
@@ -1517,7 +1516,7 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) e
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec, incomingVersion string) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1551,8 +1550,13 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 			}
 
 			if singleConf["name"] == oldSingleConf["name"] {
-				// replication-factor update not allowed
-				if isValueUpdated(
+				val, err := lib.CompareVersions(incomingVersion, Version6)
+				if err != nil {
+					return fmt.Errorf("failed to check image version: %v", err)
+				}
+
+				// For versions 6.0 and later, replication-factor is dynamic for AP namespaces (non strong-consistency).
+				if (IsNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(

@@ -33,6 +33,9 @@ const (
 
 	// DefaultAdminPassword si default admin user password.
 	DefaultAdminPassword = "admin"
+
+	// Version6 server version 6 tag
+	Version6 = "6.0.0.0"
 )
 
 // roleNameForbiddenChars are characters forbidden in role name.
@@ -319,7 +322,7 @@ func isPrivilegeValid(
 	}
 
 	// Check if new privileges are used in an older version.
-	cmp, err := lib.CompareVersions(version, "6.0.0.0")
+	cmp, err := lib.CompareVersions(version, Version6)
 	if err != nil {
 		return false, err
 	}

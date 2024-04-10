@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -89,15 +88,6 @@ func init() {
 	}
 }
 
-func getNamespacedNameForSTSConfigMap(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
-}
-
 // createConfigMapData create configMap data
 func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	map[string]string, error,
@@ -167,16 +157,15 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 func createPodSpecForRack(
 	aeroCluster *asdbv1.AerospikeCluster, rack *asdbv1.Rack,
 ) *asdbv1.AerospikePodSpec {
-	rackFullPodSpec := asdbv1.AerospikePodSpec{}
-	lib.DeepCopy(
-		&rackFullPodSpec, &aeroCluster.Spec.PodSpec,
-	)
+	rackFullPodSpec := lib.DeepCopy(
+		&aeroCluster.Spec.PodSpec,
+	).(*asdbv1.AerospikePodSpec)
 
 	rackFullPodSpec.Affinity = rack.PodSpec.Affinity
 	rackFullPodSpec.Tolerations = rack.PodSpec.Tolerations
 	rackFullPodSpec.NodeSelector = rack.PodSpec.NodeSelector
 
-	return &rackFullPodSpec
+	return rackFullPodSpec
 }
 
 func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
@@ -311,7 +300,7 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	for idx := range rackStateList {
 		rackState := &rackStateList[idx]
 		size := rackState.Size
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 
 		for i := 0; i < size; i++ {
 			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))

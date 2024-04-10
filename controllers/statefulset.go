@@ -147,7 +147,7 @@ func (r *SingleClusterReconciler) createSTS(
 									// TODO: Do we need this var?
 									{
 										Name: "CONFIG_MAP_NAME",
-										Value: getNamespacedNameForSTSConfigMap(
+										Value: utils.GetNamespacedNameForSTSOrConfigMap(
 											r.aeroCluster, rackState.Rack.ID,
 										).Name,
 									},
@@ -380,7 +380,7 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	found := &appsv1.StatefulSet{}
 	if err := r.Client.Get(
 		context.TODO(),
-		getNamespacedNameForSTS(r.aeroCluster, rackState.Rack.ID),
+		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID),
 		found,
 	); err != nil {
 		return nil, err
@@ -849,9 +849,9 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 
 	// Use rack affinity, if given
 	if rackState.Rack.PodSpec.Affinity != nil {
-		lib.DeepCopy(affinity, rackState.Rack.PodSpec.Affinity)
+		affinity = lib.DeepCopy(rackState.Rack.PodSpec.Affinity).(*corev1.Affinity)
 	} else if r.aeroCluster.Spec.PodSpec.Affinity != nil {
-		lib.DeepCopy(affinity, r.aeroCluster.Spec.PodSpec.Affinity)
+		affinity = lib.DeepCopy(r.aeroCluster.Spec.PodSpec.Affinity).(*corev1.Affinity)
 	}
 
 	// Set our rules in PodAntiAffinity
@@ -1026,8 +1026,7 @@ func updateSTSContainers(
 
 		// Create a copy because updating stateful sets defaults
 		// on the sidecar container object which mutates original aeroCluster object.
-		specContainerCopy := &corev1.Container{}
-		lib.DeepCopy(specContainerCopy, specContainer)
+		specContainerCopy := lib.DeepCopy(specContainer).(*corev1.Container)
 
 		for stsIdx := range stsContainers {
 			if specContainer.Name != stsContainers[stsIdx].Name {
@@ -1091,7 +1090,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 
 	for rackID := range allRackIDs {
 		st := &appsv1.StatefulSet{}
-		stsName := getNamespacedNameForSTS(r.aeroCluster, rackID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
 
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
@@ -1286,7 +1285,7 @@ func getDefaultSTSVolumes(
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: getNamespacedNameForSTSConfigMap(
+						Name: utils.GetNamespacedNameForSTSOrConfigMap(
 							aeroCluster, rackState.Rack.ID,
 						).Name,
 					},
@@ -1579,15 +1578,6 @@ func getSTSContainerPort(
 	}
 
 	return ports
-}
-
-func getNamespacedNameForSTS(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
-) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
-		Namespace: aeroCluster.Namespace,
-	}
 }
 
 func getSTSPodOrdinal(podName string) (*int32, error) {

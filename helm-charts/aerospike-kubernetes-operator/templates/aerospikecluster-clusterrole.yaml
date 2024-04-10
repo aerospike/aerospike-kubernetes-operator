@@ -10,7 +10,6 @@ rules:
 - apiGroups:
     - ""
   resources:
-    - pods
     - nodes
     - services
     - configmaps
@@ -24,3 +23,11 @@ rules:
     - '*'
   verbs:
     - '*'
+- apiGroups:
+    - ""
+  resources:
+    - pods
+  verbs:
+    - get
+    - list
+    - update

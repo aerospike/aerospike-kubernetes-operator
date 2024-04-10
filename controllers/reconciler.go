@@ -463,11 +463,13 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 		return err
 	}
 
-	// AerospikeAccessControl
-	statusAerospikeAccessControl := &asdbv1.AerospikeAccessControlSpec{}
-	lib.DeepCopy(
-		statusAerospikeAccessControl, r.aeroCluster.Spec.AerospikeAccessControl,
-	)
+	var statusAerospikeAccessControl *asdbv1.AerospikeAccessControlSpec
+	if r.aeroCluster.Spec.AerospikeAccessControl != nil {
+		// AerospikeAccessControl
+		statusAerospikeAccessControl = lib.DeepCopy(
+			r.aeroCluster.Spec.AerospikeAccessControl,
+		).(*asdbv1.AerospikeAccessControlSpec)
+	}
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
 
@@ -619,7 +621,8 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCl
 	//  Seems like a bug in encoding/json/Unmarshall.
 	//
 	// Workaround by force copying new object's status to old object's status.
-	lib.DeepCopy(&oldAeroCluster.Status, &newAeroCluster.Status)
+	aeroclusterStatus := lib.DeepCopy(&newAeroCluster.Status).(*asdbv1.AerospikeClusterStatus)
+	oldAeroCluster.Status = *aeroclusterStatus
 
 	return nil
 }
@@ -945,28 +948,9 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		}
 	}
 
-	if len(patches) == 0 {
-		return nil
-	}
-
-	jsonPatchJSON, err := json.Marshal(patches)
-	if err != nil {
-		return err
-	}
-
-	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
-
-	// Since the pod status is updated from pod init container,
-	// set the field owner to "pod" for pod status updates.
 	r.Log.Info("Patching status with updated initialised volumes")
 
-	if err = r.Client.Status().Patch(
-		ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
-	); err != nil {
-		return fmt.Errorf("error updating status: %v", err)
-	}
-
-	return nil
+	return r.patchPodStatus(ctx, patches)
 }
 
 func (r *SingleClusterReconciler) getPVCUid(ctx context.Context, pod *corev1.Pod, volName string) (string, error) {
