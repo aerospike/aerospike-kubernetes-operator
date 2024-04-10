@@ -3,6 +3,7 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -204,6 +205,90 @@ var _ = Describe(
 
 						By("Verify warm restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
+					},
+				)
+			},
+		)
+
+		Context(
+			"When doing invalid operations", func() {
+
+				clusterName := "dynamic-config-test"
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				BeforeEach(
+					func() {
+						// Create a 2 node cluster
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
+							"dcs": []map[string]interface{}{
+								{
+									"name":      "dc1",
+									"auth-mode": "internal",
+									"auth-user": "admin",
+									"node-address-ports": []string{
+										"aeroclusterdst-0-0 3000",
+									},
+									"auth-password-file": "/etc/aerospike/secret/password_DC1.txt",
+									"namespaces": []map[string]interface{}{
+										{
+											"name": "test",
+										},
+									},
+								},
+							},
+						}
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					},
+				)
+
+				It(
+					"Should fail dynamic config update for invalid config", func() {
+
+						By("Modify dynamic config with incorrect value")
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						podPIDMap, err := getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						// This change will lead to dynamic config update failure.
+						// Assuming it will fall back to rolling restart. Which leads to pod failures.
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 9999999
+
+						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
+						Expect(err).To(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						// Recovery
+						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						// As pods were failed, expectation is that pods will be cold restarted.
+						By("Verify cold restarts in Pods")
+						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
+
 					},
 				)
 			},
