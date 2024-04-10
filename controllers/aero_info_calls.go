@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The aerospike-operator Authors.
+Copyright 2024 The aerospike-operator Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -14,6 +14,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -22,7 +23,9 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -292,6 +295,82 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
 		return reconcileError(err)
+	}
+
+	return reconcileSuccess()
+}
+
+func (r *SingleClusterReconciler) setDynamicConfig(
+	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+) reconcileResult {
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	podList := make([]corev1.Pod, 0, len(pods))
+	podIPNameMap := make(map[string]string, len(pods))
+
+	for idx := range pods {
+		podIPNameMap[pods[idx].Status.PodIP] = pods[idx].Name
+		podList = append(podList, *pods[idx])
+	}
+
+	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePodNames)
+	if err != nil {
+		return reconcileError(
+			fmt.Errorf(
+				"failed to get hostConn for aerospike cluster nodes: %v", err,
+			),
+		)
+	}
+
+	if len(selectedHostConns) == 0 {
+		r.Log.Info("No pods selected for dynamic config change")
+
+		return reconcileSuccess()
+	}
+
+	for _, host := range selectedHostConns {
+		podName := podIPNameMap[host.ASConn.AerospikeHostName]
+		asConfCmds, err := asconfig.CreateSetConfigCmdList(dynamicConfDiffPerPod[podName],
+			host.ASConn, r.getClientPolicy())
+
+		if err != nil {
+			// Assuming error returned here will not be a server error.
+			return reconcileError(err)
+		}
+
+		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
+
+		if err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
+			[]*deployment.HostConn{host}, asConfCmds); err != nil {
+			var patches []jsonpatch.PatchOperation
+
+			patch := jsonpatch.PatchOperation{
+				Operation: "replace",
+				Path:      "/status/pods/" + podName + "/dynamicConfigFailed",
+				Value:     true,
+			}
+			patches = append(patches, patch)
+
+			if patchErr := r.patchPodStatus(
+				context.TODO(), patches,
+			); patchErr != nil {
+				return reconcileError(fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err))
+			}
+
+			return reconcileError(err)
+		}
+
+		if err := r.updateAerospikeConfInPod(podName); err != nil {
+			return reconcileError(err)
+		}
 	}
 
 	return reconcileSuccess()

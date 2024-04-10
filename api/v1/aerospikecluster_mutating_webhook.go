@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -95,9 +95,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
-	if err := c.setDefaultAerospikeConfigs(
-		asLog, *c.Spec.AerospikeConfig,
-	); err != nil {
+	if err := c.setDefaultAerospikeConfigs(asLog, *c.Spec.AerospikeConfig, nil); err != nil {
 		return err
 	}
 
@@ -261,18 +259,18 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 				c.Spec.AerospikeConfig.Value, rack.InputAerospikeConfig.Value,
 			)
 
+			if err != nil {
+				return err
+			}
+
 			asLog.V(1).Info(
 				"Merged rack config from global aerospikeConfig", "rack id",
 				rack.ID, "rackAerospikeConfig", m, "globalAerospikeConfig",
 				c.Spec.AerospikeConfig,
 			)
-
-			if err != nil {
-				return err
-			}
 		} else {
 			// Use the global config.
-			m = c.Spec.AerospikeConfig.Value
+			m = c.Spec.AerospikeConfig.DeepCopy().Value
 		}
 
 		asLog.V(1).Info(
@@ -282,9 +280,7 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := c.setDefaultAerospikeConfigs(
-			asLog, AerospikeConfigSpec{Value: m},
-		); err != nil {
+		if err := c.setDefaultAerospikeConfigs(asLog, AerospikeConfigSpec{Value: m}, &rack.ID); err != nil {
 			return err
 		}
 
@@ -294,15 +290,12 @@ func (c *AerospikeCluster) updateRacksAerospikeConfigFromGlobal(asLog logr.Logge
 	return nil
 }
 
-func (c *AerospikeCluster) setDefaultAerospikeConfigs(
-	asLog logr.Logger, configSpec AerospikeConfigSpec,
-) error {
+func (c *AerospikeCluster) setDefaultAerospikeConfigs(asLog logr.Logger,
+	configSpec AerospikeConfigSpec, rackID *int) error {
 	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(
-		asLog, configSpec, c.Spec.RackConfig.Namespaces,
-	); err != nil {
+	if err := setDefaultNsConf(asLog, configSpec, c.Spec.RackConfig.Namespaces, rackID); err != nil {
 		return err
 	}
 
@@ -369,10 +362,8 @@ func (n *AerospikeNetworkPolicy) setNetworkNamespace(namespace string) {
 // Helper
 // *****************************************************************************
 
-func setDefaultNsConf(
-	asLog logr.Logger, configSpec AerospikeConfigSpec,
-	rackEnabledNsList []string,
-) error {
+func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
+	rackEnabledNsList []string, rackID *int) error {
 	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
@@ -406,20 +397,21 @@ func setDefaultNsConf(
 			)
 		}
 
-		// Add dummy rack-id only for rackEnabled namespaces
-		defaultConfs := map[string]interface{}{"rack-id": DefaultRackID}
-
 		if nsName, ok := nsMap["name"]; ok {
-			if _, ok := nsName.(string); ok {
-				if isNameExist(rackEnabledNsList, nsName.(string)) {
-					// Add dummy rack-id, should be replaced with actual rack-id by init-container script
-					if err := setDefaultsInConfigMap(
-						asLog, nsMap, defaultConfs,
-					); err != nil {
-						return fmt.Errorf(
-							"failed to set default aerospikeConfig.namespaces rack config: %v",
-							err,
-						)
+			if name, ok := nsName.(string); ok {
+				if isNameExist(rackEnabledNsList, name) {
+					// Add rack-id only for rackEnabled namespaces
+					if rackID != nil {
+						// Add rack-id only in rack specific config, not in global config
+						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+						if err := setDefaultsInConfigMap(
+							asLog, nsMap, defaultConfs,
+						); err != nil {
+							return fmt.Errorf(
+								"failed to set default aerospikeConfig.namespaces rack config: %v",
+								err,
+							)
+						}
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
@@ -427,7 +419,7 @@ func setDefaultNsConf(
 					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
 					asLog.Info(
 						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. "+
-							"Namespace will not have defaultRackID",
+							"Namespace will not have any rackID",
 						"nsName", nsName, "rackEnabledNamespaces",
 						rackEnabledNsList,
 					)

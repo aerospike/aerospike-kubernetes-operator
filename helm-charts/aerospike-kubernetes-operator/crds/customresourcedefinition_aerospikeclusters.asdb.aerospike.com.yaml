@@ -14238,6 +14238,10 @@ spec:
                       items:
                         type: string
                       type: array
+                    dynamicConfigFailed:
+                      description: DynamicConfigFailed is true if aerospike config
+                        change failed to apply dynamically.
+                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
