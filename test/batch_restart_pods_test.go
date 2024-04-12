@@ -128,7 +128,6 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.RackConfig.Racks = aeroCluster.Spec.RackConfig.Racks[:1]
-			aeroCluster.Spec.RackConfig.Namespaces = nil
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 

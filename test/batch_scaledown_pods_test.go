@@ -2,12 +2,12 @@ package test
 
 import (
 	goctx "context"
-	"fmt"
-
 	"time"
 
+	set "github.com/deckarep/golang-set/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +49,7 @@ var _ = Describe("BatchScaleDown", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Using ScaleDownBatchSize PCT which is not enough eg. 1%")
-			err = batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, percent("1%"), 1)
+			err = batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, percent("1%"), 2)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -77,14 +77,12 @@ var _ = Describe("BatchScaleDown", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validating batch scale-down for deleted rack 2")
-			isRackBatchDelete := isRackBatchDelete(aeroCluster, scaleDownBatchSize, 2)
-			Expect(isRackBatchDelete).To(BeTrue())
+			validateRackBatchDelete(aeroCluster, scaleDownBatchSize, 2)
 
 			err = waitForClusterScaleDown(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 				getTimeout(aeroCluster.Spec.Size),
 			)
 			Expect(err).ToNot(HaveOccurred())
-
 		})
 	})
 
@@ -102,15 +100,8 @@ func batchScaleDownTest(
 		return err
 	}
 
-	oldPodsPerRack := int(aeroCluster.Spec.Size) / len(aeroCluster.Spec.RackConfig.Racks)
 	aeroCluster.Spec.RackConfig.ScaleDownBatchSize = batchSize
 	aeroCluster.Spec.Size -= decreaseBy
-	newPodsPerRack := int(aeroCluster.Spec.Size) / len(aeroCluster.Spec.RackConfig.Racks)
-	scaleDownBatchSize := oldPodsPerRack - newPodsPerRack
-
-	if batchSize != nil && batchSize.IntVal > 0 && batchSize.IntVal < int32(scaleDownBatchSize) {
-		scaleDownBatchSize = int(batchSize.IntVal)
-	}
 
 	if err := k8sClient.Update(ctx, aeroCluster); err != nil {
 		return err
@@ -118,9 +109,7 @@ func batchScaleDownTest(
 
 	By("Validating batch scale-down")
 
-	if !isBatchScaleDown(aeroCluster, scaleDownBatchSize) {
-		return fmt.Errorf("looks like pods are not scaling down in batch")
-	}
+	validateBatchScaleDown(aeroCluster, batchSize)
 
 	return waitForClusterScaleDown(
 		k8sClient, ctx, aeroCluster,
@@ -129,62 +118,94 @@ func batchScaleDownTest(
 	)
 }
 
-func isBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatchSize int) bool {
-	oldSize := int(aeroCluster.Status.Size)
+func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *intstr.IntOrString) {
+	oldPodsPerRack := podsPerRack(int(aeroCluster.Status.Size), len(aeroCluster.Status.RackConfig.Racks))
+	newPodsPerRack := podsPerRack(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
 
-	// Wait for scale-down
-	for {
-		readyPods := getReadyPods(aeroCluster)
+	rackTested := set.NewSet[int]()
 
-		unreadyPods := oldSize - len(readyPods)
-		if unreadyPods > 0 {
-			break
+	Eventually(func() bool {
+		for idx := range aeroCluster.Spec.RackConfig.Racks {
+			if rackTested.Contains(aeroCluster.Spec.RackConfig.Racks[idx].ID) {
+				continue
+			}
+
+			scaleDownBatchSize := oldPodsPerRack[idx] - newPodsPerRack[idx]
+
+			if batchSize != nil && batchSize.IntVal > 0 && batchSize.IntVal < int32(scaleDownBatchSize) {
+				scaleDownBatchSize = int(batchSize.IntVal)
+			}
+
+			sts, err := getSTSFromRackID(aeroCluster, aeroCluster.Spec.RackConfig.Racks[idx].ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			currentSize := int(*sts.Spec.Replicas)
+			if currentSize == oldPodsPerRack[idx] {
+				pkgLog.Info("Waiting for batch scale-down",
+					"rack", aeroCluster.Spec.RackConfig.Racks[idx].ID,
+					"batchSize", scaleDownBatchSize)
+				return false
+			}
+
+			// Check if scale-down happened in batch
+			if currentSize > oldPodsPerRack[idx]-scaleDownBatchSize {
+				Fail("scale-down didn't happen in batch")
+			}
+
+			rackTested.Add(aeroCluster.Spec.RackConfig.Racks[idx].ID)
 		}
-	}
 
-	// Operator should scale down multiple pods at a time
-	for i := 0; i < 100; i++ {
-		readyPods := getReadyPods(aeroCluster)
-		unreadyPods := oldSize - len(readyPods)
-
-		if unreadyPods == scaleDownBatchSize {
-			return true
-		}
-	}
-
-	return false
+		return true
+	}, getTimeout(aeroCluster.Spec.Size), 2*time.Second).Should(BeTrue())
 }
 
-func isRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatchSize, rackID int) bool {
-	oldSize := aeroCluster.Status.Size
-
-	// Rack to be deleted
+func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatchSize, rackID int) {
 	sts, err := getSTSFromRackID(aeroCluster, rackID)
 	Expect(err).ToNot(HaveOccurred())
 
-	newSize := int(oldSize + *sts.Spec.Replicas)
+	oldSize := int(*sts.Spec.Replicas)
 
-	// Wait for new rack addition
-	for {
-		readyPods := getReadyPods(aeroCluster)
+	Eventually(func() bool {
+		sts, err = getSTSFromRackID(aeroCluster, rackID)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				pkgLog.Info("STS deleted", "rack", rackID)
+				return true
+			}
 
-		// This means the new rack is added before deleting the old rack
-		if len(readyPods) == newSize {
-			break
-		}
-	}
-
-	// Operator should scale down multiple pods at a time for the rack to be deleted
-	for i := 0; i < 100; i++ {
-		readyPods := getReadyPods(aeroCluster)
-		unreadyPods := newSize - len(readyPods)
-
-		if unreadyPods == scaleDownBatchSize {
-			return true
+			Fail("failed to get sts")
 		}
 
-		time.Sleep(1 * time.Second)
+		currentSize := int(*sts.Spec.Replicas)
+		if currentSize == oldSize {
+			pkgLog.Info("Waiting for batch scale-down for deleted rack",
+				"rack", rackID,
+				"batchSize", scaleDownBatchSize)
+			return false
+		}
+
+		if currentSize > oldSize-scaleDownBatchSize {
+			Fail("scale-down didn't happen in batch")
+		}
+
+		return true
+	}, getTimeout(aeroCluster.Spec.Size), 2*time.Second).Should(BeTrue())
+}
+
+func podsPerRack(size, racks int) []int {
+	nodesPerRack, extraNodes := size/racks, size%racks
+
+	// Distributing nodes in given racks
+	var topology []int
+
+	for rackIdx := 0; rackIdx < racks; rackIdx++ {
+		nodesForThisRack := nodesPerRack
+		if rackIdx < extraNodes {
+			nodesForThisRack++
+		}
+
+		topology = append(topology, nodesForThisRack)
 	}
 
-	return false
+	return topology
 }
