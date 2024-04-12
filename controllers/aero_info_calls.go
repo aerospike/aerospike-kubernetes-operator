@@ -348,20 +348,12 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
 
-		if cmdStatus, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
+		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {
 			errorStatus := asdbv1.Failed
 
-			// Calculate the number of passed commands and based on that set Failed or PartiallyFailed status.
-			var passedCounter int
-
-			for _, passed := range cmdStatus {
-				if passed {
-					passedCounter++
-				}
-			}
-
-			if passedCounter != 0 {
+			// if the len of succeededCmds is not 0 along with error, then it is partially failed.
+			if len(succeededCmds) != 0 {
 				errorStatus = asdbv1.PartiallyFailed
 			}
 
