@@ -86,11 +86,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
-	// EnableDynamicUpdate enables dynamic config update flow of the operator.
+	// EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
 	// If enabled, operator will try to update the Aerospike config dynamically.
 	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="EnableDynamicUpdate"
-	EnableDynamicUpdate *bool `json:"enableDynamicUpdate,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
+	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`

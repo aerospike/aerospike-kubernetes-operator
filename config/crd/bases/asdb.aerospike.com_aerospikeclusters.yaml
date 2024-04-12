@@ -281,11 +281,11 @@ spec:
                     - customInterface
                     type: string
                 type: object
-              enableDynamicUpdate:
-                description: EnableDynamicUpdate enables dynamic config update flow
-                  of the operator. If enabled, operator will try to update the Aerospike
-                  config dynamically. In case of inconsistent state during dynamic
-                  config update, operator falls back to rolling restart.
+              enableDynamicConfigUpdate:
+                description: EnableDynamicConfigUpdate enables dynamic config update
+                  flow of the operator. If enabled, operator will try to update the
+                  Aerospike config dynamically. In case of inconsistent state during
+                  dynamic config update, operator falls back to rolling restart.
                 type: boolean
               image:
                 description: Aerospike server image

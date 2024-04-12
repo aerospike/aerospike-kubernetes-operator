@@ -119,10 +119,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			// If version >= 6.0.0, then we can update config dynamically.
 			if v >= 0 {
-				// If EnableDynamicUpdate is set and dynamic config command exec partially failed in previous try
+				// If EnableDynamicConfigUpdate is set and dynamic config command exec partially failed in previous try
 				// then skip dynamic config update and fall back to rolling restart.
 				// Continue with dynamic config update in case of Failed DynamicConfigUpdateStatus
-				if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicUpdate) &&
+				if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) &&
 					podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed {
 					// Fetching all dynamic config change.
 					dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
