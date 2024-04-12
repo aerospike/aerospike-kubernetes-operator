@@ -119,8 +119,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			// If version >= 6.0.0, then we can update config dynamically.
 			if v >= 0 {
-				// If dynamic commands have failed in previous retry, then we should not try to update config dynamically.
-				if !podStatus.DynamicConfigFailed {
+				// If EnableDynamicUpdate is set and dynamic config command exec partially failed in previous try
+				// then skip dynamic config update and fall back to rolling restart.
+				// Continue with dynamic config update in case of Failed DynamicConfigUpdateStatus
+				if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicUpdate) &&
+					podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed {
 					// Fetching all dynamic config change.
 					dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
 					if err != nil {
@@ -135,7 +138,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
 			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0)
 
-		if podStatus.DynamicConfigFailed {
+		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
+		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
 	}

@@ -169,6 +169,11 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 		in, out := &in.AerospikeConfig, &out.AerospikeConfig
 		*out = (*in).DeepCopy()
 	}
+	if in.EnableDynamicUpdate != nil {
+		in, out := &in.EnableDynamicUpdate, &out.EnableDynamicUpdate
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ValidationPolicy != nil {
 		in, out := &in.ValidationPolicy, &out.ValidationPolicy
 		*out = new(ValidationPolicySpec)
