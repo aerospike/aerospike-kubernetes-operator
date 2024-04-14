@@ -1006,6 +1006,7 @@ func createDummyAerospikeClusterWithoutStorage(
 	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, 1, nil)
 }
 
+
 func createDummyAerospikeClusterWithRF(
 	clusterNamespacedName types.NamespacedName, size int32, rf int,
 ) *asdbv1.AerospikeCluster {
@@ -1550,6 +1551,23 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getSCNamespaceConfigWithSet(name, path string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+		"sets": []map[string]interface{}{
+			{
+				"name": "testset",
+			},
 		},
 	}
 }

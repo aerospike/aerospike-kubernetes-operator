@@ -338,7 +338,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 	for _, host := range selectedHostConns {
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
-		asConfCmds, err := asconfig.CreateSetConfigCmdList(dynamicConfDiffPerPod[podName],
+		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
 			host.ASConn, r.getClientPolicy())
 
 		if err != nil {
