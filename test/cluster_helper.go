@@ -1006,7 +1006,6 @@ func createDummyAerospikeClusterWithoutStorage(
 	return createDummyAerospikeClusterWithRFAndStorage(clusterNamespacedName, size, 1, nil)
 }
 
-
 func createDummyAerospikeClusterWithRF(
 	clusterNamespacedName types.NamespacedName, size int32, rf int,
 ) *asdbv1.AerospikeCluster {
