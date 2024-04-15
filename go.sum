@@ -1,9 +1,9 @@
 github.com/aerospike/aerospike-client-go/v7 v7.1.0 h1:yvCTKdbpqZxHvv7sWsFHV1j49jZcC8yXRooWsDFqKtA=
 github.com/aerospike/aerospike-client-go/v7 v7.1.0/go.mod h1:AkHiKvCbqa1c16gCNGju3c5X/yzwLVvblNczqjxNwNk=
-github.com/aerospike/aerospike-management-lib v1.2.1-0.20240325134810-f8046fe9872e h1:Q/AfYe++0ouO5csLS8l99kCQqJJvDKlfHwhuWbECpaQ=
-github.com/aerospike/aerospike-management-lib v1.2.1-0.20240325134810-f8046fe9872e/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
-github.com/aerospike/aerospike-management-lib v1.3.1-0.20240404063536-2adfbedf9687 h1:d7oDvHmiKhq4rzcD/w3z9tP3wH0+iaDvxKDk3IYuqeU=
-github.com/aerospike/aerospike-management-lib v1.3.1-0.20240404063536-2adfbedf9687/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240412042741-c7d631bbfa43 h1:7xdFCD3e1rdy5GiznyTrxinShah6cNJAMZZAphGEPZs=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240412042741-c7d631bbfa43/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240412130613-2bc07a8654c3 h1:buzjr9iDYSuI0jy/A8366pfPXalBP3Gke3MN+rO/Vzo=
+github.com/aerospike/aerospike-management-lib v1.3.1-0.20240412130613-2bc07a8654c3/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d h1:Byv0BzEl3/e6D5CLfI0j/7hiIEtvGVFPCZ7Ei2oq8iQ=
