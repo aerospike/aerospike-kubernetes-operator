@@ -348,14 +348,21 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
 
-		if err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
+		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {
+			errorStatus := asdbv1.Failed
+
+			// if the len of succeededCmds is not 0 along with error, then it is partially failed.
+			if len(succeededCmds) != 0 {
+				errorStatus = asdbv1.PartiallyFailed
+			}
+
 			var patches []jsonpatch.PatchOperation
 
 			patch := jsonpatch.PatchOperation{
 				Operation: "replace",
-				Path:      "/status/pods/" + podName + "/dynamicConfigFailed",
-				Value:     true,
+				Path:      "/status/pods/" + podName + "/dynamicConfigUpdateStatus",
+				Value:     errorStatus,
 			}
 			patches = append(patches, patch)
 

@@ -47,6 +47,15 @@ const (
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
+// +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
+type DynamicConfigUpdateStatus string
+
+const (
+	Failed          DynamicConfigUpdateStatus = "Failed"
+	PartiallyFailed DynamicConfigUpdateStatus = "PartiallyFailed"
+	Empty           DynamicConfigUpdateStatus = ""
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -77,6 +86,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
+	// EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
+	// If enabled, operator will try to update the Aerospike config dynamically.
+	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
+	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
@@ -872,8 +886,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// PodSpecHash is ripemd160 hash of PodSpec used by this pod
 	PodSpecHash string `json:"podSpecHash"`
 
-	// DynamicConfigFailed is true if aerospike config change failed to apply dynamically.
-	DynamicConfigFailed bool `json:"dynamicConfigFailed,omitempty"`
+	// DynamicConfigUpdateStatus is the status of dynamic config update operation.
+	// Empty "" status means successful update.
+	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 
 	// IsSecurityEnabled is true if security is enabled in the pod
 	IsSecurityEnabled bool `json:"isSecurityEnabled"`

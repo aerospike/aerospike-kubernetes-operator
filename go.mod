@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.8
 
 require (
-	github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414093735-a11e7fe7c3ec
+	github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414184711-fbbc7564be0b
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.3.0
