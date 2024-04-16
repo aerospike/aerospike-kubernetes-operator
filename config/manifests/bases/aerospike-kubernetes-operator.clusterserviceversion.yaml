@@ -47,12 +47,12 @@ spec:
           the Aerospike cluster.
         displayName: Aerospike Network Policy
         path: aerospikeNetworkPolicy
-      - description: EnableDynamicUpdate enables dynamic config update flow of the
-          operator. If enabled, operator will try to update the Aerospike config dynamically.
-          In case of inconsistent state during dynamic config update, operator falls
-          back to rolling restart.
-        displayName: EnableDynamicUpdate
-        path: enableDynamicUpdate
+      - description: EnableDynamicConfigUpdate enables dynamic config update flow
+          of the operator. If enabled, operator will try to update the Aerospike config
+          dynamically. In case of inconsistent state during dynamic config update,
+          operator falls back to rolling restart.
+        displayName: Enable Dynamic Config Update
+        path: enableDynamicConfigUpdate
       - description: Aerospike server image
         displayName: Server Image
         path: image
