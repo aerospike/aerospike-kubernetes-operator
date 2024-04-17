@@ -336,6 +336,8 @@ func isClusterStateValid(
 		return false
 	}
 
+	pkgLog.Info("Cluster state is validated successfully")
+
 	return true
 }
 

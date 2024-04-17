@@ -121,6 +121,26 @@ var _ = Describe("BatchRestart", func() {
 			err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("Should fail update when spec is valid and status is invalid for RollingUpdateBatchSize", func() {
+			By("Remove 2nd rack")
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.Racks = aeroCluster.Spec.RackConfig.Racks[:1]
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Add 2nd rack with RollingUpdateBatchSize")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1, 2)
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
+
+			err = k8sClient.Update(ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+
 	})
 
 	Context("When doing namespace related operations", func() {

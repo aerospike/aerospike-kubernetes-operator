@@ -888,6 +888,11 @@ func (in *RackConfig) DeepCopyInto(out *RackConfig) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.ScaleDownBatchSize != nil {
+		in, out := &in.ScaleDownBatchSize, &out.ScaleDownBatchSize
+		*out = new(intstr.IntOrString)
+		**out = **in
+	}
 	if in.MaxIgnorablePods != nil {
 		in, out := &in.MaxIgnorablePods, &out.MaxIgnorablePods
 		*out = new(intstr.IntOrString)

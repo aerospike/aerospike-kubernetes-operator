@@ -389,7 +389,6 @@ var _ = Describe(
 	},
 )
 
-//nolint:unparam // generic function
 func getSTSFromRackID(aeroCluster *asdbv1.AerospikeCluster, rackID int) (
 	*appsv1.StatefulSet, error,
 ) {

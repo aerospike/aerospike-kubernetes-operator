@@ -602,38 +602,15 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	// Validate batch upgrade/restart param
-	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
-		if err := validateIntOrStringField(c.Spec.RackConfig.RollingUpdateBatchSize,
-			"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
-			return err
-		}
+	if err := c.validateBatchSize(c.Spec.RackConfig.RollingUpdateBatchSize,
+		"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
+		return err
+	}
 
-		if len(c.Spec.RackConfig.Racks) < 2 {
-			return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when number of racks is less than two")
-		}
-
-		nsConfsNamespaces := c.getNsConfsForNamespaces()
-		for ns, nsConf := range nsConfsNamespaces {
-			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when there is any non-rack enabled namespace %s", ns,
-				)
-			}
-
-			if nsConf.noOfRacksForNamespaces <= 1 {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured in only one rack",
-					ns,
-				)
-			}
-
-			if nsConf.replicationFactor <= 1 {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured with replication-factor 1",
-					ns,
-				)
-			}
-		}
+	// Validate batch scaleDown param
+	if err := c.validateBatchSize(c.Spec.RackConfig.ScaleDownBatchSize,
+		"spec.rackConfig.scaleDownBatchSize"); err != nil {
+		return err
 	}
 
 	// Validate MaxIgnorablePods param
@@ -652,11 +629,11 @@ type nsConf struct {
 	replicationFactor      int
 }
 
-func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
+func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for idx := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[idx]
+	for idx := range rackConfig.Racks {
+		rack := &rackConfig.Racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -2167,6 +2144,61 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 			"tlsFabric", "customTLSFabricNetworkNames",
 		); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, fieldPath string) error {
+	if batchSize == nil {
+		return nil
+	}
+
+	if err := validateIntOrStringField(batchSize, fieldPath); err != nil {
+		return err
+	}
+
+	validateRacksForBatchSize := func(rackConfig RackConfig) error {
+		if len(rackConfig.Racks) < 2 {
+			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
+		}
+
+		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		for ns, nsConf := range nsConfsNamespaces {
+			if !isNameExist(rackConfig.Namespaces, ns) {
+				return fmt.Errorf(
+					"can not use %s when there is any non-rack enabled namespace %s", fieldPath, ns,
+				)
+			}
+
+			if nsConf.noOfRacksForNamespaces <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured in only one rack", fieldPath, ns,
+				)
+			}
+
+			if nsConf.replicationFactor <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured with replication-factor 1", fieldPath,
+					ns,
+				)
+			}
+		}
+
+		return nil
+	}
+
+	// validate rackConf from spec
+	if err := validateRacksForBatchSize(c.Spec.RackConfig); err != nil {
+		return err
+	}
+
+	// If the status is not nil, validate rackConf from status to restrict batch-size update
+	// when old rackConfig is not valid for batch-size
+	if c.Status.AerospikeConfig != nil {
+		if err := validateRacksForBatchSize(c.Status.RackConfig); err != nil {
+			return fmt.Errorf("status invalid for %s: update, %v", fieldPath, err)
 		}
 	}
 
