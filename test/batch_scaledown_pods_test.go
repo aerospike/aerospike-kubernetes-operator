@@ -140,10 +140,12 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 			Expect(err).ToNot(HaveOccurred())
 
 			currentSize := int(*sts.Spec.Replicas)
+
+			pkgLog.Info("Waiting for batch scale-down",
+				"rack", aeroCluster.Spec.RackConfig.Racks[idx].ID,
+				"batchSize", scaleDownBatchSize, "currentSize", currentSize, "oldSize", oldPodsPerRack[idx])
+
 			if currentSize == oldPodsPerRack[idx] {
-				pkgLog.Info("Waiting for batch scale-down",
-					"rack", aeroCluster.Spec.RackConfig.Racks[idx].ID,
-					"batchSize", scaleDownBatchSize)
 				return false
 			}
 
@@ -152,6 +154,7 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 				Fail("scale-down didn't happen in batch")
 			}
 
+			pkgLog.Info("Batch scale-down finished for rack", "rack", aeroCluster.Spec.RackConfig.Racks[idx].ID)
 			rackTested.Add(aeroCluster.Spec.RackConfig.Racks[idx].ID)
 		}
 
@@ -163,7 +166,7 @@ func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatc
 	sts, err := getSTSFromRackID(aeroCluster, rackID)
 	Expect(err).ToNot(HaveOccurred())
 
-	oldSize := int(*sts.Spec.Replicas)
+	oldSize := int(sts.Status.Replicas)
 
 	Eventually(func() bool {
 		sts, err = getSTSFromRackID(aeroCluster, rackID)
@@ -177,16 +180,20 @@ func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatc
 		}
 
 		currentSize := int(*sts.Spec.Replicas)
+
+		pkgLog.Info("Waiting for batch scale-down for deleted rack",
+			"rack", rackID,
+			"batchSize", scaleDownBatchSize, "currentSize", currentSize, "oldSize", oldSize)
+
 		if currentSize == oldSize {
-			pkgLog.Info("Waiting for batch scale-down for deleted rack",
-				"rack", rackID,
-				"batchSize", scaleDownBatchSize)
 			return false
 		}
 
 		if currentSize > oldSize-scaleDownBatchSize {
 			Fail("scale-down didn't happen in batch")
 		}
+
+		pkgLog.Info("Batch scale-down finished for deleted rack", "rack", rackID)
 
 		return true
 	}, getTimeout(aeroCluster.Spec.Size), 2*time.Second).Should(BeTrue())
