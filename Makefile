@@ -65,7 +65,6 @@ endif
 
 # Image URL to use all building/pushing operator manager image targets
 IMG ?= controller:latest
-IMG_TAGS ?= ""
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.26
@@ -164,7 +163,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --tag ${IMG_TAGS} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	- docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push

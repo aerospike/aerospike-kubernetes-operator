@@ -122,6 +122,8 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 			}
 
 			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			// Requeue after 1 second to fetch latest CR object with updated pod status
+			return reconcileRequeueAfter(1)
 		}
 	}
 
