@@ -8690,7 +8690,14 @@ spec:
                     - type: integer
                     - type: string
                     description: RollingUpdateBatchSize is the percentage/number of
-                      rack pods that will be restarted simultaneously
+                      rack pods that can be restarted simultaneously
+                    x-kubernetes-int-or-string: true
+                  scaleDownBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: ScaleDownBatchSize is the percentage/number of rack
+                      pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
               rosterNodeBlockList:
@@ -18149,7 +18156,14 @@ spec:
                     - type: integer
                     - type: string
                     description: RollingUpdateBatchSize is the percentage/number of
-                      rack pods that will be restarted simultaneously
+                      rack pods that can be restarted simultaneously
+                    x-kubernetes-int-or-string: true
+                  scaleDownBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: ScaleDownBatchSize is the percentage/number of rack
+                      pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
               resources:

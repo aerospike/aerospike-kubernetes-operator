@@ -897,10 +897,10 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []corev1.Pod, ignorablePodNames sets.Set[string],
+func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) bool {
 	for idx := range podList {
-		pod := &podList[idx]
+		pod := podList[idx]
 		if ignorablePodNames.Has(pod.Name) {
 			continue
 		}

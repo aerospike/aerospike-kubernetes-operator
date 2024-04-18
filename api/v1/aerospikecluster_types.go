@@ -321,9 +321,12 @@ type RackConfig struct { //nolint:govet // for readability
 	// Racks is the list of all racks
 	// +nullable
 	Racks []Rack `json:"racks,omitempty"`
-	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
+	// RollingUpdateBatchSize is the percentage/number of rack pods that can be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
+	// ScaleDownBatchSize is the percentage/number of rack pods that can be scaled down simultaneously
+	// +optional
+	ScaleDownBatchSize *intstr.IntOrString `json:"scaleDownBatchSize,omitempty"`
 	// MaxIgnorablePods is the maximum number/percentage of pending/failed pods in a rack that are ignored while
 	// assessing cluster stability. Pods identified using this value are not considered part of the cluster.
 	// Additionally, in SC mode clusters, these pods are removed from the roster.

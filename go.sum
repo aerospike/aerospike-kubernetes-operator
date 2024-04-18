@@ -1,7 +1,5 @@
 github.com/aerospike/aerospike-client-go/v7 v7.1.0 h1:yvCTKdbpqZxHvv7sWsFHV1j49jZcC8yXRooWsDFqKtA=
 github.com/aerospike/aerospike-client-go/v7 v7.1.0/go.mod h1:AkHiKvCbqa1c16gCNGju3c5X/yzwLVvblNczqjxNwNk=
-github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414093735-a11e7fe7c3ec h1:o0G+fsUiUfiKU/tnG20/rhHsKd579HkWPMvzz7OwtSU=
-github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414093735-a11e7fe7c3ec/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
 github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414184711-fbbc7564be0b h1:k6BwzHgmhFSvpKWCOkRGcVgaY7CPfU4SsHdBixOd5oM=
 github.com/aerospike/aerospike-management-lib v1.3.1-0.20240414184711-fbbc7564be0b/go.mod h1:E4dk798IikCp9a8fugpYoeQVIXuvdxogHvt6sKhaORQ=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
