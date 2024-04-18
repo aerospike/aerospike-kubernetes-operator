@@ -27,6 +27,12 @@ type podID struct {
 	asdPID string
 }
 
+const clName = "dynamic-config-test"
+
+var clusterNamespacedName = getNamespacedName(
+	clName, namespace,
+)
+
 var configWithMaxDefaultVal = mapset.NewSet("info-max-ms", "flush-max-ms")
 
 var _ = Describe(
@@ -37,10 +43,6 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 
-				clusterName := "dynamic-config-test"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
@@ -269,10 +271,6 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 
-				clusterName := "dynamic-config-test"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
@@ -406,11 +404,6 @@ var _ = Describe(
 		Context(
 			"When doing complete dynamic config change", func() {
 
-				clusterName := "aerocluster"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, "test",
-				)
-
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
@@ -442,11 +435,24 @@ var _ = Describe(
 
 						aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 							"log": map[string]interface{}{
-								"report-data-op": []string{"test"},
+								"report-data-op-role": []string{"read"},
+								"report-data-op-user": []string{"admin2"},
 							},
 						}
 
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
+
+						admin2 := asdbv1.AerospikeUserSpec{
+							Name:       "admin2",
+							SecretName: authSecretName,
+							Roles: []string{
+								"sys-admin",
+								"user-admin",
+								"read-write",
+							},
+						}
+
+						aeroCluster.Spec.AerospikeAccessControl.Users = append(aeroCluster.Spec.AerospikeAccessControl.Users, admin2)
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -539,7 +545,7 @@ var _ = Describe(
 						By("Verify XDR Context configs dynamically")
 						err = validateXDRContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
-
+						//
 						By("Verify no warm/cold restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 					},
@@ -602,12 +608,16 @@ func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[s
 	return pidMap, nil
 }
 
-func updateValue(val interface{}) (interface{}, error) {
+func updateValue(val interface{}, confKey string) (interface{}, error) {
 	switch val2 := val.(type) {
 	case []string:
-
+		if v, ok := sliceConfTypeVal[confKey]; ok {
+			return v, nil
+		}
 	case string:
-
+		if v, ok := stringConfTypeVal[confKey]; ok {
+			return v, nil
+		}
 	case bool:
 		return !val2, nil
 	case int:
@@ -620,12 +630,27 @@ func updateValue(val interface{}) (interface{}, error) {
 		return val2 + 1, nil
 
 	case lib.Stats:
-
+		println("stats", confKey)
 	default:
 		return nil, fmt.Errorf("format not supported")
 	}
 
 	return nil, nil
+}
+
+var stringConfTypeVal = map[string]string{
+	"network.heartbeat.protocol":              "v3",
+	"namespaces._.storage-engine.compression": "snappy",
+}
+
+var sliceConfTypeVal = map[string][]string{
+	"security.log.report-data-op":        {"test"},
+	"security.log.report-data-op-role":   {"sys-admin"},
+	"security.log.report-data-op-user":   {"admin"},
+	"xdr.dcs._.namespaces._.ship-sets":   {"testset"},
+	"xdr.dcs._.namespaces._.ignore-sets": {"testset"},
+	"xdr.dcs._.namespaces._.ship-bins":   {"testbin"},
+	"xdr.dcs._.namespaces._.ignore-bins": {"testbin"},
 }
 
 func validateServiceContextDynamically(
@@ -643,7 +668,7 @@ func validateServiceContextDynamically(
 		tokens := strings.Split(confKey, ".")
 
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
-			v, err := updateValue(val)
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
 			}
@@ -685,7 +710,7 @@ func validateNetworkContextDynamically(
 		tokens := strings.Split(confKey, ".")
 
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
-			v, err := updateValue(val)
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
 			}
@@ -709,7 +734,8 @@ func validateNamespaceContextDynamically(
 	aeroCluster *asdbv1.AerospikeCluster, dynamic mapset.Set[string],
 ) error {
 	newSpec := *flatSpec
-	ignoredConf := mapset.NewSet("rack-id", "default-ttl", "disable-write-dup-res", "disallow-expunge")
+	ignoredConf := mapset.NewSet("rack-id", "default-ttl", "disable-write-dup-res",
+		"disallow-expunge", "conflict-resolution-policy")
 
 	for confKey, val := range *flatServer {
 		if asconfig.ContextKey(confKey) != "namespaces" {
@@ -718,7 +744,7 @@ func validateNamespaceContextDynamically(
 
 		tokens := strings.Split(confKey, ".")
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
-			v, err := updateValue(val)
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
 			}
@@ -754,7 +780,7 @@ func validateSecurityContextDynamically(
 
 		tokens := strings.Split(confKey, ".")
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) {
-			v, err := updateValue(val)
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
 			}
@@ -777,8 +803,8 @@ func validateXDRContextDynamically(
 	ctx goctx.Context, flatServer, flatSpec *asconfig.Conf,
 	aeroCluster *asdbv1.AerospikeCluster, dynamic mapset.Set[string],
 ) error {
-	newSpec := *flatSpec
-	ignoredConf := mapset.NewSet("use-alternate-access-address", "connector", "ship-bin-luts")
+	xdrNSFields := make(asconfig.Conf)
+	dcFields := make(asconfig.Conf)
 
 	for confKey, val := range *flatServer {
 		if asconfig.ContextKey(confKey) != "xdr" {
@@ -786,8 +812,38 @@ func validateXDRContextDynamically(
 		}
 
 		tokens := strings.Split(confKey, ".")
-		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
-			v, err := updateValue(val)
+		if dynamic.Contains(asconfig.GetFlatKey(tokens)) {
+			if len(tokens) < 3 || tokens[len(tokens)-3] == "namespaces" {
+				xdrNSFields[confKey] = val
+			} else {
+				dcFields[confKey] = val
+			}
+		}
+	}
+
+	if err := validateXDRDCFieldsDynamically(ctx, &dcFields, flatSpec, aeroCluster); err != nil {
+		return err
+	}
+
+	aeroCluster, err := getCluster(
+		k8sClient, ctx, clusterNamespacedName,
+	)
+	if err != nil {
+		return err
+	}
+
+	return validateXDRNSFieldsDynamically(ctx, &xdrNSFields, flatSpec, aeroCluster)
+}
+
+func validateXDRNSFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asconfig.Conf,
+	aeroCluster *asdbv1.AerospikeCluster) error {
+	newSpec := *flatSpec
+	ignoredConf := mapset.NewSet("ship-bin-luts")
+
+	for confKey, val := range *flatServer {
+		tokens := strings.Split(confKey, ".")
+		if !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
 			}
@@ -809,6 +865,37 @@ func validateXDRContextDynamically(
 	newMap := *newConf.ToMap()
 
 	aeroCluster.Spec.AerospikeConfig.Value["xdr"] = lib.DeepCopy(newMap["xdr"])
+
+	return updateCluster(k8sClient, ctx, aeroCluster)
+}
+
+func validateXDRDCFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asconfig.Conf,
+	aeroCluster *asdbv1.AerospikeCluster) error {
+	newSpec := *flatSpec
+	ignoredConf := mapset.NewSet("connector")
+
+	for confKey, val := range *flatServer {
+		tokens := strings.Split(confKey, ".")
+		if !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
+			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
+			if err != nil {
+				return err
+			}
+
+			if v != nil {
+				newSpec[confKey] = v
+			}
+		}
+	}
+
+	newConf := asconfig.New(logger, &newSpec)
+	newMap := *newConf.ToMap()
+
+	aeroCluster.Spec.AerospikeConfig.Value["xdr"] = lib.DeepCopy(newMap["xdr"])
+	dcs := aeroCluster.Spec.AerospikeConfig.Value["xdr"].(lib.Stats)["dcs"].([]lib.Stats)
+	delete(dcs[0], "namespaces")
+	delete(dcs[0], "node-address-ports")
+	aeroCluster.Spec.AerospikeConfig.Value["xdr"].(lib.Stats)["dcs"] = dcs
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
