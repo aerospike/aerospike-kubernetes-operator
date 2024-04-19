@@ -26,7 +26,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/sirupsen/logrus v1.9.0
 	golang.org/x/crypto v0.21.0
-	golang.org/x/net v0.21.0
+	golang.org/x/net v0.23.0
 	gomodules.xyz/jsonpatch/v2 v2.3.0
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
