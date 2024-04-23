@@ -1358,7 +1358,7 @@ func validateAerospikeConfigUpdate(
 		}
 	}
 
-	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus, incomingVersion)
+	return validateNsConfUpdate(incomingSpec, outgoingSpec, currentStatus)
 }
 
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
@@ -1516,7 +1516,7 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *AerospikeNetworkPolicy) e
 	return nil
 }
 
-func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec, incomingVersion string) error {
+func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 
@@ -1550,13 +1550,8 @@ func validateNsConfUpdate(newConfSpec, oldConfSpec, currentStatus *AerospikeConf
 			}
 
 			if singleConf["name"] == oldSingleConf["name"] {
-				val, err := lib.CompareVersions(incomingVersion, Version6)
-				if err != nil {
-					return fmt.Errorf("failed to check image version: %v", err)
-				}
-
-				// For versions 6.0 and later, replication-factor is dynamic for AP namespaces (non strong-consistency).
-				if (IsNSSCEnabled(singleConf) || val < 0) && isValueUpdated(
+				// replication-factor update not allowed
+				if isValueUpdated(
 					oldSingleConf, singleConf, "replication-factor",
 				) {
 					return fmt.Errorf(
