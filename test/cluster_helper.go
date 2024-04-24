@@ -1554,6 +1554,23 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 	}
 }
 
+func getSCNamespaceConfigWithSet(name, path string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+		"sets": []map[string]interface{}{
+			{
+				"name": "testset",
+			},
+		},
+	}
+}
+
 func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,

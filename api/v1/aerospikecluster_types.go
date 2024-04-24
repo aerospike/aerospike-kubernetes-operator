@@ -659,6 +659,11 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +nullable
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
+	// EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
+	// If enabled, operator will try to update the Aerospike config dynamically.
+	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
+	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
@@ -994,6 +999,14 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.OperatorClientCertSpec = clientCertSpec
 	}
 
+	if spec.EnableDynamicConfigUpdate != nil {
+		enableDynamicConfigUpdate := lib.DeepCopy(
+			spec.EnableDynamicConfigUpdate,
+		).(*bool)
+
+		status.EnableDynamicConfigUpdate = enableDynamicConfigUpdate
+	}
+
 	// Storage
 	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
 	status.PodSpec = *statusPodSpec
@@ -1081,6 +1094,14 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		).(*AerospikeOperatorClientCertSpec)
 
 		spec.OperatorClientCertSpec = clientCertSpec
+	}
+
+	if status.EnableDynamicConfigUpdate != nil {
+		enableDynamicConfigUpdate := lib.DeepCopy(
+			status.EnableDynamicConfigUpdate,
+		).(*bool)
+
+		spec.EnableDynamicConfigUpdate = enableDynamicConfigUpdate
 	}
 
 	// Storage

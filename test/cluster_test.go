@@ -979,22 +979,6 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					By("UpdateReplicationFactor: should update namespace replication-factor on non-SC namespace")
-
-					aeroCluster, err := getCluster(
-						k8sClient, ctx,
-						clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-					namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
-					// aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-					namespaceConfig["replication-factor"] = 3
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
-
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
 					By("Scaling up along with modifying Namespace storage Dynamically")
 
 					err = scaleUpClusterTestWithNSDeviceHandling(
@@ -1155,6 +1139,35 @@ func UpdateClusterTest(ctx goctx.Context) {
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 											namespaceConfig["replication-factor"] = 5
 											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+
+											err = k8sClient.Update(
+												ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
+										},
+									)
+
+									It(
+										"UpdateReplicationFactor: should fail for updating namespace"+
+											"replication-factor on non-SC namespace. Cannot be updated",
+										func() {
+											By("RollingRestart By Adding Namespace Dynamically")
+
+											err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
+												k8sClient, ctx, dynamicNs, clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											aeroCluster, err := getCluster(
+												k8sClient, ctx,
+												clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
+											namespaceConfig["replication-factor"] = 3
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
 
 											err = k8sClient.Update(
 												ctx, aeroCluster,
