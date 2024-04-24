@@ -24,6 +24,7 @@ func (r *SingleClusterReconciler) reconcilePDB() error {
 		}
 
 		r.Log.Info("PodDisruptionBudget is disabled, skipping PodDisruptionBudget creation")
+
 		return nil
 	}
 
