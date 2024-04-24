@@ -14,6 +14,44 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
+func (r *SingleClusterReconciler) reconcilePDB() error {
+	// If spec.DisablePDB is set to true, then we don't need to create PDB
+	// If it exist then delete it
+	if asdbv1.GetBool(r.aeroCluster.Spec.DisablePDB) {
+		if !asdbv1.GetBool(r.aeroCluster.Status.DisablePDB) {
+			r.Log.Info("PodDisruptionBudget is disabled. Deleting old PodDisruptionBudget")
+			return r.deletePDB()
+		}
+
+		r.Log.Info("PodDisruptionBudget is disabled, skipping PodDisruptionBudget creation")
+		return nil
+	}
+
+	// Create or update PodDisruptionBudget
+	return r.createOrUpdatePDB()
+}
+
+func (r *SingleClusterReconciler) deletePDB() error {
+	pdb := &v1.PodDisruptionBudget{}
+
+	// Get the PodDisruptionBudget
+	if err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, pdb,
+	); err != nil {
+		if errors.IsNotFound(err) {
+			// PodDisruptionBudget is already deleted
+			return nil
+		}
+
+		return err
+	}
+
+	// Delete the PodDisruptionBudget
+	return r.Client.Delete(context.TODO(), pdb)
+}
+
 func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	podList, err := r.getClusterPodList()
 	if err != nil {

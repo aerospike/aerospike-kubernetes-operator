@@ -72,7 +72,7 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set maxUnavailable default to 1
-	if c.Spec.MaxUnavailable == nil {
+	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
 		maxUnavailable := intstr.FromInt(1)
 		c.Spec.MaxUnavailable = &maxUnavailable
 	}
