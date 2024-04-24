@@ -86,6 +86,7 @@ var _ = Describe(
 					"Should update config dynamically", func() {
 
 						By("Modify dynamic config by adding fields")
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -122,16 +123,21 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						By("Fetch and verify dynamic configs")
+
 						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
 
+						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"service", &pod)
 						Expect(err).ToNot(HaveOccurred())
+
 						cv, ok := conf["proto-fd-max"]
 						Expect(ok).ToNot(BeFalse())
 
 						Expect(cv).To(Equal(int64(18000)))
 
+						// Fetch and verify security section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"security", &pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -141,6 +147,7 @@ var _ = Describe(
 
 						Expect(reportDataOp).To(Equal("test"))
 
+						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"xdr", &pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -148,9 +155,11 @@ var _ = Describe(
 						Expect(conf["dcs"]).To(HaveLen(2))
 
 						By("Verify no warm/cold restarts in Pods")
+
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 
 						By("Modify dynamic config by removing fields")
+
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -168,8 +177,11 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						By("Fetch and verify dynamic configs")
+
 						pod = aeroCluster.Status.Pods["dynamic-config-test-0-0"]
 
+						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"service", &pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -178,6 +190,7 @@ var _ = Describe(
 
 						Expect(cv).To(Equal(int64(15000)))
 
+						// Fetch and verify security section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"security", &pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -185,6 +198,7 @@ var _ = Describe(
 						_, ok = conf["log.report-data-op[0]"].(string)
 						Expect(ok).ToNot(BeTrue())
 
+						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"xdr", &pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -192,8 +206,8 @@ var _ = Describe(
 						Expect(conf["dcs"]).To(HaveLen(1))
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 
+						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 					},
 				)
 
@@ -215,6 +229,8 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						By("Fetch and verify static configs")
+
 						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
@@ -227,6 +243,7 @@ var _ = Describe(
 						Expect(enableQuotas).To(BeTrue())
 
 						By("Verify warm restarts in Pods")
+
 						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
 					},
 				)
@@ -234,7 +251,7 @@ var _ = Describe(
 				It(
 					"Should update config statically by disabling dynamic update feature", func() {
 
-						By("Modify static config")
+						By("Modify dynamic config statically")
 
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -244,11 +261,14 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						// Disable dynamic config update and set config
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(false)
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 19000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+
+						By("Fetch and verify static configs")
 
 						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
 
@@ -320,6 +340,8 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						// Failure:
+						// Update invalid config value
 						// This change will lead to dynamic config update failure.
 						// In case of full failure, will not fall back to rolling restart
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 9999999
@@ -332,16 +354,18 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						// Recovery
+						// Recovery:
+						// Update valid config value
+						// This change will lead to dynamic config update success.
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						// As pods were failed, expectation is that pods will be cold restarted.
+						// As there was no full config update failure,
+						// expectation is that pods will not be restarted.
 						By("Verify cold restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
-
 					},
 				)
 
@@ -355,6 +379,8 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						// Failure:
+						// Update multiple invalid config values
 						// This change will lead to dynamic config update failure.
 						// Assuming it will fall back to rolling restart in case of partial failure.
 						// Which leads to pod failures.
@@ -386,7 +412,9 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						// Recovery
+						// Recovery:
+						// Update valid config value
+						// This change will lead to static config update success.
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -545,7 +573,12 @@ var _ = Describe(
 						By("Verify XDR Context configs dynamically")
 						err = validateXDRContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
-						//
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
 						By("Verify no warm/cold restarts in Pods")
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 					},
@@ -630,7 +663,7 @@ func updateValue(val interface{}, confKey string) (interface{}, error) {
 		return val2 + 1, nil
 
 	case lib.Stats:
-		println("stats", confKey)
+		pkgLog.Info("got lib.stats type key", confKey)
 	default:
 		return nil, fmt.Errorf("format not supported")
 	}
