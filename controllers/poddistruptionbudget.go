@@ -49,6 +49,11 @@ func (r *SingleClusterReconciler) deletePDB() error {
 		return err
 	}
 
+	if !isPDBCreatedByOperator(pdb) {
+		r.Log.Info("PodDisruptionBudget is not created/owned by operator. Skipping delete")
+		return nil
+	}
+
 	// Delete the PodDisruptionBudget
 	return r.Client.Delete(context.TODO(), pdb)
 }
@@ -125,6 +130,18 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
+	// This will ensure that cluster is not deployed with PDB created by user
+	// cluster deploy call itself will fail.
+	// If PDB is not created by operator then no need to even match the spec
+	if !isPDBCreatedByOperator(pdb) {
+		r.Log.Info("PodDisruptionBudget is not created/owned by operator. Skipping update")
+
+		return fmt.Errorf(
+			"failed to update PodDisruptionBudget: %v",
+			fmt.Errorf("PodDisruptionBudget is not created/owned by operator"),
+		)
+	}
+
 	if pdb.Spec.MaxUnavailable.String() != r.aeroCluster.Spec.MaxUnavailable.String() {
 		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
 
@@ -142,4 +159,13 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	}
 
 	return nil
+}
+
+func isPDBCreatedByOperator(pdb *v1.PodDisruptionBudget) bool {
+	val, ok := pdb.GetLabels()[asdbv1.AerospikeAppLabel]
+	if ok && val == asdbv1.AerospikeAppLabelValue {
+		return true
+	}
+
+	return false
 }

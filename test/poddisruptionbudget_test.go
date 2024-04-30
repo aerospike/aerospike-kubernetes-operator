@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -19,7 +20,7 @@ var _ = Describe(
 		ctx := context.TODO()
 		aeroCluster := &asdbv1.AerospikeCluster{}
 		maxUnavailable := intstr.FromInt(0)
-		defaultMaxUpavailable := intstr.FromInt(1)
+		defaultMaxUnavailable := intstr.FromInt(1)
 		clusterNamespacedName := getNamespacedName("pdb-test-cluster", namespace)
 
 		BeforeEach(func() {
@@ -36,7 +37,7 @@ var _ = Describe(
 			It("Validate create PDB with default maxUnavailable", func() {
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-				validatePDB(ctx, aeroCluster, defaultMaxUpavailable.IntValue())
+				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 			})
 
 			It("Validate create PDB with specified maxUnavailable", func() {
@@ -49,7 +50,7 @@ var _ = Describe(
 			It("Validate update PDB", func() {
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-				validatePDB(ctx, aeroCluster, defaultMaxUpavailable.IntValue())
+				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
@@ -79,7 +80,7 @@ var _ = Describe(
 				By("Create cluster with PDB enabled")
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-				validatePDB(ctx, aeroCluster, 1)
+				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				By("Update disablePDB to true")
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -102,7 +103,34 @@ var _ = Describe(
 				aeroCluster.Spec.DisablePDB = ptr.To(false)
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-				validatePDB(ctx, aeroCluster, 1)
+				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+			})
+
+			It("Validate that non-operator created PDB is not created", func() {
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+				Expect(err).ToNot(HaveOccurred())
+
+				// Create cluster should fail as PDB is not created by operator
+				err = deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+
+				err = deletePDB(ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Create cluster should pass as PDB is deleted
+				err = deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+			})
+
+			It("Validate that cluster is deployed with disabledPDB even if non-operator created PDB is present", func() {
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+				Expect(err).ToNot(HaveOccurred())
+
+				// Create cluster with disabledPDB
+				aeroCluster.Spec.DisablePDB = ptr.To(true)
+				err = deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -124,6 +152,7 @@ var _ = Describe(
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
 			})
+
 			It("Should fail if maxUnavailable is given but disablePDB is true", func() {
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
 				value := intstr.FromInt(1)
@@ -158,4 +187,29 @@ func getPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) (*policyv
 	}, pdb)
 
 	return pdb, err
+}
+
+func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUnavailable int) error {
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aerocluster.Name,
+			Namespace: aerocluster.Namespace,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: int32(maxUnavailable)},
+		},
+	}
+
+	return k8sClient.Create(ctx, pdb)
+}
+
+func deletePDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) error {
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      aerocluster.Name,
+			Namespace: aerocluster.Namespace,
+		},
+	}
+
+	return k8sClient.Delete(ctx, pdb)
 }
