@@ -50,7 +50,10 @@ func (r *SingleClusterReconciler) deletePDB() error {
 	}
 
 	if !isPDBCreatedByOperator(pdb) {
-		r.Log.Info("PodDisruptionBudget is not created/owned by operator. Skipping delete")
+		r.Log.Info(
+			"PodDisruptionBudget is not created/owned by operator. Skipping delete",
+			"name", getPDBNamespacedName(r.aeroCluster),
+		)
 		return nil
 	}
 
@@ -92,7 +95,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			return err
 		}
 
-		r.Log.Info("Create PodDisruptionBudget")
+		r.Log.Info("Create PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
 
 		pdb.SetName(r.aeroCluster.Name)
 		pdb.SetNamespace(r.aeroCluster.Namespace)
@@ -119,26 +122,28 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			)
 		}
 
-		r.Log.Info("Created new PodDisruptionBudget", "name",
-			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name))
+		r.Log.Info("Created new PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
 
 		return nil
 	}
 
 	r.Log.Info(
-		"PodDisruptionBudget already exist. Updating existing PodDisruptionBudget if required", "name",
-		utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name),
+		"PodDisruptionBudget already exist. Updating existing PodDisruptionBudget if required",
+		"name", getPDBNamespacedName(r.aeroCluster),
 	)
 
 	// This will ensure that cluster is not deployed with PDB created by user
 	// cluster deploy call itself will fail.
 	// If PDB is not created by operator then no need to even match the spec
 	if !isPDBCreatedByOperator(pdb) {
-		r.Log.Info("PodDisruptionBudget is not created/owned by operator. Skipping update")
+		r.Log.Info(
+			"PodDisruptionBudget is not created/owned by operator. Skipping update",
+			"name", getPDBNamespacedName(r.aeroCluster),
+		)
 
 		return fmt.Errorf(
-			"failed to update PodDisruptionBudget: %v",
-			fmt.Errorf("PodDisruptionBudget is not created/owned by operator"),
+			"failed to update PodDisruptionBudget, PodDisruptionBudget is not "+
+				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster),
 		)
 	}
 
@@ -154,8 +159,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			)
 		}
 
-		r.Log.Info("Updated PodDisruptionBudget", "name",
-			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name))
+		r.Log.Info("Updated PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
 	}
 
 	return nil
@@ -168,4 +172,8 @@ func isPDBCreatedByOperator(pdb *v1.PodDisruptionBudget) bool {
 	}
 
 	return false
+}
+
+func getPDBNamespacedName(aeroCluster *asdbv1.AerospikeCluster) types.NamespacedName {
+	return types.NamespacedName{Name: aeroCluster.Name, Namespace: aeroCluster.Namespace}
 }

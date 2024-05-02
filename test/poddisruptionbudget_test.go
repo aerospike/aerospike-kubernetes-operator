@@ -31,6 +31,7 @@ var _ = Describe(
 
 		AfterEach(func() {
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+			Expect(deletePDB(ctx, aeroCluster)).NotTo(HaveOccurred())
 		})
 
 		Context("Valid Operations", func() {
@@ -107,19 +108,27 @@ var _ = Describe(
 			})
 
 			It("Validate that non-operator created PDB is not created", func() {
+				By("Create PDB")
 				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
 
+				By("Create cluster. It should fail as PDB is already created")
 				// Create cluster should fail as PDB is not created by operator
 				err = deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
 
+				By("Delete PDB")
 				err = deletePDB(ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
+				By("Wait for cluster to be created. It should pass as PDB is deleted")
 				// Create cluster should pass as PDB is deleted
-				err = deployCluster(k8sClient, ctx, aeroCluster)
+				err = waitForAerospikeCluster(
+					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+					getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+				)
 				Expect(err).ToNot(HaveOccurred())
+
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 			})
 
@@ -211,5 +220,10 @@ func deletePDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) error 
 		},
 	}
 
-	return k8sClient.Delete(ctx, pdb)
+	err := k8sClient.Delete(ctx, pdb)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
