@@ -54,6 +54,7 @@ func (r *SingleClusterReconciler) deletePDB() error {
 			"PodDisruptionBudget is not created/owned by operator. Skipping delete",
 			"name", getPDBNamespacedName(r.aeroCluster),
 		)
+
 		return nil
 	}
 
