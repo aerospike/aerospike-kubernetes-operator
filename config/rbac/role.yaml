@@ -117,6 +117,7 @@ rules:
   - poddisruptionbudgets
   verbs:
   - create
+  - delete
   - get
   - patch
   - update

@@ -2222,8 +2222,17 @@ func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error
 
 func (c *AerospikeCluster) validateMaxUnavailable() error {
 	// safe check for corner cases when mutation webhook somehow didn't work
-	if c.Spec.MaxUnavailable == nil {
-		return fmt.Errorf("maxUnavailable cannot be nil. Mutation webhook didn't work")
+	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
+		return fmt.Errorf("maxUnavailable cannot be nil if PDB is not disabled. Mutation webhook didn't work")
+	}
+
+	if GetBool(c.Spec.DisablePDB) {
+		if c.Spec.MaxUnavailable != nil {
+			return fmt.Errorf("maxUnavailable must be nil if PDB is disabled")
+		}
+
+		// PDB is disabled, so no need to validate further
+		return nil
 	}
 
 	if err := validateIntOrStringField(c.Spec.MaxUnavailable, "spec.maxUnavailable"); err != nil {

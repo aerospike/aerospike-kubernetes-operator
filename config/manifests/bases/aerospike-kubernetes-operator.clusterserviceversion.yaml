@@ -47,6 +47,9 @@ spec:
           the Aerospike cluster.
         displayName: Aerospike Network Policy
         path: aerospikeNetworkPolicy
+      - description: Disable the PodDisruptionBudget creation for the Aerospike cluster.
+        displayName: Disable PodDisruptionBudget
+        path: disablePDB
       - description: EnableDynamicConfigUpdate enables dynamic config update flow
           of the operator. If enabled, operator will try to update the Aerospike config
           dynamically. In case of inconsistent state during dynamic config update,

@@ -65,6 +65,7 @@ const (
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
 	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.0-dev3"
 	AerospikeAppLabel                              = "app"
+	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"

@@ -68,14 +68,17 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// Aerospike cluster size
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
 	Size int32 `json:"size"`
+	// Aerospike server image
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
+	Image string `json:"image"`
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
 	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
 	// Refer Aerospike documentation for more details.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Max Unavailable"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
-	// Aerospike server image
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
-	Image string `json:"image"`
+	// Disable the PodDisruptionBudget creation for the Aerospike cluster.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Disable PodDisruptionBudget"
+	DisablePDB *bool `json:"disablePDB,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
@@ -637,6 +640,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
 	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+	// Disable the PodDisruptionBudget creation for the Aerospike cluster.
+	DisablePDB *bool `json:"disablePDB,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -1000,11 +1005,13 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	}
 
 	if spec.EnableDynamicConfigUpdate != nil {
-		enableDynamicConfigUpdate := lib.DeepCopy(
-			spec.EnableDynamicConfigUpdate,
-		).(*bool)
+		enableDynamicConfigUpdate := *spec.EnableDynamicConfigUpdate
+		status.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
 
-		status.EnableDynamicConfigUpdate = enableDynamicConfigUpdate
+	if spec.DisablePDB != nil {
+		disablePDB := *spec.DisablePDB
+		status.DisablePDB = &disablePDB
 	}
 
 	// Storage
@@ -1097,11 +1104,13 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	}
 
 	if status.EnableDynamicConfigUpdate != nil {
-		enableDynamicConfigUpdate := lib.DeepCopy(
-			status.EnableDynamicConfigUpdate,
-		).(*bool)
+		enableDynamicConfigUpdate := *status.EnableDynamicConfigUpdate
+		spec.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
 
-		spec.EnableDynamicConfigUpdate = enableDynamicConfigUpdate
+	if status.DisablePDB != nil {
+		disablePDB := *status.DisablePDB
+		spec.DisablePDB = &disablePDB
 	}
 
 	// Storage

@@ -138,11 +138,11 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return res.result, recErr
 	}
 
-	if err := r.createOrUpdatePDB(); err != nil {
-		r.Log.Error(err, "Failed to create PodDisruptionBudget")
+	if err := r.reconcilePDB(); err != nil {
+		r.Log.Error(err, "Failed to reconcile PodDisruptionBudget")
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetCreateFailed",
-			"Failed to create PodDisruptionBudget %s/%s",
+			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
+			"Failed to reconcile PodDisruptionBudget %s/%s",
 			r.aeroCluster.Namespace, r.aeroCluster.Name,
 		)
 
