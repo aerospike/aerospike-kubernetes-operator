@@ -978,7 +978,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
 		if err = r.validateSCClusterState(policy, ignorablePodNames); err != nil {
 			// reset cluster size
-			newSize := *found.Spec.Replicas + 1
+			newSize := *found.Spec.Replicas + int32(len(podsBatch))
 			found.Spec.Replicas = &newSize
 
 			r.Log.Error(
@@ -995,6 +995,10 @@ func (r *SingleClusterReconciler) scaleDownRack(
 						newSize, err,
 					),
 				)
+			}
+
+			if err = r.waitForSTSToBeReady(found, ignorablePodNames); err != nil {
+				r.Log.Error(err, "Failed to wait for statefulset to be ready")
 			}
 
 			return found, reconcileRequeueAfter(1)

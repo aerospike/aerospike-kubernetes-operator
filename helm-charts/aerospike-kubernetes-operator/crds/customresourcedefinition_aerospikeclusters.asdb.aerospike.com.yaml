@@ -14318,7 +14318,6 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
-                  - isSecurityEnabled
                   - networkPolicyHash
                   - podIP
                   - podPort

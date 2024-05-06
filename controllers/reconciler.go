@@ -123,6 +123,10 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
+	if err := r.handleEnableDynamicConfig(); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Reconcile all racks
 	if res := r.reconcileRacks(); !res.isSuccess {
 		if res.err != nil {
@@ -1038,6 +1042,33 @@ func (r *SingleClusterReconciler) handleEnableSecurity() error {
 		)
 
 		return err
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) handleEnableDynamicConfig() error {
+	if r.IsStatusEmpty() {
+		// We have invalid status.
+		return nil
+	}
+
+	if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) &&
+		!asdbv1.GetBool(r.aeroCluster.Status.EnableDynamicConfigUpdate) {
+		// Populate Pod's annotation with aerospike config, if empty
+		pods, err := r.getClusterPodList()
+		if err != nil {
+			return err
+		}
+
+		for idx := range pods.Items {
+			pod := &pods.Items[idx]
+			if pod.Annotations == nil {
+				if err := r.updateAerospikeConfInPod(pod.Name); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil

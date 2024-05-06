@@ -16,7 +16,7 @@ import (
 
 func (r *SingleClusterReconciler) reconcilePDB() error {
 	// If spec.DisablePDB is set to true, then we don't need to create PDB
-	// If it exist then delete it
+	// If it exists then delete it
 	if asdbv1.GetBool(r.aeroCluster.Spec.DisablePDB) {
 		if !asdbv1.GetBool(r.aeroCluster.Status.DisablePDB) {
 			r.Log.Info("PodDisruptionBudget is disabled. Deleting old PodDisruptionBudget")

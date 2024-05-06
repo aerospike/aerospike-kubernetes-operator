@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -104,7 +103,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	}
 
 	// MultiPodPerHost cannot be updated
-	if !ptr.Equal(c.Spec.PodSpec.MultiPodPerHost, old.Spec.PodSpec.MultiPodPerHost) {
+	if GetBool(c.Spec.PodSpec.MultiPodPerHost) != GetBool(old.Spec.PodSpec.MultiPodPerHost) {
 		return nil, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
@@ -602,14 +601,12 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	// Validate batch upgrade/restart param
-	if err := c.validateBatchSize(c.Spec.RackConfig.RollingUpdateBatchSize,
-		"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
+	if err := c.validateBatchSize(c.Spec.RackConfig.RollingUpdateBatchSize, true); err != nil {
 		return err
 	}
 
 	// Validate batch scaleDown param
-	if err := c.validateBatchSize(c.Spec.RackConfig.ScaleDownBatchSize,
-		"spec.rackConfig.scaleDownBatchSize"); err != nil {
+	if err := c.validateBatchSize(c.Spec.RackConfig.ScaleDownBatchSize, false); err != nil {
 		return err
 	}
 
@@ -627,6 +624,7 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 type nsConf struct {
 	noOfRacksForNamespaces int
 	replicationFactor      int
+	scEnabled              bool
 }
 
 func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
@@ -647,9 +645,13 @@ func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 			}
 
 			rf, _ := getNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+
+			ns := nsInterface.(map[string]interface{})
+			scEnabled := IsNSSCEnabled(ns)
 			nsConfs[nsName] = nsConf{
 				noOfRacksForNamespaces: noOfRacksForNamespaces,
 				replicationFactor:      rf,
+				scEnabled:              scEnabled,
 			}
 		}
 	}
@@ -1249,8 +1251,24 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 }
 
 func validateSecurityConfigUpdate(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, podStatus map[string]AerospikePodStatus,
-) error {
+	newVersion, oldVersion string, newSpec, oldSpec, currentStatus *AerospikeConfigSpec,
+	podStatus map[string]AerospikePodStatus) error {
+	if currentStatus != nil {
+		currentSecurityConfig, err := IsSecurityEnabled(oldVersion, currentStatus)
+		if err != nil {
+			return err
+		}
+
+		desiredSecurityConfig, err := IsSecurityEnabled(newVersion, newSpec)
+		if err != nil {
+			return err
+		}
+
+		if currentSecurityConfig && !desiredSecurityConfig {
+			return fmt.Errorf("cannot disable security in running cluster")
+		}
+	}
+
 	nv, err := lib.CompareVersions(newVersion, "5.7.0")
 	if err != nil {
 		return err
@@ -1261,23 +1279,15 @@ func validateSecurityConfigUpdate(
 		return err
 	}
 
-	isSecurityEnabledPodExist := false
-
-	for pod := range podStatus {
-		if podStatus[pod].IsSecurityEnabled {
-			isSecurityEnabledPodExist = true
-			break
-		}
-	}
-
 	if nv >= 0 || ov >= 0 {
-		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec, isSecurityEnabledPodExist)
+		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec, podStatus)
 	}
 
-	return validateEnableSecurityConfig(newSpec, oldSpec, isSecurityEnabledPodExist)
+	return validateEnableSecurityConfig(newSpec, oldSpec, podStatus)
 }
 
-func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec, isSecurityEnabledPodExist bool) error {
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
+	podStatus map[string]AerospikePodStatus) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 	oldSec, oldSecConfFound := oldConf["security"]
@@ -1291,9 +1301,15 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
-		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) &&
-			isSecurityEnabledPodExist {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
+		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
+			isSecurityEnabledPodExist, err := isSecurityEnabledPodExist(podStatus)
+			if err != nil {
+				return fmt.Errorf("cannot disable cluster security in running cluster, %s", err.Error())
+			}
+
+			if isSecurityEnabledPodExist {
+				return fmt.Errorf("cannot disable cluster security in running cluster")
+			}
 		}
 	}
 
@@ -1301,7 +1317,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 }
 
 func validateSecurityContext(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, isSecurityEnabledPodExist bool,
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, podStatus map[string]AerospikePodStatus,
 ) error {
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
@@ -1322,11 +1338,32 @@ func validateSecurityContext(
 		}
 	}
 
-	if !ivflag && ovflag && isSecurityEnabledPodExist {
-		return fmt.Errorf("cannot disable cluster security in running cluster")
+	if !ivflag && ovflag {
+		isSecurityEnabledPodExist, err := isSecurityEnabledPodExist(podStatus)
+		if err != nil {
+			return fmt.Errorf("cannot disable cluster security in running cluster, %s", err.Error())
+		}
+
+		if isSecurityEnabledPodExist {
+			return fmt.Errorf("cannot disable cluster security in running cluster")
+		}
 	}
 
 	return nil
+}
+
+func isSecurityEnabledPodExist(podStatus map[string]AerospikePodStatus) (bool, error) {
+	if podStatus == nil {
+		return false, fmt.Errorf("podStatus is nil")
+	}
+
+	for pod := range podStatus {
+		if podStatus[pod].IsSecurityEnabled {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func validateAerospikeConfigUpdate(
@@ -1338,7 +1375,7 @@ func validateAerospikeConfigUpdate(
 
 	if err := validateSecurityConfigUpdate(
 		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
-		podStatus,
+		currentStatus, podStatus,
 	); err != nil {
 		return err
 	}
@@ -2145,9 +2182,17 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	return nil
 }
 
-func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, fieldPath string) error {
+func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool) error {
+	var fieldPath string
+
 	if batchSize == nil {
 		return nil
+	}
+
+	if rollingUpdateBatch {
+		fieldPath = "spec.rackConfig.rollingUpdateBatchSize"
+	} else {
+		fieldPath = "spec.rackConfig.scaleDownBatchSize"
 	}
 
 	if err := validateIntOrStringField(batchSize, fieldPath); err != nil {
@@ -2176,6 +2221,13 @@ func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, fiel
 			if nsConf.replicationFactor <= 1 {
 				return fmt.Errorf(
 					"can not use %s when namespace `%s` is configured with replication-factor 1", fieldPath,
+					ns,
+				)
+			}
+
+			if !rollingUpdateBatch && nsConf.scEnabled {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured with Strong Consistency", fieldPath,
 					ns,
 				)
 			}

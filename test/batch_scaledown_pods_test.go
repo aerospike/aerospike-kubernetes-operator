@@ -28,7 +28,7 @@ var _ = Describe("BatchScaleDown", func() {
 
 		BeforeEach(
 			func() {
-				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 8)
+				aeroCluster = createNonSCDummyAerospikeCluster(clusterNamespacedName, 8)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -88,6 +88,34 @@ var _ = Describe("BatchScaleDown", func() {
 
 	// TODO: Do we need to add all the invalid operation test-cases here?
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
+	Context("When doing invalid operations", func() {
+		clusterNamespacedName := getNamespacedName(
+			batchScaleDownClusterName, namespace,
+		)
+		aeroCluster := &asdbv1.AerospikeCluster{}
+
+		BeforeEach(
+			func() {
+				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 8)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				err := deployCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+			},
+		)
+
+		AfterEach(
+			func() {
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			},
+		)
+
+		It("Should fail batch scale-down if SC namespace is present", func() {
+			err := batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, count(3), 2)
+			Expect(err).Should(HaveOccurred())
+		})
+	})
 })
 
 func batchScaleDownTest(
