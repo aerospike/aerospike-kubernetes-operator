@@ -411,6 +411,8 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 								err,
 							)
 						}
+					} else {
+						delete(nsMap, "rack-id")
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
