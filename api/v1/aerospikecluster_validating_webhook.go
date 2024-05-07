@@ -1265,7 +1265,7 @@ func validateSecurityConfigUpdate(
 		}
 
 		if currentSecurityConfig && !desiredSecurityConfig {
-			return fmt.Errorf("cannot disable security in running cluster")
+			return fmt.Errorf("cannot disable cluster security in running cluster")
 		}
 	}
 

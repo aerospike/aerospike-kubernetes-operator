@@ -1063,7 +1063,7 @@ func (r *SingleClusterReconciler) handleEnableDynamicConfig() error {
 
 		for idx := range pods.Items {
 			pod := &pods.Items[idx]
-			if pod.Annotations == nil {
+			if _, ok := pod.Annotations["aerospikeConf"]; !ok {
 				if err := r.updateAerospikeConfInPod(pod.Name); err != nil {
 					return err
 				}
