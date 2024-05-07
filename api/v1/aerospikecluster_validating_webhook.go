@@ -1341,7 +1341,7 @@ func validateSecurityContext(
 	if !ivflag && ovflag {
 		isSecurityEnabledPodExist, err := isSecurityEnabledPodExist(podStatus)
 		if err != nil {
-			return fmt.Errorf("cannot disable cluster security in running cluster, %s", err.Error())
+			return fmt.Errorf("cannot disable cluster security, %s", err.Error())
 		}
 
 		if isSecurityEnabledPodExist {
@@ -1353,8 +1353,8 @@ func validateSecurityContext(
 }
 
 func isSecurityEnabledPodExist(podStatus map[string]AerospikePodStatus) (bool, error) {
-	if podStatus == nil {
-		return false, fmt.Errorf("podStatus is nil")
+	if len(podStatus) == 0 {
+		return false, fmt.Errorf("pod status is unknown")
 	}
 
 	for pod := range podStatus {

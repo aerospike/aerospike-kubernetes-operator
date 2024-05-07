@@ -144,6 +144,10 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 		string(podSpecStr), "\"aerospikeInitContainer\":{},", "",
 	))
 
+	podSpecStr = []byte(strings.ReplaceAll(
+		string(podSpecStr), "\"multiPodPerHost\":false,", "",
+	))
+
 	podSpecHash, err := utils.GetHash(string(podSpecStr))
 	if err != nil {
 		return nil, err
