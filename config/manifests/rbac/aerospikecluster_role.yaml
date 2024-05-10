@@ -19,11 +19,3 @@ rules:
     - '*'
   verbs:
     - '*'
-- apiGroups:
-    - ""
-  resources:
-    - pods
-  verbs:
-    - get
-    - list
-    - update

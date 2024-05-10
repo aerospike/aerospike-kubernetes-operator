@@ -28,6 +28,11 @@ import (
 // RestartType is the type of pod restart to use.
 type RestartType int
 
+type DynamicConfigMetadata struct {
+	dynamicConfDiff asconfig.DynamicConfigMap
+	finalConf       string
+}
+
 const (
 	// noRestart needed.
 	noRestart RestartType = iota
@@ -62,11 +67,11 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 
 // Fetching RestartType of all pods, based on the operation being performed.
 func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
-	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error) {
+	restartTypeMap map[string]RestartType, dynamicConfMetadataPerPod map[string]DynamicConfigMetadata, err error) {
 	var addedNSDevices []string
 
 	restartTypeMap = make(map[string]RestartType)
-	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
+	dynamicConfMetadataPerPod = make(map[string]DynamicConfigMetadata)
 
 	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -125,7 +130,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) &&
 					podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed {
 					// Fetching all dynamic config change.
-					dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
+					dynamicConfMetadataPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
 					if err != nil {
 						return nil, nil, err
 					}
@@ -136,7 +141,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 
 		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
-			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0)
+			len(dynamicConfMetadataPerPod[pods[idx].Name].dynamicConfDiff) > 0)
 
 		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
@@ -144,7 +149,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 	}
 
-	return restartTypeMap, dynamicConfDiffPerPod, nil
+	return restartTypeMap, dynamicConfMetadataPerPod, nil
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
@@ -254,37 +259,18 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
-	operation RestartType) error {
-	rackID, err := utils.GetRackIDFromPodName(podName)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get rackID for the pod %s", podName,
-		)
-	}
-
+func (r *SingleClusterReconciler) restartASDInPod(
+	rackState *RackState, pod *corev1.Pod,
+) error {
 	podNamespacedName := types.NamespacedName{
-		Name:      podName,
+		Name:      pod.Name,
 		Namespace: r.aeroCluster.Namespace,
 	}
-
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, *rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 	initBinary := "/etc/aerospike/akoinit"
-
-	var subCommand string
-
-	switch operation {
-	case noRestart, podRestart:
-		return fmt.Errorf("invalid operation for akoinit")
-	case quickRestart:
-		subCommand = "quick-restart"
-	case noRestartUpdateConf:
-		subCommand = "update-conf"
-	}
-
 	cmd := []string{
 		initBinary,
-		subCommand,
+		"quick-restart",
 		"--cm-name",
 		cmName.Name,
 		"--cm-namespace",
@@ -315,7 +301,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 			if err != nil {
 				r.Log.V(1).Info(
-					"Failed warm restart", "err", err, "podName", podNamespacedName.Name, "stdout",
+					"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
 					stdout, "stderr", stderr,
 				)
 
@@ -323,7 +309,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 			}
 		} else {
 			r.Log.V(1).Info(
-				"Failed to perform", "operation", subCommand, "err", err, "podName", podNamespacedName.Name, "stdout",
+				"Failed warm restart", "err", err, "podName", pod.Name, "stdout",
 				stdout, "stderr", stderr,
 			)
 
@@ -331,19 +317,11 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		}
 	}
 
-	if subCommand == "quick-restart" {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-			"[rack-%d] Restarted Pod %s", *rackID, podNamespacedName.Name,
-		)
-		r.Log.V(1).Info("Pod warm restarted", "podName", podNamespacedName.Name)
-	} else {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
-			"[rack-%d] Updated Pod %s", *rackID, podNamespacedName.Name,
-		)
-		r.Log.V(1).Info("Pod conf updated", "podName", podNamespacedName.Name)
-	}
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
+		"[rack-%d] Restarted Pod %s", rackState.Rack.ID, pod.Name,
+	)
+	r.Log.V(1).Info("Pod warm restarted", "podName", pod.Name)
 
 	return nil
 }
@@ -357,6 +335,11 @@ func (r *SingleClusterReconciler) restartPods(
 		return reconcileError(err)
 	}
 
+	// For each pod restart, we need to reset the dynamic command failure flag if any from each pod status.
+	if err := r.resetDynamicFailureStatus(podsToRestart); err != nil {
+		return reconcileError(err)
+	}
+
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
@@ -367,7 +350,7 @@ func (r *SingleClusterReconciler) restartPods(
 
 		if restartType == quickRestart {
 			// If ASD restart fails, then go ahead and restart the pod
-			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err == nil {
+			if err := r.restartASDInPod(rackState, pod); err == nil {
 				continue
 			}
 		}
@@ -398,11 +381,37 @@ func (r *SingleClusterReconciler) restartPods(
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName string) error {
+func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName, finalConf string) error {
 	r.Log.Info("Updating aerospike config file in pod", "pod", podName)
 
-	if err := r.restartASDOrUpdateAerospikeConf(podName, noRestartUpdateConf); err != nil {
+	err := r.setAerospikeConfFile(podName, finalConf)
+	if err != nil {
 		return err
+	}
+
+	rackID, err := utils.GetRackIDFromPodName(podName)
+	if err != nil {
+		return err
+	}
+
+	confMap, err := r.getConfigMap(*rackID)
+	if err != nil {
+		return err
+	}
+
+	var patches []jsonpatch.PatchOperation
+
+	patch := jsonpatch.PatchOperation{
+		Operation: "replace",
+		Path:      "/status/pods/" + podName + "/aerospikeConfigHash",
+		Value:     confMap.Data[aerospikeConfHashFileName],
+	}
+	patches = append(patches, patch)
+
+	if patchErr := r.patchPodStatus(
+		context.TODO(), patches,
+	); patchErr != nil {
+		return fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err)
 	}
 
 	r.Log.V(1).Info("Updated aerospike config file in pod", "podName", podName)
@@ -1343,45 +1352,80 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 }
 
 func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState, pod *corev1.Pod, version string) (
-	asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation := pod.Annotations["aerospikeConf"]
+	DynamicConfigMetadata, error) {
+	dynamicConfigMetadata := DynamicConfigMetadata{}
 
-	asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
+	statusFromConfFile, err := r.getAerospikeConfFile(pod.Name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		r.Log.Info("Failed to get config file from server, fallback to rolling restart", "error", err.Error())
+		return dynamicConfigMetadata, nil
+	}
+
+	asConfStatus, err := getFlatConfig(r.Log, statusFromConfFile)
+	if err != nil {
+		return dynamicConfigMetadata, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
 	asConf, err := asconfig.NewMapAsConfig(r.Log, rackState.Rack.AerospikeConfig.Value)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return dynamicConfigMetadata, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	asConfSpec, err := getFlatConfig(r.Log, asConf.ToConfFile())
+	specConfFile := asConf.ToConfFile()
+
+	// special handling for DNE in ldap configurations
+	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{un}", "${un}")
+	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{dn}", "${dn}")
+
+	asConfSpec, err := getFlatConfig(r.Log, specConfFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return dynamicConfigMetadata, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
 		true, version)
 	if err != nil {
-		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart: %v", err)
-		return nil, nil
+		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
+			"error", err.Error())
+		return dynamicConfigMetadata, nil
 	}
 
-	if len(specToStatusDiffs) > 0 {
-		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
+	diffWithoutIndex := make(asconfig.DynamicConfigMap)
+
+	for k, v := range specToStatusDiffs {
+		if asconfig.BaseKey(k) != "<index>" {
+			diffWithoutIndex[k] = v
+		}
+	}
+
+	if len(diffWithoutIndex) > 0 {
+		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, diffWithoutIndex, version)
 		if err != nil {
-			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart: %v", err)
-			return nil, nil
+			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())
+			return dynamicConfigMetadata, nil
 		}
 
 		if !isDynamic {
 			r.Log.Info("Static field has been modified, cannot change config dynamically")
-			return nil, nil
+			return dynamicConfigMetadata, nil
 		}
 	}
 
-	return specToStatusDiffs, nil
+	finalConf := *asConfStatus
+	spec := *asConfSpec
+
+	for k := range specToStatusDiffs {
+		if _, ok := spec[k]; ok {
+			finalConf[k] = spec[k]
+		} else {
+			delete(finalConf, k)
+		}
+	}
+
+	dynamicConfigMetadata.dynamicConfDiff = diffWithoutIndex
+	dynamicConfigMetadata.finalConf = asconfig.New(r.Log, &finalConf).ToConfFile()
+
+	return dynamicConfigMetadata, nil
 }
 
 // mapping functions get mapped to each key value pair in a management lib Stats map
@@ -1459,4 +1503,79 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		r.Log.Info("Pod status patched successfully")
 		return nil
 	})
+}
+
+func (r *SingleClusterReconciler) getAerospikeConfFile(podName string) (string, error) {
+	fileName := "/etc/aerospike/aerospike.conf"
+	cmd := []string{
+		"bash", "-c", fmt.Sprintf(
+			"cat %s",
+			fileName,
+		),
+	}
+
+	podNamespacedName := types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}
+
+	stdout, stderr, err := utils.Exec(podNamespacedName, asdbv1.AerospikeServerContainerName,
+		cmd, r.KubeClient, r.KubeConfig)
+
+	if err != nil {
+		r.Log.V(1).Info(
+			"Failed to fetch aerospike.conf file from server", "err", err, "podName", podName, "stdout",
+			stdout, "stderr", stderr,
+		)
+
+		return "", fmt.Errorf("error fetching file %v", err)
+	}
+
+	return stdout, nil
+}
+
+func (r *SingleClusterReconciler) setAerospikeConfFile(podName, finalConf string) error {
+	fileName := "/etc/aerospike/aerospike.conf"
+	cmd := []string{
+		"bash", "-c", fmt.Sprintf(
+			"echo '%s' > %s",
+			finalConf, fileName,
+		),
+	}
+
+	podNamespacedName := types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}
+
+	stdout, stderr, err := utils.Exec(podNamespacedName, asdbv1.AerospikeServerContainerName,
+		cmd, r.KubeClient, r.KubeConfig)
+
+	if err != nil {
+		r.Log.V(1).Info(
+			"Failed to write aerospike.conf file in server", "err", err, "podName", podName, "stdout",
+			stdout, "stderr", stderr,
+		)
+
+		return fmt.Errorf("error fetching file %v", err)
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) resetDynamicFailureStatus(podsToRestart []*corev1.Pod) error {
+	var patches []jsonpatch.PatchOperation
+
+	for _, pod := range podsToRestart {
+		if r.aeroCluster.Status.Pods[pod.Name].DynamicConfigUpdateStatus != asdbv1.Empty {
+			patch1 := jsonpatch.PatchOperation{
+				Operation: "replace",
+				Path:      "/status/pods/" + pod.Name + "/dynamicConfigUpdateStatus",
+				Value:     asdbv1.Empty,
+			}
+			patches = append(patches, patch1)
+		}
+	}
+
+	if len(patches) > 0 {
+		if err := r.patchPodStatus(context.TODO(), patches); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

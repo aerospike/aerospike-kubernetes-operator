@@ -301,7 +301,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 }
 
 func (r *SingleClusterReconciler) setDynamicConfig(
-	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	dynamicConfMetadataPerPod map[string]DynamicConfigMetadata, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) reconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
@@ -338,7 +338,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 	for _, host := range selectedHostConns {
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
-		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
+		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfMetadataPerPod[podName].dynamicConfDiff,
 			host.ASConn, r.getClientPolicy())
 
 		if err != nil {
@@ -375,7 +375,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			return reconcileError(err)
 		}
 
-		if err := r.updateAerospikeConfInPod(podName); err != nil {
+		if err := r.updateAerospikeConfInPod(podName, dynamicConfMetadataPerPod[podName].finalConf); err != nil {
 			return reconcileError(err)
 		}
 	}

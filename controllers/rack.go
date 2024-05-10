@@ -18,7 +18,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 type scaledDownRack struct {
@@ -427,7 +426,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 		if len(failedPods) == 0 && rollingRestartInfo.needUpdateConf {
 			res = r.updateDynamicConfig(rackState, ignorablePodNames,
-				rollingRestartInfo.restartTypeMap, rollingRestartInfo.dynamicConfDiffPerPod)
+				rollingRestartInfo.restartTypeMap, rollingRestartInfo.dynamicConfMetadataPerPod)
 			if !res.isSuccess {
 				if res.err != nil {
 					r.Log.Error(
@@ -467,7 +466,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(found *appsv1.Stat
 
 func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap) reconcileResult {
+	dynamicConfMetadataPerPod map[string]DynamicConfigMetadata) reconcileResult {
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
@@ -501,7 +500,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(rackState *RackState,
 		podsToUpdate = append(podsToUpdate, pod)
 	}
 
-	if res := r.setDynamicConfig(dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.isSuccess {
+	if res := r.setDynamicConfig(dynamicConfMetadataPerPod, podsToUpdate, ignorablePodNames); !res.isSuccess {
 		return res
 	}
 
@@ -1244,14 +1243,14 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(statefulSet *appsv1
 
 type rollingRestartInfo struct {
 	restartTypeMap              map[string]RestartType
-	dynamicConfDiffPerPod       map[string]asconfig.DynamicConfigMap
+	dynamicConfMetadataPerPod   map[string]DynamicConfigMetadata
 	needRestart, needUpdateConf bool
 }
 
 func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ignorablePodNames sets.Set[string]) (
 	info *rollingRestartInfo, err error,
 ) {
-	restartTypeMap, dynamicConfDiffPerPod, err := r.getRollingRestartTypeMap(rackState, ignorablePodNames)
+	restartTypeMap, dynamicConfMetadataPerPod, err := r.getRollingRestartTypeMap(rackState, ignorablePodNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1270,10 +1269,10 @@ func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ig
 	}
 
 	info = &rollingRestartInfo{
-		needRestart:           needRestart,
-		needUpdateConf:        needUpdateConf,
-		restartTypeMap:        restartTypeMap,
-		dynamicConfDiffPerPod: dynamicConfDiffPerPod,
+		needRestart:               needRestart,
+		needUpdateConf:            needUpdateConf,
+		restartTypeMap:            restartTypeMap,
+		dynamicConfMetadataPerPod: dynamicConfMetadataPerPod,
 	}
 
 	return info, nil
