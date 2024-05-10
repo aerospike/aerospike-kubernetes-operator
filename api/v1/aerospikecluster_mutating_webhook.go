@@ -73,7 +73,7 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set maxUnavailable default to 1
 	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
-		maxUnavailable := intstr.FromInt(1)
+		maxUnavailable := intstr.FromInt32(1)
 		c.Spec.MaxUnavailable = &maxUnavailable
 	}
 
@@ -403,6 +403,13 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 					if rackID != nil {
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+
+						// Delete rack-id from namespace in rack specific config if set to 0
+						// This could happen in operator below 3.3.0
+						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
+							delete(nsMap, "rack-id")
+						}
+
 						if err := setDefaultsInConfigMap(
 							asLog, nsMap, defaultConfs,
 						); err != nil {
