@@ -114,7 +114,7 @@ var _ = Describe(
 
 				By("Create cluster. It should fail as PDB is already created")
 				// Create cluster should fail as PDB is not created by operator
-				err = deployCluster(k8sClient, ctx, aeroCluster)
+				err = deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)
 				Expect(err).To(HaveOccurred())
 
 				By("Delete PDB")
@@ -144,7 +144,7 @@ var _ = Describe(
 		})
 
 		Context("Invalid Operations", func() {
-			value := intstr.FromInt(3)
+			value := intstr.FromInt32(3)
 
 			It("Should fail if maxUnavailable is greater than size", func() {
 				// Cluster size is 2
@@ -156,7 +156,7 @@ var _ = Describe(
 			It("Should fail if maxUnavailable is greater than RF", func() {
 				// PDB should be < (least rf)). rf is 2 in this test
 				aeroCluster.Spec.Size = 4
-				value := intstr.FromInt(2)
+				value := intstr.FromInt32(2)
 				aeroCluster.Spec.MaxUnavailable = &value
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
@@ -164,7 +164,7 @@ var _ = Describe(
 
 			It("Should fail if maxUnavailable is given but disablePDB is true", func() {
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				value := intstr.FromInt(1)
+				value := intstr.FromInt32(1)
 				aeroCluster.Spec.MaxUnavailable = &value
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
