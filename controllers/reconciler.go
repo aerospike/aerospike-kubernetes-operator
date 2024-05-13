@@ -119,10 +119,6 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	if err := r.handleEnableSecurity(); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	if err := r.handleEnableDynamicConfig(); err != nil {
 		return reconcile.Result{}, err
 	}
@@ -986,65 +982,6 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 
 	return r.Client.Update(ctx, aeroCluster, updateOption)
-}
-
-func (r *SingleClusterReconciler) getSecurityEnabledPods() ([]corev1.Pod, error) {
-	securityEnabledPods := make([]corev1.Pod, 0, len(r.aeroCluster.Status.Pods))
-
-	for podName := range r.aeroCluster.Status.Pods {
-		if r.aeroCluster.Status.Pods[podName].IsSecurityEnabled {
-			pod := &corev1.Pod{}
-			podName := types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace}
-
-			if err := r.Client.Get(context.TODO(), podName, pod); err != nil {
-				return securityEnabledPods, err
-			}
-
-			securityEnabledPods = append(securityEnabledPods, *pod)
-		}
-	}
-
-	return securityEnabledPods, nil
-}
-
-func (r *SingleClusterReconciler) enablingSecurity() bool {
-	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
-}
-
-func (r *SingleClusterReconciler) handleEnableSecurity() error {
-	if !r.enablingSecurity() {
-		return nil // No need to proceed if security is not to be enabling
-	}
-
-	securityEnabledPods, err := r.getSecurityEnabledPods()
-	if err != nil {
-		return err
-	}
-
-	if len(securityEnabledPods) == 0 {
-		return nil // No security-enabled pods found
-	}
-
-	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
-	if err != nil {
-		r.Log.Error(err, "Failed to determine pods to be ignored")
-
-		return err
-	}
-
-	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to Reconcile access control")
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
-			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
-			r.aeroCluster.Name,
-		)
-
-		return err
-	}
-
-	return nil
 }
 
 func (r *SingleClusterReconciler) handleEnableDynamicConfig() error {

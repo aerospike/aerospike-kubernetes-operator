@@ -117,7 +117,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
-		c.Status.AerospikeConfig, c.Status.Pods,
+		c.Status.AerospikeConfig,
 	); err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
-						rackStatusConfig, c.Status.Pods,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -947,7 +947,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 		return result, err
 	}
 
-	if len(cert.Subject.CommonName) > 0 {
+	if cert.Subject.CommonName != "" {
 		result[cert.Subject.CommonName] = struct{}{}
 	}
 
@@ -1251,8 +1251,7 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 }
 
 func validateSecurityConfigUpdate(
-	newVersion, oldVersion string, newSpec, oldSpec, currentStatus *AerospikeConfigSpec,
-	podStatus map[string]AerospikePodStatus) error {
+	newVersion, oldVersion string, newSpec, oldSpec, currentStatus *AerospikeConfigSpec) error {
 	if currentStatus != nil {
 		currentSecurityConfig, err := IsSecurityEnabled(oldVersion, currentStatus)
 		if err != nil {
@@ -1280,14 +1279,13 @@ func validateSecurityConfigUpdate(
 	}
 
 	if nv >= 0 || ov >= 0 {
-		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec, podStatus)
+		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec)
 	}
 
-	return validateEnableSecurityConfig(newSpec, oldSpec, podStatus)
+	return validateEnableSecurityConfig(newSpec, oldSpec)
 }
 
-func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
-	podStatus map[string]AerospikePodStatus) error {
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 	oldSec, oldSecConfFound := oldConf["security"]
@@ -1302,14 +1300,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
 		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
-			isSecurityEnabledPodExist, err := isSecurityEnabledPodExist(podStatus)
-			if err != nil {
-				return fmt.Errorf("cannot disable cluster security in running cluster, %s", err.Error())
-			}
-
-			if isSecurityEnabledPodExist {
-				return fmt.Errorf("cannot disable cluster security in running cluster")
-			}
+			return fmt.Errorf("cannot disable cluster security in running cluster")
 		}
 	}
 
@@ -1317,8 +1308,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 }
 
 func validateSecurityContext(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, podStatus map[string]AerospikePodStatus,
-) error {
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.ErrNotFound) {
@@ -1339,44 +1329,21 @@ func validateSecurityContext(
 	}
 
 	if !ivflag && ovflag {
-		isSecurityEnabledPodExist, err := isSecurityEnabledPodExist(podStatus)
-		if err != nil {
-			return fmt.Errorf("cannot disable cluster security, %s", err.Error())
-		}
-
-		if isSecurityEnabledPodExist {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
+		return fmt.Errorf("cannot disable cluster security in running cluster")
 	}
 
 	return nil
 }
 
-func isSecurityEnabledPodExist(podStatus map[string]AerospikePodStatus) (bool, error) {
-	if len(podStatus) == 0 {
-		return false, fmt.Errorf("pod status is unknown")
-	}
-
-	for pod := range podStatus {
-		if podStatus[pod].IsSecurityEnabled {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger, incomingVersion, outgoingVersion string,
 	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
-	podStatus map[string]AerospikePodStatus,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 
 	if err := validateSecurityConfigUpdate(
 		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
-		currentStatus, podStatus,
-	); err != nil {
+		currentStatus); err != nil {
 		return err
 	}
 

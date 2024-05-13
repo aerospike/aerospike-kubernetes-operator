@@ -902,10 +902,6 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// DynamicConfigUpdateStatus is the status of dynamic config update operation.
 	// Empty "" status means successful update.
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
-
-	// IsSecurityEnabled is true if security is enabled in the pod
-	// +optional
-	IsSecurityEnabled bool `json:"isSecurityEnabled"`
 }
 
 // +kubebuilder:object:root=true
