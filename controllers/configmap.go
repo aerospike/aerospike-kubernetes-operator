@@ -107,6 +107,9 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 
 	confData[aerospikeTemplateConfFileName] = confTemp
 
+	// This field value is rectified in 3.3.0.
+	// Ignore rack-id change from hash computation so that on upgrade clusters are
+	// not rolling restarted.
 	re := regexp.MustCompile(`rack-id.*\d+`)
 	if rackStr := re.FindString(confTemp); rackStr != "" {
 		confTemp = strings.ReplaceAll(confTemp, rackStr, "rack-id    0")
