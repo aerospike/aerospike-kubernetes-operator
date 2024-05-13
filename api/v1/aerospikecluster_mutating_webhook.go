@@ -403,6 +403,13 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 					if rackID != nil {
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+
+						// Delete rack-id from namespace in rack specific config if set to 0
+						// This could happen in operator below 3.3.0
+						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
+							delete(nsMap, "rack-id")
+						}
+
 						if err := setDefaultsInConfigMap(
 							asLog, nsMap, defaultConfs,
 						); err != nil {
@@ -411,6 +418,8 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 								err,
 							)
 						}
+					} else {
+						delete(nsMap, "rack-id")
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list

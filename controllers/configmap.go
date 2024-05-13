@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -105,6 +106,11 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	}
 
 	confData[aerospikeTemplateConfFileName] = confTemp
+
+	re := regexp.MustCompile(`rack-id.*\d+`)
+	if rackStr := re.FindString(confTemp); rackStr != "" {
+		confTemp = strings.ReplaceAll(confTemp, rackStr, "rack-id    0")
+	}
 
 	// Add conf hash
 	confHash, err := utils.GetHash(confTemp)
