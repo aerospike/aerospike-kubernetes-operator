@@ -1356,7 +1356,12 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	asConfSpec, err := getFlatConfig(r.Log, asConf.ToConfFile())
+	// special handling for DNE in ldap configurations
+	specConfFile := asConf.ToConfFile()
+	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{un}", "${un}")
+	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{dn}", "${dn}")
+
+	asConfSpec, err := getFlatConfig(r.Log, specConfFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
@@ -1364,14 +1369,15 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
 		true, version)
 	if err != nil {
-		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart: %v", err)
+		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
+			"error", err.Error())
 		return nil, nil
 	}
 
 	if len(specToStatusDiffs) > 0 {
 		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
 		if err != nil {
-			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart: %v", err)
+			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())
 			return nil, nil
 		}
 

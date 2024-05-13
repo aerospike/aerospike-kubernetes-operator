@@ -144,6 +144,9 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 		string(podSpecStr), "\"aerospikeInitContainer\":{},", "",
 	))
 
+	// This field is changed from bool type to *bool type in 3.3.0
+	// Ignore false value from hash computation so that on upgrade clusters are
+	// not rolling restarted.
 	podSpecStr = []byte(strings.ReplaceAll(
 		string(podSpecStr), "\"multiPodPerHost\":false,", "",
 	))

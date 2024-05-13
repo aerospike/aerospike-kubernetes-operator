@@ -53,7 +53,7 @@ var _ = Describe("BatchScaleDown", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("Should do ScaleDownBatch when ScaleDownBatchSize is greater than the actual numbers of pods per rack"+
+		It("Should do ScaleDownBatch when ScaleDownBatchSize is greater than the actual numbers of pods per rack "+
 			"to be scaled down", func() {
 			err := batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, count(3), 4)
 			Expect(err).ToNot(HaveOccurred())
