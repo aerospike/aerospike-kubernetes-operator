@@ -81,6 +81,11 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
+	// Validate MaxUnavailable for PodDisruptionBudget
+	if err := c.validateEnableDynamicConfigUpdate(); err != nil {
+		return nil, err
+	}
+
 	outgoingVersion, err := GetImageVersion(old.Spec.Image)
 	if err != nil {
 		return nil, err
@@ -2300,4 +2305,62 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 	}
 
 	return nil
+}
+
+func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
+	if !GetBool(c.Spec.EnableDynamicConfigUpdate) {
+		return nil
+	}
+
+	if len(c.Status.Pods) == 0 {
+		return nil
+	}
+
+	minInitVersion, err := getMinRunningInitVersion(c.Status.Pods)
+	if err != nil {
+		return err
+	}
+
+	val, err := lib.CompareVersions(minInitVersion, minInitVersion4DynamicConf)
+	if err != nil {
+		return fmt.Errorf("failed to check image version: %v", err)
+	}
+
+	if val < 0 {
+		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, init container are running version less than %s",
+			minInitVersion4DynamicConf)
+	}
+
+	return nil
+}
+
+func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
+	minVersion := ""
+
+	for idx := range pods {
+		if pods[idx].InitImage != "" {
+			version, err := GetImageVersion(pods[idx].InitImage)
+			if err != nil {
+				return "", err
+			}
+
+			if minVersion == "" {
+				minVersion = version
+				continue
+			}
+
+			val, err := lib.CompareVersions(version, minVersion)
+			if err != nil {
+				return "", fmt.Errorf("failed to check image version: %v", err)
+			}
+
+			if val < 0 {
+				minVersion = version
+			}
+		} else {
+			return baseInitVersion, nil
+		}
+	}
+
+	return minVersion, nil
 }
