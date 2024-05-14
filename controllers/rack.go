@@ -1797,7 +1797,7 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
-	securityEnabledPods := make([]corev1.Pod, 0, len(r.aeroCluster.Status.Pods))
+	securityEnabledPods := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
 		podName := pods[idx].Name
