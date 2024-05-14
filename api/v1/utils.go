@@ -32,7 +32,10 @@ const (
 	InfoPortName = "info"
 )
 
-const baseVersion = "4.9.0.3"
+const (
+	baseVersion     = "4.9.0.3"
+	baseInitVersion = "2.0.0"
+)
 
 const (
 	// Namespace keys.
@@ -62,8 +65,8 @@ const (
 	AerospikeInitContainerName                     = "aerospike-init"
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
-	AerospikeInitContainerDefaultRegistryNamespace = "sud82"
-	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init-nightly:2.1.0-dev1"
+	AerospikeInitContainerDefaultRegistryNamespace = "tanmayj10"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init-nightly:2.2.0"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
