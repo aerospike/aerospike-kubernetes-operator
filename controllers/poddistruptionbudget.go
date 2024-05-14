@@ -63,24 +63,16 @@ func (r *SingleClusterReconciler) deletePDB() error {
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePDB() error {
-	podList, err := r.getClusterPodList()
-	if err != nil {
-		return err
-	}
+	if !r.IsStatusEmpty() {
+		clusterReadinessEnabled, err := r.getClusterReadinessStatus()
+		if err != nil {
+			return fmt.Errorf("failed to get cluster readiness status: %v", err)
+		}
 
-	for podIdx := range podList.Items {
-		pod := &podList.Items[podIdx]
-
-		for containerIdx := range pod.Spec.Containers {
-			if pod.Spec.Containers[containerIdx].Name != asdbv1.AerospikeServerContainerName {
-				continue
-			}
-
-			if pod.Spec.Containers[containerIdx].ReadinessProbe == nil {
-				r.Log.Info("Pod found without ReadinessProbe, skipping PodDisruptionBudget. Refer Aerospike "+
-					"documentation for more details.", "name", pod.Name)
-				return nil
-			}
+		if !clusterReadinessEnabled {
+			r.Log.Info("Pod Readiness is not enabled throughout cluster. Skipping PodDisruptionBudget." +
+				" Refer Aerospike documentation for more details.")
+			return nil
 		}
 	}
 

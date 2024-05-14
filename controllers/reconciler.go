@@ -417,6 +417,13 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
+	clusterReadinessEnable, err := r.getClusterReadinessStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get cluster readiness status: %v", err)
+	}
+
+	newAeroCluster.Status.IsClusterReadinessEnabled = clusterReadinessEnable
+
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {
 		return fmt.Errorf("error updating status: %w", err)
@@ -440,6 +447,29 @@ func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPh
 	}
 
 	return nil
+}
+
+func (r *SingleClusterReconciler) getClusterReadinessStatus() (bool, error) {
+	podList, err := r.getClusterPodList()
+	if err != nil {
+		return false, err
+	}
+
+	for podIdx := range podList.Items {
+		pod := &podList.Items[podIdx]
+
+		for containerIdx := range pod.Spec.Containers {
+			if pod.Spec.Containers[containerIdx].Name != asdbv1.AerospikeServerContainerName {
+				continue
+			}
+
+			if pod.Spec.Containers[containerIdx].ReadinessProbe == nil {
+				return false, nil
+			}
+		}
+	}
+
+	return true, nil
 }
 
 func (r *SingleClusterReconciler) updateAccessControlStatus() error {
