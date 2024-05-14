@@ -873,7 +873,8 @@ type AerospikeInstanceSummary struct { //nolint:govet // for readability
 type AerospikePodStatus struct { //nolint:govet // for readability
 	// Image is the Aerospike image this pod is running.
 	Image string `json:"image"`
-	// InitImage is the init image this pod's init container is running.
+	// InitImage is the Aerospike init image this pod's init container is running.
+	// +optional
 	InitImage string `json:"initImage,omitempty"`
 	// PodIP in the K8s network.
 	PodIP string `json:"podIP"`

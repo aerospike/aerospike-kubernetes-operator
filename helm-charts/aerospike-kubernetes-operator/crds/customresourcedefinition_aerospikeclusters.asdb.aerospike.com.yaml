@@ -14292,8 +14292,8 @@ spec:
                       description: Image is the Aerospike image this pod is running.
                       type: string
                     initImage:
-                      description: InitImage is the init image this pod's init container
-                        is running.
+                      description: InitImage is the Aerospike init image this pod's
+                        init container is running.
                       type: string
                     initializedVolumes:
                       description: InitializedVolumes is the list of volume names

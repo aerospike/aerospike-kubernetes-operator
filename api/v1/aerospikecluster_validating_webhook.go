@@ -81,7 +81,6 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	// Validate MaxUnavailable for PodDisruptionBudget
 	if err := c.validateEnableDynamicConfigUpdate(); err != nil {
 		return nil, err
 	}
@@ -2321,14 +2320,14 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 		return err
 	}
 
-	val, err := lib.CompareVersions(minInitVersion, minInitVersion4DynamicConf)
+	val, err := lib.CompareVersions(minInitVersion, minInitVersionForDynamicConf)
 	if err != nil {
 		return fmt.Errorf("failed to check image version: %v", err)
 	}
 
 	if val < 0 {
 		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, init container are running version less than %s",
-			minInitVersion4DynamicConf)
+			minInitVersionForDynamicConf)
 	}
 
 	return nil

@@ -33,9 +33,9 @@ const (
 )
 
 const (
-	baseVersion                = "4.9.0.3"
-	baseInitVersion            = "2.0.0"
-	minInitVersion4DynamicConf = "2.2.0"
+	baseVersion                  = "4.9.0.3"
+	baseInitVersion              = "1.0.0"
+	minInitVersionForDynamicConf = "2.2.0"
 )
 
 const (
