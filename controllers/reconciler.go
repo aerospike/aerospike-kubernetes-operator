@@ -417,12 +417,16 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
-	clusterReadinessEnable, err := r.getClusterReadinessStatus()
-	if err != nil {
-		return fmt.Errorf("failed to get cluster readiness status: %v", err)
-	}
+	// If IsClusterReadinessEnabled is not enabled, then only check for cluster readiness.
+	// This is to avoid checking cluster readiness for every reconcile as once it is enabled, it will not be disabled.
+	if !newAeroCluster.Status.IsClusterReadinessEnabled {
+		clusterReadinessEnable, gErr := r.getClusterReadinessStatus()
+		if gErr != nil {
+			return fmt.Errorf("failed to get cluster readiness status: %v", gErr)
+		}
 
-	newAeroCluster.Status.IsClusterReadinessEnabled = clusterReadinessEnable
+		newAeroCluster.Status.IsClusterReadinessEnabled = clusterReadinessEnable
+	}
 
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {
