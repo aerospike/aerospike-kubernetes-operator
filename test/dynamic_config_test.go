@@ -11,6 +11,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -438,6 +440,21 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+							asdbv1.VolumeSpec{
+								Name: "bar",
+								Source: asdbv1.VolumeSource{
+									PersistentVolume: &asdbv1.PersistentVolumeSpec{
+										Size:         resource.MustParse("1Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   v1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+									Path: "/test/dev/xvdf1",
+								},
+							},
+						)
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -459,6 +476,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 							getSCNamespaceConfigWithSet("test", "/test/dev/xvdf"),
+							getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"),
 						}
 
 						aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
@@ -768,7 +786,8 @@ func validateNamespaceContextDynamically(
 ) error {
 	newSpec := *flatSpec
 	ignoredConf := mapset.NewSet("rack-id", "default-ttl", "disable-write-dup-res",
-		"disallow-expunge", "conflict-resolution-policy")
+		"disallow-expunge", "conflict-resolution-policy", "compression-acceleration", "compression-level",
+		"strong-consistency-allow-expunge")
 
 	for confKey, val := range *flatServer {
 		if asconfig.ContextKey(confKey) != "namespaces" {
