@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -29,16 +30,15 @@ type podID struct {
 
 const clName = "dynamic-config-test"
 
-var clusterNamespacedName = getNamespacedName(
-	clName, namespace,
-)
-
 var configWithMaxDefaultVal = mapset.NewSet("info-max-ms", "flush-max-ms")
 
 var _ = Describe(
 	"DynamicConfig", func() {
 
 		ctx := goctx.Background()
+		var clusterNamespacedName = getNamespacedName(
+			clName, namespace,
+		)
 
 		Context(
 			"When doing valid operations", func() {
@@ -571,7 +571,8 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 
 						By("Verify XDR Context configs dynamically")
-						err = validateXDRContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
+						err = validateXDRContextDynamically(clusterNamespacedName,
+							ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster, err = getCluster(
@@ -832,7 +833,7 @@ func validateSecurityContextDynamically(
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
-func validateXDRContextDynamically(
+func validateXDRContextDynamically(clusterNamespacedName types.NamespacedName,
 	ctx goctx.Context, flatServer, flatSpec *asconfig.Conf,
 	aeroCluster *asdbv1.AerospikeCluster, dynamic mapset.Set[string],
 ) error {

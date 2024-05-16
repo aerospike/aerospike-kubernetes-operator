@@ -1331,8 +1331,6 @@ var _ = Describe(
 				Context(
 					"When cluster is not deployed", func() {
 
-						ctx := goctx.Background()
-
 						clusterName := "ac-invalid"
 						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
@@ -1626,8 +1624,6 @@ var _ = Describe(
 				)
 				Context(
 					"When cluster is deployed", func() {
-						ctx := goctx.Background()
-
 						It(
 							"SecurityEnable: should enable security in running cluster",
 							func() {
@@ -2148,6 +2144,23 @@ var _ = Describe(
 		)
 
 		Context("Using default-password-file", func() {
+			var clusterNamespacedName = getNamespacedName(
+				"default-password-file", namespace,
+			)
+
+			It("Should fail if volume is not present for default-password-file", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "randompath",
+				}
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("Should use default-password-file when configured", func() {
 				By("Creating cluster")
 
@@ -2163,7 +2176,7 @@ var _ = Describe(
 
 				// Get default password from secret.
 				secretNamespcedName := types.NamespacedName{
-					Name:      aerospikeConfigSecret,
+					Name:      aerospikeSecretName,
 					Namespace: aeroCluster.Namespace,
 				}
 				passFileName := "password.conf"
@@ -2182,12 +2195,14 @@ var _ = Describe(
 					}
 
 					nodes := client.GetNodeNames()
-					Expect(nodes).ToNot(BeNil())
+					if len(nodes) == 0 {
+						return fmt.Errorf("No nodes found")
+					}
 
 					pkgLog.Info("Connected to cluster", "nodes", nodes)
 
 					return nil
-				}, 2*time.Minute).ShouldNot(HaveOccurred())
+				}, 3*time.Minute).ShouldNot(HaveOccurred())
 			})
 		})
 	},

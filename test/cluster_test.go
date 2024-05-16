@@ -1198,7 +1198,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 											aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 												AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 													SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-														SecretName:         tlsSecretName,
+														SecretName:         aerospikeSecretName,
 														CaCertsFilename:    "cacert.pem",
 														ClientCertFilename: "svc_cluster_chain.pem",
 														ClientKeyFilename:  "svc_key.pem",

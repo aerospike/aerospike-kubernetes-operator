@@ -1823,7 +1823,8 @@ func validateRequiredFileStorageForFeatureConf(
 	for _, path := range allPaths {
 		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
 			return fmt.Errorf(
-				"feature-key-file paths or tls paths or default-password-file path are not mounted - create an entry for '%v' in 'storage.volumes'",
+				"feature-key-file paths or tls paths or default-password-file path "+
+					"are not mounted - create an entry for '%v' in 'storage.volumes'",
 				path,
 			)
 		}

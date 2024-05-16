@@ -63,7 +63,7 @@ func rollingRestartClusterByEnablingTLS(
 	aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-				SecretName:         tlsSecretName,
+				SecretName:         aerospikeSecretName,
 				CaCertsFilename:    "cacert.pem",
 				ClientCertFilename: "svc_cluster_chain.pem",
 				ClientKeyFilename:  "svc_key.pem",
@@ -862,7 +862,7 @@ func createAerospikeClusterPost460(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -925,7 +925,7 @@ func createAerospikeClusterPost560(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1312,7 +1312,7 @@ func createBasicTLSCluster(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1535,7 +1535,7 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 		Name: aerospikeConfigSecret,
 		Source: asdbv1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
+				SecretName: aerospikeSecretName,
 			},
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{

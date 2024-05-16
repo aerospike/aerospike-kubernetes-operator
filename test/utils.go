@@ -2,7 +2,6 @@ package test
 
 import (
 	"bytes"
-	"context"
 	goctx "context"
 	"encoding/json"
 	"fmt"
@@ -45,7 +44,7 @@ var cacertSecrets map[string][]byte
 const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
 const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
 
-const tlsSecretName = "aerospike-secret"
+const aerospikeSecretName = "aerospike-secret"
 const tlsCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
 const authSecretName = "auth-secret"
 const authSecretNameForUpdate = "auth-update"
@@ -192,7 +191,7 @@ func createConfigSecret(
 	// Create configSecret
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tlsSecretName,
+			Name:      aerospikeSecretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
@@ -802,7 +801,7 @@ func getPasswordFromSecret(k8sClient client.Client,
 ) (string, error) {
 	secret := &corev1.Secret{}
 
-	err := k8sClient.Get(context.TODO(), secretNamespcedName, secret)
+	err := k8sClient.Get(goctx.TODO(), secretNamespcedName, secret)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
 	}
