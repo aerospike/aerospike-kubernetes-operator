@@ -34,7 +34,7 @@ const (
 	prevServerVersion   = "6.4.0.0"
 	pre6Version         = "5.7.0.17"
 	version6            = "6.0.0.5"
-	latestServerVersion = "7.0.0.0"
+	latestServerVersion = "7.1.0.0"
 	invalidVersion      = "3.0.0.4"
 )
 
@@ -1123,8 +1123,10 @@ func createDummyAerospikeCluster(
 						"proto-fd-max":     defaultProtofdmax,
 						"auto-pin":         "none",
 					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkConfig(),
+					"security": map[string]interface{}{
+						"default-password-file": "/etc/aerospike/secret/password.conf",
+					},
+					"network": getNetworkConfig(),
 					"namespaces": []interface{}{
 						getSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},

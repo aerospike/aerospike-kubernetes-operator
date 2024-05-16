@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -57,6 +58,7 @@ var aerospikeConfigWithSecurityWithQuota = &asdbv1.AerospikeConfigSpec{
 
 var _ = Describe(
 	"AccessControl", func() {
+		ctx := goctx.TODO()
 
 		Context(
 			"AccessControl", func() {
@@ -2144,6 +2146,50 @@ var _ = Describe(
 				)
 			},
 		)
+
+		Context("Using default-password-file", func() {
+			It("Should use default-password-file when configured", func() {
+				By("Creating cluster")
+
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Cluster is not ready, connect with cluster using default password")
+
+				// Get default password from secret.
+				secretNamespcedName := types.NamespacedName{
+					Name:      aerospikeConfigSecret,
+					Namespace: aeroCluster.Namespace,
+				}
+				passFileName := "password.conf"
+				pass, err := getPasswordFromSecret(k8sClient, secretNamespcedName, passFileName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Cluster is not yet ready. Therefore, it should be using default password
+				Eventually(func() error {
+					clientPolicy := getClientPolicy(aeroCluster, k8sClient)
+					clientPolicy.Password = pass
+
+					client, cerr := getClientWithPolicy(
+						pkgLog, aeroCluster, k8sClient, clientPolicy)
+					if cerr != nil {
+						return cerr
+					}
+
+					nodes := client.GetNodeNames()
+					Expect(nodes).ToNot(BeNil())
+
+					pkgLog.Info("Connected to cluster", "nodes", nodes)
+
+					return nil
+				}, 2*time.Minute).ShouldNot(HaveOccurred())
+			})
+		})
 	},
 )
 

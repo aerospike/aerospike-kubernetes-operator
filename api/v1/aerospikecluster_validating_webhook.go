@@ -1792,9 +1792,12 @@ func validateRequiredFileStorageForMetadata(
 func validateRequiredFileStorageForFeatureConf(
 	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 ) error {
-	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
 	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
+	defaultPassFilePath := GetDefaultPasswordFilePath(&configSpec)
+
+	// TODO: What if default password file is given via Secret Manager?
+	// How operator will access that file? Should we allow that?
 
 	var allPaths []string
 
@@ -1813,10 +1816,14 @@ func validateRequiredFileStorageForFeatureConf(
 	// CA cert related fields are not supported with Secret Manager, so check their mount volume
 	allPaths = append(allPaths, caPaths...)
 
+	if defaultPassFilePath != nil {
+		allPaths = append(allPaths, *defaultPassFilePath)
+	}
+
 	for _, path := range allPaths {
 		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
 			return fmt.Errorf(
-				"feature-key-file paths or tls paths are not mounted - create an entry for '%v' in 'storage.volumes'",
+				"feature-key-file paths or tls paths or default-password-file path are not mounted - create an entry for '%v' in 'storage.volumes'",
 				path,
 			)
 		}

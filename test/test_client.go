@@ -60,6 +60,13 @@ func (pp FromSecretPasswordProvider) Get(
 	return string(passbyte), nil
 }
 
+// This function is not used in the test code. This is just a dummy implementation.
+// Tests do not make client call till cluster is up and reconciled.
+// DefaultPassword only comes into play when the cluster is being created.
+func (pp FromSecretPasswordProvider) GetDefaultPassword(_ *asdbv1.AerospikeClusterSpec) string {
+	return asdbv1.DefaultAdminPassword
+}
+
 func getPasswordProvider(
 	aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client,
 ) FromSecretPasswordProvider {
@@ -71,6 +78,18 @@ func getPasswordProvider(
 func getClient(
 	log logr.Logger, aeroCluster *asdbv1.AerospikeCluster,
 	k8sClient client.Client,
+) (*as.Client, error) {
+	// Create policy using status, status has current connection info
+	policy := getClientPolicy(
+		aeroCluster, k8sClient,
+	)
+
+	return getClientWithPolicy(log, aeroCluster, k8sClient, policy)
+}
+
+func getClientWithPolicy(
+	log logr.Logger, aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client, policy *as.ClientPolicy,
 ) (*as.Client, error) {
 	conns, err := newAllHostConn(log, aeroCluster, k8sClient)
 	if err != nil {
@@ -87,10 +106,7 @@ func getClient(
 			},
 		)
 	}
-	// Create policy using status, status has current connection info
-	policy := getClientPolicy(
-		aeroCluster, k8sClient,
-	)
+
 	aeroClient, err := as.NewClientWithPolicyAndHost(
 		policy, hosts...,
 	)
@@ -299,13 +315,17 @@ func appendCACertFromFileOrPath(
 			if err != nil {
 				return err
 			}
+
 			if !d.IsDir() {
 				var caData []byte
+
 				if caData, err = os.ReadFile(path); err != nil {
 					return err
 				}
+
 				serverPool.AppendCertsFromPEM(caData)
 			}
+
 			return nil
 		},
 	)

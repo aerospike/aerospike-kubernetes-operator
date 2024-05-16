@@ -2,6 +2,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	goctx "context"
 	"encoding/json"
 	"fmt"
@@ -794,4 +795,25 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 	}
 
 	return confs[configContext].(lib.Stats), nil
+}
+
+func getPasswordFromSecret(k8sClient client.Client,
+	secretNamespcedName types.NamespacedName, passFileName string,
+) (string, error) {
+	secret := &corev1.Secret{}
+
+	err := k8sClient.Get(context.TODO(), secretNamespcedName, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
+	}
+
+	passBytes, ok := secret.Data[passFileName]
+	if !ok {
+		return "", fmt.Errorf(
+			"failed to get password file in secret %s, fileName %s",
+			secretNamespcedName, passFileName,
+		)
+	}
+
+	return string(passBytes), nil
 }
