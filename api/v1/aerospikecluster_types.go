@@ -670,11 +670,10 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
 	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 
-	// IsClusterReadinessEnabled determines if the cluster is readiness enabled i.e. readiness probe is
-	// present in all pods.
-	// This field is used to determine if PodDisruptionBudget should be created for the Aerospike cluster or not.
+	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
+	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
-	IsClusterReadinessEnabled bool `json:"isClusterReadinessEnabled"`
+	IsReadinessProbeEnabled bool `json:"isClusterReadinessEnabled"`
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given

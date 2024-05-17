@@ -65,7 +65,7 @@ func (r *SingleClusterReconciler) deletePDB() error {
 func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	// Check for cluster readiness status only when it's false.
 	// Once enabled it won't be disabled.
-	if !r.IsStatusEmpty() && !r.aeroCluster.Status.IsClusterReadinessEnabled {
+	if !r.IsStatusEmpty() && !r.aeroCluster.Status.IsReadinessProbeEnabled {
 		clusterReadinessEnabled, err := r.getClusterReadinessStatus()
 		if err != nil {
 			return fmt.Errorf("failed to get cluster readiness status: %v", err)
