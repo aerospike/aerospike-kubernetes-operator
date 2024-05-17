@@ -2153,6 +2153,9 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	return nil
 }
 
+// validateBatchSize validates the batch size for the following types:
+// - rollingUpdateBatchSize: Rolling update batch size
+// - scaleDownBatchSize: Scale down batch size
 func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool) error {
 	var fieldPath string
 
@@ -2196,6 +2199,7 @@ func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, roll
 				)
 			}
 
+			// If Strong Consistency is enabled, then scaleDownBatchSize can't be used
 			if !rollingUpdateBatch && nsConf.scEnabled {
 				return fmt.Errorf(
 					"can not use %s when namespace `%s` is configured with Strong Consistency", fieldPath,
@@ -2326,7 +2330,9 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	}
 
 	if val < 0 {
-		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, init container are running version less than %s",
+		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, some init containers are running version less"+
+			" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
+			" for more details about enableDynamicConfigUpdate flag",
 			minInitVersionForDynamicConf)
 	}
 

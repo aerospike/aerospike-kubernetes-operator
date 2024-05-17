@@ -404,8 +404,9 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
 
-						// Delete rack-id from namespace in rack specific config if set to 0
-						// This could happen in operator below 3.3.0
+						// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
+						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack specific config is set to 0.
+						// Hence, deleting this 0 rack-id so that correct rack-id will be added.
 						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
 							delete(nsMap, "rack-id")
 						}
@@ -419,6 +420,8 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 							)
 						}
 					} else {
+						// Deleting rack-id for namespaces in global config.
+						// Correct rack-id will be added in rack specific config.
 						delete(nsMap, "rack-id")
 					}
 				} else {

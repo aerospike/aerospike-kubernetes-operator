@@ -107,9 +107,10 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 
 	confData[aerospikeTemplateConfFileName] = confTemp
 
-	// This field value is rectified in 3.3.0.
-	// Ignore rack-id change from hash computation so that on upgrade clusters are
-	// not rolling restarted.
+	// [Backward compatibility fix for AKO 3.3.0 upgrade]
+	// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
+	// This change led to hash mismatches during the AKO 3.3.0 upgrade, triggering unnecessary warm restarts.
+	// Solution: Replace real rack-id with 0 in hash calculations to avoid this issue.
 	re := regexp.MustCompile(`rack-id.*\d+`)
 	if rackStr := re.FindString(confTemp); rackStr != "" {
 		confTemp = strings.ReplaceAll(confTemp, rackStr, "rack-id    0")
@@ -146,6 +147,7 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 		return nil, err
 	}
 
+	// [Backward compatibility fix for AKO 2.1.0 upgrade]
 	// This is a newly introduced field in 2.1.0.
 	// Ignore empty value from hash computation so that on upgrade clusters are
 	// not rolling restarted.
@@ -153,6 +155,7 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 		string(podSpecStr), "\"aerospikeInitContainer\":{},", "",
 	))
 
+	// [Backward compatibility fix for AKO 3.3.0 upgrade]
 	// This field is changed from bool type to *bool type in 3.3.0
 	// Ignore false value from hash computation so that on upgrade clusters are
 	// not rolling restarted.

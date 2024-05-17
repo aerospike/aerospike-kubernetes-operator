@@ -437,8 +437,8 @@ var _ = Describe(
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 2,
+						aeroCluster := getAerospikeClusterSpecWithLDAP(
+							clusterNamespacedName,
 						)
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
 							asdbv1.VolumeSpec{
@@ -479,11 +479,9 @@ var _ = Describe(
 							getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"),
 						}
 
-						aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
-							"log": map[string]interface{}{
-								"report-data-op-role": []string{"read"},
-								"report-data-op-user": []string{"admin2"},
-							},
+						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"] = map[string]interface{}{
+							"report-data-op-role": []string{"read"},
+							"report-data-op-user": []string{"admin2"},
 						}
 
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
