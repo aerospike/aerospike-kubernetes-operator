@@ -1797,7 +1797,7 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
-	securityEnabledPods := make([]corev1.Pod, 0, len(pods))
+	updatedPods := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
 		podName := pods[idx].Name
@@ -1805,11 +1805,11 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 
 		if podStatus.AerospikeConfigHash == requiredConfHash {
 			// Config hash is matching, it means config has been applied
-			securityEnabledPods = append(securityEnabledPods, *pods[idx])
+			updatedPods = append(updatedPods, *pods[idx])
 		}
 	}
 
-	return securityEnabledPods, nil
+	return updatedPods, nil
 }
 
 func isContainerNameInStorageVolumeAttachments(
