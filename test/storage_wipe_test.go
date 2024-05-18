@@ -74,7 +74,7 @@ var _ = Describe(
 						}
 						aeroCluster := getStorageWipeAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
-							latestImage, getAerospikeClusterConfig(),
+							post6Image, getAerospikeClusterConfig(),
 						)
 
 						aeroCluster.Spec.PodSpec = podSpec

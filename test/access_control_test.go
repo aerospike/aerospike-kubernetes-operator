@@ -13,6 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -2161,6 +2162,28 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 			})
 
+			It("Should fail if volume source is not secret for default-password-file", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "/etc/aerospike/defaultpass/password.conf",
+				}
+				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+					Name: "defaultpass",
+					Source: asdbv1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+					Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+						Path: "/etc/aerospike/defaultpass",
+					},
+				})
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("Should use default-password-file when configured", func() {
 				By("Creating cluster")
 
@@ -2168,6 +2191,10 @@ var _ = Describe(
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				// This file is already added in the storage volume backed by the secret.
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "/etc/aerospike/secret/password.conf",
+				}
 
 				err := k8sClient.Create(ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -2194,15 +2221,20 @@ var _ = Describe(
 						return cerr
 					}
 
-					nodes := client.GetNodeNames()
-					if len(nodes) == 0 {
-						return fmt.Errorf("No nodes found")
+					if !client.IsConnected() {
+						return fmt.Errorf("Not connected")
 					}
 
-					pkgLog.Info("Connected to cluster", "nodes", nodes)
+					pkgLog.Info("Connected to cluster")
 
 					return nil
 				}, 3*time.Minute).ShouldNot(HaveOccurred())
+
+				By("Try scaleup")
+				err = scaleUpClusterTest(
+					k8sClient, ctx, clusterNamespacedName, 1,
+				)
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	},
