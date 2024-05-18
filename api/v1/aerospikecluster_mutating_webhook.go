@@ -73,7 +73,7 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Set maxUnavailable default to 1
 	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
-		maxUnavailable := intstr.FromInt(1)
+		maxUnavailable := intstr.FromInt32(1)
 		c.Spec.MaxUnavailable = &maxUnavailable
 	}
 
@@ -403,6 +403,14 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 					if rackID != nil {
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+
+						// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
+						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack specific config is set to 0.
+						// Hence, deleting this 0 rack-id so that correct rack-id will be added.
+						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
+							delete(nsMap, "rack-id")
+						}
+
 						if err := setDefaultsInConfigMap(
 							asLog, nsMap, defaultConfs,
 						); err != nil {
@@ -411,6 +419,10 @@ func setDefaultNsConf(asLog logr.Logger, configSpec AerospikeConfigSpec,
 								err,
 							)
 						}
+					} else {
+						// Deleting rack-id for namespaces in global config.
+						// Correct rack-id will be added in rack specific config.
+						delete(nsMap, "rack-id")
 					}
 				} else {
 					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list

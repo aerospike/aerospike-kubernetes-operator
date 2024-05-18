@@ -669,6 +669,11 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
 	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
+
+	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
+	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
+	// +optional
+	IsReadinessProbeEnabled bool `json:"isClusterReadinessEnabled"`
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
@@ -867,6 +872,9 @@ type AerospikeInstanceSummary struct { //nolint:govet // for readability
 type AerospikePodStatus struct { //nolint:govet // for readability
 	// Image is the Aerospike image this pod is running.
 	Image string `json:"image"`
+	// InitImage is the Aerospike init image this pod's init container is running.
+	// +optional
+	InitImage string `json:"initImage,omitempty"`
 	// PodIP in the K8s network.
 	PodIP string `json:"podIP"`
 	// HostInternalIP of the K8s host this pod is scheduled on.
@@ -902,9 +910,6 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// DynamicConfigUpdateStatus is the status of dynamic config update operation.
 	// Empty "" status means successful update.
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
-
-	// IsSecurityEnabled is true if security is enabled in the pod
-	IsSecurityEnabled bool `json:"isSecurityEnabled"`
 }
 
 // +kubebuilder:object:root=true
