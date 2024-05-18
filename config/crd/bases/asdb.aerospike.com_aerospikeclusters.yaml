@@ -9618,6 +9618,11 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
+              isClusterReadinessEnabled:
+                description: IsReadinessProbeEnabled tells whether the readiness probe
+                  is present in all pods or not. Moreover, PodDisruptionBudget should
+                  be created for the Aerospike cluster only when this field is enabled.
+                type: boolean
               k8sNodeBlockList:
                 description: K8sNodeBlockList is a list of Kubernetes nodes which
                   are not used for Aerospike pods.
@@ -14285,16 +14290,16 @@ spec:
                     image:
                       description: Image is the Aerospike image this pod is running.
                       type: string
+                    initImage:
+                      description: InitImage is the Aerospike init image this pod's
+                        init container is running.
+                      type: string
                     initializedVolumes:
                       description: InitializedVolumes is the list of volume names
                         that have already been initialized.
                       items:
                         type: string
                       type: array
-                    isSecurityEnabled:
-                      description: IsSecurityEnabled is true if security is enabled
-                        in the pod
-                      type: boolean
                     networkPolicyHash:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
@@ -14318,7 +14323,6 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
-                  - isSecurityEnabled
                   - networkPolicyHash
                   - podIP
                   - podPort

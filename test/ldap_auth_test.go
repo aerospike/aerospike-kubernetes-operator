@@ -10,8 +10,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -97,7 +95,6 @@ func validateTransactions(
 func getAerospikeClusterSpecWithLDAP(
 	clusterNamespacedName types.NamespacedName,
 ) *asdbv1.AerospikeCluster {
-	cascadeDelete := true
 	networkConf := getNetworkTLSConfig()
 	operatorClientCertSpec := getOperatorCert()
 
@@ -107,32 +104,9 @@ func getAerospikeClusterSpecWithLDAP(
 			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: asdbv1.AerospikeClusterSpec{
-			Size:  2,
-			Image: latestImage,
-			Storage: asdbv1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDelete,
-				},
-				BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputCascadeDelete: &cascadeDelete,
-				},
-				Volumes: []asdbv1.VolumeSpec{
-					{
-						Name: "workdir",
-						Source: asdbv1.VolumeSource{
-							PersistentVolume: &asdbv1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   corev1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					getStorageVolumeForSecret(),
-				},
-			},
+			Size:    2,
+			Image:   latestImage,
+			Storage: getBasicStorageSpecObject(),
 
 			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
 				Users: []asdbv1.AerospikeUserSpec{
@@ -177,15 +151,7 @@ func getAerospikeClusterSpecWithLDAP(
 						},
 					},
 					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"replication-factor": 2,
-							"migrate-sleep":      0,
-							"storage-engine": map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						},
+						getSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
 			},
