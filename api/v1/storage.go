@@ -203,12 +203,6 @@ func (s *AerospikeStorageSpec) getAerospikeStorageList(onlyPV bool) (
 	return blockStorageDeviceList, fileStorageList, nil
 }
 
-// isVolumePresentForAerospikePath checks if configuration has a volume defined for given path for Aerospike server
-// container.
-func (s *AerospikeStorageSpec) isVolumePresentForAerospikePath(path string) bool {
-	return s.GetVolumeForAerospikePath(path) != nil
-}
-
 // GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
 func (s *AerospikeStorageSpec) GetVolumeForAerospikePath(path string) *VolumeSpec {
 	var matchedVolume *VolumeSpec

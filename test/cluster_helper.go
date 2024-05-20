@@ -31,11 +31,13 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "6.4.0.0"
-	pre6Version         = "5.7.0.17"
-	version6            = "6.0.0.5"
-	latestServerVersion = "7.0.0.0"
+	nextServerVersion   = "7.1.0.0_1"
+	latestServerVersion = "7.1.0.0"
 	invalidVersion      = "3.0.0.4"
+
+	post6Version = "7.0.0.0"
+	pre6Version  = "5.7.0.17"
+	version6     = "6.0.0.5"
 )
 
 var (
@@ -43,11 +45,14 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
-	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	nextImage          = fmt.Sprintf("%s:%s", baseImage, nextServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
+
+	// Storage wipe test
+	post6Image    = fmt.Sprintf("%s:%s", baseImage, post6Version)
+	version6Image = fmt.Sprintf("%s:%s", baseImage, version6)
+	pre6Image     = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func rollingRestartClusterByEnablingTLS(
@@ -63,7 +68,7 @@ func rollingRestartClusterByEnablingTLS(
 	aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-				SecretName:         tlsSecretName,
+				SecretName:         aerospikeSecretName,
 				CaCertsFilename:    "cacert.pem",
 				ClientCertFilename: "svc_cluster_chain.pem",
 				ClientKeyFilename:  "svc_key.pem",
@@ -862,7 +867,7 @@ func createAerospikeClusterPost460(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -925,7 +930,7 @@ func createAerospikeClusterPost560(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1310,7 +1315,7 @@ func createBasicTLSCluster(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1465,7 +1470,7 @@ func aerospikeClusterCreateUpdate(
 	ctx goctx.Context,
 ) error {
 	return aerospikeClusterCreateUpdateWithTO(
-		k8sClient, desired, ctx, retryInterval, getTimeout(1),
+		k8sClient, desired, ctx, retryInterval, getTimeout(desired.Spec.Size),
 	)
 }
 
@@ -1533,7 +1538,7 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 		Name: aerospikeConfigSecret,
 		Source: asdbv1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
+				SecretName: aerospikeSecretName,
 			},
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{

@@ -20,9 +20,8 @@ import (
 const batchClusterName = "batch-restart"
 
 var (
-	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "7.0.0.99")
-	availableImage1  = fmt.Sprintf("%s:%s", baseImage, "7.0.0.0_1")
-	availableImage2  = fmt.Sprintf("%s:%s", baseImage, "7.0.0.0_2")
+	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "7.1.0.99")
+	availableImage1  = nextImage
 )
 
 func percent(val string) *intstr.IntOrString {
@@ -429,7 +428,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
-		aeroCluster.Spec.Image = availableImage2
+		aeroCluster.Spec.Image = latestImage
 		err = k8sClient.Update(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 

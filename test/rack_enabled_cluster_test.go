@@ -132,7 +132,7 @@ var _ = Describe(
 
 						// don't change image, it upgrade, check old version
 						err = upgradeClusterTest(
-							k8sClient, ctx, clusterNamespacedName, prevImage,
+							k8sClient, ctx, clusterNamespacedName, nextImage,
 						)
 						Expect(err).ToNot(HaveOccurred())
 

@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:7.0.0.0
+  image: aerospike/aerospike-server-enterprise:7.1.0.0
 
   podSpec:
     multiPodPerHost: true

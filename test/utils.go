@@ -44,7 +44,7 @@ var cacertSecrets map[string][]byte
 const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
 const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
 
-const tlsSecretName = "aerospike-secret"
+const aerospikeSecretName = "aerospike-secret"
 const tlsCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
 const authSecretName = "auth-secret"
 const authSecretNameForUpdate = "auth-update"
@@ -191,7 +191,7 @@ func createConfigSecret(
 	// Create configSecret
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tlsSecretName,
+			Name:      aerospikeSecretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
@@ -794,4 +794,25 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 	}
 
 	return confs[configContext].(lib.Stats), nil
+}
+
+func getPasswordFromSecret(k8sClient client.Client,
+	secretNamespcedName types.NamespacedName, passFileName string,
+) (string, error) {
+	secret := &corev1.Secret{}
+
+	err := k8sClient.Get(goctx.TODO(), secretNamespcedName, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
+	}
+
+	passBytes, ok := secret.Data[passFileName]
+	if !ok {
+		return "", fmt.Errorf(
+			"failed to get password file in secret %s, fileName %s",
+			secretNamespcedName, passFileName,
+		)
+	}
+
+	return string(passBytes), nil
 }

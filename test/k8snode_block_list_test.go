@@ -122,7 +122,7 @@ var _ = Describe(
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
-						aeroCluster.Spec.Image = availableImage2
+						aeroCluster.Spec.Image = availableImage1
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())

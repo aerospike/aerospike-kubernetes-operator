@@ -53,6 +53,10 @@ const (
 	confKeyXdr         = "xdr"
 	confKeyXdrDlogPath = "xdr-digestlog-path"
 
+	// Security keys.
+	confKeySecurity                    = "security"
+	confKeySecurityDefaultPasswordFile = "default-password-file"
+
 	// Service section keys.
 	confKeyService       = "service"
 	confKeyWorkDirectory = "work-directory"
@@ -504,4 +508,31 @@ func getContainerNames(containers []v1.Container) []string {
 // GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
 func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
+}
+
+// GetDefaultPasswordFilePath returns the default-password-fille path if configured.
+func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *string {
+	aerospikeConfig := aerospikeConfigSpec.Value
+
+	// Get security config.
+	securityConfTmp, ok := aerospikeConfig[confKeySecurity]
+	if !ok {
+		return nil
+	}
+
+	securityConf, ok := securityConfTmp.(map[string]interface{})
+	if !ok {
+		// Should never happen.
+		return nil
+	}
+
+	// Get password file.
+	passFileTmp, ok := securityConf[confKeySecurityDefaultPasswordFile]
+	if !ok {
+		return nil
+	}
+
+	passFile := passFileTmp.(string)
+
+	return &passFile
 }

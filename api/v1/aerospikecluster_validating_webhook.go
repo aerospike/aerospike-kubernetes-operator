@@ -223,7 +223,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 			return err
 		}
 
-		if err := validateRequiredFileStorageForFeatureConf(
+		if err := validateRequiredFileStorageForAerospikeConfig(
 			rack.AerospikeConfig, &rack.Storage,
 		); err != nil {
 			return err
@@ -1797,12 +1797,15 @@ func validateRequiredFileStorageForMetadata(
 	return nil
 }
 
-func validateRequiredFileStorageForFeatureConf(
+func validateRequiredFileStorageForAerospikeConfig(
 	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 ) error {
-	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
 	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
+	defaultPassFilePath := GetDefaultPasswordFilePath(&configSpec)
+
+	// TODO: What if default password file is given via Secret Manager?
+	// How operator will access that file? Should we allow that?
 
 	var allPaths []string
 
@@ -1818,14 +1821,32 @@ func validateRequiredFileStorageForFeatureConf(
 		}
 	}
 
+	if defaultPassFilePath != nil {
+		if !isSecretManagerPath(*defaultPassFilePath) {
+			allPaths = append(allPaths, *defaultPassFilePath)
+		} else {
+			return fmt.Errorf("default-password-file path doesn't support Secret Manager, path %s", *defaultPassFilePath)
+		}
+	}
+
 	// CA cert related fields are not supported with Secret Manager, so check their mount volume
 	allPaths = append(allPaths, caPaths...)
 
 	for _, path := range allPaths {
-		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
+		volume := storage.GetVolumeForAerospikePath(filepath.Dir(path))
+		if volume == nil {
 			return fmt.Errorf(
-				"feature-key-file paths or tls paths are not mounted - create an entry for '%v' in 'storage.volumes'",
+				"feature-key-file paths or tls paths or default-password-file path "+
+					"are not mounted - create an entry for '%s' in 'storage.volumes'",
 				path,
+			)
+		}
+
+		if defaultPassFilePath != nil &&
+			(path == *defaultPassFilePath && volume.Source.Secret == nil) {
+			return fmt.Errorf(
+				"default-password-file path %s volume source should be secret in storage config, volume %v",
+				path, volume,
 			)
 		}
 	}

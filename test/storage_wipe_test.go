@@ -74,7 +74,7 @@ var _ = Describe(
 						}
 						aeroCluster := getStorageWipeAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
-							latestImage, getAerospikeClusterConfig(),
+							post6Image, getAerospikeClusterConfig(),
 						)
 
 						aeroCluster.Spec.PodSpec = podSpec
@@ -107,7 +107,7 @@ var _ = Describe(
 						By(
 							fmt.Sprintf(
 								"Downgrading image from %s to %s - volumes should not be wiped",
-								latestImage, version6,
+								post6Image, version6,
 							),
 						)
 						err = UpdateClusterImage(aeroCluster, version6Image)
