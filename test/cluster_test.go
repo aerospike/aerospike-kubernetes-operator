@@ -254,8 +254,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Eventually(func() error {
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
-						newImage := baseImage + ":7.0.0.0_2"
-						aeroCluster.Spec.Image = newImage
+						aeroCluster.Spec.Image = nextImage
 						// As pod is in pending state, CR object will be won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
@@ -1032,7 +1031,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					// dont change image, it upgrade, check old version
 					err = upgradeClusterTest(
-						k8sClient, ctx, clusterNamespacedName, prevImage,
+						k8sClient, ctx, clusterNamespacedName, nextImage,
 					)
 					Expect(err).ToNot(HaveOccurred())
 				},

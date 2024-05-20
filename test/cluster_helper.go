@@ -31,7 +31,7 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "7.0.0.0"
+	nextServerVersion   = "7.1.0.0_1"
 	latestServerVersion = "7.1.0.0"
 	invalidVersion      = "3.0.0.4"
 
@@ -45,7 +45,7 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
-	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	nextImage          = fmt.Sprintf("%s:%s", baseImage, nextServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
 

@@ -212,7 +212,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
-						err = UpdateClusterImage(aeroCluster, prevImage)
+						err = UpdateClusterImage(aeroCluster, nextImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
 							k8sClient, aeroCluster, ctx,
@@ -231,7 +231,7 @@ var _ = Describe(
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
-							prevImage,
+							nextImage,
 						)
 						aeroCluster.Spec.PodSpec = podSpec
 						err = aerospikeClusterCreateUpdate(
