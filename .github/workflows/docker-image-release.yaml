@@ -38,7 +38,7 @@ jobs:
         run: make docker-buildx IMG=${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
 
       - name: Build and push image on Quay
-        run: make docker-buildx IMG=quay.io/${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
+        run: make docker-buildx-openshift IMG=quay.io/${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
 
       - name: Run Snyk image security scan
         uses: snyk/actions/docker@master
