@@ -9618,7 +9618,7 @@ spec:
               image:
                 description: Aerospike server image
                 type: string
-              isClusterReadinessEnabled:
+              isReadinessProbeEnabled:
                 description: IsReadinessProbeEnabled tells whether the readiness probe
                   is present in all pods or not. Moreover, PodDisruptionBudget should
                   be created for the Aerospike cluster only when this field is enabled.
