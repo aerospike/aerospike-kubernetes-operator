@@ -673,7 +673,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
-	IsReadinessProbeEnabled bool `json:"isClusterReadinessEnabled"`
+	IsReadinessProbeEnabled bool `json:"isReadinessProbeEnabled"`
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
