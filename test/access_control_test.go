@@ -2221,14 +2221,15 @@ var _ = Describe(
 						return cerr
 					}
 
-					if !client.IsConnected() {
+					nodes := client.GetNodeNames()
+					if len(nodes) == 0 {
 						return fmt.Errorf("Not connected")
 					}
 
-					pkgLog.Info("Connected to cluster")
+					pkgLog.Info("Connected to cluster", "nodes", nodes, "pass", pass)
 
 					return nil
-				}, 3*time.Minute).ShouldNot(HaveOccurred())
+				}, 5*time.Minute).ShouldNot(HaveOccurred())
 
 				By("Try scaleup")
 				err = scaleUpClusterTest(

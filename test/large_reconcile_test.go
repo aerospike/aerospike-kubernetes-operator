@@ -244,8 +244,14 @@ func loadDataInCluster(
 		return readErr
 	}
 
-	fmt.Printf("Loading record, isClusterConnected %v\n", clientP.IsConnected())
-	fmt.Println(asClient.GetNodes())
+	for !asClient.IsConnected() {
+		pkgLog.Info("Waiting for cluster to connect")
+		time.Sleep(2 * time.Second)
+	}
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
+	)
 
 	// The k8s services take time to come up so the timeouts are on the
 	// higher side.
