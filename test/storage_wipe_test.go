@@ -241,10 +241,14 @@ func writeDataToCluster(
 		return err
 	}
 
-	fmt.Printf(
-		"Loading record, isClusterConnected %v\n", asClient.IsConnected(),
+	for !asClient.IsConnected() {
+		pkgLog.Info("Waiting for cluster to connect")
+		time.Sleep(2 * time.Second)
+	}
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
 	)
-	fmt.Println(asClient.GetNodes())
 
 	wp := as.NewWritePolicy(0, 0)
 
@@ -299,10 +303,14 @@ func checkDataInCluster(
 
 	defer asClient.Close()
 
-	fmt.Printf(
-		"Loading record, isClusterConnected %v\n", asClient.IsConnected(),
+	for !asClient.IsConnected() {
+		pkgLog.Info("Waiting for cluster to connect")
+		time.Sleep(2 * time.Second)
+	}
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
 	)
-	fmt.Println(asClient.GetNodes())
 
 	if _, err = asClient.WarmUp(-1); err != nil {
 		return nil, err
