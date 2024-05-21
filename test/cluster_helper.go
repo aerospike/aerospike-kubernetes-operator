@@ -38,6 +38,8 @@ const (
 	post6Version = "7.0.0.0"
 	pre6Version  = "5.7.0.17"
 	version6     = "6.0.0.5"
+
+	latestSchemaVersion = "7.1.0"
 )
 
 var (

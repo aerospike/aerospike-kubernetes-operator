@@ -32,7 +32,11 @@ type podID struct {
 
 const clName = "dynamic-config-test"
 
-var configWithMaxDefaultVal = mapset.NewSet("info-max-ms", "flush-max-ms")
+var (
+	configWithMaxDefaultVal = mapset.NewSet("info-max-ms", "flush-max-ms")
+	configWithPow2Val       = mapset.NewSet("flush-size", "transaction-queue-limit")
+	configWithMul100Val     = mapset.NewSet("max-throughput")
+)
 
 var _ = Describe(
 	"DynamicConfig", func() {
@@ -532,7 +536,7 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						dynamic, err := asconfig.GetDynamic("7.0.0")
+						dynamic, err := asconfig.GetDynamic(latestSchemaVersion)
 						Expect(err).ToNot(HaveOccurred())
 
 						flatServer, flatSpec, err := getAerospikeConfigFromNodeAndSpec(aeroCluster)
@@ -801,8 +805,11 @@ func validateNamespaceContextDynamically(
 			}
 
 			if v != nil {
-				if configWithMaxDefaultVal.Contains(asconfig.BaseKey(confKey)) {
+				switch {
+				case configWithMaxDefaultVal.Contains(asconfig.BaseKey(confKey)):
 					v = v.(int64) - 1
+				case configWithPow2Val.Contains(asconfig.BaseKey(confKey)):
+					v = (v.(int64) - 1) * 2
 				}
 
 				newSpec[confKey] = v
@@ -900,10 +907,10 @@ func validateXDRNSFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asc
 			}
 
 			if v != nil {
-				switch asconfig.BaseKey(confKey) {
-				case "max-throughput":
+				switch {
+				case configWithMul100Val.Contains(asconfig.BaseKey(confKey)):
 					v = v.(int64) + 99
-				case "transaction-queue-limit":
+				case configWithPow2Val.Contains(asconfig.BaseKey(confKey)):
 					v = (v.(int64) - 1) * 2
 				}
 
