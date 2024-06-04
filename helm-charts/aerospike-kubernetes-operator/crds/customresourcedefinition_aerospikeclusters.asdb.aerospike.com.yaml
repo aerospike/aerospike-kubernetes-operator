@@ -312,6 +312,31 @@ spec:
                   This value is used to create PodDisruptionBudget. Defaults to 1.
                   Refer Aerospike documentation for more details.
                 x-kubernetes-int-or-string: true
+              operation:
+                description: Operation is a list of on demand operation to be performed
+                  on the Aerospike cluster.
+                items:
+                  properties:
+                    operationID:
+                      minimum: 1
+                      type: integer
+                    operationType:
+                      description: OperationType is the type of operation to be performed
+                        on the Aerospike cluster.
+                      enum:
+                      - quickRestart
+                      - podRestart
+                      type: string
+                    podList:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - operationID
+                  - operationType
+                  - podList
+                  type: object
+                type: array
               operatorClientCert:
                 description: Certificates to connect to Aerospike.
                 properties:
@@ -9651,6 +9676,31 @@ spec:
                   is the port requested by the user. Deprecated: MultiPodPerHost is
                   now part of podSpec"
                 type: boolean
+              operation:
+                description: Operation is a list of on demand operation to be performed
+                  on the Aerospike cluster.
+                items:
+                  properties:
+                    operationID:
+                      minimum: 1
+                      type: integer
+                    operationType:
+                      description: OperationType is the type of operation to be performed
+                        on the Aerospike cluster.
+                      enum:
+                      - quickRestart
+                      - podRestart
+                      type: string
+                    podList:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - operationID
+                  - operationType
+                  - podList
+                  type: object
+                type: array
               operatorClientCertSpec:
                 description: Certificates to connect to Aerospike. If omitted then
                   certs are taken from the secret 'aerospike-secret'.

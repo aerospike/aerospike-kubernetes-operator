@@ -17,6 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
+	"strconv"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,6 +127,28 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
 	// +kubebuilder:validation:MinItems:=1
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
+	// Operation is a list of on demand operation to be performed on the Aerospike cluster.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
+	Operation []OperationSpec `json:"operation,omitempty"`
+}
+
+type OperationType string
+
+const (
+	// OperationQuickRestart specifies the on demand operation is quick restart of aerospike pods.
+	OperationQuickRestart OperationType = "quickRestart"
+
+	// OperationPodRestart specifies the on demand operation is cold restart of aerospike pods.
+	OperationPodRestart OperationType = "podRestart"
+)
+
+type OperationSpec struct {
+	// OperationType is the type of operation to be performed on the Aerospike cluster.
+	// +kubebuilder:validation:Enum=quickRestart;podRestart
+	OperationType OperationType `json:"operationType"`
+	PodList       []string      `json:"podList"`
+	// +kubebuilder:validation:Minimum=1
+	OperationID int `json:"operationID"`
 }
 
 type SeedsFinderServices struct {
@@ -699,6 +724,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
+	// Operation is a list of on demand operation to be performed on the Aerospike cluster.
+	Operation []OperationSpec `json:"operation,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -935,6 +962,30 @@ type AerospikeCluster struct { //nolint:govet // for readability
 	Status AerospikeClusterStatus `json:"status,omitempty"`
 }
 
+func (c *AerospikeCluster) setDefaultOperation() {
+	for i := range c.Spec.Operation {
+		if len(c.Spec.Operation[i].PodList) == 0 {
+			c.Spec.Operation[i].PodList = c.getAllPodNames()
+		}
+	}
+}
+
+func (c *AerospikeCluster) getAllPodNames() []string {
+	podNames := make([]string, 0, c.Spec.Size)
+	topology := DistributeItems(
+		int(c.Spec.Size), len(c.Spec.RackConfig.Racks),
+	)
+
+	racks := c.Spec.RackConfig.Racks
+	for idx := range racks {
+		for i := 0; i < topology[idx]; i++ {
+			podNames = append(podNames, fmt.Sprintf("%s-%s-%d", c.Name, strconv.Itoa(racks[idx].ID), i))
+		}
+	}
+
+	return podNames
+}
+
 // +kubebuilder:object:root=true
 
 // AerospikeClusterList contains a list of AerospikeCluster
@@ -1044,6 +1095,12 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
+	if len(spec.Operation) != 0 {
+		operation := lib.DeepCopy(&spec.Operation).(*[]OperationSpec)
+
+		status.Operation = *operation
+	}
+
 	return &status, nil
 }
 
@@ -1141,6 +1198,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.K8sNodeBlockList) != 0 {
 		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
 		spec.K8sNodeBlockList = *k8sNodeBlockList
+	}
+
+	if len(status.Operation) != 0 {
+		operation := lib.DeepCopy(&status.Operation).(*[]OperationSpec)
+		spec.Operation = *operation
 	}
 
 	return &spec, nil

@@ -536,3 +536,67 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 
 	return &passFile
 }
+
+func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
+	minVersion := ""
+
+	for idx := range pods {
+		if pods[idx].InitImage != "" {
+			version, err := GetImageVersion(pods[idx].InitImage)
+			if err != nil {
+				return "", err
+			}
+
+			if minVersion == "" {
+				minVersion = version
+				continue
+			}
+
+			val, err := lib.CompareVersions(version, minVersion)
+			if err != nil {
+				return "", fmt.Errorf("failed to check image version: %v", err)
+			}
+
+			if val < 0 {
+				minVersion = version
+			}
+		} else {
+			return baseInitVersion, nil
+		}
+	}
+
+	return minVersion, nil
+}
+
+func DistributeItems(totalItems, totalGroups int) []int {
+	itemsPerGroup, extraItems := totalItems/totalGroups, totalItems%totalGroups
+
+	// Distributing nodes in given racks
+	var topology []int
+
+	for groupIdx := 0; groupIdx < totalGroups; groupIdx++ {
+		itemsForThisGroup := itemsPerGroup
+		if groupIdx < extraItems {
+			itemsForThisGroup++
+		}
+
+		topology = append(topology, itemsForThisGroup)
+	}
+
+	return topology
+}
+
+func ConvertToMap[T any](items []T, keyExtractor func(T) int) (map[int]T, error) {
+	itemMap := make(map[int]T)
+
+	for _, item := range items {
+		key := keyExtractor(item)
+		if _, ok := itemMap[key]; ok {
+			return nil, fmt.Errorf("duplicate key %d", key)
+		}
+
+		itemMap[key] = item
+	}
+
+	return itemMap, nil
+}

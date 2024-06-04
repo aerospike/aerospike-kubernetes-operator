@@ -117,6 +117,12 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
+	if err := validateOperatonUpdate(
+		&old.Spec.Operation, &c.Spec.Operation,
+	); err != nil {
+		return nil, err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
@@ -191,6 +197,10 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	if err := validateOperation(&c.Spec.Operation, &c.Status.Operation); err != nil {
+		return err
+	}
+
 	// Storage should be validated before validating aerospikeConfig and fileStorage
 	if err := validateStorage(&c.Spec.Storage, &c.Spec.PodSpec); err != nil {
 		return err
@@ -261,6 +271,59 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	return c.validateSCNamespaces()
+}
+
+func validateOperation(specOps, statusOps *[]OperationSpec) error {
+	// Define a key extractor function
+	keyExtractor := func(op OperationSpec) int {
+		return op.OperationID
+	}
+
+	specOpsMap, err := ConvertToMap(*specOps, keyExtractor)
+	if err != nil {
+		return err
+	}
+
+	statusOpsMap, err := ConvertToMap(*statusOps, keyExtractor)
+	if err != nil {
+		return err
+	}
+
+	quickRestarts, podRestarts := podsToRestart(specOpsMap, statusOpsMap)
+
+	invalidPods := quickRestarts.Intersection(podRestarts)
+	if invalidPods.Len() > 0 {
+		return fmt.Errorf(
+			"pods %v cannot be part of both quick restart and pod restart operations",
+			invalidPods,
+		)
+	}
+
+	return nil
+}
+
+func podsToRestart(specOps, statusOps map[int]OperationSpec) (quickRestarts, podRestarts sets.Set[string]) {
+	quickRestarts = make(sets.Set[string])
+	podRestarts = make(sets.Set[string])
+
+	for id := range specOps {
+		pods := sets.NewString()
+		if _, ok := statusOps[id]; !ok {
+			pods.Insert(specOps[id].PodList...)
+		} else {
+			pods.Union(sets.NewString(specOps[id].PodList...).Difference(sets.NewString(statusOps[id].PodList...)))
+		}
+
+		if pods.Len() > 0 {
+			if specOps[id].OperationType == OperationQuickRestart {
+				quickRestarts.Insert(pods.List()...)
+			} else if specOps[id].OperationType == OperationPodRestart {
+				podRestarts.Insert(pods.List()...)
+			}
+		}
+	}
+
+	return quickRestarts, podRestarts
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
@@ -2360,33 +2423,30 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
-	minVersion := ""
+func validateOperatonUpdate(oldOp, newOp *[]OperationSpec) error {
+	// Define a key extractor function
+	keyExtractor := func(op OperationSpec) int {
+		return op.OperationID
+	}
 
-	for idx := range pods {
-		if pods[idx].InitImage != "" {
-			version, err := GetImageVersion(pods[idx].InitImage)
-			if err != nil {
-				return "", err
-			}
+	// Convert the array of structs to a map
+	oldOpMap, err := ConvertToMap(*oldOp, keyExtractor)
+	if err != nil {
+		return err
+	}
 
-			if minVersion == "" {
-				minVersion = version
-				continue
-			}
+	newOpMap, err := ConvertToMap(*newOp, keyExtractor)
+	if err != nil {
+		return err
+	}
 
-			val, err := lib.CompareVersions(version, minVersion)
-			if err != nil {
-				return "", fmt.Errorf("failed to check image version: %v", err)
+	for key, value := range newOpMap {
+		if _, ok := oldOpMap[key]; ok {
+			if oldOpMap[key].OperationType != value.OperationType {
+				return fmt.Errorf("operation type of existing operation %d cannot be updated", key)
 			}
-
-			if val < 0 {
-				minVersion = version
-			}
-		} else {
-			return baseInitVersion, nil
 		}
 	}
 
-	return minVersion, nil
+	return nil
 }

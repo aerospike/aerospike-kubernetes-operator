@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -221,6 +222,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
 	}
 
+	if op := r.onDemandOperationType(pod.Name); op != noRestart {
+		restartType = mergeRestartType(restartType, op)
+
+		r.Log.Info("Pod warm/cold restarted requested. Need rolling restart",
+			"pod name", pod.Name, "operation", op, "restartType", restartType)
+	}
+
 	return restartType
 }
 
@@ -358,6 +366,8 @@ func (r *SingleClusterReconciler) restartPods(
 	}
 
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
+	restartedPodNames := make([]string, 0, len(podsToRestart))
+	restartedASDPodNames := make([]string, 0, len(podsToRestart))
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
 	for idx := range podsToRestart {
@@ -367,32 +377,42 @@ func (r *SingleClusterReconciler) restartPods(
 
 		if restartType == quickRestart {
 			// If ASD restart fails, then go ahead and restart the pod
-			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err == nil {
-				continue
-			}
-		}
-
-		if blockedK8sNodes.Has(pod.Spec.NodeName) {
-			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-				"podName", pod.Name)
-
-			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
+				r.Log.Error(err, "Failed to restart asd pod")
 				return reconcileError(err)
 			}
+
+			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
+		} else if restartType == podRestart {
+			if blockedK8sNodes.Has(pod.Spec.NodeName) {
+				r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+					"podName", pod.Name)
+
+				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+					return reconcileError(err)
+				}
+			}
+
+			if err := r.Client.Delete(context.TODO(), pod); err != nil {
+				r.Log.Error(err, "Failed to delete pod")
+				return reconcileError(err)
+			}
+
+			restartedPods = append(restartedPods, pod)
+			restartedPodNames = append(restartedPodNames, pod.Name)
+
+			r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
 		}
+	}
 
-		if err := r.Client.Delete(context.TODO(), pod); err != nil {
-			r.Log.Error(err, "Failed to delete pod")
-			return reconcileError(err)
-		}
-
-		restartedPods = append(restartedPods, pod)
-
-		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+	if err := r.updateOperationStatus(restartedASDPodNames, restartedPodNames); err != nil {
+		return reconcileError(err)
 	}
 
 	if len(restartedPods) > 0 {
-		return r.ensurePodsRunningAndReady(restartedPods)
+		if result := r.ensurePodsRunningAndReady(restartedPods); !result.isSuccess {
+			return result
+		}
 	}
 
 	return reconcileSuccess()
@@ -1465,4 +1485,130 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		r.Log.Info("Pod status patched successfully")
 		return nil
 	})
+}
+
+func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartType {
+	// If the Spec.Operation and Status.Operation are equal, return noRestart immediately.
+	if reflect.DeepEqual(r.aeroCluster.Spec.Operation, r.aeroCluster.Status.Operation) {
+		return noRestart
+	}
+
+	keyExtractor := func(op asdbv1.OperationSpec) int {
+		return op.OperationID
+	}
+
+	// Convert the array of structs to a map
+	// Duplicate OperationID is validated in webhook, hence ignoring error.
+	statusOpsMap, _ := asdbv1.ConvertToMap(r.aeroCluster.Status.Operation, keyExtractor)
+
+	for _, op := range r.aeroCluster.Spec.Operation {
+		if !asdbv1.ContainsString(op.PodList, podName) {
+			continue
+		}
+
+		statusOp, exists := statusOpsMap[op.OperationID]
+		if exists {
+			if !asdbv1.ContainsString(statusOp.PodList, podName) {
+				switch op.OperationType {
+				case asdbv1.OperationQuickRestart:
+					return quickRestart
+				case asdbv1.OperationPodRestart:
+					return podRestart
+				}
+			}
+		} else {
+			switch op.OperationType {
+			case asdbv1.OperationQuickRestart:
+				return quickRestart
+			case asdbv1.OperationPodRestart:
+				return podRestart
+			}
+		}
+	}
+
+	return noRestart
+}
+
+func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestarts []string) error {
+	if reflect.DeepEqual(r.aeroCluster.Spec.Operation, r.aeroCluster.Status.Operation) {
+		return nil
+	}
+
+	statusOperation := lib.DeepCopy(r.aeroCluster.Status.Operation).([]asdbv1.OperationSpec)
+
+	for _, op := range r.aeroCluster.Spec.Operation {
+		opIDExist := false
+
+		for idx, statusOp := range statusOperation {
+			if op.OperationID != statusOp.OperationID {
+				continue
+			}
+
+			opIDExist = true
+
+			if statusOp.OperationType == asdbv1.OperationQuickRestart {
+				for _, pod := range quickRestarts {
+					if asdbv1.ContainsString(op.PodList, pod) && !asdbv1.ContainsString(statusOp.PodList, pod) {
+						statusOp.PodList = append(statusOp.PodList, pod)
+					}
+				}
+			}
+
+			if statusOp.OperationType == asdbv1.OperationPodRestart {
+				for _, pod := range podRestarts {
+					if asdbv1.ContainsString(op.PodList, pod) && !asdbv1.ContainsString(statusOp.PodList, pod) {
+						statusOp.PodList = append(statusOp.PodList, pod)
+					}
+				}
+			}
+
+			statusOperation[idx] = statusOp
+
+			break
+		}
+
+		if !opIDExist {
+			podList := make([]string, 0)
+
+			if op.OperationType == asdbv1.OperationQuickRestart {
+				for _, pod := range quickRestarts {
+					if asdbv1.ContainsString(op.PodList, pod) {
+						podList = append(podList, pod)
+					}
+				}
+			}
+
+			if op.OperationType == asdbv1.OperationPodRestart {
+				for _, pod := range podRestarts {
+					if asdbv1.ContainsString(op.PodList, pod) {
+						podList = append(podList, pod)
+					}
+				}
+			}
+
+			statusOperation = append(statusOperation, asdbv1.OperationSpec{
+				OperationID:   op.OperationID,
+				OperationType: op.OperationType,
+				PodList:       podList,
+			})
+		}
+	}
+
+	// Get the old object, it may have been updated in between.
+	newAeroCluster := &asdbv1.AerospikeCluster{}
+	if err := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	); err != nil {
+		return err
+	}
+
+	newAeroCluster.Status.Operation = statusOperation
+
+	if err := r.patchStatus(newAeroCluster); err != nil {
+		return fmt.Errorf("error updating status: %w", err)
+	}
+
+	return nil
 }
