@@ -117,8 +117,8 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	if err := validateOperatonUpdate(
-		&old.Spec.Operation, &c.Spec.Operation,
+	if err := validateOperationUpdate(
+		&old.Spec.Operations, &c.Spec.Operations,
 	); err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
-	if err := validateOperation(&c.Spec.Operation, &c.Status.Operation); err != nil {
+	if err := c.validateOperation(); err != nil {
 		return err
 	}
 
@@ -273,23 +273,30 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	return c.validateSCNamespaces()
 }
 
-func validateOperation(specOps, statusOps *[]OperationSpec) error {
-	// Define a key extractor function
-	keyExtractor := func(op OperationSpec) int {
-		return op.OperationID
+func (c *AerospikeCluster) validateOperation() error {
+	if c.Status.AerospikeConfig == nil && len(c.Spec.Operations) != 0 {
+		return fmt.Errorf("operation cannot be set on create")
 	}
 
-	specOpsMap, err := ConvertToMap(*specOps, keyExtractor)
+	allPodNames := GetAllPodNames(c.Name, c.Spec.Size, c.Spec.RackConfig.Racks)
+
+	for idx := range c.Spec.Operations {
+		if ContainsString(c.Spec.Operations[idx].PodList, AllPods) {
+			if len(c.Spec.Operations[idx].PodList) > 1 {
+				return fmt.Errorf("cannot specify ALL and other pods in operation")
+			}
+		} else {
+			podSet := sets.NewString(c.Spec.Operations[idx].PodList...)
+			if !allPodNames.IsSuperset(sets.Set[string](podSet)) {
+				return fmt.Errorf("invalid pod name in operation")
+			}
+		}
+	}
+
+	quickRestarts, podRestarts, err := PodsToRestart(c.Spec.Operations, c.Status.Operations, allPodNames)
 	if err != nil {
 		return err
 	}
-
-	statusOpsMap, err := ConvertToMap(*statusOps, keyExtractor)
-	if err != nil {
-		return err
-	}
-
-	quickRestarts, podRestarts := podsToRestart(specOpsMap, statusOpsMap)
 
 	invalidPods := quickRestarts.Intersection(podRestarts)
 	if invalidPods.Len() > 0 {
@@ -299,31 +306,14 @@ func validateOperation(specOps, statusOps *[]OperationSpec) error {
 		)
 	}
 
-	return nil
-}
-
-func podsToRestart(specOps, statusOps map[int]OperationSpec) (quickRestarts, podRestarts sets.Set[string]) {
-	quickRestarts = make(sets.Set[string])
-	podRestarts = make(sets.Set[string])
-
-	for id := range specOps {
-		pods := sets.NewString()
-		if _, ok := statusOps[id]; !ok {
-			pods.Insert(specOps[id].PodList...)
-		} else {
-			pods.Union(sets.NewString(specOps[id].PodList...).Difference(sets.NewString(statusOps[id].PodList...)))
-		}
-
-		if pods.Len() > 0 {
-			if specOps[id].OperationType == OperationQuickRestart {
-				quickRestarts.Insert(pods.List()...)
-			} else if specOps[id].OperationType == OperationPodRestart {
-				podRestarts.Insert(pods.List()...)
-			}
-		}
+	// Don't allow any operation along with cluster scale up or racks added or removed
+	// New pods won't be available for operation
+	if len(quickRestarts)+len(podRestarts) > 0 &&
+		(c.Spec.Size > c.Status.Size || len(c.Spec.RackConfig.Racks) != len(c.Status.RackConfig.Racks)) {
+		return fmt.Errorf("cannot perform operation along with cluster scale up")
 	}
 
-	return quickRestarts, podRestarts
+	return nil
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
@@ -1362,7 +1352,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec)
 		return fmt.Errorf("cannot remove cluster security config")
 	}
 
-	if oldSecConfFound && newSecConfFound {
+	if oldSecConfFound {
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
@@ -2423,7 +2413,7 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func validateOperatonUpdate(oldOp, newOp *[]OperationSpec) error {
+func validateOperationUpdate(oldOp, newOp *[]OperationSpec) error {
 	// Define a key extractor function
 	keyExtractor := func(op OperationSpec) int {
 		return op.OperationID

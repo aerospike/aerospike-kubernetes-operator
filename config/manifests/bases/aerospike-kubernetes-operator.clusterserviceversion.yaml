@@ -71,7 +71,7 @@ spec:
           for more details.
         displayName: Max Unavailable
         path: maxUnavailable
-      - description: Operation is a list of on demand operation to be performed on
+      - description: Operations is a list of on demand operation to be performed on
           the Aerospike cluster.
         displayName: Operations
         path: operation

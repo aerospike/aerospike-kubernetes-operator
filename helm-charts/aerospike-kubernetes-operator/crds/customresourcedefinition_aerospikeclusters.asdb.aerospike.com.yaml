@@ -313,7 +313,7 @@ spec:
                   Refer Aerospike documentation for more details.
                 x-kubernetes-int-or-string: true
               operation:
-                description: Operation is a list of on demand operation to be performed
+                description: Operations is a list of on demand operation to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
@@ -334,7 +334,6 @@ spec:
                   required:
                   - operationID
                   - operationType
-                  - podList
                   type: object
                 type: array
               operatorClientCert:
@@ -9677,7 +9676,7 @@ spec:
                   now part of podSpec"
                 type: boolean
               operation:
-                description: Operation is a list of on demand operation to be performed
+                description: Operations is a list of on demand operation to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
@@ -9698,7 +9697,6 @@ spec:
                   required:
                   - operationID
                   - operationType
-                  - podList
                   type: object
                 type: array
               operatorClientCertSpec:

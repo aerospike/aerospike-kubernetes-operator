@@ -4,8 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
@@ -30,6 +34,8 @@ const (
 	FabricPortName    = "fabric"
 
 	InfoPortName = "info"
+
+	AllPods = "ALL"
 )
 
 const (
@@ -599,4 +605,78 @@ func ConvertToMap[T any](items []T, keyExtractor func(T) int) (map[int]T, error)
 	}
 
 	return itemMap, nil
+}
+
+func GetAllPodNames(clusterName string, clusterSize int32, racks []Rack) sets.Set[string] {
+	podNames := make(sets.Set[string])
+	topology := DistributeItems(
+		int(clusterSize), len(racks),
+	)
+
+	for idx := range racks {
+		for i := 0; i < topology[idx]; i++ {
+			podNames.Insert(fmt.Sprintf("%s-%s-%d", clusterName, strconv.Itoa(racks[idx].ID), i))
+		}
+	}
+
+	return podNames
+}
+
+func PodsToRestart(specOps, statusOps []OperationSpec, allPodNames sets.Set[string]) (quickRestarts,
+	podRestarts sets.Set[string], err error) {
+	quickRestarts = make(sets.Set[string])
+	podRestarts = make(sets.Set[string])
+
+	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
+	if reflect.DeepEqual(specOps, statusOps) {
+		return quickRestarts, podRestarts, nil
+	}
+
+	// Define a key extractor function
+	keyExtractor := func(op OperationSpec) int {
+		return op.OperationID
+	}
+
+	statusOpsMap, err := ConvertToMap(statusOps, keyExtractor)
+	if err != nil {
+		return quickRestarts, podRestarts, err
+	}
+
+	for _, specOp := range specOps {
+		// If no pod list is provided, it indicates that no pods need to be restarted.
+		if len(specOp.PodList) == 0 {
+			continue
+		}
+
+		var (
+			podsToRestart, specPods sets.Set[string]
+		)
+
+		if specOp.PodList[0] == AllPods {
+			specPods = allPodNames
+		} else {
+			specPods = sets.New[string](specOp.PodList...)
+		}
+
+		// If the operation is not present in the status, all pods need to be restarted.
+		// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
+		// If the operation is present in the status and all podList has ALL pods, no pods need to be restarted.
+		if _, exists := statusOpsMap[specOp.OperationID]; !exists || len(statusOpsMap[specOp.OperationID].PodList) == 0 {
+			podsToRestart = specPods
+		} else if statusOpsMap[specOp.OperationID].PodList[0] != AllPods {
+			podsToRestart = specPods.Difference(sets.New[string](statusOpsMap[specOp.OperationID].PodList...))
+		}
+
+		// Separate pods to be restarted based on operation type
+		if podsToRestart != nil && podsToRestart.Len() > 0 {
+			switch specOp.OperationType {
+			case OperationQuickRestart:
+				quickRestarts.Insert(podsToRestart.UnsortedList()...)
+			case OperationPodRestart:
+				podRestarts.Insert(podsToRestart.UnsortedList()...)
+			}
+		}
+	}
+
+	return quickRestarts, podRestarts, nil
 }

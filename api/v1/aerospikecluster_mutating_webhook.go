@@ -100,10 +100,6 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		return err
 	}
 
-	// Set defaults for user specified operations
-	// Populate all possible pod names in pod list if given empty
-	c.setDefaultOperation()
-
 	// Update racks configuration using global values where required.
 	if err := c.updateRacks(asLog); err != nil {
 		return err

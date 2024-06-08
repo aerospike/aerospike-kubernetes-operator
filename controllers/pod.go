@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1488,110 +1487,96 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 }
 
 func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartType {
-	// If the Spec.Operation and Status.Operation are equal, return noRestart immediately.
-	if reflect.DeepEqual(r.aeroCluster.Spec.Operation, r.aeroCluster.Status.Operation) {
-		return noRestart
-	}
-
-	keyExtractor := func(op asdbv1.OperationSpec) int {
-		return op.OperationID
-	}
-
-	// Convert the array of structs to a map
+	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Name, r.aeroCluster.Spec.Size, r.aeroCluster.Spec.RackConfig.Racks)
 	// Duplicate OperationID is validated in webhook, hence ignoring error.
-	statusOpsMap, _ := asdbv1.ConvertToMap(r.aeroCluster.Status.Operation, keyExtractor)
+	quickRestarts, podRestarts, _ := asdbv1.PodsToRestart(r.aeroCluster.Spec.Operations,
+		r.aeroCluster.Status.Operations, allPodNames)
 
-	for _, op := range r.aeroCluster.Spec.Operation {
-		if !asdbv1.ContainsString(op.PodList, podName) {
-			continue
-		}
-
-		statusOp, exists := statusOpsMap[op.OperationID]
-		if exists {
-			if !asdbv1.ContainsString(statusOp.PodList, podName) {
-				switch op.OperationType {
-				case asdbv1.OperationQuickRestart:
-					return quickRestart
-				case asdbv1.OperationPodRestart:
-					return podRestart
-				}
-			}
-		} else {
-			switch op.OperationType {
-			case asdbv1.OperationQuickRestart:
-				return quickRestart
-			case asdbv1.OperationPodRestart:
-				return podRestart
-			}
-		}
+	switch {
+	case quickRestarts.Has(podName):
+		return quickRestart
+	case podRestarts.Has(podName):
+		return podRestart
 	}
 
 	return noRestart
 }
 
 func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestarts []string) error {
-	if reflect.DeepEqual(r.aeroCluster.Spec.Operation, r.aeroCluster.Status.Operation) {
+	if len(quickRestarts)+len(podRestarts) == 0 {
 		return nil
 	}
 
-	statusOperation := lib.DeepCopy(r.aeroCluster.Status.Operation).([]asdbv1.OperationSpec)
+	// Define a key extractor function
+	keyExtractor := func(op asdbv1.OperationSpec) int {
+		return op.OperationID
+	}
 
-	for _, op := range r.aeroCluster.Spec.Operation {
-		opIDExist := false
+	statusOpsMap, err := asdbv1.ConvertToMap(r.aeroCluster.Status.Operations, keyExtractor)
+	if err != nil {
+		return err
+	}
 
-		for idx, statusOp := range statusOperation {
-			if op.OperationID != statusOp.OperationID {
+	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Name, r.aeroCluster.Spec.Size, r.aeroCluster.Spec.RackConfig.Racks)
+
+	quickRestartsSet := sets.New[string](quickRestarts...)
+	podRestartsSet := sets.New[string](podRestarts...)
+
+	for _, specOp := range r.aeroCluster.Spec.Operations {
+		// If no pod list is provided, it indicates that no pods need to be restarted.
+		if len(specOp.PodList) == 0 {
+			continue
+		}
+
+		var specPods sets.Set[string]
+
+		if specOp.PodList[0] == asdbv1.AllPods {
+			specPods = allPodNames
+		} else {
+			specPods = sets.New[string](specOp.PodList...)
+		}
+
+		if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
+			var podList []string
+
+			if specOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
+				podList = quickRestartsSet.Intersection(specPods).UnsortedList()
+			}
+
+			if specOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
+				podList = podRestartsSet.Intersection(specPods).UnsortedList()
+			}
+
+			statusOpsMap[specOp.OperationID] = asdbv1.OperationSpec{
+				OperationID:   specOp.OperationID,
+				OperationType: specOp.OperationType,
+				PodList:       podList,
+			}
+		} else {
+			if len(statusOp.PodList) != 0 && statusOp.PodList[0] == asdbv1.AllPods {
 				continue
 			}
 
-			opIDExist = true
+			statusPods := sets.New[string](statusOp.PodList...)
 
-			if statusOp.OperationType == asdbv1.OperationQuickRestart {
-				for _, pod := range quickRestarts {
-					if asdbv1.ContainsString(op.PodList, pod) && !asdbv1.ContainsString(statusOp.PodList, pod) {
-						statusOp.PodList = append(statusOp.PodList, pod)
-					}
-				}
+			if statusOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
+				statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
+					Difference(statusPods).UnsortedList()...)
 			}
 
-			if statusOp.OperationType == asdbv1.OperationPodRestart {
-				for _, pod := range podRestarts {
-					if asdbv1.ContainsString(op.PodList, pod) && !asdbv1.ContainsString(statusOp.PodList, pod) {
-						statusOp.PodList = append(statusOp.PodList, pod)
-					}
-				}
+			if statusOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
+				statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
+					Difference(statusPods).UnsortedList()...)
 			}
 
-			statusOperation[idx] = statusOp
-
-			break
+			statusOpsMap[specOp.OperationID] = statusOp
 		}
+	}
 
-		if !opIDExist {
-			podList := make([]string, 0)
-
-			if op.OperationType == asdbv1.OperationQuickRestart {
-				for _, pod := range quickRestarts {
-					if asdbv1.ContainsString(op.PodList, pod) {
-						podList = append(podList, pod)
-					}
-				}
-			}
-
-			if op.OperationType == asdbv1.OperationPodRestart {
-				for _, pod := range podRestarts {
-					if asdbv1.ContainsString(op.PodList, pod) {
-						podList = append(podList, pod)
-					}
-				}
-			}
-
-			statusOperation = append(statusOperation, asdbv1.OperationSpec{
-				OperationID:   op.OperationID,
-				OperationType: op.OperationType,
-				PodList:       podList,
-			})
-		}
+	// Convert statusOperation map back to a slice
+	updatedStatusOperation := make([]asdbv1.OperationSpec, 0, len(statusOpsMap))
+	for _, statusOp := range statusOpsMap {
+		updatedStatusOperation = append(updatedStatusOperation, statusOp)
 	}
 
 	// Get the old object, it may have been updated in between.
@@ -1604,7 +1589,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestar
 		return err
 	}
 
-	newAeroCluster.Status.Operation = statusOperation
+	newAeroCluster.Status.Operations = updatedStatusOperation
 
 	if err := r.patchStatus(newAeroCluster); err != nil {
 		return fmt.Errorf("error updating status: %w", err)
