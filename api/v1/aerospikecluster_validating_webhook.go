@@ -274,43 +274,31 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 }
 
 func (c *AerospikeCluster) validateOperation() error {
-	if c.Status.AerospikeConfig == nil && len(c.Spec.Operations) != 0 {
+	// Nothing to validate if no operation
+	if len(c.Spec.Operations) == 0 {
+		return nil
+	}
+
+	if c.Status.AerospikeConfig == nil {
 		return fmt.Errorf("operation cannot be set on create")
+	}
+
+	if len(c.Spec.Operations) > 1 {
+		return fmt.Errorf("only one operation can be set at a time")
 	}
 
 	allPodNames := GetAllPodNames(c.Name, c.Spec.Size, c.Spec.RackConfig.Racks)
 
-	for idx := range c.Spec.Operations {
-		if ContainsString(c.Spec.Operations[idx].PodList, AllPods) {
-			if len(c.Spec.Operations[idx].PodList) > 1 {
-				return fmt.Errorf("cannot specify ALL and other pods in operation")
-			}
-		} else {
-			podSet := sets.NewString(c.Spec.Operations[idx].PodList...)
-			if !allPodNames.IsSuperset(sets.Set[string](podSet)) {
-				return fmt.Errorf("invalid pod name in operation")
-			}
-		}
-	}
-
-	quickRestarts, podRestarts, err := PodsToRestart(c.Spec.Operations, c.Status.Operations, allPodNames)
-	if err != nil {
-		return err
-	}
-
-	invalidPods := quickRestarts.Intersection(podRestarts)
-	if invalidPods.Len() > 0 {
-		return fmt.Errorf(
-			"pods %v cannot be part of both quick restart and pod restart operations",
-			invalidPods,
-		)
+	podSet := sets.NewString(c.Spec.Operations[0].PodList...)
+	if !allPodNames.IsSuperset(sets.Set[string](podSet)) {
+		return fmt.Errorf("invalid pod name in operation")
 	}
 
 	// Don't allow any operation along with cluster scale up or racks added or removed
 	// New pods won't be available for operation
-	if len(quickRestarts)+len(podRestarts) > 0 &&
+	if !reflect.DeepEqual(c.Spec.Operations, c.Status.Operations) &&
 		(c.Spec.Size > c.Status.Size || len(c.Spec.RackConfig.Racks) != len(c.Status.RackConfig.Racks)) {
-		return fmt.Errorf("cannot perform operation along with cluster scale up")
+		return fmt.Errorf("cannot perform any on demand operation along with cluster scale up or racks added or removed")
 	}
 
 	return nil
@@ -2415,7 +2403,7 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 
 func validateOperationUpdate(oldOp, newOp *[]OperationSpec) error {
 	// Define a key extractor function
-	keyExtractor := func(op OperationSpec) int {
+	keyExtractor := func(op OperationSpec) string {
 		return op.OperationID
 	}
 
@@ -2425,15 +2413,11 @@ func validateOperationUpdate(oldOp, newOp *[]OperationSpec) error {
 		return err
 	}
 
-	newOpMap, err := ConvertToMap(*newOp, keyExtractor)
-	if err != nil {
-		return err
-	}
-
-	for key, value := range newOpMap {
+	for idx := range *newOp {
+		key := (*newOp)[idx].OperationID
 		if _, ok := oldOpMap[key]; ok {
-			if oldOpMap[key].OperationType != value.OperationType {
-				return fmt.Errorf("operation type of existing operation %d cannot be updated", key)
+			if oldOpMap[key].OperationType != (*newOp)[idx].OperationType {
+				return fmt.Errorf("operation type of existing operation %s cannot be updated", key)
 			}
 		}
 	}

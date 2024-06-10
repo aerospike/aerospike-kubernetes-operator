@@ -1503,12 +1503,12 @@ func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartT
 }
 
 func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestarts []string) error {
-	if len(quickRestarts)+len(podRestarts) == 0 {
+	if len(quickRestarts)+len(podRestarts) == 0 || len(r.aeroCluster.Spec.Operations) == 0 {
 		return nil
 	}
 
 	// Define a key extractor function
-	keyExtractor := func(op asdbv1.OperationSpec) int {
+	keyExtractor := func(op asdbv1.OperationSpec) string {
 		return op.OperationID
 	}
 
@@ -1522,55 +1522,47 @@ func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestar
 	quickRestartsSet := sets.New[string](quickRestarts...)
 	podRestartsSet := sets.New[string](podRestarts...)
 
-	for _, specOp := range r.aeroCluster.Spec.Operations {
-		// If no pod list is provided, it indicates that no pods need to be restarted.
-		if len(specOp.PodList) == 0 {
-			continue
+	specOp := r.aeroCluster.Spec.Operations[0]
+
+	var specPods sets.Set[string]
+
+	// If no pod list is provided, it indicates that all pods need to be restarted.
+	if len(specOp.PodList) == 0 {
+		specPods = allPodNames
+	} else {
+		specPods = sets.New[string](specOp.PodList...)
+	}
+
+	if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
+		var podList []string
+
+		if specOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
+			podList = quickRestartsSet.Intersection(specPods).UnsortedList()
 		}
 
-		var specPods sets.Set[string]
-
-		if specOp.PodList[0] == asdbv1.AllPods {
-			specPods = allPodNames
-		} else {
-			specPods = sets.New[string](specOp.PodList...)
+		if specOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
+			podList = podRestartsSet.Intersection(specPods).UnsortedList()
 		}
 
-		if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
-			var podList []string
-
-			if specOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
-				podList = quickRestartsSet.Intersection(specPods).UnsortedList()
-			}
-
-			if specOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
-				podList = podRestartsSet.Intersection(specPods).UnsortedList()
-			}
-
-			statusOpsMap[specOp.OperationID] = asdbv1.OperationSpec{
-				OperationID:   specOp.OperationID,
-				OperationType: specOp.OperationType,
-				PodList:       podList,
-			}
-		} else {
-			if len(statusOp.PodList) != 0 && statusOp.PodList[0] == asdbv1.AllPods {
-				continue
-			}
-
-			statusPods := sets.New[string](statusOp.PodList...)
-
-			if statusOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
-				statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
-					Difference(statusPods).UnsortedList()...)
-			}
-
-			if statusOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
-				statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
-					Difference(statusPods).UnsortedList()...)
-			}
-
-			statusOpsMap[specOp.OperationID] = statusOp
+		statusOpsMap[specOp.OperationID] = asdbv1.OperationSpec{
+			OperationID:   specOp.OperationID,
+			OperationType: specOp.OperationType,
+			PodList:       podList,
 		}
+	} else if len(statusOp.PodList) != 0 {
+		statusPods := sets.New[string](statusOp.PodList...)
+
+		if statusOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
+			statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
+				Difference(statusPods).UnsortedList()...)
+		}
+
+		if statusOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
+			statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
+				Difference(statusPods).UnsortedList()...)
+		}
+
+		statusOpsMap[specOp.OperationID] = statusOp
 	}
 
 	// Convert statusOperation map back to a slice

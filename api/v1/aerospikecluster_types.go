@@ -126,7 +126,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 	// Operations is a list of on demand operation to be performed on the Aerospike cluster.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
-	Operations []OperationSpec `json:"operation,omitempty"`
+	Operations []OperationSpec `json:"operations,omitempty"`
 }
 
 type OperationType string
@@ -143,9 +143,11 @@ type OperationSpec struct {
 	// OperationType is the type of operation to be performed on the Aerospike cluster.
 	// +kubebuilder:validation:Enum=quickRestart;podRestart
 	OperationType OperationType `json:"operationType"`
-	PodList       []string      `json:"podList,omitempty"`
-	// +kubebuilder:validation:Minimum=1
-	OperationID int `json:"operationID"`
+	// +kubebuilder:validation:MaxLength=5
+	// +kubebuilder:validation:MinLength=5
+	// +optional
+	OperationID string   `json:"operationID"`
+	PodList     []string `json:"podList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -722,7 +724,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
 	// Operations is a list of on demand operation to be performed on the Aerospike cluster.
-	Operations []OperationSpec `json:"operation,omitempty"`
+	Operations []OperationSpec `json:"operations,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster

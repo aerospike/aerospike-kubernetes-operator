@@ -1,8 +1,10 @@
 package v1
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"reflect"
 	"regexp"
@@ -34,8 +36,6 @@ const (
 	FabricPortName    = "fabric"
 
 	InfoPortName = "info"
-
-	AllPods = "ALL"
 )
 
 const (
@@ -592,13 +592,13 @@ func DistributeItems(totalItems, totalGroups int) []int {
 	return topology
 }
 
-func ConvertToMap[T any](items []T, keyExtractor func(T) int) (map[int]T, error) {
-	itemMap := make(map[int]T)
+func ConvertToMap[T any](items []T, keyExtractor func(T) string) (map[string]T, error) {
+	itemMap := make(map[string]T)
 
 	for _, item := range items {
 		key := keyExtractor(item)
 		if _, ok := itemMap[key]; ok {
-			return nil, fmt.Errorf("duplicate key %d", key)
+			return nil, fmt.Errorf("duplicate key %s", key)
 		}
 
 		itemMap[key] = item
@@ -627,13 +627,14 @@ func PodsToRestart(specOps, statusOps []OperationSpec, allPodNames sets.Set[stri
 	quickRestarts = make(sets.Set[string])
 	podRestarts = make(sets.Set[string])
 
+	// If no spec operations, no pods to restart
 	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
-	if reflect.DeepEqual(specOps, statusOps) {
+	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
 		return quickRestarts, podRestarts, nil
 	}
 
 	// Define a key extractor function
-	keyExtractor := func(op OperationSpec) int {
+	keyExtractor := func(op OperationSpec) string {
 		return op.OperationID
 	}
 
@@ -642,41 +643,66 @@ func PodsToRestart(specOps, statusOps []OperationSpec, allPodNames sets.Set[stri
 		return quickRestarts, podRestarts, err
 	}
 
-	for _, specOp := range specOps {
-		// If no pod list is provided, it indicates that no pods need to be restarted.
-		if len(specOp.PodList) == 0 {
-			continue
-		}
+	// Assuming only one operation is present in the spec.
+	specOp := specOps[0]
+	// If the operation is not a quick restart or pod restart, no pods need to be restarted.
+	if specOp.OperationType != OperationQuickRestart && specOp.OperationType != OperationPodRestart {
+		return quickRestarts, podRestarts, nil
+	}
 
-		var (
-			podsToRestart, specPods sets.Set[string]
-		)
+	var (
+		podsToRestart, specPods sets.Set[string]
+	)
+	// If no pod list is provided, it indicates that all pods need to be restarted.
+	if len(specOp.PodList) == 0 {
+		specPods = allPodNames
+	} else {
+		specPods = sets.New[string](specOp.PodList...)
+	}
 
-		if specOp.PodList[0] == AllPods {
-			specPods = allPodNames
+	// If the operation is not present in the status, all pods need to be restarted.
+	// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
+	// If the operation is present in the status and podList is empty, no pods need to be restarted.
+	if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
+		podsToRestart = specPods
+	} else {
+		var statusPods sets.Set[string]
+		if len(statusOp.PodList) == 0 {
+			statusPods = allPodNames
 		} else {
-			specPods = sets.New[string](specOp.PodList...)
+			statusPods = sets.New[string](statusOp.PodList...)
 		}
 
-		// If the operation is not present in the status, all pods need to be restarted.
-		// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
-		// If the operation is present in the status and all podList has ALL pods, no pods need to be restarted.
-		if _, exists := statusOpsMap[specOp.OperationID]; !exists || len(statusOpsMap[specOp.OperationID].PodList) == 0 {
-			podsToRestart = specPods
-		} else if statusOpsMap[specOp.OperationID].PodList[0] != AllPods {
-			podsToRestart = specPods.Difference(sets.New[string](statusOpsMap[specOp.OperationID].PodList...))
-		}
+		podsToRestart = specPods.Difference(statusPods)
+	}
 
-		// Separate pods to be restarted based on operation type
-		if podsToRestart != nil && podsToRestart.Len() > 0 {
-			switch specOp.OperationType {
-			case OperationQuickRestart:
-				quickRestarts.Insert(podsToRestart.UnsortedList()...)
-			case OperationPodRestart:
-				podRestarts.Insert(podsToRestart.UnsortedList()...)
-			}
+	// Separate pods to be restarted based on operation type
+	if podsToRestart != nil && podsToRestart.Len() > 0 {
+		switch specOp.OperationType {
+		case OperationQuickRestart:
+			quickRestarts.Insert(podsToRestart.UnsortedList()...)
+		case OperationPodRestart:
+			podRestarts.Insert(podsToRestart.UnsortedList()...)
 		}
 	}
 
 	return quickRestarts, podRestarts, nil
+}
+
+// charset contains the characters to use for the random string
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// randomString generates a random string of length n
+func randomString(n int) (string, error) {
+	b := make([]byte, n)
+	for i := range b {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+
+		b[i] = charset[num.Int64()]
+	}
+
+	return string(b), nil
 }

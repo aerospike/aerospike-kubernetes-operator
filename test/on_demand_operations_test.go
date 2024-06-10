@@ -4,10 +4,11 @@ import (
 	goctx "context"
 	"fmt"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe(
@@ -40,48 +41,6 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-				It(
-					"Should execute multiple operations on different pods", func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						oldPodIDs, err := getPodIDs(ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						operations := []asdbv1.OperationSpec{
-							{
-								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
-								PodList:       []string{"operations-1-1"},
-							},
-							{
-								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   2,
-								PodList:       []string{"operations-1-0"},
-							},
-						}
-
-						aeroCluster.Spec.Operations = operations
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						operationTypeMap := map[string]asdbv1.OperationType{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": asdbv1.OperationQuickRestart,
-						}
-
-						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
 
 				It(
 					"Should execute quickRestart operations on all pods", func() {
@@ -96,8 +55,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
-								PodList:       []string{"ALL"},
 							},
 						}
 
@@ -134,8 +91,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   2,
-								PodList:       []string{"ALL"},
 							},
 						}
 
@@ -172,7 +127,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   1,
 								PodList:       []string{"operations-1-0"},
 							},
 						}
@@ -222,8 +176,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   2,
-								PodList:       []string{"ALL"},
 							},
 						}
 
@@ -261,8 +213,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   2,
-								PodList:       []string{"ALL"},
 							},
 						}
 
@@ -292,7 +242,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				It(
-					"Should fail if operations have duplicate id", func() {
+					"Should fail if there are more than 1 operations", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -301,61 +251,9 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
 							},
 							{
 								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   1,
-								PodList:       []string{"ALL"},
-							},
-						}
-
-						aeroCluster.Spec.Operations = operations
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).To(HaveOccurred())
-					},
-				)
-
-				It(
-					"should fail if multiple operations target the same pod", func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						operations := []asdbv1.OperationSpec{
-							{
-								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
-								PodList:       []string{"operations-1-0"},
-							},
-							{
-								OperationType: asdbv1.OperationPodRestart,
-								OperationID:   2,
-								PodList:       []string{"ALL"},
-							},
-						}
-
-						aeroCluster.Spec.Operations = operations
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).To(HaveOccurred())
-					},
-				)
-
-				It(
-					"should fail if a specific pod name is mentioned along with 'ALL' in the pod list", func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						operations := []asdbv1.OperationSpec{
-							{
-								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
-								PodList:       []string{"operations-1-0", "ALL"},
 							},
 						}
 
@@ -376,7 +274,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
 								PodList:       []string{"operations-1-0", "invalid-pod"},
 							},
 						}
@@ -398,7 +295,6 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
 								PodList:       []string{"operations-1-0"},
 							},
 						}
@@ -427,19 +323,12 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
 								PodList:       []string{"operations-1-0"},
 							},
 						}
 
 						aeroCluster.Spec.Operations = operations
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						// Modify operationType
-						operations[0].OperationType = asdbv1.OperationPodRestart
-						aeroCluster.Spec.Operations = operations
+						aeroCluster.Spec.Size++
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())

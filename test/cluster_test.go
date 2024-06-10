@@ -281,8 +281,6 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						operations := []asdbv1.OperationSpec{
 							{
 								OperationType: asdbv1.OperationQuickRestart,
-								OperationID:   1,
-								PodList:       []string{"ALL"},
 							},
 						}
 						aeroCluster.Spec.Operations = operations

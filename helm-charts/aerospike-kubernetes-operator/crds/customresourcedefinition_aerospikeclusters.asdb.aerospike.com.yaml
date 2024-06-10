@@ -312,14 +312,15 @@ spec:
                   This value is used to create PodDisruptionBudget. Defaults to 1.
                   Refer Aerospike documentation for more details.
                 x-kubernetes-int-or-string: true
-              operation:
+              operations:
                 description: Operations is a list of on demand operation to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
                     operationID:
-                      minimum: 1
-                      type: integer
+                      maxLength: 5
+                      minLength: 5
+                      type: string
                     operationType:
                       description: OperationType is the type of operation to be performed
                         on the Aerospike cluster.
@@ -332,7 +333,6 @@ spec:
                         type: string
                       type: array
                   required:
-                  - operationID
                   - operationType
                   type: object
                 type: array
@@ -9675,14 +9675,15 @@ spec:
                   is the port requested by the user. Deprecated: MultiPodPerHost is
                   now part of podSpec"
                 type: boolean
-              operation:
+              operations:
                 description: Operations is a list of on demand operation to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
                     operationID:
-                      minimum: 1
-                      type: integer
+                      maxLength: 5
+                      minLength: 5
+                      type: string
                     operationType:
                       description: OperationType is the type of operation to be performed
                         on the Aerospike cluster.
@@ -9695,7 +9696,6 @@ spec:
                         type: string
                       type: array
                   required:
-                  - operationID
                   - operationType
                   type: object
                 type: array
