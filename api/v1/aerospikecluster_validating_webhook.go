@@ -2416,8 +2416,8 @@ func validateOperationUpdate(oldOp, newOp *[]OperationSpec) error {
 	for idx := range *newOp {
 		key := (*newOp)[idx].OperationID
 		if _, ok := oldOpMap[key]; ok {
-			if oldOpMap[key].OperationType != (*newOp)[idx].OperationType {
-				return fmt.Errorf("operation type of existing operation %s cannot be updated", key)
+			if !reflect.DeepEqual(oldOpMap[key], (*newOp)[idx]) {
+				return fmt.Errorf("operation %s cannot be updated", key)
 			}
 		}
 	}

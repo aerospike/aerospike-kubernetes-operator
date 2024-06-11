@@ -314,6 +314,34 @@ var _ = Describe(
 				)
 
 				It(
+					"should fail if podList is modified", func() {
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						operations := []asdbv1.OperationSpec{
+							{
+								OperationType: asdbv1.OperationQuickRestart,
+								PodList:       []string{"operations-1-0"},
+							},
+						}
+
+						aeroCluster.Spec.Operations = operations
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						// Modify podList
+						operations[0].PodList = []string{"operations-1-1"}
+						aeroCluster.Spec.Operations = operations
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+					},
+				)
+
+				It(
 					"should fail any operation along with cluster scale-up", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
