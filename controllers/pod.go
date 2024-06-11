@@ -1488,8 +1488,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 
 func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartType {
 	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Name, r.aeroCluster.Spec.Size, r.aeroCluster.Spec.RackConfig.Racks)
-	// Duplicate OperationID is validated in webhook, hence ignoring error.
-	quickRestarts, podRestarts, _ := asdbv1.PodsToRestart(r.aeroCluster.Spec.Operations,
+	quickRestarts, podRestarts := utils.PodsToRestart(r.aeroCluster.Spec.Operations,
 		r.aeroCluster.Status.Operations, allPodNames)
 
 	switch {

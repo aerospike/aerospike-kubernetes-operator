@@ -347,7 +347,7 @@ func validateOperationTypes(ctx goctx.Context, aeroCluster *asdbv1.AerospikeClus
 	for podName, opType := range operationTypeMap {
 		switch opType {
 		case asdbv1.OperationQuickRestart:
-			if newPodPidMap[podName].podUID != pid[podName].podUID && newPodPidMap[podName].asdPID == pid[podName].asdPID {
+			if newPodPidMap[podName].podUID != pid[podName].podUID || newPodPidMap[podName].asdPID == pid[podName].asdPID {
 				return fmt.Errorf("failed to quick restart pod %s", podName)
 			}
 		case asdbv1.OperationPodRestart:

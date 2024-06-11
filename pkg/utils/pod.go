@@ -5,15 +5,19 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
@@ -119,17 +123,6 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// GetPod get pod from pod list by name
-func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
-	for idx := range pods {
-		if podName == pods[idx].Name {
-			return &pods[idx]
-		}
-	}
-
-	return nil
-}
-
 // GetRackIDFromPodName returns the rack id given a pod name.
 func GetRackIDFromPodName(podName string) (*int, error) {
 	parts := strings.Split(podName, "-")
@@ -218,4 +211,69 @@ func IsPodReasonUnschedulable(pod *corev1.Pod) bool {
 	}
 
 	return false
+}
+
+func PodsToRestart(specOps, statusOps []asdbv1.OperationSpec, allPodNames sets.Set[string]) (quickRestarts,
+	podRestarts sets.Set[string]) {
+	quickRestarts = make(sets.Set[string])
+	podRestarts = make(sets.Set[string])
+
+	// If no spec operations, no pods to restart
+	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
+	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
+		return quickRestarts, podRestarts
+	}
+
+	// Define a key extractor function
+	keyExtractor := func(op asdbv1.OperationSpec) string {
+		return op.OperationID
+	}
+
+	// Ignoring duplicate key error as the operationID will always be unique in status.
+	statusOpsMap, _ := asdbv1.ConvertToMap(statusOps, keyExtractor)
+
+	// Assuming only one operation is present in the spec.
+	specOp := specOps[0]
+	// If the operation is not a quick restart or pod restart, no pods need to be restarted.
+	if specOp.OperationType != asdbv1.OperationQuickRestart && specOp.OperationType != asdbv1.OperationPodRestart {
+		return quickRestarts, podRestarts
+	}
+
+	var (
+		podsToRestart, specPods sets.Set[string]
+	)
+	// If no pod list is provided, it indicates that all pods need to be restarted.
+	if len(specOp.PodList) == 0 {
+		specPods = allPodNames
+	} else {
+		specPods = sets.New[string](specOp.PodList...)
+	}
+
+	// If the operation is not present in the status, all pods need to be restarted.
+	// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
+	// If the operation is present in the status and podList is empty, no pods need to be restarted.
+	if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
+		podsToRestart = specPods
+	} else {
+		var statusPods sets.Set[string]
+		if len(statusOp.PodList) == 0 {
+			statusPods = allPodNames
+		} else {
+			statusPods = sets.New[string](statusOp.PodList...)
+		}
+
+		podsToRestart = specPods.Difference(statusPods)
+	}
+
+	// Separate pods to be restarted based on operation type
+	if podsToRestart != nil && podsToRestart.Len() > 0 {
+		switch specOp.OperationType {
+		case asdbv1.OperationQuickRestart:
+			quickRestarts.Insert(podsToRestart.UnsortedList()...)
+		case asdbv1.OperationPodRestart:
+			podRestarts.Insert(podsToRestart.UnsortedList()...)
+		}
+	}
+
+	return quickRestarts, podRestarts
 }
