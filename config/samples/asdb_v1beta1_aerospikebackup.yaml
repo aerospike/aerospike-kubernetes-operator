@@ -1,0 +1,12 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackup
+metadata:
+  labels:
+    app.kubernetes.io/name: aerospikebackup
+    app.kubernetes.io/instance: aerospikebackup-sample
+    app.kubernetes.io/part-of: aerospike-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: aerospike-kubernetes-operator
+  name: aerospikebackup-sample
+spec:
+  # TODO(user): Add fields here
