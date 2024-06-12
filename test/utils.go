@@ -15,6 +15,7 @@ import (
 	"time"
 
 	set "github.com/deckarep/golang-set/v2"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -28,6 +29,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 var (
@@ -42,7 +44,7 @@ var cacertSecrets map[string][]byte
 const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
 const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
 
-const tlsSecretName = "aerospike-secret"
+const aerospikeSecretName = "aerospike-secret"
 const tlsCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
 const authSecretName = "auth-secret"
 const authSecretNameForUpdate = "auth-update"
@@ -189,7 +191,7 @@ func createConfigSecret(
 	// Create configSecret
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tlsSecretName,
+			Name:      aerospikeSecretName,
 			Namespace: namespace,
 			Labels:    labels,
 		},
@@ -333,6 +335,8 @@ func isClusterStateValid(
 		pkgLog.Info("Cluster phase is not correct")
 		return false
 	}
+
+	pkgLog.Info("Cluster state is validated successfully")
 
 	return true
 }
@@ -766,4 +770,49 @@ func getGitRepoRootPath() (string, error) {
 	}
 
 	return strings.TrimSpace(string(path)), nil
+}
+
+func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, configContext string, pod *asdbv1.AerospikePodStatus) (lib.Stats, error) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+
+	host, err := createHost(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	asinfo := info.NewAsInfo(
+		log, host, getClientPolicy(aeroCluster, k8sClient),
+	)
+
+	confs, err := getAsConfig(asinfo, configContext)
+	if err != nil {
+		return nil, err
+	}
+
+	return confs[configContext].(lib.Stats), nil
+}
+
+func getPasswordFromSecret(k8sClient client.Client,
+	secretNamespcedName types.NamespacedName, passFileName string,
+) (string, error) {
+	secret := &corev1.Secret{}
+
+	err := k8sClient.Get(goctx.TODO(), secretNamespcedName, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
+	}
+
+	passBytes, ok := secret.Data[passFileName]
+	if !ok {
+		return "", fmt.Errorf(
+			"failed to get password file in secret %s, fileName %s",
+			secretNamespcedName, passFileName,
+		)
+	}
+
+	return string(passBytes), nil
 }

@@ -31,11 +31,15 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	prevServerVersion   = "6.4.0.0"
-	pre6Version         = "5.7.0.17"
-	version6            = "6.0.0.5"
-	latestServerVersion = "7.0.0.0"
+	nextServerVersion   = "7.1.0.0_1"
+	latestServerVersion = "7.1.0.0"
 	invalidVersion      = "3.0.0.4"
+
+	post6Version = "7.0.0.0"
+	pre6Version  = "5.7.0.17"
+	version6     = "6.0.0.5"
+
+	latestSchemaVersion = "7.1.0"
 )
 
 var (
@@ -43,11 +47,14 @@ var (
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
-	prevImage          = fmt.Sprintf("%s:%s", baseImage, prevServerVersion)
+	nextImage          = fmt.Sprintf("%s:%s", baseImage, nextServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	version6Image      = fmt.Sprintf("%s:%s", baseImage, version6)
 	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre6Image          = fmt.Sprintf("%s:%s", baseImage, pre6Version)
+
+	// Storage wipe test
+	post6Image    = fmt.Sprintf("%s:%s", baseImage, post6Version)
+	version6Image = fmt.Sprintf("%s:%s", baseImage, version6)
+	pre6Image     = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func rollingRestartClusterByEnablingTLS(
@@ -63,7 +70,7 @@ func rollingRestartClusterByEnablingTLS(
 	aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-				SecretName:         tlsSecretName,
+				SecretName:         aerospikeSecretName,
 				CaCertsFilename:    "cacert.pem",
 				ClientCertFilename: "svc_cluster_chain.pem",
 				ClientKeyFilename:  "svc_key.pem",
@@ -332,7 +339,7 @@ func rollingRestartClusterTest(
 		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
 	}
 
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = defaultProtofdmax + 1
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["indent-allocations"] = true
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -341,7 +348,7 @@ func rollingRestartClusterTest(
 
 	// Verify that the change has been applied on the cluster.
 	return validateAerospikeConfigServiceClusterUpdate(
-		log, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
+		log, k8sClient, ctx, clusterNamespacedName, []string{"indent-allocations"},
 	)
 }
 
@@ -862,7 +869,7 @@ func createAerospikeClusterPost460(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -925,7 +932,7 @@ func createAerospikeClusterPost560(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1121,6 +1128,7 @@ func createDummyAerospikeCluster(
 					"service": map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
+						"auto-pin":         "none",
 					},
 					"security": map[string]interface{}{},
 					"network":  getNetworkConfig(),
@@ -1309,7 +1317,7 @@ func createBasicTLSCluster(
 			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
 				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         tlsSecretName,
+						SecretName:         aerospikeSecretName,
 						CaCertsFilename:    "cacert.pem",
 						ClientCertFilename: "svc_cluster_chain.pem",
 						ClientKeyFilename:  "svc_key.pem",
@@ -1442,15 +1450,12 @@ func aerospikeClusterCreateUpdateWithTO(
 	// Apply the update.
 	if desired.Spec.AerospikeAccessControl != nil {
 		current.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{}
-		lib.DeepCopy(&current.Spec, &desired.Spec)
+		current.Spec = *lib.DeepCopy(&desired.Spec).(*asdbv1.AerospikeClusterSpec)
 	} else {
 		current.Spec.AerospikeAccessControl = nil
 	}
 
-	lib.DeepCopy(
-		&current.Spec.AerospikeConfig.Value,
-		&desired.Spec.AerospikeConfig.Value,
-	)
+	current.Spec.AerospikeConfig.Value = desired.Spec.AerospikeConfig.DeepCopy().Value
 
 	if err := k8sClient.Update(ctx, current); err != nil {
 		return err
@@ -1467,7 +1472,7 @@ func aerospikeClusterCreateUpdate(
 	ctx goctx.Context,
 ) error {
 	return aerospikeClusterCreateUpdateWithTO(
-		k8sClient, desired, ctx, retryInterval, getTimeout(1),
+		k8sClient, desired, ctx, retryInterval, getTimeout(desired.Spec.Size),
 	)
 }
 
@@ -1535,7 +1540,7 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 		Name: aerospikeConfigSecret,
 		Source: asdbv1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: tlsSecretName,
+				SecretName: aerospikeSecretName,
 			},
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
@@ -1552,6 +1557,23 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 		"storage-engine": map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
+		},
+	}
+}
+
+func getSCNamespaceConfigWithSet(name, path string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		"storage-engine": map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{path},
+		},
+		"sets": []map[string]interface{}{
+			{
+				"name": "testset",
+			},
 		},
 	}
 }

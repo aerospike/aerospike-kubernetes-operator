@@ -159,6 +159,11 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.DisablePDB != nil {
+		in, out := &in.DisablePDB, &out.DisablePDB
+		*out = new(bool)
+		**out = **in
+	}
 	in.Storage.DeepCopyInto(&out.Storage)
 	if in.AerospikeAccessControl != nil {
 		in, out := &in.AerospikeAccessControl, &out.AerospikeAccessControl
@@ -168,6 +173,11 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 	if in.AerospikeConfig != nil {
 		in, out := &in.AerospikeConfig, &out.AerospikeConfig
 		*out = (*in).DeepCopy()
+	}
+	if in.EnableDynamicConfigUpdate != nil {
+		in, out := &in.EnableDynamicConfigUpdate, &out.EnableDynamicConfigUpdate
+		*out = new(bool)
+		**out = **in
 	}
 	if in.ValidationPolicy != nil {
 		in, out := &in.ValidationPolicy, &out.ValidationPolicy
@@ -236,6 +246,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.DisablePDB != nil {
+		in, out := &in.DisablePDB, &out.DisablePDB
+		*out = new(bool)
+		**out = **in
+	}
 	if in.MultiPodPerHost != nil {
 		in, out := &in.MultiPodPerHost, &out.MultiPodPerHost
 		*out = new(bool)
@@ -250,6 +265,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 	if in.AerospikeConfig != nil {
 		in, out := &in.AerospikeConfig, &out.AerospikeConfig
 		*out = (*in).DeepCopy()
+	}
+	if in.EnableDynamicConfigUpdate != nil {
+		in, out := &in.EnableDynamicConfigUpdate, &out.EnableDynamicConfigUpdate
+		*out = new(bool)
+		**out = **in
 	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
@@ -880,6 +900,11 @@ func (in *RackConfig) DeepCopyInto(out *RackConfig) {
 	}
 	if in.RollingUpdateBatchSize != nil {
 		in, out := &in.RollingUpdateBatchSize, &out.RollingUpdateBatchSize
+		*out = new(intstr.IntOrString)
+		**out = **in
+	}
+	if in.ScaleDownBatchSize != nil {
+		in, out := &in.ScaleDownBatchSize, &out.ScaleDownBatchSize
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}

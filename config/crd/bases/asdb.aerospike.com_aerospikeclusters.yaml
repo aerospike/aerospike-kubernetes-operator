@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 3.2.2
+    aerospike-kubernetes-operator/version: 3.3.0
     controller-gen.kubebuilder.io/version: v0.12.1
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -281,6 +281,16 @@ spec:
                     - customInterface
                     type: string
                 type: object
+              disablePDB:
+                description: Disable the PodDisruptionBudget creation for the Aerospike
+                  cluster.
+                type: boolean
+              enableDynamicConfigUpdate:
+                description: EnableDynamicConfigUpdate enables dynamic config update
+                  flow of the operator. If enabled, operator will try to update the
+                  Aerospike config dynamically. In case of inconsistent state during
+                  dynamic config update, operator falls back to rolling restart.
+                type: boolean
               image:
                 description: Aerospike server image
                 type: string
@@ -8684,7 +8694,14 @@ spec:
                     - type: integer
                     - type: string
                     description: RollingUpdateBatchSize is the percentage/number of
-                      rack pods that will be restarted simultaneously
+                      rack pods that can be restarted simultaneously
+                    x-kubernetes-int-or-string: true
+                  scaleDownBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: ScaleDownBatchSize is the percentage/number of rack
+                      pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
               rosterNodeBlockList:
@@ -9588,9 +9605,24 @@ spec:
                     - customInterface
                     type: string
                 type: object
+              disablePDB:
+                description: Disable the PodDisruptionBudget creation for the Aerospike
+                  cluster.
+                type: boolean
+              enableDynamicConfigUpdate:
+                description: EnableDynamicConfigUpdate enables dynamic config update
+                  flow of the operator. If enabled, operator will try to update the
+                  Aerospike config dynamically. In case of inconsistent state during
+                  dynamic config update, operator falls back to rolling restart.
+                type: boolean
               image:
                 description: Aerospike server image
                 type: string
+              isReadinessProbeEnabled:
+                description: IsReadinessProbeEnabled tells whether the readiness probe
+                  is present in all pods or not. Moreover, PodDisruptionBudget should
+                  be created for the Aerospike cluster only when this field is enabled.
+                type: boolean
               k8sNodeBlockList:
                 description: K8sNodeBlockList is a list of Kubernetes nodes which
                   are not used for Aerospike pods.
@@ -14238,6 +14270,15 @@ spec:
                       items:
                         type: string
                       type: array
+                    dynamicConfigUpdateStatus:
+                      description: DynamicConfigUpdateStatus is the status of dynamic
+                        config update operation. Empty "" status means successful
+                        update.
+                      enum:
+                      - Failed
+                      - PartiallyFailed
+                      - ""
+                      type: string
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -14249,16 +14290,16 @@ spec:
                     image:
                       description: Image is the Aerospike image this pod is running.
                       type: string
+                    initImage:
+                      description: InitImage is the Aerospike init image this pod's
+                        init container is running.
+                      type: string
                     initializedVolumes:
                       description: InitializedVolumes is the list of volume names
                         that have already been initialized.
                       items:
                         type: string
                       type: array
-                    isSecurityEnabled:
-                      description: IsSecurityEnabled is true if security is enabled
-                        in the pod
-                      type: boolean
                     networkPolicyHash:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
@@ -14282,7 +14323,6 @@ spec:
                   required:
                   - aerospikeConfigHash
                   - image
-                  - isSecurityEnabled
                   - networkPolicyHash
                   - podIP
                   - podPort
@@ -18128,7 +18168,14 @@ spec:
                     - type: integer
                     - type: string
                     description: RollingUpdateBatchSize is the percentage/number of
-                      rack pods that will be restarted simultaneously
+                      rack pods that can be restarted simultaneously
+                    x-kubernetes-int-or-string: true
+                  scaleDownBatchSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: ScaleDownBatchSize is the percentage/number of rack
+                      pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
               resources:

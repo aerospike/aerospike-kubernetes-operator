@@ -24,10 +24,5 @@ func (c *AerospikeConfigSpec) UnmarshalJSON(b []byte) error {
 }
 
 func (c *AerospikeConfigSpec) DeepCopy() *AerospikeConfigSpec {
-	dst := &AerospikeConfigSpec{
-		Value: map[string]interface{}{},
-	}
-	lib.DeepCopy(dst, c)
-
-	return dst
+	return lib.DeepCopy(c).(*AerospikeConfigSpec)
 }

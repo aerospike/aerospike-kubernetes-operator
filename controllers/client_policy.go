@@ -53,6 +53,55 @@ func (pp fromSecretPasswordProvider) Get(
 	return string(passBytes), nil
 }
 
+// GetDefaultPassword returns the default password for cluster using AerospikeClusterSpec.
+func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeClusterSpec) string {
+	defaultPasswordFilePath := asdbv1.GetDefaultPasswordFilePath(spec.AerospikeConfig)
+
+	// No default password file specified. Give default password.
+	if defaultPasswordFilePath == nil {
+		return asdbv1.DefaultAdminPassword
+	}
+
+	// Default password file specified. Get the secret name from the volume
+	volume := spec.Storage.GetVolumeForAerospikePath(*defaultPasswordFilePath)
+	secretName := volume.Source.Secret.SecretName
+
+	// Get the password from the secret.
+	passwordFileName := filepath.Base(*defaultPasswordFilePath)
+
+	password, err := pp.getPasswordFromSecret(secretName, passwordFileName)
+	if err != nil {
+		pkgLog.Error(err, "Failed to get password from secret")
+
+		return asdbv1.DefaultAdminPassword
+	}
+
+	return password
+}
+
+// GetPasswordFromSecret returns the password from the secret.
+func (pp fromSecretPasswordProvider) getPasswordFromSecret(
+	secretName string, passFileName string,
+) (string, error) {
+	secretNamespcedName := types.NamespacedName{Name: secretName, Namespace: pp.namespace}
+	secret := &corev1.Secret{}
+
+	err := (*pp.k8sClient).Get(context.TODO(), secretNamespcedName, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
+	}
+
+	passBytes, ok := secret.Data[passFileName]
+	if !ok {
+		return "", fmt.Errorf(
+			"failed to get password file in secret %s, fileName %s",
+			secretNamespcedName, passFileName,
+		)
+	}
+
+	return string(passBytes), nil
+}
+
 func (r *SingleClusterReconciler) getPasswordProvider() fromSecretPasswordProvider {
 	return fromSecretPasswordProvider{
 		k8sClient: &r.Client, namespace: r.aeroCluster.Namespace,

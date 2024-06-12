@@ -8,10 +8,12 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -58,6 +60,7 @@ var aerospikeConfigWithSecurityWithQuota = &asdbv1.AerospikeConfigSpec{
 
 var _ = Describe(
 	"AccessControl", func() {
+		ctx := goctx.TODO()
 
 		Context(
 			"AccessControl", func() {
@@ -1330,8 +1333,6 @@ var _ = Describe(
 				Context(
 					"When cluster is not deployed", func() {
 
-						ctx := goctx.Background()
-
 						clusterName := "ac-invalid"
 						clusterNamespacedName := getNamespacedName(
 							clusterName, namespace,
@@ -1625,8 +1626,6 @@ var _ = Describe(
 				)
 				Context(
 					"When cluster is deployed", func() {
-						ctx := goctx.Background()
-
 						It(
 							"SecurityEnable: should enable security in running cluster",
 							func() {
@@ -1904,6 +1903,8 @@ var _ = Describe(
 												"read-write.test",
 												"read-write-udf.test.users",
 											},
+											ReadQuota:  2,
+											WriteQuota: 2,
 										},
 										{
 											Name: "roleToDrop",
@@ -1960,6 +1961,82 @@ var _ = Describe(
 									Expect(err).ToNot(HaveOccurred())
 								}
 								if err = aerospikeConfigSpec.setEnableQuotas(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, &accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("DisableQuota")
+
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+										},
+										{
+											Name: "roleToDrop",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: authSecretName,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: authSecretName,
+											Roles: []string{
+												"profiler",
+												"sys-admin",
+											},
+										},
+
+										{
+											Name:       "userToDrop",
+											SecretName: authSecretName,
+											Roles: []string{
+												"profiler",
+											},
+										},
+									},
+								}
+
+								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+								if err = aerospikeConfigSpec.setEnableSecurity(true); err != nil {
+									Expect(err).ToNot(HaveOccurred())
+								}
+								if err = aerospikeConfigSpec.setEnableQuotas(false); err != nil {
 									Expect(err).ToNot(HaveOccurred())
 								}
 
@@ -2067,6 +2144,101 @@ var _ = Describe(
 				)
 			},
 		)
+
+		Context("Using default-password-file", func() {
+			var clusterNamespacedName = getNamespacedName(
+				"default-password-file", namespace,
+			)
+
+			It("Should fail if volume is not present for default-password-file", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "randompath",
+				}
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("Should fail if volume source is not secret for default-password-file", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "/etc/aerospike/defaultpass/password.conf",
+				}
+				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+					Name: "defaultpass",
+					Source: asdbv1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+					Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+						Path: "/etc/aerospike/defaultpass",
+					},
+				})
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("Should use default-password-file when configured", func() {
+				By("Creating cluster")
+
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				racks := getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Racks = racks
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				// This file is already added in the storage volume backed by the secret.
+				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
+					"default-password-file": "/etc/aerospike/secret/password.conf",
+				}
+
+				err := k8sClient.Create(ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Cluster is not ready, connect with cluster using default password")
+
+				// Get default password from secret.
+				secretNamespcedName := types.NamespacedName{
+					Name:      aerospikeSecretName,
+					Namespace: aeroCluster.Namespace,
+				}
+				passFileName := "password.conf"
+				pass, err := getPasswordFromSecret(k8sClient, secretNamespcedName, passFileName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Cluster is not yet ready. Therefore, it should be using default password
+				Eventually(func() error {
+					clientPolicy := getClientPolicy(aeroCluster, k8sClient)
+					clientPolicy.Password = pass
+
+					client, cerr := getClientWithPolicy(
+						pkgLog, aeroCluster, k8sClient, clientPolicy)
+					if cerr != nil {
+						return cerr
+					}
+
+					nodes := client.GetNodeNames()
+					if len(nodes) == 0 {
+						return fmt.Errorf("Not connected")
+					}
+
+					pkgLog.Info("Connected to cluster", "nodes", nodes, "pass", pass)
+
+					return nil
+				}, 5*time.Minute).ShouldNot(HaveOccurred())
+
+				By("Try scaleup")
+				err = scaleUpClusterTest(
+					k8sClient, ctx, clusterNamespacedName, 1,
+				)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 	},
 )
 
@@ -2155,12 +2327,10 @@ func validateAccessControl(
 
 	err = validateRoles(clientP, &aeroCluster.Spec)
 	if err != nil {
-		return fmt.Errorf("error creating client: %v", err)
+		return fmt.Errorf("error validating roles: %v", err)
 	}
 
-	err = validateUsers(clientP, aeroCluster)
-
-	return err
+	return validateUsers(clientP, aeroCluster)
 }
 
 func getRole(

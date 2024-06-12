@@ -32,7 +32,11 @@ const (
 	InfoPortName = "info"
 )
 
-const baseVersion = "4.9.0.3"
+const (
+	baseVersion                  = "4.9.0.3"
+	baseInitVersion              = "1.0.0"
+	minInitVersionForDynamicConf = "2.2.0"
+)
 
 const (
 	// Namespace keys.
@@ -49,6 +53,10 @@ const (
 	confKeyXdr         = "xdr"
 	confKeyXdrDlogPath = "xdr-digestlog-path"
 
+	// Security keys.
+	confKeySecurity                    = "security"
+	confKeySecurityDefaultPasswordFile = "default-password-file"
+
 	// Service section keys.
 	confKeyService       = "service"
 	confKeyWorkDirectory = "work-directory"
@@ -63,8 +71,9 @@ const (
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.0-dev1"
+	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.0"
 	AerospikeAppLabel                              = "app"
+	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
@@ -499,4 +508,31 @@ func getContainerNames(containers []v1.Container) []string {
 // GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
 func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
+}
+
+// GetDefaultPasswordFilePath returns the default-password-fille path if configured.
+func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *string {
+	aerospikeConfig := aerospikeConfigSpec.Value
+
+	// Get security config.
+	securityConfTmp, ok := aerospikeConfig[confKeySecurity]
+	if !ok {
+		return nil
+	}
+
+	securityConf, ok := securityConfTmp.(map[string]interface{})
+	if !ok {
+		// Should never happen.
+		return nil
+	}
+
+	// Get password file.
+	passFileTmp, ok := securityConf[confKeySecurityDefaultPasswordFile]
+	if !ok {
+		return nil
+	}
+
+	passFile := passFileTmp.(string)
+
+	return &passFile
 }

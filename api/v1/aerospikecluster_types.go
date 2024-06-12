@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2024.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,6 +47,15 @@ const (
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
+// +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
+type DynamicConfigUpdateStatus string
+
+const (
+	Failed          DynamicConfigUpdateStatus = "Failed"
+	PartiallyFailed DynamicConfigUpdateStatus = "PartiallyFailed"
+	Empty           DynamicConfigUpdateStatus = ""
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -59,14 +68,17 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// Aerospike cluster size
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
 	Size int32 `json:"size"`
+	// Aerospike server image
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
+	Image string `json:"image"`
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
 	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
 	// Refer Aerospike documentation for more details.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Max Unavailable"
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
-	// Aerospike server image
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
-	Image string `json:"image"`
+	// Disable the PodDisruptionBudget creation for the Aerospike cluster.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Disable PodDisruptionBudget"
+	DisablePDB *bool `json:"disablePDB,omitempty"`
 	// Storage specify persistent storage to use for the Aerospike pods
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Storage"
 	Storage AerospikeStorageSpec `json:"storage,omitempty"`
@@ -77,6 +89,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Aerospike Server Configuration"
 	// +kubebuilder:pruning:PreserveUnknownFields
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig"`
+	// EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
+	// If enabled, operator will try to update the Aerospike config dynamically.
+	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
+	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
@@ -307,9 +324,12 @@ type RackConfig struct { //nolint:govet // for readability
 	// Racks is the list of all racks
 	// +nullable
 	Racks []Rack `json:"racks,omitempty"`
-	// RollingUpdateBatchSize is the percentage/number of rack pods that will be restarted simultaneously
+	// RollingUpdateBatchSize is the percentage/number of rack pods that can be restarted simultaneously
 	// +optional
 	RollingUpdateBatchSize *intstr.IntOrString `json:"rollingUpdateBatchSize,omitempty"`
+	// ScaleDownBatchSize is the percentage/number of rack pods that can be scaled down simultaneously
+	// +optional
+	ScaleDownBatchSize *intstr.IntOrString `json:"scaleDownBatchSize,omitempty"`
 	// MaxIgnorablePods is the maximum number/percentage of pending/failed pods in a rack that are ignored while
 	// assessing cluster stability. Pods identified using this value are not considered part of the cluster.
 	// Additionally, in SC mode clusters, these pods are removed from the roster.
@@ -620,6 +640,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
 	// disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+	// Disable the PodDisruptionBudget creation for the Aerospike cluster.
+	DisablePDB *bool `json:"disablePDB,omitempty"`
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod.
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
@@ -642,6 +664,16 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +nullable
 	AerospikeConfig *AerospikeConfigSpec `json:"aerospikeConfig,omitempty"`
+	// EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
+	// If enabled, operator will try to update the Aerospike config dynamically.
+	// In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Config Update"
+	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
+
+	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
+	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
+	// +optional
+	IsReadinessProbeEnabled bool `json:"isReadinessProbeEnabled"`
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
@@ -840,6 +872,9 @@ type AerospikeInstanceSummary struct { //nolint:govet // for readability
 type AerospikePodStatus struct { //nolint:govet // for readability
 	// Image is the Aerospike image this pod is running.
 	Image string `json:"image"`
+	// InitImage is the Aerospike init image this pod's init container is running.
+	// +optional
+	InitImage string `json:"initImage,omitempty"`
 	// PodIP in the K8s network.
 	PodIP string `json:"podIP"`
 	// HostInternalIP of the K8s host this pod is scheduled on.
@@ -872,8 +907,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// PodSpecHash is ripemd160 hash of PodSpec used by this pod
 	PodSpecHash string `json:"podSpecHash"`
 
-	// IsSecurityEnabled is true if security is enabled in the pod
-	IsSecurityEnabled bool `json:"isSecurityEnabled"`
+	// DynamicConfigUpdateStatus is the status of dynamic config update operation.
+	// Empty "" status means successful update.
+	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -888,7 +924,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.2.2"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.3.0"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
@@ -913,7 +949,9 @@ func init() {
 }
 
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
-func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) { //nolint:dupl // not duplicate
+//
+//nolint:dupl // not duplicate
+func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) {
 	status := AerospikeClusterStatusSpec{}
 
 	status.Size = spec.Size
@@ -921,99 +959,98 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	status.MaxUnavailable = spec.MaxUnavailable
 
 	// Storage
-	statusStorage := AerospikeStorageSpec{}
-	lib.DeepCopy(&statusStorage, &spec.Storage)
+	statusStorage := lib.DeepCopy(&spec.Storage).(*AerospikeStorageSpec)
 
-	status.Storage = statusStorage
+	status.Storage = *statusStorage
 
 	if spec.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
-		statusAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		lib.DeepCopy(
-			statusAerospikeAccessControl, spec.AerospikeAccessControl,
-		)
+		statusAerospikeAccessControl := lib.DeepCopy(
+			spec.AerospikeAccessControl,
+		).(*AerospikeAccessControlSpec)
 
 		status.AerospikeAccessControl = statusAerospikeAccessControl
 	}
 
-	// AerospikeConfig
-	statusAerospikeConfig := &AerospikeConfigSpec{}
-	lib.DeepCopy(
-		statusAerospikeConfig, spec.AerospikeConfig,
-	)
+	if spec.AerospikeConfig != nil {
+		// AerospikeConfig
+		statusAerospikeConfig := lib.DeepCopy(
+			spec.AerospikeConfig,
+		).(*AerospikeConfigSpec)
 
-	status.AerospikeConfig = statusAerospikeConfig
+		status.AerospikeConfig = statusAerospikeConfig
+	}
 
 	if spec.ValidationPolicy != nil {
 		// ValidationPolicy
-		statusValidationPolicy := &ValidationPolicySpec{}
-		lib.DeepCopy(
-			statusValidationPolicy, spec.ValidationPolicy,
-		)
+		statusValidationPolicy := lib.DeepCopy(
+			spec.ValidationPolicy,
+		).(*ValidationPolicySpec)
 
 		status.ValidationPolicy = statusValidationPolicy
 	}
 
 	// RackConfig
-	statusRackConfig := RackConfig{}
-	lib.DeepCopy(&statusRackConfig, &spec.RackConfig)
-	status.RackConfig = statusRackConfig
+	statusRackConfig := lib.DeepCopy(&spec.RackConfig).(*RackConfig)
+	status.RackConfig = *statusRackConfig
 
 	// AerospikeNetworkPolicy
-	statusAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	lib.DeepCopy(
-		&statusAerospikeNetworkPolicy, &spec.AerospikeNetworkPolicy,
-	)
+	statusAerospikeNetworkPolicy := lib.DeepCopy(
+		&spec.AerospikeNetworkPolicy,
+	).(*AerospikeNetworkPolicy)
 
-	status.AerospikeNetworkPolicy = statusAerospikeNetworkPolicy
+	status.AerospikeNetworkPolicy = *statusAerospikeNetworkPolicy
 
 	if spec.OperatorClientCertSpec != nil {
-		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		lib.DeepCopy(
-			clientCertSpec, spec.OperatorClientCertSpec,
-		)
+		clientCertSpec := lib.DeepCopy(
+			spec.OperatorClientCertSpec,
+		).(*AerospikeOperatorClientCertSpec)
 
 		status.OperatorClientCertSpec = clientCertSpec
 	}
 
+	if spec.EnableDynamicConfigUpdate != nil {
+		enableDynamicConfigUpdate := *spec.EnableDynamicConfigUpdate
+		status.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
+
+	if spec.DisablePDB != nil {
+		disablePDB := *spec.DisablePDB
+		status.DisablePDB = &disablePDB
+	}
+
 	// Storage
-	statusPodSpec := AerospikePodSpec{}
-	lib.DeepCopy(&statusPodSpec, &spec.PodSpec)
-	status.PodSpec = statusPodSpec
+	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
+	status.PodSpec = *statusPodSpec
 
-	seedsFinderServices := SeedsFinderServices{}
-	lib.DeepCopy(
-		&seedsFinderServices, &spec.SeedsFinderServices,
-	)
+	seedsFinderServices := lib.DeepCopy(
+		&spec.SeedsFinderServices,
+	).(*SeedsFinderServices)
 
-	status.SeedsFinderServices = seedsFinderServices
+	status.SeedsFinderServices = *seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(spec.RosterNodeBlockList) != 0 {
-		var rosterNodeBlockList []string
+		rosterNodeBlockList := lib.DeepCopy(
+			&spec.RosterNodeBlockList,
+		).(*[]string)
 
-		lib.DeepCopy(
-			&rosterNodeBlockList, &spec.RosterNodeBlockList,
-		)
-
-		status.RosterNodeBlockList = rosterNodeBlockList
+		status.RosterNodeBlockList = *rosterNodeBlockList
 	}
 
 	if len(spec.K8sNodeBlockList) != 0 {
-		var k8sNodeBlockList []string
+		k8sNodeBlockList := lib.DeepCopy(&spec.K8sNodeBlockList).(*[]string)
 
-		lib.DeepCopy(
-			&k8sNodeBlockList, &spec.K8sNodeBlockList,
-		)
-
-		status.K8sNodeBlockList = k8sNodeBlockList
+		status.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
 	return &status, nil
 }
 
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) { //nolint:dupl // no need
+//
+//nolint:dupl // not duplicate
+func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
 	spec := AerospikeClusterSpec{}
 
 	spec.Size = status.Size
@@ -1021,93 +1058,89 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	spec.MaxUnavailable = status.MaxUnavailable
 
 	// Storage
-	specStorage := AerospikeStorageSpec{}
-	lib.DeepCopy(&specStorage, &status.Storage)
-	spec.Storage = specStorage
+	specStorage := lib.DeepCopy(&status.Storage).(*AerospikeStorageSpec)
+	spec.Storage = *specStorage
 
 	if status.AerospikeAccessControl != nil {
 		// AerospikeAccessControl
-		specAerospikeAccessControl := &AerospikeAccessControlSpec{}
-		lib.DeepCopy(
-			specAerospikeAccessControl, status.AerospikeAccessControl,
-		)
+		specAerospikeAccessControl := lib.DeepCopy(
+			status.AerospikeAccessControl,
+		).(*AerospikeAccessControlSpec)
 
 		spec.AerospikeAccessControl = specAerospikeAccessControl
 	}
 
 	// AerospikeConfig
-	specAerospikeConfig := &AerospikeConfigSpec{}
-	lib.DeepCopy(
-		specAerospikeConfig, status.AerospikeConfig,
-	)
+	if status.AerospikeConfig != nil {
+		specAerospikeConfig := lib.DeepCopy(
+			status.AerospikeConfig,
+		).(*AerospikeConfigSpec)
 
-	spec.AerospikeConfig = specAerospikeConfig
+		spec.AerospikeConfig = specAerospikeConfig
+	}
 
 	if status.ValidationPolicy != nil {
 		// ValidationPolicy
-		specValidationPolicy := &ValidationPolicySpec{}
-		lib.DeepCopy(
-			specValidationPolicy, status.ValidationPolicy,
-		)
+		specValidationPolicy := lib.DeepCopy(
+			status.ValidationPolicy,
+		).(*ValidationPolicySpec)
 
 		spec.ValidationPolicy = specValidationPolicy
 	}
 
 	// RackConfig
-	specRackConfig := RackConfig{}
-	lib.DeepCopy(&specRackConfig, &status.RackConfig)
+	specRackConfig := lib.DeepCopy(&status.RackConfig).(*RackConfig)
 
-	spec.RackConfig = specRackConfig
+	spec.RackConfig = *specRackConfig
 
 	// AerospikeNetworkPolicy
-	specAerospikeNetworkPolicy := AerospikeNetworkPolicy{}
-	lib.DeepCopy(
-		&specAerospikeNetworkPolicy, &status.AerospikeNetworkPolicy,
-	)
+	specAerospikeNetworkPolicy := lib.DeepCopy(
+		&status.AerospikeNetworkPolicy,
+	).(*AerospikeNetworkPolicy)
 
-	spec.AerospikeNetworkPolicy = specAerospikeNetworkPolicy
+	spec.AerospikeNetworkPolicy = *specAerospikeNetworkPolicy
 
 	if status.OperatorClientCertSpec != nil {
-		clientCertSpec := &AerospikeOperatorClientCertSpec{}
-		lib.DeepCopy(
-			clientCertSpec, status.OperatorClientCertSpec,
-		)
+		clientCertSpec := lib.DeepCopy(
+			status.OperatorClientCertSpec,
+		).(*AerospikeOperatorClientCertSpec)
 
 		spec.OperatorClientCertSpec = clientCertSpec
 	}
 
+	if status.EnableDynamicConfigUpdate != nil {
+		enableDynamicConfigUpdate := *status.EnableDynamicConfigUpdate
+		spec.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
+
+	if status.DisablePDB != nil {
+		disablePDB := *status.DisablePDB
+		spec.DisablePDB = &disablePDB
+	}
+
 	// Storage
-	specPodSpec := AerospikePodSpec{}
-	lib.DeepCopy(&specPodSpec, &status.PodSpec)
+	specPodSpec := lib.DeepCopy(&status.PodSpec).(*AerospikePodSpec)
 
-	spec.PodSpec = specPodSpec
+	spec.PodSpec = *specPodSpec
 
-	seedsFinderServices := SeedsFinderServices{}
-	lib.DeepCopy(
-		&seedsFinderServices, &status.SeedsFinderServices,
-	)
+	seedsFinderServices := lib.DeepCopy(
+		&status.SeedsFinderServices,
+	).(*SeedsFinderServices)
 
-	spec.SeedsFinderServices = seedsFinderServices
+	spec.SeedsFinderServices = *seedsFinderServices
 
 	// RosterNodeBlockList
 	if len(status.RosterNodeBlockList) != 0 {
-		var rosterNodeBlockList []string
+		rosterNodeBlockList := lib.DeepCopy(
+			&status.RosterNodeBlockList,
+		).(*[]string)
 
-		lib.DeepCopy(
-			&rosterNodeBlockList, &status.RosterNodeBlockList,
-		)
-
-		spec.RosterNodeBlockList = rosterNodeBlockList
+		spec.RosterNodeBlockList = *rosterNodeBlockList
 	}
 
 	if len(status.K8sNodeBlockList) != 0 {
-		var k8sNodeBlockList []string
-
-		lib.DeepCopy(
-			&k8sNodeBlockList, &status.K8sNodeBlockList,
-		)
-
-		spec.K8sNodeBlockList = k8sNodeBlockList
+		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
+		spec.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
 	return &spec, nil

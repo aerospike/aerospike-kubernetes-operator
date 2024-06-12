@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 4
-  image: aerospike/aerospike-server-enterprise:7.0.0.0
+  image: aerospike/aerospike-server-enterprise:7.1.0.0
 
   rosterNodeBlockList:
     - 1A0

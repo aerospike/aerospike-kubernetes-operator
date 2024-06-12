@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -41,7 +40,6 @@ import (
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
@@ -83,6 +81,10 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
+	if err := c.validateEnableDynamicConfigUpdate(); err != nil {
+		return nil, err
+	}
+
 	outgoingVersion, err := GetImageVersion(old.Spec.Image)
 	if err != nil {
 		return nil, err
@@ -93,7 +95,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
-	if err := deployment.IsValidUpgrade(
+	if err := asconfig.IsValidUpgrade(
 		outgoingVersion, incomingVersion,
 	); err != nil {
 		return nil, fmt.Errorf("failed to start upgrade: %v", err)
@@ -105,7 +107,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	}
 
 	// MultiPodPerHost cannot be updated
-	if !ptr.Equal(c.Spec.PodSpec.MultiPodPerHost, old.Spec.PodSpec.MultiPodPerHost) {
+	if GetBool(c.Spec.PodSpec.MultiPodPerHost) != GetBool(old.Spec.PodSpec.MultiPodPerHost) {
 		return nil, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
@@ -119,7 +121,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
 		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
-		c.Status.AerospikeConfig, c.Status.Pods,
+		c.Status.AerospikeConfig,
 	); err != nil {
 		return nil, err
 	}
@@ -221,7 +223,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 			return err
 		}
 
-		if err := validateRequiredFileStorageForFeatureConf(
+		if err := validateRequiredFileStorageForAerospikeConfig(
 			rack.AerospikeConfig, &rack.Storage,
 		); err != nil {
 			return err
@@ -443,7 +445,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 					if err := validateAerospikeConfigUpdate(
 						aslog, incomingVersion, outgoingVersion,
 						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
-						rackStatusConfig, c.Status.Pods,
+						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
 							"invalid update in Rack(ID: %d) aerospikeConfig: %v",
@@ -603,38 +605,13 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 	}
 
 	// Validate batch upgrade/restart param
-	if c.Spec.RackConfig.RollingUpdateBatchSize != nil {
-		if err := validateIntOrStringField(c.Spec.RackConfig.RollingUpdateBatchSize,
-			"spec.rackConfig.rollingUpdateBatchSize"); err != nil {
-			return err
-		}
+	if err := c.validateBatchSize(c.Spec.RackConfig.RollingUpdateBatchSize, true); err != nil {
+		return err
+	}
 
-		if len(c.Spec.RackConfig.Racks) < 2 {
-			return fmt.Errorf("can not use rackConfig.RollingUpdateBatchSize when number of racks is less than two")
-		}
-
-		nsConfsNamespaces := c.getNsConfsForNamespaces()
-		for ns, nsConf := range nsConfsNamespaces {
-			if !isNameExist(c.Spec.RackConfig.Namespaces, ns) {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when there is any non-rack enabled namespace %s", ns,
-				)
-			}
-
-			if nsConf.noOfRacksForNamespaces <= 1 {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured in only one rack",
-					ns,
-				)
-			}
-
-			if nsConf.replicationFactor <= 1 {
-				return fmt.Errorf(
-					"can not use rackConfig.RollingUpdateBatchSize when namespace `%s` is configured with replication-factor 1",
-					ns,
-				)
-			}
-		}
+	// Validate batch scaleDown param
+	if err := c.validateBatchSize(c.Spec.RackConfig.ScaleDownBatchSize, false); err != nil {
+		return err
 	}
 
 	// Validate MaxIgnorablePods param
@@ -651,13 +628,14 @@ func (c *AerospikeCluster) validateRackConfig(_ logr.Logger) error {
 type nsConf struct {
 	noOfRacksForNamespaces int
 	replicationFactor      int
+	scEnabled              bool
 }
 
-func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
+func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for idx := range c.Spec.RackConfig.Racks {
-		rack := &c.Spec.RackConfig.Racks[idx]
+	for idx := range rackConfig.Racks {
+		rack := &rackConfig.Racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -671,9 +649,13 @@ func (c *AerospikeCluster) getNsConfsForNamespaces() map[string]nsConf {
 			}
 
 			rf, _ := getNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+
+			ns := nsInterface.(map[string]interface{})
+			scEnabled := IsNSSCEnabled(ns)
 			nsConfs[nsName] = nsConf{
 				noOfRacksForNamespaces: noOfRacksForNamespaces,
 				replicationFactor:      rf,
+				scEnabled:              scEnabled,
 			}
 		}
 	}
@@ -969,7 +951,7 @@ func readNamesFromLocalCertificate(clientCertSpec *AerospikeOperatorClientCertSp
 		return result, err
 	}
 
-	if len(cert.Subject.CommonName) > 0 {
+	if cert.Subject.CommonName != "" {
 		result[cert.Subject.CommonName] = struct{}{}
 	}
 
@@ -1273,8 +1255,23 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 }
 
 func validateSecurityConfigUpdate(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, podStatus map[string]AerospikePodStatus,
-) error {
+	newVersion, oldVersion string, newSpec, oldSpec, currentStatus *AerospikeConfigSpec) error {
+	if currentStatus != nil {
+		currentSecurityConfig, err := IsSecurityEnabled(oldVersion, currentStatus)
+		if err != nil {
+			return err
+		}
+
+		desiredSecurityConfig, err := IsSecurityEnabled(newVersion, newSpec)
+		if err != nil {
+			return err
+		}
+
+		if currentSecurityConfig && !desiredSecurityConfig {
+			return fmt.Errorf("cannot disable cluster security in running cluster")
+		}
+	}
+
 	nv, err := lib.CompareVersions(newVersion, "5.7.0")
 	if err != nil {
 		return err
@@ -1285,23 +1282,14 @@ func validateSecurityConfigUpdate(
 		return err
 	}
 
-	isSecurityEnabledPodExist := false
-
-	for pod := range podStatus {
-		if podStatus[pod].IsSecurityEnabled {
-			isSecurityEnabledPodExist = true
-			break
-		}
-	}
-
 	if nv >= 0 || ov >= 0 {
-		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec, isSecurityEnabledPodExist)
+		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec)
 	}
 
-	return validateEnableSecurityConfig(newSpec, oldSpec, isSecurityEnabledPodExist)
+	return validateEnableSecurityConfig(newSpec, oldSpec)
 }
 
-func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec, isSecurityEnabledPodExist bool) error {
+func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
 	oldSec, oldSecConfFound := oldConf["security"]
@@ -1315,8 +1303,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
 		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
-		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) &&
-			isSecurityEnabledPodExist {
+		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
 			return fmt.Errorf("cannot disable cluster security in running cluster")
 		}
 	}
@@ -1325,8 +1312,7 @@ func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec,
 }
 
 func validateSecurityContext(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec, isSecurityEnabledPodExist bool,
-) error {
+	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
 	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
 	if err != nil {
 		if !errors.Is(err, internalerrors.ErrNotFound) {
@@ -1346,7 +1332,7 @@ func validateSecurityContext(
 		}
 	}
 
-	if !ivflag && ovflag && isSecurityEnabledPodExist {
+	if !ivflag && ovflag {
 		return fmt.Errorf("cannot disable cluster security in running cluster")
 	}
 
@@ -1356,14 +1342,12 @@ func validateSecurityContext(
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger, incomingVersion, outgoingVersion string,
 	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
-	podStatus map[string]AerospikePodStatus,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 
 	if err := validateSecurityConfigUpdate(
 		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
-		podStatus,
-	); err != nil {
+		currentStatus); err != nil {
 		return err
 	}
 
@@ -1813,12 +1797,15 @@ func validateRequiredFileStorageForMetadata(
 	return nil
 }
 
-func validateRequiredFileStorageForFeatureConf(
+func validateRequiredFileStorageForAerospikeConfig(
 	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
 ) error {
-	// TODO Add validation for feature key file.
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
 	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
+	defaultPassFilePath := GetDefaultPasswordFilePath(&configSpec)
+
+	// TODO: What if default password file is given via Secret Manager?
+	// How operator will access that file? Should we allow that?
 
 	var allPaths []string
 
@@ -1834,14 +1821,32 @@ func validateRequiredFileStorageForFeatureConf(
 		}
 	}
 
+	if defaultPassFilePath != nil {
+		if !isSecretManagerPath(*defaultPassFilePath) {
+			allPaths = append(allPaths, *defaultPassFilePath)
+		} else {
+			return fmt.Errorf("default-password-file path doesn't support Secret Manager, path %s", *defaultPassFilePath)
+		}
+	}
+
 	// CA cert related fields are not supported with Secret Manager, so check their mount volume
 	allPaths = append(allPaths, caPaths...)
 
 	for _, path := range allPaths {
-		if !storage.isVolumePresentForAerospikePath(filepath.Dir(path)) {
+		volume := storage.GetVolumeForAerospikePath(filepath.Dir(path))
+		if volume == nil {
 			return fmt.Errorf(
-				"feature-key-file paths or tls paths are not mounted - create an entry for '%v' in 'storage.volumes'",
+				"feature-key-file paths or tls paths or default-password-file path "+
+					"are not mounted - create an entry for '%s' in 'storage.volumes'",
 				path,
+			)
+		}
+
+		if defaultPassFilePath != nil &&
+			(path == *defaultPassFilePath && volume.Source.Secret == nil) {
+			return fmt.Errorf(
+				"default-password-file path %s volume source should be secret in storage config, volume %v",
+				path, volume,
 			)
 		}
 	}
@@ -2169,6 +2174,80 @@ func (c *AerospikeCluster) validateNetworkPolicy(namespace string) error {
 	return nil
 }
 
+// validateBatchSize validates the batch size for the following types:
+// - rollingUpdateBatchSize: Rolling update batch size
+// - scaleDownBatchSize: Scale down batch size
+func (c *AerospikeCluster) validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool) error {
+	var fieldPath string
+
+	if batchSize == nil {
+		return nil
+	}
+
+	if rollingUpdateBatch {
+		fieldPath = "spec.rackConfig.rollingUpdateBatchSize"
+	} else {
+		fieldPath = "spec.rackConfig.scaleDownBatchSize"
+	}
+
+	if err := validateIntOrStringField(batchSize, fieldPath); err != nil {
+		return err
+	}
+
+	validateRacksForBatchSize := func(rackConfig RackConfig) error {
+		if len(rackConfig.Racks) < 2 {
+			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
+		}
+
+		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		for ns, nsConf := range nsConfsNamespaces {
+			if !isNameExist(rackConfig.Namespaces, ns) {
+				return fmt.Errorf(
+					"can not use %s when there is any non-rack enabled namespace %s", fieldPath, ns,
+				)
+			}
+
+			if nsConf.noOfRacksForNamespaces <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured in only one rack", fieldPath, ns,
+				)
+			}
+
+			if nsConf.replicationFactor <= 1 {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured with replication-factor 1", fieldPath,
+					ns,
+				)
+			}
+
+			// If Strong Consistency is enabled, then scaleDownBatchSize can't be used
+			if !rollingUpdateBatch && nsConf.scEnabled {
+				return fmt.Errorf(
+					"can not use %s when namespace `%s` is configured with Strong Consistency", fieldPath,
+					ns,
+				)
+			}
+		}
+
+		return nil
+	}
+
+	// validate rackConf from spec
+	if err := validateRacksForBatchSize(c.Spec.RackConfig); err != nil {
+		return err
+	}
+
+	// If the status is not nil, validate rackConf from status to restrict batch-size update
+	// when old rackConfig is not valid for batch-size
+	if c.Status.AerospikeConfig != nil {
+		if err := validateRacksForBatchSize(c.Status.RackConfig); err != nil {
+			return fmt.Errorf("status invalid for %s: update, %v", fieldPath, err)
+		}
+	}
+
+	return nil
+}
+
 func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error {
 	randomNumber := 100
 	// Just validate if value is valid number or string.
@@ -2191,8 +2270,17 @@ func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error
 
 func (c *AerospikeCluster) validateMaxUnavailable() error {
 	// safe check for corner cases when mutation webhook somehow didn't work
-	if c.Spec.MaxUnavailable == nil {
-		return fmt.Errorf("maxUnavailable cannot be nil. Mutation webhook didn't work")
+	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
+		return fmt.Errorf("maxUnavailable cannot be nil if PDB is not disabled. Mutation webhook didn't work")
+	}
+
+	if GetBool(c.Spec.DisablePDB) {
+		if c.Spec.MaxUnavailable != nil {
+			return fmt.Errorf("maxUnavailable must be nil if PDB is disabled")
+		}
+
+		// PDB is disabled, so no need to validate further
+		return nil
 	}
 
 	if err := validateIntOrStringField(c.Spec.MaxUnavailable, "spec.maxUnavailable"); err != nil {
@@ -2241,4 +2329,64 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 	}
 
 	return nil
+}
+
+func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
+	if !GetBool(c.Spec.EnableDynamicConfigUpdate) {
+		return nil
+	}
+
+	if len(c.Status.Pods) == 0 {
+		return nil
+	}
+
+	minInitVersion, err := getMinRunningInitVersion(c.Status.Pods)
+	if err != nil {
+		return err
+	}
+
+	val, err := lib.CompareVersions(minInitVersion, minInitVersionForDynamicConf)
+	if err != nil {
+		return fmt.Errorf("failed to check image version: %v", err)
+	}
+
+	if val < 0 {
+		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, some init containers are running version less"+
+			" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
+			" for more details about enableDynamicConfigUpdate flag",
+			minInitVersionForDynamicConf)
+	}
+
+	return nil
+}
+
+func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
+	minVersion := ""
+
+	for idx := range pods {
+		if pods[idx].InitImage != "" {
+			version, err := GetImageVersion(pods[idx].InitImage)
+			if err != nil {
+				return "", err
+			}
+
+			if minVersion == "" {
+				minVersion = version
+				continue
+			}
+
+			val, err := lib.CompareVersions(version, minVersion)
+			if err != nil {
+				return "", fmt.Errorf("failed to check image version: %v", err)
+			}
+
+			if val < 0 {
+				minVersion = version
+			}
+		} else {
+			return baseInitVersion, nil
+		}
+	}
+
+	return minVersion, nil
 }

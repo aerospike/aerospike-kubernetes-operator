@@ -74,8 +74,67 @@ var _ = Describe(
 				ScaleDownWithMigrateFillDelay(ctx)
 			},
 		)
+		Context(
+			"UpdateClusterPre600", func() {
+				UpdateClusterPre600(ctx)
+			},
+		)
 	},
 )
+
+func UpdateClusterPre600(ctx goctx.Context) {
+	Context(
+		"UpdateClusterPre600", func() {
+			clusterNamespacedName := getNamespacedName(
+				"deploy-cluster-pre6", namespace,
+			)
+
+			BeforeEach(
+				func() {
+					image := fmt.Sprintf(
+						"aerospike/aerospike-server-enterprise:%s", pre6Version,
+					)
+					aeroCluster, err := getAeroClusterConfig(
+						clusterNamespacedName, image,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				},
+			)
+
+			It(
+				"UpdateReplicationFactor: should fail for updating namespace replication-factor on server"+
+					"before 6.0.0. Cannot be updated", func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					namespaceConfig :=
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+					namespaceConfig["replication-factor"] = 5
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+
+					err = k8sClient.Update(
+						ctx, aeroCluster,
+					)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
 
 func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 	Context(
@@ -184,8 +243,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						Expect(err).ToNot(HaveOccurred())
 						val := intstr.FromInt32(1)
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
-							int64(18000)
+						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
 
 						// As pod is in pending state, CR object will be won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
@@ -193,14 +251,14 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Upgrade version")
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					newImage := baseImage + ":7.0.0.0_2"
-					aeroCluster.Spec.Image = newImage
-					// As pod is in pending state, CR object will be won't reach the final phase.
-					// So expectedPhases can be InProgress or Completed
-					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
-					Expect(err).ToNot(HaveOccurred())
+					Eventually(func() error {
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.Image = nextImage
+						// As pod is in pending state, CR object will be won't reach the final phase.
+						// So expectedPhases can be InProgress or Completed
+						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
+					}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 					By("Verify pending pod")
 					podList, err = getPodList(aeroCluster, k8sClient)
@@ -973,7 +1031,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 					// TODO: How to check if it is checking cluster stability before killing node
 					// dont change image, it upgrade, check old version
 					err = upgradeClusterTest(
-						k8sClient, ctx, clusterNamespacedName, prevImage,
+						k8sClient, ctx, clusterNamespacedName, nextImage,
 					)
 					Expect(err).ToNot(HaveOccurred())
 				},
@@ -1067,7 +1125,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 							Context(
 								"Namespace", func() {
 									It(
-										"UpdateReplicationFactor: should fail for updating namespace replication-factor. Cannot be updated",
+										"UpdateReplicationFactor: should fail for updating namespace"+
+											"replication-factor on SC namespace. Cannot be updated",
 										func() {
 											aeroCluster, err := getCluster(
 												k8sClient, ctx,
@@ -1079,6 +1138,35 @@ func UpdateClusterTest(ctx goctx.Context) {
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 											namespaceConfig["replication-factor"] = 5
 											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+
+											err = k8sClient.Update(
+												ctx, aeroCluster,
+											)
+											Expect(err).Should(HaveOccurred())
+										},
+									)
+
+									It(
+										"UpdateReplicationFactor: should fail for updating namespace"+
+											"replication-factor on non-SC namespace. Cannot be updated",
+										func() {
+											By("RollingRestart By Adding Namespace Dynamically")
+
+											err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
+												k8sClient, ctx, dynamicNs, clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											aeroCluster, err := getCluster(
+												k8sClient, ctx,
+												clusterNamespacedName,
+											)
+											Expect(err).ToNot(HaveOccurred())
+
+											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
+											namespaceConfig["replication-factor"] = 3
+											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
 
 											err = k8sClient.Update(
 												ctx, aeroCluster,
@@ -1109,7 +1197,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 											aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 												AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
 													SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-														SecretName:         tlsSecretName,
+														SecretName:         aerospikeSecretName,
 														CaCertsFilename:    "cacert.pem",
 														ClientCertFilename: "svc_cluster_chain.pem",
 														ClientKeyFilename:  "svc_key.pem",

@@ -59,7 +59,7 @@ func AerospikeAdminCredentials(
 
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
-		return asdbv1.AdminUsername, asdbv1.DefaultAdminPassword, nil
+		return asdbv1.AdminUsername, passwordProvider.GetDefaultPassword(desiredState), nil
 	}
 
 	adminUserSpec, ok := asdbv1.GetUsersFromSpec(currentState)[asdbv1.AdminUsername]
@@ -251,6 +251,9 @@ type AerospikeUserPasswordProvider interface {
 	Get(username string, userSpec *asdbv1.AerospikeUserSpec) (
 		string, error,
 	)
+
+	// GetDefaultPassword returns the default password for cluster using AerospikeClusterSpec.
+	GetDefaultPassword(spec *asdbv1.AerospikeClusterSpec) string
 }
 
 func (r *SingleClusterReconciler) recordACLEvent(cmd acl.AerospikeAccessControlReconcileCmd, failed bool) {
