@@ -88,7 +88,7 @@ type RestoreConfig struct {
 	//+kubebuilder:validation:Enum=Full;Incremental;TimeStamp
 	Type RestoreType `json:"type"`
 
-	*model.RestoreRequest `json:"restore-config"`
+	model.RestoreRequest `json:"restore-config"`
 	// Required epoch time for recovery. The closest backup before the timestamp will be applied.
 	Time int64 `json:"time,omitempty"`
 	// The backup routine name.

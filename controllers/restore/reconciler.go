@@ -59,10 +59,10 @@ func (r *SingleRestoreReconciler) ReconcileRestore() (int64, error) {
 
 	switch r.aeroRestore.Spec.RestoreConfig.Type {
 	case asdbv1beta1.Full:
-		return serviceClient.TriggerFullRestore(r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
+		return serviceClient.TriggerFullRestore(&r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
 
 	case asdbv1beta1.Incremental:
-		return serviceClient.TriggerIncrementalRestore(r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
+		return serviceClient.TriggerIncrementalRestore(&r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
 
 	case asdbv1beta1.TimeStamp:
 		var timeStampRequest *model.RestoreTimestampRequest
