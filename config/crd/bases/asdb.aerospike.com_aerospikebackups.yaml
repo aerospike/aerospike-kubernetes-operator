@@ -1,0 +1,369 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.12.1
+  name: aerospikebackups.asdb.aerospike.com
+spec:
+  group: asdb.aerospike.com
+  names:
+    kind: AerospikeBackup
+    listKind: AerospikeBackupList
+    plural: aerospikebackups
+    singular: aerospikebackup
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: AerospikeBackup is the Schema for the aerospikebackup API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AerospikeBackupSpec defines the desired state of AerospikeBackup
+            properties:
+              backup-config:
+                properties:
+                  aerospike-cluster:
+                    properties:
+                      conn-timeout:
+                        description: The connection timeout in milliseconds.
+                        format: int32
+                        type: integer
+                      credentials:
+                        description: The authentication details to the Aerospike cluster.
+                        properties:
+                          auth-mode:
+                            description: The authentication mode string (INTERNAL,
+                              EXTERNAL, EXTERNAL_INSECURE, PKI).
+                            type: string
+                          password:
+                            description: The password for the cluster authentication.
+                            type: string
+                          password-path:
+                            description: The file path with the password string, will
+                              take precedence over the password field.
+                            type: string
+                          user:
+                            description: The username for the cluster authentication.
+                            type: string
+                        type: object
+                      label:
+                        description: The cluster name.
+                        type: string
+                      name:
+                        type: string
+                      seed-nodes:
+                        description: The seed nodes details.
+                        items:
+                          description: SeedNode represents details of a node in the
+                            Aerospike cluster. @Description SeedNode represents details
+                            of a node in the Aerospike cluster.
+                          properties:
+                            host-name:
+                              description: The host name of the node.
+                              type: string
+                            port:
+                              description: The port of the node.
+                              format: int32
+                              type: integer
+                            tls-name:
+                              description: TLS certificate name used for secure connections
+                                (if enabled).
+                              type: string
+                          type: object
+                        type: array
+                      tls:
+                        description: The cluster TLS configuration.
+                        properties:
+                          cafile:
+                            description: Path to a trusted CA certificate file.
+                            type: string
+                          capath:
+                            description: Path to a directory of trusted CA certificates.
+                            type: string
+                          certfile:
+                            description: Path to the chain file for mutual authentication
+                              (if Aerospike Cluster supports it).
+                            type: string
+                          cipher-suite:
+                            description: TLS cipher selection criteria. The format
+                              is the same as OpenSSL's Cipher List Format.
+                            type: string
+                          keyfile:
+                            description: Path to the key for mutual authentication
+                              (if Aerospike cluster supports it).
+                            type: string
+                          keyfile-password:
+                            description: Password to load protected TLS-keyfile (env:VAR,
+                              file:PATH, PASSWORD).
+                            type: string
+                          name:
+                            description: The default TLS name used to authenticate
+                              each TLS socket connection.
+                            type: string
+                          protocols:
+                            description: TLS protocol selection criteria. This format
+                              is the same as Apache's SSL Protocol.
+                            type: string
+                        type: object
+                      use-services-alternate:
+                        description: Whether should use "services-alternate" instead
+                          of "services" in info request during cluster tending.
+                        type: boolean
+                    required:
+                    - name
+                    type: object
+                  backup-policies:
+                    items:
+                      properties:
+                        bandwidth:
+                          description: Throttles backup write operations to the backup
+                            file(s) to not exceed the given bandwidth in MiB/s.
+                          format: int64
+                          type: integer
+                        compression:
+                          description: Compression details.
+                          properties:
+                            level:
+                              description: The compression level to use (or -1 if
+                                unspecified).
+                              format: int32
+                              type: integer
+                            mode:
+                              description: The compression mode to be used (default
+                                is NONE).
+                              type: string
+                          type: object
+                        encryption:
+                          description: Encryption details.
+                          properties:
+                            key-env:
+                              description: The name of the environment variable containing
+                                the encryption key.
+                              type: string
+                            key-file:
+                              description: The path to the file containing the encryption
+                                key.
+                              type: string
+                            key-secret:
+                              description: The secret keyword in Aerospike Secret
+                                Agent containing the encryption key.
+                              type: string
+                            mode:
+                              description: The encryption mode to be used (NONE, AES128,
+                                AES256)
+                              type: string
+                          type: object
+                        file-limit:
+                          description: File size limit (in MB) for the backup directory.
+                            If an .asb backup file crosses this size threshold, a
+                            new backup file will be created.
+                          format: int64
+                          type: integer
+                        max-records:
+                          description: An approximate limit for the number of records
+                            to process. Available in server 4.9 and above.
+                          format: int64
+                          type: integer
+                        max-retries:
+                          description: Maximum number of retries before aborting the
+                            current transaction.
+                          format: int32
+                          type: integer
+                        name:
+                          type: string
+                        no-bins:
+                          description: Only backup record metadata (digest, TTL, generation
+                            count, key).
+                          type: boolean
+                        no-indexes:
+                          description: Do not back up any secondary index definitions.
+                          type: boolean
+                        no-records:
+                          description: Do not back up any record data (metadata or
+                            bin data).
+                          type: boolean
+                        no-udfs:
+                          description: Do not back up any UDF modules.
+                          type: boolean
+                        parallel:
+                          description: Maximum number of scan calls to run in parallel.
+                          format: int32
+                          type: integer
+                        records-per-second:
+                          description: Limit total returned records per second (RPS).
+                            If RPS is zero (the default), the records-per-second limit
+                            is not applied.
+                          format: int32
+                          type: integer
+                        remove-artifacts:
+                          description: Clear directory or remove output file.
+                          type: boolean
+                        remove-files:
+                          description: 'Whether to clear the output directory (default:
+                            KeepAll).'
+                          type: string
+                        retry-delay:
+                          description: RetryDelay defines the delay in milliseconds
+                            before retrying a failed operation.
+                          format: int32
+                          type: integer
+                        sealed:
+                          description: Sealed determines whether backup should include
+                            keys updated during the backup process. When true, the
+                            backup contains only records that last modified before
+                            backup started. When false (default), records updated
+                            during backup might be included in the backup, but it's
+                            not guaranteed.
+                          type: boolean
+                        socket-timeout:
+                          description: Socket timeout in milliseconds. If this value
+                            is 0, it is set to total-timeout. If both are 0, there
+                            is no socket idle time limit.
+                          format: int32
+                          type: integer
+                        total-timeout:
+                          description: Total socket timeout in milliseconds. Default
+                            is 0, that is, no timeout.
+                          format: int32
+                          type: integer
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  backup-routines:
+                    items:
+                      properties:
+                        backup-policy:
+                          description: The name of the corresponding backup policy.
+                          type: string
+                        bin-list:
+                          description: The list of backup bin names (optional, an
+                            empty list implies backing up all bins).
+                          items:
+                            type: string
+                          type: array
+                        incr-interval-cron:
+                          description: The interval for incremental backup as a cron
+                            expression string (optional).
+                          type: string
+                        interval-cron:
+                          description: The interval for full backup as a cron expression
+                            string.
+                          type: string
+                        name:
+                          type: string
+                        namespaces:
+                          description: The list of the namespaces to back up (optional,
+                            empty list implies backup up whole cluster).
+                          items:
+                            type: string
+                          type: array
+                        partition-list:
+                          description: 'Back up list of partition filters. Partition
+                            filters can be ranges, individual partitions, or records
+                            after a specific digest within a single partition. Default
+                            number of partitions to back up: 0 to 4095: all partitions.'
+                          type: string
+                        prefer-racks:
+                          description: A list of Aerospike Server rack IDs to prefer
+                            when reading records for a backup.
+                          items:
+                            type: integer
+                          type: array
+                        secret-agent:
+                          description: The Secret Agent configuration for the routine
+                            (optional).
+                          type: string
+                        set-list:
+                          description: The list of backup set names (optional, an
+                            empty list implies backing up all sets).
+                          items:
+                            type: string
+                          type: array
+                        source-cluster:
+                          description: The name of the corresponding source cluster.
+                          type: string
+                        storage:
+                          description: The name of the corresponding storage provider
+                            configuration.
+                          type: string
+                      required:
+                      - incr-interval-cron
+                      - interval-cron
+                      - name
+                      type: object
+                    type: array
+                  storage:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        path:
+                          description: The root path for the backup repository.
+                          type: string
+                        s3-endpoint-override:
+                          description: An alternative endpoint for the S3 SDK to communicate
+                            (AWS S3 optional).
+                          type: string
+                        s3-log-level:
+                          description: The log level of the AWS S3 SDK (AWS S3 optional).
+                          type: string
+                        s3-profile:
+                          description: The S3 profile name (AWS S3 optional).
+                          type: string
+                        s3-region:
+                          description: The S3 region string (AWS S3 optional).
+                          type: string
+                        type:
+                          description: The type of the storage provider (0 - Local,
+                            1 - AWS S3).
+                          type: integer
+                      required:
+                      - name
+                      - type
+                      type: object
+                    type: array
+                required:
+                - aerospike-cluster
+                - backup-policies
+                - backup-routines
+                - storage
+                type: object
+              service-config:
+                properties:
+                  address:
+                    description: The address to listen on.
+                    type: string
+                  context-path:
+                    description: ContextPath customizes path for the API endpoints.
+                    type: string
+                  port:
+                    description: The port to listen on.
+                    type: integer
+                type: object
+            required:
+            - backup-config
+            - service-config
+            type: object
+          status:
+            description: AerospikeBackupStatus defines the observed state of AerospikeBackup
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

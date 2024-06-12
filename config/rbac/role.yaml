@@ -19,6 +19,32 @@ rules:
 - apiGroups:
   - asdb.aerospike.com
   resources:
+  - aerospikebackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
   - aerospikeclusters
   verbs:
   - create
@@ -38,6 +64,32 @@ rules:
   - asdb.aerospike.com
   resources:
   - aerospikeclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikerestores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikerestores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikerestores/status
   verbs:
   - get
   - patch

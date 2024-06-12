@@ -20,12 +20,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	// +kubebuilder:scaffold:imports
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// +kubebuilder:scaffold:imports
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -36,6 +37,7 @@ var (
 )
 
 func init() {
+	utilRuntime.Must(asdbv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))
 	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
@@ -93,13 +95,14 @@ func main() {
 		options.Cache.Namespaces = []string{watchNs}
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	kubeConfig := ctrl.GetConfigOrDie()
+
+	mgr, err := ctrl.NewManager(kubeConfig, options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	kubeConfig := ctrl.GetConfigOrDie()
 	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
 
 	// This client will read/write directly from api-server
@@ -153,6 +156,24 @@ func main() {
 
 	if err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "v1-webhook", "AerospikeCluster")
+		os.Exit(1)
+	}
+
+	if err = (&backup.AerospikeBackupReconciler{
+		Client: client,
+		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeBackup"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackup")
+		os.Exit(1)
+	}
+
+	if err = (&restore.AerospikeRestoreReconciler{
+		Client: client,
+		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeRestore"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AerospikeRestore")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
