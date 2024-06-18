@@ -9,4 +9,32 @@ metadata:
     app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikebackup-sample
 spec:
-  # TODO(user): Add fields here
+  service-config:
+    address: 35.188.208.134
+    port: 8080
+  backup-config:
+    aerospike-cluster:
+      name: abhisek-test
+      credentials:
+        password: admin123
+        user: admin
+      seed-nodes:
+        - host-name: aerocluster.aerospike.svc.cluster.local
+          port: 3000
+    backup-policies:
+      keepFilesPolicy:
+        parallel: 3
+        remove-files: KeepAll
+    backup-routines:
+      keepFilesRoutine:
+        backup-policy: keepFilesPolicy
+        interval-cron: "@daily"
+        incr-interval-cron: "@hourly"
+        namespaces: ["test"]
+        source-cluster: absCluster1
+        storage: local
+    storage:
+      local:
+        "path": "/localStorage"
+        "type": 0
+

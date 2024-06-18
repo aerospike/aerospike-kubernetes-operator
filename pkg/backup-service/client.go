@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-logr/logr"
+
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
@@ -196,8 +198,10 @@ func (b *Client) GetBackupRoutines() {}
 
 func (b *Client) GetBackupRoutine() {}
 
-func (b *Client) TriggerFullRestore(request *model.RestoreRequest) (int64, error) {
+func (b *Client) TriggerFullRestore(log logr.Logger, request *model.RestoreRequest) (int64, error) {
 	url := b.API("/restore/full")
+
+	log.Info("Triggering full restore")
 
 	jsonBody, err := json.Marshal(request)
 	if err != nil {
@@ -212,7 +216,15 @@ func (b *Client) TriggerFullRestore(request *model.RestoreRequest) (int64, error
 	}
 
 	if resp.StatusCode != http.StatusAccepted {
-		return 0, fmt.Errorf("failed to trigger full restore")
+		log.Info("Response", "status-code", resp.StatusCode)
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, err
+		}
+
+		return 0, fmt.Errorf("failed to trigger full restore, error: %s", string(body))
 	}
 
 	var jobID int64
@@ -231,7 +243,7 @@ func (b *Client) TriggerFullRestore(request *model.RestoreRequest) (int64, error
 	return jobID, nil
 }
 
-func (b *Client) TriggerIncrementalRestore(request *model.RestoreRequest) (int64, error) {
+func (b *Client) TriggerIncrementalRestore(log logr.Logger, request *model.RestoreRequest) (int64, error) {
 	url := b.API("/restore/incremental")
 
 	jsonBody, err := json.Marshal(request)
@@ -266,7 +278,7 @@ func (b *Client) TriggerIncrementalRestore(request *model.RestoreRequest) (int64
 	return jobID, nil
 }
 
-func (b *Client) TriggerRestoreByTimeStamp(request *model.RestoreTimestampRequest) (int64, error) {
+func (b *Client) TriggerRestoreByTimeStamp(log logr.Logger, request *model.RestoreTimestampRequest) (int64, error) {
 	url := b.API("/restore/timestamp")
 
 	jsonBody, err := json.Marshal(request)
@@ -302,7 +314,7 @@ func (b *Client) TriggerRestoreByTimeStamp(request *model.RestoreTimestampReques
 }
 
 func (b *Client) CheckRestoreStatus(jobID int64) (*model.RestoreJobStatus, error) {
-	url := b.API(fmt.Sprintf("/restore/restoreStatus/%d", jobID))
+	url := b.API(fmt.Sprintf("/restore/status/%d", jobID))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -313,7 +325,7 @@ func (b *Client) CheckRestoreStatus(jobID int64) (*model.RestoreJobStatus, error
 		return nil, fmt.Errorf("failed to check restore restoreStatus")
 	}
 
-	var restoreStatus *model.RestoreJobStatus
+	restoreStatus := &model.RestoreJobStatus{}
 
 	defer resp.Body.Close()
 
@@ -336,5 +348,7 @@ func (b *Client) API(pattern string) string {
 		contextPath += "/"
 	}
 
-	return fmt.Sprintf("%s%s%s", contextPath, restAPIVersion, pattern)
+	address := fmt.Sprintf("%s:%d", *b.GetAddress(), *b.Port)
+
+	return fmt.Sprintf("http://%s%s%s%s", address, contextPath, restAPIVersion, pattern)
 }

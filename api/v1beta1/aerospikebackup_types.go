@@ -21,20 +21,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // AerospikeBackupSpec defines the desired state of AerospikeBackup
+// +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
 	ServiceConfig *ServiceConfig `json:"service-config"`
 	BackupConfig  *BackupConfig  `json:"backup-config"`
 }
 
 type BackupConfig struct {
-	AerospikeCluster *Cluster        `json:"aerospike-cluster"`
-	Storage          []Storage       `json:"storage"`
-	BackupRoutines   []BackupRoutine `json:"backup-routines"`
-	BackupPolicies   []BackupPolicy  `json:"backup-policies"`
+	AerospikeCluster *Cluster                        `json:"aerospike-cluster"`
+	Storage          map[string]*model.Storage       `json:"storage"`
+	BackupRoutines   map[string]*model.BackupRoutine `json:"backup-routines"`
+	BackupPolicies   map[string]*model.BackupPolicy  `json:"backup-policies"`
 }
 
 type ServiceConfig struct {
@@ -49,21 +47,6 @@ type ServiceConfig struct {
 type Cluster struct {
 	model.AerospikeCluster `json:",inline"`
 	Name                   string `json:"name"`
-}
-
-type Storage struct {
-	model.Storage `json:",inline"`
-	Name          string `json:"name"`
-}
-
-type BackupPolicy struct {
-	model.BackupPolicy `json:",inline"`
-	Name               string `json:"name"`
-}
-
-type BackupRoutine struct {
-	model.BackupRoutine `json:",inline"`
-	Name                string `json:"name"`
 }
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup

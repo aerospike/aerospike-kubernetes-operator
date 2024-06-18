@@ -21,9 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // +kubebuilder:validation:Enum=InProgress;Completed;Failed
 type AerospikeRestorePhase string
 
@@ -43,8 +40,12 @@ const (
 )
 
 // AerospikeRestoreSpec defines the desired state of AerospikeRestore
+// +k8s:openapi-gen=true
 type AerospikeRestoreSpec struct {
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Service Config"
 	ServiceConfig *ServiceConfig `json:"service-config"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
 	RestoreConfig *RestoreConfig `json:"restore-config"`
 }
 
@@ -88,7 +89,7 @@ type RestoreConfig struct {
 	//+kubebuilder:validation:Enum=Full;Incremental;TimeStamp
 	Type RestoreType `json:"type"`
 
-	model.RestoreRequest `json:"restore-config"`
+	model.RestoreRequest `json:",inline"`
 	// Required epoch time for recovery. The closest backup before the timestamp will be applied.
 	Time int64 `json:"time,omitempty"`
 	// The backup routine name.
