@@ -127,7 +127,9 @@ spec:
                     - name
                     type: object
                   backup-policies:
-                    items:
+                    additionalProperties:
+                      description: BackupPolicy represents a scheduled backup policy.
+                        @Description BackupPolicy represents a scheduled backup policy.
                       properties:
                         bandwidth:
                           description: Throttles backup write operations to the backup
@@ -183,8 +185,6 @@ spec:
                             current transaction.
                           format: int32
                           type: integer
-                        name:
-                          type: string
                         no-bins:
                           description: Only backup record metadata (digest, TTL, generation
                             count, key).
@@ -240,12 +240,13 @@ spec:
                             is 0, that is, no timeout.
                           format: int32
                           type: integer
-                      required:
-                      - name
                       type: object
-                    type: array
+                    type: object
                   backup-routines:
-                    items:
+                    additionalProperties:
+                      description: BackupRoutine represents a scheduled backup operation
+                        routine. @Description BackupRoutine represents a scheduled
+                        backup operation routine.
                       properties:
                         backup-policy:
                           description: The name of the corresponding backup policy.
@@ -263,8 +264,6 @@ spec:
                         interval-cron:
                           description: The interval for full backup as a cron expression
                             string.
-                          type: string
-                        name:
                           type: string
                         namespaces:
                           description: The list of the namespaces to back up (optional,
@@ -304,14 +303,14 @@ spec:
                       required:
                       - incr-interval-cron
                       - interval-cron
-                      - name
                       type: object
-                    type: array
+                    type: object
                   storage:
-                    items:
+                    additionalProperties:
+                      description: Storage represents the configuration for a backup
+                        storage details. @Description Storage represents the configuration
+                        for a backup storage details.
                       properties:
-                        name:
-                          type: string
                         path:
                           description: The root path for the backup repository.
                           type: string
@@ -333,10 +332,9 @@ spec:
                             1 - AWS S3).
                           type: integer
                       required:
-                      - name
                       - type
                       type: object
-                    type: array
+                    type: object
                 required:
                 - aerospike-cluster
                 - backup-policies

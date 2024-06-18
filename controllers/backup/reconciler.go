@@ -89,16 +89,14 @@ func (r *SingleBackupReconciler) UpdateConfigMap(cm *v1.ConfigMap) error {
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.BackupPolicies != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
-			backupPolicy := &r.aeroBackup.Spec.BackupConfig.BackupPolicies[idx]
-			config.BackupPolicies[backupPolicy.Name] = &backupPolicy.BackupPolicy
+		for name, policy := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
+			config.BackupPolicies[name] = policy
 		}
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.BackupRoutines != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
-			backupRoutine := &r.aeroBackup.Spec.BackupConfig.BackupRoutines[idx]
-			config.BackupRoutines[backupRoutine.Name] = &backupRoutine.BackupRoutine
+		for name, routine := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
+			config.BackupRoutines[name] = routine
 		}
 	}
 
@@ -107,9 +105,8 @@ func (r *SingleBackupReconciler) UpdateConfigMap(cm *v1.ConfigMap) error {
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.Storage {
-			storage := &r.aeroBackup.Spec.BackupConfig.Storage[idx]
-			config.Storage[storage.Name] = &storage.Storage
+		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
+			config.Storage[name] = storage
 		}
 	}
 
@@ -132,10 +129,10 @@ func (r *SingleBackupReconciler) MakeAPICalls() error {
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.BackupPolicies != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
-			backupPolicy := &r.aeroBackup.Spec.BackupConfig.BackupPolicies[idx]
-			if _, ok := config.BackupPolicies[backupPolicy.Name]; ok {
+		for name, policy := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
+			if _, ok := config.BackupPolicies[name]; ok {
 				// do PUT call
+				_ = policy
 			} else {
 				// do POST call
 			}
@@ -143,10 +140,10 @@ func (r *SingleBackupReconciler) MakeAPICalls() error {
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.BackupRoutines != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
-			backupRoutine := &r.aeroBackup.Spec.BackupConfig.BackupRoutines[idx]
-			if _, ok := config.BackupRoutines[backupRoutine.Name]; ok {
+		for name, routine := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
+			if _, ok := config.BackupRoutines[name]; ok {
 				// do PUT call
+				_ = routine
 			} else {
 				// do POST call
 			}
@@ -162,10 +159,10 @@ func (r *SingleBackupReconciler) MakeAPICalls() error {
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
-		for idx := range r.aeroBackup.Spec.BackupConfig.Storage {
-			storage := &r.aeroBackup.Spec.BackupConfig.Storage[idx]
-			if _, ok := config.Storage[storage.Name]; ok {
+		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
+			if _, ok := config.Storage[name]; ok {
 				// do PUT call
+				_ = storage
 			} else {
 				// do POST call
 			}

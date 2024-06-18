@@ -9,4 +9,24 @@ metadata:
     app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikerestore-sample
 spec:
-  # TODO(user): Add fields here
+  service-config:
+    address: 35.188.208.134
+    port: 8080
+  restore-config:
+    type: Full
+    destination:
+      label: absCluster1
+      credentials:
+        password: admin123
+        user: admin
+      seed-nodes:
+        - host-name: aerocluster.test.svc.cluster.local
+          port: 3000
+    policy:
+      parallel: 3
+      no-generation: true
+      no-indexes: true
+    source:
+      "path": "/localStorage/keepFilesRoutine/backup/1718099241666/data/test"
+      "type": 0
+

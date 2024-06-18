@@ -1,5 +1,5 @@
-github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240612121205-64819629c5e8 h1:QM8Fl9avGiYdwENRjHlQGBAu7KOnof9yeWepa0RzWr0=
-github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240612121205-64819629c5e8/go.mod h1:mA7mNsJ0yVqggf3x1cGQt7riYG9MzPEv1lo3w91cmng=
+github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240613141225-adfacd7b3840 h1:+wn+oMgIIqY4AcKRvViiFmv/wlHhsZE5mIj3z3SwxBU=
+github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240613141225-adfacd7b3840/go.mod h1:mA7mNsJ0yVqggf3x1cGQt7riYG9MzPEv1lo3w91cmng=
 github.com/aerospike/aerospike-client-go/v7 v7.2.0 h1:bw5DesRDpK/6Rjkf4qQghDHZGSj97yxMQvZxyQu9NcY=
 github.com/aerospike/aerospike-client-go/v7 v7.2.0/go.mod h1:RuwffKg1xMlCvFtKRl0+UW9MTr+aonoXVrVsCqRFJ28=
 github.com/aerospike/aerospike-management-lib v1.4.0 h1:wT0l3kwzXv5DV5Cd+hD0BQq3hjSIyaPX1HaUb1304TI=
