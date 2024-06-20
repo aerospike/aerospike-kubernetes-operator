@@ -142,6 +142,15 @@ func LabelsForPodAntiAffinity(clName string) map[string]string {
 	return labels
 }
 
+// LabelsForAerospikeBackupService returns the labels for selecting the resources
+// belonging to the given AerospikeBackupService CR name.
+func LabelsForAerospikeBackupService(clName string) map[string]string {
+	return map[string]string{
+		asdbv1.AerospikeAppLabel:            "aerospike-backup-service",
+		asdbv1.AerospikeCustomResourceLabel: clName,
+	}
+}
+
 // MergeLabels merges operator an user defined labels
 func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string {
 	mergedMap := make(map[string]string, len(operatorLabels)+len(userLabels))

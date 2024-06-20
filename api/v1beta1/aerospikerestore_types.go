@@ -17,8 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // +kubebuilder:validation:Enum=InProgress;Completed;Failed
@@ -42,26 +42,35 @@ const (
 // AerospikeRestoreSpec defines the desired state of AerospikeRestore
 // +k8s:openapi-gen=true
 type AerospikeRestoreSpec struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Service Config"
-	ServiceConfig *ServiceConfig `json:"service-config"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
+	// BackupService is the backup service reference.
+	BackupService *BackupService `json:"backupService"`
+
+	//+kubebuilder:validation:Enum=Full;Incremental;TimeStamp
+	// Type is the restore type
+	Type RestoreType `json:"type"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
-	RestoreConfig *RestoreConfig `json:"restore-config"`
+	// Config is the configuration for the restore.
+	Config runtime.RawExtension `json:"config"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
+	// PollingPeriod is the polling period for restore service.
+	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore
 type AerospikeRestoreStatus struct {
-	JobID int64 `json:"job-id"`
+	JobID *int64 `json:"job-id,omitempty"`
 	// Phase denotes the current phase of Aerospike restore operation.
 	Phase AerospikeRestorePhase `json:"phase,omitempty"`
 
-	RestoreResult *model.RestoreResult `json:"restore-result,omitempty"`
-
-	Error string `json:"error,omitempty"`
+	RestoreResult runtime.RawExtension `json:"restoreResult,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.restoreResult.status`
 
 // AerospikeRestore is the Schema for the aerospikerestores API
 type AerospikeRestore struct {
@@ -83,15 +92,4 @@ type AerospikeRestoreList struct {
 
 func init() {
 	SchemeBuilder.Register(&AerospikeRestore{}, &AerospikeRestoreList{})
-}
-
-type RestoreConfig struct {
-	//+kubebuilder:validation:Enum=Full;Incremental;TimeStamp
-	Type RestoreType `json:"type"`
-
-	model.RestoreRequest `json:",inline"`
-	// Required epoch time for recovery. The closest backup before the timestamp will be applied.
-	Time int64 `json:"time,omitempty"`
-	// The backup routine name.
-	Routine string `json:"routine,omitempty"`
 }

@@ -2,9 +2,11 @@ package backup
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -14,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
@@ -33,29 +35,36 @@ type SingleBackupReconciler struct {
 }
 
 func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	// Check DeletionTimestamp to see if the backup is being deleted
+	if !r.aeroBackup.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := r.removeFinalizer(finalizerName); err != nil {
+			r.Log.Error(err, "Failed to remove finalizer")
+			return reconcile.Result{}, err
+		}
+
+		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
+	}
+
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
 		return reconcile.Result{}, err
 	}
 
-	// Get backup service config map
-	// TODO: How to read this value
-	cm := &v1.ConfigMap{}
-	if err := r.Client.Get(context.TODO(), types.NamespacedName{
-		Namespace: "aerospike",
-		Name:      "aerospike-backup-service-cm",
-	}, cm); err != nil {
-		r.Log.Error(err, "Failed to get backup service config map")
-		return ctrl.Result{}, err
+	if err := r.reconcileConfigMap(); err != nil {
+		r.Log.Error(err, "Failed to reconcile config map")
+		return reconcile.Result{}, err
 	}
 
-	if err := r.UpdateConfigMap(cm); err != nil {
-		return ctrl.Result{}, err
+	if err := r.reconcileBackup(); err != nil {
+		r.Log.Error(err, "Failed to reconcile backup")
+		return reconcile.Result{}, err
 	}
 
-	if err := r.MakeAPICalls(); err != nil {
-		return ctrl.Result{}, err
+	if err := r.updateStatus(); err != nil {
+		r.Log.Error(err, "Failed to update status")
+		return reconcile.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -80,94 +89,399 @@ func (r *SingleBackupReconciler) addFinalizer(finalizerName string) error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) UpdateConfigMap(cm *v1.ConfigMap) error {
-	backupConfig := cm.Data[BackupConfigYAML]
-	config := &model.Config{}
-
-	if err := yaml.Unmarshal([]byte(backupConfig), config); err != nil {
-		return err
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.BackupPolicies != nil {
-		for name, policy := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
-			config.BackupPolicies[name] = policy
+func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
+	if utils.ContainsString(r.aeroBackup.ObjectMeta.Finalizers, finalizerName) {
+		if err := r.removeBackupInfoFromConfigMap(); err != nil {
+			return err
 		}
-	}
 
-	if r.aeroBackup.Spec.BackupConfig.BackupRoutines != nil {
-		for name, routine := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
-			config.BackupRoutines[name] = routine
+		if err := r.unregisterBackup(); err != nil {
+			return err
 		}
-	}
 
-	if r.aeroBackup.Spec.BackupConfig.AerospikeCluster != nil {
-		config.AerospikeClusters[r.aeroBackup.Spec.BackupConfig.AerospikeCluster.Name] = &r.aeroBackup.Spec.BackupConfig.AerospikeCluster.AerospikeCluster
-	}
+		r.Log.Info("Removing finalizer",
+			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		// Remove finalizer from the list
+		r.aeroBackup.ObjectMeta.Finalizers = utils.RemoveString(
+			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
+		)
 
-	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
-		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
-			config.Storage[name] = storage
-		}
-	}
-
-	updateConfig, err := yaml.Marshal(config)
-	if err != nil {
-		return err
-	}
-
-	cm.Data[BackupConfigYAML] = string(updateConfig)
-
-	return r.Client.Update(context.TODO(), cm)
-}
-
-func (r *SingleBackupReconciler) MakeAPICalls() error {
-	serviceClient := backup_service.GetBackupServiceClient(r.aeroBackup.Spec.ServiceConfig)
-
-	config, err := serviceClient.GetBackupServiceConfig()
-	if err != nil {
-		return nil
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.BackupPolicies != nil {
-		for name, policy := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
-			if _, ok := config.BackupPolicies[name]; ok {
-				// do PUT call
-				_ = policy
-			} else {
-				// do POST call
-			}
-		}
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.BackupRoutines != nil {
-		for name, routine := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
-			if _, ok := config.BackupRoutines[name]; ok {
-				// do PUT call
-				_ = routine
-			} else {
-				// do POST call
-			}
-		}
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.AerospikeCluster != nil {
-		if _, ok := config.AerospikeClusters[r.aeroBackup.Spec.BackupConfig.AerospikeCluster.Name]; ok {
-			// do PUT call
-		} else {
-			// do POST call
-		}
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
-		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
-			if _, ok := config.Storage[name]; ok {
-				// do PUT call
-				_ = storage
-			} else {
-				// do POST call
-			}
+		if err := r.Client.Update(context.TODO(), r.aeroBackup); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func (r *SingleBackupReconciler) reconcileConfigMap() error {
+	cm := &corev1.ConfigMap{}
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackup.Spec.BackupService.Namespace,
+			Name:      r.aeroBackup.Spec.BackupService.Name,
+		}, cm,
+	); err != nil {
+		return fmt.Errorf("backup Service configMap not found, name: %s namespace: %s",
+			r.aeroBackup.Spec.BackupService.Name, r.aeroBackup.Spec.BackupService.Namespace)
+	}
+
+	r.Log.Info("Updating existing ConfigMap for Backup",
+		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	backupDataMap := make(map[string]interface{})
+	cmDataMap := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupDataMap); err != nil {
+		return err
+	}
+
+	data := cm.Data[BackupConfigYAML]
+
+	if err := yaml.Unmarshal([]byte(data), &cmDataMap); err != nil {
+		return err
+	}
+
+	if _, ok := cmDataMap["aerospike-clusters"]; !ok {
+		cmDataMap["aerospike-clusters"] = make(map[string]interface{})
+	}
+
+	clusterMap, ok := cmDataMap["aerospike-clusters"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("aerospike-clusters is not a map")
+	}
+
+	newCluster := backupDataMap["aerospike-cluster"].(map[string]interface{})
+
+	for name, cluster := range newCluster {
+		clusterMap[name] = cluster
+	}
+
+	cmDataMap["aerospike-clusters"] = clusterMap
+
+	if _, ok = cmDataMap["backup-routines"]; !ok {
+		cmDataMap["backup-routines"] = make(map[string]interface{})
+	}
+
+	routineMap, ok := cmDataMap["backup-routines"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("backup-routines is not a map")
+	}
+
+	newRoutines := backupDataMap["backup-routines"].(map[string]interface{})
+
+	for name, routine := range newRoutines {
+		routineMap[name] = routine
+	}
+
+	cmDataMap["backup-routines"] = routineMap
+
+	updatedConfig, err := yaml.Marshal(cmDataMap)
+	if err != nil {
+		return err
+	}
+
+	cm.Data[BackupConfigYAML] = string(updatedConfig)
+
+	if err := r.Client.Update(
+		context.TODO(), cm, common.UpdateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update Backup Service ConfigMap: %v",
+			err,
+		)
+	}
+
+	r.Log.Info("Updated Backup Service ConfigMap for Backup",
+		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
+	cm := &corev1.ConfigMap{}
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackup.Spec.BackupService.Namespace,
+			Name:      r.aeroBackup.Spec.BackupService.Name,
+		}, cm,
+	); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+
+		return err
+	}
+
+	r.Log.Info("Removing Backup info from existing ConfigMap",
+		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	backupDataMap := make(map[string]interface{})
+	cmDataMap := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupDataMap); err != nil {
+		return err
+	}
+
+	data := cm.Data[BackupConfigYAML]
+
+	if err := yaml.Unmarshal([]byte(data), &cmDataMap); err != nil {
+		return err
+	}
+
+	if clusterIface, ok := cmDataMap["aerospike-clusters"]; ok {
+		if clusterMap, ok := clusterIface.(map[string]interface{}); ok {
+			currentCluster := backupDataMap["aerospike-cluster"].(map[string]interface{})
+			for name := range currentCluster {
+				delete(clusterMap, name)
+			}
+
+			cmDataMap["aerospike-clusters"] = clusterMap
+		}
+	}
+
+	if routineIface, ok := cmDataMap["backup-routines"]; ok {
+		if routineMap, ok := routineIface.(map[string]interface{}); ok {
+			currentRoutines := backupDataMap["backup-routines"].(map[string]interface{})
+			for name := range currentRoutines {
+				delete(routineMap, name)
+			}
+
+			cmDataMap["backup-routines"] = routineMap
+		}
+	}
+
+	updatedConfig, err := yaml.Marshal(cmDataMap)
+	if err != nil {
+		return err
+	}
+
+	cm.Data[BackupConfigYAML] = string(updatedConfig)
+
+	if err := r.Client.Update(
+		context.TODO(), cm, common.UpdateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update Backup Service ConfigMap: %v",
+			err,
+		)
+	}
+
+	r.Log.Info("Removed Backup info from existing ConfigMap",
+		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) ScheduleOnDemandBackup() error {
+	// There can be only one on-demand backup allowed right now.
+	if len(r.aeroBackup.Status.OnDemand) > 0 &&
+		r.aeroBackup.Spec.OnDemand[0].ID == r.aeroBackup.Status.OnDemand[0].ID {
+		r.Log.Info("On-demand backup already scheduled",
+			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		return nil
+	}
+
+	r.Log.Info("Schedule on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	if err != nil {
+		return err
+	}
+
+	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand[0].RoutineName,
+		r.aeroBackup.Spec.OnDemand[0].Delay); err != nil {
+		r.Log.Error(err, "Failed to schedule on-demand backup")
+		return err
+	}
+
+	r.Log.Info("Scheduled on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) reconcileBackup() error {
+	r.Log.Info("Registering backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	if err != nil {
+		return err
+	}
+
+	config, err := serviceClient.GetBackupServiceConfig()
+	if err != nil {
+		return err
+	}
+
+	r.Log.Info("Fetched backup service config", "config", config)
+
+	backupConfigMap := make(map[string]interface{})
+
+	err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap)
+	if err != nil {
+		return err
+	}
+
+	if backupConfigMap["aerospike-cluster"] != nil {
+		cluster := backupConfigMap["aerospike-cluster"].(map[string]interface{})
+
+		currentClusters, gErr := common.GetConfigSection(config, "aerospike-clusters")
+		if gErr != nil {
+			return gErr
+		}
+
+		for name, clusterConfig := range cluster {
+			if _, ok := currentClusters[name]; ok {
+				err = serviceClient.PutCluster(name, clusterConfig)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = serviceClient.UpdateCluster(name, clusterConfig)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if backupConfigMap["backup-routines"] != nil {
+		routines := backupConfigMap["backup-routines"].(map[string]interface{})
+
+		currentRoutines, gErr := common.GetConfigSection(config, "backup-routines")
+		if gErr != nil {
+			return gErr
+		}
+
+		for name, routine := range routines {
+			if _, ok := currentRoutines[name]; ok {
+				err = serviceClient.PutBackupRoutine(name, routine)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = serviceClient.UpdateBackupRoutine(name, routine)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// if r.aeroBackup.Spec.Config.BackupPolicies != nil {
+	//	for name, policy := range r.aeroBackup.Spec.Config.BackupPolicies {
+	//		if _, ok := config.BackupPolicies[name]; ok {
+	//			if err := serviceClient.PutBackupPolicy(name, policy); err != nil {
+	//				return err
+	//			}
+	//		} else {
+	//			if err := serviceClient.UpdateBackupPolicy(name, policy); err != nil {
+	//				return err
+	//			}
+	//		}
+	//	}
+	// }
+
+	// if r.aeroBackup.Spec.Config.Storage != nil {
+	//	for name, storage := range r.aeroBackup.Spec.Config.Storage {
+	//		if _, ok := config.Storage[name]; ok {
+	//			if err := serviceClient.PutStorage(name, storage); err != nil {
+	//				return err
+	//			}
+	//		} else {
+	//			if err := serviceClient.UpdateStorage(name, storage); err != nil {
+	//				return err
+	//			}
+	//		}
+	//	}
+	// }
+
+	// Apply the updated configuration for the changes to take effect
+	err = serviceClient.ApplyConfig()
+	if err != nil {
+		return err
+	}
+
+	// Schedule on-demand backup if given
+	if len(r.aeroBackup.Spec.OnDemand) > 0 {
+		if err = r.ScheduleOnDemandBackup(); err != nil {
+			r.Log.Error(err, "Failed to schedule backup")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) unregisterBackup() error {
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	if err != nil {
+		return err
+	}
+
+	config, err := serviceClient.GetBackupServiceConfig()
+	if err != nil {
+		return err
+	}
+
+	backupConfigMap := make(map[string]interface{})
+
+	err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap)
+	if err != nil {
+		return err
+	}
+
+	if backupConfigMap["backup-routines"] != nil {
+		routines := backupConfigMap["backup-routines"].(map[string]interface{})
+
+		currentRoutines, gErr := common.GetConfigSection(config, "backup-routines")
+		if gErr != nil {
+			return gErr
+		}
+
+		for name := range routines {
+			if _, ok := currentRoutines[name]; ok {
+				err = serviceClient.DeleteBackupRoutine(name)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if backupConfigMap["aerospike-cluster"] != nil {
+		cluster := backupConfigMap["aerospike-cluster"].(map[string]interface{})
+
+		currentClusters, gErr := common.GetConfigSection(config, "aerospike-clusters")
+		if gErr != nil {
+			return gErr
+		}
+
+		for name := range cluster {
+			if _, ok := currentClusters[name]; ok {
+				err = serviceClient.DeleteCluster(name)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Apply the updated configuration for the changes to take effect
+	err = serviceClient.ApplyConfig()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) updateStatus() error {
+	r.aeroBackup.Status.OnDemand = r.aeroBackup.Spec.OnDemand
+
+	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackup.Status))
+
+	return r.Client.Status().Update(context.Background(), r.aeroBackup)
 }

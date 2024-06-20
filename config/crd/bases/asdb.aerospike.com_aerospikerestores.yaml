@@ -14,7 +14,11 @@ spec:
     singular: aerospikerestore
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .status.restoreResult.status
+      name: Status
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AerospikeRestore is the Schema for the aerospikerestores API
@@ -34,322 +38,39 @@ spec:
           spec:
             description: AerospikeRestoreSpec defines the desired state of AerospikeRestore
             properties:
-              restore-config:
+              backupService:
+                description: BackupService is the backup service reference.
                 properties:
-                  destination:
-                    description: AerospikeCluster represents the configuration for
-                      an Aerospike cluster for backup. @Description AerospikeCluster
-                      represents the configuration for an Aerospike cluster for backup.
-                    properties:
-                      conn-timeout:
-                        description: The connection timeout in milliseconds.
-                        format: int32
-                        type: integer
-                      credentials:
-                        description: The authentication details to the Aerospike cluster.
-                        properties:
-                          auth-mode:
-                            description: The authentication mode string (INTERNAL,
-                              EXTERNAL, EXTERNAL_INSECURE, PKI).
-                            type: string
-                          password:
-                            description: The password for the cluster authentication.
-                            type: string
-                          password-path:
-                            description: The file path with the password string, will
-                              take precedence over the password field.
-                            type: string
-                          user:
-                            description: The username for the cluster authentication.
-                            type: string
-                        type: object
-                      label:
-                        description: The cluster name.
-                        type: string
-                      seed-nodes:
-                        description: The seed nodes details.
-                        items:
-                          description: SeedNode represents details of a node in the
-                            Aerospike cluster. @Description SeedNode represents details
-                            of a node in the Aerospike cluster.
-                          properties:
-                            host-name:
-                              description: The host name of the node.
-                              type: string
-                            port:
-                              description: The port of the node.
-                              format: int32
-                              type: integer
-                            tls-name:
-                              description: TLS certificate name used for secure connections
-                                (if enabled).
-                              type: string
-                          type: object
-                        type: array
-                      tls:
-                        description: The cluster TLS configuration.
-                        properties:
-                          cafile:
-                            description: Path to a trusted CA certificate file.
-                            type: string
-                          capath:
-                            description: Path to a directory of trusted CA certificates.
-                            type: string
-                          certfile:
-                            description: Path to the chain file for mutual authentication
-                              (if Aerospike Cluster supports it).
-                            type: string
-                          cipher-suite:
-                            description: TLS cipher selection criteria. The format
-                              is the same as OpenSSL's Cipher List Format.
-                            type: string
-                          keyfile:
-                            description: Path to the key for mutual authentication
-                              (if Aerospike cluster supports it).
-                            type: string
-                          keyfile-password:
-                            description: Password to load protected TLS-keyfile (env:VAR,
-                              file:PATH, PASSWORD).
-                            type: string
-                          name:
-                            description: The default TLS name used to authenticate
-                              each TLS socket connection.
-                            type: string
-                          protocols:
-                            description: TLS protocol selection criteria. This format
-                              is the same as Apache's SSL Protocol.
-                            type: string
-                        type: object
-                      use-services-alternate:
-                        description: Whether should use "services-alternate" instead
-                          of "services" in info request during cluster tending.
-                        type: boolean
-                    type: object
-                  policy:
-                    description: RestorePolicy represents a policy for the restore
-                      operation. @Description RestorePolicy represents a policy for
-                      the restore operation.
-                    properties:
-                      bandwidth:
-                        description: Throttles read operations from the backup file(s)
-                          to not exceed the given I/O bandwidth in MiB/s and its database
-                          write operations to not exceed the given number of transactions
-                          per second.
-                        format: int64
-                        type: integer
-                      batch-size:
-                        description: The max allowed number of records per an async
-                          batch write call. Default is 128 with batch writes enabled,
-                          or 16 without batch writes.
-                        format: int32
-                        type: integer
-                      bin-list:
-                        description: The bins to restore (optional, an empty list
-                          implies restoring all bins).
-                        items:
-                          type: string
-                        type: array
-                      compression:
-                        description: Compression details.
-                        properties:
-                          level:
-                            description: The compression level to use (or -1 if unspecified).
-                            format: int32
-                            type: integer
-                          mode:
-                            description: The compression mode to be used (default
-                              is NONE).
-                            type: string
-                        type: object
-                      disable-batch-writes:
-                        description: Disables the use of batch writes when restoring
-                          records to the Aerospike cluster. By default, the cluster
-                          is checked for batch write support.
-                        type: boolean
-                      encryption:
-                        description: Encryption details.
-                        properties:
-                          key-env:
-                            description: The name of the environment variable containing
-                              the encryption key.
-                            type: string
-                          key-file:
-                            description: The path to the file containing the encryption
-                              key.
-                            type: string
-                          key-secret:
-                            description: The secret keyword in Aerospike Secret Agent
-                              containing the encryption key.
-                            type: string
-                          mode:
-                            description: The encryption mode to be used (NONE, AES128,
-                              AES256)
-                            type: string
-                        type: object
-                      max-async-batches:
-                        description: The max number of outstanding async record batch
-                          write calls at a time.
-                        format: int32
-                        type: integer
-                      namespace:
-                        description: Namespace details for the restore operation.
-                          By default, the data is restored to the namespace from which
-                          it was taken.
-                        properties:
-                          destination:
-                            description: Destination namespace name.
-                            type: string
-                          source:
-                            description: Original namespace name.
-                            type: string
-                        type: object
-                      no-generation:
-                        description: Records from backups take precedence. This option
-                          disables the generation check. With this option, records
-                          from the backup always overwrite records that already exist
-                          in the namespace, regardless of generation numbers.
-                        type: boolean
-                      no-indexes:
-                        description: Do not restore any secondary index definitions.
-                        type: boolean
-                      no-records:
-                        description: Do not restore any record data (metadata or bin
-                          data). By default, record data, secondary index definitions,
-                          and UDF modules will be restored.
-                        type: boolean
-                      no-udfs:
-                        description: Do not restore any UDF modules.
-                        type: boolean
-                      parallel:
-                        description: The number of client threads to spawn for writing
-                          to the cluster.
-                        format: int32
-                        type: integer
-                      replace:
-                        description: Replace records. This controls how records from
-                          the backup overwrite existing records in the namespace.
-                          By default, restoring a record from a backup only replaces
-                          the bins contained in the backup; all other bins of an existing
-                          record remain untouched.
-                        type: boolean
-                      set-list:
-                        description: The sets to restore (optional, an empty list
-                          implies restoring all sets).
-                        items:
-                          type: string
-                        type: array
-                      timeout:
-                        description: Timeout (ms) for Aerospike commands to write
-                          records, create indexes and create UDFs.
-                        format: int32
-                        type: integer
-                      tps:
-                        description: Throttles read operations from the backup file(s)
-                          to not exceed the given I/O bandwidth in MiB/s and its database
-                          write operations to not exceed the given number of transactions
-                          per second.
-                        format: int32
-                        type: integer
-                      unique:
-                        description: Existing records take precedence. With this option,
-                          only records that do not exist in the namespace are restored,
-                          regardless of generation numbers. If a record exists in
-                          the namespace, the record from the backup is ignored.
-                        type: boolean
-                    type: object
-                  routine:
-                    description: The backup routine name.
+                  name:
                     type: string
-                  secret-agent:
-                    description: "SecretAgent represents the configuration of an Aerospike
-                      Secret Agent for a backup/restore operation. Aerospike Secret
-                      Agent acts as a proxy layer between Aerospike server and one
-                      or more external secrets management services, fetching secrets
-                      on behalf of the server. \n @Description SecretAgent represents
-                      the configuration of an Aerospike Secret Agent @Description
-                      for a backup/restore operation."
-                    properties:
-                      address:
-                        description: Address of the Secret Agent.
-                        type: string
-                      port:
-                        description: Port the Secret Agent is running on.
-                        type: string
-                      timeout:
-                        description: Timeout in milliseconds.
-                        format: int32
-                        type: integer
-                      tls-ca:
-                        description: The path to a trusted CA certificate file in
-                          PEM format.
-                        type: string
-                      tls-enabled:
-                        description: Indicates whether TLS is enabled.
-                        type: boolean
-                    type: object
-                  source:
-                    description: Storage represents the configuration for a backup
-                      storage details. @Description Storage represents the configuration
-                      for a backup storage details.
-                    properties:
-                      path:
-                        description: The root path for the backup repository.
-                        type: string
-                      s3-endpoint-override:
-                        description: An alternative endpoint for the S3 SDK to communicate
-                          (AWS S3 optional).
-                        type: string
-                      s3-log-level:
-                        description: The log level of the AWS S3 SDK (AWS S3 optional).
-                        type: string
-                      s3-profile:
-                        description: The S3 profile name (AWS S3 optional).
-                        type: string
-                      s3-region:
-                        description: The S3 region string (AWS S3 optional).
-                        type: string
-                      type:
-                        description: The type of the storage provider (0 - Local,
-                          1 - AWS S3).
-                        type: integer
-                    required:
-                    - type
-                    type: object
-                  time:
-                    description: Required epoch time for recovery. The closest backup
-                      before the timestamp will be applied.
-                    format: int64
-                    type: integer
-                  type:
-                    enum:
-                    - Full
-                    - Incremental
-                    - TimeStamp
+                  namespace:
                     type: string
                 required:
-                - type
+                - name
+                - namespace
                 type: object
-              service-config:
-                properties:
-                  address:
-                    description: The address to listen on.
-                    type: string
-                  context-path:
-                    description: ContextPath customizes path for the API endpoints.
-                    type: string
-                  port:
-                    description: The port to listen on.
-                    type: integer
+              config:
+                description: Config is the configuration for the restore.
                 type: object
+                x-kubernetes-preserve-unknown-fields: true
+              pollingPeriod:
+                description: PollingPeriod is the polling period for restore service.
+                type: string
+              type:
+                description: Type is the restore type
+                enum:
+                - Full
+                - Incremental
+                - TimeStamp
+                type: string
             required:
-            - restore-config
-            - service-config
+            - backupService
+            - config
+            - type
             type: object
           status:
             description: AerospikeRestoreStatus defines the observed state of AerospikeRestore
             properties:
-              error:
-                type: string
               job-id:
                 format: int64
                 type: integer
@@ -361,42 +82,9 @@ spec:
                 - Completed
                 - Failed
                 type: string
-              restore-result:
-                description: RestoreResult represents a single restore operation result.
-                properties:
-                  existed-records:
-                    format: int64
-                    type: integer
-                  expired-records:
-                    format: int64
-                    type: integer
-                  fresher-records:
-                    format: int64
-                    type: integer
-                  ignored-records:
-                    format: int64
-                    type: integer
-                  index-count:
-                    format: int64
-                    type: integer
-                  inserted-records:
-                    format: int64
-                    type: integer
-                  skipped-records:
-                    format: int64
-                    type: integer
-                  total-bytes:
-                    format: int64
-                    type: integer
-                  total-records:
-                    format: int64
-                    type: integer
-                  udf-count:
-                    format: int64
-                    type: integer
+              restoreResult:
                 type: object
-            required:
-            - job-id
+                x-kubernetes-preserve-unknown-fields: true
             type: object
         type: object
     served: true

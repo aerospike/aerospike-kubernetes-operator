@@ -17,40 +17,42 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // AerospikeBackupSpec defines the desired state of AerospikeBackup
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
-	ServiceConfig *ServiceConfig `json:"service-config"`
-	BackupConfig  *BackupConfig  `json:"backup-config"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
+	// BackupService is the backup service reference.
+	BackupService *BackupService `json:"backupService"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
+	// Config is the configuration for the backup.
+	Config runtime.RawExtension `json:"config"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand
+	// OnDemand is the on demand backup configuration.
+	// +kubebuilder:validation:MaxItems:=1
+	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 }
 
-type BackupConfig struct {
-	AerospikeCluster *Cluster                        `json:"aerospike-cluster"`
-	Storage          map[string]*model.Storage       `json:"storage"`
-	BackupRoutines   map[string]*model.BackupRoutine `json:"backup-routines"`
-	BackupPolicies   map[string]*model.BackupPolicy  `json:"backup-policies"`
+type BackupService struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
-type ServiceConfig struct {
-	// The address to listen on.
-	Address *string `json:"address,omitempty" default:"0.0.0.0"`
-	// The port to listen on.
-	Port *int `json:"port,omitempty" default:"8080"`
-	// ContextPath customizes path for the API endpoints.
-	ContextPath *string `json:"context-path,omitempty" default:"/"`
-}
-
-type Cluster struct {
-	model.AerospikeCluster `json:",inline"`
-	Name                   string `json:"name"`
+type OnDemandSpec struct {
+	// On demand backup ID
+	ID string `json:"id,omitempty"`
+	// Backup routine name
+	RoutineName string `json:"routineName"`
+	// Delay interval in milliseconds
+	Delay metav1.Duration `json:"delay,omitempty"`
 }
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
+	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 }
 
 //+kubebuilder:object:root=true

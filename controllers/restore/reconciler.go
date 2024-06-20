@@ -2,9 +2,8 @@ package restore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
 
 	"github.com/go-logr/logr"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -13,8 +12,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 )
 
@@ -28,18 +27,12 @@ type SingleRestoreReconciler struct {
 	Log         logr.Logger
 }
 
-type ReconcileResult struct {
-	Err       error
-	Result    reconcile.Result
-	IsSuccess bool
-}
-
 func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	if err := r.setStatusPhase(asdbv1beta1.AerospikeRestoreInProgress); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if res := r.ReconcileRestore(); !res.IsSuccess {
+	if res := r.reconcileRestore(); !res.IsSuccess {
 		if res.Err != nil {
 			return res.Result, res.Err
 		}
@@ -47,77 +40,86 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return res.Result, nil
 	}
 
-	if err := r.CheckRestoreStatus(); err != nil {
+	if err := r.checkRestoreStatus(); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreInProgress {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *SingleRestoreReconciler) ReconcileRestore() ReconcileResult {
-	if r.aeroRestore.Status.JobID != 0 {
+func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
+	if r.aeroRestore.Status.JobID != nil {
 		r.Log.Info("Restore already running, checking the restore status")
-		return reconcileSuccess()
+		return common.ReconcileSuccess()
 	}
 
-	serviceClient := backup_service.GetBackupServiceClient(r.aeroRestore.Spec.ServiceConfig)
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroRestore.Spec.BackupService)
+	if err != nil {
+		return common.ReconcileError(err)
+	}
 
-	var (
-		jobID int64
-		err   error
-	)
+	var jobID *int64
 
-	switch r.aeroRestore.Spec.RestoreConfig.Type {
+	switch r.aeroRestore.Spec.Type {
 	case asdbv1beta1.Full:
-		jobID, err = serviceClient.TriggerFullRestore(r.Log, &r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
+		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Full),
+			r.aeroRestore.Spec.Config.Raw)
 
 	case asdbv1beta1.Incremental:
-		jobID, err = serviceClient.TriggerIncrementalRestore(r.Log, &r.aeroRestore.Spec.RestoreConfig.RestoreRequest)
+		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Incremental),
+			r.aeroRestore.Spec.Config.Raw)
 
 	case asdbv1beta1.TimeStamp:
-		var timeStampRequest *model.RestoreTimestampRequest
-		timeStampRequest.Time = r.aeroRestore.Spec.RestoreConfig.Time
-		timeStampRequest.Routine = r.aeroRestore.Spec.RestoreConfig.Routine
-		timeStampRequest.Policy = r.aeroRestore.Spec.RestoreConfig.Policy
-		timeStampRequest.DestinationCuster = r.aeroRestore.Spec.RestoreConfig.DestinationCuster
-		timeStampRequest.SecretAgent = r.aeroRestore.Spec.RestoreConfig.SecretAgent
+		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.TimeStamp),
+			r.aeroRestore.Spec.Config.Raw)
 
-		jobID, err = serviceClient.TriggerRestoreByTimeStamp(r.Log, timeStampRequest)
 	default:
-		return reconcileError(fmt.Errorf("unsupported restore type"))
+		return common.ReconcileError(fmt.Errorf("unsupported restore type"))
 	}
 
 	if err != nil {
-		reconcileError(err)
+		common.ReconcileError(err)
 	}
 
 	r.aeroRestore.Status.JobID = jobID
 
 	if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
 		r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
-		return reconcileError(err)
+		return common.ReconcileError(err)
 	}
 
-	return reconcileRequeueAfter(1)
+	return common.ReconcileRequeueAfter(1)
 }
 
-func (r *SingleRestoreReconciler) CheckRestoreStatus() error {
-	serviceClient := backup_service.GetBackupServiceClient(r.aeroRestore.Spec.ServiceConfig)
+func (r *SingleRestoreReconciler) checkRestoreStatus() error {
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroRestore.Spec.BackupService)
+	if err != nil {
+		return err
+	}
 
 	restoreStatus, err := serviceClient.CheckRestoreStatus(r.aeroRestore.Status.JobID)
 	if err != nil {
 		return err
 	}
 
-	r.aeroRestore.Status.RestoreResult = &restoreStatus.RestoreResult
-	r.aeroRestore.Status.Error = restoreStatus.Error
-	r.aeroRestore.Status.Phase = statusToPhase(restoreStatus.Status)
+	r.Log.Info(fmt.Sprintf("Restore status: %+v", restoreStatus))
 
-	if err := r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
+	if status, ok := restoreStatus["status"]; ok {
+		r.aeroRestore.Status.Phase = statusToPhase(status.(string))
+	}
+
+	statusBytes, err := json.Marshal(restoreStatus)
+	if err != nil {
+		return err
+	}
+
+	r.aeroRestore.Status.RestoreResult.Raw = statusBytes
+
+	if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
 		r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
 		return err
 	}
@@ -138,35 +140,17 @@ func (r *SingleRestoreReconciler) setStatusPhase(phase asdbv1beta1.AerospikeRest
 	return nil
 }
 
-func statusToPhase(status model.JobStatus) asdbv1beta1.AerospikeRestorePhase {
+func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
 	switch status {
-	case model.JobStatusDone:
+	case "Done":
 		return asdbv1beta1.AerospikeRestoreCompleted
 
-	case model.JobStatusRunning:
+	case "Running":
 		return asdbv1beta1.AerospikeRestoreInProgress
 
-	case model.JobStatusFailed:
+	case "Failed":
 		return asdbv1beta1.AerospikeRestoreFailed
 	}
 
 	return ""
-}
-
-func reconcileSuccess() ReconcileResult {
-	return ReconcileResult{IsSuccess: true, Result: reconcile.Result{}}
-}
-
-func reconcileRequeueAfter(secs int) ReconcileResult {
-	t := time.Duration(secs) * time.Second
-
-	return ReconcileResult{
-		Result: reconcile.Result{
-			Requeue: true, RequeueAfter: t,
-		},
-	}
-}
-
-func reconcileError(e error) ReconcileResult {
-	return ReconcileResult{Result: reconcile.Result{}, Err: e}
 }

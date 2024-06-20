@@ -20,12 +20,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// +kubebuilder:scaffold:imports
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/controllers/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -37,7 +37,6 @@ var (
 )
 
 func init() {
-	utilRuntime.Must(asdbv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))
 	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
@@ -174,6 +173,15 @@ func main() {
 		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeRestore"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeRestore")
+		os.Exit(1)
+	}
+
+	if err = (&backupservice.AerospikeBackupServiceReconciler{
+		Client: client,
+		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeBackupService"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackupService")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
