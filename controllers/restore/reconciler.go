@@ -59,7 +59,7 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 }
 
 func (r *SingleRestoreReconciler) ReconcileRestore() ReconcileResult {
-	if r.aeroRestore.Status.JobID != 0 {
+	if r.aeroRestore.Status.JobID != nil {
 		r.Log.Info("Restore already running, checking the restore status")
 		return reconcileSuccess()
 	}
@@ -67,7 +67,7 @@ func (r *SingleRestoreReconciler) ReconcileRestore() ReconcileResult {
 	serviceClient := backup_service.GetBackupServiceClient(r.aeroRestore.Spec.ServiceConfig)
 
 	var (
-		jobID int64
+		jobID *int64
 		err   error
 	)
 

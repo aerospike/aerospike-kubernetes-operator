@@ -22,6 +22,7 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -1011,5 +1012,5 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 
 	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 
-	return r.Client.Update(ctx, aeroCluster, updateOption)
+	return r.Client.Update(ctx, aeroCluster, common.UpdateOption)
 }

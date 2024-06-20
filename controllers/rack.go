@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -725,7 +726,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	found.Spec.Replicas = &desiredSize
 
 	// Scale up the statefulset
-	if err = r.Client.Update(context.TODO(), found, updateOption); err != nil {
+	if err = r.Client.Update(context.TODO(), found, common.UpdateOption); err != nil {
 		return found, reconcileError(
 			fmt.Errorf(
 				"failed to update StatefulSet pods: %v", err,
@@ -959,7 +960,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	found.Spec.Replicas = &newSize
 
 	if err = r.Client.Update(
-		context.TODO(), found, updateOption,
+		context.TODO(), found, common.UpdateOption,
 	); err != nil {
 		return found, reconcileError(
 			fmt.Errorf(
@@ -995,7 +996,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			)
 
 			if err = r.Client.Update(
-				context.TODO(), found, updateOption,
+				context.TODO(), found, common.UpdateOption,
 			); err != nil {
 				return found, reconcileError(
 					fmt.Errorf(

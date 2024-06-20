@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backup
+package backupservice
 
 import (
 	"context"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -28,34 +29,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const finalizerName = "asdb.aerospike.com/backup-finalizer"
 
-// AerospikeBackupReconciler reconciles a AerospikeBackup object
-type AerospikeBackupReconciler struct {
+// AerospikeBackupServiceReconciler reconciles a AerospikeBackupService object
+type AerospikeBackupServiceReconciler struct {
 	client.Client
-	Scheme *k8sruntime.Scheme
 	Log    logr.Logger
+	Scheme *k8sruntime.Scheme
 }
 
-//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups/finalizers,verbs=update
+//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.1/pkg/reconcile
-func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("aerospikebackup", request.NamespacedName)
+func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("aerospikebackupservice", request.NamespacedName)
 
-	log.Info("Reconciling AerospikeBackup")
+	log.Info("Reconciling AerospikeBackupService")
 
 	// Fetch the AerospikeBackup instance
-	aeroBackup := &asdbv1beta1.AerospikeBackup{}
-	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackup); err != nil {
+	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
+	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
@@ -64,20 +65,20 @@ func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Re
 		return reconcile.Result{Requeue: true}, err
 	}
 
-	cr := SingleBackupReconciler{
-		aeroBackup: aeroBackup,
-		Client:     r.Client,
-		Log:        log,
-		Scheme:     r.Scheme,
+	cr := SingleBackupServiceReconciler{
+		aeroBackupService: aeroBackupService,
+		Client:            r.Client,
+		Log:               log,
+		Scheme:            r.Scheme,
 	}
 
 	return cr.Reconcile()
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AerospikeBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AerospikeBackupServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&asdbv1beta1.AerospikeBackup{}).
+		For(&asdbv1beta1.AerospikeBackupService{}).
 		WithOptions(
 			controller.Options{
 				MaxConcurrentReconciles: common.MaxConcurrentReconciles,

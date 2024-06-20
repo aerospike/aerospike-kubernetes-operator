@@ -395,8 +395,6 @@ spec:
                     format: int64
                     type: integer
                 type: object
-            required:
-            - job-id
             type: object
         type: object
     served: true

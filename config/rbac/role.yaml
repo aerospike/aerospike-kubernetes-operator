@@ -7,6 +7,17 @@ rules:
 - apiGroups:
   - apps
   resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
   - statefulsets
   verbs:
   - create
@@ -38,6 +49,32 @@ rules:
   - asdb.aerospike.com
   resources:
   - aerospikebackups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackupservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackupservices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackupservices/status
   verbs:
   - get
   - patch

@@ -1,0 +1,466 @@
+package backupservice
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/go-logr/logr"
+	app "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+)
+
+const BackupConfigYAML = "aerospike-backup-service.yml"
+
+var DefaultPort = map[string]int32{
+	"http": 8080,
+}
+
+// SingleBackupServiceReconciler reconciles a single AerospikeBackupService
+type SingleBackupServiceReconciler struct {
+	client.Client
+	Recorder          record.EventRecorder
+	aeroBackupService *asdbv1beta1.AerospikeBackupService
+	KubeConfig        *rest.Config
+	Scheme            *k8sRuntime.Scheme
+	Log               logr.Logger
+}
+
+func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	// Check DeletionTimestamp to see if the backup is being deleted
+	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := r.removeFinalizer(finalizerName); err != nil {
+			r.Log.Error(err, "Failed to remove finalizer")
+			return reconcile.Result{}, err
+		}
+
+		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
+	}
+
+	// The cluster is not being deleted, add finalizer if not added already
+	if err := r.addFinalizer(finalizerName); err != nil {
+		r.Log.Error(err, "Failed to add finalizer")
+		return reconcile.Result{}, err
+	}
+
+	if err := r.reconcileConfigMap(); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileDeployment(); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileService(); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *SingleBackupServiceReconciler) addFinalizer(finalizerName string) error {
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object. This is equivalent
+	// registering our finalizer.
+	if !utils.ContainsString(
+		r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
+	) {
+		r.aeroBackupService.ObjectMeta.Finalizers = append(
+			r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
+		)
+
+		if err := r.Client.Update(context.TODO(), r.aeroBackupService); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) removeFinalizer(finalizerName string) error {
+	if utils.ContainsString(r.aeroBackupService.ObjectMeta.Finalizers, finalizerName) {
+		// Remove finalizer from the list
+		r.aeroBackupService.ObjectMeta.Finalizers = utils.RemoveString(
+			r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
+		)
+
+		if err := r.Client.Update(context.TODO(), r.aeroBackupService); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
+	cm := &corev1.ConfigMap{}
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackupService.Namespace,
+			Name:      r.aeroBackupService.Name,
+		}, cm,
+	); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		r.Log.Info("Create Backup Service ConfigMap",
+			"name", getBackupServiceName(r.aeroBackupService))
+
+		cm = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      r.aeroBackupService.Name,
+				Namespace: r.aeroBackupService.Namespace,
+				Labels:    utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
+			},
+			Data: r.getConfigMapData(),
+		}
+
+		// Set AerospikeCluster instance as the owner and controller
+		err = controllerutil.SetControllerReference(
+			r.aeroBackupService, cm, r.Scheme,
+		)
+		if err != nil {
+			return err
+		}
+
+		if err = r.Client.Create(
+			context.TODO(), cm, common.CreateOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to create ConfigMap: %v",
+				err,
+			)
+		}
+
+		r.Log.Info("Created new Backup Service ConfigMap",
+			"name", getBackupServiceName(r.aeroBackupService))
+
+		return nil
+
+	}
+
+	r.Log.Info(
+		"ConfigMap already exist. Updating existing ConfigMap if required",
+		"name", getBackupServiceName(r.aeroBackupService),
+	)
+
+	desiredDataMap := make(map[string]interface{})
+	currentDataMap := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &desiredDataMap); err != nil {
+		return err
+	}
+
+	data := cm.Data[BackupConfigYAML]
+
+	if err := yaml.Unmarshal([]byte(data), &currentDataMap); err != nil {
+		return err
+	}
+
+	currentDataMap["service"] = desiredDataMap["service"]
+	currentDataMap["backup-policies"] = desiredDataMap["backup-policies"]
+	currentDataMap["storage"] = desiredDataMap["storage"]
+	currentDataMap["secret-agent"] = desiredDataMap["secret-agent"]
+
+	updatedConfig, err := yaml.Marshal(currentDataMap)
+	if err != nil {
+		return err
+	}
+
+	cm.Data[BackupConfigYAML] = string(updatedConfig)
+
+	if err := r.Client.Update(
+		context.TODO(), cm, common.UpdateOption,
+	); err != nil {
+		return fmt.Errorf(
+			"failed to update Backup Service ConfigMap: %v",
+			err,
+		)
+	}
+
+	r.Log.Info("Updated Backup Service ConfigMap",
+		"name", getBackupServiceName(r.aeroBackupService))
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
+	data := make(map[string]string)
+	data[BackupConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+
+	return data
+
+}
+
+func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
+	var deploy app.Deployment
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackupService.Namespace,
+			Name:      r.aeroBackupService.Name,
+		}, &deploy,
+	); err != nil {
+
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		r.Log.Info("Create Backup Service Deployment",
+			"name", getBackupServiceName(r.aeroBackupService))
+
+		deployment, err := r.getDeploymentObject()
+		if err != nil {
+			return err
+		}
+
+		// Set AerospikeBackupService instance as the owner and controller
+		if err = controllerutil.SetControllerReference(
+			r.aeroBackupService, deployment, r.Scheme,
+		); err != nil {
+			return err
+		}
+
+		if err = r.Client.Create(context.TODO(), deployment, common.CreateOption); err != nil {
+			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
+		}
+
+		return nil
+	}
+
+	r.Log.Info(
+		"Backup Service deployment already exist. Updating existing deployment if required",
+		"name", getBackupServiceName(r.aeroBackupService),
+	)
+	// TODO: Add update flow
+	return nil
+}
+
+func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService) types.NamespacedName {
+	return types.NamespacedName{Name: aeroBackupService.Name, Namespace: aeroBackupService.Namespace}
+}
+
+func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
+	labels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
+	volumeMounts, volumes := r.getVolumeAndMounts()
+	ports, err := r.getServicePorts()
+	if err != nil {
+		return nil, err
+	}
+
+	var containerPorts []corev1.ContainerPort
+
+	for name, port := range ports {
+		containerPorts = append(containerPorts, corev1.ContainerPort{
+			Name:          name,
+			ContainerPort: port,
+		})
+	}
+
+	deploy := &app.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.aeroBackupService.Name,
+			Namespace: r.aeroBackupService.Namespace,
+			Labels:    labels,
+		},
+		Spec: app.DeploymentSpec{
+			Replicas: func(replica int32) *int32 { return &replica }(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					// TODO: Finalise on this. Who should create this SA?
+					ServiceAccountName: "aerospike-backup-service",
+					Containers: []corev1.Container{
+						{
+							Name:            "backup-service",
+							Image:           r.aeroBackupService.Spec.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							VolumeMounts:    volumeMounts,
+							Resources:       r.aeroBackupService.Spec.Resources,
+							Ports:           containerPorts,
+						},
+					},
+					Volumes: volumes,
+				},
+			},
+		},
+	}
+
+	return deploy, nil
+}
+
+func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMount, []corev1.Volume) {
+
+	volumes := make([]corev1.Volume, 0, len(r.aeroBackupService.Spec.SecretMounts))
+	volumeMounts := make([]corev1.VolumeMount, 0, len(r.aeroBackupService.Spec.SecretMounts))
+
+	for idx := range r.aeroBackupService.Spec.SecretMounts {
+		secretMount := r.aeroBackupService.Spec.SecretMounts[idx]
+		volumeMounts = append(volumeMounts, secretMount.VolumeMount)
+
+		volumes = append(volumes, corev1.Volume{
+			Name: secretMount.VolumeMount.Name,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretMount.SecretName,
+				},
+			},
+		})
+	}
+
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "backup-service-config",
+		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", BackupConfigYAML),
+		SubPath:   BackupConfigYAML,
+	})
+
+	volumes = append(volumes, corev1.Volume{
+		Name: "backup-service-config",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: r.aeroBackupService.Name,
+				},
+			},
+		},
+	})
+
+	return volumeMounts, volumes
+}
+
+func (r *SingleBackupServiceReconciler) reconcileService() error {
+	var service corev1.Service
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackupService.Namespace,
+			Name:      r.aeroBackupService.Name,
+		}, &service,
+	); err != nil {
+
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		r.Log.Info("Create Backup Service",
+			"name", getBackupServiceName(r.aeroBackupService))
+
+		svc, err := r.getServiceObject()
+		if err != nil {
+			return err
+		}
+
+		// Set AerospikeBackupService instance as the owner and controller
+		if err = controllerutil.SetControllerReference(
+			r.aeroBackupService, svc, r.Scheme,
+		); err != nil {
+			return err
+		}
+
+		if err = r.Client.Create(context.TODO(), svc, common.CreateOption); err != nil {
+			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
+		}
+
+		return nil
+	}
+
+	r.Log.Info(
+		"Backup Service already exist. Updating existing service if required",
+		"name", getBackupServiceName(r.aeroBackupService),
+	)
+	// TODO: Add update flow
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, error) {
+	ports, err := r.getServicePorts()
+	if err != nil {
+		return nil, err
+	}
+
+	var servicePort []corev1.ServicePort
+
+	for name, port := range ports {
+		servicePort = append(servicePort, corev1.ServicePort{
+			Name: name,
+			Port: port,
+		})
+	}
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.aeroBackupService.Name,
+			Namespace: r.aeroBackupService.Namespace,
+			Labels:    utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     r.aeroBackupService.Spec.Service.Type,
+			Selector: utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
+			Ports:    servicePort,
+		},
+	}
+
+	return svc, nil
+}
+
+func (r *SingleBackupServiceReconciler) getServicePorts() (map[string]int32, error) {
+	config := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
+		return nil, err
+	}
+
+	r.Log.Info(fmt.Sprintf("Config converted to map: %+v", config))
+
+	if _, ok := config["service"]; !ok {
+		r.Log.Info("Service config not found")
+		return DefaultPort, nil
+	}
+
+	serviceConfig, ok := config["service"].(map[string]interface{})
+	if !ok {
+		r.Log.Info("Service assertion failed")
+		return nil, fmt.Errorf("service config not found")
+	}
+
+	if _, ok = serviceConfig["http"]; !ok {
+		r.Log.Info("HTTP config not found")
+		return DefaultPort, nil
+	}
+
+	httpConf, ok := serviceConfig["http"].(map[string]interface{})
+	if !ok {
+		r.Log.Info("HTTP assertion failed")
+		return nil, fmt.Errorf("http config not found")
+	}
+
+	port, ok := httpConf["port"]
+	if !ok {
+		r.Log.Info("Port not found")
+		return DefaultPort, nil
+	}
+
+	return map[string]int32{
+		"http": int32(port.(float64)),
+	}, nil
+}

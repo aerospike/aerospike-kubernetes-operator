@@ -18,8 +18,6 @@ package restore
 
 import (
 	"context"
-	"runtime"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -28,12 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// Number of Reconcile threads to run Reconcile operations
-var maxConcurrentReconciles = runtime.NumCPU() * 2
 
 // AerospikeRestoreReconciler reconciles a AerospikeRestore object
 type AerospikeRestoreReconciler struct {
@@ -82,7 +78,7 @@ func (r *AerospikeRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&asdbv1beta1.AerospikeRestore{}).
 		WithOptions(
 			controller.Options{
-				MaxConcurrentReconciles: maxConcurrentReconciles,
+				MaxConcurrentReconciles: common.MaxConcurrentReconciles,
 			},
 		).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).

@@ -33,6 +33,17 @@ type SingleBackupReconciler struct {
 }
 
 func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	// Check DeletionTimestamp to see if the backup is being deleted
+	if !r.aeroBackup.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := r.removeFinalizer(finalizerName); err != nil {
+			r.Log.Error(err, "Failed to remove finalizer")
+			return reconcile.Result{}, err
+		}
+
+		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
+	}
+
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
@@ -54,7 +65,10 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.MakeAPICalls(); err != nil {
+	r.Log.Info("Updated Backup service configmap")
+
+	if err := r.RegisterBackup(); err != nil {
+		r.Log.Error(err, "Failed to register backup")
 		return ctrl.Result{}, err
 	}
 
@@ -69,6 +83,21 @@ func (r *SingleBackupReconciler) addFinalizer(finalizerName string) error {
 		r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
 	) {
 		r.aeroBackup.ObjectMeta.Finalizers = append(
+			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
+		)
+
+		if err := r.Client.Update(context.TODO(), r.aeroBackup); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
+	if utils.ContainsString(r.aeroBackup.ObjectMeta.Finalizers, finalizerName) {
+		// Remove finalizer from the list
+		r.aeroBackup.ObjectMeta.Finalizers = utils.RemoveString(
 			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
 		)
 
@@ -120,21 +149,54 @@ func (r *SingleBackupReconciler) UpdateConfigMap(cm *v1.ConfigMap) error {
 	return r.Client.Update(context.TODO(), cm)
 }
 
-func (r *SingleBackupReconciler) MakeAPICalls() error {
+func (r *SingleBackupReconciler) RegisterBackup() error {
+	r.Log.Info("Registering backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+
 	serviceClient := backup_service.GetBackupServiceClient(r.aeroBackup.Spec.ServiceConfig)
 
 	config, err := serviceClient.GetBackupServiceConfig()
 	if err != nil {
-		return nil
+		return err
+	}
+
+	r.Log.Info("Fetched backup service config", "config", config)
+
+	if r.aeroBackup.Spec.BackupConfig.AerospikeCluster != nil {
+		if _, ok := config.AerospikeClusters[r.aeroBackup.Spec.BackupConfig.AerospikeCluster.Name]; ok {
+			if err = serviceClient.PutCluster(r.aeroBackup.Spec.BackupConfig.AerospikeCluster); err != nil {
+				return err
+			}
+		} else {
+			if err = serviceClient.UpdateCluster(r.aeroBackup.Spec.BackupConfig.AerospikeCluster); err != nil {
+				return err
+			}
+		}
 	}
 
 	if r.aeroBackup.Spec.BackupConfig.BackupPolicies != nil {
 		for name, policy := range r.aeroBackup.Spec.BackupConfig.BackupPolicies {
 			if _, ok := config.BackupPolicies[name]; ok {
-				// do PUT call
-				_ = policy
+				if err := serviceClient.PutBackupPolicy(name, policy); err != nil {
+					return err
+				}
 			} else {
-				// do POST call
+				if err := serviceClient.UpdateBackupPolicy(name, policy); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
+		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
+			if _, ok := config.Storage[name]; ok {
+				if err := serviceClient.PutStorage(name, storage); err != nil {
+					return err
+				}
+			} else {
+				if err := serviceClient.UpdateStorage(name, storage); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -142,32 +204,16 @@ func (r *SingleBackupReconciler) MakeAPICalls() error {
 	if r.aeroBackup.Spec.BackupConfig.BackupRoutines != nil {
 		for name, routine := range r.aeroBackup.Spec.BackupConfig.BackupRoutines {
 			if _, ok := config.BackupRoutines[name]; ok {
-				// do PUT call
-				_ = routine
+				if err := serviceClient.PutBackupRoutine(name, routine); err != nil {
+					return err
+				}
 			} else {
-				// do POST call
+				if err := serviceClient.UpdateBackupRoutine(name, routine); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
-	if r.aeroBackup.Spec.BackupConfig.AerospikeCluster != nil {
-		if _, ok := config.AerospikeClusters[r.aeroBackup.Spec.BackupConfig.AerospikeCluster.Name]; ok {
-			// do PUT call
-		} else {
-			// do POST call
-		}
-	}
-
-	if r.aeroBackup.Spec.BackupConfig.Storage != nil {
-		for name, storage := range r.aeroBackup.Spec.BackupConfig.Storage {
-			if _, ok := config.Storage[name]; ok {
-				// do PUT call
-				_ = storage
-			} else {
-				// do POST call
-			}
-		}
-	}
-
-	return nil
+	return serviceClient.ApplyConfig()
 }

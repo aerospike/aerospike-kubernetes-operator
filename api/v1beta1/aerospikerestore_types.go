@@ -51,7 +51,7 @@ type AerospikeRestoreSpec struct {
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore
 type AerospikeRestoreStatus struct {
-	JobID int64 `json:"job-id"`
+	JobID *int64 `json:"job-id,omitempty"`
 	// Phase denotes the current phase of Aerospike restore operation.
 	Phase AerospikeRestorePhase `json:"phase,omitempty"`
 

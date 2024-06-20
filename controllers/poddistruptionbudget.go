@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -109,7 +110,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		}
 
 		if err = r.Client.Create(
-			context.TODO(), pdb, createOption,
+			context.TODO(), pdb, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to create PodDisruptionBudget: %v",
@@ -146,7 +147,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
 
 		if err := r.Client.Update(
-			context.TODO(), pdb, updateOption,
+			context.TODO(), pdb, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to update PodDisruptionBudget: %v",
