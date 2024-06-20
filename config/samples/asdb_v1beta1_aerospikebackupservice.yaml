@@ -1,0 +1,38 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackupService
+metadata:
+  labels:
+    app.kubernetes.io/name: aerospikebackupservice
+    app.kubernetes.io/instance: aerospikebackupservice-sample
+    app.kubernetes.io/part-of: aerospike-kubernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: aerospike-kubernetes-operator
+  name: aerospikebackupservice-sample
+  namespace: aerospike
+spec:
+  image: aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:0.3.0
+  config:
+    service:
+      http:
+        port: 8081
+    backup-policies:
+      test-policy:
+        parallel: 3
+        remove-files: KeepAll
+        type: 1
+      test-policy1:
+        parallel: 3
+        remove-files: KeepAll
+        type: 1
+    storage:
+      local:
+        path: /localStorage
+        type: 0
+  secrets:
+    - secretName: auth-secret
+      volumeMount:
+        name: auth-secret
+        mountPath: /etc/aerospike-backup-service/auth-secret
+  service:
+    type: LoadBalancer
+

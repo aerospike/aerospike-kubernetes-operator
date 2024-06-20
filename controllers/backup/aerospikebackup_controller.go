@@ -18,7 +18,6 @@ package backup
 
 import (
 	"context"
-	"runtime"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,12 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const finalizerName = "asdb.aerospike.com/backup-finalizer"
-
-// Number of Reconcile threads to run Reconcile operations
-var maxConcurrentReconciles = runtime.NumCPU() * 2
 
 // AerospikeBackupReconciler reconciles a AerospikeBackup object
 type AerospikeBackupReconciler struct {
@@ -84,7 +81,7 @@ func (r *AerospikeBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&asdbv1beta1.AerospikeBackup{}).
 		WithOptions(
 			controller.Options{
-				MaxConcurrentReconciles: maxConcurrentReconciles,
+				MaxConcurrentReconciles: common.MaxConcurrentReconciles,
 			},
 		).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
