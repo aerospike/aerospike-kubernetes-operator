@@ -26,8 +26,16 @@ import (
 
 const BackupConfigYAML = "aerospike-backup-service.yml"
 
-var DefaultPort = map[string]int32{
-	"http": 8080,
+type serviceConfig struct {
+	portInfo    map[string]int32
+	contextPath string
+}
+
+var defaultServiceConfig = serviceConfig{
+	portInfo: map[string]int32{
+		"http": 8080,
+	},
+	contextPath: "/",
 }
 
 // SingleBackupServiceReconciler reconciles a single AerospikeBackupService
@@ -69,6 +77,11 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	if err := r.reconcileService(); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	if err := r.updateStatus(); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -258,14 +271,14 @@ func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService)
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
 	labels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
-	ports, err := r.getServicePorts()
+	svcConf, err := r.getServiceConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	var containerPorts []corev1.ContainerPort
 
-	for name, port := range ports {
+	for name, port := range svcConf.portInfo {
 		containerPorts = append(containerPorts, corev1.ContainerPort{
 			Name:          name,
 			ContainerPort: port,
@@ -298,6 +311,27 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 							VolumeMounts:    volumeMounts,
 							Resources:       r.aeroBackupService.Spec.Resources,
 							Ports:           containerPorts,
+						},
+					},
+					InitContainers: []corev1.Container{
+						{
+							Name:  "init-backup-service",
+							Image: "busybox",
+							Command: []string{
+								"sh",
+								"-c",
+								"cp /etc/aerospike-backup-service/aerospike-backup-service.yml /work-dir/aerospike-backup-service.yml",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "backup-service-config-configmap",
+									MountPath: "/etc/aerospike-backup-service/",
+								},
+								{
+									Name:      "backup-service-config",
+									MountPath: "/work-dir",
+								},
+							},
 						},
 					},
 					Volumes: volumes,
@@ -334,14 +368,23 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 		SubPath:   BackupConfigYAML,
 	})
 
+	// Backup service configMap
 	volumes = append(volumes, corev1.Volume{
-		Name: "backup-service-config",
+		Name: "backup-service-config-configmap",
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: r.aeroBackupService.Name,
 				},
 			},
+		},
+	})
+
+	// EmptyDir for init-container to copy configMap to
+	volumes = append(volumes, corev1.Volume{
+		Name: "backup-service-config",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	})
 
@@ -393,14 +436,14 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 }
 
 func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, error) {
-	ports, err := r.getServicePorts()
+	svcConfig, err := r.getServiceConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	var servicePort []corev1.ServicePort
 
-	for name, port := range ports {
+	for name, port := range svcConfig.portInfo {
 		servicePort = append(servicePort, corev1.ServicePort{
 			Name: name,
 			Port: port,
@@ -423,7 +466,7 @@ func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, err
 	return svc, nil
 }
 
-func (r *SingleBackupServiceReconciler) getServicePorts() (map[string]int32, error) {
+func (r *SingleBackupServiceReconciler) getServiceConfig() (*serviceConfig, error) {
 	config := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
@@ -434,33 +477,59 @@ func (r *SingleBackupServiceReconciler) getServicePorts() (map[string]int32, err
 
 	if _, ok := config["service"]; !ok {
 		r.Log.Info("Service config not found")
-		return DefaultPort, nil
+		return &defaultServiceConfig, nil
 	}
 
-	serviceConfig, ok := config["service"].(map[string]interface{})
+	svc, ok := config["service"].(map[string]interface{})
 	if !ok {
 		r.Log.Info("Service assertion failed")
 		return nil, fmt.Errorf("service config not found")
 	}
 
-	if _, ok = serviceConfig["http"]; !ok {
+	if _, ok = svc["http"]; !ok {
 		r.Log.Info("HTTP config not found")
-		return DefaultPort, nil
+		return &defaultServiceConfig, nil
 	}
 
-	httpConf, ok := serviceConfig["http"].(map[string]interface{})
+	httpConf, ok := svc["http"].(map[string]interface{})
 	if !ok {
 		r.Log.Info("HTTP assertion failed")
 		return nil, fmt.Errorf("http config not found")
 	}
 
+	var svcConfig serviceConfig
+
 	port, ok := httpConf["port"]
 	if !ok {
-		r.Log.Info("Port not found")
-		return DefaultPort, nil
+		svcConfig.portInfo = defaultServiceConfig.portInfo
+	} else {
+		svcConfig.portInfo = map[string]int32{"http": int32(port.(float64))}
 	}
 
-	return map[string]int32{
-		"http": int32(port.(float64)),
-	}, nil
+	ctxPath, ok := httpConf["context-path"]
+	if !ok {
+		svcConfig.contextPath = defaultServiceConfig.contextPath
+	} else {
+		svcConfig.contextPath = ctxPath.(string)
+	}
+
+	return &svcConfig, nil
+}
+
+func (r *SingleBackupServiceReconciler) updateStatus() error {
+	svcConfig, err := r.getServiceConfig()
+	if err != nil {
+		return err
+	}
+
+	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
+	r.aeroBackupService.Status.Port = svcConfig.portInfo["http"]
+
+	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
+
+	if err := r.Client.Status().Update(context.Background(), r.aeroBackupService); err != nil {
+		return err
+	}
+
+	return nil
 }

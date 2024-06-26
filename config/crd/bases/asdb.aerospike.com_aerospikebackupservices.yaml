@@ -152,6 +152,15 @@ spec:
           status:
             description: AerospikeBackupServiceStatus defines the observed state of
               AerospikeBackupService
+            properties:
+              contextPath:
+                type: string
+              port:
+                format: int32
+                type: integer
+            required:
+            - contextPath
+            - port
             type: object
         type: object
     served: true

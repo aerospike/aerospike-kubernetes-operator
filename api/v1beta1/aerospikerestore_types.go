@@ -43,10 +43,10 @@ const (
 // +k8s:openapi-gen=true
 type AerospikeRestoreSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Service Config"
-	ServiceConfig *ServiceConfig `json:"service-config"`
+	ServiceConfig *BackupService `json:"serviceConfig"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
-	RestoreConfig *RestoreConfig `json:"restore-config"`
+	Config *RestoreConfig `json:"config"`
 }
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore

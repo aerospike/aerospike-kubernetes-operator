@@ -20,7 +20,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	//v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -42,6 +41,8 @@ type AerospikeBackupServiceSpec struct {
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
 type AerospikeBackupServiceStatus struct {
+	Port        int32  `json:"port"`
+	ContextPath string `json:"contextPath"`
 }
 
 //+kubebuilder:object:root=true

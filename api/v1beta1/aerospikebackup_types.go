@@ -19,29 +19,32 @@ package v1beta1
 import (
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // AerospikeBackupSpec defines the desired state of AerospikeBackup
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
-	ServiceConfig *ServiceConfig `json:"service-config"`
-	BackupConfig  *BackupConfig  `json:"backup-config"`
+	BackupService *BackupService       `json:"backupService"`
+	Config        runtime.RawExtension `json:"config"`
+	OnDemand      *OnDemand            `json:"onDemand,omitempty"`
 }
 
-type BackupConfig struct {
-	AerospikeCluster *Cluster                        `json:"aerospike-cluster"`
-	Storage          map[string]*model.Storage       `json:"storage"`
-	BackupRoutines   map[string]*model.BackupRoutine `json:"backup-routines"`
-	BackupPolicies   map[string]*model.BackupPolicy  `json:"backup-policies"`
+//type BackupConfig struct {
+//	AerospikeCluster *Cluster                        `json:"aerospike-cluster"`
+//	Storage          map[string]*model.Storage       `json:"storage"`
+//	BackupRoutines   map[string]*model.BackupRoutine `json:"backup-routines"`
+//	BackupPolicies   map[string]*model.BackupPolicy  `json:"backup-policies"`
+//}
+
+type BackupService struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
-type ServiceConfig struct {
-	// The address to listen on.
-	Address *string `json:"address,omitempty" default:"0.0.0.0"`
-	// The port to listen on.
-	Port *int `json:"port,omitempty" default:"8080"`
-	// ContextPath customizes path for the API endpoints.
-	ContextPath *string `json:"context-path,omitempty" default:"/"`
+type OnDemand struct {
+	ID          string `json:"id,omitempty"`
+	RoutineName string `json:"routineName"`
 }
 
 type Cluster struct {
