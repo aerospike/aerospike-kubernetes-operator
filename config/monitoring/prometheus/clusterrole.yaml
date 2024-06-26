@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: aerospike-monitoring-stack
+    chart: aerospike-monitoring-stack
+    release: aerospike-monitoring-stack
+  name: aerospike-monitoring-stack-aerospike-monitoring-stack
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - statefulsets
+      - configmaps
+      - secrets
+      - services
+      - nodes
+      - nodes/metrics
+      - endpoints
+    verbs:
+      - list
+      - watch
+      - get
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]

@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aerospike-monitoring-stack-grafana
+  namespace: default
+  labels: &Labels
+    app: aerospike-monitoring-stack-grafana
+    chart: aerospike-monitoring-stack
+    release: aerospike-monitoring-stack
+    app.kubernetes.io/component: grafana
+    unique-app: aerospike-monitoring-stack-grafana
+spec:
+  serviceName: aerospike-monitoring-stack-grafana
+  replicas: 1
+  selector:
+    matchLabels: *Labels
+  template:
+    metadata:
+      labels: *Labels
+      annotations:
+    spec:
+      serviceAccountName: aerospike-monitoring-stack
+      terminationGracePeriodSeconds: 120
+      initContainers:
+        - name: "init-chmod-data"
+          image: debian:9
+          imagePullPolicy: "IfNotPresent"
+          command: ["chmod", "777", "/var/lib/grafana"]
+          volumeMounts:
+            - name: grafanadata
+              mountPath: "/var/lib/grafana"
+      containers:
+        - name: grafana
+          image: "grafana/grafana:latest"
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: grafana-config
+              mountPath: "/etc/grafana/"
+            - name: grafana-provisioning-datasources
+              mountPath: "/etc/grafana/provisioning/datasources"
+            - name: grafana-dashboards
+              mountPath: "/etc/grafana/provisioning/dashboards"
+            - name: grafanadata
+              mountPath: "/data"
+          ports:
+            - name: service
+              containerPort: 80
+              protocol: TCP
+            - name: grafana
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          resources:
+            {}
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+      volumes:
+        - name: grafana-config
+          configMap:
+            name: aerospike-monitoring-stack-grafana-config
+        - name: grafana-provisioning-datasources
+          configMap:
+            name: aerospike-monitoring-stack-grafana-provisioning-datasources
+        - name: grafana-dashboards
+          configMap:
+            defaultMode: 420
+            name: grafana-dashboards
+        - name: grafanadata
+          persistentVolumeClaim:
+            claimName: grafanadata

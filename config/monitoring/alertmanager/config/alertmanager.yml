@@ -1,0 +1,13 @@
+# This is an example alertmanager.yaml which sends alert notifications to a slack channel.
+
+global:
+  slack_api_url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  receiver: slack_general
+
+receivers:
+  - name: slack_general
+    slack_configs:
+      - channel: '#channel'
+        text: "summary: {{ .CommonAnnotations.summary }}\ndescription: {{ .CommonAnnotations.description }}"

@@ -1,0 +1,9 @@
+apiVersion: 1
+datasources:
+  - name: "Aerospike Prometheus"
+    type: prometheus
+    access: proxy
+    # orgId: 1
+    url: http://aerospike-monitoring-stack-prometheus:9090
+    editable: true
+    isDefault: false

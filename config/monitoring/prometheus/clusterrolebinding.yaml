@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: aerospike-monitoring-stack
+    chart: aerospike-monitoring-stack
+    release: aerospike-monitoring-stack
+  name: aerospike-monitoring-stack-aerospike-monitoring-stack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aerospike-monitoring-stack-aerospike-monitoring-stack
+subjects:
+  - kind: ServiceAccount
+    name: aerospike-monitoring-stack
+    namespace: default

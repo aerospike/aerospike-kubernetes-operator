@@ -1,0 +1,19 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: aerospike-monitoring-stack-prometheus
+  namespace: default
+  labels:
+    app: aerospike-monitoring-stack-prometheus
+    chart: aerospike-monitoring-stack
+    release: aerospike-monitoring-stack
+    app.kubernetes.io/component: prometheus
+spec:
+  ports:
+    - name: http
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+  sessionAffinity: ClientIP
+  selector:
+    app: aerospike-monitoring-stack-prometheus

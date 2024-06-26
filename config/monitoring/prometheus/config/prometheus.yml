@@ -1,0 +1,76 @@
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+alerting:
+  alertmanagers:
+    - kubernetes_sd_configs:
+        - role: pod
+          selectors:
+            - role: pod
+              label: app.kubernetes.io/component=aerospike-alertmanager
+rule_files:
+  - "/etc/prometheus/alert-rules.d/aerospike_rules.yml"
+  - "/etc/prometheus/alert-rules.d/node_exporter_alerts.yml"
+scrape_configs:
+  - job_name: "aerospike-kubernetes-operator"
+    honor_timestamps: true
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: https
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      insecure_skip_verify: true
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_control_plane, __meta_kubernetes_service_labelpresent_control_plane]
+        separator: ;
+        regex: (controller-manager);true
+        replacement: $1
+        action: keep
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        separator: ;
+        regex: https
+        replacement: $1
+        action: keep
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - default
+            - aerospike
+#  - job_name: 'kubernetes_event_exporter' # https://github.com/resmoio/kubernetes-event-exporter
+#    kubernetes_sd_configs:
+#      - role: endpoints
+#        namespaces:
+#          names:
+#            - monitoring
+#    relabel_configs:
+#      - action: keep
+#        regex: event-exporter
+#        replacement: $1
+#        separator: ;
+#        source_labels:
+#          - __meta_kubernetes_pod_container_port_name
+  - job_name: 'event_exporter' # https://github.com/caicloud/event_exporter/blob/master/deploy/README.md
+    static_configs:
+      - targets: ['event-exporter:9102']
+  - job_name: 'aerospike'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - default
+            - aerospike
+    relabel_configs:
+      - action: keep
+        regex: aerospike-cluster
+        replacement: $1
+        separator: ;
+        source_labels:
+          - __meta_kubernetes_pod_label_app
+      - action: keep
+        regex: exporter
+        replacement: $1
+        separator: ;
+        source_labels:
+          - __meta_kubernetes_pod_container_port_name
