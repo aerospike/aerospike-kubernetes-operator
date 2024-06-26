@@ -2236,6 +2236,13 @@ var _ = Describe(
 					k8sClient, ctx, clusterNamespacedName, 1,
 				)
 				Expect(err).ToNot(HaveOccurred())
+
+				if aeroCluster != nil {
+					err = deleteCluster(
+						k8sClient, ctx, aeroCluster,
+					)
+					Expect(err).ToNot(HaveOccurred())
+				}
 			})
 		})
 	},

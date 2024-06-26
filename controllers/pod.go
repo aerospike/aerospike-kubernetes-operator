@@ -221,11 +221,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
 	}
 
-	if op := r.onDemandOperationType(pod.Name); op != noRestart {
-		restartType = mergeRestartType(restartType, op)
+	if opType := r.onDemandOperationType(pod.Name); opType != noRestart {
+		restartType = mergeRestartType(restartType, opType)
 
-		r.Log.Info("Pod warm/cold restarted requested. Need rolling restart",
-			"pod name", pod.Name, "operation", op, "restartType", restartType)
+		r.Log.Info("Pod warm/cold restart requested. Need rolling restart",
+			"pod name", pod.Name, "operation", opType, "restartType", restartType)
 	}
 
 	return restartType
@@ -375,9 +375,9 @@ func (r *SingleClusterReconciler) restartPods(
 		restartType := restartTypeMap[pod.Name]
 
 		if restartType == quickRestart {
-			// If ASD restart fails, then go ahead and restart the pod
+			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
-				r.Log.Error(err, "Failed to restart asd pod")
+				r.Log.Error(err, "Failed to warm restart pod", "podName", pod.Name)
 				return reconcileError(err)
 			}
 
@@ -1487,7 +1487,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 }
 
 func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartType {
-	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Name, r.aeroCluster.Spec.Size, r.aeroCluster.Spec.RackConfig.Racks)
+	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 	quickRestarts, podRestarts := utils.PodsToRestart(r.aeroCluster.Spec.Operations,
 		r.aeroCluster.Status.Operations, allPodNames)
 
@@ -1501,25 +1501,17 @@ func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartT
 	return noRestart
 }
 
-func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestarts []string) error {
-	if len(quickRestarts)+len(podRestarts) == 0 || len(r.aeroCluster.Spec.Operations) == 0 {
+func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, restartedPodNames []string) error {
+	if len(restartedASDPodNames)+len(restartedPodNames) == 0 || len(r.aeroCluster.Spec.Operations) == 0 {
 		return nil
 	}
 
-	// Define a key extractor function
-	keyExtractor := func(op asdbv1.OperationSpec) string {
-		return op.OperationID
-	}
+	statusOps := lib.DeepCopy(r.aeroCluster.Status.Operations).([]asdbv1.OperationSpec)
 
-	statusOpsMap, err := asdbv1.ConvertToMap(r.aeroCluster.Status.Operations, keyExtractor)
-	if err != nil {
-		return err
-	}
+	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 
-	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Name, r.aeroCluster.Spec.Size, r.aeroCluster.Spec.RackConfig.Racks)
-
-	quickRestartsSet := sets.New[string](quickRestarts...)
-	podRestartsSet := sets.New[string](podRestarts...)
+	quickRestartsSet := sets.New(restartedASDPodNames...)
+	podRestartsSet := sets.New(restartedPodNames...)
 
 	specOp := r.aeroCluster.Spec.Operations[0]
 
@@ -1529,45 +1521,48 @@ func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestar
 	if len(specOp.PodList) == 0 {
 		specPods = allPodNames
 	} else {
-		specPods = sets.New[string](specOp.PodList...)
+		specPods = sets.New(specOp.PodList...)
 	}
 
-	if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
+	opFound := false
+
+	for idx := range statusOps {
+		statusOp := &statusOps[idx]
+		if statusOp.ID == specOp.ID {
+			opFound = true
+
+			if len(statusOp.PodList) != 0 {
+				statusPods := sets.New(statusOp.PodList...)
+
+				if statusOp.Kind == asdbv1.OperationWarmRestart && quickRestartsSet != nil {
+					statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
+						Difference(statusPods).UnsortedList()...)
+				}
+
+				if statusOp.Kind == asdbv1.OperationPodRestart && podRestartsSet != nil {
+					statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
+						Difference(statusPods).UnsortedList()...)
+				}
+			}
+		}
+	}
+
+	if !opFound {
 		var podList []string
 
-		if specOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
+		if specOp.Kind == asdbv1.OperationWarmRestart && quickRestartsSet != nil {
 			podList = quickRestartsSet.Intersection(specPods).UnsortedList()
 		}
 
-		if specOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
+		if specOp.Kind == asdbv1.OperationPodRestart && podRestartsSet != nil {
 			podList = podRestartsSet.Intersection(specPods).UnsortedList()
 		}
 
-		statusOpsMap[specOp.OperationID] = asdbv1.OperationSpec{
-			OperationID:   specOp.OperationID,
-			OperationType: specOp.OperationType,
-			PodList:       podList,
-		}
-	} else if len(statusOp.PodList) != 0 {
-		statusPods := sets.New[string](statusOp.PodList...)
-
-		if statusOp.OperationType == asdbv1.OperationQuickRestart && quickRestartsSet != nil {
-			statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
-				Difference(statusPods).UnsortedList()...)
-		}
-
-		if statusOp.OperationType == asdbv1.OperationPodRestart && podRestartsSet != nil {
-			statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
-				Difference(statusPods).UnsortedList()...)
-		}
-
-		statusOpsMap[specOp.OperationID] = statusOp
-	}
-
-	// Convert statusOperation map back to a slice
-	updatedStatusOperation := make([]asdbv1.OperationSpec, 0, len(statusOpsMap))
-	for _, statusOp := range statusOpsMap {
-		updatedStatusOperation = append(updatedStatusOperation, statusOp)
+		statusOps = append(statusOps, asdbv1.OperationSpec{
+			ID:      specOp.ID,
+			Kind:    specOp.Kind,
+			PodList: podList,
+		})
 	}
 
 	// Get the old object, it may have been updated in between.
@@ -1580,7 +1575,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(quickRestarts, podRestar
 		return err
 	}
 
-	newAeroCluster.Status.Operations = updatedStatusOperation
+	newAeroCluster.Status.Operations = statusOps
 
 	if err := r.patchStatus(newAeroCluster); err != nil {
 		return fmt.Errorf("error updating status: %w", err)

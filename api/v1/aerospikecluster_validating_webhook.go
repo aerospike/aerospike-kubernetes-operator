@@ -280,25 +280,21 @@ func (c *AerospikeCluster) validateOperation() error {
 	}
 
 	if c.Status.AerospikeConfig == nil {
-		return fmt.Errorf("operation cannot be set on create")
+		return fmt.Errorf("operation cannot be added during aerospike cluster creation")
 	}
 
-	if len(c.Spec.Operations) > 1 {
-		return fmt.Errorf("only one operation can be set at a time")
-	}
+	allPodNames := GetAllPodNames(c.Status.Pods)
 
-	allPodNames := GetAllPodNames(c.Name, c.Spec.Size, c.Spec.RackConfig.Racks)
-
-	podSet := sets.NewString(c.Spec.Operations[0].PodList...)
-	if !allPodNames.IsSuperset(sets.Set[string](podSet)) {
-		return fmt.Errorf("invalid pod name in operation")
+	podSet := sets.New(c.Spec.Operations[0].PodList...)
+	if !allPodNames.IsSuperset(podSet) {
+		return fmt.Errorf("invalid pod names in operation %v", podSet.Difference(allPodNames).UnsortedList())
 	}
 
 	// Don't allow any operation along with cluster scale up or racks added or removed
 	// New pods won't be available for operation
 	if !reflect.DeepEqual(c.Spec.Operations, c.Status.Operations) &&
 		(c.Spec.Size > c.Status.Size || len(c.Spec.RackConfig.Racks) != len(c.Status.RackConfig.Racks)) {
-		return fmt.Errorf("cannot perform any on demand operation along with cluster scale up or racks added or removed")
+		return fmt.Errorf("cannot perform any on-demand operation along with cluster scale-up or rack addition/removal")
 	}
 
 	return nil
@@ -1333,20 +1329,22 @@ func validateSecurityConfigUpdate(
 func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	oldSec, oldSecConfFound := oldConf["security"]
-	newSec, newSecConfFound := newConf["security"]
 
-	if oldSecConfFound && !newSecConfFound {
+	oldSec, oldSecConfFound := oldConf["security"]
+	if !oldSecConfFound {
+		return nil
+	}
+
+	newSec, newSecConfFound := newConf["security"]
+	if !newSecConfFound {
 		return fmt.Errorf("cannot remove cluster security config")
 	}
 
-	if oldSecConfFound {
-		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
-		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
+	oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
+	newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
-		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
+	if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
+		return fmt.Errorf("cannot disable cluster security in running cluster")
 	}
 
 	return nil
@@ -2401,25 +2399,16 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func validateOperationUpdate(oldOp, newOp *[]OperationSpec) error {
-	// Define a key extractor function
-	keyExtractor := func(op OperationSpec) string {
-		return op.OperationID
+func validateOperationUpdate(oldOps, newOps *[]OperationSpec) error {
+	if len(*oldOps) == 0 || len(*newOps) == 0 {
+		return nil
 	}
 
-	// Convert the array of structs to a map
-	oldOpMap, err := ConvertToMap(*oldOp, keyExtractor)
-	if err != nil {
-		return err
-	}
+	oldOp := (*oldOps)[0]
+	newOp := (*newOps)[0]
 
-	for idx := range *newOp {
-		key := (*newOp)[idx].OperationID
-		if _, ok := oldOpMap[key]; ok {
-			if !reflect.DeepEqual(oldOpMap[key], (*newOp)[idx]) {
-				return fmt.Errorf("operation %s cannot be updated", key)
-			}
-		}
+	if oldOp.ID == newOp.ID && !reflect.DeepEqual(oldOp, newOp) {
+		return fmt.Errorf("operation %s cannot be updated", newOp.ID)
 	}
 
 	return nil

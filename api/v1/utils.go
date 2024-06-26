@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -591,31 +590,11 @@ func DistributeItems(totalItems, totalGroups int) []int {
 	return topology
 }
 
-func ConvertToMap[T any](items []T, keyExtractor func(T) string) (map[string]T, error) {
-	itemMap := make(map[string]T)
-
-	for _, item := range items {
-		key := keyExtractor(item)
-		if _, ok := itemMap[key]; ok {
-			return nil, fmt.Errorf("duplicate key %s", key)
-		}
-
-		itemMap[key] = item
-	}
-
-	return itemMap, nil
-}
-
-func GetAllPodNames(clusterName string, clusterSize int32, racks []Rack) sets.Set[string] {
+func GetAllPodNames(pods map[string]AerospikePodStatus) sets.Set[string] {
 	podNames := make(sets.Set[string])
-	topology := DistributeItems(
-		int(clusterSize), len(racks),
-	)
 
-	for idx := range racks {
-		for i := 0; i < topology[idx]; i++ {
-			podNames.Insert(fmt.Sprintf("%s-%s-%d", clusterName, strconv.Itoa(racks[idx].ID), i))
-		}
+	for podName := range pods {
+		podNames.Insert(podName)
 	}
 
 	return podNames

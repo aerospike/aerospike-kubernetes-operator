@@ -313,28 +313,28 @@ spec:
                   Refer Aerospike documentation for more details.
                 x-kubernetes-int-or-string: true
               operations:
-                description: Operations is a list of on demand operation to be performed
+                description: Operations is a list of on-demand operations to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
-                    operationID:
-                      maxLength: 5
-                      minLength: 5
+                    id:
+                      maxLength: 20
                       type: string
-                    operationType:
-                      description: OperationType is the type of operation to be performed
+                    kind:
+                      description: OperationKind is the type of operation to be performed
                         on the Aerospike cluster.
                       enum:
-                      - quickRestart
-                      - podRestart
+                      - WarmRestart
+                      - PodRestart
                       type: string
                     podList:
                       items:
                         type: string
                       type: array
                   required:
-                  - operationType
+                  - kind
                   type: object
+                maxItems: 1
                 type: array
               operatorClientCert:
                 description: Certificates to connect to Aerospike.
@@ -9676,27 +9676,26 @@ spec:
                   now part of podSpec"
                 type: boolean
               operations:
-                description: Operations is a list of on demand operation to be performed
+                description: Operations is a list of on-demand operation to be performed
                   on the Aerospike cluster.
                 items:
                   properties:
-                    operationID:
-                      maxLength: 5
-                      minLength: 5
+                    id:
+                      maxLength: 20
                       type: string
-                    operationType:
-                      description: OperationType is the type of operation to be performed
+                    kind:
+                      description: OperationKind is the type of operation to be performed
                         on the Aerospike cluster.
                       enum:
-                      - quickRestart
-                      - podRestart
+                      - WarmRestart
+                      - PodRestart
                       type: string
                     podList:
                       items:
                         type: string
                       type: array
                   required:
-                  - operationType
+                  - kind
                   type: object
                 type: array
               operatorClientCertSpec:

@@ -54,7 +54,7 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
+								Kind: asdbv1.OperationWarmRestart,
 							},
 						}
 
@@ -68,9 +68,9 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						operationTypeMap := map[string]asdbv1.OperationType{
-							"operations-1-0": asdbv1.OperationQuickRestart,
-							"operations-1-1": asdbv1.OperationQuickRestart,
+						operationTypeMap := map[string]asdbv1.OperationKind{
+							"operations-1-0": asdbv1.OperationWarmRestart,
+							"operations-1-1": asdbv1.OperationWarmRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -90,7 +90,7 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationPodRestart,
+								Kind: asdbv1.OperationPodRestart,
 							},
 						}
 
@@ -104,7 +104,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						operationTypeMap := map[string]asdbv1.OperationType{
+						operationTypeMap := map[string]asdbv1.OperationKind{
 							"operations-1-0": asdbv1.OperationPodRestart,
 							"operations-1-1": asdbv1.OperationPodRestart,
 						}
@@ -126,8 +126,8 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationPodRestart,
-								PodList:       []string{"operations-1-0"},
+								Kind:    asdbv1.OperationPodRestart,
+								PodList: []string{"operations-1-0"},
 							},
 						}
 
@@ -143,7 +143,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						operationTypeMap := map[string]asdbv1.OperationType{
+						operationTypeMap := map[string]asdbv1.OperationKind{
 							"operations-1-0": asdbv1.OperationPodRestart,
 							"operations-1-1": "noRestart",
 						}
@@ -175,7 +175,7 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationPodRestart,
+								Kind: asdbv1.OperationPodRestart,
 							},
 						}
 
@@ -190,7 +190,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						operationTypeMap := map[string]asdbv1.OperationType{
+						operationTypeMap := map[string]asdbv1.OperationKind{
 							"operations-1-0": asdbv1.OperationPodRestart,
 							"operations-1-1": asdbv1.OperationPodRestart,
 						}
@@ -212,7 +212,7 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
+								Kind: asdbv1.OperationWarmRestart,
 							},
 						}
 
@@ -227,7 +227,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						operationTypeMap := map[string]asdbv1.OperationType{
+						operationTypeMap := map[string]asdbv1.OperationKind{
 							"operations-1-0": asdbv1.OperationPodRestart,
 							"operations-1-1": asdbv1.OperationPodRestart,
 						}
@@ -250,10 +250,10 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
+								Kind: asdbv1.OperationWarmRestart,
 							},
 							{
-								OperationType: asdbv1.OperationPodRestart,
+								Kind: asdbv1.OperationPodRestart,
 							},
 						}
 
@@ -273,8 +273,8 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
-								PodList:       []string{"operations-1-0", "invalid-pod"},
+								Kind:    asdbv1.OperationWarmRestart,
+								PodList: []string{"operations-1-0", "invalid-pod"},
 							},
 						}
 
@@ -294,8 +294,8 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
-								PodList:       []string{"operations-1-0"},
+								Kind:    asdbv1.OperationWarmRestart,
+								PodList: []string{"operations-1-0"},
 							},
 						}
 
@@ -305,7 +305,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Modify operationType
-						operations[0].OperationType = asdbv1.OperationPodRestart
+						operations[0].Kind = asdbv1.OperationPodRestart
 						aeroCluster.Spec.Operations = operations
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -322,8 +322,8 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
-								PodList:       []string{"operations-1-0"},
+								Kind:    asdbv1.OperationWarmRestart,
+								PodList: []string{"operations-1-0"},
 							},
 						}
 
@@ -350,8 +350,8 @@ var _ = Describe(
 
 						operations := []asdbv1.OperationSpec{
 							{
-								OperationType: asdbv1.OperationQuickRestart,
-								PodList:       []string{"operations-1-0"},
+								Kind:    asdbv1.OperationWarmRestart,
+								PodList: []string{"operations-1-0"},
 							},
 						}
 
@@ -368,13 +368,13 @@ var _ = Describe(
 )
 
 func validateOperationTypes(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster, pid map[string]podID,
-	operationTypeMap map[string]asdbv1.OperationType) error {
+	operationTypeMap map[string]asdbv1.OperationKind) error {
 	newPodPidMap, err := getPodIDs(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
 	for podName, opType := range operationTypeMap {
 		switch opType {
-		case asdbv1.OperationQuickRestart:
+		case asdbv1.OperationWarmRestart:
 			if newPodPidMap[podName].podUID != pid[podName].podUID || newPodPidMap[podName].asdPID == pid[podName].asdPID {
 				return fmt.Errorf("failed to quick restart pod %s", podName)
 			}

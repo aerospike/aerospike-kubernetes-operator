@@ -224,20 +224,8 @@ func PodsToRestart(specOps, statusOps []asdbv1.OperationSpec, allPodNames sets.S
 		return quickRestarts, podRestarts
 	}
 
-	// Define a key extractor function
-	keyExtractor := func(op asdbv1.OperationSpec) string {
-		return op.OperationID
-	}
-
-	// Ignoring duplicate key error as the operationID will always be unique in status.
-	statusOpsMap, _ := asdbv1.ConvertToMap(statusOps, keyExtractor)
-
 	// Assuming only one operation is present in the spec.
 	specOp := specOps[0]
-	// If the operation is not a quick restart or pod restart, no pods need to be restarted.
-	if specOp.OperationType != asdbv1.OperationQuickRestart && specOp.OperationType != asdbv1.OperationPodRestart {
-		return quickRestarts, podRestarts
-	}
 
 	var (
 		podsToRestart, specPods sets.Set[string]
@@ -246,29 +234,40 @@ func PodsToRestart(specOps, statusOps []asdbv1.OperationSpec, allPodNames sets.S
 	if len(specOp.PodList) == 0 {
 		specPods = allPodNames
 	} else {
-		specPods = sets.New[string](specOp.PodList...)
+		specPods = sets.New(specOp.PodList...)
 	}
+
+	opFound := false
 
 	// If the operation is not present in the status, all pods need to be restarted.
 	// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
 	// If the operation is present in the status and podList is empty, no pods need to be restarted.
-	if statusOp, exists := statusOpsMap[specOp.OperationID]; !exists {
-		podsToRestart = specPods
-	} else {
+	for _, statusOp := range statusOps {
+		if statusOp.ID != specOp.ID {
+			continue
+		}
+
 		var statusPods sets.Set[string]
 		if len(statusOp.PodList) == 0 {
 			statusPods = allPodNames
 		} else {
-			statusPods = sets.New[string](statusOp.PodList...)
+			statusPods = sets.New(statusOp.PodList...)
 		}
 
 		podsToRestart = specPods.Difference(statusPods)
+		opFound = true
+
+		break
+	}
+
+	if !opFound {
+		podsToRestart = specPods
 	}
 
 	// Separate pods to be restarted based on operation type
 	if podsToRestart != nil && podsToRestart.Len() > 0 {
-		switch specOp.OperationType {
-		case asdbv1.OperationQuickRestart:
+		switch specOp.Kind {
+		case asdbv1.OperationWarmRestart:
 			quickRestarts.Insert(podsToRestart.UnsortedList()...)
 		case asdbv1.OperationPodRestart:
 			podRestarts.Insert(podsToRestart.UnsortedList()...)

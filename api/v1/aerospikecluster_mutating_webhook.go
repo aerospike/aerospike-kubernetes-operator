@@ -858,13 +858,13 @@ func setNamespaceDefault(networks []string, namespace string) {
 
 func setDefaultOperation(operations *[]OperationSpec) error {
 	for i := range *operations {
-		if (*operations)[i].OperationID == "" {
+		if (*operations)[i].ID == "" {
 			id, err := randomString(5)
 			if err != nil {
 				return err
 			}
 
-			(*operations)[i].OperationID = id
+			(*operations)[i].ID = id
 		}
 	}
 

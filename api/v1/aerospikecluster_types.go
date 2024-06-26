@@ -124,30 +124,31 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
 	// +kubebuilder:validation:MinItems:=1
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
-	// Operations is a list of on demand operation to be performed on the Aerospike cluster.
+	// Operations is a list of on-demand operations to be performed on the Aerospike cluster.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
+	// +kubebuilder:validation:MaxItems:=1
 	Operations []OperationSpec `json:"operations,omitempty"`
 }
 
-type OperationType string
+type OperationKind string
 
 const (
-	// OperationQuickRestart specifies the on demand operation is quick restart of aerospike pods.
-	OperationQuickRestart OperationType = "quickRestart"
+	// OperationWarmRestart is the on-demand operation that leads to the warm restart of the aerospike pods
+	// (Restarting ASD in the pods). https://aerospike.com/docs/cloud/kubernetes/operator/Warm-restart
+	OperationWarmRestart OperationKind = "WarmRestart"
 
-	// OperationPodRestart specifies the on demand operation is cold restart of aerospike pods.
-	OperationPodRestart OperationType = "podRestart"
+	// OperationPodRestart is the on-demand operation that leads to the restart of aerospike pods.
+	OperationPodRestart OperationKind = "PodRestart"
 )
 
 type OperationSpec struct {
-	// OperationType is the type of operation to be performed on the Aerospike cluster.
-	// +kubebuilder:validation:Enum=quickRestart;podRestart
-	OperationType OperationType `json:"operationType"`
-	// +kubebuilder:validation:MaxLength=5
-	// +kubebuilder:validation:MinLength=5
+	// OperationKind is the type of operation to be performed on the Aerospike cluster.
+	// +kubebuilder:validation:Enum=WarmRestart;PodRestart
+	Kind OperationKind `json:"kind"`
+	// +kubebuilder:validation:MaxLength=20
 	// +optional
-	OperationID string   `json:"operationID"`
-	PodList     []string `json:"podList,omitempty"`
+	ID      string   `json:"id"`
+	PodList []string `json:"podList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -723,7 +724,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
-	// Operations is a list of on demand operation to be performed on the Aerospike cluster.
+	// Operations is a list of on-demand operation to be performed on the Aerospike cluster.
 	Operations []OperationSpec `json:"operations,omitempty"`
 }
 
@@ -1071,9 +1072,9 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	}
 
 	if len(spec.Operations) != 0 {
-		operation := lib.DeepCopy(&spec.Operations).(*[]OperationSpec)
+		operations := lib.DeepCopy(&spec.Operations).(*[]OperationSpec)
 
-		status.Operations = *operation
+		status.Operations = *operations
 	}
 
 	return &status, nil
@@ -1176,8 +1177,8 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	}
 
 	if len(status.Operations) != 0 {
-		operation := lib.DeepCopy(&status.Operations).(*[]OperationSpec)
-		spec.Operations = *operation
+		operations := lib.DeepCopy(&status.Operations).(*[]OperationSpec)
+		spec.Operations = *operations
 	}
 
 	return &spec, nil
