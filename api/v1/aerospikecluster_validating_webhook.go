@@ -118,7 +118,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	}
 
 	if err := validateOperationUpdate(
-		&old.Spec.Operations, &c.Spec.Operations,
+		old.Spec.Operations, c.Spec.Operations,
 	); err != nil {
 		return nil, err
 	}
@@ -2399,13 +2399,13 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func validateOperationUpdate(oldOps, newOps *[]OperationSpec) error {
-	if len(*oldOps) == 0 || len(*newOps) == 0 {
+func validateOperationUpdate(oldOps, newOps []OperationSpec) error {
+	if len(oldOps) == 0 || len(newOps) == 0 {
 		return nil
 	}
 
-	oldOp := (*oldOps)[0]
-	newOp := (*newOps)[0]
+	oldOp := oldOps[0]
+	newOp := newOps[0]
 
 	if oldOp.ID == newOp.ID && !reflect.DeepEqual(oldOp, newOp) {
 		return fmt.Errorf("operation %s cannot be updated", newOp.ID)

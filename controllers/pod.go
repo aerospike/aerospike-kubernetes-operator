@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -81,6 +82,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
+	// Fetching all pods requested for on-demand operations.
+	onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
+
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
 			continue
@@ -136,7 +140,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 
 		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
-			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0)
+			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0, onDemandQuickRestarts, onDemandPodRestarts)
 
 		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
@@ -150,6 +154,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap,
 	addedNSDevices []string, onlyDynamicConfigChange bool,
+	onDemandQuickRestarts, onDemandPodRestarts sets.Set[string],
 ) RestartType {
 	restartType := noRestart
 
@@ -221,7 +226,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
 	}
 
-	if opType := r.onDemandOperationType(pod.Name); opType != noRestart {
+	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {
 		restartType = mergeRestartType(restartType, opType)
 
 		r.Log.Info("Pod warm/cold restart requested. Need rolling restart",
@@ -1486,15 +1491,12 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 	})
 }
 
-func (r *SingleClusterReconciler) onDemandOperationType(podName string) RestartType {
-	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
-	quickRestarts, podRestarts := utils.PodsToRestart(r.aeroCluster.Spec.Operations,
-		r.aeroCluster.Status.Operations, allPodNames)
-
+func (r *SingleClusterReconciler) onDemandOperationType(podName string, onDemandQuickRestarts,
+	onDemandPodRestarts sets.Set[string]) RestartType {
 	switch {
-	case quickRestarts.Has(podName):
+	case onDemandQuickRestarts.Has(podName):
 		return quickRestart
-	case podRestarts.Has(podName):
+	case onDemandPodRestarts.Has(podName):
 		return podRestart
 	}
 
@@ -1582,4 +1584,72 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 	}
 
 	return nil
+}
+
+// podsToRestart returns the pods that need to be restarted(quick/pod restart) based on the on-demand operations.
+func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string]) {
+	quickRestarts = make(sets.Set[string])
+	podRestarts = make(sets.Set[string])
+
+	specOps := r.aeroCluster.Spec.Operations
+	statusOps := r.aeroCluster.Status.Operations
+	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
+
+	// If no spec operations, no pods to restart
+	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
+	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
+		return quickRestarts, podRestarts
+	}
+
+	// Assuming only one operation is present in the spec.
+	specOp := specOps[0]
+
+	var (
+		podsToRestart, specPods sets.Set[string]
+	)
+	// If no pod list is provided, it indicates that all pods need to be restarted.
+	if len(specOp.PodList) == 0 {
+		specPods = allPodNames
+	} else {
+		specPods = sets.New(specOp.PodList...)
+	}
+
+	opFound := false
+
+	// If the operation is not present in the status, all pods need to be restarted.
+	// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
+	// If the operation is present in the status and podList is empty, no pods need to be restarted.
+	for _, statusOp := range statusOps {
+		if statusOp.ID != specOp.ID {
+			continue
+		}
+
+		var statusPods sets.Set[string]
+		if len(statusOp.PodList) == 0 {
+			statusPods = allPodNames
+		} else {
+			statusPods = sets.New(statusOp.PodList...)
+		}
+
+		podsToRestart = specPods.Difference(statusPods)
+		opFound = true
+
+		break
+	}
+
+	if !opFound {
+		podsToRestart = specPods
+	}
+
+	// Separate pods to be restarted based on operation type
+	if podsToRestart != nil && podsToRestart.Len() > 0 {
+		switch specOp.Kind {
+		case asdbv1.OperationWarmRestart:
+			quickRestarts.Insert(podsToRestart.UnsortedList()...)
+		case asdbv1.OperationPodRestart:
+			podRestarts.Insert(podsToRestart.UnsortedList()...)
+		}
+	}
+
+	return quickRestarts, podRestarts
 }

@@ -5,19 +5,15 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
@@ -211,68 +207,4 @@ func IsPodReasonUnschedulable(pod *corev1.Pod) bool {
 	}
 
 	return false
-}
-
-func PodsToRestart(specOps, statusOps []asdbv1.OperationSpec, allPodNames sets.Set[string]) (quickRestarts,
-	podRestarts sets.Set[string]) {
-	quickRestarts = make(sets.Set[string])
-	podRestarts = make(sets.Set[string])
-
-	// If no spec operations, no pods to restart
-	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
-	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
-		return quickRestarts, podRestarts
-	}
-
-	// Assuming only one operation is present in the spec.
-	specOp := specOps[0]
-
-	var (
-		podsToRestart, specPods sets.Set[string]
-	)
-	// If no pod list is provided, it indicates that all pods need to be restarted.
-	if len(specOp.PodList) == 0 {
-		specPods = allPodNames
-	} else {
-		specPods = sets.New(specOp.PodList...)
-	}
-
-	opFound := false
-
-	// If the operation is not present in the status, all pods need to be restarted.
-	// If the operation is present in the status, only the pods that are not present in the status need to be restarted.
-	// If the operation is present in the status and podList is empty, no pods need to be restarted.
-	for _, statusOp := range statusOps {
-		if statusOp.ID != specOp.ID {
-			continue
-		}
-
-		var statusPods sets.Set[string]
-		if len(statusOp.PodList) == 0 {
-			statusPods = allPodNames
-		} else {
-			statusPods = sets.New(statusOp.PodList...)
-		}
-
-		podsToRestart = specPods.Difference(statusPods)
-		opFound = true
-
-		break
-	}
-
-	if !opFound {
-		podsToRestart = specPods
-	}
-
-	// Separate pods to be restarted based on operation type
-	if podsToRestart != nil && podsToRestart.Len() > 0 {
-		switch specOp.Kind {
-		case asdbv1.OperationWarmRestart:
-			quickRestarts.Insert(podsToRestart.UnsortedList()...)
-		case asdbv1.OperationPodRestart:
-			podRestarts.Insert(podsToRestart.UnsortedList()...)
-		}
-	}
-
-	return quickRestarts, podRestarts
 }
