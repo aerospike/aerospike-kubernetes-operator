@@ -30,7 +30,7 @@ func percent(val string) *intstr.IntOrString {
 }
 
 func count(val int) *intstr.IntOrString {
-	v := intstr.FromInt(val)
+	v := intstr.FromInt32(int32(val))
 	return &v
 }
 
@@ -528,9 +528,7 @@ func batchRollingRestartTest(
 	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
 	aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 
-	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
-
-	return err
+	return updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
 }
 
 func batchUpgradeTest(
@@ -546,9 +544,7 @@ func batchUpgradeTest(
 	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
 	aeroCluster.Spec.Image = unavailableImage
 
-	err = updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
-
-	return err
+	return updateClusterForBatchRestart(k8sClient, ctx, aeroCluster)
 }
 
 func rollingRestartTest(
@@ -569,9 +565,7 @@ func rollingRestartTest(
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 	}
 
-	err = updateCluster(k8sClient, ctx, aeroCluster)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }
 
 func upgradeTest(
@@ -587,7 +581,5 @@ func upgradeTest(
 	aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = batchSize
 	aeroCluster.Spec.Image = image
 
-	err = updateCluster(k8sClient, ctx, aeroCluster)
-
-	return err
+	return updateCluster(k8sClient, ctx, aeroCluster)
 }

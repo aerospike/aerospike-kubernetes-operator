@@ -215,9 +215,8 @@ func getClientPolicy(
 			RootCAs: getClusterServerPool(
 				clientCertSpec, aeroCluster.Namespace, k8sClient,
 			),
-			Certificates:             []tls.Certificate{},
-			PreferServerCipherSuites: true,
-			MinVersion:               tls.VersionTLS12,
+			Certificates: []tls.Certificate{},
+			MinVersion:   tls.VersionTLS12,
 			// used only in testing
 			// InsecureSkipVerify: true,
 		}

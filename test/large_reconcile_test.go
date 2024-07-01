@@ -198,40 +198,15 @@ var _ = Describe(
 func loadDataInCluster(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
-	policy := getClientPolicy(aeroCluster, k8sClient)
-	policy.FailIfNotConnected = false
-	policy.Timeout = time.Minute * 2
-	policy.UseServicesAlternate = true
-	policy.ConnectionQueueSize = 100
-	policy.LimitConnectionsToQueueSize = true
-
-	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
-
-	for podName := range aeroCluster.Status.Pods {
-		pod := aeroCluster.Status.Pods[podName]
-
-		host, err := createHost(&pod)
-		if err != nil {
-			return err
-		}
-
-		hostList = append(hostList, host)
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return err
 	}
 
-	clientP, err := as.NewClientWithPolicyAndHost(policy, hostList...)
-	if clientP == nil {
-		return fmt.Errorf(
-			"failed to create aerospike cluster asClient: %v", err,
-		)
-	}
-
-	asClient := *clientP
 	defer func() {
 		fmt.Println("Closing Aerospike client")
 		asClient.Close()
 	}()
-
-	_, _ = asClient.WarmUp(-1)
 
 	keyPrefix := "testkey"
 
@@ -242,11 +217,6 @@ func loadDataInCluster(
 	_, readErr := rand.Read(token)
 	if readErr != nil {
 		return readErr
-	}
-
-	for !asClient.IsConnected() {
-		pkgLog.Info("Waiting for cluster to connect")
-		time.Sleep(2 * time.Second)
 	}
 
 	pkgLog.Info(

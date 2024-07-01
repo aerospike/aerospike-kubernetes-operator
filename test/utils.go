@@ -26,6 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -212,7 +213,7 @@ func createAuthSecret(
 	labels map[string]string, secretName, pass string,
 ) error {
 	// Create authSecret
-	as := &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: namespace,
@@ -224,7 +225,7 @@ func createAuthSecret(
 		},
 	}
 	// use test context's create helper to create the object and add a cleanup function for the new object
-	err := k8sClient.Create(ctx, as)
+	err := k8sClient.Create(ctx, secret)
 	if !errors.IsAlreadyExists(err) {
 		return err
 	}
@@ -815,4 +816,46 @@ func getPasswordFromSecret(k8sClient client.Client,
 	}
 
 	return string(passBytes), nil
+}
+
+func getAerospikeClient(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
+	policy := getClientPolicy(aeroCluster, k8sClient)
+	policy.FailIfNotConnected = false
+	policy.Timeout = time.Minute * 2
+	policy.UseServicesAlternate = true
+	policy.ConnectionQueueSize = 100
+	policy.LimitConnectionsToQueueSize = true
+
+	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
+
+	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
+		if err != nil {
+			return nil, err
+		}
+
+		hostList = append(hostList, host)
+	}
+
+	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
+	if asClient == nil {
+		return nil, fmt.Errorf(
+			"failed to create aerospike cluster asClient: %v", err,
+		)
+	}
+
+	_, _ = asClient.WarmUp(-1)
+
+	// Wait for 5 minutes for cluster to connect
+	for j := 0; j < 150; j++ {
+		if isConnected := asClient.IsConnected(); isConnected {
+			break
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+
+	return asClient, nil
 }

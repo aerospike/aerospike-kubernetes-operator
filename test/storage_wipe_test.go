@@ -3,7 +3,6 @@ package test
 import (
 	goctx "context"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -211,40 +210,12 @@ func writeDataToCluster(
 	k8sClient client.Client,
 	namespaces []string,
 ) error {
-	policy := getClientPolicy(aeroCluster, k8sClient)
-	policy.FailIfNotConnected = false
-	policy.Timeout = time.Minute * 2
-	policy.UseServicesAlternate = true
-	policy.ConnectionQueueSize = 100
-	policy.LimitConnectionsToQueueSize = true
-	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
-
-	for podName := range aeroCluster.Status.Pods {
-		pod := aeroCluster.Status.Pods[podName]
-
-		host, err := createHost(&pod)
-		if err != nil {
-			return err
-		}
-
-		hostList = append(hostList, host)
-	}
-
-	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
-	if asClient == nil {
-		return fmt.Errorf("aerospike client is nil %v", err)
-	}
-
-	defer asClient.Close()
-
-	if _, err = asClient.WarmUp(-1); err != nil {
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
 		return err
 	}
 
-	for !asClient.IsConnected() {
-		pkgLog.Info("Waiting for cluster to connect")
-		time.Sleep(2 * time.Second)
-	}
+	defer asClient.Close()
 
 	pkgLog.Info(
 		"Loading record", "nodes", asClient.GetNodeNames(),
@@ -277,44 +248,16 @@ func checkDataInCluster(
 ) (map[string]bool, error) {
 	data := make(map[string]bool)
 
-	policy := getClientPolicy(aeroCluster, k8sClient)
-	policy.FailIfNotConnected = false
-	policy.Timeout = time.Minute * 2
-	policy.UseServicesAlternate = true
-	policy.ConnectionQueueSize = 100
-	policy.LimitConnectionsToQueueSize = true
-	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
-
-	for podName := range aeroCluster.Status.Pods {
-		pod := aeroCluster.Status.Pods[podName]
-
-		host, err := createHost(&pod)
-		if err != nil {
-			return nil, err
-		}
-
-		hostList = append(hostList, host)
-	}
-
-	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
 	if err != nil {
 		return nil, err
 	}
 
 	defer asClient.Close()
 
-	for !asClient.IsConnected() {
-		pkgLog.Info("Waiting for cluster to connect")
-		time.Sleep(2 * time.Second)
-	}
-
 	pkgLog.Info(
 		"Loading record", "nodes", asClient.GetNodeNames(),
 	)
-
-	if _, err = asClient.WarmUp(-1); err != nil {
-		return nil, err
-	}
 
 	for _, ns := range namespaces {
 		newKey, err := as.NewKey(ns, setName, key)
@@ -327,8 +270,8 @@ func checkDataInCluster(
 			return nil, nil
 		}
 
-		if bin, ok := record.Bins[binName]; ok {
-			value := bin.(string)
+		if bin, exists := record.Bins[binName]; exists {
+			value, ok := bin.(string)
 
 			if !ok {
 				return nil, fmt.Errorf(

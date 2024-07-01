@@ -1824,26 +1824,8 @@ func isContainerNameInStorageVolumeAttachments(
 	return false
 }
 
-func splitRacks(nodes, racks int) []int {
-	nodesPerRack, extraNodes := nodes/racks, nodes%racks
-
-	// Distributing nodes in given racks
-	var topology []int
-
-	for rackIdx := 0; rackIdx < racks; rackIdx++ {
-		nodesForThisRack := nodesPerRack
-		if rackIdx < extraNodes {
-			nodesForThisRack++
-		}
-
-		topology = append(topology, nodesForThisRack)
-	}
-
-	return topology
-}
-
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
-	topology := splitRacks(
+	topology := asdbv1.DistributeItems(
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
 

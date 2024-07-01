@@ -507,8 +507,6 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 		return fmt.Errorf("error updating status: %w", err)
 	}
 
-	r.aeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
-
 	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
 
 	return nil

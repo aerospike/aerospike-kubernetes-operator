@@ -117,6 +117,12 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 		return nil, err
 	}
 
+	if err := validateOperationUpdate(
+		old.Spec.Operations, c.Spec.Operations,
+	); err != nil {
+		return nil, err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, incomingVersion, outgoingVersion,
@@ -191,6 +197,10 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		return err
 	}
 
+	if err := c.validateOperation(); err != nil {
+		return err
+	}
+
 	// Storage should be validated before validating aerospikeConfig and fileStorage
 	if err := validateStorage(&c.Spec.Storage, &c.Spec.PodSpec); err != nil {
 		return err
@@ -261,6 +271,33 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 	}
 
 	return c.validateSCNamespaces()
+}
+
+func (c *AerospikeCluster) validateOperation() error {
+	// Nothing to validate if no operation
+	if len(c.Spec.Operations) == 0 {
+		return nil
+	}
+
+	if c.Status.AerospikeConfig == nil {
+		return fmt.Errorf("operation cannot be added during aerospike cluster creation")
+	}
+
+	allPodNames := GetAllPodNames(c.Status.Pods)
+
+	podSet := sets.New(c.Spec.Operations[0].PodList...)
+	if !allPodNames.IsSuperset(podSet) {
+		return fmt.Errorf("invalid pod names in operation %v", podSet.Difference(allPodNames).UnsortedList())
+	}
+
+	// Don't allow any operation along with cluster scale up or racks added or removed
+	// New pods won't be available for operation
+	if !reflect.DeepEqual(c.Spec.Operations, c.Status.Operations) &&
+		(c.Spec.Size > c.Status.Size || len(c.Spec.RackConfig.Racks) != len(c.Status.RackConfig.Racks)) {
+		return fmt.Errorf("cannot perform any on-demand operation along with cluster scale-up or rack addition/removal")
+	}
+
+	return nil
 }
 
 func (c *AerospikeCluster) validateSCNamespaces() error {
@@ -1292,20 +1329,22 @@ func validateSecurityConfigUpdate(
 func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
 	newConf := newConfSpec.Value
 	oldConf := oldConfSpec.Value
-	oldSec, oldSecConfFound := oldConf["security"]
-	newSec, newSecConfFound := newConf["security"]
 
-	if oldSecConfFound && !newSecConfFound {
+	oldSec, oldSecConfFound := oldConf["security"]
+	if !oldSecConfFound {
+		return nil
+	}
+
+	newSec, newSecConfFound := newConf["security"]
+	if !newSecConfFound {
 		return fmt.Errorf("cannot remove cluster security config")
 	}
 
-	if oldSecConfFound && newSecConfFound {
-		oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
-		newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
+	oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
+	newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
 
-		if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
+	if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
+		return fmt.Errorf("cannot disable cluster security in running cluster")
 	}
 
 	return nil
@@ -2360,33 +2399,17 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
-	minVersion := ""
-
-	for idx := range pods {
-		if pods[idx].InitImage != "" {
-			version, err := GetImageVersion(pods[idx].InitImage)
-			if err != nil {
-				return "", err
-			}
-
-			if minVersion == "" {
-				minVersion = version
-				continue
-			}
-
-			val, err := lib.CompareVersions(version, minVersion)
-			if err != nil {
-				return "", fmt.Errorf("failed to check image version: %v", err)
-			}
-
-			if val < 0 {
-				minVersion = version
-			}
-		} else {
-			return baseInitVersion, nil
-		}
+func validateOperationUpdate(oldOps, newOps []OperationSpec) error {
+	if len(oldOps) == 0 || len(newOps) == 0 {
+		return nil
 	}
 
-	return minVersion, nil
+	oldOp := oldOps[0]
+	newOp := newOps[0]
+
+	if oldOp.ID == newOp.ID && !reflect.DeepEqual(oldOp, newOp) {
+		return fmt.Errorf("operation %s cannot be updated", newOp.ID)
+	}
+
+	return nil
 }
