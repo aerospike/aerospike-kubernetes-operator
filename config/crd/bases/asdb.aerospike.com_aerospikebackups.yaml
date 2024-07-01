@@ -35,6 +35,7 @@ spec:
             description: AerospikeBackupSpec defines the desired state of AerospikeBackup
             properties:
               backupService:
+                description: BackupService is the backup service reference.
                 properties:
                   name:
                     type: string
@@ -45,10 +46,14 @@ spec:
                 - namespace
                 type: object
               config:
+                description: Config is the configuration for the backup.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               onDemand:
+                description: OnDemand is the on demand backup configuration.
                 properties:
+                  delay:
+                    type: integer
                   id:
                     type: string
                   routineName:

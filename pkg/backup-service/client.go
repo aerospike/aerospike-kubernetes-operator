@@ -1,16 +1,21 @@
+//nolint:gosec // to ignore potential HTTP request made with variable url (gosec)
 package backupservice
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	url2 "net/url"
 	"strings"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
@@ -19,44 +24,59 @@ const defaultContextPath = "/"
 
 type Client struct {
 	// The address to listen on.
-	Address *string `json:"address,omitempty"`
-	// The port to listen on.
-	Port *int `json:"port,omitempty"`
+	Address string `json:"address,omitempty"`
+
 	// ContextPath customizes path for the API endpoints.
-	ContextPath *string `json:"context-path,omitempty"`
+	ContextPath string `json:"context-path,omitempty"`
+
+	// The port to listen on.
+	Port int32 `json:"port,omitempty"`
 }
 
-func GetBackupServiceClient(config *v1beta1.ServiceConfig) *Client {
-	return &Client{
-		Address:     config.Address,
-		Port:        config.Port,
-		ContextPath: config.ContextPath,
+func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService) (*Client, error) {
+	backupSvc := &v1beta1.AerospikeBackupService{}
+
+	if err := k8sClient.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: svc.Namespace,
+			Name:      svc.Name,
+		}, backupSvc,
+	); err != nil {
+		return nil, err
 	}
+
+	return &Client{
+		Address:     fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
+		Port:        backupSvc.Status.Port,
+		ContextPath: backupSvc.Status.ContextPath,
+	}, nil
 }
 
-func (b *Client) GetAddress() *string {
-	return b.Address
+func (c *Client) GetAddress() string {
+	return c.Address
 }
 
-func (b *Client) GetPort() *int {
-	return b.Port
+func (c *Client) GetPort() int32 {
+	return c.Port
 }
 
-func (b *Client) GetContextPath() string {
-	if b.ContextPath != nil {
-		return *b.ContextPath
+func (c *Client) GetContextPath() string {
+	if c.ContextPath != "" {
+		return c.ContextPath
 	}
 
 	return defaultContextPath
 }
 
-func (b *Client) CheckBackupServiceHealth() error {
-	url := b.API("/health")
+func (c *Client) CheckBackupServiceHealth() error {
+	url := c.API("/health")
 
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("backup service is not healthy")
@@ -65,8 +85,8 @@ func (b *Client) CheckBackupServiceHealth() error {
 	return nil
 }
 
-func (b *Client) GetBackupServiceConfig() (*model.Config, error) {
-	url := b.API("/config")
+func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
+	url := c.API("/config")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -77,7 +97,7 @@ func (b *Client) GetBackupServiceConfig() (*model.Config, error) {
 		return nil, fmt.Errorf("failed to get backup service config")
 	}
 
-	var conf model.Config
+	conf := make(map[string]interface{})
 
 	defer resp.Body.Close()
 
@@ -90,11 +110,11 @@ func (b *Client) GetBackupServiceConfig() (*model.Config, error) {
 		return nil, err
 	}
 
-	return &conf, nil
+	return conf, nil
 }
 
-func (b *Client) ApplyConfig() error {
-	url := b.API("/config/apply")
+func (c *Client) ApplyConfig() error {
+	url := c.API("/config/apply")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -115,8 +135,8 @@ func (b *Client) ApplyConfig() error {
 	return nil
 }
 
-func (b *Client) GetClusters() (map[string]*model.AerospikeCluster, error) {
-	url := b.API("/config/clusters")
+func (c *Client) GetClusters() (map[string]interface{}, error) {
+	url := c.API("/config/clusters")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -127,7 +147,7 @@ func (b *Client) GetClusters() (map[string]*model.AerospikeCluster, error) {
 		return nil, fmt.Errorf("failed to get aerospike clusters")
 	}
 
-	aerospikeClusters := make(map[string]*model.AerospikeCluster)
+	aerospikeClusters := make(map[string]interface{})
 
 	defer resp.Body.Close()
 
@@ -143,10 +163,10 @@ func (b *Client) GetClusters() (map[string]*model.AerospikeCluster, error) {
 	return aerospikeClusters, nil
 }
 
-func (b *Client) PutCluster(cluster *v1beta1.Cluster) error {
-	url := b.API(fmt.Sprintf("/config/clusters/%s", cluster.Name))
+func (c *Client) PutCluster(name, cluster interface{}) error {
+	url := c.API(fmt.Sprintf("/config/clusters/%s", name))
 
-	jsonBody, err := json.Marshal(cluster.AerospikeCluster)
+	jsonBody, err := json.Marshal(cluster)
 	if err != nil {
 		return err
 	}
@@ -158,9 +178,9 @@ func (b *Client) PutCluster(cluster *v1beta1.Cluster) error {
 		return err
 	}
 
-	client := &http.Client{}
+	cl := &http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -179,10 +199,10 @@ func (b *Client) PutCluster(cluster *v1beta1.Cluster) error {
 	return nil
 }
 
-func (b *Client) UpdateCluster(cluster *v1beta1.Cluster) error {
-	url := b.API(fmt.Sprintf("/config/clusters/%s", cluster.Name))
+func (c *Client) UpdateCluster(name, cluster interface{}) error {
+	url := c.API(fmt.Sprintf("/config/clusters/%s", name))
 
-	jsonBody, err := json.Marshal(cluster.AerospikeCluster)
+	jsonBody, err := json.Marshal(cluster)
 	if err != nil {
 		return err
 	}
@@ -208,8 +228,8 @@ func (b *Client) UpdateCluster(cluster *v1beta1.Cluster) error {
 	return nil
 }
 
-func (b *Client) GetBackupPolicies() (map[string]*model.BackupPolicy, error) {
-	url := b.API("/config/policies")
+func (c *Client) GetBackupPolicies() (map[string]interface{}, error) {
+	url := c.API("/config/policies")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -220,7 +240,7 @@ func (b *Client) GetBackupPolicies() (map[string]*model.BackupPolicy, error) {
 		return nil, fmt.Errorf("failed to get backup policies")
 	}
 
-	policies := make(map[string]*model.BackupPolicy)
+	policies := make(map[string]interface{})
 
 	defer resp.Body.Close()
 
@@ -236,8 +256,8 @@ func (b *Client) GetBackupPolicies() (map[string]*model.BackupPolicy, error) {
 	return policies, nil
 }
 
-func (b *Client) PutBackupPolicy(name string, policy *model.BackupPolicy) error {
-	url := b.API(fmt.Sprintf("/config/policies/%s", name))
+func (c *Client) PutBackupPolicy(name string, policy interface{}) error {
+	url := c.API(fmt.Sprintf("/config/policies/%s", name))
 
 	jsonBody, err := json.Marshal(policy)
 	if err != nil {
@@ -251,9 +271,9 @@ func (b *Client) PutBackupPolicy(name string, policy *model.BackupPolicy) error 
 		return err
 	}
 
-	client := &http.Client{}
+	cl := &http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -272,8 +292,8 @@ func (b *Client) PutBackupPolicy(name string, policy *model.BackupPolicy) error 
 	return nil
 }
 
-func (b *Client) UpdateBackupPolicy(name string, policy *model.BackupPolicy) error {
-	url := b.API(fmt.Sprintf("/config/policies/%s", name))
+func (c *Client) UpdateBackupPolicy(name string, policy interface{}) error {
+	url := c.API(fmt.Sprintf("/config/policies/%s", name))
 
 	jsonBody, err := json.Marshal(policy)
 	if err != nil {
@@ -301,10 +321,10 @@ func (b *Client) UpdateBackupPolicy(name string, policy *model.BackupPolicy) err
 	return nil
 }
 
-func (b *Client) GetBackupRoutines() {}
+func (c *Client) GetBackupRoutines() {}
 
-func (b *Client) PutBackupRoutine(name string, routine *model.BackupRoutine) error {
-	url := b.API(fmt.Sprintf("/config/routines/%s", name))
+func (c *Client) PutBackupRoutine(name string, routine interface{}) error {
+	url := c.API(fmt.Sprintf("/config/routines/%s", name))
 
 	jsonBody, err := json.Marshal(routine)
 	if err != nil {
@@ -318,9 +338,9 @@ func (b *Client) PutBackupRoutine(name string, routine *model.BackupRoutine) err
 		return err
 	}
 
-	client := &http.Client{}
+	cl := &http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -339,8 +359,8 @@ func (b *Client) PutBackupRoutine(name string, routine *model.BackupRoutine) err
 	return nil
 }
 
-func (b *Client) UpdateBackupRoutine(name string, routine *model.BackupRoutine) error {
-	url := b.API(fmt.Sprintf("/config/routines/%s", name))
+func (c *Client) UpdateBackupRoutine(name string, routine interface{}) error {
+	url := c.API(fmt.Sprintf("/config/routines/%s", name))
 
 	jsonBody, err := json.Marshal(routine)
 	if err != nil {
@@ -368,8 +388,8 @@ func (b *Client) UpdateBackupRoutine(name string, routine *model.BackupRoutine) 
 	return nil
 }
 
-func (b *Client) GetStorage() (map[string]*model.Storage, error) {
-	url := b.API("/config/storage")
+func (c *Client) GetStorage() (map[string]interface{}, error) {
+	url := c.API("/config/storage")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -380,7 +400,7 @@ func (b *Client) GetStorage() (map[string]*model.Storage, error) {
 		return nil, fmt.Errorf("failed to get backup storage")
 	}
 
-	storage := make(map[string]*model.Storage)
+	storage := make(map[string]interface{})
 
 	defer resp.Body.Close()
 
@@ -396,8 +416,8 @@ func (b *Client) GetStorage() (map[string]*model.Storage, error) {
 	return storage, nil
 }
 
-func (b *Client) PutStorage(name string, storage *model.Storage) error {
-	url := b.API(fmt.Sprintf("/config/storage/%s", name))
+func (c *Client) PutStorage(name string, storage interface{}) error {
+	url := c.API(fmt.Sprintf("/config/storage/%s", name))
 
 	jsonBody, err := json.Marshal(storage)
 	if err != nil {
@@ -411,9 +431,9 @@ func (b *Client) PutStorage(name string, storage *model.Storage) error {
 		return err
 	}
 
-	client := &http.Client{}
+	cl := &http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := cl.Do(req)
 	if err != nil {
 		return err
 	}
@@ -432,8 +452,8 @@ func (b *Client) PutStorage(name string, storage *model.Storage) error {
 	return nil
 }
 
-func (b *Client) UpdateStorage(name string, storage *model.Storage) error {
-	url := b.API(fmt.Sprintf("/config/storage/%s", name))
+func (c *Client) UpdateStorage(name string, storage interface{}) error {
+	url := c.API(fmt.Sprintf("/config/storage/%s", name))
 
 	jsonBody, err := json.Marshal(storage)
 	if err != nil {
@@ -461,8 +481,8 @@ func (b *Client) UpdateStorage(name string, storage *model.Storage) error {
 	return nil
 }
 
-func (b *Client) GetFullBackups() (map[string][]model.BackupDetails, error) {
-	url := b.API("/backups/full")
+func (c *Client) GetFullBackups() (map[string][]interface{}, error) {
+	url := c.API("/backups/full")
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -473,7 +493,7 @@ func (b *Client) GetFullBackups() (map[string][]model.BackupDetails, error) {
 		return nil, fmt.Errorf("failed to get backups")
 	}
 
-	backups := make(map[string][]model.BackupDetails)
+	backups := make(map[string][]interface{})
 
 	defer resp.Body.Close()
 
@@ -489,8 +509,8 @@ func (b *Client) GetFullBackups() (map[string][]model.BackupDetails, error) {
 	return backups, nil
 }
 
-func (b *Client) GetFullBackupForRoutine(routineName string) ([]model.BackupDetails, error) {
-	url := b.API(fmt.Sprintf("/backups/full/%s", routineName))
+func (c *Client) GetFullBackupForRoutine(routineName string) ([]interface{}, error) {
+	url := c.API(fmt.Sprintf("/backups/full/%s", routineName))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -501,7 +521,7 @@ func (b *Client) GetFullBackupForRoutine(routineName string) ([]model.BackupDeta
 		return nil, fmt.Errorf("failed to get backups")
 	}
 
-	var backups []model.BackupDetails
+	var backups []interface{}
 
 	defer resp.Body.Close()
 
@@ -517,13 +537,24 @@ func (b *Client) GetFullBackupForRoutine(routineName string) ([]model.BackupDeta
 	return backups, nil
 }
 
-func (b *Client) ScheduleBackup(routineName string) error {
-	url := b.API(fmt.Sprintf("/backups/schedule/%s", routineName))
-
-	resp, err := http.Post(url, "application/json", nil)
+func (c *Client) ScheduleBackup(routineName string, delay int) error {
+	url, err := url2.Parse(c.API(fmt.Sprintf("/backups/schedule/%s", routineName)))
 	if err != nil {
 		return err
 	}
+
+	if delay > 0 {
+		query := url.Query()
+		query.Add("delay", fmt.Sprintf("%d", delay))
+		url.RawQuery = query.Encode()
+	}
+
+	resp, err := http.Post(url.String(), "application/json", nil)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted {
 		return fmt.Errorf("failed to schedule backup")
@@ -532,12 +563,26 @@ func (b *Client) ScheduleBackup(routineName string) error {
 	return nil
 }
 
-func (b *Client) TriggerFullRestore(log logr.Logger, request *model.RestoreRequest) (*int64, error) {
-	url := b.API("/restore/full")
+func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string, request []byte) (*int64, error) {
+	log.Info(fmt.Sprintf("Triggering %s restore", restoreType))
 
-	log.Info("Triggering full restore")
+	var url string
 
-	jsonBody, err := json.Marshal(request)
+	switch restoreType {
+	case "Full":
+		url = c.API("/restore/full")
+
+	case "Incremental":
+		url = c.API("/restore/incremental")
+
+	case "TimeStamp":
+		url = c.API("/restore/timestamp")
+
+	default:
+		return nil, fmt.Errorf("unsupported restore type")
+	}
+
+	jsonBody, err := yaml.YAMLToJSON(request)
 	if err != nil {
 		return nil, err
 	}
@@ -551,14 +596,15 @@ func (b *Client) TriggerFullRestore(log logr.Logger, request *model.RestoreReque
 
 	if resp.StatusCode != http.StatusAccepted {
 		log.Info("Response", "status-code", resp.StatusCode)
+
 		defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
+		body, rErr := io.ReadAll(resp.Body)
+		if rErr != nil {
+			return nil, rErr
 		}
 
-		return nil, fmt.Errorf("failed to trigger full restore, error: %s", string(body))
+		return nil, fmt.Errorf("failed to trigger %s restore, error: %s", restoreType, string(body))
 	}
 
 	var jobID int64
@@ -574,81 +620,13 @@ func (b *Client) TriggerFullRestore(log logr.Logger, request *model.RestoreReque
 		return nil, err
 	}
 
-	return &jobID, nil
-}
-
-func (b *Client) TriggerIncrementalRestore(log logr.Logger, request *model.RestoreRequest) (*int64, error) {
-	url := b.API("/restore/incremental")
-
-	jsonBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-
-	bodyReader := bytes.NewReader(jsonBody)
-
-	resp, err := http.Post(url, "application/json", bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusAccepted {
-		return nil, fmt.Errorf("failed to trigger incremental restore")
-	}
-
-	var jobID int64
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(body, &jobID); err != nil {
-		return nil, err
-	}
+	log.Info(fmt.Sprintf("Triggered %s restore", restoreType))
 
 	return &jobID, nil
 }
 
-func (b *Client) TriggerRestoreByTimeStamp(log logr.Logger, request *model.RestoreTimestampRequest) (*int64, error) {
-	url := b.API("/restore/timestamp")
-
-	jsonBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-
-	bodyReader := bytes.NewReader(jsonBody)
-
-	resp, err := http.Post(url, "application/json", bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusAccepted {
-		return nil, fmt.Errorf("failed to trigger restore by timestamp")
-	}
-
-	var jobID int64
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(body, &jobID); err != nil {
-		return nil, err
-	}
-
-	return &jobID, nil
-}
-
-func (b *Client) CheckRestoreStatus(jobID *int64) (*model.RestoreJobStatus, error) {
-	url := b.API(fmt.Sprintf("/restore/status/%d", *jobID))
+func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error) {
+	url := c.API(fmt.Sprintf("/restore/status/%d", *jobID))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -659,7 +637,7 @@ func (b *Client) CheckRestoreStatus(jobID *int64) (*model.RestoreJobStatus, erro
 		return nil, fmt.Errorf("failed to check restore restoreStatus")
 	}
 
-	var restoreStatus model.RestoreJobStatus
+	restoreStatus := make(map[string]interface{})
 
 	defer resp.Body.Close()
 
@@ -672,17 +650,17 @@ func (b *Client) CheckRestoreStatus(jobID *int64) (*model.RestoreJobStatus, erro
 		return nil, err
 	}
 
-	return &restoreStatus, nil
+	return restoreStatus, nil
 }
 
-func (b *Client) API(pattern string) string {
-	contextPath := b.GetContextPath()
+func (c *Client) API(pattern string) string {
+	contextPath := c.GetContextPath()
 
 	if !strings.HasSuffix(contextPath, "/") {
 		contextPath += "/"
 	}
 
-	address := fmt.Sprintf("%s:%d", *b.GetAddress(), *b.Port)
+	address := fmt.Sprintf("%s:%d", c.GetAddress(), c.Port)
 
 	return fmt.Sprintf("http://%s%s%s%s", address, contextPath, restAPIVersion, pattern)
 }

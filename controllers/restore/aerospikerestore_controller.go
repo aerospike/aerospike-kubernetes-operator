@@ -18,6 +18,7 @@ package restore
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -38,6 +39,7 @@ type AerospikeRestoreReconciler struct {
 	Log    logr.Logger
 }
 
+//nolint:lll // for readability
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikerestores,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikerestores/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikerestores/finalizers,verbs=update

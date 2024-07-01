@@ -107,7 +107,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 			Name:      r.aeroBackup.Spec.BackupService.Name,
 		}, cm,
 	); err != nil {
-		return fmt.Errorf("Backup Service configMap not found, name: %s namespace: %s",
+		return fmt.Errorf("backup Service configMap not found, name: %s namespace: %s",
 			r.aeroBackup.Spec.BackupService.Name, r.aeroBackup.Spec.BackupService.Namespace)
 	}
 
@@ -191,10 +191,13 @@ func (r *SingleBackupReconciler) ScheduleOnDemandBackup() error {
 		return err
 	}
 
-	if err := backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand.RoutineName); err != nil {
+	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand.RoutineName,
+		r.aeroBackup.Spec.OnDemand.Delay); err != nil {
 		r.Log.Error(err, "Failed to schedule on-demand backup")
 		return err
 	}
+
+	r.Log.Info("Scheduled on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 
 	return nil
 }
@@ -215,25 +218,29 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 	r.Log.Info("Fetched backup service config", "config", config)
 
 	backupConfigMap := make(map[string]interface{})
-	if err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap); err != nil {
+
+	err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap)
+	if err != nil {
 		return err
 	}
 
 	if backupConfigMap["aerospike-cluster"] != nil {
 		cluster := backupConfigMap["aerospike-cluster"].(map[string]interface{})
 
-		currentClusters, err := common.GetConfigSection(config, "aerospike-clusters")
-		if err != nil {
-			return err
+		currentClusters, gErr := common.GetConfigSection(config, "aerospike-clusters")
+		if gErr != nil {
+			return gErr
 		}
 
 		for name, clusterConfig := range cluster {
 			if _, ok := currentClusters[name]; ok {
-				if err = serviceClient.PutCluster(name, clusterConfig); err != nil {
+				err = serviceClient.PutCluster(name, clusterConfig)
+				if err != nil {
 					return err
 				}
 			} else {
-				if err = serviceClient.UpdateCluster(name, clusterConfig); err != nil {
+				err = serviceClient.UpdateCluster(name, clusterConfig)
+				if err != nil {
 					return err
 				}
 			}
@@ -243,24 +250,27 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 	if backupConfigMap["backup-routines"] != nil {
 		routines := backupConfigMap["backup-routines"].(map[string]interface{})
 
-		currentRoutines, err := common.GetConfigSection(config, "backup-routines")
-		if err != nil {
-			return err
+		currentRoutines, gErr := common.GetConfigSection(config, "backup-routines")
+		if gErr != nil {
+			return gErr
 		}
+
 		for name, routine := range routines {
 			if _, ok := currentRoutines[name]; ok {
-				if err := serviceClient.PutBackupRoutine(name, routine); err != nil {
+				err = serviceClient.PutBackupRoutine(name, routine)
+				if err != nil {
 					return err
 				}
 			} else {
-				if err := serviceClient.UpdateBackupRoutine(name, routine); err != nil {
+				err = serviceClient.UpdateBackupRoutine(name, routine)
+				if err != nil {
 					return err
 				}
 			}
 		}
 	}
 
-	//if r.aeroBackup.Spec.Config.BackupPolicies != nil {
+	// if r.aeroBackup.Spec.Config.BackupPolicies != nil {
 	//	for name, policy := range r.aeroBackup.Spec.Config.BackupPolicies {
 	//		if _, ok := config.BackupPolicies[name]; ok {
 	//			if err := serviceClient.PutBackupPolicy(name, policy); err != nil {
@@ -272,9 +282,9 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 	//			}
 	//		}
 	//	}
-	//}
+	// }
 
-	//if r.aeroBackup.Spec.Config.Storage != nil {
+	// if r.aeroBackup.Spec.Config.Storage != nil {
 	//	for name, storage := range r.aeroBackup.Spec.Config.Storage {
 	//		if _, ok := config.Storage[name]; ok {
 	//			if err := serviceClient.PutStorage(name, storage); err != nil {
@@ -286,10 +296,11 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 	//			}
 	//		}
 	//	}
-	//}
+	// }
 
 	// Apply the updated configuration for the changes to take effect
-	if err = serviceClient.ApplyConfig(); err != nil {
+	err = serviceClient.ApplyConfig()
+	if err != nil {
 		return err
 	}
 

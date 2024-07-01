@@ -25,7 +25,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup-service"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/controllers/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -175,6 +175,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeRestore")
 		os.Exit(1)
 	}
+
 	if err = (&backupservice.AerospikeBackupServiceReconciler{
 		Client: client,
 		Scheme: mgr.GetScheme(),

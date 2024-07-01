@@ -370,7 +370,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			if patchErr := r.patchPodStatus(
 				context.TODO(), patches,
 			); patchErr != nil {
-				return common.ReconcileError(fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err))
+				return common.ReconcileError(
+					fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err))
 			}
 
 			return common.ReconcileError(err)

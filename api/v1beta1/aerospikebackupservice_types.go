@@ -28,7 +28,10 @@ import (
 
 // AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
 type AerospikeBackupServiceSpec struct {
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Image"
+	// Image is the image for the backup service.
 	Image string `json:"image"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config
 	// Config is the configuration for the backup service.
 	Config runtime.RawExtension `json:"config"`
 
@@ -36,13 +39,15 @@ type AerospikeBackupServiceSpec struct {
 
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
 	Service *Service `json:"service,omitempty"`
 }
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
 type AerospikeBackupServiceStatus struct {
-	Port        int32  `json:"port"`
 	ContextPath string `json:"contextPath"`
+	ConfigHash  string `json:"configHash"`
+	Port        int32  `json:"port"`
 }
 
 //+kubebuilder:object:root=true

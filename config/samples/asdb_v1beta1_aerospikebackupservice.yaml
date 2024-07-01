@@ -16,12 +16,16 @@ spec:
       http:
         port: 8081
     backup-policies:
-      keepFilesPolicy:
+      test-policy:
+        parallel: 3
+        remove-files: KeepAll
+        type: 1
+      test-policy1:
         parallel: 3
         remove-files: KeepAll
         type: 1
     storage:
-      s3Storage:
+      local:
         path: /localStorage
         type: 0
   secrets:

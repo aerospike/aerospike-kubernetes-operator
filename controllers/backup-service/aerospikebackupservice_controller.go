@@ -18,6 +18,7 @@ package backupservice
 
 import (
 	"context"
+
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -40,6 +41,7 @@ type AerospikeBackupServiceReconciler struct {
 	Scheme *k8sruntime.Scheme
 }
 
+//nolint:lll // for readability
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/finalizers,verbs=update

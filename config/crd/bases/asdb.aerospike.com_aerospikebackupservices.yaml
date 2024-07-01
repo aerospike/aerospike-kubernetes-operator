@@ -40,6 +40,7 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               image:
+                description: Image is the image for the backup service.
                 type: string
               resources:
                 description: ResourceRequirements describes the compute resource requirements.
@@ -153,12 +154,15 @@ spec:
             description: AerospikeBackupServiceStatus defines the observed state of
               AerospikeBackupService
             properties:
+              configHash:
+                type: string
               contextPath:
                 type: string
               port:
                 format: int32
                 type: integer
             required:
+            - configHash
             - contextPath
             - port
             type: object

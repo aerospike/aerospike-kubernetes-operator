@@ -165,7 +165,6 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			"name", getBackupServiceName(r.aeroBackupService))
 
 		return nil
-
 	}
 
 	r.Log.Info(
@@ -198,7 +197,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 	cm.Data[BackupConfigYAML] = string(updatedConfig)
 
-	if err := r.Client.Update(
+	if err = r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf(
@@ -209,6 +208,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 	r.Log.Info("Updated Backup Service ConfigMap",
 		"name", getBackupServiceName(r.aeroBackupService))
+
 	return nil
 }
 
@@ -217,7 +217,6 @@ func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	data[BackupConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
 
 	return data
-
 }
 
 func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
@@ -229,7 +228,6 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			Name:      r.aeroBackupService.Name,
 		}, &deploy,
 	); err != nil {
-
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -243,13 +241,15 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		}
 
 		// Set AerospikeBackupService instance as the owner and controller
-		if err = controllerutil.SetControllerReference(
+		err = controllerutil.SetControllerReference(
 			r.aeroBackupService, deployment, r.Scheme,
-		); err != nil {
+		)
+		if err != nil {
 			return err
 		}
 
-		if err = r.Client.Create(context.TODO(), deployment, common.CreateOption); err != nil {
+		err = r.Client.Create(context.TODO(), deployment, common.CreateOption)
+		if err != nil {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
 
@@ -260,7 +260,36 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		"Backup Service deployment already exist. Updating existing deployment if required",
 		"name", getBackupServiceName(r.aeroBackupService),
 	)
-	// TODO: Add update flow
+
+	oldResourceVersion := deploy.ResourceVersion
+
+	deployObj, err := r.getDeploymentObject()
+	if err != nil {
+		return err
+	}
+
+	deploy.Spec = deployObj.Spec
+
+	if err = r.Client.Update(context.TODO(), &deploy, common.UpdateOption); err != nil {
+		return fmt.Errorf("failed to update Backup service deployment: %v", err)
+	}
+
+	if oldResourceVersion != deploy.ResourceVersion {
+		r.Log.Info("Deployment spec is updated, will result in rolling restart")
+		return nil
+	}
+
+	hash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
+	if err != nil {
+		return err
+	}
+
+	if r.aeroBackupService.Status.ConfigHash != "" && hash != r.aeroBackupService.Status.ConfigHash {
+		r.Log.Info("Config hash is updated, will result in rolling restart")
+		// TODO: Add pod restart flow
+		return nil
+	}
+
 	return nil
 }
 
@@ -271,12 +300,13 @@ func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService)
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
 	labels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
+
 	svcConf, err := r.getServiceConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	var containerPorts []corev1.ContainerPort
+	containerPorts := make([]corev1.ContainerPort, 0, len(svcConf.portInfo))
 
 	for name, port := range svcConf.portInfo {
 		containerPorts = append(containerPorts, corev1.ContainerPort{
@@ -344,7 +374,6 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 }
 
 func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMount, []corev1.Volume) {
-
 	volumes := make([]corev1.Volume, 0, len(r.aeroBackupService.Spec.SecretMounts))
 	volumeMounts := make([]corev1.VolumeMount, 0, len(r.aeroBackupService.Spec.SecretMounts))
 
@@ -400,7 +429,6 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			Name:      r.aeroBackupService.Name,
 		}, &service,
 	); err != nil {
-
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -414,13 +442,15 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 		}
 
 		// Set AerospikeBackupService instance as the owner and controller
-		if err = controllerutil.SetControllerReference(
+		err = controllerutil.SetControllerReference(
 			r.aeroBackupService, svc, r.Scheme,
-		); err != nil {
+		)
+		if err != nil {
 			return err
 		}
 
-		if err = r.Client.Create(context.TODO(), svc, common.CreateOption); err != nil {
+		err = r.Client.Create(context.TODO(), svc, common.CreateOption)
+		if err != nil {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
 
@@ -441,7 +471,7 @@ func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, err
 		return nil, err
 	}
 
-	var servicePort []corev1.ServicePort
+	servicePort := make([]corev1.ServicePort, 0, len(svcConfig.portInfo))
 
 	for name, port := range svcConfig.portInfo {
 		servicePort = append(servicePort, corev1.ServicePort{
@@ -472,8 +502,6 @@ func (r *SingleBackupServiceReconciler) getServiceConfig() (*serviceConfig, erro
 	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
 		return nil, err
 	}
-
-	r.Log.Info(fmt.Sprintf("Config converted to map: %+v", config))
 
 	if _, ok := config["service"]; !ok {
 		r.Log.Info("Service config not found")
@@ -522,14 +550,16 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 		return err
 	}
 
-	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
-	r.aeroBackupService.Status.Port = svcConfig.portInfo["http"]
-
-	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
-
-	if err := r.Client.Status().Update(context.Background(), r.aeroBackupService); err != nil {
+	hash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
+	if err != nil {
 		return err
 	}
 
-	return nil
+	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
+	r.aeroBackupService.Status.Port = svcConfig.portInfo["http"]
+	r.aeroBackupService.Status.ConfigHash = hash
+
+	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
+
+	return r.Client.Status().Update(context.Background(), r.aeroBackupService)
 }

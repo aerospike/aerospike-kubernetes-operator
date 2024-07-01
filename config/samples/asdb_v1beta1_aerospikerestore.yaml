@@ -9,13 +9,13 @@ metadata:
     app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikerestore-sample
 spec:
-  service-config:
-    address: 35.188.208.134
-    port: 8080
-  restore-config:
-    type: Full
+  backupService:
+    name: aerospikebackupservice-sample
+    namespace: aerospike
+  type: Full
+  config:
     destination:
-      label: absCluster1
+      label: destinationCluster
       credentials:
         password: admin123
         user: admin
@@ -27,6 +27,6 @@ spec:
       no-generation: true
       no-indexes: true
     source:
-      "path": "/localStorage/keepFilesRoutine/backup/1718099241666/data/test"
+      "path": "/localStorage/test-routine/backup/1719824240816/data/test"
       "type": 0
 

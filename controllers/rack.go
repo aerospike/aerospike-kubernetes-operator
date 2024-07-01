@@ -898,7 +898,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	}
 
 	if r.isAnyPodInImageFailedState(oldPodList, ignorablePodNames) {
-		return found, common.ReconcileError(fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
+		return found, common.ReconcileError(
+			fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
 	}
 
 	// Code flow will reach this stage only when found.Spec.Replicas > desiredSize

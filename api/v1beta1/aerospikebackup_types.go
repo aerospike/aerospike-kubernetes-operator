@@ -17,7 +17,6 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -25,17 +24,16 @@ import (
 // AerospikeBackupSpec defines the desired state of AerospikeBackup
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
-	BackupService *BackupService       `json:"backupService"`
-	Config        runtime.RawExtension `json:"config"`
-	OnDemand      *OnDemand            `json:"onDemand,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
+	// BackupService is the backup service reference.
+	BackupService *BackupService `json:"backupService"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
+	// Config is the configuration for the backup.
+	Config runtime.RawExtension `json:"config"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand
+	// OnDemand is the on demand backup configuration.
+	OnDemand *OnDemand `json:"onDemand,omitempty"`
 }
-
-//type BackupConfig struct {
-//	AerospikeCluster *Cluster                        `json:"aerospike-cluster"`
-//	Storage          map[string]*model.Storage       `json:"storage"`
-//	BackupRoutines   map[string]*model.BackupRoutine `json:"backup-routines"`
-//	BackupPolicies   map[string]*model.BackupPolicy  `json:"backup-policies"`
-//}
 
 type BackupService struct {
 	Name      string `json:"name"`
@@ -45,11 +43,7 @@ type BackupService struct {
 type OnDemand struct {
 	ID          string `json:"id,omitempty"`
 	RoutineName string `json:"routineName"`
-}
-
-type Cluster struct {
-	model.AerospikeCluster `json:",inline"`
-	Name                   string `json:"name"`
+	Delay       int    `json:"delay,omitempty"`
 }
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
