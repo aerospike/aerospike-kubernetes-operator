@@ -25,12 +25,15 @@ var _ = Describe(
 			"WarmRestart", func() {
 				It(
 					"Should work with tini", func() {
-						WarmRestart(ctx)
+						WarmRestart(ctx, latestImage, true)
 					},
 				)
 				It(
-					"Should cold start without tini", func() {
-						PodRestart(ctx)
+					"Should not work without tini", func() {
+						image := fmt.Sprintf(
+							"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
+						)
+						WarmRestart(ctx, image, false)
 					},
 				)
 
@@ -39,15 +42,8 @@ var _ = Describe(
 	},
 )
 
-func WarmRestart(ctx goCtx.Context) {
-	rollCluster(ctx, latestImage, true)
-}
-
-func PodRestart(ctx goCtx.Context) {
-	image := fmt.Sprintf(
-		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
-	)
-	rollCluster(ctx, image, false)
+func WarmRestart(ctx goCtx.Context, image string, expectWarmStart bool) {
+	rollCluster(ctx, image, expectWarmStart)
 }
 
 func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
@@ -86,15 +82,19 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	err = rollingRestartClusterTest(
 		logger, k8sClient, ctx, clusterNamespacedName,
 	)
-	Expect(err).ToNot(HaveOccurred())
+	if !expectWarmStart {
+		Expect(err).Should(HaveOccurred())
+	} else {
+		Expect(err).ToNot(HaveOccurred())
 
-	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)
-	Expect(err).ToNot(HaveOccurred())
+		podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)
+		Expect(err).ToNot(HaveOccurred())
 
-	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
+		pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 
-	for _, marker := range podToMarkerPresent {
-		Expect(marker).To(Equal(expectWarmStart))
+		for _, marker := range podToMarkerPresent {
+			Expect(marker).To(Equal(expectWarmStart))
+		}
 	}
 }
 

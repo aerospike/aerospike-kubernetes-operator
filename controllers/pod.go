@@ -1537,13 +1537,11 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 				statusPods := sets.New(statusOp.PodList...)
 
 				if statusOp.Kind == asdbv1.OperationWarmRestart && quickRestartsSet != nil {
-					statusOp.PodList = append(statusOp.PodList, quickRestartsSet.Intersection(specPods).
-						Difference(statusPods).UnsortedList()...)
+					statusOp.PodList = statusPods.Union(quickRestartsSet.Intersection(specPods)).UnsortedList()
 				}
 
 				if statusOp.Kind == asdbv1.OperationPodRestart && podRestartsSet != nil {
-					statusOp.PodList = append(statusOp.PodList, podRestartsSet.Intersection(specPods).
-						Difference(statusPods).UnsortedList()...)
+					statusOp.PodList = statusPods.Union(podRestartsSet.Intersection(specPods)).UnsortedList()
 				}
 			}
 		}
