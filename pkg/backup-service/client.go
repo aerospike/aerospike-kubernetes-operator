@@ -199,6 +199,35 @@ func (c *Client) PutCluster(name, cluster interface{}) error {
 	return nil
 }
 
+func (c *Client) DeleteCluster(name string) error {
+	url := c.API(fmt.Sprintf("/config/clusters/%s", name))
+
+	req, err := http.NewRequest(http.MethodDelete, url, http.NoBody)
+	if err != nil {
+		return err
+	}
+
+	cl := &http.Client{}
+
+	resp, err := cl.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		return fmt.Errorf("failed to delete aerospike cluster, error: %s", string(body))
+	}
+
+	return nil
+}
+
 func (c *Client) UpdateCluster(name, cluster interface{}) error {
 	url := c.API(fmt.Sprintf("/config/clusters/%s", name))
 
@@ -383,6 +412,35 @@ func (c *Client) UpdateBackupRoutine(name string, routine interface{}) error {
 		}
 
 		return fmt.Errorf("failed to update backup routine, error: %s", string(body))
+	}
+
+	return nil
+}
+
+func (c *Client) DeleteBackupRoutine(name string) error {
+	url := c.API(fmt.Sprintf("/config/routines/%s", name))
+
+	req, err := http.NewRequest(http.MethodDelete, url, http.NoBody)
+	if err != nil {
+		return err
+	}
+
+	cl := &http.Client{}
+
+	resp, err := cl.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		return fmt.Errorf("failed to delete backup routine, error: %s", string(body))
 	}
 
 	return nil

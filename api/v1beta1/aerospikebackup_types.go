@@ -48,6 +48,7 @@ type OnDemand struct {
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
+	OnDemand *OnDemand `json:"onDemand,omitempty"`
 }
 
 //+kubebuilder:object:root=true

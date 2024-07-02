@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -284,9 +285,31 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		return err
 	}
 
+	// If there is a change in config hash, then restart the deployment pod
 	if r.aeroBackupService.Status.ConfigHash != "" && hash != r.aeroBackupService.Status.ConfigHash {
 		r.Log.Info("Config hash is updated, will result in rolling restart")
-		// TODO: Add pod restart flow
+
+		var podList corev1.PodList
+
+		labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name))
+		listOps := &client.ListOptions{
+			Namespace: r.aeroBackupService.Namespace, LabelSelector: labelSelector,
+		}
+
+		err = r.Client.List(context.TODO(), &podList, listOps)
+		if err != nil {
+			return err
+		}
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+
+			err = r.Client.Delete(context.TODO(), pod)
+			if err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 
@@ -298,7 +321,7 @@ func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService)
 }
 
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
-	labels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
+	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
 	svcConf, err := r.getServiceConfig()
@@ -319,16 +342,16 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.aeroBackupService.Name,
 			Namespace: r.aeroBackupService.Namespace,
-			Labels:    labels,
+			Labels:    svcLabels,
 		},
 		Spec: app.DeploymentSpec{
 			Replicas: func(replica int32) *int32 { return &replica }(1),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: svcLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: svcLabels,
 				},
 				Spec: corev1.PodSpec{
 					// TODO: Finalise on this. Who should create this SA?
