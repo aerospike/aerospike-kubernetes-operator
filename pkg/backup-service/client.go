@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -595,15 +596,15 @@ func (c *Client) GetFullBackupForRoutine(routineName string) ([]interface{}, err
 	return backups, nil
 }
 
-func (c *Client) ScheduleBackup(routineName string, delay int) error {
+func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error {
 	url, err := url2.Parse(c.API(fmt.Sprintf("/backups/schedule/%s", routineName)))
 	if err != nil {
 		return err
 	}
 
-	if delay > 0 {
+	if delay.Duration.Milliseconds() > 0 {
 		query := url.Query()
-		query.Add("delay", fmt.Sprintf("%d", delay))
+		query.Add("delay", fmt.Sprintf("%d", delay.Duration.Milliseconds()))
 		url.RawQuery = query.Encode()
 	}
 

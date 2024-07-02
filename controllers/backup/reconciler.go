@@ -276,7 +276,9 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 }
 
 func (r *SingleBackupReconciler) ScheduleOnDemandBackup() error {
-	if r.aeroBackup.Status.OnDemand != nil && r.aeroBackup.Spec.OnDemand.ID == r.aeroBackup.Status.OnDemand.ID {
+	// There can be only one on-demand backup allowed right now.
+	if len(r.aeroBackup.Status.OnDemand) > 0 &&
+		r.aeroBackup.Spec.OnDemand[0].ID == r.aeroBackup.Status.OnDemand[0].ID {
 		r.Log.Info("On-demand backup already scheduled",
 			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 		return nil
@@ -289,8 +291,8 @@ func (r *SingleBackupReconciler) ScheduleOnDemandBackup() error {
 		return err
 	}
 
-	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand.RoutineName,
-		r.aeroBackup.Spec.OnDemand.Delay); err != nil {
+	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand[0].RoutineName,
+		r.aeroBackup.Spec.OnDemand[0].Delay); err != nil {
 		r.Log.Error(err, "Failed to schedule on-demand backup")
 		return err
 	}
@@ -403,7 +405,7 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 	}
 
 	// Schedule on-demand backup if given
-	if r.aeroBackup.Spec.OnDemand != nil {
+	if len(r.aeroBackup.Spec.OnDemand) > 0 {
 		if err = r.ScheduleOnDemandBackup(); err != nil {
 			r.Log.Error(err, "Failed to schedule backup")
 			return err

@@ -51,16 +51,22 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
               onDemand:
                 description: OnDemand is the on demand backup configuration.
-                properties:
-                  delay:
-                    type: integer
-                  id:
-                    type: string
-                  routineName:
-                    type: string
-                required:
-                - routineName
-                type: object
+                items:
+                  properties:
+                    delay:
+                      description: Delay interval in milliseconds
+                      type: string
+                    id:
+                      description: On demand backup ID
+                      type: string
+                    routineName:
+                      description: Backup routine name
+                      type: string
+                  required:
+                  - routineName
+                  type: object
+                maxItems: 1
+                type: array
             required:
             - backupService
             - config
@@ -69,16 +75,21 @@ spec:
             description: AerospikeBackupStatus defines the observed state of AerospikeBackup
             properties:
               onDemand:
-                properties:
-                  delay:
-                    type: integer
-                  id:
-                    type: string
-                  routineName:
-                    type: string
-                required:
-                - routineName
-                type: object
+                items:
+                  properties:
+                    delay:
+                      description: Delay interval in milliseconds
+                      type: string
+                    id:
+                      description: On demand backup ID
+                      type: string
+                    routineName:
+                      description: Backup routine name
+                      type: string
+                  required:
+                  - routineName
+                  type: object
+                type: array
             type: object
         type: object
     served: true

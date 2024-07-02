@@ -53,6 +53,9 @@ spec:
                 description: Config is the configuration for the restore.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              pollingPeriod:
+                description: PollingPeriod is the polling period for restore service.
+                type: string
               type:
                 description: Type is the restore type
                 enum:

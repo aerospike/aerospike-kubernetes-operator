@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -41,12 +40,12 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return res.Result, nil
 	}
 
-	if err := r.CheckRestoreStatus(); err != nil {
+	if err := r.checkRestoreStatus(); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreInProgress {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -96,7 +95,7 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 	return common.ReconcileRequeueAfter(1)
 }
 
-func (r *SingleRestoreReconciler) CheckRestoreStatus() error {
+func (r *SingleRestoreReconciler) checkRestoreStatus() error {
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroRestore.Spec.BackupService)
 	if err != nil {
 		return err

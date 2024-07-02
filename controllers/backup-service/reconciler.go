@@ -474,7 +474,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 
 		err = r.Client.Create(context.TODO(), svc, common.CreateOption)
 		if err != nil {
-			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
+			return fmt.Errorf("failed to create Backup Service: %v", err)
 		}
 
 		return nil

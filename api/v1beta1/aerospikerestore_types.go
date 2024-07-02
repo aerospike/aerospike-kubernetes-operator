@@ -53,6 +53,10 @@ type AerospikeRestoreSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
 	// Config is the configuration for the restore.
 	Config runtime.RawExtension `json:"config"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
+	// PollingPeriod is the polling period for restore service.
+	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore
