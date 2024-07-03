@@ -622,7 +622,8 @@ func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error
 	return nil
 }
 
-func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string, request []byte) (*int64, error) {
+func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
+	request []byte) (jobID *int64, statusCode *int, err error) {
 	log.Info(fmt.Sprintf("Triggering %s restore", restoreType))
 
 	var url string
@@ -638,19 +639,19 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string, req
 		url = c.API("/restore/timestamp")
 
 	default:
-		return nil, fmt.Errorf("unsupported restore type")
+		return nil, nil, fmt.Errorf("unsupported restore type")
 	}
 
 	jsonBody, err := yaml.YAMLToJSON(request)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	bodyReader := bytes.NewReader(jsonBody)
 
 	resp, err := http.Post(url, "application/json", bodyReader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if resp.StatusCode != http.StatusAccepted {
@@ -660,28 +661,29 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string, req
 
 		body, rErr := io.ReadAll(resp.Body)
 		if rErr != nil {
-			return nil, rErr
+			return nil, &resp.StatusCode, rErr
 		}
 
-		return nil, fmt.Errorf("failed to trigger %s restore, error: %s", restoreType, string(body))
+		return nil, &resp.StatusCode,
+			fmt.Errorf("failed to trigger %s restore, error: %s", restoreType, string(body))
 	}
 
-	var jobID int64
+	jobID = new(int64)
 
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, &resp.StatusCode, err
 	}
 
-	if err := json.Unmarshal(body, &jobID); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, jobID); err != nil {
+		return nil, &resp.StatusCode, err
 	}
 
 	log.Info(fmt.Sprintf("Triggered %s restore", restoreType))
 
-	return &jobID, nil
+	return jobID, &resp.StatusCode, nil
 }
 
 func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
@@ -62,19 +64,22 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 		return common.ReconcileError(err)
 	}
 
-	var jobID *int64
+	var (
+		jobID      *int64
+		statusCode *int
+	)
 
 	switch r.aeroRestore.Spec.Type {
 	case asdbv1beta1.Full:
-		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Full),
+		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Full),
 			r.aeroRestore.Spec.Config.Raw)
 
 	case asdbv1beta1.Incremental:
-		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Incremental),
+		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Incremental),
 			r.aeroRestore.Spec.Config.Raw)
 
 	case asdbv1beta1.TimeStamp:
-		jobID, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.TimeStamp),
+		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.TimeStamp),
 			r.aeroRestore.Spec.Config.Raw)
 
 	default:
@@ -82,7 +87,21 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 	}
 
 	if err != nil {
-		common.ReconcileError(err)
+		if statusCode != nil && *statusCode == http.StatusBadRequest {
+			r.Log.Error(err, fmt.Sprintf("Failed to trigger restore with status code %d", *statusCode))
+
+			r.aeroRestore.Status.Phase = asdbv1beta1.AerospikeRestoreFailed
+
+			if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
+				r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
+				return common.ReconcileError(err)
+			}
+
+			// Don't requeue if the error is due to bad request.
+			return common.ReconcileError(reconcile.TerminalError(err))
+		}
+
+		return common.ReconcileError(err)
 	}
 
 	r.aeroRestore.Status.JobID = jobID

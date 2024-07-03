@@ -113,6 +113,9 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikeclusters.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikeclusters.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikebackupservices.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikebackupservices.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikebackups.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikebackups.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikerestores.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikerestores.asdb.aerospike.com.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

@@ -17,7 +17,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -34,7 +33,7 @@ type serviceConfig struct {
 
 var defaultServiceConfig = serviceConfig{
 	portInfo: map[string]int32{
-		"http": 8080,
+		common.HTTPKey: 8080,
 	},
 	contextPath: "/",
 }
@@ -50,23 +49,6 @@ type SingleBackupServiceReconciler struct {
 }
 
 func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr error) {
-	// Check DeletionTimestamp to see if the backup is being deleted
-	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
-		if err := r.removeFinalizer(finalizerName); err != nil {
-			r.Log.Error(err, "Failed to remove finalizer")
-			return reconcile.Result{}, err
-		}
-
-		// Stop reconciliation as the cluster is being deleted
-		return reconcile.Result{}, nil
-	}
-
-	// The cluster is not being deleted, add finalizer if not added already
-	if err := r.addFinalizer(finalizerName); err != nil {
-		r.Log.Error(err, "Failed to add finalizer")
-		return reconcile.Result{}, err
-	}
-
 	if err := r.reconcileConfigMap(); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -84,40 +66,6 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *SingleBackupServiceReconciler) addFinalizer(finalizerName string) error {
-	// The object is not being deleted, so if it does not have our finalizer,
-	// then lets add the finalizer and update the object. This is equivalent
-	// registering our finalizer.
-	if !utils.ContainsString(
-		r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
-	) {
-		r.aeroBackupService.ObjectMeta.Finalizers = append(
-			r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
-		)
-
-		if err := r.Client.Update(context.TODO(), r.aeroBackupService); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *SingleBackupServiceReconciler) removeFinalizer(finalizerName string) error {
-	if utils.ContainsString(r.aeroBackupService.ObjectMeta.Finalizers, finalizerName) {
-		// Remove finalizer from the list
-		r.aeroBackupService.ObjectMeta.Finalizers = utils.RemoveString(
-			r.aeroBackupService.ObjectMeta.Finalizers, finalizerName,
-		)
-
-		if err := r.Client.Update(context.TODO(), r.aeroBackupService); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
@@ -187,8 +135,8 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 	}
 
 	currentDataMap["service"] = desiredDataMap["service"]
-	currentDataMap["backup-policies"] = desiredDataMap["backup-policies"]
-	currentDataMap["storage"] = desiredDataMap["storage"]
+	currentDataMap[common.BackupPoliciesKey] = desiredDataMap[common.BackupPoliciesKey]
+	currentDataMap[common.StorageKey] = desiredDataMap[common.StorageKey]
 	currentDataMap["secret-agent"] = desiredDataMap["secret-agent"]
 
 	updatedConfig, err := yaml.Marshal(currentDataMap)
@@ -233,7 +181,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return err
 		}
 
-		r.Log.Info("Create Backup Service Deployment",
+		r.Log.Info("Create Backup Service deployment",
 			"name", getBackupServiceName(r.aeroBackupService))
 
 		deployment, err := r.getDeploymentObject()
@@ -324,7 +272,7 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
-	svcConf, err := r.getServiceConfig()
+	svcConf, err := r.getBackupServiceConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -355,10 +303,10 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 				},
 				Spec: corev1.PodSpec{
 					// TODO: Finalise on this. Who should create this SA?
-					ServiceAccountName: "aerospike-backup-service",
+					ServiceAccountName: common.AerospikeBackupService,
 					Containers: []corev1.Container{
 						{
-							Name:            "backup-service",
+							Name:            common.AerospikeBackupService,
 							Image:           r.aeroBackupService.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    volumeMounts,
@@ -366,6 +314,9 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 							Ports:           containerPorts,
 						},
 					},
+					// Init-container is used to copy configMap data to work-dir(emptyDir).
+					// There is a limitation of read-only file-system for mounted configMap volumes
+					// Remove this init-container when backup-service start supporting hot reload
 					InitContainers: []corev1.Container{
 						{
 							Name:  "init-backup-service",
@@ -414,6 +365,7 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 		})
 	}
 
+	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
 		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", BackupConfigYAML),
@@ -432,7 +384,8 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 		},
 	})
 
-	// EmptyDir for init-container to copy configMap to
+	// EmptyDir for init-container to copy configMap data to work-dir
+	// Remove this volume when backup-service starts supporting hot reload
 	volumes = append(volumes, corev1.Volume{
 		Name: "backup-service-config",
 		VolumeSource: corev1.VolumeSource{
@@ -484,12 +437,25 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 		"Backup Service already exist. Updating existing service if required",
 		"name", getBackupServiceName(r.aeroBackupService),
 	)
-	// TODO: Add update flow
+
+	svc, err := r.getServiceObject()
+	if err != nil {
+		return err
+	}
+
+	service.Spec = svc.Spec
+
+	if err = r.Client.Update(context.TODO(), &service, common.UpdateOption); err != nil {
+		return fmt.Errorf("failed to update Backup service: %v", err)
+	}
+
+	r.Log.Info("Updated Backup Service", "name", getBackupServiceName(r.aeroBackupService))
+
 	return nil
 }
 
 func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, error) {
-	svcConfig, err := r.getServiceConfig()
+	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -510,42 +476,43 @@ func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, err
 			Labels:    utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
 		},
 		Spec: corev1.ServiceSpec{
-			Type:     r.aeroBackupService.Spec.Service.Type,
 			Selector: utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
 			Ports:    servicePort,
 		},
 	}
 
+	if r.aeroBackupService.Spec.Service != nil {
+		svc.Spec.Type = r.aeroBackupService.Spec.Service.Type
+	}
+
 	return svc, nil
 }
 
-func (r *SingleBackupServiceReconciler) getServiceConfig() (*serviceConfig, error) {
+func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig, error) {
 	config := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
 		return nil, err
 	}
 
-	if _, ok := config["service"]; !ok {
+	if _, ok := config[common.ServiceKey]; !ok {
 		r.Log.Info("Service config not found")
 		return &defaultServiceConfig, nil
 	}
 
-	svc, ok := config["service"].(map[string]interface{})
+	svc, ok := config[common.ServiceKey].(map[string]interface{})
 	if !ok {
-		r.Log.Info("Service assertion failed")
-		return nil, fmt.Errorf("service config not found")
+		return nil, fmt.Errorf("service config is not in correct format")
 	}
 
-	if _, ok = svc["http"]; !ok {
+	if _, ok = svc[common.HTTPKey]; !ok {
 		r.Log.Info("HTTP config not found")
 		return &defaultServiceConfig, nil
 	}
 
-	httpConf, ok := svc["http"].(map[string]interface{})
+	httpConf, ok := svc[common.HTTPKey].(map[string]interface{})
 	if !ok {
-		r.Log.Info("HTTP assertion failed")
-		return nil, fmt.Errorf("http config not found")
+		return nil, fmt.Errorf("http config is not in correct format")
 	}
 
 	var svcConfig serviceConfig
@@ -554,7 +521,7 @@ func (r *SingleBackupServiceReconciler) getServiceConfig() (*serviceConfig, erro
 	if !ok {
 		svcConfig.portInfo = defaultServiceConfig.portInfo
 	} else {
-		svcConfig.portInfo = map[string]int32{"http": int32(port.(float64))}
+		svcConfig.portInfo = map[string]int32{common.HTTPKey: int32(port.(float64))}
 	}
 
 	ctxPath, ok := httpConf["context-path"]
@@ -568,7 +535,7 @@ func (r *SingleBackupServiceReconciler) getServiceConfig() (*serviceConfig, erro
 }
 
 func (r *SingleBackupServiceReconciler) updateStatus() error {
-	svcConfig, err := r.getServiceConfig()
+	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
 		return err
 	}
@@ -579,7 +546,7 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 	}
 
 	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
-	r.aeroBackupService.Status.Port = svcConfig.portInfo["http"]
+	r.aeroBackupService.Status.Port = svcConfig.portInfo[common.HTTPKey]
 	r.aeroBackupService.Status.ConfigHash = hash
 
 	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))

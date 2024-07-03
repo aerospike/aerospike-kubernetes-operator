@@ -41,6 +41,8 @@ const (
 
 // AerospikeRestoreSpec defines the desired state of AerospikeRestore
 // +k8s:openapi-gen=true
+//
+//nolint:govet // for readability
 type AerospikeRestoreSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
 	// BackupService is the backup service reference.
@@ -61,11 +63,14 @@ type AerospikeRestoreSpec struct {
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore
 type AerospikeRestoreStatus struct {
+	// JobID is the restore operation job id.
 	JobID *int64 `json:"job-id,omitempty"`
+
+	// RestoreResult is the result of the restore operation.
+	RestoreResult runtime.RawExtension `json:"restoreResult,omitempty"`
+
 	// Phase denotes the current phase of Aerospike restore operation.
 	Phase AerospikeRestorePhase `json:"phase,omitempty"`
-
-	RestoreResult runtime.RawExtension `json:"restoreResult,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -73,6 +78,8 @@ type AerospikeRestoreStatus struct {
 //+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.restoreResult.status`
 
 // AerospikeRestore is the Schema for the aerospikerestores API
+//
+//nolint:govet // auto-generated
 type AerospikeRestore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -24,12 +24,38 @@ spec:
       displayName: Aerospike Backup
       kind: AerospikeBackup
       name: aerospikebackups.asdb.aerospike.com
+      specDescriptors:
+      - description: BackupService is the backup service reference.
+        displayName: Backup Service
+        path: backupService
+      - description: Config is the configuration for the backup.
+        displayName: Backup Config
+        path: config
+      - description: OnDemand is the on demand backup configuration.
+        displayName: On Demand
+        path: onDemand
       version: v1beta1
     - description: AerospikeBackupService is the Schema for the aerospikebackupservices
         API
       displayName: Aerospike Backup Service
       kind: AerospikeBackupService
       name: aerospikebackupservices.asdb.aerospike.com
+      specDescriptors:
+      - description: Config is the configuration for the backup service.
+        displayName: Backup Service Config
+        path: config
+      - description: Image is the image for the backup service.
+        displayName: Backup Service Image
+        path: image
+      - description: Resources is the resource requirements for the backup service.
+        displayName: Resources
+        path: resources
+      - description: SecretMounts is the list of secret to be mounted in the backup
+          service.
+        displayName: Backup Service Volume
+        path: secrets
+      - displayName: Backup Service
+        path: service
       version: v1beta1
     - description: AerospikeCluster is the schema for the AerospikeCluster API
       displayName: Aerospike Cluster
@@ -179,10 +205,15 @@ spec:
       kind: AerospikeRestore
       name: aerospikerestores.asdb.aerospike.com
       specDescriptors:
-      - displayName: Backup Service
+      - description: BackupService is the backup service reference.
+        displayName: Backup Service
         path: backupService
-      - displayName: Restore Config
+      - description: Config is the configuration for the restore.
+        displayName: Restore Config
         path: config
+      - description: PollingPeriod is the polling period for restore service.
+        displayName: Restore Service Polling Period
+        path: pollingPeriod
       version: v1beta1
   description: |
     The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes. The operator allows you to deploy multi-node Aerospike clusters, recover automatically from node failures, scale up or down automatically as load changes, ensure nodes are evenly split across racks or zones, automatically update to new versions of Aerospike and manage configuration changes in your clusters.

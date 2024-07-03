@@ -27,26 +27,34 @@ type AerospikeBackupSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
 	// BackupService is the backup service reference.
 	BackupService *BackupService `json:"backupService"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
 	// Config is the configuration for the backup.
 	Config runtime.RawExtension `json:"config"`
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand"
 	// OnDemand is the on demand backup configuration.
 	// +kubebuilder:validation:MaxItems:=1
 	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 }
 
 type BackupService struct {
-	Name      string `json:"name"`
+	// Backup service name
+	Name string `json:"name"`
+
+	// Backup service namespace
 	Namespace string `json:"namespace"`
 }
 
 type OnDemandSpec struct {
 	// On demand backup ID
-	ID string `json:"id,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	ID string `json:"id"`
+
 	// Backup routine name
 	RoutineName string `json:"routineName"`
-	// Delay interval in milliseconds
+
+	// Delay interval before starting the backup.
 	Delay metav1.Duration `json:"delay,omitempty"`
 }
 

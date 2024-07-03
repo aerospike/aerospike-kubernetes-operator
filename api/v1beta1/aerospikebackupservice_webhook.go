@@ -84,5 +84,18 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 		return err
 	}
 
+	// Add empty placeholders for missing config sections. This is required for validation to work.
+	if config.ServiceConfig == nil {
+		config.ServiceConfig = &model.BackupServiceConfig{}
+	}
+
+	if config.ServiceConfig.HTTPServer == nil {
+		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+	}
+
+	if config.ServiceConfig.Logger == nil {
+		config.ServiceConfig.Logger = &model.LoggerConfig{}
+	}
+
 	return config.Validate()
 }
