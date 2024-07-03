@@ -32,13 +32,11 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
-const finalizerName = "asdb.aerospike.com/backup-finalizer"
-
 // AerospikeBackupServiceReconciler reconciles a AerospikeBackupService object
 type AerospikeBackupServiceReconciler struct {
-	client.Client
-	Log    logr.Logger
 	Scheme *k8sruntime.Scheme
+	client.Client
+	Log logr.Logger
 }
 
 //nolint:lll // for readability

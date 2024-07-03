@@ -27,16 +27,23 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
+//
+//nolint:govet // for readability
 type AerospikeBackupServiceSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Image"
 	// Image is the image for the backup service.
 	Image string `json:"image"`
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config"
 	// Config is the configuration for the backup service.
 	Config runtime.RawExtension `json:"config"`
 
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
+	// Resources is the resource requirements for the backup service.
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Volume"
+	// SecretMounts is the list of secret to be mounted in the backup service.
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
@@ -45,9 +52,14 @@ type AerospikeBackupServiceSpec struct {
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
 type AerospikeBackupServiceStatus struct {
+	// Backup Service API context path
 	ContextPath string `json:"contextPath"`
-	ConfigHash  string `json:"configHash"`
-	Port        int32  `json:"port"`
+
+	// Backup service config hash
+	ConfigHash string `json:"configHash"`
+
+	// Backup service listening port
+	Port int32 `json:"port"`
 }
 
 //+kubebuilder:object:root=true

@@ -143,39 +143,39 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	if _, ok := cmDataMap["aerospike-clusters"]; !ok {
-		cmDataMap["aerospike-clusters"] = make(map[string]interface{})
+	if _, ok := cmDataMap[common.AerospikeClustersKey]; !ok {
+		cmDataMap[common.AerospikeClustersKey] = make(map[string]interface{})
 	}
 
-	clusterMap, ok := cmDataMap["aerospike-clusters"].(map[string]interface{})
+	clusterMap, ok := cmDataMap[common.AerospikeClustersKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("aerospike-clusters is not a map")
 	}
 
-	newCluster := backupDataMap["aerospike-cluster"].(map[string]interface{})
+	newCluster := backupDataMap[common.AerospikeClusterKey].(map[string]interface{})
 
 	for name, cluster := range newCluster {
 		clusterMap[name] = cluster
 	}
 
-	cmDataMap["aerospike-clusters"] = clusterMap
+	cmDataMap[common.AerospikeClustersKey] = clusterMap
 
-	if _, ok = cmDataMap["backup-routines"]; !ok {
-		cmDataMap["backup-routines"] = make(map[string]interface{})
+	if _, ok = cmDataMap[common.BackupRoutinesKey]; !ok {
+		cmDataMap[common.BackupRoutinesKey] = make(map[string]interface{})
 	}
 
-	routineMap, ok := cmDataMap["backup-routines"].(map[string]interface{})
+	routineMap, ok := cmDataMap[common.BackupRoutinesKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("backup-routines is not a map")
 	}
 
-	newRoutines := backupDataMap["backup-routines"].(map[string]interface{})
+	newRoutines := backupDataMap[common.BackupRoutinesKey].(map[string]interface{})
 
 	for name, routine := range newRoutines {
 		routineMap[name] = routine
 	}
 
-	cmDataMap["backup-routines"] = routineMap
+	cmDataMap[common.BackupRoutinesKey] = routineMap
 
 	updatedConfig, err := yaml.Marshal(cmDataMap)
 	if err != nil {
@@ -231,25 +231,25 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 		return err
 	}
 
-	if clusterIface, ok := cmDataMap["aerospike-clusters"]; ok {
+	if clusterIface, ok := cmDataMap[common.AerospikeClustersKey]; ok {
 		if clusterMap, ok := clusterIface.(map[string]interface{}); ok {
-			currentCluster := backupDataMap["aerospike-cluster"].(map[string]interface{})
+			currentCluster := backupDataMap[common.AerospikeClusterKey].(map[string]interface{})
 			for name := range currentCluster {
 				delete(clusterMap, name)
 			}
 
-			cmDataMap["aerospike-clusters"] = clusterMap
+			cmDataMap[common.AerospikeClustersKey] = clusterMap
 		}
 	}
 
-	if routineIface, ok := cmDataMap["backup-routines"]; ok {
+	if routineIface, ok := cmDataMap[common.BackupRoutinesKey]; ok {
 		if routineMap, ok := routineIface.(map[string]interface{}); ok {
-			currentRoutines := backupDataMap["backup-routines"].(map[string]interface{})
+			currentRoutines := backupDataMap[common.BackupRoutinesKey].(map[string]interface{})
 			for name := range currentRoutines {
 				delete(routineMap, name)
 			}
 
-			cmDataMap["backup-routines"] = routineMap
+			cmDataMap[common.BackupRoutinesKey] = routineMap
 		}
 	}
 
@@ -324,10 +324,10 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 		return err
 	}
 
-	if backupConfigMap["aerospike-cluster"] != nil {
-		cluster := backupConfigMap["aerospike-cluster"].(map[string]interface{})
+	if backupConfigMap[common.AerospikeClusterKey] != nil {
+		cluster := backupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
 
-		currentClusters, gErr := common.GetConfigSection(config, "aerospike-clusters")
+		currentClusters, gErr := common.GetConfigSection(config, common.AerospikeClustersKey)
 		if gErr != nil {
 			return gErr
 		}
@@ -347,10 +347,10 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 		}
 	}
 
-	if backupConfigMap["backup-routines"] != nil {
-		routines := backupConfigMap["backup-routines"].(map[string]interface{})
+	if backupConfigMap[common.BackupRoutinesKey] != nil {
+		routines := backupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 
-		currentRoutines, gErr := common.GetConfigSection(config, "backup-routines")
+		currentRoutines, gErr := common.GetConfigSection(config, common.BackupRoutinesKey)
 		if gErr != nil {
 			return gErr
 		}
@@ -369,34 +369,6 @@ func (r *SingleBackupReconciler) reconcileBackup() error {
 			}
 		}
 	}
-
-	// if r.aeroBackup.Spec.Config.BackupPolicies != nil {
-	//	for name, policy := range r.aeroBackup.Spec.Config.BackupPolicies {
-	//		if _, ok := config.BackupPolicies[name]; ok {
-	//			if err := serviceClient.PutBackupPolicy(name, policy); err != nil {
-	//				return err
-	//			}
-	//		} else {
-	//			if err := serviceClient.UpdateBackupPolicy(name, policy); err != nil {
-	//				return err
-	//			}
-	//		}
-	//	}
-	// }
-
-	// if r.aeroBackup.Spec.Config.Storage != nil {
-	//	for name, storage := range r.aeroBackup.Spec.Config.Storage {
-	//		if _, ok := config.Storage[name]; ok {
-	//			if err := serviceClient.PutStorage(name, storage); err != nil {
-	//				return err
-	//			}
-	//		} else {
-	//			if err := serviceClient.UpdateStorage(name, storage); err != nil {
-	//				return err
-	//			}
-	//		}
-	//	}
-	// }
 
 	// Apply the updated configuration for the changes to take effect
 	err = serviceClient.ApplyConfig()
@@ -433,10 +405,10 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 		return err
 	}
 
-	if backupConfigMap["backup-routines"] != nil {
-		routines := backupConfigMap["backup-routines"].(map[string]interface{})
+	if backupConfigMap[common.BackupRoutinesKey] != nil {
+		routines := backupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 
-		currentRoutines, gErr := common.GetConfigSection(config, "backup-routines")
+		currentRoutines, gErr := common.GetConfigSection(config, common.BackupRoutinesKey)
 		if gErr != nil {
 			return gErr
 		}
@@ -451,10 +423,10 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 		}
 	}
 
-	if backupConfigMap["aerospike-cluster"] != nil {
-		cluster := backupConfigMap["aerospike-cluster"].(map[string]interface{})
+	if backupConfigMap[common.AerospikeClusterKey] != nil {
+		cluster := backupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
 
-		currentClusters, gErr := common.GetConfigSection(config, "aerospike-clusters")
+		currentClusters, gErr := common.GetConfigSection(config, common.AerospikeClustersKey)
 		if gErr != nil {
 			return gErr
 		}

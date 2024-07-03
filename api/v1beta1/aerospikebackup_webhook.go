@@ -19,18 +19,23 @@ package v1beta1
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/types"
+	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
+
+	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 // log is for logging in this package.
@@ -41,9 +46,6 @@ func (r *AerospikeBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		For(r).
 		Complete()
 }
-
-//nolint:lll // for readability
-//+kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=maerospikebackup.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &AerospikeBackup{}
 
@@ -61,6 +63,10 @@ var _ webhook.Validator = &AerospikeBackup{}
 func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 	aerospikebackuplog.Info("validate create", "name", r.Name)
 
+	if len(r.Spec.OnDemand) != 0 && r.Spec.Config.Raw != nil {
+		return nil, fmt.Errorf("onDemand and backup config cannot be specified together while creating backup")
+	}
+
 	if err := r.validateBackupConfig(); err != nil {
 		return nil, err
 	}
@@ -69,11 +75,28 @@ func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeBackup) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
+func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	aerospikebackuplog.Info("validate update", "name", r.Name)
+
+	oldObj := old.(*AerospikeBackup)
 
 	if err := r.validateBackupConfig(); err != nil {
 		return nil, err
+	}
+
+	if len(r.Spec.OnDemand) > 0 && len(oldObj.Spec.OnDemand) > 0 {
+		// Check if onDemand backup spec is updated
+		if r.Spec.OnDemand[0].ID == oldObj.Spec.OnDemand[0].ID &&
+			!reflect.DeepEqual(r.Spec.OnDemand[0], oldObj.Spec.OnDemand[0]) {
+			return nil, fmt.Errorf("onDemand backup cannot be updated")
+		}
+
+		// Check if previous onDemand backup is completed before allowing new onDemand backup
+		if r.Spec.OnDemand[0].ID != oldObj.Spec.OnDemand[0].ID && (len(r.Status.OnDemand) == 0 ||
+			r.Status.OnDemand[0].ID != oldObj.Spec.OnDemand[0].ID) {
+			return nil,
+				fmt.Errorf("can not add new onDemand backup when previous onDemand backup is not completed")
+		}
 	}
 
 	return nil, nil
@@ -113,11 +136,11 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return err
 	}
 
-	if _, ok := configMap["aerospike-cluster"]; !ok {
+	if _, ok := configMap[common.AerospikeClusterKey]; !ok {
 		return fmt.Errorf("aerospike-cluster field is required in config")
 	}
 
-	cluster, ok := configMap["aerospike-cluster"].(map[string]interface{})
+	cluster, ok := configMap[common.AerospikeClusterKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("aerospike-cluster field is not in the right format")
 	}
@@ -141,11 +164,11 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		config.AerospikeClusters[name] = aeroCluster
 	}
 
-	if _, ok = configMap["backup-routines"]; !ok {
+	if _, ok = configMap[common.BackupRoutinesKey]; !ok {
 		return fmt.Errorf("backup-routines field is required in config")
 	}
 
-	routines, ok := configMap["backup-routines"].(map[string]interface{})
+	routines, ok := configMap[common.BackupRoutinesKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("backup-routines field is not in the right format")
 	}
@@ -169,14 +192,44 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		config.BackupRoutines[name] = routine
 	}
 
-	return config.Validate()
+	// Add empty placeholders for missing config sections. This is required for validation to work.
+	if config.ServiceConfig == nil {
+		config.ServiceConfig = &model.BackupServiceConfig{}
+	}
+
+	if config.ServiceConfig.HTTPServer == nil {
+		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+	}
+
+	if config.ServiceConfig.Logger == nil {
+		config.ServiceConfig.Logger = &model.LoggerConfig{}
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil
+	}
+
+	// Validate on-demand backup
+	if len(r.Spec.OnDemand) > 0 {
+		if _, ok = config.BackupRoutines[r.Spec.OnDemand[0].RoutineName]; !ok {
+			return fmt.Errorf("backup routine %s not found", r.Spec.OnDemand[0].RoutineName)
+		}
+	}
+
+	return nil
 }
 
 func getK8sClient() (client.Client, error) {
 	restConfig := ctrl.GetConfigOrDie()
 
+	scheme := runtime.NewScheme()
+
+	utilRuntime.Must(asdbv1.AddToScheme(scheme))
+	utilRuntime.Must(clientGoScheme.AddToScheme(scheme))
+	utilRuntime.Must(AddToScheme(scheme))
+
 	cl, err := client.New(restConfig, client.Options{
-		Scheme: clientGoScheme.Scheme,
+		Scheme: scheme,
 	})
 	if err != nil {
 		return nil, err
