@@ -37,6 +37,10 @@ resources:
   kind: AerospikeBackup
   path: github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1
   version: v1beta1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -46,6 +50,10 @@ resources:
   kind: AerospikeRestore
   path: github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1
   version: v1beta1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -55,4 +63,8 @@ resources:
   kind: AerospikeBackupService
   path: github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1
   version: v1beta1
+  webhooks:
+    defaulting: false
+    validation: true
+    webhookVersion: v1
 version: "3"

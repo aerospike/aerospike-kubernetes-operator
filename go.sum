@@ -1,3 +1,5 @@
+github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240604175608-042db47ee091 h1:eY5MT18Ocf5cCHohbZ1qcdophb/aOqr066lwSM3zGPk=
+github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240604175608-042db47ee091/go.mod h1:CMA+bHRLvL/Kj/aLlbu95iNnlPnvP67q62X81b5e2G4=
 github.com/aerospike/aerospike-client-go/v7 v7.4.0 h1:g8/7v8RHhQhTArhW3C7Au7o+u8j8x5eySZL6MXfpHKU=
 github.com/aerospike/aerospike-client-go/v7 v7.4.0/go.mod h1:pPKnWiS8VDJcH4IeB1b8SA2TWnkjcVLHwAAJ+BHfGK8=
 github.com/aerospike/aerospike-management-lib v1.4.0 h1:wT0l3kwzXv5DV5Cd+hD0BQq3hjSIyaPX1HaUb1304TI=
@@ -6,6 +8,8 @@ github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPd
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d h1:Byv0BzEl3/e6D5CLfI0j/7hiIEtvGVFPCZ7Ei2oq8iQ=
 github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
+github.com/aws/smithy-go v1.20.2 h1:tbp628ireGtzcHDDmLT/6ADHidqnwgF57XOXZe6tp4Q=
+github.com/aws/smithy-go v1.20.2/go.mod h1:krry+ya/rV9RDcV/Q16kpu6ypI4K2czasz0NC3qS14E=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -111,6 +115,8 @@ github.com/prometheus/common v0.48.0 h1:QO8U2CdOzSn1BBsmXJXduaaW+dY/5QLjfB8svtSz
 github.com/prometheus/common v0.48.0/go.mod h1:0/KsvlIEfPQCQ5I2iNSAWKPZziNCvRs5EC6ILDTlAPc=
 github.com/prometheus/procfs v0.12.0 h1:jluTpSng7V9hY0O2R9DzzJHYb2xULk9VTR1V1R/k6Bo=
 github.com/prometheus/procfs v0.12.0/go.mod h1:pcuDEFsWDnvcgNzo4EEweacyhjeA9Zk3cnaOZAZEfOo=
+github.com/reugn/go-quartz v0.11.2 h1:+jc54Ji06n/D/endEPmc+CuG/Jc8466nda1oxtFRrks=
+github.com/reugn/go-quartz v0.11.2/go.mod h1:no4ktgYbAAuY0E1SchR8cTx1LF4jYIzdgaQhzRPSkpk=
 github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
