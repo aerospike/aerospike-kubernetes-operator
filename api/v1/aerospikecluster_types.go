@@ -142,11 +142,11 @@ const (
 )
 
 type OperationSpec struct {
-	// OperationKind is the type of operation to be performed on the Aerospike cluster.
+	// Kind is the type of operation to be performed on the Aerospike cluster.
 	// +kubebuilder:validation:Enum=WarmRestart;PodRestart
 	Kind OperationKind `json:"kind"`
 	// +kubebuilder:validation:MaxLength=20
-	// +optional
+	// +kubebuilder:validation:MinLength=1
 	ID      string   `json:"id"`
 	PodList []string `json:"podList,omitempty"`
 }

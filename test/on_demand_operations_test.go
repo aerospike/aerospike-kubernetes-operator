@@ -55,6 +55,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
 							},
 						}
 
@@ -91,6 +92,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationPodRestart,
+								ID:   "1",
 							},
 						}
 
@@ -115,6 +117,60 @@ var _ = Describe(
 				)
 
 				It(
+					"Should be able to replace/remove the running operations", func() {
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						oldPodIDs, err := getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						operations := []asdbv1.OperationSpec{
+							{
+								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
+							},
+						}
+
+						aeroCluster.Spec.Operations = operations
+
+						err = k8sClient.Update(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Operations[0].Kind = asdbv1.OperationPodRestart
+						aeroCluster.Spec.Operations[0].ID = "2"
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						operationTypeMap := map[string]asdbv1.OperationKind{
+							"operations-1-0": asdbv1.OperationPodRestart,
+							"operations-1-1": asdbv1.OperationPodRestart,
+						}
+
+						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
+						Expect(err).ToNot(HaveOccurred())
+
+						// Remove operations
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Operations = nil
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
 					"Should execute operations on selected pods with dynamic config change", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -127,6 +183,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind:    asdbv1.OperationPodRestart,
+								ID:      "1",
 								PodList: []string{"operations-1-0"},
 							},
 						}
@@ -154,7 +211,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should execute podRestart operations on all pods along with scale down", func() {
+					"Should execute on-demand podRestart operations on all pods along with scale down", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -176,6 +233,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationPodRestart,
+								ID:   "1",
 							},
 						}
 
@@ -201,7 +259,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should execute podRestart operations on all pods along with upgrade", func() {
+					"Should execute podRestart if podSpec is changed with on-demand warm restart", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -210,14 +268,15 @@ var _ = Describe(
 						oldPodIDs, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
 							},
 						}
 
 						aeroCluster.Spec.Operations = operations
-						aeroCluster.Spec.Image = nextImage
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -251,9 +310,11 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
 							},
 							{
 								Kind: asdbv1.OperationPodRestart,
+								ID:   "2",
 							},
 						}
 
@@ -274,6 +335,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind:    asdbv1.OperationWarmRestart,
+								ID:      "1",
 								PodList: []string{"operations-1-0", "invalid-pod"},
 							},
 						}
@@ -295,6 +357,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind:    asdbv1.OperationWarmRestart,
+								ID:      "1",
 								PodList: []string{"operations-1-0"},
 							},
 						}
@@ -323,6 +386,7 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind:    asdbv1.OperationWarmRestart,
+								ID:      "1",
 								PodList: []string{"operations-1-0"},
 							},
 						}
@@ -351,12 +415,36 @@ var _ = Describe(
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind:    asdbv1.OperationWarmRestart,
+								ID:      "1",
 								PodList: []string{"operations-1-0"},
 							},
 						}
 
 						aeroCluster.Spec.Operations = operations
 						aeroCluster.Spec.Size++
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+					},
+				)
+
+				It(
+					"should fail any operation along with cluster upgrade", func() {
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						operations := []asdbv1.OperationSpec{
+							{
+								Kind:    asdbv1.OperationWarmRestart,
+								ID:      "1",
+								PodList: []string{"operations-1-0"},
+							},
+						}
+
+						aeroCluster.Spec.Operations = operations
+						aeroCluster.Spec.Image = nextImage
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())

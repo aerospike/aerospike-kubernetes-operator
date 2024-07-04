@@ -319,10 +319,11 @@ spec:
                   properties:
                     id:
                       maxLength: 20
+                      minLength: 1
                       type: string
                     kind:
-                      description: OperationKind is the type of operation to be performed
-                        on the Aerospike cluster.
+                      description: Kind is the type of operation to be performed on
+                        the Aerospike cluster.
                       enum:
                       - WarmRestart
                       - PodRestart
@@ -332,6 +333,7 @@ spec:
                         type: string
                       type: array
                   required:
+                  - id
                   - kind
                   type: object
                 maxItems: 1
@@ -9682,10 +9684,11 @@ spec:
                   properties:
                     id:
                       maxLength: 20
+                      minLength: 1
                       type: string
                     kind:
-                      description: OperationKind is the type of operation to be performed
-                        on the Aerospike cluster.
+                      description: Kind is the type of operation to be performed on
+                        the Aerospike cluster.
                       enum:
                       - WarmRestart
                       - PodRestart
@@ -9695,6 +9698,7 @@ spec:
                         type: string
                       type: array
                   required:
+                  - id
                   - kind
                   type: object
                 type: array

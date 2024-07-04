@@ -118,7 +118,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 	}
 
 	if err := validateOperationUpdate(
-		old.Spec.Operations, c.Spec.Operations,
+		&old.Spec, &c.Spec, &c.Status,
 	); err != nil {
 		return nil, err
 	}
@@ -281,20 +281,6 @@ func (c *AerospikeCluster) validateOperation() error {
 
 	if c.Status.AerospikeConfig == nil {
 		return fmt.Errorf("operation cannot be added during aerospike cluster creation")
-	}
-
-	allPodNames := GetAllPodNames(c.Status.Pods)
-
-	podSet := sets.New(c.Spec.Operations[0].PodList...)
-	if !allPodNames.IsSuperset(podSet) {
-		return fmt.Errorf("invalid pod names in operation %v", podSet.Difference(allPodNames).UnsortedList())
-	}
-
-	// Don't allow any operation along with cluster scale up or racks added or removed
-	// New pods won't be available for operation
-	if !reflect.DeepEqual(c.Spec.Operations, c.Status.Operations) &&
-		(c.Spec.Size > c.Status.Size || len(c.Spec.RackConfig.Racks) != len(c.Status.RackConfig.Racks)) {
-		return fmt.Errorf("cannot perform any on-demand operation along with cluster scale-up or rack addition/removal")
 	}
 
 	return nil
@@ -2399,16 +2385,47 @@ func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {
 	return nil
 }
 
-func validateOperationUpdate(oldOps, newOps []OperationSpec) error {
-	if len(oldOps) == 0 || len(newOps) == 0 {
+func validateOperationUpdate(oldSpec, newSpec *AerospikeClusterSpec, status *AerospikeClusterStatus) error {
+	if len(newSpec.Operations) == 0 {
 		return nil
 	}
 
-	oldOp := oldOps[0]
-	newOp := newOps[0]
+	newOp := &newSpec.Operations[0]
 
-	if oldOp.ID == newOp.ID && !reflect.DeepEqual(oldOp, newOp) {
-		return fmt.Errorf("operation %s cannot be updated", newOp.ID)
+	var oldOp *OperationSpec
+
+	if len(oldSpec.Operations) != 0 {
+		oldOp = &oldSpec.Operations[0]
+	}
+
+	if !reflect.DeepEqual(oldOp, newOp) {
+		if oldOp != nil && oldOp.ID == newOp.ID {
+			return fmt.Errorf("operation %s cannot be updated", newOp.ID)
+		}
+	}
+
+	allPodNames := GetAllPodNames(status.Pods)
+
+	podSet := sets.New(newSpec.Operations[0].PodList...)
+	if !allPodNames.IsSuperset(podSet) {
+		return fmt.Errorf("invalid pod names in operation %v", podSet.Difference(allPodNames).UnsortedList())
+	}
+
+	// Don't allow any on-demand operation along with these cluster change:
+	// 1- scale up
+	// 2- racks added or removed
+	// 3- image update
+	// New pods won't be available for operation
+	if !reflect.DeepEqual(newSpec.Operations, status.Operations) {
+		switch {
+		case newSpec.Size > status.Size:
+			return fmt.Errorf("cannot perform any on-demand operation along with cluster scale-up")
+		case len(newSpec.RackConfig.Racks) != len(status.RackConfig.Racks) ||
+			len(newSpec.RackConfig.Racks) != len(oldSpec.RackConfig.Racks):
+			return fmt.Errorf("cannot perform any on-demand operation along with rack addition/removal")
+		case newSpec.Image != status.Image || newSpec.Image != oldSpec.Image:
+			return fmt.Errorf("cannot perform any on-demand operation along with image update")
+		}
 	}
 
 	return nil

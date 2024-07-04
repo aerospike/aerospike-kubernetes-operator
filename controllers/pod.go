@@ -1536,22 +1536,36 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 			if len(statusOp.PodList) != 0 {
 				statusPods := sets.New(statusOp.PodList...)
 
-				if statusOp.Kind == asdbv1.OperationWarmRestart && quickRestartsSet != nil {
-					statusOp.PodList = statusPods.Union(quickRestartsSet.Intersection(specPods)).UnsortedList()
+				if statusOp.Kind == asdbv1.OperationWarmRestart {
+					if quickRestartsSet != nil {
+						statusOp.PodList = statusPods.Union(quickRestartsSet.Intersection(specPods)).UnsortedList()
+					}
+
+					if podRestartsSet != nil {
+						statusOp.PodList = statusPods.Union(podRestartsSet.Intersection(specPods)).UnsortedList()
+					}
 				}
 
 				if statusOp.Kind == asdbv1.OperationPodRestart && podRestartsSet != nil {
 					statusOp.PodList = statusPods.Union(podRestartsSet.Intersection(specPods)).UnsortedList()
 				}
 			}
+
+			break
 		}
 	}
 
 	if !opFound {
 		var podList []string
 
-		if specOp.Kind == asdbv1.OperationWarmRestart && quickRestartsSet != nil {
-			podList = quickRestartsSet.Intersection(specPods).UnsortedList()
+		if specOp.Kind == asdbv1.OperationWarmRestart {
+			if quickRestartsSet != nil {
+				podList = quickRestartsSet.Intersection(specPods).UnsortedList()
+			}
+
+			if podRestartsSet != nil {
+				podList = append(podList, podRestartsSet.Intersection(specPods).UnsortedList()...)
+			}
 		}
 
 		if specOp.Kind == asdbv1.OperationPodRestart && podRestartsSet != nil {

@@ -1,10 +1,8 @@
 package v1
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"regexp"
 	"strings"
@@ -598,22 +596,4 @@ func GetAllPodNames(pods map[string]AerospikePodStatus) sets.Set[string] {
 	}
 
 	return podNames
-}
-
-// charset contains the characters to use for the random string
-const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-// randomString generates a random string of length n
-func randomString(n int) (string, error) {
-	b := make([]byte, n)
-	for i := range b {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", err
-		}
-
-		b[i] = charset[num.Int64()]
-	}
-
-	return string(b), nil
 }

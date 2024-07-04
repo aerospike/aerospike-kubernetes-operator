@@ -100,12 +100,6 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		return err
 	}
 
-	// Set defaults for user specified operations
-	// Populate operation id if not present
-	if err := setDefaultOperation(&c.Spec.Operations); err != nil {
-		return err
-	}
-
 	// Update racks configuration using global values where required.
 	if err := c.updateRacks(asLog); err != nil {
 		return err
@@ -854,19 +848,4 @@ func setNamespaceDefault(networks []string, namespace string) {
 
 		networks[idx] = netName
 	}
-}
-
-func setDefaultOperation(operations *[]OperationSpec) error {
-	for i := range *operations {
-		if (*operations)[i].ID == "" {
-			id, err := randomString(5)
-			if err != nil {
-				return err
-			}
-
-			(*operations)[i].ID = id
-		}
-	}
-
-	return nil
 }
