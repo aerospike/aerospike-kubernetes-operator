@@ -2398,10 +2398,8 @@ func validateOperationUpdate(oldSpec, newSpec *AerospikeClusterSpec, status *Aer
 		oldOp = &oldSpec.Operations[0]
 	}
 
-	if !reflect.DeepEqual(oldOp, newOp) {
-		if oldOp != nil && oldOp.ID == newOp.ID {
-			return fmt.Errorf("operation %s cannot be updated", newOp.ID)
-		}
+	if oldOp != nil && oldOp.ID == newOp.ID && !reflect.DeepEqual(oldOp, newOp) {
+		return fmt.Errorf("operation %s cannot be updated", newOp.ID)
 	}
 
 	allPodNames := GetAllPodNames(status.Pods)
