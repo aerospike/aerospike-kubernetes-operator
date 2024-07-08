@@ -245,7 +245,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
 
-						// As pod is in pending state, CR object will be won't reach the final phase.
+						// As pod is in pending state, CR object won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
@@ -255,7 +255,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.Image = nextImage
-						// As pod is in pending state, CR object will be won't reach the final phase.
+						// As pod is in pending state, CR object won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
@@ -285,7 +285,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 							},
 						}
 						aeroCluster.Spec.Operations = operations
-						// As pod is in pending state, CR object will be won't reach the final phase.
+						// As pod is in pending state, CR object won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
@@ -307,7 +307,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					aeroCluster.Spec.Size--
-					// As pod is in pending state, CR object will be won't reach the final phase.
+					// As pod is in pending state, CR object won't reach the final phase.
 					// So expectedPhases can be InProgress or Completed
 					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					Expect(err).ToNot(HaveOccurred())

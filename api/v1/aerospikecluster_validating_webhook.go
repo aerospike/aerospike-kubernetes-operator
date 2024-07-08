@@ -2417,12 +2417,12 @@ func validateOperationUpdate(oldSpec, newSpec *AerospikeClusterSpec, status *Aer
 	if !reflect.DeepEqual(newSpec.Operations, status.Operations) {
 		switch {
 		case newSpec.Size > status.Size:
-			return fmt.Errorf("cannot perform any on-demand operation along with cluster scale-up")
+			return fmt.Errorf("cannot change Spec.Operations along with cluster scale-up")
 		case len(newSpec.RackConfig.Racks) != len(status.RackConfig.Racks) ||
 			len(newSpec.RackConfig.Racks) != len(oldSpec.RackConfig.Racks):
-			return fmt.Errorf("cannot perform any on-demand operation along with rack addition/removal")
+			return fmt.Errorf("cannot change Spec.Operations along with rack addition/removal")
 		case newSpec.Image != status.Image || newSpec.Image != oldSpec.Image:
-			return fmt.Errorf("cannot perform any on-demand operation along with image update")
+			return fmt.Errorf("cannot change Spec.Operations along with image update")
 		}
 	}
 
