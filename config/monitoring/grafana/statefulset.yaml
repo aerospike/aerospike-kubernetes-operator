@@ -40,6 +40,12 @@ spec:
               mountPath: "/etc/grafana/provisioning/datasources"
             - name: grafana-dashboards
               mountPath: "/etc/grafana/provisioning/dashboards"
+            - name: cluster-dashboard
+              mountPath: "/var/lib/grafana/dashboards/cluster.json"
+              subPath: cluster.json
+            - name: node-dashboard
+              mountPath: "/var/lib/grafana/dashboards/node.json"
+              subPath: node.json
             - name: grafanadata
               mountPath: "/data"
           ports:
@@ -85,6 +91,14 @@ spec:
           configMap:
             defaultMode: 420
             name: grafana-dashboards
+        - name: cluster-dashboard
+          configMap:
+            defaultMode: 420
+            name: cluster-dashboard
+        - name: node-dashboard
+          configMap:
+            defaultMode: 420
+            name: node-dashboard
         - name: grafanadata
           persistentVolumeClaim:
             claimName: grafanadata

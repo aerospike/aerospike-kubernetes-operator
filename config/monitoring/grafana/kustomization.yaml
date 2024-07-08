@@ -20,7 +20,6 @@ configMapGenerator:
     files:
       - config/grafana.ini
   - name: grafana-dashboards
-    behavior: merge
     files:
       - config/aerospike_grafana_dashboards.yaml
 
