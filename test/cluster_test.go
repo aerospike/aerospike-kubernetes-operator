@@ -281,6 +281,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
 							},
 						}
 						aeroCluster.Spec.Operations = operations
