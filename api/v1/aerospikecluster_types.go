@@ -124,6 +124,9 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
 	// +kubebuilder:validation:MinItems:=1
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
+	// Paused flag is used to pause the reconciliation for the AerospikeCluster.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pause Reconcile"
+	Paused *bool `json:"paused,omitempty"`
 }
 
 type SeedsFinderServices struct {

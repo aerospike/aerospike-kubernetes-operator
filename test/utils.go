@@ -287,16 +287,20 @@ func isClusterStateValid(
 		return false
 	}
 
-	// Validate status
-	statusToSpec, err := asdbv1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
-	if err != nil {
-		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
-		return false
-	}
+	// Do not compare status with spec if cluster reconciliation is paused
+	// `paused` flag only exists in the spec and not in the status.
+	if !asdbv1.GetBool(aeroCluster.Spec.Paused) {
+		// Validate status
+		statusToSpec, err := asdbv1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
+		if err != nil {
+			pkgLog.Error(err, "Failed to copy spec in status", "err", err)
+			return false
+		}
 
-	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-		pkgLog.Info("Cluster status is not matching the spec")
-		return false
+		if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
+			pkgLog.Info("Cluster status is not matching the spec")
+			return false
+		}
 	}
 
 	// TODO: This is not valid for tests where maxUnavailablePods flag is used.
@@ -322,6 +326,8 @@ func isClusterStateValid(
 				aeroCluster.Spec.Image,
 			),
 		)
+
+		return false
 	}
 
 	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {

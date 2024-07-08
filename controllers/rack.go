@@ -556,6 +556,13 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
 func (r *SingleClusterReconciler) reconcileRack(
 	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) reconcileResult {
+	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
+		// This check is not strictly necessary here. It is already checked in the parent reconcile function.
+		// But, it is added here to avoid unnecessary reconciliation of rack when reconcileRack is called in a loop.
+		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
+		return reconcileRequeueAfter(1)
+	}
+
 	r.Log.Info(
 		"Reconcile existing Aerospike cluster statefulset", "stsName",
 		found.Name,

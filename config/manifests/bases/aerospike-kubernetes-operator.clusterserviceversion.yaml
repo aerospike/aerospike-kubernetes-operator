@@ -74,6 +74,9 @@ spec:
       - description: Certificates to connect to Aerospike.
         displayName: Operator Client Cert
         path: operatorClientCert
+      - description: Paused flag is used to pause the reconciliation for the AerospikeCluster.
+        displayName: Pause Reconcile
+        path: paused
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec

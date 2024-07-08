@@ -79,8 +79,70 @@ var _ = Describe(
 				UpdateClusterPre600(ctx)
 			},
 		)
+		Context("PauseReconcile", func() {
+			PauseReconcileTest(ctx)
+		})
 	},
 )
+
+func PauseReconcileTest(ctx goctx.Context) {
+	clusterNamespacedName := getNamespacedName(
+		"pause-reconcile", namespace,
+	)
+
+	BeforeEach(
+		func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	)
+
+	AfterEach(
+		func() {
+			aeroCluster, err := getCluster(
+				k8sClient, ctx, clusterNamespacedName,
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		},
+	)
+
+	It("Should pause reconcile", func() {
+		// Pause reconcile and then apply operation
+		// Testing over upgrade as it is a long-running operation
+		By("Pause reconcile")
+		err := setPauseFlag(ctx, clusterNamespacedName, ptr.To(true))
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Start upgrade, it should fail")
+		err = upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)
+		Expect(err).To(HaveOccurred())
+
+		By("Resume reconcile")
+		err = setPauseFlag(ctx, clusterNamespacedName, nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Upgrade should succeed")
+		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = waitForAerospikeCluster(k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval, getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted})
+		Expect(err).ToNot(HaveOccurred())
+	})
+}
+
+func setPauseFlag(ctx goctx.Context, clusterNamespacedName types.NamespacedName, pause *bool) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	aeroCluster.Spec.Paused = pause
+
+	return updateCluster(k8sClient, ctx, aeroCluster)
+}
 
 func UpdateClusterPre600(ctx goctx.Context) {
 	Context(

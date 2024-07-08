@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,9 +13,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strings"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -78,6 +77,13 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		)
 
 		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
+	}
+
+	// Pause the reconciliation for the AerospikeCluster if the paused field is set to true.
+	// Deletion of the AerospikeCluster will not be paused.
+	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
+		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
 		return reconcile.Result{}, nil
 	}
 
