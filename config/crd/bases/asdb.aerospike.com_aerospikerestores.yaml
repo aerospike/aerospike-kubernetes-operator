@@ -15,9 +15,18 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.backupService.name
+      name: Backup Service Name
+      type: string
+    - jsonPath: .spec.backupService.namespace
+      name: Backup Service Namespace
+      type: string
     - jsonPath: .status.restoreResult.status
       name: Status
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:

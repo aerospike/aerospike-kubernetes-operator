@@ -23,8 +23,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// +kubebuilder:validation:Enum=InProgress;Completed;Failed
+type AerospikeBackupServicePhase string
+
+// These are the valid phases of Aerospike Backup Service reconcile flow.
+const (
+	AerospikeBackupServiceInProgress AerospikeBackupServicePhase = "InProgress"
+	AerospikeBackupServiceCompleted  AerospikeBackupServicePhase = "Completed"
+	AerospikeBackupServiceFailed     AerospikeBackupServicePhase = "Failed"
+)
 
 // AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
 //
@@ -58,12 +65,19 @@ type AerospikeBackupServiceStatus struct {
 	// Backup service config hash
 	ConfigHash string `json:"configHash"`
 
+	// Backup service phase
+	Phase AerospikeBackupServicePhase `json:"phase,omitempty"`
+
 	// Backup service listening port
 	Port int32 `json:"port"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
+// +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
+//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeBackupService is the Schema for the aerospikebackupservices API
 type AerospikeBackupService struct {

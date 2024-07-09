@@ -75,7 +75,10 @@ type AerospikeRestoreStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
+// +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 //+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.restoreResult.status`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeRestore is the Schema for the aerospikerestores API
 //
