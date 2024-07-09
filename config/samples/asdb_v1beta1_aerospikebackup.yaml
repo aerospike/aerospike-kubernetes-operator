@@ -13,8 +13,8 @@ spec:
     name: aerospikebackupservice-sample
     namespace: aerospike
   onDemand:
-    id: first-ad-hoc-backup
-    routineName: test-routine
+    - id: first-ad-hoc-backup
+      routineName: test-routine
   config:
     aerospike-cluster:
       test-cluster:

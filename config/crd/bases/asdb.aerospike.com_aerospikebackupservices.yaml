@@ -14,7 +14,20 @@ spec:
     singular: aerospikebackupservice
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.image
+      name: Image
+      type: string
+    - jsonPath: .spec.service.type
+      name: Service Type
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AerospikeBackupService is the Schema for the aerospikebackupservices
@@ -162,6 +175,13 @@ spec:
                 type: string
               contextPath:
                 description: Backup Service API context path
+                type: string
+              phase:
+                description: Backup service phase
+                enum:
+                - InProgress
+                - Completed
+                - Failed
                 type: string
               port:
                 description: Backup service listening port

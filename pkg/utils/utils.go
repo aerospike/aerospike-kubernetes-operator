@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const (
@@ -146,7 +147,7 @@ func LabelsForPodAntiAffinity(clName string) map[string]string {
 // belonging to the given AerospikeBackupService CR name.
 func LabelsForAerospikeBackupService(clName string) map[string]string {
 	return map[string]string{
-		asdbv1.AerospikeAppLabel:            "aerospike-backup-service",
+		asdbv1.AerospikeAppLabel:            common.AerospikeBackupService,
 		asdbv1.AerospikeCustomResourceLabel: clName,
 	}
 }

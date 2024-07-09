@@ -3,6 +3,7 @@ package backupservice
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	app "k8s.io/api/apps/v1"
@@ -12,11 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
@@ -49,15 +52,35 @@ type SingleBackupServiceReconciler struct {
 }
 
 func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	// Set the status phase to Error if the recErr is not nil
+	// recErr is only set when reconcile failure should result in Error phase of the Backup service operation
+	defer func() {
+		if recErr != nil {
+			r.Log.Error(recErr, "Reconcile failed")
+
+			if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceFailed); err != nil {
+				recErr = err
+			}
+		}
+	}()
+
+	// Set the status to AerospikeClusterInProgress before starting any operations
+	if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	if err := r.reconcileConfigMap(); err != nil {
+		recErr = err
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileDeployment(); err != nil {
+		recErr = err
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileService(); err != nil {
+		recErr = err
 		return ctrl.Result{}, err
 	}
 
@@ -202,7 +225,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
 
-		return nil
+		return r.waitForDeploymentToBeReady()
 	}
 
 	r.Log.Info(
@@ -225,7 +248,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 	if oldResourceVersion != deploy.ResourceVersion {
 		r.Log.Info("Deployment spec is updated, will result in rolling restart")
-		return nil
+		return r.waitForDeploymentToBeReady()
 	}
 
 	hash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
@@ -237,14 +260,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 	if r.aeroBackupService.Status.ConfigHash != "" && hash != r.aeroBackupService.Status.ConfigHash {
 		r.Log.Info("Config hash is updated, will result in rolling restart")
 
-		var podList corev1.PodList
-
-		labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name))
-		listOps := &client.ListOptions{
-			Namespace: r.aeroBackupService.Namespace, LabelSelector: labelSelector,
-		}
-
-		err = r.Client.List(context.TODO(), &podList, listOps)
+		podList, err := r.getBackupServicePodList()
 		if err != nil {
 			return err
 		}
@@ -258,7 +274,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			}
 		}
 
-		return nil
+		return r.waitForDeploymentToBeReady()
 	}
 
 	return nil
@@ -266,6 +282,21 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService) types.NamespacedName {
 	return types.NamespacedName{Name: aeroBackupService.Name, Namespace: aeroBackupService.Namespace}
+}
+
+func (r *SingleBackupServiceReconciler) getBackupServicePodList() (*corev1.PodList, error) {
+	var podList corev1.PodList
+
+	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name))
+	listOps := &client.ListOptions{
+		Namespace: r.aeroBackupService.Namespace, LabelSelector: labelSelector,
+	}
+
+	if err := r.Client.List(context.TODO(), &podList, listOps); err != nil {
+		return nil, err
+	}
+
+	return &podList, nil
 }
 
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
@@ -534,6 +565,77 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 	return &svcConfig, nil
 }
 
+func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
+	const (
+		podStatusTimeout       = 2 * time.Minute
+		podStatusRetryInterval = time.Second * 5
+	)
+
+	r.Log.Info(
+		"Waiting for deployment to be ready", "WaitTimePerPod", podStatusTimeout,
+	)
+
+	if err := wait.PollUntilContextTimeout(context.TODO(),
+		podStatusRetryInterval, podStatusTimeout, true, func(ctx context.Context) (done bool, err error) {
+			podList, err := r.getBackupServicePodList()
+			if err != nil {
+				return false, err
+			}
+
+			if len(podList.Items) == 0 {
+				return false, fmt.Errorf("no pod found for deployment")
+			}
+
+			for idx := range podList.Items {
+				pod := &podList.Items[idx]
+
+				if err := utils.CheckPodFailed(pod); err != nil {
+					return false, fmt.Errorf("pod %s failed: %v", pod.Name, err)
+				}
+
+				if !utils.IsPodRunningAndReady(pod) {
+					r.Log.Info("Pod is not ready", "pod", pod.Name)
+					return false, nil
+				}
+			}
+
+			var deploy app.Deployment
+			if err := r.Client.Get(
+				ctx,
+				types.NamespacedName{Name: r.aeroBackupService.Name, Namespace: r.aeroBackupService.Namespace},
+				&deploy,
+			); err != nil {
+				return false, err
+			}
+
+			if deploy.Status.Replicas != *deploy.Spec.Replicas {
+				return false, fmt.Errorf("deployment status is not updated")
+			}
+
+			return true, nil
+		},
+	); err != nil {
+		return err
+	}
+
+	r.Log.Info("Deployment is ready")
+
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) setStatusPhase(phase asdbv1beta1.AerospikeBackupServicePhase) error {
+	if r.aeroBackupService.Status.Phase != phase {
+		r.aeroBackupService.Status.Phase = phase
+
+		if err := r.Client.Status().Update(context.Background(), r.aeroBackupService); err != nil {
+			r.Log.Error(err, fmt.Sprintf("Failed to set restore status to %s", phase))
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleBackupServiceReconciler) updateStatus() error {
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
@@ -548,6 +650,7 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
 	r.aeroBackupService.Status.Port = svcConfig.portInfo[common.HTTPKey]
 	r.aeroBackupService.Status.ConfigHash = hash
+	r.aeroBackupService.Status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
 
 	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
 

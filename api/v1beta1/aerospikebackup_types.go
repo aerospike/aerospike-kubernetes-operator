@@ -61,10 +61,15 @@ type OnDemandSpec struct {
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
 	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
+
+	// TODO: finalize the status and phase
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
+// +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeBackup is the Schema for the aerospikebackup API
 type AerospikeBackup struct {
