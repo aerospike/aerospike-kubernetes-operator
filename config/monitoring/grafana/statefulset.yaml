@@ -21,14 +21,6 @@ spec:
     spec:
       serviceAccountName: aerospike-monitoring-stack
       terminationGracePeriodSeconds: 120
-      initContainers:
-        - name: "init-chmod-data"
-          image: debian:9
-          imagePullPolicy: "IfNotPresent"
-          command: ["chmod", "777", "/var/lib/grafana"]
-          volumeMounts:
-            - name: grafanadata
-              mountPath: "/var/lib/grafana"
       containers:
         - name: grafana
           image: "grafana/grafana:latest"
@@ -73,13 +65,15 @@ spec:
             timeoutSeconds: 10
             successThreshold: 1
             failureThreshold: 10
-          resources:
-            {}
           env:
             - name: GF_SECURITY_ADMIN_USER
               value: "admin"
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: "admin"
+            - name: GF_PATHS_DATA
+              value: /data/grafana/data
+      securityContext:
+        fsGroup: 472
       volumes:
         - name: grafana-config
           configMap:

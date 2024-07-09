@@ -7,7 +7,7 @@ metadata:
     app: aerospike-monitoring-stack-alertmanager
     chart: aerospike-monitoring-stack
     release: aerospike-monitoring-stack
-    app.kubernetes.io/component: alertmanager
+    app.kubernetes.io/component: aerospike-alertmanager
 spec:
   ports:
     - name: http

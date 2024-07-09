@@ -23,21 +23,13 @@ spec:
       annotations:
     spec:
       serviceAccountName: aerospike-monitoring-stack
-      initContainers:
-        - name: "init-chown-data"
-          image: debian:9
-          imagePullPolicy: "IfNotPresent"
-          command: ["chown", "-R", "65534:65534", "/data"]
-          volumeMounts:
-            - name: "prometheus-data"
-              mountPath: "/data"
       containers:
         - name: prometheus-server
           image: "prom/prometheus:latest"
           imagePullPolicy: "IfNotPresent"
           args:
             - --config.file=/etc/prometheus/prometheus.yml
-            - --storage.tsdb.path="/data"
+            - --storage.tsdb.path=/data
             - --web.listen-address=:9090
           ports:
             - containerPort: 9090
@@ -65,10 +57,12 @@ spec:
             - name: config-volume
               mountPath: /etc/prometheus
             - name: "prometheus-data"
-              mountPath: "/data"
+              mountPath: /data
             - mountPath: /etc/prometheus/alert-rules.d
               name: alertmanagerrules
       terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 65534
       volumes:
         - name: config-volume
           configMap:
