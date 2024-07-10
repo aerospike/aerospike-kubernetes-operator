@@ -22,7 +22,7 @@ require (
 )
 
 require (
-	github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240604175608-042db47ee091
+	github.com/abhishekdwivedi3060/aerospike-backup-service v0.0.0-20240709182036-38038c5c38c7
 	github.com/aerospike/aerospike-client-go/v7 v7.4.0
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/sirupsen/logrus v1.9.0

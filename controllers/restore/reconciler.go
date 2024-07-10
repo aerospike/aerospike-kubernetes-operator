@@ -30,6 +30,11 @@ type SingleRestoreReconciler struct {
 }
 
 func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	if !r.aeroRestore.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Stop reconciliation as the Aerospike restore is being deleted
+		return reconcile.Result{}, nil
+	}
+
 	if err := r.setStatusPhase(asdbv1beta1.AerospikeRestoreInProgress); err != nil {
 		return ctrl.Result{}, err
 	}
