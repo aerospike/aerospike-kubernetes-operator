@@ -384,7 +384,7 @@ func (r *SingleClusterReconciler) restartPods(
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
 				r.Log.Error(err, "Failed to warm restart pod", "podName", pod.Name)
-				return reconcileError(err)
+				return common.ReconcileError(err)
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
@@ -415,7 +415,7 @@ func (r *SingleClusterReconciler) restartPods(
 	}
 
 	if len(restartedPods) > 0 {
-		if result := r.ensurePodsRunningAndReady(restartedPods); !result.isSuccess {
+		if result := r.ensurePodsRunningAndReady(restartedPods); !result.IsSuccess {
 			return result
 		}
 	}

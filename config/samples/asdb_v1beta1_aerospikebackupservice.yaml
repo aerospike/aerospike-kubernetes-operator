@@ -10,7 +10,7 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:0.3.0
+  image: aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:1.0.0
   config:
     service:
       http:
@@ -27,7 +27,7 @@ spec:
     storage:
       local:
         path: /localStorage
-        type: 0
+        type: local
   secrets:
     - secretName: auth-secret
       volumeMount:

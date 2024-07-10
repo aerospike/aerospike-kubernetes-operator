@@ -64,6 +64,11 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		}
 	}()
 
+	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Stop reconciliation as the Aerospike Backup service is being deleted
+		return reconcile.Result{}, nil
+	}
+
 	// Set the status to AerospikeClusterInProgress before starting any operations
 	if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
 		return reconcile.Result{}, err
@@ -273,11 +278,9 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 				return err
 			}
 		}
-
-		return r.waitForDeploymentToBeReady()
 	}
 
-	return nil
+	return r.waitForDeploymentToBeReady()
 }
 
 func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService) types.NamespacedName {
@@ -568,7 +571,7 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 	const (
 		podStatusTimeout       = 2 * time.Minute
-		podStatusRetryInterval = time.Second * 5
+		podStatusRetryInterval = 5 * time.Second
 	)
 
 	r.Log.Info(
@@ -583,7 +586,8 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			}
 
 			if len(podList.Items) == 0 {
-				return false, fmt.Errorf("no pod found for deployment")
+				r.Log.Info("No pod found for deployment")
+				return false, nil
 			}
 
 			for idx := range podList.Items {
@@ -609,7 +613,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			}
 
 			if deploy.Status.Replicas != *deploy.Spec.Replicas {
-				return false, fmt.Errorf("deployment status is not updated")
+				return false, nil
 			}
 
 			return true, nil
@@ -628,7 +632,7 @@ func (r *SingleBackupServiceReconciler) setStatusPhase(phase asdbv1beta1.Aerospi
 		r.aeroBackupService.Status.Phase = phase
 
 		if err := r.Client.Status().Update(context.Background(), r.aeroBackupService); err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to set restore status to %s", phase))
+			r.Log.Error(err, fmt.Sprintf("Failed to set backup service status to %s", phase))
 			return err
 		}
 	}
