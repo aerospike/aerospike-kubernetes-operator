@@ -350,6 +350,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
+					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
