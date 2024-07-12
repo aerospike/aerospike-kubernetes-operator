@@ -1537,13 +1537,13 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 				statusPods := sets.New(statusOp.PodList...)
 
 				if statusOp.Kind == asdbv1.OperationWarmRestart {
-					if quickRestartsSet != nil {
+					if quickRestartsSet.Len() > 0 {
 						statusOp.PodList = statusPods.Union(quickRestartsSet.Intersection(specPods)).UnsortedList()
 					}
 
 					// If the operation is a warm restart and the pod undergoes a cold restart for any reason,
 					// we will still consider the warm restart operation as completed for that pod.
-					if podRestartsSet != nil {
+					if podRestartsSet.Len() > 0 {
 						statusOp.PodList = statusPods.Union(podRestartsSet.Intersection(specPods)).UnsortedList()
 					}
 				}
@@ -1561,13 +1561,13 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 		var podList []string
 
 		if specOp.Kind == asdbv1.OperationWarmRestart {
-			if quickRestartsSet != nil {
+			if quickRestartsSet.Len() > 0 {
 				podList = quickRestartsSet.Intersection(specPods).UnsortedList()
 			}
 
 			// If the operation is a warm restart and the pod undergoes a cold restart for any reason,
 			// we will still consider the warm restart operation as completed for that pod.
-			if podRestartsSet != nil {
+			if podRestartsSet.Len() > 0 {
 				podList = append(podList, podRestartsSet.Intersection(specPods).UnsortedList()...)
 			}
 		}
