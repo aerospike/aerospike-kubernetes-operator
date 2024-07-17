@@ -79,6 +79,10 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 
 	oldObj := old.(*AerospikeBackup)
 
+	if !reflect.DeepEqual(r.Spec.BackupService, oldObj.Spec.BackupService) {
+		return nil, fmt.Errorf("backup service cannot be updated")
+	}
+
 	if err := r.validateBackupConfig(); err != nil {
 		return nil, err
 	}
@@ -155,6 +159,10 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return err
 	}
 
+	if len(aeroClusters) != 1 {
+		return fmt.Errorf("only one aerospike cluster is allowed in backup config")
+	}
+
 	if len(config.AerospikeClusters) == 0 {
 		config.AerospikeClusters = make(map[string]*model.AerospikeCluster)
 	}
@@ -205,7 +213,7 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 	}
 
 	if err := config.Validate(); err != nil {
-		return nil
+		return err
 	}
 
 	// Validate on-demand backup

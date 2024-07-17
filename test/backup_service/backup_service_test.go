@@ -20,26 +20,26 @@ var _ = Describe(
 		)
 
 		AfterEach(func() {
-			Expect(deleteBackupService(k8sClient, backupService)).ToNot(HaveOccurred())
+			Expect(DeleteBackupService(k8sClient, backupService)).ToNot(HaveOccurred())
 		})
 
 		Context(
 			"When doing Invalid operations", func() {
 				It("Should fail when wrong format backup config is given", func() {
-					backupService, err = newBackupService()
+					backupService, err = NewBackupService()
 					Expect(err).ToNot(HaveOccurred())
 
 					badConfig, gErr := getWrongBackupServiceConfBytes()
 					Expect(gErr).ToNot(HaveOccurred())
 					backupService.Spec.Config.Raw = badConfig
 
-					err = deployBackupService(k8sClient, backupService)
+					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).To(HaveOccurred())
 				},
 				)
 
 				It("Should fail when wrong image is given", func() {
-					backupService, err = newBackupService()
+					backupService, err = NewBackupService()
 					Expect(err).ToNot(HaveOccurred())
 
 					backupService.Spec.Image = "wrong-image"
@@ -53,16 +53,16 @@ var _ = Describe(
 
 		Context("When doing Valid operations", func() {
 			It("Should deploy backup service components when correct backup config is given", func() {
-				backupService, err = newBackupService()
+				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				err = deployBackupService(k8sClient, backupService)
+				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("Should restart backup service deployment pod when config is changed", func() {
-				backupService, err = newBackupService()
+				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				err = deployBackupService(k8sClient, backupService)
+				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
@@ -88,9 +88,9 @@ var _ = Describe(
 			})
 
 			It("Should restart backup service deployment pod when pod spec is changed", func() {
-				backupService, err = newBackupService()
+				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				err = deployBackupService(k8sClient, backupService)
+				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
@@ -121,9 +121,9 @@ var _ = Describe(
 			})
 
 			It("Should change K8s service type when service type is changed in CR", func() {
-				backupService, err = newBackupService()
+				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				err := deployBackupService(k8sClient, backupService)
+				err := DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
 				svc, err := getBackupK8sServiceObj(k8sClient, name, namespace)
