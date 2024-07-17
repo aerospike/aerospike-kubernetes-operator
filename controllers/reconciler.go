@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,11 +16,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -307,8 +308,10 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl(selectedPods []corev1.Pod,
-	ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
+	selectedPods []corev1.Pod,
+	ignorablePodNames sets.Set[string],
+) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
@@ -965,7 +968,9 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
-				initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+				initializedVolumes = append(
+					initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID),
+				)
 			}
 		}
 
