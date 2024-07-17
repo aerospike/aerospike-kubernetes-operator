@@ -87,7 +87,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
-			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 
 			if res = r.reconcileRack(
 				found, state, ignorablePodNames, failedPods,
@@ -95,7 +95,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 				return res
 			}
 
-			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 		}
 
 		// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
@@ -115,14 +115,14 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
-			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 
 			if _, res = r.rollingRestartRack(found, state, ignorablePodNames, nil,
 				failedPods); !res.IsSuccess {
 				return res
 			}
 
-			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 			// Requeue after 1 second to fetch latest CR object with updated pod status
 			return common.ReconcileRequeueAfter(1)
 		}
