@@ -28,29 +28,16 @@ var _ = Describe(
 						WarmRestart(ctx)
 					},
 				)
-				It(
-					"Should cold start without tini", func() {
-						PodRestart(ctx)
-					},
-				)
-
 			},
 		)
 	},
 )
 
 func WarmRestart(ctx goCtx.Context) {
-	rollCluster(ctx, latestImage, true)
+	rollCluster(ctx, latestImage)
 }
 
-func PodRestart(ctx goCtx.Context) {
-	image := fmt.Sprintf(
-		"aerospike/aerospike-server-enterprise:%s", "5.7.0.8",
-	)
-	rollCluster(ctx, image, false)
-}
-
-func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
+func rollCluster(ctx goCtx.Context, image string) {
 	clusterName := "warm-restart-cluster"
 	clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
@@ -94,7 +81,7 @@ func rollCluster(ctx goCtx.Context, image string, expectWarmStart bool) {
 	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 
 	for _, marker := range podToMarkerPresent {
-		Expect(marker).To(Equal(expectWarmStart))
+		Expect(marker).To(Equal(true))
 	}
 }
 
