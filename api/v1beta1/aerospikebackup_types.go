@@ -60,8 +60,9 @@ type OnDemandSpec struct {
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
-	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
-
+	BackupService *BackupService       `json:"backupService"`
+	Config        runtime.RawExtension `json:"config"`
+	OnDemand      []OnDemandSpec       `json:"onDemand,omitempty"`
 	// TODO: finalize the status and phase
 }
 

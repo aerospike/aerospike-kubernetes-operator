@@ -1,0 +1,197 @@
+package backup
+
+import (
+	"encoding/json"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+)
+
+var _ = Describe(
+	"Backup Service Test", func() {
+
+		var (
+			backup *asdbv1beta1.AerospikeBackup
+			err    error
+		)
+
+		AfterEach(func() {
+			Expect(deleteBackup(k8sClient, backup)).ToNot(HaveOccurred())
+		})
+
+		Context(
+			"When doing Invalid operations", func() {
+				It("Should fail when wrong format backup config is given", func() {
+					backup, err = newBackup()
+					Expect(err).ToNot(HaveOccurred())
+
+					badConfig, gErr := getWrongBackupConfBytes()
+					Expect(gErr).ToNot(HaveOccurred())
+					backup.Spec.Config.Raw = badConfig
+
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when more than 1 cluster is given in backup config", func() {
+					config := getBackupConfigInMap()
+					aeroCluster := config[common.AerospikeClusterKey].(map[string]interface{})
+					aeroCluster["cluster-two"] = aeroCluster["test-cluster"]
+					config[common.AerospikeClusterKey] = aeroCluster
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when on-demand backup is given at the time of creation", func() {
+					backup, err = newBackup()
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+						{
+							ID:          "on-demand",
+							RoutineName: "test-routine",
+						},
+					}
+
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when non-existing routine is given in on-demand backup", func() {
+					backup, err = newBackup()
+					Expect(err).ToNot(HaveOccurred())
+
+					err = deployBackup(k8sClient, backup)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+						{
+							ID:          "on-demand",
+							RoutineName: "non-existing-routine",
+						},
+					}
+
+					err = k8sClient.Update(testCtx, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when backup service is not present", func() {
+					backup, err = newBackup()
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.BackupService.Name = "wrong-backup-service"
+
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when backup service reference is updated", func() {
+					backup, err = newBackup()
+					Expect(err).ToNot(HaveOccurred())
+
+					err = deployBackup(k8sClient, backup)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.BackupService.Name = "updated-backup-service"
+
+					err = k8sClient.Update(testCtx, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when non-existing policy is referred in Backup routine", func() {
+					config := getBackupConfigInMap()
+					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines["test-routine"].(map[string]interface{})["backup-policy"] = "non-existing-policy"
+					config[common.BackupRoutinesKey] = routines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				FIt("Should fail when non-existing cluster is referred in Backup routine", func() {
+					config := getBackupConfigInMap()
+					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines["test-routine"].(map[string]interface{})["source-cluster"] = "non-existing-cluster"
+					config[common.BackupRoutinesKey] = routines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when non-existing storage is referred in Backup routine", func() {
+					config := getBackupConfigInMap()
+					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines["test-routine"].(map[string]interface{})["storage"] = "non-existing-storage"
+					config[common.BackupRoutinesKey] = routines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+			},
+		)
+
+		Context("When doing Valid operations", func() {
+			It("Should trigger backup when correct backup config is given", func() {
+				backup, err = newBackup()
+				Expect(err).ToNot(HaveOccurred())
+				err = deployBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+			})
+
+			It("Should trigger on-demand backup when given", func() {
+				backup, err = newBackup()
+				Expect(err).ToNot(HaveOccurred())
+				err = deployBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+					{
+						ID:          "on-demand",
+						RoutineName: "test-routine",
+					},
+				}
+
+				err = k8sClient.Update(testCtx, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+		})
+	},
+)

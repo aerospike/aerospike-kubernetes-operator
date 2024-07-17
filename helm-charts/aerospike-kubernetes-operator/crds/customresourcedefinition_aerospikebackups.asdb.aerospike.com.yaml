@@ -88,6 +88,21 @@ spec:
           status:
             description: AerospikeBackupStatus defines the observed state of AerospikeBackup
             properties:
+              backupService:
+                properties:
+                  name:
+                    description: Backup service name
+                    type: string
+                  namespace:
+                    description: Backup service namespace
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              config:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               onDemand:
                 items:
                   properties:
@@ -106,6 +121,9 @@ spec:
                   - routineName
                   type: object
                 type: array
+            required:
+            - backupService
+            - config
             type: object
         type: object
     served: true

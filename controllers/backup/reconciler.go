@@ -303,6 +303,22 @@ func (r *SingleBackupReconciler) ScheduleOnDemandBackup() error {
 }
 
 func (r *SingleBackupReconciler) reconcileBackup() error {
+	specHash, err := utils.GetHash(string(r.aeroBackup.Spec.Config.Raw))
+	if err != nil {
+		return err
+	}
+
+	statusHash, err := utils.GetHash(string(r.aeroBackup.Status.Config.Raw))
+	if err != nil {
+		return err
+	}
+
+	if specHash == statusHash {
+		r.Log.Info("Backup config not changed",
+			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		return nil
+	}
+
 	r.Log.Info("Registering backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
@@ -451,9 +467,9 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 }
 
 func (r *SingleBackupReconciler) updateStatus() error {
+	r.aeroBackup.Status.BackupService = r.aeroBackup.Spec.BackupService
+	r.aeroBackup.Status.Config = r.aeroBackup.Spec.Config
 	r.aeroBackup.Status.OnDemand = r.aeroBackup.Spec.OnDemand
-
-	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackup.Status))
 
 	return r.Client.Status().Update(context.Background(), r.aeroBackup)
 }
