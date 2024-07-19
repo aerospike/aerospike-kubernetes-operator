@@ -48,7 +48,9 @@ spec:
             description: AerospikeRestoreSpec defines the desired state of AerospikeRestore
             properties:
               backupService:
-                description: BackupService is the backup service reference.
+                description: BackupService is the backup service reference i.e. name
+                  and namespace. It is used to communicate to the backup service to
+                  trigger restores. This field is immutable
                 properties:
                   name:
                     description: Backup service name
@@ -61,14 +63,20 @@ spec:
                 - namespace
                 type: object
               config:
-                description: Config is the configuration for the restore.
+                description: 'Config is the configuration for the restore in YAML
+                  format. This config is used to trigger restores. It includes: destination,
+                  policy, source, secret-agent, time and routine.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               pollingPeriod:
-                description: PollingPeriod is the polling period for restore service.
+                description: PollingPeriod is the polling period for restore operation
+                  status. It is used to poll the restore service to fetch restore
+                  operation status. Default is 60 seconds.
                 type: string
               type:
-                description: Type is the restore type
+                description: Type is the type of restore. It can of type Full, Incremental,
+                  and Timestamp. Based on the restore type, relevant restore config
+                  is given.
                 enum:
                 - Full
                 - Incremental

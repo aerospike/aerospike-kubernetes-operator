@@ -26,9 +26,12 @@ type AerospikeRestorePhase string
 
 // These are the valid phases of Aerospike restore operation.
 const (
+	// AerospikeRestoreInProgress means the AerospikeRestore CR is being reconciled and restore operation is going on.
 	AerospikeRestoreInProgress AerospikeRestorePhase = "InProgress"
-	AerospikeRestoreCompleted  AerospikeRestorePhase = "Completed"
-	AerospikeRestoreFailed     AerospikeRestorePhase = "Failed"
+	// AerospikeRestoreCompleted means the AerospikeRestore CR has been reconciled and restore operation is completed.
+	AerospikeRestoreCompleted AerospikeRestorePhase = "Completed"
+	// AerospikeRestoreFailed means the AerospikeRestore CR has been reconciled and restore operation is failed.
+	AerospikeRestoreFailed AerospikeRestorePhase = "Failed"
 )
 
 type RestoreType string
@@ -44,20 +47,26 @@ const (
 //
 //nolint:govet // for readability
 type AerospikeRestoreSpec struct {
+	// BackupService is the backup service reference i.e. name and namespace.
+	// It is used to communicate to the backup service to trigger restores. This field is immutable
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
-	// BackupService is the backup service reference.
 	BackupService *BackupService `json:"backupService"`
 
-	//+kubebuilder:validation:Enum=Full;Incremental;TimeStamp
-	// Type is the restore type
+	// Type is the type of restore. It can of type Full, Incremental, and Timestamp.
+	// Based on the restore type, relevant restore config is given.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Type"
+	// +kubebuilder:validation:Enum=Full;Incremental;TimeStamp
 	Type RestoreType `json:"type"`
 
+	// Config is the configuration for the restore in YAML format.
+	// This config is used to trigger restores. It includes: destination, policy, source, secret-agent, time and routine.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
-	// Config is the configuration for the restore.
 	Config runtime.RawExtension `json:"config"`
 
+	// PollingPeriod is the polling period for restore operation status.
+	// It is used to poll the restore service to fetch restore operation status.
+	// Default is 60 seconds.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
-	// PollingPeriod is the polling period for restore service.
 	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }
 
@@ -73,8 +82,8 @@ type AerospikeRestoreStatus struct {
 	Phase AerospikeRestorePhase `json:"phase,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 //+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.restoreResult.status`
@@ -91,7 +100,7 @@ type AerospikeRestore struct {
 	Status AerospikeRestoreStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // AerospikeRestoreList contains a list of AerospikeRestore
 type AerospikeRestoreList struct {

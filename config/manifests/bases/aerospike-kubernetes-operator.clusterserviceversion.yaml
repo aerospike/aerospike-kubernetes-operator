@@ -25,14 +25,17 @@ spec:
       kind: AerospikeBackup
       name: aerospikebackups.asdb.aerospike.com
       specDescriptors:
-      - description: BackupService is the backup service reference.
+      - description: BackupService is the backup service reference i.e. name and namespace.
+          It is used to communicate to the backup service to trigger backups. This
+          field is immutable
         displayName: Backup Service
         path: backupService
-      - description: Config is the configuration for the backup.
+      - description: 'Config is the configuration for the backup in YAML format. This
+          config is used to trigger backups. It includes: aerospike-cluster, backup-routines.'
         displayName: Backup Config
         path: config
-      - description: OnDemand is the on demand backup configuration.
-        displayName: On Demand
+      - description: OnDemand is the configuration on demand backups.
+        displayName: On Demand Backups
         path: onDemand
       version: v1beta1
     - description: AerospikeBackupService is the Schema for the aerospikebackupservices
@@ -41,20 +44,27 @@ spec:
       kind: AerospikeBackupService
       name: aerospikebackupservices.asdb.aerospike.com
       specDescriptors:
-      - description: Config is the configuration for the backup service.
+      - description: 'Config is the configuration for the backup service in YAML format.
+          This config is used to start the backup service. The config is passed as
+          a file to the backup service. It includes: service, backup-policies, storage,
+          secret-agent.'
         displayName: Backup Service Config
         path: config
       - description: Image is the image for the backup service.
         displayName: Backup Service Image
         path: image
-      - description: Resources is the resource requirements for the backup service.
+      - description: Resources defines the requests and limits for the backup service
+          container. Resources.Limits should be more than Resources.Requests.
         displayName: Resources
         path: resources
       - description: SecretMounts is the list of secret to be mounted in the backup
           service.
         displayName: Backup Service Volume
         path: secrets
-      - displayName: Backup Service
+      - description: Service defines the Kubernetes service configuration for the
+          backup service. It is used to expose the backup service deployment. By default,
+          the service type is ClusterIP.
+        displayName: Backup Service
         path: service
       version: v1beta1
     - description: AerospikeCluster is the schema for the AerospikeCluster API
@@ -205,15 +215,25 @@ spec:
       kind: AerospikeRestore
       name: aerospikerestores.asdb.aerospike.com
       specDescriptors:
-      - description: BackupService is the backup service reference.
+      - description: BackupService is the backup service reference i.e. name and namespace.
+          It is used to communicate to the backup service to trigger restores. This
+          field is immutable
         displayName: Backup Service
         path: backupService
-      - description: Config is the configuration for the restore.
+      - description: 'Config is the configuration for the restore in YAML format.
+          This config is used to trigger restores. It includes: destination, policy,
+          source, secret-agent, time and routine.'
         displayName: Restore Config
         path: config
-      - description: PollingPeriod is the polling period for restore service.
+      - description: PollingPeriod is the polling period for restore operation status.
+          It is used to poll the restore service to fetch restore operation status.
+          Default is 60 seconds.
         displayName: Restore Service Polling Period
         path: pollingPeriod
+      - description: Type is the type of restore. It can of type Full, Incremental,
+          and Timestamp. Based on the restore type, relevant restore config is given.
+        displayName: Restore Type
+        path: type
       version: v1beta1
   description: |
     The Aerospike Kubernetes Operator automates the deployment and management of Aerospike enterprise clusters on Kubernetes. The operator allows you to deploy multi-node Aerospike clusters, recover automatically from node failures, scale up or down automatically as load changes, ensure nodes are evenly split across racks or zones, automatically update to new versions of Aerospike and manage configuration changes in your clusters.

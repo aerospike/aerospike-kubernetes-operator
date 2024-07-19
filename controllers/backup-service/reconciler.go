@@ -58,7 +58,7 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		if recErr != nil {
 			r.Log.Error(recErr, "Reconcile failed")
 
-			if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceFailed); err != nil {
+			if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceError); err != nil {
 				recErr = err
 			}
 		}

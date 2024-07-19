@@ -49,15 +49,18 @@ spec:
             description: AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
             properties:
               config:
-                description: Config is the configuration for the backup service.
+                description: 'Config is the configuration for the backup service in
+                  YAML format. This config is used to start the backup service. The
+                  config is passed as a file to the backup service. It includes: service,
+                  backup-policies, storage, secret-agent.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               image:
                 description: Image is the image for the backup service.
                 type: string
               resources:
-                description: Resources is the resource requirements for the backup
-                  service.
+                description: Resources defines the requests and limits for the backup
+                  service container. Resources.Limits should be more than Resources.Requests.
                 properties:
                   claims:
                     description: "Claims lists the names of resources, defined in
@@ -108,12 +111,15 @@ spec:
                 description: SecretMounts is the list of secret to be mounted in the
                   backup service.
                 items:
+                  description: SecretMount specifies the secret and its corresponding
+                    volume mount options.
                   properties:
                     secretName:
+                      description: SecretName is the name of the secret to be mounted.
                       type: string
                     volumeMount:
-                      description: VolumeMount describes a mounting of a Volume within
-                        a container.
+                      description: VolumeMount is the volume mount options for the
+                        secret.
                       properties:
                         mountPath:
                           description: Path within the container at which the volume
@@ -154,10 +160,12 @@ spec:
                   type: object
                 type: array
               service:
+                description: Service defines the Kubernetes service configuration
+                  for the backup service. It is used to expose the backup service
+                  deployment. By default, the service type is ClusterIP.
                 properties:
                   type:
-                    description: Service Type string describes ingress methods for
-                      a service
+                    description: Type is the Kubernetes service type.
                     type: string
                 required:
                 - type
@@ -171,20 +179,20 @@ spec:
               AerospikeBackupService
             properties:
               configHash:
-                description: Backup service config hash
+                description: ConfigHash is the hash string of backup service config
                 type: string
               contextPath:
-                description: Backup Service API context path
+                description: ContextPath is the backup service API context path
                 type: string
               phase:
-                description: Backup service phase
+                description: Phase denotes Backup service phase
                 enum:
                 - InProgress
                 - Completed
-                - Failed
+                - Error
                 type: string
               port:
-                description: Backup service listening port
+                description: Port is the listening port of backup service
                 format: int32
                 type: integer
             required:

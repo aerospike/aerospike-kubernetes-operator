@@ -199,6 +199,13 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		config.BackupRoutines[name] = routine
 	}
 
+	// validate if only correct aerospike cluster (the one referred in Backup CR) is used in backup routines
+	for _, routine := range config.BackupRoutines {
+		if _, ok = aeroClusters[routine.SourceCluster]; !ok {
+			return fmt.Errorf("cluster %s not found in backup config", routine.SourceCluster)
+		}
+	}
+
 	// Add empty placeholders for missing config sections. This is required for validation to work.
 	if config.ServiceConfig == nil {
 		config.ServiceConfig = &model.BackupServiceConfig{}
