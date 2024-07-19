@@ -24,16 +24,18 @@ import (
 // AerospikeBackupSpec defines the desired state of AerospikeBackup
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
+	// BackupService is the backup service reference i.e. name and namespace.
+	// It is used to communicate to the backup service to trigger backups. This field is immutable
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
-	// BackupService is the backup service reference.
 	BackupService *BackupService `json:"backupService"`
 
+	// Config is the configuration for the backup in YAML format.
+	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
-	// Config is the configuration for the backup.
 	Config runtime.RawExtension `json:"config"`
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand"
-	// OnDemand is the on demand backup configuration.
+	// OnDemand is the configuration on demand backups.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand Backups"
 	// +kubebuilder:validation:MaxItems:=1
 	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 }
@@ -47,27 +49,33 @@ type BackupService struct {
 }
 
 type OnDemandSpec struct {
-	// On demand backup ID
+	// ID is the unique identifier for the on-demand backup.
 	// +kubebuilder:validation:MinLength=1
 	ID string `json:"id"`
 
-	// Backup routine name
+	// RoutineName is the routine name used to trigger on-demand backup.
 	RoutineName string `json:"routineName"`
 
-	// Delay interval before starting the backup.
+	// Delay is the interval before starting the on-demand backup.
 	Delay metav1.Duration `json:"delay,omitempty"`
 }
 
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
-	BackupService *BackupService       `json:"backupService"`
-	Config        runtime.RawExtension `json:"config"`
-	OnDemand      []OnDemandSpec       `json:"onDemand,omitempty"`
+	// BackupService is the backup service reference i.e. name and namespace.
+	BackupService *BackupService `json:"backupService"`
+
+	// Config is the configuration for the backup in YAML format.
+	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
+	Config runtime.RawExtension `json:"config"`
+
+	// OnDemand is the configuration on demand backups.
+	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 	// TODO: finalize the status and phase
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -81,7 +89,7 @@ type AerospikeBackup struct {
 	Status AerospikeBackupStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // AerospikeBackupList contains a list of AerospikeBackup
 type AerospikeBackupList struct {

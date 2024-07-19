@@ -5,7 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
+
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
@@ -126,7 +126,7 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
-				FIt("Should fail when non-existing cluster is referred in Backup routine", func() {
+				It("Should fail when non-existing cluster is referred in Backup routine", func() {
 					config := getBackupConfigInMap()
 					routines := config[common.BackupRoutinesKey].(map[string]interface{})
 					routines["test-routine"].(map[string]interface{})["source-cluster"] = "non-existing-cluster"
@@ -144,6 +144,20 @@ var _ = Describe(
 					config := getBackupConfigInMap()
 					routines := config[common.BackupRoutinesKey].(map[string]interface{})
 					routines["test-routine"].(map[string]interface{})["storage"] = "non-existing-storage"
+					config[common.BackupRoutinesKey] = routines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when a different aerospike cluster is referred in Backup routine", func() {
+					config := getBackupConfigInMap()
+					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines["test-routine"].(map[string]interface{})["source-cluster"] = "random-cluster"
 					config[common.BackupRoutinesKey] = routines
 
 					configBytes, mErr := json.Marshal(config)

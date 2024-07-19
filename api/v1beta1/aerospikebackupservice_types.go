@@ -23,60 +23,72 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=InProgress;Completed;Failed
+// +kubebuilder:validation:Enum=InProgress;Completed;Error
 type AerospikeBackupServicePhase string
 
 // These are the valid phases of Aerospike Backup Service reconcile flow.
 const (
+	// AerospikeBackupServiceInProgress means the AerospikeBackupService CR is being reconciled and operations are
+	// in-progress state. This phase denotes that AerospikeBackupService resources are gradually getting deployed.
 	AerospikeBackupServiceInProgress AerospikeBackupServicePhase = "InProgress"
-	AerospikeBackupServiceCompleted  AerospikeBackupServicePhase = "Completed"
-	AerospikeBackupServiceFailed     AerospikeBackupServicePhase = "Failed"
+	// AerospikeBackupServiceCompleted means the AerospikeBackupService CR has been reconciled.
+	// This phase denotes that the AerospikeBackupService resources have been deployed/upgraded successfully and is
+	// ready to use.
+	AerospikeBackupServiceCompleted AerospikeBackupServicePhase = "Completed"
+	// AerospikeBackupServiceError means the AerospikeBackupService operation is in error state because of some reason
+	// like incorrect backup service config, incorrect image, etc.
+	AerospikeBackupServiceError AerospikeBackupServicePhase = "Error"
 )
 
 // AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
 //
 //nolint:govet // for readability
 type AerospikeBackupServiceSpec struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Image"
 	// Image is the image for the backup service.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Image"
 	Image string `json:"image"`
 
+	// Config is the configuration for the backup service in YAML format.
+	// This config is used to start the backup service. The config is passed as a file to the backup service.
+	// It includes: service, backup-policies, storage, secret-agent.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config"
-	// Config is the configuration for the backup service.
 	Config runtime.RawExtension `json:"config"`
 
+	// Resources defines the requests and limits for the backup service container.
+	// Resources.Limits should be more than Resources.Requests.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
-	// Resources is the resource requirements for the backup service.
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Volume"
 	// SecretMounts is the list of secret to be mounted in the backup service.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Volume"
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
+	// Service defines the Kubernetes service configuration for the backup service.
+	// It is used to expose the backup service deployment. By default, the service type is ClusterIP.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
 	Service *Service `json:"service,omitempty"`
 }
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
 type AerospikeBackupServiceStatus struct {
-	// Backup Service API context path
+	// ContextPath is the backup service API context path
 	ContextPath string `json:"contextPath"`
 
-	// Backup service config hash
+	// ConfigHash is the hash string of backup service config
 	ConfigHash string `json:"configHash"`
 
-	// Backup service phase
+	// Phase denotes Backup service phase
 	Phase AerospikeBackupServicePhase `json:"phase,omitempty"`
 
-	// Backup service listening port
+	// Port is the listening port of backup service
 	Port int32 `json:"port"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
-//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeBackupService is the Schema for the aerospikebackupservices API
@@ -88,7 +100,7 @@ type AerospikeBackupService struct {
 	Status AerospikeBackupServiceStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // AerospikeBackupServiceList contains a list of AerospikeBackupService
 type AerospikeBackupServiceList struct {
@@ -101,12 +113,17 @@ func init() {
 	SchemeBuilder.Register(&AerospikeBackupService{}, &AerospikeBackupServiceList{})
 }
 
+// SecretMount specifies the secret and its corresponding volume mount options.
 type SecretMount struct {
+	// SecretName is the name of the secret to be mounted.
 	SecretName string `json:"secretName"`
 
+	// VolumeMount is the volume mount options for the secret.
 	VolumeMount corev1.VolumeMount `json:"volumeMount"`
 }
 
+// Service specifies the Kubernetes service related configuration.
 type Service struct {
+	// Type is the Kubernetes service type.
 	Type corev1.ServiceType `json:"type"`
 }
