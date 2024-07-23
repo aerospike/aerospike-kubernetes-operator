@@ -121,7 +121,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			Data: r.getConfigMapData(),
 		}
 
-		// Set AerospikeCluster instance as the owner and controller
+		// Set AerospikeBackupService instance as the owner and controller
 		err = controllerutil.SetControllerReference(
 			r.aeroBackupService, cm, r.Scheme,
 		)
@@ -240,12 +240,12 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 	oldResourceVersion := deploy.ResourceVersion
 
-	deployObj, err := r.getDeploymentObject()
+	desiredDeployObj, err := r.getDeploymentObject()
 	if err != nil {
 		return err
 	}
 
-	deploy.Spec = deployObj.Spec
+	deploy.Spec = desiredDeployObj.Spec
 
 	if err = r.Client.Update(context.TODO(), &deploy, common.UpdateOption); err != nil {
 		return fmt.Errorf("failed to update Backup service deployment: %v", err)
@@ -256,14 +256,24 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		return r.waitForDeploymentToBeReady()
 	}
 
-	hash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
+	// If status is empty then no need for config Hash comparison
+	if len(r.aeroBackupService.Status.Config.Raw) == 0 {
+		return r.waitForDeploymentToBeReady()
+	}
+
+	desiredHash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
+	if err != nil {
+		return err
+	}
+
+	currentHash, err := utils.GetHash(string(r.aeroBackupService.Status.Config.Raw))
 	if err != nil {
 		return err
 	}
 
 	// If there is a change in config hash, then restart the deployment pod
-	if r.aeroBackupService.Status.ConfigHash != "" && hash != r.aeroBackupService.Status.ConfigHash {
-		r.Log.Info("Config hash is updated, will result in rolling restart")
+	if desiredHash != currentHash {
+		r.Log.Info("BackupService config is updated, will result in rolling restart")
 
 		podList, err := r.getBackupServicePodList()
 		if err != nil {
@@ -306,6 +316,12 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
+	resources := corev1.ResourceRequirements{}
+
+	if r.aeroBackupService.Spec.Resources != nil {
+		resources = *r.aeroBackupService.Spec.Resources
+	}
+
 	svcConf, err := r.getBackupServiceConfig()
 	if err != nil {
 		return nil, err
@@ -344,7 +360,7 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 							Image:           r.aeroBackupService.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    volumeMounts,
-							Resources:       r.aeroBackupService.Spec.Resources,
+							Resources:       resources,
 							Ports:           containerPorts,
 						},
 					},
@@ -646,17 +662,25 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 		return err
 	}
 
-	hash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
-	if err != nil {
-		return err
-	}
+	status := r.CopySpecToStatus()
+	status.ContextPath = svcConfig.contextPath
+	status.Port = svcConfig.portInfo[common.HTTPKey]
+	status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
 
-	r.aeroBackupService.Status.ContextPath = svcConfig.contextPath
-	r.aeroBackupService.Status.Port = svcConfig.portInfo[common.HTTPKey]
-	r.aeroBackupService.Status.ConfigHash = hash
-	r.aeroBackupService.Status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+	r.aeroBackupService.Status = *status
 
 	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
 
 	return r.Client.Status().Update(context.Background(), r.aeroBackupService)
+}
+
+func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.AerospikeBackupServiceStatus {
+	status := asdbv1beta1.AerospikeBackupServiceStatus{}
+	status.Image = r.aeroBackupService.Spec.Image
+	status.Config = r.aeroBackupService.Spec.Config
+	status.Resources = r.aeroBackupService.Spec.Resources
+	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
+	status.Service = r.aeroBackupService.Spec.Service
+
+	return &status
 }

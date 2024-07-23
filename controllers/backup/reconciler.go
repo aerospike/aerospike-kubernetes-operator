@@ -99,8 +99,7 @@ func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
 			return err
 		}
 
-		r.Log.Info("Removing finalizer",
-			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		r.Log.Info("Removing finalizer")
 		// Remove finalizer from the list
 		r.aeroBackup.ObjectMeta.Finalizers = utils.RemoveString(
 			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
@@ -286,7 +285,7 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 
 	r.Log.Info("Schedule on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 
-	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
 		return err
 	}
@@ -297,7 +296,8 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 		return err
 	}
 
-	r.Log.Info("Scheduled on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+	r.Log.Info("Scheduled on-demand backup", "routine-name",
+		r.aeroBackup.Spec.OnDemand[0].RoutineName)
 
 	return nil
 }
@@ -329,7 +329,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 
 	r.Log.Info("Registering backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
 		return err
 	}
@@ -363,7 +363,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 					return err
 				}
 			} else {
-				err = serviceClient.UpdateCluster(name, clusterConfig)
+				err = serviceClient.AddCluster(name, clusterConfig)
 				if err != nil {
 					return err
 				}
@@ -386,7 +386,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 					return err
 				}
 			} else {
-				err = serviceClient.UpdateBackupRoutine(name, routine)
+				err = serviceClient.AddBackupRoutine(name, routine)
 				if err != nil {
 					return err
 				}
@@ -399,6 +399,8 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	if err != nil {
 		return err
 	}
+
+	r.Log.Info("Registered backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
 
 	return nil
 }
@@ -416,7 +418,7 @@ func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 }
 
 func (r *SingleBackupReconciler) unregisterBackup() error {
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroBackup.Spec.BackupService)
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
 		return err
 	}

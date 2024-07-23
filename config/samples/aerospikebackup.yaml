@@ -30,5 +30,12 @@ spec:
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"
         namespaces: ["test"]
+        source-cluster: test-cluster1
+        storage: local
+      test-routine1:
+        backup-policy: test-policy
+        interval-cron: "@daily"
+        incr-interval-cron: "@hourly"
+        namespaces: [ "test" ]
         source-cluster: test-cluster
         storage: local

@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.backupService.namespace
       name: Backup Service Namespace
       type: string
-    - jsonPath: .status.restoreResult.status
+    - jsonPath: .status.phase
       name: Status
       type: string
     - jsonPath: .metadata.creationTimestamp
@@ -63,9 +63,9 @@ spec:
                 - namespace
                 type: object
               config:
-                description: 'Config is the configuration for the restore in YAML
-                  format. This config is used to trigger restores. It includes: destination,
-                  policy, source, secret-agent, time and routine.'
+                description: 'Config is the free form configuration for the restore
+                  in YAML format. This config is used to trigger restores. It includes:
+                  destination, policy, source, secret-agent, time and routine.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               pollingPeriod:
@@ -106,6 +106,8 @@ spec:
                 description: RestoreResult is the result of the restore operation.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+            required:
+            - phase
             type: object
         type: object
     served: true

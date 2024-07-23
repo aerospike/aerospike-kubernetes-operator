@@ -30,8 +30,9 @@ spec:
           field is immutable
         displayName: Backup Service
         path: backupService
-      - description: 'Config is the configuration for the backup in YAML format. This
-          config is used to trigger backups. It includes: aerospike-cluster, backup-routines.'
+      - description: 'Config is the free form configuration for the backup in YAML
+          format. This config is used to trigger backups. It includes: aerospike-cluster,
+          backup-routines.'
         displayName: Backup Config
         path: config
       - description: OnDemand is the configuration on demand backups.
@@ -44,10 +45,10 @@ spec:
       kind: AerospikeBackupService
       name: aerospikebackupservices.asdb.aerospike.com
       specDescriptors:
-      - description: 'Config is the configuration for the backup service in YAML format.
-          This config is used to start the backup service. The config is passed as
-          a file to the backup service. It includes: service, backup-policies, storage,
-          secret-agent.'
+      - description: 'Config is the free form configuration for the backup service
+          in YAML format. This config is used to start the backup service. The config
+          is passed as a file to the backup service. It includes: service, backup-policies,
+          storage, secret-agent.'
         displayName: Backup Service Config
         path: config
       - description: Image is the image for the backup service.
@@ -220,9 +221,9 @@ spec:
           field is immutable
         displayName: Backup Service
         path: backupService
-      - description: 'Config is the configuration for the restore in YAML format.
-          This config is used to trigger restores. It includes: destination, policy,
-          source, secret-agent, time and routine.'
+      - description: 'Config is the free form configuration for the restore in YAML
+          format. This config is used to trigger restores. It includes: destination,
+          policy, source, secret-agent, time and routine.'
         displayName: Restore Config
         path: config
       - description: PollingPeriod is the polling period for restore operation status.

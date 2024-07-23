@@ -104,7 +104,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change Pod spec
-				backupService.Spec.Resources = corev1.ResourceRequirements{
+				backupService.Spec.Resources = &corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU: resource.MustParse("0.5"),
 					},

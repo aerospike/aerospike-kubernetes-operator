@@ -48,7 +48,7 @@ type AerospikeBackupServiceSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Image"
 	Image string `json:"image"`
 
-	// Config is the configuration for the backup service in YAML format.
+	// Config is the free form configuration for the backup service in YAML format.
 	// This config is used to start the backup service. The config is passed as a file to the backup service.
 	// It includes: service, backup-policies, storage, secret-agent.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config"
@@ -57,7 +57,7 @@ type AerospikeBackupServiceSpec struct {
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Volume"
@@ -70,18 +70,36 @@ type AerospikeBackupServiceSpec struct {
 }
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
+//
+//nolint:govet // for readbility
 type AerospikeBackupServiceStatus struct {
-	// ContextPath is the backup service API context path
-	ContextPath string `json:"contextPath"`
+	// Image is the image for the backup service.
+	Image string `json:"image,omitempty"`
 
-	// ConfigHash is the hash string of backup service config
-	ConfigHash string `json:"configHash"`
+	// Config is the free form configuration for the backup service in YAML format.
+	// This config is used to start the backup service. The config is passed as a file to the backup service.
+	// It includes: service, backup-policies, storage, secret-agent.
+	Config runtime.RawExtension `json:"config,omitempty"`
+
+	// Resources defines the requests and limits for the backup service container.
+	// Resources.Limits should be more than Resources.Requests.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// SecretMounts is the list of secret to be mounted in the backup service.
+	SecretMounts []SecretMount `json:"secrets,omitempty"`
+
+	// Service defines the Kubernetes service configuration for the backup service.
+	// It is used to expose the backup service deployment. By default, the service type is ClusterIP.
+	Service *Service `json:"service,omitempty"`
+
+	// ContextPath is the backup service API context path
+	ContextPath string `json:"contextPath,omitempty"`
 
 	// Phase denotes Backup service phase
-	Phase AerospikeBackupServicePhase `json:"phase,omitempty"`
+	Phase AerospikeBackupServicePhase `json:"phase"`
 
 	// Port is the listening port of backup service
-	Port int32 `json:"port"`
+	Port int32 `json:"port,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -28,7 +28,7 @@ import (
 )
 
 // log is for logging in this package.
-var aerospikebackupservicelog = logf.Log.WithName("aerospikebackupservice-resource")
+var aerospikeBackupServiceLog = logf.Log.WithName("aerospikebackupservice-resource")
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -40,7 +40,7 @@ var _ webhook.Defaulter = &AerospikeBackupService{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeBackupService) Default() {
-	aerospikebackupservicelog.Info("default", "name", r.Name)
+	aerospikeBackupServiceLog.Info("default", "name", r.Name)
 }
 
 //nolint:lll // for readability
@@ -50,7 +50,7 @@ var _ webhook.Validator = &AerospikeBackupService{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
-	aerospikebackupservicelog.Info("validate create", "name", r.Name)
+	aerospikeBackupServiceLog.Info("validate create", "name", r.Name)
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
-	aerospikebackupservicelog.Info("validate update", "name", r.Name)
+	aerospikeBackupServiceLog.Info("validate update", "name", r.Name)
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
-	aerospikebackupservicelog.Info("validate delete", "name", r.Name)
+	aerospikeBackupServiceLog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil

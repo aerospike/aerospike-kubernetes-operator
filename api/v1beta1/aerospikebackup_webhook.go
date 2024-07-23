@@ -38,7 +38,7 @@ import (
 )
 
 // log is for logging in this package.
-var aerospikebackuplog = logf.Log.WithName("aerospikebackup-resource")
+var aerospikeBackupLog = logf.Log.WithName("aerospikebackup-resource")
 
 func (r *AerospikeBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -50,7 +50,7 @@ var _ webhook.Defaulter = &AerospikeBackup{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeBackup) Default() {
-	aerospikebackuplog.Info("default", "name", r.Name)
+	aerospikeBackupLog.Info("default", "name", r.Name)
 }
 
 //nolint:lll // for readability
@@ -60,7 +60,7 @@ var _ webhook.Validator = &AerospikeBackup{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
-	aerospikebackuplog.Info("validate create", "name", r.Name)
+	aerospikeBackupLog.Info("validate create", "name", r.Name)
 
 	if len(r.Spec.OnDemand) != 0 && r.Spec.Config.Raw != nil {
 		return nil, fmt.Errorf("onDemand and backup config cannot be specified together while creating backup")
@@ -75,7 +75,7 @@ func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	aerospikebackuplog.Info("validate update", "name", r.Name)
+	aerospikeBackupLog.Info("validate update", "name", r.Name)
 
 	oldObj := old.(*AerospikeBackup)
 
@@ -107,7 +107,7 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateDelete() (admission.Warnings, error) {
-	aerospikebackuplog.Info("validate delete", "name", r.Name)
+	aerospikeBackupLog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
@@ -127,106 +127,57 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return err
 	}
 
-	var config model.Config
+	var backupSvcConfig model.Config
 
-	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &config); err != nil {
+	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &backupSvcConfig); err != nil {
 		return err
 	}
 
-	configMap := make(map[string]interface{})
+	backupSvcConfigMap := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.Spec.Config.Raw, &configMap); err != nil {
+	if err := yaml.Unmarshal(r.Spec.Config.Raw, &backupSvcConfigMap); err != nil {
 		return err
 	}
 
-	if _, ok := configMap[common.AerospikeClusterKey]; !ok {
-		return fmt.Errorf("aerospike-cluster field is required in config")
-	}
-
-	cluster, ok := configMap[common.AerospikeClusterKey].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("aerospike-cluster field is not in the right format")
-	}
-
-	clusterBytes, cErr := yaml.Marshal(cluster)
-	if cErr != nil {
-		return cErr
-	}
-
-	aeroClusters := make(map[string]*model.AerospikeCluster)
-
-	if err := yaml.Unmarshal(clusterBytes, &aeroClusters); err != nil {
+	aeroClusters, err := validateAerospikeCluster(&backupSvcConfig, backupSvcConfigMap)
+	if err != nil {
 		return err
 	}
 
-	if len(aeroClusters) != 1 {
-		return fmt.Errorf("only one aerospike cluster is allowed in backup config")
-	}
-
-	if len(config.AerospikeClusters) == 0 {
-		config.AerospikeClusters = make(map[string]*model.AerospikeCluster)
-	}
-
-	for name, aeroCluster := range aeroClusters {
-		config.AerospikeClusters[name] = aeroCluster
-	}
-
-	if _, ok = configMap[common.BackupRoutinesKey]; !ok {
-		return fmt.Errorf("backup-routines field is required in config")
-	}
-
-	routines, ok := configMap[common.BackupRoutinesKey].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("backup-routines field is not in the right format")
-	}
-
-	routineBytes, rErr := yaml.Marshal(routines)
-	if rErr != nil {
-		return rErr
-	}
-
-	backupRoutines := make(map[string]*model.BackupRoutine)
-
-	if err := yaml.Unmarshal(routineBytes, &backupRoutines); err != nil {
+	backupRoutines, err := validateBackupRoutines(&backupSvcConfig, backupSvcConfigMap)
+	if err != nil {
 		return err
-	}
-
-	if len(config.BackupRoutines) == 0 {
-		config.BackupRoutines = make(map[string]*model.BackupRoutine)
-	}
-
-	for name, routine := range backupRoutines {
-		config.BackupRoutines[name] = routine
 	}
 
 	// validate if only correct aerospike cluster (the one referred in Backup CR) is used in backup routines
-	for _, routine := range config.BackupRoutines {
-		if _, ok = aeroClusters[routine.SourceCluster]; !ok {
-			return fmt.Errorf("cluster %s not found in backup config", routine.SourceCluster)
+	for _, routine := range backupRoutines {
+		if _, ok := aeroClusters[routine.SourceCluster]; !ok {
+			return fmt.Errorf("cluster %s not found in backup backupSvcConfig", routine.SourceCluster)
 		}
 	}
 
-	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig == nil {
-		config.ServiceConfig = &model.BackupServiceConfig{}
+	// Add empty placeholders for missing backupSvcConfig sections. This is required for validation to work.
+	if backupSvcConfig.ServiceConfig == nil {
+		backupSvcConfig.ServiceConfig = &model.BackupServiceConfig{}
 	}
 
-	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+	if backupSvcConfig.ServiceConfig.HTTPServer == nil {
+		backupSvcConfig.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
 	}
 
-	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &model.LoggerConfig{}
+	if backupSvcConfig.ServiceConfig.Logger == nil {
+		backupSvcConfig.ServiceConfig.Logger = &model.LoggerConfig{}
 	}
 
-	if err := config.Validate(); err != nil {
+	if err := backupSvcConfig.Validate(); err != nil {
 		return err
 	}
 
 	// Validate on-demand backup
 	if len(r.Spec.OnDemand) > 0 {
-		if _, ok = config.BackupRoutines[r.Spec.OnDemand[0].RoutineName]; !ok {
-			return fmt.Errorf("backup routine %s not found", r.Spec.OnDemand[0].RoutineName)
+		if _, ok := backupSvcConfig.BackupRoutines[r.Spec.OnDemand[0].RoutineName]; !ok {
+			return fmt.Errorf("invalid onDemand config, backup routine %s not found",
+				r.Spec.OnDemand[0].RoutineName)
 		}
 	}
 
@@ -250,4 +201,74 @@ func getK8sClient() (client.Client, error) {
 	}
 
 	return cl, nil
+}
+
+func validateAerospikeCluster(backupSvcConfig *model.Config, backupSvcConfigMap map[string]interface{},
+) (map[string]*model.AerospikeCluster, error) {
+	if _, ok := backupSvcConfigMap[common.AerospikeClusterKey]; !ok {
+		return nil, fmt.Errorf("aerospike-cluster field is required in backupSvcConfig")
+	}
+
+	cluster, ok := backupSvcConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("aerospike-cluster field is not in the right format")
+	}
+
+	clusterBytes, cErr := yaml.Marshal(cluster)
+	if cErr != nil {
+		return nil, cErr
+	}
+
+	aeroClusters := make(map[string]*model.AerospikeCluster)
+
+	if err := yaml.Unmarshal(clusterBytes, &aeroClusters); err != nil {
+		return nil, err
+	}
+
+	if len(aeroClusters) != 1 {
+		return aeroClusters, fmt.Errorf("only one aerospike cluster is allowed in backup backupSvcConfig")
+	}
+
+	if len(backupSvcConfig.AerospikeClusters) == 0 {
+		backupSvcConfig.AerospikeClusters = make(map[string]*model.AerospikeCluster)
+	}
+
+	for name, aeroCluster := range aeroClusters {
+		backupSvcConfig.AerospikeClusters[name] = aeroCluster
+	}
+
+	return aeroClusters, nil
+}
+
+func validateBackupRoutines(backupSvcConfig *model.Config, backupSvcConfigMap map[string]interface{},
+) (map[string]*model.BackupRoutine, error) {
+	if _, ok := backupSvcConfigMap[common.BackupRoutinesKey]; !ok {
+		return nil, fmt.Errorf("backup-routines field is required in backupSvcConfig")
+	}
+
+	routines, ok := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("backup-routines field is not in the right format")
+	}
+
+	routineBytes, rErr := yaml.Marshal(routines)
+	if rErr != nil {
+		return nil, rErr
+	}
+
+	backupRoutines := make(map[string]*model.BackupRoutine)
+
+	if err := yaml.Unmarshal(routineBytes, &backupRoutines); err != nil {
+		return nil, err
+	}
+
+	if len(backupSvcConfig.BackupRoutines) == 0 {
+		backupSvcConfig.BackupRoutines = make(map[string]*model.BackupRoutine)
+	}
+
+	for name, routine := range backupRoutines {
+		backupSvcConfig.BackupRoutines[name] = routine
+	}
+
+	return backupRoutines, nil
 }

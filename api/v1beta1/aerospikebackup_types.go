@@ -21,15 +21,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// AerospikeBackupSpec defines the desired state of AerospikeBackup
+// AerospikeBackupSpec defines the desired state of AerospikeBackup for a given AerospikeCluster
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
 	// BackupService is the backup service reference i.e. name and namespace.
 	// It is used to communicate to the backup service to trigger backups. This field is immutable
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
-	BackupService *BackupService `json:"backupService"`
+	BackupService BackupService `json:"backupService"`
 
-	// Config is the configuration for the backup in YAML format.
+	// Config is the free form configuration for the backup in YAML format.
 	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
 	Config runtime.RawExtension `json:"config"`
@@ -63,7 +63,7 @@ type OnDemandSpec struct {
 // AerospikeBackupStatus defines the observed state of AerospikeBackup
 type AerospikeBackupStatus struct {
 	// BackupService is the backup service reference i.e. name and namespace.
-	BackupService *BackupService `json:"backupService"`
+	BackupService BackupService `json:"backupService"`
 
 	// Config is the configuration for the backup in YAML format.
 	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.

@@ -64,7 +64,7 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 		return common.ReconcileSuccess()
 	}
 
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroRestore.Spec.BackupService)
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -120,7 +120,7 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 }
 
 func (r *SingleRestoreReconciler) checkRestoreStatus() error {
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, r.aeroRestore.Spec.BackupService)
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
 		return err
 	}
