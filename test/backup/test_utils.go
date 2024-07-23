@@ -9,10 +9,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	corev1 "k8s.io/api/core/v1"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,7 +19,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const (
@@ -55,7 +54,7 @@ func newBackup() (*asdbv1beta1.AerospikeBackup, error) {
 			Namespace: namespace,
 		},
 		Spec: asdbv1beta1.AerospikeBackupSpec{
-			BackupService: &asdbv1beta1.BackupService{
+			BackupService: asdbv1beta1.BackupService{
 				Name:      backupServiceName,
 				Namespace: backupServiceNamespace,
 			},
@@ -73,7 +72,7 @@ func newBackupWithConfig(conf []byte) *asdbv1beta1.AerospikeBackup {
 			Namespace: namespace,
 		},
 		Spec: asdbv1beta1.AerospikeBackupSpec{
-			BackupService: &asdbv1beta1.BackupService{
+			BackupService: asdbv1beta1.BackupService{
 				Name:      backupServiceName,
 				Namespace: backupServiceNamespace,
 			},
@@ -159,8 +158,10 @@ func getBackupConfigInMap() map[string]interface{} {
 				},
 				"seed-nodes": []map[string]interface{}{
 					{
-						"host-name": "aerocluster.aerospike.svc.cluster.local",
-						"port":      3000,
+						"host-name": fmt.Sprintf("%s.%s.svc.cluster.local",
+							aerospikeNsNm.Name, aerospikeNsNm.Namespace,
+						),
+						"port": 3000,
 					},
 				},
 			},

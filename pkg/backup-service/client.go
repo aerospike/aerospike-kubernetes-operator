@@ -53,15 +53,15 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 	}, nil
 }
 
-func (c *Client) GetAddress() string {
+func (c *Client) getAddress() string {
 	return c.Address
 }
 
-func (c *Client) GetPort() int32 {
+func (c *Client) getPort() int32 {
 	return c.Port
 }
 
-func (c *Client) GetContextPath() string {
+func (c *Client) getContextPath() string {
 	if c.ContextPath != "" {
 		return c.ContextPath
 	}
@@ -94,13 +94,13 @@ func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get backup service config")
 	}
 
 	conf := make(map[string]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -122,9 +122,9 @@ func (c *Client) ApplyConfig() error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -144,13 +144,13 @@ func (c *Client) GetClusters() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get aerospike clusters")
 	}
 
 	aerospikeClusters := make(map[string]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -186,9 +186,9 @@ func (c *Client) PutCluster(name, cluster interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -215,9 +215,9 @@ func (c *Client) DeleteCluster(name string) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusNoContent {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusNoContent {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -229,7 +229,7 @@ func (c *Client) DeleteCluster(name string) error {
 	return nil
 }
 
-func (c *Client) UpdateCluster(name, cluster interface{}) error {
+func (c *Client) AddCluster(name, cluster interface{}) error {
 	url := c.API(fmt.Sprintf("/config/clusters/%s", name))
 
 	jsonBody, err := json.Marshal(cluster)
@@ -244,9 +244,9 @@ func (c *Client) UpdateCluster(name, cluster interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusCreated {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -266,13 +266,13 @@ func (c *Client) GetBackupPolicies() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get backup policies")
 	}
 
 	policies := make(map[string]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -308,9 +308,9 @@ func (c *Client) PutBackupPolicy(name string, policy interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -322,7 +322,7 @@ func (c *Client) PutBackupPolicy(name string, policy interface{}) error {
 	return nil
 }
 
-func (c *Client) UpdateBackupPolicy(name string, policy interface{}) error {
+func (c *Client) AddBackupPolicy(name string, policy interface{}) error {
 	url := c.API(fmt.Sprintf("/config/policies/%s", name))
 
 	jsonBody, err := json.Marshal(policy)
@@ -337,9 +337,9 @@ func (c *Client) UpdateBackupPolicy(name string, policy interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusCreated {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -375,9 +375,9 @@ func (c *Client) PutBackupRoutine(name string, routine interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -389,7 +389,7 @@ func (c *Client) PutBackupRoutine(name string, routine interface{}) error {
 	return nil
 }
 
-func (c *Client) UpdateBackupRoutine(name string, routine interface{}) error {
+func (c *Client) AddBackupRoutine(name string, routine interface{}) error {
 	url := c.API(fmt.Sprintf("/config/routines/%s", name))
 
 	jsonBody, err := json.Marshal(routine)
@@ -404,9 +404,9 @@ func (c *Client) UpdateBackupRoutine(name string, routine interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusCreated {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -433,9 +433,9 @@ func (c *Client) DeleteBackupRoutine(name string) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusNoContent {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusNoContent {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -455,13 +455,13 @@ func (c *Client) GetStorage() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get backup storage")
 	}
 
 	storage := make(map[string]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -497,9 +497,9 @@ func (c *Client) PutStorage(name string, storage interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -511,7 +511,7 @@ func (c *Client) PutStorage(name string, storage interface{}) error {
 	return nil
 }
 
-func (c *Client) UpdateStorage(name string, storage interface{}) error {
+func (c *Client) AddStorage(name string, storage interface{}) error {
 	url := c.API(fmt.Sprintf("/config/storage/%s", name))
 
 	jsonBody, err := json.Marshal(storage)
@@ -526,9 +526,9 @@ func (c *Client) UpdateStorage(name string, storage interface{}) error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusCreated {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -548,13 +548,13 @@ func (c *Client) GetFullBackups() (map[string][]interface{}, error) {
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get backups")
 	}
 
 	backups := make(map[string][]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -576,13 +576,13 @@ func (c *Client) GetFullBackupForRoutine(routineName string) ([]interface{}, err
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get backups")
 	}
 
 	var backups []interface{}
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -654,10 +654,10 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 		return nil, nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusAccepted {
 		log.Info("Response", "status-code", resp.StatusCode)
-
-		defer resp.Body.Close()
 
 		body, rErr := io.ReadAll(resp.Body)
 		if rErr != nil {
@@ -669,8 +669,6 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 	}
 
 	jobID = new(int64)
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -694,13 +692,13 @@ func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to check restore restoreStatus")
 	}
 
 	restoreStatus := make(map[string]interface{})
-
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -715,13 +713,13 @@ func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error
 }
 
 func (c *Client) API(pattern string) string {
-	contextPath := c.GetContextPath()
+	contextPath := c.getContextPath()
 
 	if !strings.HasSuffix(contextPath, "/") {
 		contextPath += "/"
 	}
 
-	address := fmt.Sprintf("%s:%d", c.GetAddress(), c.Port)
+	address := fmt.Sprintf("%s:%d", c.getAddress(), c.getPort())
 
 	return fmt.Sprintf("http://%s%s%s%s", address, contextPath, restAPIVersion, pattern)
 }

@@ -50,7 +50,7 @@ type AerospikeRestoreSpec struct {
 	// BackupService is the backup service reference i.e. name and namespace.
 	// It is used to communicate to the backup service to trigger restores. This field is immutable
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
-	BackupService *BackupService `json:"backupService"`
+	BackupService BackupService `json:"backupService"`
 
 	// Type is the type of restore. It can of type Full, Incremental, and Timestamp.
 	// Based on the restore type, relevant restore config is given.
@@ -58,7 +58,7 @@ type AerospikeRestoreSpec struct {
 	// +kubebuilder:validation:Enum=Full;Incremental;TimeStamp
 	Type RestoreType `json:"type"`
 
-	// Config is the configuration for the restore in YAML format.
+	// Config is the free form configuration for the restore in YAML format.
 	// This config is used to trigger restores. It includes: destination, policy, source, secret-agent, time and routine.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Config"
 	Config runtime.RawExtension `json:"config"`
@@ -79,14 +79,14 @@ type AerospikeRestoreStatus struct {
 	RestoreResult runtime.RawExtension `json:"restoreResult,omitempty"`
 
 	// Phase denotes the current phase of Aerospike restore operation.
-	Phase AerospikeRestorePhase `json:"phase,omitempty"`
+	Phase AerospikeRestorePhase `json:"phase"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
-//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.restoreResult.status`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeRestore is the Schema for the aerospikerestores API

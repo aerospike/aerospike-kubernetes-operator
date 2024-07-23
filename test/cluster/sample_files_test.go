@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -128,6 +129,20 @@ func getSamplesFiles() ([]string, error) {
 
 	absolutePath := filepath.Join(projectRoot, fileDir)
 
+	// Files/Dirs ignored are:
+	// 1. PMEM sample file as hardware is not available
+	// 2. XDR related files as they are separately tested
+	// 3. All files which are not CR samples
+	// 4. BackupService, Backup and Restore related files
+	ignoreFiles := sets.New[string](
+		"pmem_cluster_cr.yaml",
+		"xdr_dst_cluster_cr.yaml",
+		"xdr_src_cluster_cr.yaml",
+		"aerospikebackup.yaml",
+		"aerospikebackupservice.yaml",
+		"aerospikerestore.yaml",
+	)
+
 	if err := filepath.Walk(absolutePath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -138,12 +153,10 @@ func getSamplesFiles() ([]string, error) {
 			return nil
 		}
 
-		// Files/Dirs ignored are:
-		// 1. PMEM sample file as hardware is not available
-		// 2. XDR related files as they are separately tested
-		// 3. All files which are not CR samples
-		if strings.Contains(path, "pmem_cluster_cr.yaml") || strings.Contains(path, "xdr_") ||
-			!strings.HasSuffix(path, "_cr.yaml") {
+		parts := strings.Split(path, "/")
+		file := parts[len(parts)-1]
+
+		if ignoreFiles.Has(file) || !strings.HasSuffix(path, "_cr.yaml") {
 			return nil
 		}
 

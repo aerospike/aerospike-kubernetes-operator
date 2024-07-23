@@ -49,10 +49,10 @@ spec:
             description: AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
             properties:
               config:
-                description: 'Config is the configuration for the backup service in
-                  YAML format. This config is used to start the backup service. The
-                  config is passed as a file to the backup service. It includes: service,
-                  backup-policies, storage, secret-agent.'
+                description: 'Config is the free form configuration for the backup
+                  service in YAML format. This config is used to start the backup
+                  service. The config is passed as a file to the backup service. It
+                  includes: service, backup-policies, storage, secret-agent.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               image:
@@ -178,11 +178,18 @@ spec:
             description: AerospikeBackupServiceStatus defines the observed state of
               AerospikeBackupService
             properties:
-              configHash:
-                description: ConfigHash is the hash string of backup service config
-                type: string
+              config:
+                description: 'Config is the free form configuration for the backup
+                  service in YAML format. This config is used to start the backup
+                  service. The config is passed as a file to the backup service. It
+                  includes: service, backup-policies, storage, secret-agent.'
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               contextPath:
                 description: ContextPath is the backup service API context path
+                type: string
+              image:
+                description: Image is the image for the backup service.
                 type: string
               phase:
                 description: Phase denotes Backup service phase
@@ -195,10 +202,120 @@ spec:
                 description: Port is the listening port of backup service
                 format: int32
                 type: integer
+              resources:
+                description: Resources defines the requests and limits for the backup
+                  service container. Resources.Limits should be more than Resources.Requests.
+                properties:
+                  claims:
+                    description: "Claims lists the names of resources, defined in
+                      spec.resourceClaims, that are used by this container. \n This
+                      is an alpha field and requires enabling the DynamicResourceAllocation
+                      feature gate. \n This field is immutable. It can only be set
+                      for containers."
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: Name must match the name of one entry in pod.spec.resourceClaims
+                            of the Pod where this field is used. It makes that resource
+                            available inside a container.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Limits describes the maximum amount of compute resources
+                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Requests describes the minimum amount of compute
+                      resources required. If Requests is omitted for a container,
+                      it defaults to Limits if that is explicitly specified, otherwise
+                      to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+                type: object
+              secrets:
+                description: SecretMounts is the list of secret to be mounted in the
+                  backup service.
+                items:
+                  description: SecretMount specifies the secret and its corresponding
+                    volume mount options.
+                  properties:
+                    secretName:
+                      description: SecretName is the name of the secret to be mounted.
+                      type: string
+                    volumeMount:
+                      description: VolumeMount is the volume mount options for the
+                        secret.
+                      properties:
+                        mountPath:
+                          description: Path within the container at which the volume
+                            should be mounted.  Must not contain ':'.
+                          type: string
+                        mountPropagation:
+                          description: mountPropagation determines how mounts are
+                            propagated from the host to container and the other way
+                            around. When not set, MountPropagationNone is used. This
+                            field is beta in 1.10.
+                          type: string
+                        name:
+                          description: This must match the Name of a Volume.
+                          type: string
+                        readOnly:
+                          description: Mounted read-only if true, read-write otherwise
+                            (false or unspecified). Defaults to false.
+                          type: boolean
+                        subPath:
+                          description: Path within the volume from which the container's
+                            volume should be mounted. Defaults to "" (volume's root).
+                          type: string
+                        subPathExpr:
+                          description: Expanded path within the volume from which
+                            the container's volume should be mounted. Behaves similarly
+                            to SubPath but environment variable references $(VAR_NAME)
+                            are expanded using the container's environment. Defaults
+                            to "" (volume's root). SubPathExpr and SubPath are mutually
+                            exclusive.
+                          type: string
+                      required:
+                      - mountPath
+                      - name
+                      type: object
+                  required:
+                  - secretName
+                  - volumeMount
+                  type: object
+                type: array
+              service:
+                description: Service defines the Kubernetes service configuration
+                  for the backup service. It is used to expose the backup service
+                  deployment. By default, the service type is ClusterIP.
+                properties:
+                  type:
+                    description: Type is the Kubernetes service type.
+                    type: string
+                required:
+                - type
+                type: object
             required:
-            - configHash
-            - contextPath
-            - port
+            - phase
             type: object
         type: object
     served: true

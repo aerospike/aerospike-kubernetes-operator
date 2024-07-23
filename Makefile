@@ -1,4 +1,4 @@
-# # /bin/sh does not support source command needed in make test-all
+# # /bin/sh does not support source command needed in make all-test
 #SHELL := /bin/bash
 
 ROOT_DIR=$(shell git rev-parse --show-toplevel)

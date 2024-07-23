@@ -32,7 +32,7 @@ import (
 )
 
 // log is for logging in this package.
-var aerospikerestorelog = logf.Log.WithName("aerospikerestore-resource")
+var aerospikeRestoreLog = logf.Log.WithName("aerospikerestore-resource")
 
 const defaultPollingPeriod time.Duration = 60 * time.Second
 
@@ -49,7 +49,7 @@ var _ webhook.Defaulter = &AerospikeRestore{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeRestore) Default() {
-	aerospikerestorelog.Info("default", "name", r.Name)
+	aerospikeRestoreLog.Info("default", "name", r.Name)
 
 	if r.Spec.PollingPeriod.Duration.Seconds() == 0 {
 		r.Spec.PollingPeriod.Duration = defaultPollingPeriod
@@ -63,7 +63,7 @@ var _ webhook.Validator = &AerospikeRestore{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
-	aerospikerestorelog.Info("validate create", "name", r.Name)
+	aerospikeRestoreLog.Info("validate create", "name", r.Name)
 
 	if err := r.validateRestoreConfig(); err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	aerospikerestorelog.Info("validate update", "name", r.Name)
+	aerospikeRestoreLog.Info("validate update", "name", r.Name)
 
 	oldRestore := old.(*AerospikeRestore)
 
@@ -87,7 +87,7 @@ func (r *AerospikeRestore) ValidateUpdate(old runtime.Object) (admission.Warning
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
-	aerospikerestorelog.Info("validate delete", "name", r.Name)
+	aerospikeRestoreLog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil

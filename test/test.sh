@@ -62,4 +62,4 @@ echo "---------------------"
 export CUSTOM_INIT_REGISTRY="$REGISTRY"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
-make test-all FOCUS="$FOCUS" ARGS="$ARGS"
+make all-test FOCUS="$FOCUS" ARGS="$ARGS"
