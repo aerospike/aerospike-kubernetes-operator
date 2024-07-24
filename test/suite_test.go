@@ -37,6 +37,7 @@ import (
 	// +kubebuilder:scaffold:imports
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -90,6 +91,10 @@ var _ = BeforeSuite(
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
+
+		// Create SA for aerospike backup service
+		err = createServiceAccount(k8sClient, goctx.TODO(), common.AerospikeBackupService, namespace)
+		Expect(err).ToNot(HaveOccurred())
 
 		// Setup by user function
 		// test creating resource
