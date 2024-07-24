@@ -2,7 +2,7 @@ kind: Service
 apiVersion: v1
 metadata:
   name: aerospike-monitoring-stack-prometheus
-  namespace: default
+  namespace: monitoring
   labels:
     app: aerospike-monitoring-stack-prometheus
     chart: aerospike-monitoring-stack

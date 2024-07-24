@@ -13,4 +13,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: aerospike-monitoring-stack
-    namespace: default
+    namespace: monitoring

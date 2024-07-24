@@ -62,6 +62,12 @@ scrape_configs:
             - default
             - aerospike
     relabel_configs:
+      - source_labels:
+          - __meta_kubernetes_namespace
+        target_label: namespace
+      - source_labels:
+          - __meta_kubernetes_pod_name
+        target_label: pod
       - action: keep
         regex: aerospike-cluster
         replacement: $1

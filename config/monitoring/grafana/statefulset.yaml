@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-grafana
-  namespace: default
+  namespace: monitoring
   labels: &Labels
     app: aerospike-monitoring-stack-grafana
     chart: aerospike-monitoring-stack
