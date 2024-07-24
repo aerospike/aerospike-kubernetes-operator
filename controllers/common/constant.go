@@ -8,7 +8,7 @@ const (
 	StorageKey           = "storage"
 	BackupRoutinesKey    = "backup-routines"
 	BackupPoliciesKey    = "backup-policies"
-	SecretAgentsKey      = "secret-agents"
+	SecretAgentsKey      = "secret-agent"
 )
 
 const (

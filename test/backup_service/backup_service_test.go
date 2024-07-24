@@ -1,8 +1,11 @@
 package backupservice
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,17 +29,13 @@ var _ = Describe(
 		Context(
 			"When doing Invalid operations", func() {
 				It("Should fail when wrong format backup config is given", func() {
-					backupService, err = NewBackupService()
-					Expect(err).ToNot(HaveOccurred())
-
 					badConfig, gErr := getWrongBackupServiceConfBytes()
 					Expect(gErr).ToNot(HaveOccurred())
-					backupService.Spec.Config.Raw = badConfig
+					backupService = newBackupServiceWithConfig(badConfig)
 
 					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).To(HaveOccurred())
-				},
-				)
+				})
 
 				It("Should fail when wrong image is given", func() {
 					backupService, err = NewBackupService()
@@ -46,8 +45,59 @@ var _ = Describe(
 
 					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
 					Expect(err).To(HaveOccurred())
-				},
-				)
+				})
+
+				It("Should fail when aerospike-clusters field is given", func() {
+					configMap := getBackupServiceConfMap()
+					configMap[common.AerospikeClustersKey] = map[string]interface{}{
+						"test-cluster": map[string]interface{}{
+							"credentials": map[string]interface{}{
+								"password": "admin123",
+								"user":     "admin",
+							},
+							"seed-nodes": []map[string]interface{}{
+								{
+									"host-name": "aerocluster.aerospike.svc.cluster.local",
+									"port":      3000,
+								},
+							},
+						},
+					}
+
+					configBytes, mErr := json.Marshal(configMap)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backupService = newBackupServiceWithConfig(configBytes)
+
+					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring(
+						"aerospike-clusters field cannot be specified in backup service config"))
+				})
+
+				It("Should fail when backup-routines field is given", func() {
+					configMap := getBackupServiceConfMap()
+					configMap[common.BackupRoutinesKey] = map[string]interface{}{
+						"test-routine": map[string]interface{}{
+							"backup-policy":      "test-policy",
+							"interval-cron":      "@daily",
+							"incr-interval-cron": "@hourly",
+							"namespaces":         []string{"test"},
+							"source-cluster":     "test-cluster",
+							"storage":            "local",
+						},
+					}
+
+					configBytes, mErr := json.Marshal(configMap)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backupService = newBackupServiceWithConfig(configBytes)
+
+					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("backup-routines field cannot be specified in backup service config"))
+				})
 			},
 		)
 

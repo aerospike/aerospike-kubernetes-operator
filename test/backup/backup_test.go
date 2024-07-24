@@ -54,7 +54,7 @@ var _ = Describe(
 					backup, err = newBackup()
 					Expect(err).ToNot(HaveOccurred())
 
-					backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand",
 							RoutineName: "test-routine",
@@ -75,7 +75,7 @@ var _ = Describe(
 					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
-					backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand",
 							RoutineName: "non-existing-routine",
@@ -168,6 +168,82 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
+				It("Should fail when service field is given in backup config", func() {
+					config := getBackupConfigInMap()
+					config[common.ServiceKey] = map[string]interface{}{
+						"http": map[string]interface{}{
+							"port": 8081,
+						},
+					}
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("service field cannot be specified in backup config"))
+				})
+
+				It("Should fail when backup-policies field is given in backup config", func() {
+					config := getBackupConfigInMap()
+					config[common.BackupPoliciesKey] = map[string]interface{}{
+						"test-policy": map[string]interface{}{
+							"parallel":     3,
+							"remove-files": "KeepAll",
+							"type":         1,
+						},
+					}
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("backup-policies field cannot be specified in backup config"))
+				})
+
+				It("Should fail when storage field is given in backup config", func() {
+					config := getBackupConfigInMap()
+					config[common.StorageKey] = map[string]interface{}{
+						"local": map[string]interface{}{
+							"path": "/localStorage",
+							"type": "local",
+						},
+					}
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("storage field cannot be specified in backup config"))
+				})
+
+				It("Should fail when secret-agent is given in backup config", func() {
+					config := getBackupConfigInMap()
+					config[common.SecretAgentsKey] = map[string]interface{}{
+						"test-agent": map[string]interface{}{
+							"address": "localhost",
+							"port":    4000,
+						},
+					}
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(configBytes)
+					err = deployBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("secret-agent field cannot be specified in backup config"))
+				})
+
 			},
 		)
 
@@ -192,7 +268,7 @@ var _ = Describe(
 				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
 				Expect(err).ToNot(HaveOccurred())
 
-				backup.Spec.OnDemand = []asdbv1beta1.OnDemandSpec{
+				backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 					{
 						ID:          "on-demand",
 						RoutineName: "test-routine",

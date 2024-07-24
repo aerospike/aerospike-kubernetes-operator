@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -83,6 +85,14 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 
 	if err := yaml.Unmarshal(r.Spec.Config.Raw, &config); err != nil {
 		return err
+	}
+
+	if len(config.BackupRoutines) != 0 {
+		return fmt.Errorf("backup-routines field cannot be specified in backup service config")
+	}
+
+	if len(config.AerospikeClusters) != 0 {
+		return fmt.Errorf("aerospike-clusters field cannot be specified in backup service config")
 	}
 
 	// Add empty placeholders for missing config sections. This is required for validation to work.

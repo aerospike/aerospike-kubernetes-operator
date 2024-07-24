@@ -47,14 +47,12 @@ type AerospikeBackupServiceReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.1/pkg/reconcile
 func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("aerospikebackupservice", request.NamespacedName)
 
 	log.Info("Reconciling AerospikeBackupService")
 
-	// Fetch the AerospikeBackup instance
+	// Fetch the AerospikeBackupService instance
 	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
 	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
