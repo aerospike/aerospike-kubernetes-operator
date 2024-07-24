@@ -127,7 +127,9 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	}
 
 	r.Log.Info("Updating existing ConfigMap for Backup",
-		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		"name", r.aeroBackup.Spec.BackupService.Name,
+		"namespace", r.aeroBackup.Spec.BackupService.Namespace,
+	)
 
 	backupDataMap := make(map[string]interface{})
 	cmDataMap := make(map[string]interface{})
@@ -193,7 +195,9 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	}
 
 	r.Log.Info("Updated Backup Service ConfigMap for Backup",
-		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		"name", r.aeroBackup.Spec.BackupService.Name,
+		"namespace", r.aeroBackup.Spec.BackupService.Namespace,
+	)
 
 	return nil
 }
@@ -215,7 +219,9 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	}
 
 	r.Log.Info("Removing Backup info from existing ConfigMap",
-		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		"name", r.aeroBackup.Spec.BackupService.Name,
+		"namespace", r.aeroBackup.Spec.BackupService.Namespace,
+	)
 
 	backupDataMap := make(map[string]interface{})
 	cmDataMap := make(map[string]interface{})
@@ -269,7 +275,9 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	}
 
 	r.Log.Info("Removed Backup info from existing ConfigMap",
-		"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		"name", r.aeroBackup.Spec.BackupService.Name,
+		"namespace", r.aeroBackup.Spec.BackupService.Namespace,
+	)
 
 	return nil
 }
@@ -278,12 +286,13 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 	// There can be only one on-demand backup allowed right now.
 	if len(r.aeroBackup.Status.OnDemand) > 0 &&
 		r.aeroBackup.Spec.OnDemand[0].ID == r.aeroBackup.Status.OnDemand[0].ID {
-		r.Log.Info("On-demand backup already scheduled",
-			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		r.Log.Info("On-demand backup already scheduled for the same ID",
+			"ID", r.aeroBackup.Status.OnDemand[0].ID)
 		return nil
 	}
 
-	r.Log.Info("Schedule on-demand backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+	r.Log.Info("Schedule on-demand backup",
+		"ID", r.aeroBackup.Spec.OnDemand[0].ID, "routine", r.aeroBackup.Spec.OnDemand[0].RoutineName)
 
 	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
@@ -296,8 +305,8 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 		return err
 	}
 
-	r.Log.Info("Scheduled on-demand backup", "routine-name",
-		r.aeroBackup.Spec.OnDemand[0].RoutineName)
+	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemand[0].ID,
+		"routine", r.aeroBackup.Spec.OnDemand[0].RoutineName)
 
 	return nil
 }
@@ -322,12 +331,11 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	if specHash == statusHash {
-		r.Log.Info("Backup config not changed",
-			"name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+		r.Log.Info("Backup config not changed")
 		return nil
 	}
 
-	r.Log.Info("Registering backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+	r.Log.Info("Registering backup")
 
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
@@ -400,7 +408,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		return err
 	}
 
-	r.Log.Info("Registered backup", "name", r.aeroBackup.Name, "namespace", r.aeroBackup.Namespace)
+	r.Log.Info("Registered backup")
 
 	return nil
 }

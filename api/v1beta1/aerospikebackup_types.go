@@ -69,7 +69,7 @@ type AerospikeBackupStatus struct {
 	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
 	Config runtime.RawExtension `json:"config"`
 
-	// OnDemand is the configuration on demand backups.
+	// OnDemand is the configuration for demand backups.
 	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
 	// TODO: finalize the status and phase
 }
