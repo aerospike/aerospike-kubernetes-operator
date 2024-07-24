@@ -36,6 +36,7 @@ for namespace in $namespaces; do
 
   echo "Removing serviceaccount from namespace: $namespace"
   kubectl -n "$namespace" delete serviceaccount aerospike-operator-controller-manager --ignore-not-found
+  kubectl -n "$namespace" delete serviceaccount aerospike-backup-service --ignore-not-found
 
 done
 
