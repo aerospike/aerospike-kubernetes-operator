@@ -12,7 +12,7 @@ spec:
   backupService:
     name: aerospikebackupservice-sample
     namespace: aerospike
-#  onDemand:
+#  onDemandBackups:
 #    - id: first-ad-hoc-backup
 #      routineName: test-routine
   config:
@@ -30,7 +30,7 @@ spec:
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"
         namespaces: ["test"]
-        source-cluster: test-cluster1
+        source-cluster: test-cluster
         storage: local
       test-routine1:
         backup-policy: test-policy

@@ -45,6 +45,28 @@ spec:
             description: AerospikeBackupSpec defines the desired state of AerospikeBackup
               for a given AerospikeCluster
             properties:
+              OnDemandBackups:
+                description: OnDemandBackups is the configuration for on-demand backups.
+                items:
+                  properties:
+                    delay:
+                      description: Delay is the interval before starting the on-demand
+                        backup.
+                      type: string
+                    id:
+                      description: ID is the unique identifier for the on-demand backup.
+                      minLength: 1
+                      type: string
+                    routineName:
+                      description: RoutineName is the routine name used to trigger
+                        on-demand backup.
+                      type: string
+                  required:
+                  - id
+                  - routineName
+                  type: object
+                maxItems: 1
+                type: array
               backupService:
                 description: BackupService is the backup service reference i.e. name
                   and namespace. It is used to communicate to the backup service to
@@ -66,8 +88,15 @@ spec:
                   aerospike-cluster, backup-routines.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              onDemand:
-                description: OnDemand is the configuration on demand backups.
+            required:
+            - backupService
+            - config
+            type: object
+          status:
+            description: AerospikeBackupStatus defines the observed state of AerospikeBackup
+            properties:
+              OnDemandBackups:
+                description: OnDemandBackups is the configuration for on-demand backups.
                 items:
                   properties:
                     delay:
@@ -86,15 +115,7 @@ spec:
                   - id
                   - routineName
                   type: object
-                maxItems: 1
                 type: array
-            required:
-            - backupService
-            - config
-            type: object
-          status:
-            description: AerospikeBackupStatus defines the observed state of AerospikeBackup
-            properties:
               backupService:
                 description: BackupService is the backup service reference i.e. name
                   and namespace.
@@ -115,27 +136,6 @@ spec:
                   backup-routines.'
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
-              onDemand:
-                description: OnDemand is the configuration for demand backups.
-                items:
-                  properties:
-                    delay:
-                      description: Delay is the interval before starting the on-demand
-                        backup.
-                      type: string
-                    id:
-                      description: ID is the unique identifier for the on-demand backup.
-                      minLength: 1
-                      type: string
-                    routineName:
-                      description: RoutineName is the routine name used to trigger
-                        on-demand backup.
-                      type: string
-                  required:
-                  - id
-                  - routineName
-                  type: object
-                type: array
             required:
             - backupService
             - config

@@ -24,7 +24,7 @@ import (
 
 const BackupConfigYAML = "aerospike-backup-service.yml"
 
-// SingleClusterReconciler reconciles a single AerospikeCluster
+// SingleBackupReconciler reconciles a single AerospikeBackup object
 type SingleBackupReconciler struct {
 	client.Client
 	Recorder   record.EventRecorder
@@ -42,11 +42,11 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 			return reconcile.Result{}, err
 		}
 
-		// Stop reconciliation as the cluster is being deleted
+		// Stop reconciliation as the backup is being deleted
 		return reconcile.Result{}, nil
 	}
 
-	// The cluster is not being deleted, add finalizer if not added already
+	// The backup is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(finalizerName); err != nil {
 		r.Log.Error(err, "Failed to add finalizer")
 		return reconcile.Result{}, err
@@ -284,29 +284,29 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 
 func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 	// There can be only one on-demand backup allowed right now.
-	if len(r.aeroBackup.Status.OnDemand) > 0 &&
-		r.aeroBackup.Spec.OnDemand[0].ID == r.aeroBackup.Status.OnDemand[0].ID {
+	if len(r.aeroBackup.Status.OnDemandBackups) > 0 &&
+		r.aeroBackup.Spec.OnDemandBackups[0].ID == r.aeroBackup.Status.OnDemandBackups[0].ID {
 		r.Log.Info("On-demand backup already scheduled for the same ID",
-			"ID", r.aeroBackup.Status.OnDemand[0].ID)
+			"ID", r.aeroBackup.Status.OnDemandBackups[0].ID)
 		return nil
 	}
 
 	r.Log.Info("Schedule on-demand backup",
-		"ID", r.aeroBackup.Spec.OnDemand[0].ID, "routine", r.aeroBackup.Spec.OnDemand[0].RoutineName)
+		"ID", r.aeroBackup.Spec.OnDemandBackups[0].ID, "routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
 
 	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
 		return err
 	}
 
-	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemand[0].RoutineName,
-		r.aeroBackup.Spec.OnDemand[0].Delay); err != nil {
+	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemandBackups[0].RoutineName,
+		r.aeroBackup.Spec.OnDemandBackups[0].Delay); err != nil {
 		r.Log.Error(err, "Failed to schedule on-demand backup")
 		return err
 	}
 
-	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemand[0].ID,
-		"routine", r.aeroBackup.Spec.OnDemand[0].RoutineName)
+	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
+		"routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
 
 	return nil
 }
@@ -364,6 +364,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 			return gErr
 		}
 
+		// TODO: Remove these API calls when hot reload is implemented
 		for name, clusterConfig := range cluster {
 			if _, ok := currentClusters[name]; ok {
 				err = serviceClient.PutCluster(name, clusterConfig)
@@ -387,6 +388,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 			return gErr
 		}
 
+		// TODO: Remove these API calls when hot reload is implemented
 		for name, routine := range routines {
 			if _, ok := currentRoutines[name]; ok {
 				err = serviceClient.PutBackupRoutine(name, routine)
@@ -415,7 +417,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 
 func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 	// Schedule on-demand backup if given
-	if len(r.aeroBackup.Spec.OnDemand) > 0 {
+	if len(r.aeroBackup.Spec.OnDemandBackups) > 0 {
 		if err := r.scheduleOnDemandBackup(); err != nil {
 			r.Log.Error(err, "Failed to schedule backup")
 			return err
@@ -491,7 +493,7 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 func (r *SingleBackupReconciler) updateStatus() error {
 	r.aeroBackup.Status.BackupService = r.aeroBackup.Spec.BackupService
 	r.aeroBackup.Status.Config = r.aeroBackup.Spec.Config
-	r.aeroBackup.Status.OnDemand = r.aeroBackup.Spec.OnDemand
+	r.aeroBackup.Status.OnDemandBackups = r.aeroBackup.Spec.OnDemandBackups
 
 	return r.Client.Status().Update(context.Background(), r.aeroBackup)
 }

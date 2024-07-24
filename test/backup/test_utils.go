@@ -125,7 +125,7 @@ func waitForBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup,
 			status := asdbv1beta1.AerospikeBackupStatus{}
 			status.BackupService = backup.Spec.BackupService
 			status.Config = backup.Spec.Config
-			status.OnDemand = backup.Spec.OnDemand
+			status.OnDemandBackups = backup.Spec.OnDemandBackups
 
 			if !reflect.DeepEqual(status, backup.Status) {
 				pkgLog.Info("Backup status not updated yet")

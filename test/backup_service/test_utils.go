@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	app "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,10 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 const BackupServiceImage = "aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:1.0.0"
@@ -53,6 +53,21 @@ func NewBackupService() (*asdbv1beta1.AerospikeBackupService, error) {
 			},
 		},
 	}, nil
+}
+
+func newBackupServiceWithConfig(config []byte) *asdbv1beta1.AerospikeBackupService {
+	return &asdbv1beta1.AerospikeBackupService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: asdbv1beta1.AerospikeBackupServiceSpec{
+			Image: BackupServiceImage,
+			Config: runtime.RawExtension{
+				Raw: config,
+			},
+		},
+	}
 }
 
 func getBackupServiceObj(cl client.Client, name, namespace string) (*asdbv1beta1.AerospikeBackupService,
@@ -160,30 +175,9 @@ func waitForBackupService(cl client.Client, backupService *asdbv1beta1.Aerospike
 }
 
 func getBackupServiceConfBytes() ([]byte, error) {
-	config := `service:
-  http:
-    port: 8081
-backup-policies:
-  test-policy:
-    parallel: 3
-    remove-files: KeepAll
-    type: 1
-  test-policy1:
-    parallel: 3
-    remove-files: KeepAll
-    type: 1
-storage:
-  local:
-    path: /localStorage
-    type: local`
+	config := getBackupServiceConfMap()
 
-	configMap := make(map[string]interface{})
-
-	if err := yaml.Unmarshal([]byte(config), &configMap); err != nil {
-		return nil, err
-	}
-
-	configBytes, err := json.Marshal(configMap)
+	configBytes, err := json.Marshal(config)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +185,56 @@ storage:
 	pkgLog.Info(string(configBytes))
 
 	return configBytes, nil
+}
+
+func getWrongBackupServiceConfBytes() ([]byte, error) {
+	config := getBackupServiceConfMap()
+
+	tempList := make([]interface{}, 0, len(config[common.BackupPoliciesKey].(map[string]interface{})))
+
+	for _, policy := range config[common.BackupPoliciesKey].(map[string]interface{}) {
+		tempList = append(tempList, policy)
+	}
+
+	// change the format from map to list
+	config[common.BackupPoliciesKey] = tempList
+
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	pkgLog.Info(string(configBytes))
+
+	return configBytes, nil
+}
+
+func getBackupServiceConfMap() map[string]interface{} {
+	return map[string]interface{}{
+		common.ServiceKey: map[string]interface{}{
+			"http": map[string]interface{}{
+				"port": 8081,
+			},
+		},
+		common.BackupPoliciesKey: map[string]interface{}{
+			"test-policy": map[string]interface{}{
+				"parallel":     3,
+				"remove-files": "KeepAll",
+				"type":         1,
+			},
+			"test-policy1": map[string]interface{}{
+				"parallel":     3,
+				"remove-files": "KeepAll",
+				"type":         1,
+			},
+		},
+		common.StorageKey: map[string]interface{}{
+			"local": map[string]interface{}{
+				"path": "/localStorage",
+				"type": "local",
+			},
+		},
+	}
 }
 
 func getBackupServicePodList(cl client.Client, backupService *asdbv1beta1.AerospikeBackupService) (*corev1.PodList,
@@ -207,40 +251,6 @@ func getBackupServicePodList(cl client.Client, backupService *asdbv1beta1.Aerosp
 	}
 
 	return &podList, nil
-}
-
-func getWrongBackupServiceConfBytes() ([]byte, error) {
-	config := `service:
-  http:
-    port: 8081
-backup-policies:
-  - test-policy:
-      parallel: 3
-      remove-files: KeepAll
-      type: 1
-  - test-policy1:
-      parallel: 3
-      remove-files: KeepAll
-      type: 1
-storage:
-  local:
-    path: /localStorage
-    type: local`
-
-	configMap := make(map[string]interface{})
-
-	if err := yaml.Unmarshal([]byte(config), &configMap); err != nil {
-		return nil, err
-	}
-
-	configBytes, err := json.Marshal(configMap)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgLog.Info(string(configBytes))
-
-	return configBytes, nil
 }
 
 func DeleteBackupService(

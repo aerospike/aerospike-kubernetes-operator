@@ -34,10 +34,10 @@ type AerospikeBackupSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Config"
 	Config runtime.RawExtension `json:"config"`
 
-	// OnDemand is the configuration on demand backups.
+	// OnDemandBackups is the configuration for on-demand backups.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand Backups"
 	// +kubebuilder:validation:MaxItems:=1
-	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
+	OnDemandBackups []OnDemandBackupSpec `json:"OnDemandBackups,omitempty"`
 }
 
 type BackupService struct {
@@ -48,7 +48,7 @@ type BackupService struct {
 	Namespace string `json:"namespace"`
 }
 
-type OnDemandSpec struct {
+type OnDemandBackupSpec struct {
 	// ID is the unique identifier for the on-demand backup.
 	// +kubebuilder:validation:MinLength=1
 	ID string `json:"id"`
@@ -69,8 +69,9 @@ type AerospikeBackupStatus struct {
 	// This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
 	Config runtime.RawExtension `json:"config"`
 
-	// OnDemand is the configuration for demand backups.
-	OnDemand []OnDemandSpec `json:"onDemand,omitempty"`
+	// OnDemandBackups is the configuration for on-demand backups.
+	OnDemandBackups []OnDemandBackupSpec `json:"OnDemandBackups,omitempty"`
+
 	// TODO: finalize the status and phase
 }
 

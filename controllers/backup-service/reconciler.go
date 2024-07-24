@@ -27,7 +27,8 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-const BackupConfigYAML = "aerospike-backup-service.yml"
+// BackupServiceConfigYAML is the backup service configuration yaml file
+const BackupServiceConfigYAML = "aerospike-backup-service.yml"
 
 type serviceConfig struct {
 	portInfo    map[string]int32
@@ -156,23 +157,23 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	data := cm.Data[BackupConfigYAML]
+	data := cm.Data[BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &currentDataMap); err != nil {
 		return err
 	}
 
-	currentDataMap["service"] = desiredDataMap["service"]
+	currentDataMap[common.ServiceKey] = desiredDataMap[common.ServiceKey]
 	currentDataMap[common.BackupPoliciesKey] = desiredDataMap[common.BackupPoliciesKey]
 	currentDataMap[common.StorageKey] = desiredDataMap[common.StorageKey]
-	currentDataMap["secret-agent"] = desiredDataMap["secret-agent"]
+	currentDataMap[common.SecretAgentsKey] = desiredDataMap[common.SecretAgentsKey]
 
 	updatedConfig, err := yaml.Marshal(currentDataMap)
 	if err != nil {
 		return err
 	}
 
-	cm.Data[BackupConfigYAML] = string(updatedConfig)
+	cm.Data[BackupServiceConfigYAML] = string(updatedConfig)
 
 	if err = r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,
@@ -191,7 +192,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	data := make(map[string]string)
-	data[BackupConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+	data[BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
 
 	return data
 }
@@ -418,8 +419,8 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
-		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", BackupConfigYAML),
-		SubPath:   BackupConfigYAML,
+		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", BackupServiceConfigYAML),
+		SubPath:   BackupServiceConfigYAML,
 	})
 
 	// Backup service configMap
