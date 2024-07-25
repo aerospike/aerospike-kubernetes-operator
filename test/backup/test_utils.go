@@ -175,6 +175,14 @@ func getBackupConfigInMap() map[string]interface{} {
 				"source-cluster":     "test-cluster",
 				"storage":            "local",
 			},
+			"test-routine1": map[string]interface{}{
+				"backup-policy":      "test-policy",
+				"interval-cron":      "@daily",
+				"incr-interval-cron": "@hourly",
+				"namespaces":         []string{"test"},
+				"source-cluster":     "test-cluster",
+				"storage":            "local",
+			},
 		},
 	}
 }
@@ -271,20 +279,24 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 
 	newCluster := desiredConfigMap[common.AerospikeClusterKey].(map[string]interface{})
 
-	for name := range newCluster {
-		if _, ok := config.AerospikeClusters[name]; !ok {
-			return fmt.Errorf("cluster %s not found in backup config", name)
+	for clusterName := range newCluster {
+		if _, ok := config.AerospikeClusters[clusterName]; !ok {
+			return fmt.Errorf("cluster %s not found in backup config", clusterName)
 		}
 	}
 
-	pkgLog.Info("Backup cluster info is found in backup config")
+	pkgLog.Info("Backup cluster info is found in backup service config")
 
 	routines := desiredConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 
-	for name := range routines {
-		if _, ok := config.BackupRoutines[name]; !ok {
-			return fmt.Errorf("routine %s not found in backup config", name)
+	for routineName := range routines {
+		if _, ok := config.BackupRoutines[routineName]; !ok {
+			return fmt.Errorf("routine %s not found in backup service config", routineName)
 		}
+	}
+
+	if len(routines) != len(config.BackupRoutines) {
+		return fmt.Errorf("backup routine count mismatch")
 	}
 
 	pkgLog.Info("Backup routines info is found in backup config")

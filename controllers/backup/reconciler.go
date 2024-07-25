@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -349,15 +350,15 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 
 	r.Log.Info("Fetched backup service config", "config", config)
 
-	backupConfigMap := make(map[string]interface{})
+	specBackupConfigMap := make(map[string]interface{})
 
-	err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap)
+	err = yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &specBackupConfigMap)
 	if err != nil {
 		return err
 	}
 
-	if backupConfigMap[common.AerospikeClusterKey] != nil {
-		cluster := backupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	if specBackupConfigMap[common.AerospikeClusterKey] != nil {
+		cluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
 
 		currentClusters, gErr := common.GetConfigSection(config, common.AerospikeClustersKey)
 		if gErr != nil {
@@ -367,9 +368,14 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		// TODO: Remove these API calls when hot reload is implemented
 		for name, clusterConfig := range cluster {
 			if _, ok := currentClusters[name]; ok {
-				err = serviceClient.PutCluster(name, clusterConfig)
-				if err != nil {
-					return err
+				// Only update if there is any change
+				if !reflect.DeepEqual(currentClusters[name], clusterConfig) {
+					r.Log.Info("Cluster config has been changed, updating it", "cluster", name)
+
+					err = serviceClient.PutCluster(name, clusterConfig)
+					if err != nil {
+						return err
+					}
 				}
 			} else {
 				err = serviceClient.AddCluster(name, clusterConfig)
@@ -380,8 +386,8 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		}
 	}
 
-	if backupConfigMap[common.BackupRoutinesKey] != nil {
-		routines := backupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+	if specBackupConfigMap[common.BackupRoutinesKey] != nil {
+		routines := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 
 		currentRoutines, gErr := common.GetConfigSection(config, common.BackupRoutinesKey)
 		if gErr != nil {
@@ -391,9 +397,14 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		// TODO: Remove these API calls when hot reload is implemented
 		for name, routine := range routines {
 			if _, ok := currentRoutines[name]; ok {
-				err = serviceClient.PutBackupRoutine(name, routine)
-				if err != nil {
-					return err
+				// Only update if there is any change
+				if !reflect.DeepEqual(currentRoutines[name], routine) {
+					r.Log.Info("Routine config has been changed, updating it", "routine", name)
+
+					err = serviceClient.PutBackupRoutine(name, routine)
+					if err != nil {
+						return err
+					}
 				}
 			} else {
 				err = serviceClient.AddBackupRoutine(name, routine)
@@ -401,6 +412,14 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 					return err
 				}
 			}
+		}
+	}
+
+	// If there are routines that are removed, unregister them
+	if len(r.aeroBackup.Status.Config.Raw) != 0 {
+		err = r.unregisterBackupRoutines(specBackupConfigMap, serviceClient)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -485,6 +504,32 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 	err = serviceClient.ApplyConfig()
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) unregisterBackupRoutines(
+	specBackupConfigMap map[string]interface{},
+	serviceClient *backup_service.Client,
+) error {
+	statusBackupConfigMap := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(r.aeroBackup.Status.Config.Raw, &statusBackupConfigMap); err != nil {
+		return err
+	}
+
+	// Unregister the backup routines which are removed
+	for name := range statusBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{}) {
+		if _, ok := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})[name]; !ok {
+			r.Log.Info("Unregistering backup routine", "routine", name)
+
+			if err := serviceClient.DeleteBackupRoutine(name); err != nil {
+				return err
+			}
+
+			r.Log.Info("Unregistered backup routine", "routine", name)
+		}
 	}
 
 	return nil
