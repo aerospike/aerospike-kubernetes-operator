@@ -282,6 +282,36 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
+			It("Should unregister backup-routines when removed from backup CR", func() {
+				backup, err = newBackup()
+				Expect(err).ToNot(HaveOccurred())
+				err = deployBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Removing 1 backup-routine from backup CR")
+				backupConfig := getBackupConfigInMap()
+				routines := backupConfig[common.BackupRoutinesKey].(map[string]interface{})
+				delete(routines, "test-routine1")
+				backupConfig[common.BackupRoutinesKey] = routines
+
+				configBytes, mErr := json.Marshal(backupConfig)
+				Expect(mErr).ToNot(HaveOccurred())
+
+				backup.Spec.Config.Raw = configBytes
+
+				err = k8sClient.Update(testCtx, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 		})
 	},
 )
