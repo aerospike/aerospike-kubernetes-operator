@@ -54,7 +54,7 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Setup Suite")
 }
 
-// This is used when running tests on existing cluster
+// This is used when running tests on an existing cluster
 // user has to install its own operator then run cleanup and then start this
 
 var _ = BeforeSuite(

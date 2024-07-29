@@ -48,24 +48,26 @@ func newBackup() (*asdbv1beta1.AerospikeBackup, error) {
 		return nil, err
 	}
 
-	return &asdbv1beta1.AerospikeBackup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: asdbv1beta1.AerospikeBackupSpec{
-			BackupService: asdbv1beta1.BackupService{
-				Name:      backupServiceName,
-				Namespace: backupServiceNamespace,
-			},
-			Config: runtime.RawExtension{
-				Raw: configBytes,
-			},
-		},
-	}, nil
+	backup := newBackupWithEmptyConfig()
+
+	backup.Spec.Config = runtime.RawExtension{
+		Raw: configBytes,
+	}
+
+	return backup, nil
 }
 
 func newBackupWithConfig(conf []byte) *asdbv1beta1.AerospikeBackup {
+	backup := newBackupWithEmptyConfig()
+
+	backup.Spec.Config = runtime.RawExtension{
+		Raw: conf,
+	}
+
+	return backup
+}
+
+func newBackupWithEmptyConfig() *asdbv1beta1.AerospikeBackup {
 	return &asdbv1beta1.AerospikeBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -75,9 +77,6 @@ func newBackupWithConfig(conf []byte) *asdbv1beta1.AerospikeBackup {
 			BackupService: asdbv1beta1.BackupService{
 				Name:      backupServiceName,
 				Namespace: backupServiceNamespace,
-			},
-			Config: runtime.RawExtension{
-				Raw: conf,
 			},
 		},
 	}
@@ -95,6 +94,14 @@ func getBackupObj(cl client.Client, name, namespace string) (*asdbv1beta1.Aerosp
 
 func deployBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	if err := cl.Create(testCtx, backup); err != nil {
+		return err
+	}
+
+	return waitForBackup(cl, backup, timeout)
+}
+
+func updateBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
+	if err := cl.Update(testCtx, backup); err != nil {
 		return err
 	}
 
@@ -175,14 +182,6 @@ func getBackupConfigInMap() map[string]interface{} {
 				"source-cluster":     "test-cluster",
 				"storage":            "local",
 			},
-			"test-routine1": map[string]interface{}{
-				"backup-policy":      "test-policy",
-				"interval-cron":      "@daily",
-				"incr-interval-cron": "@hourly",
-				"namespaces":         []string{"test"},
-				"source-cluster":     "test-cluster",
-				"storage":            "local",
-			},
 		},
 	}
 }
@@ -209,6 +208,58 @@ func getWrongBackupConfBytes() ([]byte, error) {
 func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupServiceNamespace string,
 	backup *asdbv1beta1.AerospikeBackup) error {
 	var backupK8sService corev1.Service
+
+	validateNewEntries := func(current *model.Config, desiredConfigMap map[string]interface{}, fieldPath string) error {
+		newCluster := desiredConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+
+		for clusterName := range newCluster {
+			if _, ok := current.AerospikeClusters[clusterName]; !ok {
+				return fmt.Errorf("cluster %s not found in %s backup config", clusterName, fieldPath)
+			}
+		}
+
+		pkgLog.Info(fmt.Sprintf("Cluster info is found in %s backup config", fieldPath))
+
+		routines := desiredConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+
+		for routineName := range routines {
+			if _, ok := current.BackupRoutines[routineName]; !ok {
+				return fmt.Errorf("routine %s not found in %s backup config", routineName, fieldPath)
+			}
+		}
+
+		if len(routines) != len(current.BackupRoutines) {
+			return fmt.Errorf("backup routine count mismatch in %s backup config", fieldPath)
+		}
+
+		pkgLog.Info(fmt.Sprintf("Backup routines info is found in %s backup config", fieldPath))
+
+		return nil
+	}
+
+	// Validate from backup service configmap
+	var configmap corev1.ConfigMap
+	if err := k8sClient.Get(testCtx,
+		types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace}, &configmap,
+	); err != nil {
+		return err
+	}
+
+	var config model.Config
+
+	if err := yaml.Unmarshal([]byte(configmap.Data[common.BackupServiceConfigYAML]), &config); err != nil {
+		return err
+	}
+
+	desiredConfigMap := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &desiredConfigMap); err != nil {
+		return err
+	}
+
+	if err := validateNewEntries(&config, desiredConfigMap, "configMap"); err != nil {
+		return err
+	}
 
 	// Wait for Service LB IP to be populated
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
@@ -257,49 +308,9 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 		return err
 	}
 
-	var config model.Config
-
 	if err := yaml.Unmarshal(body, &config); err != nil {
 		return err
 	}
 
-	desiredConfigMap := make(map[string]interface{})
-
-	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &desiredConfigMap); err != nil {
-		return err
-	}
-
-	if _, ok := desiredConfigMap[common.AerospikeClusterKey]; !ok {
-		return fmt.Errorf("aerospike-cluster key not found in backup config")
-	}
-
-	if _, ok := desiredConfigMap[common.BackupRoutinesKey]; !ok {
-		return fmt.Errorf("backup-routines key not found in backup config")
-	}
-
-	newCluster := desiredConfigMap[common.AerospikeClusterKey].(map[string]interface{})
-
-	for clusterName := range newCluster {
-		if _, ok := config.AerospikeClusters[clusterName]; !ok {
-			return fmt.Errorf("cluster %s not found in backup config", clusterName)
-		}
-	}
-
-	pkgLog.Info("Backup cluster info is found in backup service config")
-
-	routines := desiredConfigMap[common.BackupRoutinesKey].(map[string]interface{})
-
-	for routineName := range routines {
-		if _, ok := config.BackupRoutines[routineName]; !ok {
-			return fmt.Errorf("routine %s not found in backup service config", routineName)
-		}
-	}
-
-	if len(routines) != len(config.BackupRoutines) {
-		return fmt.Errorf("backup routine count mismatch")
-	}
-
-	pkgLog.Info("Backup routines info is found in backup config")
-
-	return nil
+	return validateNewEntries(&config, desiredConfigMap, "backup-service API")
 }

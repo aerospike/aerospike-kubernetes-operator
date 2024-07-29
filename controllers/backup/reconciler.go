@@ -23,8 +23,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-const BackupConfigYAML = "aerospike-backup-service.yml"
-
 // SingleBackupReconciler reconciles a single AerospikeBackup object
 type SingleBackupReconciler struct {
 	client.Client
@@ -139,7 +137,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	data := cm.Data[BackupConfigYAML]
+	data := cm.Data[common.BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &cmDataMap); err != nil {
 		return err
@@ -184,7 +182,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	cm.Data[BackupConfigYAML] = string(updatedConfig)
+	cm.Data[common.BackupServiceConfigYAML] = string(updatedConfig)
 
 	if err := r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,
@@ -231,7 +229,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 		return err
 	}
 
-	data := cm.Data[BackupConfigYAML]
+	data := cm.Data[common.BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &cmDataMap); err != nil {
 		return err
@@ -264,7 +262,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 		return err
 	}
 
-	cm.Data[BackupConfigYAML] = string(updatedConfig)
+	cm.Data[common.BackupServiceConfigYAML] = string(updatedConfig)
 
 	if err := r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,

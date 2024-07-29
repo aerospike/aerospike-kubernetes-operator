@@ -28,11 +28,19 @@ spec:
       local:
         path: /localStorage
         type: local
+      s3Storage:
+        type: aws-s3
+        path: "s3://aerospike-kubernetes-operator-test"
+        s3-region: us-east-1
+        s3-profile: default
+
   secrets:
-    - secretName: auth-secret
+    - secretName: aws-secret
       volumeMount:
-        name: auth-secret
-        mountPath: /etc/aerospike-backup-service/auth-secret
+        name: aws-secret
+        mountPath: /root/.aws/credentials
+        subPath: credentials
+
   service:
     type: LoadBalancer
 

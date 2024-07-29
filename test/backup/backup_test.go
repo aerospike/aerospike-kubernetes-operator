@@ -248,7 +248,7 @@ var _ = Describe(
 		)
 
 		Context("When doing Valid operations", func() {
-			It("Should trigger backup when correct backup config is given", func() {
+			It("Should trigger backup when correct backup config with local storage is given", func() {
 				backup, err = newBackup()
 				Expect(err).ToNot(HaveOccurred())
 				err = deployBackup(k8sClient, backup)
@@ -257,6 +257,25 @@ var _ = Describe(
 				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
 				Expect(err).ToNot(HaveOccurred())
 
+			})
+
+			It("Should trigger backup when correct backup config with s3 storage is given", func() {
+				config := getBackupConfigInMap()
+				backupRoutines := config[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines["test-routine"].(map[string]interface{})[common.StorageKey] = "s3Storage"
+
+				config[common.BackupRoutinesKey] = backupRoutines
+
+				configBytes, mErr := json.Marshal(config)
+				Expect(mErr).ToNot(HaveOccurred())
+
+				backup = newBackupWithConfig(configBytes)
+
+				err = deployBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("Should trigger on-demand backup when given", func() {
@@ -275,7 +294,7 @@ var _ = Describe(
 					},
 				}
 
-				err = k8sClient.Update(testCtx, backup)
+				err = updateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
@@ -283,8 +302,23 @@ var _ = Describe(
 			})
 
 			It("Should unregister backup-routines when removed from backup CR", func() {
-				backup, err = newBackup()
+				backupConfig := getBackupConfigInMap()
+				backupRoutines := backupConfig[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines["test-routine1"] = map[string]interface{}{
+					"backup-policy":      "test-policy1",
+					"interval-cron":      "@daily",
+					"incr-interval-cron": "@hourly",
+					"namespaces":         []string{"test"},
+					"source-cluster":     "test-cluster",
+					"storage":            "local",
+				}
+
+				backupConfig[common.BackupRoutinesKey] = backupRoutines
+
+				configBytes, err := json.Marshal(backupConfig)
 				Expect(err).ToNot(HaveOccurred())
+
+				backup = newBackupWithConfig(configBytes)
 				err = deployBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -295,17 +329,14 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Removing 1 backup-routine from backup CR")
-				backupConfig := getBackupConfigInMap()
-				routines := backupConfig[common.BackupRoutinesKey].(map[string]interface{})
-				delete(routines, "test-routine1")
-				backupConfig[common.BackupRoutinesKey] = routines
+				backupConfig = getBackupConfigInMap()
 
-				configBytes, mErr := json.Marshal(backupConfig)
-				Expect(mErr).ToNot(HaveOccurred())
+				configBytes, err = json.Marshal(backupConfig)
+				Expect(err).ToNot(HaveOccurred())
 
 				backup.Spec.Config.Raw = configBytes
 
-				err = k8sClient.Update(testCtx, backup)
+				err = updateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)

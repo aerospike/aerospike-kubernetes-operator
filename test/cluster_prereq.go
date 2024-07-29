@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const (
@@ -26,11 +28,13 @@ var cacertSecrets map[string][]byte
 
 const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
 const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
+const awsCredentialPath = "$HOME/.aws/credentials"          //nolint:gosec // for testing
 
 const AerospikeSecretName = "aerospike-secret"
 const TLSCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
 const AuthSecretName = "auth-secret"
 const AuthSecretNameForUpdate = "auth-update"
+const AWSSecretName = "aws-secret"
 
 const MultiClusterNs1 string = "test1"
 const MultiClusterNs2 string = "test2"
@@ -281,4 +285,35 @@ func createAuthSecret(
 	}
 
 	return nil
+}
+
+func setupBackupServicePreReq(k8sClient client.Client, ctx goctx.Context, namespace string) error {
+	// Create SA for aerospike backup service
+	if err := createServiceAccount(k8sClient, goctx.TODO(), common.AerospikeBackupService, namespace); err != nil {
+		return err
+	}
+
+	awsSecret := make(map[string][]byte)
+
+	resolvePath := os.ExpandEnv(awsCredentialPath)
+	data, err := os.ReadFile(resolvePath)
+	if err != nil {
+		return err
+	}
+
+	awsSecret["credentials"] = data
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      AWSSecretName,
+			Namespace: namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: awsSecret,
+	}
+
+	// Remove old object
+	_ = k8sClient.Delete(ctx, secret)
+
+	return k8sClient.Create(ctx, secret)
 }

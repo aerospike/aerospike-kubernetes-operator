@@ -27,9 +27,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-// BackupServiceConfigYAML is the backup service configuration yaml file
-const BackupServiceConfigYAML = "aerospike-backup-service.yml"
-
 type serviceConfig struct {
 	portInfo    map[string]int32
 	contextPath string
@@ -157,7 +154,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	data := cm.Data[BackupServiceConfigYAML]
+	data := cm.Data[common.BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &currentDataMap); err != nil {
 		return err
@@ -173,7 +170,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	cm.Data[BackupServiceConfigYAML] = string(updatedConfig)
+	cm.Data[common.BackupServiceConfigYAML] = string(updatedConfig)
 
 	if err = r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,
@@ -192,7 +189,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	data := make(map[string]string)
-	data[BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+	data[common.BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
 
 	return data
 }
@@ -419,8 +416,8 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
-		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", BackupServiceConfigYAML),
-		SubPath:   BackupServiceConfigYAML,
+		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", common.BackupServiceConfigYAML),
+		SubPath:   common.BackupServiceConfigYAML,
 	})
 
 	// Backup service configMap

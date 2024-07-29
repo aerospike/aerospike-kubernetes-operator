@@ -5,18 +5,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 var _ = Describe(
 	"Backup Service Test", func() {
 
 		It("Should setup user RBAC", func() {
-			// Create SA for aerospike backup service
-			err := createServiceAccount(k8sClient, goctx.TODO(), common.AerospikeBackupService, namespace)
-			Expect(err).ToNot(HaveOccurred())
-
 			// Setup by user function
 			// test creating resource
 			// IN operator namespace
@@ -42,7 +36,11 @@ var _ = Describe(
 			// ClusterRole: aerospike-cluster
 			// ClusterRoleBinding: aerospike-cluster
 
-			err = setupByUser(k8sClient, goctx.TODO())
+			err := setupByUser(k8sClient, goctx.TODO())
+			Expect(err).ToNot(HaveOccurred())
+
+			// Set up AerospikeBackupService RBAC and AWS secret
+			err = setupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
