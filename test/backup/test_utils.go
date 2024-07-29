@@ -27,7 +27,6 @@ import (
 const (
 	timeout   = 2 * time.Minute
 	interval  = 2 * time.Second
-	name      = "sample-backup"
 	namespace = "test"
 )
 
@@ -42,13 +41,13 @@ var aerospikeNsNm = types.NamespacedName{
 	Namespace: namespace,
 }
 
-func newBackup() (*asdbv1beta1.AerospikeBackup, error) {
-	configBytes, err := getBackupConfBytes()
+func newBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
+	configBytes, err := getBackupConfBytes(namePrefix(backupNsNm))
 	if err != nil {
 		return nil, err
 	}
 
-	backup := newBackupWithEmptyConfig()
+	backup := newBackupWithEmptyConfig(backupNsNm)
 
 	backup.Spec.Config = runtime.RawExtension{
 		Raw: configBytes,
@@ -57,8 +56,8 @@ func newBackup() (*asdbv1beta1.AerospikeBackup, error) {
 	return backup, nil
 }
 
-func newBackupWithConfig(conf []byte) *asdbv1beta1.AerospikeBackup {
-	backup := newBackupWithEmptyConfig()
+func newBackupWithConfig(backupNsNm types.NamespacedName, conf []byte) *asdbv1beta1.AerospikeBackup {
+	backup := newBackupWithEmptyConfig(backupNsNm)
 
 	backup.Spec.Config = runtime.RawExtension{
 		Raw: conf,
@@ -67,11 +66,11 @@ func newBackupWithConfig(conf []byte) *asdbv1beta1.AerospikeBackup {
 	return backup
 }
 
-func newBackupWithEmptyConfig() *asdbv1beta1.AerospikeBackup {
+func newBackupWithEmptyConfig(backupNsNm types.NamespacedName) *asdbv1beta1.AerospikeBackup {
 	return &asdbv1beta1.AerospikeBackup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      backupNsNm.Name,
+			Namespace: backupNsNm.Namespace,
 		},
 		Spec: asdbv1beta1.AerospikeBackupSpec{
 			BackupService: asdbv1beta1.BackupService{
@@ -80,6 +79,68 @@ func newBackupWithEmptyConfig() *asdbv1beta1.AerospikeBackup {
 			},
 		},
 	}
+}
+
+func getBackupConfBytes(prefix string) ([]byte, error) {
+	backupConfig := getBackupConfigInMap(prefix)
+
+	configBytes, err := json.Marshal(backupConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	pkgLog.Info(string(configBytes))
+
+	return configBytes, nil
+}
+
+func getBackupConfigInMap(prefix string) map[string]interface{} {
+	return map[string]interface{}{
+		common.AerospikeClusterKey: map[string]interface{}{
+			fmt.Sprintf("%s-%s", prefix, "test-cluster"): map[string]interface{}{
+				"credentials": map[string]interface{}{
+					"password": "admin123",
+					"user":     "admin",
+				},
+				"seed-nodes": []map[string]interface{}{
+					{
+						"host-name": fmt.Sprintf("%s.%s.svc.cluster.local",
+							aerospikeNsNm.Name, aerospikeNsNm.Namespace,
+						),
+						"port": 3000,
+					},
+				},
+			},
+		},
+		common.BackupRoutinesKey: map[string]interface{}{
+			fmt.Sprintf("%s-%s", prefix, "test-routine"): map[string]interface{}{
+				"backup-policy":      "test-policy",
+				"interval-cron":      "@daily",
+				"incr-interval-cron": "@hourly",
+				"namespaces":         []string{"test"},
+				"source-cluster":     fmt.Sprintf("%s-%s", prefix, "test-cluster"),
+				"storage":            "local",
+			},
+		},
+	}
+}
+
+func getWrongBackupConfBytes(prefix string) ([]byte, error) {
+	backupConfig := getBackupConfigInMap(prefix)
+
+	// change the format from map to list
+	backupConfig[common.BackupRoutinesKey] = []interface{}{
+		backupConfig[common.BackupRoutinesKey],
+	}
+
+	configBytes, err := json.Marshal(backupConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	pkgLog.Info(string(configBytes))
+
+	return configBytes, nil
 }
 
 func getBackupObj(cl client.Client, name, namespace string) (*asdbv1beta1.AerospikeBackup, error) {
@@ -113,6 +174,21 @@ func deleteBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 		return err
 	}
 
+	// Wait for the finalizer to be removed
+	for {
+		_, err := getBackupObj(cl, backup.Name, backup.Namespace)
+
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				break
+			}
+
+			return err
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
 	return nil
 }
 
@@ -140,68 +216,6 @@ func waitForBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup,
 			}
 			return true, nil
 		})
-}
-
-func getBackupConfBytes() ([]byte, error) {
-	backupConfig := getBackupConfigInMap()
-
-	configBytes, err := json.Marshal(backupConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgLog.Info(string(configBytes))
-
-	return configBytes, nil
-}
-
-func getBackupConfigInMap() map[string]interface{} {
-	return map[string]interface{}{
-		common.AerospikeClusterKey: map[string]interface{}{
-			"test-cluster": map[string]interface{}{
-				"credentials": map[string]interface{}{
-					"password": "admin123",
-					"user":     "admin",
-				},
-				"seed-nodes": []map[string]interface{}{
-					{
-						"host-name": fmt.Sprintf("%s.%s.svc.cluster.local",
-							aerospikeNsNm.Name, aerospikeNsNm.Namespace,
-						),
-						"port": 3000,
-					},
-				},
-			},
-		},
-		common.BackupRoutinesKey: map[string]interface{}{
-			"test-routine": map[string]interface{}{
-				"backup-policy":      "test-policy",
-				"interval-cron":      "@daily",
-				"incr-interval-cron": "@hourly",
-				"namespaces":         []string{"test"},
-				"source-cluster":     "test-cluster",
-				"storage":            "local",
-			},
-		},
-	}
-}
-
-func getWrongBackupConfBytes() ([]byte, error) {
-	backupConfig := getBackupConfigInMap()
-
-	// change the format from map to list
-	backupConfig[common.BackupRoutinesKey] = []interface{}{
-		backupConfig[common.BackupRoutinesKey],
-	}
-
-	configBytes, err := json.Marshal(backupConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgLog.Info(string(configBytes))
-
-	return configBytes, nil
 }
 
 // validateTriggeredBackup validates if the backup is triggered by checking the current config of backup-service
@@ -313,4 +327,8 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 	}
 
 	return validateNewEntries(&config, desiredConfigMap, "backup-service API")
+}
+
+func namePrefix(nsNm types.NamespacedName) string {
+	return nsNm.Namespace + "-" + nsNm.Name
 }

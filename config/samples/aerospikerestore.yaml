@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikerestore-sample
+  namespace: aerospike
 spec:
   backupService:
     name: aerospikebackupservice-sample

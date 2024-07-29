@@ -296,6 +296,7 @@ func setupBackupServicePreReq(k8sClient client.Client, ctx goctx.Context, namesp
 	awsSecret := make(map[string][]byte)
 
 	resolvePath := os.ExpandEnv(awsCredentialPath)
+
 	data, err := os.ReadFile(resolvePath)
 	if err != nil {
 		return err
