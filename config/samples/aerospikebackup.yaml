@@ -33,9 +33,9 @@ spec:
         source-cluster: test-cluster
         storage: local
       test-routine1:
-        backup-policy: test-policy
+        backup-policy: test-policy1
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"
         namespaces: [ "test" ]
         source-cluster: test-cluster
-        storage: local
+        storage: s3Storage

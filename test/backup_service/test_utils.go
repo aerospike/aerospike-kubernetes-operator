@@ -6,10 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
-
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	app "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,6 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const BackupServiceImage = "aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:1.0.0"
@@ -41,21 +42,24 @@ func NewBackupService() (*asdbv1beta1.AerospikeBackupService, error) {
 		return nil, err
 	}
 
-	return &asdbv1beta1.AerospikeBackupService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: asdbv1beta1.AerospikeBackupServiceSpec{
-			Image: BackupServiceImage,
-			Config: runtime.RawExtension{
-				Raw: configBytes,
-			},
-		},
-	}, nil
+	backupService := newBackupServiceWithEmptyConfig()
+	backupService.Spec.Config = runtime.RawExtension{
+		Raw: configBytes,
+	}
+
+	return backupService, nil
 }
 
 func newBackupServiceWithConfig(config []byte) *asdbv1beta1.AerospikeBackupService {
+	backupService := newBackupServiceWithEmptyConfig()
+	backupService.Spec.Config = runtime.RawExtension{
+		Raw: config,
+	}
+
+	return backupService
+}
+
+func newBackupServiceWithEmptyConfig() *asdbv1beta1.AerospikeBackupService {
 	return &asdbv1beta1.AerospikeBackupService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -63,8 +67,15 @@ func newBackupServiceWithConfig(config []byte) *asdbv1beta1.AerospikeBackupServi
 		},
 		Spec: asdbv1beta1.AerospikeBackupServiceSpec{
 			Image: BackupServiceImage,
-			Config: runtime.RawExtension{
-				Raw: config,
+			SecretMounts: []asdbv1beta1.SecretMount{
+				{
+					SecretName: test.AWSSecretName,
+					VolumeMount: corev1.VolumeMount{
+						Name:      test.AWSSecretName,
+						MountPath: "/root/.aws/credentials",
+						SubPath:   "credentials",
+					},
+				},
 			},
 		},
 	}
@@ -232,6 +243,12 @@ func getBackupServiceConfMap() map[string]interface{} {
 			"local": map[string]interface{}{
 				"path": "/localStorage",
 				"type": "local",
+			},
+			"s3Storage": map[string]interface{}{
+				"type":       "aws-s3",
+				"path":       "s3://aerospike-kubernetes-operator-test",
+				"s3-region":  "us-east-1",
+				"s3-profile": "default",
 			},
 		},
 	}

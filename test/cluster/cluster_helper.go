@@ -1521,6 +1521,7 @@ func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 	storage := asdbv1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 			InputCascadeDelete: &cascadeDeleteFalse,
+			CascadeDelete:      cascadeDeleteTrue,
 		},
 		FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
