@@ -130,54 +130,69 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 		"namespace", r.aeroBackup.Spec.BackupService.Namespace,
 	)
 
-	backupDataMap := make(map[string]interface{})
-	cmDataMap := make(map[string]interface{})
+	specBackupConfigMap := make(map[string]interface{})
+	backupSvcConfigMap := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupDataMap); err != nil {
+	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &specBackupConfigMap); err != nil {
 		return err
 	}
 
 	data := cm.Data[common.BackupServiceConfigYAML]
 
-	if err := yaml.Unmarshal([]byte(data), &cmDataMap); err != nil {
+	if err := yaml.Unmarshal([]byte(data), &backupSvcConfigMap); err != nil {
 		return err
 	}
 
-	if _, ok := cmDataMap[common.AerospikeClustersKey]; !ok {
-		cmDataMap[common.AerospikeClustersKey] = make(map[string]interface{})
+	if _, ok := backupSvcConfigMap[common.AerospikeClustersKey]; !ok {
+		backupSvcConfigMap[common.AerospikeClustersKey] = make(map[string]interface{})
 	}
 
-	clusterMap, ok := cmDataMap[common.AerospikeClustersKey].(map[string]interface{})
+	clusterMap, ok := backupSvcConfigMap[common.AerospikeClustersKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("aerospike-clusters is not a map")
 	}
 
-	newCluster := backupDataMap[common.AerospikeClusterKey].(map[string]interface{})
+	newCluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
 
 	for name, cluster := range newCluster {
 		clusterMap[name] = cluster
 	}
 
-	cmDataMap[common.AerospikeClustersKey] = clusterMap
+	backupSvcConfigMap[common.AerospikeClustersKey] = clusterMap
 
-	if _, ok = cmDataMap[common.BackupRoutinesKey]; !ok {
-		cmDataMap[common.BackupRoutinesKey] = make(map[string]interface{})
+	if _, ok = backupSvcConfigMap[common.BackupRoutinesKey]; !ok {
+		backupSvcConfigMap[common.BackupRoutinesKey] = make(map[string]interface{})
 	}
 
-	routineMap, ok := cmDataMap[common.BackupRoutinesKey].(map[string]interface{})
+	routineMap, ok := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("backup-routines is not a map")
 	}
 
-	newRoutines := backupDataMap[common.BackupRoutinesKey].(map[string]interface{})
+	newRoutines := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
 
 	for name, routine := range newRoutines {
 		routineMap[name] = routine
 	}
 
-	cmDataMap[common.BackupRoutinesKey] = routineMap
+	// Remove the routines which are not in spec
+	if len(r.aeroBackup.Status.Config.Raw) != 0 {
+		statusBackupConfigMap := make(map[string]interface{})
 
-	updatedConfig, err := yaml.Marshal(cmDataMap)
+		if err := yaml.Unmarshal(r.aeroBackup.Status.Config.Raw, &statusBackupConfigMap); err != nil {
+			return err
+		}
+
+		for name := range statusBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{}) {
+			if _, ok := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})[name]; !ok {
+				delete(routineMap, name)
+			}
+		}
+	}
+
+	backupSvcConfigMap[common.BackupRoutinesKey] = routineMap
+
+	updatedConfig, err := yaml.Marshal(backupSvcConfigMap)
 	if err != nil {
 		return err
 	}

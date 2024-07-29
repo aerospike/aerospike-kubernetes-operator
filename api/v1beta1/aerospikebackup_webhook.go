@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,19 +88,12 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 		return nil, err
 	}
 
-	if len(r.Spec.OnDemandBackups) > 0 && len(oldObj.Spec.OnDemandBackups) > 0 {
-		// Check if onDemand backup spec is updated
-		if r.Spec.OnDemandBackups[0].ID == oldObj.Spec.OnDemandBackups[0].ID &&
-			!reflect.DeepEqual(r.Spec.OnDemandBackups[0], oldObj.Spec.OnDemandBackups[0]) {
-			return nil, fmt.Errorf("onDemand backup cannot be updated")
-		}
+	if err := r.validateAerospikeClusterUpdate(oldObj); err != nil {
+		return nil, err
+	}
 
-		// Check if previous onDemand backup is completed before allowing new onDemand backup
-		if r.Spec.OnDemandBackups[0].ID != oldObj.Spec.OnDemandBackups[0].ID && (len(r.Status.OnDemandBackups) == 0 ||
-			r.Status.OnDemandBackups[0].ID != oldObj.Spec.OnDemandBackups[0].ID) {
-			return nil,
-				fmt.Errorf("can not add new onDemand backup when previous onDemand backup is not completed")
-		}
+	if err := r.validateOnDemandBackupsUpdate(oldObj); err != nil {
+		return nil, err
 	}
 
 	return nil, nil
@@ -155,12 +149,12 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return fmt.Errorf("secret-agent field cannot be specified in backup config")
 	}
 
-	aeroClusters, err := validateAerospikeCluster(&backupSvcConfig, backupConfigMap)
+	aeroClusters, err := r.validateAerospikeCluster(&backupSvcConfig, backupConfigMap)
 	if err != nil {
 		return err
 	}
 
-	err = validateBackupRoutines(&backupSvcConfig, backupConfigMap, aeroClusters)
+	err = r.validateBackupRoutines(&backupSvcConfig, backupConfigMap, aeroClusters)
 	if err != nil {
 		return err
 	}
@@ -212,7 +206,8 @@ func getK8sClient() (client.Client, error) {
 	return cl, nil
 }
 
-func validateAerospikeCluster(backupSvcConfig *model.Config, backupSvcConfigMap map[string]interface{},
+func (r *AerospikeBackup) validateAerospikeCluster(backupSvcConfig *model.Config,
+	backupSvcConfigMap map[string]interface{},
 ) (map[string]*model.AerospikeCluster, error) {
 	if _, ok := backupSvcConfigMap[common.AerospikeClusterKey]; !ok {
 		return nil, fmt.Errorf("aerospike-cluster field is required in backupSvcConfig")
@@ -242,15 +237,63 @@ func validateAerospikeCluster(backupSvcConfig *model.Config, backupSvcConfigMap 
 		backupSvcConfig.AerospikeClusters = make(map[string]*model.AerospikeCluster)
 	}
 
-	for name, aeroCluster := range aeroClusters {
-		backupSvcConfig.AerospikeClusters[name] = aeroCluster
+	for clusterName, aeroCluster := range aeroClusters {
+		if err := validateName(r.namePrefix(), clusterName); err != nil {
+			return nil, fmt.Errorf("invalid cluster name %s, %s", clusterName, err.Error())
+		}
+
+		backupSvcConfig.AerospikeClusters[clusterName] = aeroCluster
 	}
 
 	return aeroClusters, nil
 }
 
-func validateBackupRoutines(backupSvcConfig *model.Config, backupSvcConfigMap map[string]interface{},
-	aeroClusters map[string]*model.AerospikeCluster) error {
+func (r *AerospikeBackup) validateOnDemandBackupsUpdate(oldObj *AerospikeBackup) error {
+	if len(r.Spec.OnDemandBackups) > 0 && len(oldObj.Spec.OnDemandBackups) > 0 {
+		// Check if onDemand backup spec is updated
+		if r.Spec.OnDemandBackups[0].ID == oldObj.Spec.OnDemandBackups[0].ID &&
+			!reflect.DeepEqual(r.Spec.OnDemandBackups[0], oldObj.Spec.OnDemandBackups[0]) {
+			return fmt.Errorf("onDemand backup cannot be updated")
+		}
+
+		// Check if previous onDemand backup is completed before allowing new onDemand backup
+		if r.Spec.OnDemandBackups[0].ID != oldObj.Spec.OnDemandBackups[0].ID && (len(r.Status.OnDemandBackups) == 0 ||
+			r.Status.OnDemandBackups[0].ID != oldObj.Spec.OnDemandBackups[0].ID) {
+			return fmt.Errorf("can not add new onDemand backup when previous onDemand backup is not completed")
+		}
+	}
+
+	return nil
+}
+
+func (r *AerospikeBackup) validateAerospikeClusterUpdate(oldObj *AerospikeBackup) error {
+	oldObjConfig := make(map[string]interface{})
+	currentConfig := make(map[string]interface{})
+
+	if err := yaml.Unmarshal(oldObj.Spec.Config.Raw, &oldObjConfig); err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal(r.Spec.Config.Raw, &currentConfig); err != nil {
+		return err
+	}
+
+	oldCluster := oldObjConfig[common.AerospikeClusterKey].(map[string]interface{})
+	newCluster := currentConfig[common.AerospikeClusterKey].(map[string]interface{})
+
+	for clusterName := range newCluster {
+		if _, ok := oldCluster[clusterName]; !ok {
+			return fmt.Errorf("aerospike-cluster name update is not allowed")
+		}
+	}
+
+	return nil
+}
+
+func (r *AerospikeBackup) validateBackupRoutines(backupSvcConfig *model.Config,
+	backupSvcConfigMap map[string]interface{},
+	aeroClusters map[string]*model.AerospikeCluster,
+) error {
 	if _, ok := backupSvcConfigMap[common.BackupRoutinesKey]; !ok {
 		return fmt.Errorf("backup-routines field is required in backup onfig")
 	}
@@ -275,8 +318,14 @@ func validateBackupRoutines(backupSvcConfig *model.Config, backupSvcConfigMap ma
 		return fmt.Errorf("backup-routines field is empty")
 	}
 
-	// validate if only correct aerospike cluster (the one referred in Backup CR) is used in backup routines
-	for _, routine := range backupRoutines {
+	// validate:
+	// 1. if the correct format name is given
+	// 2. if only correct aerospike cluster (the one referred in Backup CR) is used in backup routines
+	for routineName, routine := range backupRoutines {
+		if err := validateName(r.namePrefix(), routineName); err != nil {
+			return fmt.Errorf("invalid backup routine name %s, %s", routineName, err.Error())
+		}
+
 		if _, ok := aeroClusters[routine.SourceCluster]; !ok {
 			return fmt.Errorf("cluster %s not found in backup aerospike-cluster config", routine.SourceCluster)
 		}
@@ -288,6 +337,22 @@ func validateBackupRoutines(backupSvcConfig *model.Config, backupSvcConfigMap ma
 
 	for name, routine := range backupRoutines {
 		backupSvcConfig.BackupRoutines[name] = routine
+	}
+
+	return nil
+}
+
+func (r *AerospikeBackup) namePrefix() string {
+	return r.Namespace + "-" + r.Name
+}
+
+func validateName(reqPrefix, name string) error {
+	if name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+
+	if !strings.HasPrefix(name, reqPrefix) {
+		return fmt.Errorf("name should start with %s", reqPrefix)
 	}
 
 	return nil
