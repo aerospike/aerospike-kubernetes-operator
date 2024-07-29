@@ -13,10 +13,14 @@ metadata:
 
 spec:
   # Aerospike cluster size
-  size: {{ .Values.replicas | default 3 }}
+  size: {{ .Values.replicas }}
 
   # Aerospike server docker image
   image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "7.1.0.0" }}
+
+  maxUnavailable: {{ .Values.maxUnavailable }}
+
+  disablePDB: {{ .Values.disablePDB }}
 
   # Aerospike access control configuration
   {{- with .Values.aerospikeAccessControl }}
@@ -49,6 +53,8 @@ spec:
           data-size: 1073741824 # 1GiB
 
   {{- end }}
+
+  enableDynamicConfigUpdate: {{ .Values.enableDynamicConfigUpdate }}
 
   # Aerospike network policy
   {{- with .Values.aerospikeNetworkPolicy }}
@@ -105,4 +111,12 @@ spec:
   # seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
   {{- with .Values.seedsFinderServices }}
   seedsFinderServices: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- if .Values.rosterNodeBlockList }}
+  rosterNodeBlockList: {{ .Values.rosterNodeBlockList }}
+  {{- end }}
+
+  {{- if .Values.k8sNodeBlockList }}
+  k8sNodeBlockList: {{ .Values.k8sNodeBlockList }}
   {{- end }}
