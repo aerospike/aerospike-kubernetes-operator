@@ -126,10 +126,10 @@ enableDynamicConfigUpdate: false
 
 ## rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 ## Replace the value with aerospike node id which needs to be blocked.
-rosterNodeBlockList:
-  - <aerospike-node-id>
+rosterNodeBlockList: []
+#  - <aerospike-node-id>
 
 ## k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
 ## Replace the value with kubernetes cluster node name which needs to be blocked.
-k8sNodeBlockList:
-  - <node-name>
+k8sNodeBlockList: []
+#  - <node-name>

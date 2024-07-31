@@ -18,8 +18,11 @@ spec:
   # Aerospike server docker image
   image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "7.1.0.0" }}
 
+  ## maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable
+  ## before application disruption.
   maxUnavailable: {{ .Values.maxUnavailable }}
 
+  ## Disable the PodDisruptionBudget creation for the Aerospike cluster.
   disablePDB: {{ .Values.disablePDB }}
 
   # Aerospike access control configuration
@@ -54,6 +57,7 @@ spec:
 
   {{- end }}
 
+  ## enableDynamicConfigUpdate enables dynamic config update flow of the operator.
   enableDynamicConfigUpdate: {{ .Values.enableDynamicConfigUpdate }}
 
   # Aerospike network policy
@@ -113,10 +117,12 @@ spec:
   seedsFinderServices: {{- toYaml . | nindent 4 }}
   {{- end }}
 
-  {{- if .Values.rosterNodeBlockList }}
-  rosterNodeBlockList: {{ .Values.rosterNodeBlockList }}
+  ## rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
+  {{- with .Values.rosterNodeBlockList }}
+  rosterNodeBlockList: {{- toYaml . | nindent 4 }}
   {{- end }}
 
-  {{- if .Values.k8sNodeBlockList }}
-  k8sNodeBlockList: {{ .Values.k8sNodeBlockList }}
+  ## k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
+  {{- with .Values.k8sNodeBlockList }}
+  k8sNodeBlockList: {{- toYaml . | nindent 4 }}
   {{- end }}
