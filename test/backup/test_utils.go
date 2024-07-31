@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"reflect"
 	"time"
 
@@ -22,6 +20,7 @@ import (
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 )
 
 const (
@@ -41,7 +40,7 @@ var aerospikeNsNm = types.NamespacedName{
 	Namespace: namespace,
 }
 
-func newBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
+func NewBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
 	configBytes, err := getBackupConfBytes(namePrefix(backupNsNm))
 	if err != nil {
 		return nil, err
@@ -153,7 +152,7 @@ func getBackupObj(cl client.Client, name, namespace string) (*asdbv1beta1.Aerosp
 	return &backup, nil
 }
 
-func deployBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
+func CreateBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	if err := cl.Create(testCtx, backup); err != nil {
 		return err
 	}
@@ -169,7 +168,7 @@ func updateBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	return waitForBackup(cl, backup, timeout)
 }
 
-func deleteBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
+func DeleteBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	if err := cl.Delete(testCtx, backup); err != nil && !k8serrors.IsNotFound(err) {
 		return err
 	}
@@ -219,30 +218,30 @@ func waitForBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup,
 }
 
 // validateTriggeredBackup validates if the backup is triggered by checking the current config of backup-service
-func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupServiceNamespace string,
-	backup *asdbv1beta1.AerospikeBackup) error {
+func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	var backupK8sService corev1.Service
 
-	validateNewEntries := func(current *model.Config, desiredConfigMap map[string]interface{}, fieldPath string) error {
-		newCluster := desiredConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	validateNewEntries := func(currentConfigInMap map[string]interface{}, desiredConfigInMap map[string]interface{},
+		fieldPath string) error {
+		newCluster := desiredConfigInMap[common.AerospikeClusterKey].(map[string]interface{})
 
 		for clusterName := range newCluster {
-			if _, ok := current.AerospikeClusters[clusterName]; !ok {
+			if _, ok := currentConfigInMap[common.AerospikeClustersKey].(map[string]interface{})[clusterName]; !ok {
 				return fmt.Errorf("cluster %s not found in %s backup config", clusterName, fieldPath)
 			}
 		}
 
 		pkgLog.Info(fmt.Sprintf("Cluster info is found in %s backup config", fieldPath))
 
-		routines := desiredConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+		routines := desiredConfigInMap[common.BackupRoutinesKey].(map[string]interface{})
 
 		for routineName := range routines {
-			if _, ok := current.BackupRoutines[routineName]; !ok {
+			if _, ok := currentConfigInMap[common.BackupRoutinesKey].(map[string]interface{})[routineName]; !ok {
 				return fmt.Errorf("routine %s not found in %s backup config", routineName, fieldPath)
 			}
 		}
 
-		if len(routines) != len(current.BackupRoutines) {
+		if len(routines) != len(currentConfigInMap[common.BackupRoutinesKey].(map[string]interface{})) {
 			return fmt.Errorf("backup routine count mismatch in %s backup config", fieldPath)
 		}
 
@@ -254,24 +253,27 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 	// Validate from backup service configmap
 	var configmap corev1.ConfigMap
 	if err := k8sClient.Get(testCtx,
-		types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace}, &configmap,
+		types.NamespacedName{
+			Name:      backup.Spec.BackupService.Name,
+			Namespace: backup.Spec.BackupService.Namespace,
+		}, &configmap,
 	); err != nil {
 		return err
 	}
 
-	var config model.Config
+	backupSvcConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal([]byte(configmap.Data[common.BackupServiceConfigYAML]), &config); err != nil {
+	if err := yaml.Unmarshal([]byte(configmap.Data[common.BackupServiceConfigYAML]), &backupSvcConfig); err != nil {
 		return err
 	}
 
-	desiredConfigMap := make(map[string]interface{})
+	desiredConfigInMap := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &desiredConfigMap); err != nil {
+	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &desiredConfigInMap); err != nil {
 		return err
 	}
 
-	if err := validateNewEntries(&config, desiredConfigMap, "configMap"); err != nil {
+	if err := validateNewEntries(backupSvcConfig, desiredConfigInMap, "configMap"); err != nil {
 		return err
 	}
 
@@ -279,7 +281,10 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
 			if err := k8sClient.Get(testCtx,
-				types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace},
+				types.NamespacedName{
+					Name:      backup.Spec.BackupService.Name,
+					Namespace: backup.Spec.BackupService.Namespace,
+				},
 				&backupK8sService); err != nil {
 				return false, err
 			}
@@ -293,42 +298,95 @@ func validateTriggeredBackup(k8sClient client.Client, backupServiceName, backupS
 		return err
 	}
 
-	var body []byte
+	serviceClient := backup_service.Client{
+		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
+		Port:    8081,
+	}
 
 	// Wait for Backup service to be ready
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
-			resp, err := http.Get("http://" + backupK8sService.Status.LoadBalancer.Ingress[0].IP + ":8081/v1/config")
+			config, err := serviceClient.GetBackupServiceConfig()
 			if err != nil {
 				pkgLog.Error(err, "Failed to get backup service config")
 				return false, nil
 			}
 
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				return false, fmt.Errorf("backup service config fetch failed with status code: %d",
-					resp.StatusCode)
-			}
-
-			// Validate the config
-			body, err = io.ReadAll(resp.Body)
-			if err != nil {
-				return false, err
-			}
-
+			backupSvcConfig = config
 			return true, nil
 		}); err != nil {
 		return err
 	}
 
-	if err := yaml.Unmarshal(body, &config); err != nil {
-		return err
-	}
-
-	return validateNewEntries(&config, desiredConfigMap, "backup-service API")
+	return validateNewEntries(backupSvcConfig, desiredConfigInMap, "backup-service API")
 }
 
 func namePrefix(nsNm types.NamespacedName) string {
 	return nsNm.Namespace + "-" + nsNm.Name
+}
+
+func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) ([]string, error) {
+	var backupK8sService corev1.Service
+
+	// Wait for Service LB IP to be populated
+	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
+		func(ctx context.Context) (bool, error) {
+			if err := k8sClient.Get(testCtx,
+				types.NamespacedName{
+					Name:      backup.Spec.BackupService.Name,
+					Namespace: backup.Spec.BackupService.Namespace,
+				},
+				&backupK8sService,
+			); err != nil {
+				return false, err
+			}
+
+			if backupK8sService.Status.LoadBalancer.Ingress == nil {
+				return false, nil
+			}
+
+			return true, nil
+		}); err != nil {
+		return nil, err
+	}
+
+	var (
+		config          model.Config
+		backupDataPaths []string
+	)
+
+	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &config); err != nil {
+		return backupDataPaths, err
+	}
+
+	serviceClient := backup_service.Client{
+		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
+		Port:    8081,
+	}
+
+	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
+		func(ctx context.Context) (bool, error) {
+			for routineName := range config.BackupRoutines {
+				backups, err := serviceClient.GetFullBackupsForRoutine(routineName)
+				if err != nil {
+					return false, nil
+				}
+
+				if len(backups) == 0 {
+					pkgLog.Info("No backups found for routine", "name", routineName)
+					return false, nil
+				}
+
+				for idx := range backups {
+					backupMeta := backups[idx].(map[string]interface{})
+					backupDataPaths = append(backupDataPaths, backupMeta["key"].(string))
+				}
+			}
+
+			return true, nil
+		}); err != nil {
+		return backupDataPaths, err
+	}
+
+	return backupDataPaths, nil
 }

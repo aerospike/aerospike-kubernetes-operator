@@ -1,6 +1,7 @@
-package backup
+package restore
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	"github.com/aerospike/aerospike-kubernetes-operator/test/backup"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
 	"github.com/aerospike/aerospike-kubernetes-operator/test/cluster"
 )
@@ -28,9 +30,9 @@ var k8sClient client.Client
 
 var scheme = k8Runtime.NewScheme()
 
-func TestBackup(t *testing.T) {
+func TestRestore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Backup Suite")
+	RunSpecs(t, "Restore Suite")
 }
 
 var _ = BeforeSuite(
@@ -57,9 +59,37 @@ var _ = BeforeSuite(
 		err = backupservice.DeployBackupService(k8sClient, backupService)
 		Expect(err).ToNot(HaveOccurred())
 
-		By("Deploy Aerospike Cluster")
 		cascadeDeleteTrue := true
-		aeroCluster := cluster.CreateDummyAerospikeCluster(aerospikeNsNm, 2)
+
+		By(fmt.Sprintf("Deploy source Aerospike Cluster: %s", sourceAerospikeClusterNsNm.String()))
+		aeroCluster := cluster.CreateDummyAerospikeCluster(sourceAerospikeClusterNsNm, 2)
+		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+
+		err = cluster.DeployCluster(k8sClient, testCtx, aeroCluster)
+		Expect(err).ToNot(HaveOccurred())
+
+		backupObj, err := backup.NewBackup(backupNsNm)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Point to current suite's backup service
+		backupObj.Spec.BackupService.Name = backupServiceName
+		backupObj.Spec.BackupService.Namespace = backupServiceNamespace
+
+		err = backup.CreateBackup(k8sClient, backupObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		backupDataPaths, err := backup.GetBackupDataPaths(k8sClient, backupObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		pkgLog.Info(fmt.Sprintf("BackupDataPaths: %v", backupDataPaths))
+		Expect(backupDataPaths).ToNot(BeEmpty())
+
+		// Example backupDataPath = "/localStorage/test-sample-backup-test-routine/backup/1722353745635/data/test"
+		backupDataPath = backupDataPaths[0]
+
+		By(fmt.Sprintf("Deploy destination Aerospike Cluster: %s", destinationAerospikeClusterNsNm.String()))
+		aeroCluster = cluster.CreateDummyAerospikeCluster(destinationAerospikeClusterNsNm, 2)
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 
@@ -70,14 +100,36 @@ var _ = BeforeSuite(
 var _ = AfterSuite(
 	func() {
 		By("Delete Aerospike Cluster")
-		aeroCluster := asdbv1.AerospikeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      aerospikeNsNm.Name,
-				Namespace: aerospikeNsNm.Namespace,
+		aeroClusters := []asdbv1.AerospikeCluster{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      sourceAerospikeClusterNsNm.Name,
+					Namespace: sourceAerospikeClusterNsNm.Namespace,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      destinationAerospikeClusterNsNm.Name,
+					Namespace: destinationAerospikeClusterNsNm.Namespace,
+				},
 			},
 		}
 
-		err := cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)
+		for idx := range aeroClusters {
+			aeroCluster := aeroClusters[idx]
+			err := cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		By("Delete Backup")
+		backupObj := asdbv1beta1.AerospikeBackup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      backupNsNm.Name,
+				Namespace: backupNsNm.Namespace,
+			},
+		}
+
+		err := backup.DeleteBackup(k8sClient, &backupObj)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")

@@ -12,6 +12,13 @@ const (
 	BackupServiceConfigYAML = "aerospike-backup-service.yml"
 )
 
+// Restore config fields
+const (
+	RoutineKey = "routine"
+	TimeKey    = "time"
+	SourceKey  = "source"
+)
+
 const (
 	HTTPKey                = "http"
 	AerospikeBackupService = "aerospike-backup-service"

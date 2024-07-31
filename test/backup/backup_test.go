@@ -24,20 +24,20 @@ var _ = Describe(
 		)
 
 		AfterEach(func() {
-			Expect(deleteBackup(k8sClient, backup)).ToNot(HaveOccurred())
+			Expect(DeleteBackup(k8sClient, backup)).ToNot(HaveOccurred())
 		})
 
 		Context(
 			"When doing Invalid operations", func() {
 				It("Should fail when wrong format backup config is given", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
 					badConfig, gErr := getWrongBackupConfBytes(namePrefix(backupNsNm))
 					Expect(gErr).ToNot(HaveOccurred())
 					backup.Spec.Config.Raw = badConfig
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
@@ -48,7 +48,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("name should start with %s", namePrefix(backupNsNm)))
 				})
@@ -63,12 +63,12 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
 				It("Should fail when on-demand backup is given at the time of creation", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
@@ -78,15 +78,15 @@ var _ = Describe(
 						},
 					}
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
 				It("Should fail when non-existing routine is given in on-demand backup", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).ToNot(HaveOccurred())
 
 					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
@@ -104,20 +104,20 @@ var _ = Describe(
 				})
 
 				It("Should fail when backup service is not present", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
 					backup.Spec.BackupService.Name = "wrong-backup-service"
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
 				It("Should fail when backup service reference is updated", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).ToNot(HaveOccurred())
 
 					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
@@ -140,7 +140,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
@@ -155,7 +155,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
@@ -170,7 +170,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
@@ -185,7 +185,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
 
@@ -201,7 +201,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(
 						ContainSubstring("service field cannot be specified in backup config"))
@@ -221,7 +221,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(
 						ContainSubstring("backup-policies field cannot be specified in backup config"))
@@ -240,7 +240,7 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(
 						ContainSubstring("storage field cannot be specified in backup config"))
@@ -259,20 +259,20 @@ var _ = Describe(
 					Expect(mErr).ToNot(HaveOccurred())
 
 					backup = newBackupWithConfig(backupNsNm, configBytes)
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(
 						ContainSubstring("secret-agent field cannot be specified in backup config"))
 				})
 
 				It("Should fail when aerospike-cluster name is updated", func() {
-					backup, err = newBackup(backupNsNm)
+					backup, err = NewBackup(backupNsNm)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = deployBackup(k8sClient, backup)
+					err = CreateBackup(k8sClient, backup)
 					Expect(err).ToNot(HaveOccurred())
 
-					err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+					err = validateTriggeredBackup(k8sClient, backup)
 					Expect(err).ToNot(HaveOccurred())
 
 					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
@@ -297,12 +297,12 @@ var _ = Describe(
 
 		Context("When doing Valid operations", func() {
 			It("Should trigger backup when correct backup config with local storage is given", func() {
-				backup, err = newBackup(backupNsNm)
+				backup, err = NewBackup(backupNsNm)
 				Expect(err).ToNot(HaveOccurred())
-				err = deployBackup(k8sClient, backup)
+				err = CreateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
 			})
@@ -320,17 +320,17 @@ var _ = Describe(
 
 				backup = newBackupWithConfig(backupNsNm, configBytes)
 
-				err = deployBackup(k8sClient, backup)
+				err = CreateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("Should trigger on-demand backup when given", func() {
-				backup, err = newBackup(backupNsNm)
+				backup, err = NewBackup(backupNsNm)
 				Expect(err).ToNot(HaveOccurred())
-				err = deployBackup(k8sClient, backup)
+				err = CreateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
 				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
@@ -346,7 +346,7 @@ var _ = Describe(
 				err = updateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -368,10 +368,10 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				backup = newBackupWithConfig(backupNsNm, configBytes)
-				err = deployBackup(k8sClient, backup)
+				err = CreateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
 				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
@@ -388,7 +388,7 @@ var _ = Describe(
 				err = updateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = validateTriggeredBackup(k8sClient, backupServiceName, backupServiceNamespace, backup)
+				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
