@@ -249,6 +249,11 @@ func (r *AerospikeBackup) validateAerospikeCluster(backupSvcConfig *model.Config
 }
 
 func (r *AerospikeBackup) validateOnDemandBackupsUpdate(oldObj *AerospikeBackup) error {
+	if !reflect.DeepEqual(r.Spec.OnDemandBackups, r.Status.OnDemandBackups) &&
+		!reflect.DeepEqual(r.Spec.Config.Raw, r.Status.Config.Raw) {
+		return fmt.Errorf("can not add/update onDemand backup along with backup config change")
+	}
+
 	if len(r.Spec.OnDemandBackups) > 0 && len(oldObj.Spec.OnDemandBackups) > 0 {
 		// Check if onDemand backup spec is updated
 		if r.Spec.OnDemandBackups[0].ID == oldObj.Spec.OnDemandBackups[0].ID &&

@@ -292,6 +292,44 @@ var _ = Describe(
 					Expect(err.Error()).To(ContainSubstring("aerospike-cluster name update is not allowed"))
 				})
 
+				It("Should fail when on-demand backup is added along with backup-config update", func() {
+					backup, err = NewBackup(backupNsNm)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = CreateBackup(k8sClient, backup)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = validateTriggeredBackup(k8sClient, backup)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+						{
+							ID:          "on-demand",
+							RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
+						},
+					}
+
+					// change storage to change overall backup config
+					config := getBackupConfigInMap(namePrefix(backupNsNm))
+					backupRoutines := config[common.BackupRoutinesKey].(map[string]interface{})
+					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[common.StorageKey] =
+						"s3Storage"
+
+					config[common.BackupRoutinesKey] = backupRoutines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup.Spec.Config.Raw = configBytes
+
+					err = updateBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring(
+						"can not add/update onDemand backup along with backup config change"))
+				})
 			},
 		)
 
