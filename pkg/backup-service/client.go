@@ -568,7 +568,7 @@ func (c *Client) GetFullBackups() (map[string][]interface{}, error) {
 	return backups, nil
 }
 
-func (c *Client) GetFullBackupForRoutine(routineName string) ([]interface{}, error) {
+func (c *Client) GetFullBackupsForRoutine(routineName string) ([]interface{}, error) {
 	url := c.API(fmt.Sprintf("/backups/full/%s", routineName))
 
 	resp, err := http.Get(url)

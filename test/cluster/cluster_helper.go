@@ -737,7 +737,6 @@ func deleteCluster(
 	// Wait for all removed PVCs to be terminated.
 	for {
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
-
 		if err != nil {
 			return fmt.Errorf("error getting PVCs: %v", err)
 		}
@@ -1521,7 +1520,6 @@ func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 	storage := asdbv1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 			InputCascadeDelete: &cascadeDeleteFalse,
-			CascadeDelete:      cascadeDeleteTrue,
 		},
 		FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,

@@ -28,6 +28,5 @@ spec:
       no-generation: true
       no-indexes: true
     source:
-      "path": "/localStorage/test-routine/backup/1719911170537/data/test"
-      "type": 0
-
+      "path": "/localStorage/aerospike-aerospikebackup-test-routine/backup/1722326391329/data/test"
+      "type": local
