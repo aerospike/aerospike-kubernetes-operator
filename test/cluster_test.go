@@ -113,22 +113,58 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 	It(
 		"Should pause reconcile", func() {
-			// Pause reconcile and then apply operation
 			// Testing over upgrade as it is a long-running operation
-			By("Pause reconcile")
-			err := setPauseFlag(ctx, clusterNamespacedName, ptr.To(true))
+			By("1. Start upgrade and pause at partial upgrade")
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("Start upgrade, it should fail")
-			err = upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)
+			err = UpdateClusterImage(aeroCluster, nextImage)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k8sClient.Update(ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(
+				func() bool {
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Check if at least one pod is upgraded
+					podUpgraded := false
+					for podName, podStatus := range aeroCluster.Status.Pods {
+						if podStatus.Image == nextImage {
+							pkgLog.Info("One Pod upgraded", "pod", podName, "image", podStatus.Image)
+							podUpgraded = true
+							break
+						}
+					}
+
+					return podUpgraded
+
+				}, 2*time.Minute, 1*time.Second,
+			).Should(BeTrue())
+
+			By("Pause reconcile")
+			err = setPauseFlag(ctx, clusterNamespacedName, ptr.To(true))
+			Expect(err).ToNot(HaveOccurred())
+
+			By("2. Upgrade should fail")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+				getTimeout(1), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)
 			Expect(err).To(HaveOccurred())
 
-			By("Resume reconcile")
+			// Resume reconcile and Wait for all pods to be upgraded
+			By("3. Resume reconcile and upgrade should succeed")
 			err = setPauseFlag(ctx, clusterNamespacedName, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Upgrade should succeed")
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = waitForAerospikeCluster(
@@ -148,7 +184,7 @@ func setPauseFlag(ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 
 	aeroCluster.Spec.Paused = pause
 
-	return updateCluster(k8sClient, ctx, aeroCluster)
+	return k8sClient.Update(ctx, aeroCluster)
 }
 
 func UpdateClusterPre600(ctx goctx.Context) {
