@@ -25,9 +25,6 @@ spec:
       kind: AerospikeBackup
       name: aerospikebackups.asdb.aerospike.com
       specDescriptors:
-      - description: OnDemandBackups is the configuration for on-demand backups.
-        displayName: On Demand Backups
-        path: OnDemandBackups
       - description: BackupService is the backup service reference i.e. name and namespace.
           It is used to communicate to the backup service to trigger backups. This
           field is immutable
@@ -38,6 +35,9 @@ spec:
           backup-routines.'
         displayName: Backup Config
         path: config
+      - description: OnDemandBackups is the configuration for on-demand backups.
+        displayName: On Demand Backups
+        path: onDemandBackups
       version: v1beta1
     - description: AerospikeBackupService is the Schema for the aerospikebackupservices
         API

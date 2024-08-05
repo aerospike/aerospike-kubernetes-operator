@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -37,7 +39,7 @@ type AerospikeBackupSpec struct {
 	// OnDemandBackups is the configuration for on-demand backups.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand Backups"
 	// +kubebuilder:validation:MaxItems:=1
-	OnDemandBackups []OnDemandBackupSpec `json:"OnDemandBackups,omitempty"`
+	OnDemandBackups []OnDemandBackupSpec `json:"onDemandBackups,omitempty"`
 }
 
 type BackupService struct {
@@ -46,6 +48,10 @@ type BackupService struct {
 
 	// Backup service namespace
 	Namespace string `json:"namespace"`
+}
+
+func (b *BackupService) String() string {
+	return fmt.Sprintf("%s/%s", b.Namespace, b.Name)
 }
 
 type OnDemandBackupSpec struct {
@@ -70,7 +76,7 @@ type AerospikeBackupStatus struct {
 	Config runtime.RawExtension `json:"config"`
 
 	// OnDemandBackups is the configuration for on-demand backups.
-	OnDemandBackups []OnDemandBackupSpec `json:"OnDemandBackups,omitempty"`
+	OnDemandBackups []OnDemandBackupSpec `json:"onDemandBackups,omitempty"`
 
 	// TODO: finalize the status and phase
 }

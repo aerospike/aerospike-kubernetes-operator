@@ -5,7 +5,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/yaml"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
@@ -147,7 +149,7 @@ var _ = Describe(
 				It("Should fail when non-existing cluster is referred in Backup routine", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
 					routines := config[common.BackupRoutinesKey].(map[string]interface{})
-					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["source-cluster"] =
+					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[common.SourceClusterKey] =
 						"non-existing-cluster"
 					config[common.BackupRoutinesKey] = routines
 
@@ -174,17 +176,9 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
-				It("Should fail when a different aerospike cluster is referred in Backup routine", func() {
-					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					routines := config[common.BackupRoutinesKey].(map[string]interface{})
-					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["source-cluster"] =
-						"random-cluster"
-					config[common.BackupRoutinesKey] = routines
-
-					configBytes, mErr := json.Marshal(config)
-					Expect(mErr).ToNot(HaveOccurred())
-
-					backup = newBackupWithConfig(backupNsNm, configBytes)
+				It("Should fail when empty backup config is given", func() {
+					backup = newBackupWithEmptyConfig(backupNsNm)
+					backup.Spec.Config.Raw = []byte("{}")
 					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
 				})
@@ -363,6 +357,78 @@ var _ = Describe(
 
 				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("Should delete dangling routines from the Backup service configMap", func() {
+				backup, err = NewBackup(backupNsNm)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = CreateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Get Backup service configmap to update new dangling backup routine")
+				var cm corev1.ConfigMap
+
+				err = k8sClient.Get(testCtx,
+					types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace},
+					&cm)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Add a routine to the configMap
+				data := cm.Data[common.BackupServiceConfigYAML]
+				backupSvcConfigMap := make(map[string]interface{})
+
+				err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupRoutines := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+				// Add a new routine with a different name
+				newRoutineName := namePrefix(backupNsNm) + "-" + "test-routine1"
+				backupRoutines[newRoutineName] =
+					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"]
+
+				backupSvcConfigMap[common.BackupRoutinesKey] = backupRoutines
+
+				newData, mErr := yaml.Marshal(backupSvcConfigMap)
+				Expect(mErr).ToNot(HaveOccurred())
+
+				cm.Data[common.BackupServiceConfigYAML] = string(newData)
+
+				err = k8sClient.Update(testCtx, &cm)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Update backup CR to add on-demand backup")
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+					{
+						ID:          "on-demand",
+						RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
+					},
+				}
+
+				err = updateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Validate the routine is removed from the Backup service configMap")
+				err = k8sClient.Get(testCtx,
+					types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace},
+					&cm)
+				Expect(err).ToNot(HaveOccurred())
+
+				data = cm.Data[common.BackupServiceConfigYAML]
+				backupSvcConfigMap = make(map[string]interface{})
+
+				err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupRoutines = backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+				_, ok := backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine1"]
+				Expect(ok).To(BeFalse())
 			})
 
 			It("Should trigger on-demand backup when given", func() {

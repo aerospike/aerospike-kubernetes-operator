@@ -142,29 +142,25 @@ go-lint: golanci-lint ## Run golangci-lint against code.
 
 .PHONY: all-test
 all-test: manifests generate fmt vet envtest ## Run tests.
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -r --keep-going -coverprofile cover.out -show-node-events -v -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -r --keep-going -show-node-events -v -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet envtest ## Run tests.
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -v . ./cluster -coverprofile cover.out -show-node-events  -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./cluster -show-node-events -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 
 .PHONY: backup-service-test
 backup-service-test: manifests generate fmt vet envtest ## Run tests.
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -v . ./backup_service -coverprofile cover.out -show-node-events  -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./backup_service -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 .PHONY: backup-test
 backup-test: manifests generate fmt vet envtest ## Run tests.
-	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -v . ./backup -coverprofile cover.out -show-node-events  -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./backup -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 .PHONY: restore-test
 restore-test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -v . ./restore -coverprofile cover.out -show-node-events  -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./restore -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 ##@ Build
 

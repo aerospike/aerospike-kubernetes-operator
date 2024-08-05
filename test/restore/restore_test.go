@@ -90,16 +90,16 @@ var _ = Describe(
 					Expect(err.Error()).To(ContainSubstring("restore point in time should be positive"))
 				})
 
-				It("Should fail when source is given for TimeStamp restore type", func() {
+				It("Should fail when source field is given for TimeStamp restore type", func() {
 					restore, err = newRestore(restoreNsNm, asdbv1beta1.TimeStamp)
 					Expect(err).ToNot(HaveOccurred())
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("source key is not allowed in restore config"))
+					Expect(err.Error()).To(ContainSubstring("source field is not allowed in restore config"))
 				})
 
-				It("Should fail when routine key is given for Full/Incremental restore type", func() {
+				It("Should fail when routine field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
 					restoreConfig[common.RoutineKey] = "test-routine"
 
@@ -110,10 +110,10 @@ var _ = Describe(
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("routine key is not allowed in restore config"))
+					Expect(err.Error()).To(ContainSubstring("routine field is not allowed in restore config"))
 				})
 
-				It("Should fail when time key is given for Full/Incremental restore type", func() {
+				It("Should fail when time field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
 					restoreConfig[common.TimeKey] = 1722408895094
 
@@ -124,7 +124,7 @@ var _ = Describe(
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("time key is not allowed in restore config"))
+					Expect(err.Error()).To(ContainSubstring("time field is not allowed in restore config"))
 				})
 			})
 
