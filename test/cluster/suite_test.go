@@ -57,7 +57,7 @@ var scheme = k8Runtime.NewScheme()
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Controller Suite")
+	RunSpecs(t, "Cluster Suite")
 }
 
 var _ = BeforeEach(func() {

@@ -106,11 +106,11 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 		var restoreRequest model.RestoreRequest
 
 		if _, ok := restoreConfigInMap[common.RoutineKey]; ok {
-			return fmt.Errorf("routine key is not allowed in restore config for restore type %s", r.Spec.Type)
+			return fmt.Errorf("routine field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
 		if _, ok := restoreConfigInMap[common.TimeKey]; ok {
-			return fmt.Errorf("time key is not allowed in restore config for restore type %s", r.Spec.Type)
+			return fmt.Errorf("time field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
 		if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreRequest); err != nil {
@@ -123,7 +123,7 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 		var restoreRequest model.RestoreTimestampRequest
 
 		if _, ok := restoreConfigInMap[common.SourceKey]; ok {
-			return fmt.Errorf("source key is not allowed in restore config for restore type %s", r.Spec.Type)
+			return fmt.Errorf("source field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
 		if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreRequest); err != nil {
