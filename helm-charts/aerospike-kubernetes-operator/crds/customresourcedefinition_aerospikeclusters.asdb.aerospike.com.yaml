@@ -18282,6 +18282,8 @@ spec:
                         type: integer
                     type: object
                 type: object
+              selector:
+                type: string
               size:
                 description: Aerospike cluster size
                 format: int32
@@ -18893,11 +18895,17 @@ spec:
                 - skipWorkDirValidate
                 - skipXdrDlogFileValidate
                 type: object
+            required:
+            - selector
             type: object
         type: object
     served: true
     storage: true
     subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.size
+        statusReplicasPath: .status.size
       status: {}
   - additionalPrinterColumns:
     - jsonPath: .spec.size
