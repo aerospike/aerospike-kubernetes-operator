@@ -11,7 +11,7 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "b:c:f:a:r:p:" opt
+while getopts "b:c:f:a:r:p:n:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -20,6 +20,7 @@ do
       a ) ARGS="$OPTARG" ;;
       r ) REGISTRY="$OPTARG" ;;
       p ) CRED_PATH="$OPTARG" ;;
+      n ) NAMESPACE="$OPTARG" ;;
 
    esac
 done
@@ -27,6 +28,7 @@ done
 # Defaults
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
+NAMESPACE=${NAMESPACE:-aerospike}
 
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -60,6 +62,7 @@ echo "| Starting tests.... |"
 echo "---------------------"
 
 export CUSTOM_INIT_REGISTRY="$REGISTRY"
+export CUSTOM_INIT_REGISTRY_NAMESPACE="$NAMESPACE"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
 make test FOCUS="$FOCUS" ARGS="$ARGS"

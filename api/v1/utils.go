@@ -71,6 +71,7 @@ const (
 	AerospikeServerContainerName                   = "aerospike-server"
 	AerospikeInitContainerName                     = "aerospike-init"
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
+	AerospikeInitContainerRegistryNamespaceEnvVar  = "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
 	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.1"
@@ -121,33 +122,63 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 	return DefaultWorkDirectory
 }
 
-func getInitContainerImage(registry string) string {
+func getInitContainerImage(registry, namespace string) string {
 	return fmt.Sprintf(
 		"%s/%s/%s", strings.TrimSuffix(registry, "/"),
-		strings.TrimSuffix(AerospikeInitContainerDefaultRegistryNamespace, "/"),
+		strings.TrimSuffix(namespace, "/"),
 		AerospikeInitContainerDefaultRepoAndTag,
 	)
 }
 
 func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
+	registry := getInitContainerImageRegistry(aeroCluster)
+	namespace := getInitContainerImageRegistryNamespace(aeroCluster)
+
+	return getInitContainerImage(registry, namespace)
+}
+
+func getInitContainerImageRegistryNamespace(aeroCluster *AerospikeCluster) string {
+	// Given in CR
+	var namespace *string
+	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		namespace = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace
+	}
+
+	if namespace == nil {
+		// Given in EnvVar
+		envRegistryNamespace, found := os.LookupEnv(AerospikeInitContainerRegistryNamespaceEnvVar)
+		if found {
+			namespace = &envRegistryNamespace
+		}
+	}
+
+	if namespace == nil {
+		return AerospikeInitContainerDefaultRegistryNamespace
+	}
+
+	return *namespace
+}
+
+func getInitContainerImageRegistry(aeroCluster *AerospikeCluster) string {
 	// Given in CR
 	registry := ""
 	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
 		registry = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
 	}
 
-	if registry != "" {
-		return getInitContainerImage(registry)
+	if registry == "" {
+		// Given in EnvVar
+		envRegistry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
+		if found {
+			registry = envRegistry
+		}
 	}
 
-	// Given in EnvVar
-	registry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
-	if found {
-		return getInitContainerImage(registry)
+	if registry == "" {
+		return AerospikeInitContainerDefaultRegistry
 	}
 
-	// Use default
-	return getInitContainerImage(AerospikeInitContainerDefaultRegistry)
+	return registry
 }
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {

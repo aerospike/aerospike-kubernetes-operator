@@ -318,6 +318,8 @@ type AerospikeInitContainerSpec struct { //nolint:govet // for readability
 	// ImageRegistry is the name of image registry for aerospike-init container image
 	// ImageRegistry, e.g. docker.io, redhat.access.com
 	ImageRegistry string `json:"imageRegistry,omitempty"`
+	// ImageRegistryNamespace is the name of namespace in registry for aerospike-init container image
+	ImageRegistryNamespace *string `json:"imageRegistryNamespace,omitempty"`
 	// SecurityContext that will be added to aerospike-init container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	// Define resources requests and limits for Aerospike init Container.
