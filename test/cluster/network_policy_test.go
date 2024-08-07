@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )

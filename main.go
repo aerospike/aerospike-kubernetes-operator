@@ -23,11 +23,12 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	// +kubebuilder:scaffold:imports
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/controllers/backup-service"
+
+	// +kubebuilder:scaffold:imports
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 )
@@ -137,7 +138,7 @@ func main() {
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 
-	if err = (&aerospikecluster.AerospikeClusterReconciler{
+	if err = (&cluster.AerospikeClusterReconciler{
 		Client:     client,
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
