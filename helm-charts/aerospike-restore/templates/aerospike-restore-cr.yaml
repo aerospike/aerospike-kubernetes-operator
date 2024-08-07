@@ -1,0 +1,25 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeRestore
+metadata:
+  name: {{ template "aerospike-restore.commonName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aerospike-restore.labels" . | nindent 4 }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  # Aerospike Backup Service reference
+  backupService:
+    name: {{ .Values.backupService.name}}
+    namespace: {{ .Values.backupService.namespace }}
+
+  # Aerospike Restore type
+  type: {{ .Values.type }}
+
+  # Aerospike Restore configuration
+  config:
+    {{- .Values.restoreConfig | toYaml | nindent 4 }}
+
+  # Polling period for restore operation status
+  pollingPeriod: {{ .Values.pollingPeriod }}

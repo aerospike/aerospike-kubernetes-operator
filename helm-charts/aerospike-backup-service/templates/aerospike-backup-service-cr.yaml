@@ -1,0 +1,34 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackupService
+metadata:
+  name: {{ template "aerospike-backup-service.commonName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aerospike-backup-service.labels" . | nindent 4 }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  # Aerospike Backup Service image
+  image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+
+  # Aerospike Backup Service configuration
+  config:
+    {{- .Values.backupServiceConfig | toYaml | nindent 4 }}
+
+  # Secrets to be mounted in the Aerospike Backup Service pod like aws creds etc
+  {{- with .Values.secrets }}
+  secrets: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  # Resources for the Aerospike Backup Service pod
+  {{- if .Values.resources }}
+  resources:
+    {{- .Values.resources | toYaml | nindent 4 }}
+  {{- end }}
+
+  # Kubernetes service configuration for the Aerospike Backup Service
+  {{- if .Values.service }}
+  service:
+    {{- .Values.service | toYaml | nindent 4 }}
+  {{- end }}
