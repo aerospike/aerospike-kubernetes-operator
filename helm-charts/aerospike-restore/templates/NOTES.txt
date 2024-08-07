@@ -1,0 +1,19 @@
+Thank you for installing {{ .Chart.Name }}-{{ .Chart.AppVersion }}.
+Release Name - {{ .Release.Name }}.
+
+                      +   /\
+         +              .'  '.   *
+                *      /======\      +
+                      ;:.  _   ;
+                      |:. (_)  |
+                      |:.  _   |
+            +         |:. (_)  |          *
+                      ;:.      ;
+                    .' \:.    / `.
+                   / .-'':._.'`-. \
+                   |/    /||\    \|
+
+Run the following commands to get more information about deployment:
+
+$ helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+$ helm get all {{ .Release.Name }} --namespace {{ .Release.Namespace }}

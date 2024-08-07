@@ -1,0 +1,43 @@
+# Default values for aerospike-backup.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nameOverride: ""
+
+## Custom labels that will be applied on the AerospikeBackup resource
+customLabels: {}
+
+## BackupService is the backup service reference i.e. name and namespace.
+## It is used to communicate to the backup service to trigger backups. This field is immutable
+backupService: {}
+#  name: aerospikebackupservice
+#  namespace: aerospike
+
+## Config is the free form configuration for the backup in YAML format.
+## This config is used to trigger backups. It includes: aerospike-cluster, backup-routines
+backupConfig: {}
+#  aerospike-cluster:
+#    aerospike-aerospikebackup-test-cluster:  # Name format: <backup-namespace>-<backup-name>-<cluster-name>
+#      credentials:
+#        password: admin123
+#        user: admin
+#      seed-nodes:
+#        - host-name: aerocluster.aerospike.svc.cluster.local
+#          port: 3000
+#  backup-routines:
+#    aerospike-aerospikebackup-test-routine:  # Name format: <backup-namespace>-<backup-name>-<routine-name>
+#      backup-policy: test-policy
+#      interval-cron: "@daily"
+#      incr-interval-cron: "@hourly"
+#      namespaces: ["test"]
+#      source-cluster: aerospike-aerospikebackup-test-cluster
+#      storage: local
+
+
+## OnDemandBackups is the configuration for on-demand backups.
+onDemandBackups: []
+#  - id: on-demand-backup-1
+#    routineName: aerospike-aerospikebackup-test-routine
+#    delay: 10ms
+
+
