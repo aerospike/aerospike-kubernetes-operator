@@ -1,0 +1,44 @@
+# Default values for aerospike-restore.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nameOverride: ""
+
+## Custom labels that will be applied on the AerospikeRestore resource
+customLabels: {}
+
+## BackupService is the backup service reference i.e. name and namespace.
+## It is used to communicate to the backup service to trigger restores. This field is immutable
+backupService: {}
+#  name: aerospikebackupservice
+#  namespace: aerospike
+
+## Type is the type of restore. It can of type Full, Incremental, and Timestamp.
+## Based on the restore type, relevant restore config is given.
+type: Full
+
+## Config is the free form configuration for the restore in YAML format.
+## This config is used to trigger restores. It includes: destination, policy, source, secret-agent, time and routine.
+restoreConfig: {}
+#  destination:
+#    label: destinationCluster
+#    credentials:
+#      password: admin123
+#      user: admin
+#    seed-nodes:
+#      - host-name: aerocluster.test.svc.cluster.local
+#        port: 3000
+#  policy:
+#    parallel: 3
+#    no-generation: true
+#    no-indexes: true
+#  source:
+#    "path": "/localStorage/aerospike-aerospikebackup-test-routine/backup/1722326391329/data/test"
+#    "type": local
+
+
+## Polling period for restore operation status
+## It is used to poll the restore service to fetch restore operation status.Default is 60 seconds.
+pollingPeriod: 60s
+
+
