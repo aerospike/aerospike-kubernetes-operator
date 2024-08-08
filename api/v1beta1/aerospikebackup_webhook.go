@@ -35,7 +35,7 @@ import (
 
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 func (r *AerospikeBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {

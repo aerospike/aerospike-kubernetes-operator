@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 const (

@@ -19,7 +19,7 @@ import (
 
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 )
 
