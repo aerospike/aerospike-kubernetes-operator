@@ -3,6 +3,7 @@ package test
 import (
 	goctx "context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -80,7 +81,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should execute podRestart operations on all pods", func() {
+					"Should execute podRestart operation on all pods", func() {
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -138,16 +139,17 @@ var _ = Describe(
 						err = k8sClient.Update(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						Eventually(func() error {
+							aeroCluster, err = getCluster(
+								k8sClient, ctx, clusterNamespacedName,
+							)
+							Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.Operations[0].Kind = asdbv1.OperationPodRestart
-						aeroCluster.Spec.Operations[0].ID = "2"
+							aeroCluster.Spec.Operations[0].Kind = asdbv1.OperationPodRestart
+							aeroCluster.Spec.Operations[0].ID = "2"
 
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+							return updateCluster(k8sClient, ctx, aeroCluster)
+						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
 							"operations-1-0": asdbv1.OperationPodRestart,
