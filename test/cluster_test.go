@@ -131,7 +131,8 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 					// Check if at least one pod is upgraded
 					podUpgraded := false
-					for podName, podStatus := range aeroCluster.Status.Pods {
+					for podName := range aeroCluster.Status.Pods {
+						podStatus := aeroCluster.Status.Pods[podName]
 						if podStatus.Image == nextImage {
 							pkgLog.Info("One Pod upgraded", "pod", podName, "image", podStatus.Image)
 							podUpgraded = true
@@ -140,7 +141,6 @@ func PauseReconcileTest(ctx goctx.Context) {
 					}
 
 					return podUpgraded
-
 				}, 2*time.Minute, 1*time.Second,
 			).Should(BeTrue())
 
