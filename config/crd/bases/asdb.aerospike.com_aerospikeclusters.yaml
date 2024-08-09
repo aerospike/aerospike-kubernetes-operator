@@ -623,6 +623,10 @@ spec:
                           aerospike-init container image ImageRegistry, e.g. docker.io,
                           redhat.access.com
                         type: string
+                      imageRegistryNamespace:
+                        description: ImageRegistryNamespace is the name of namespace
+                          in registry for aerospike-init container image
+                        type: string
                       resources:
                         description: Define resources requests and limits for Aerospike
                           init Container. Only Memory and Cpu resources can be given
@@ -9995,6 +9999,10 @@ spec:
                         description: ImageRegistry is the name of image registry for
                           aerospike-init container image ImageRegistry, e.g. docker.io,
                           redhat.access.com
+                        type: string
+                      imageRegistryNamespace:
+                        description: ImageRegistryNamespace is the name of namespace
+                          in registry for aerospike-init container image
                         type: string
                       resources:
                         description: Define resources requests and limits for Aerospike

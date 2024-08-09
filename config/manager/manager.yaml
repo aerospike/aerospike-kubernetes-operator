@@ -61,6 +61,9 @@ spec:
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
           # this is the registry used to pull aerospike-init image
           value: docker.io
+        - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE
+          # this is the namespace in registry used to pull aerospike-init image
+          value: aerospike
       serviceAccountName: controller-manager
 
       terminationGracePeriodSeconds: 10

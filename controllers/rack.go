@@ -1081,15 +1081,6 @@ func (r *SingleClusterReconciler) rollingRestartRack(found *appsv1.StatefulSet, 
 		}
 	}
 
-	if len(failedPods) != 0 && r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
-		return found, reconcileError(
-			fmt.Errorf(
-				"cannot Rolling restart AerospikeCluster. " +
-					"A pod is already in failed state due to image related issues",
-			),
-		)
-	}
-
 	err = r.updateSTS(found, rackState)
 	if err != nil {
 		return found, reconcileError(
