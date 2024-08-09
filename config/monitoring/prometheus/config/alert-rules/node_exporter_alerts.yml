@@ -1,0 +1,777 @@
+groups:
+  - name: node_exporter_alerts
+    rules:
+      - alert: HostNodeExporterDownCritical
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host ({{ $labels.instance }}) is down in cluster {{ $labels.cluster_name }} "
+          description: "Failed to scrape {{ $labels.job }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} for more than 1m minutes. node-exporter seems down."
+
+      - alert: HostMemoryFillingUpWarn
+        expr: 100 - (node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"} * 100 ) > 70
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host memory filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Memory is filling up (> 70%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostMemoryFillingUpCritical
+        expr: 100 - (node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"} * 100 ) > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host memory filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Node memory is filling up (> 90%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostDiskSpaceFillingUpWarn
+        expr: 100 - (node_filesystem_avail_bytes{job="node-exporter"} * 100) / node_filesystem_size_bytes{job="node-exporter"} > 70 and ON (instance, device, mountpoint) node_filesystem_readonly{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host disk space is filling up on ({{ $labels.instance }})of cluster {{ $labels.cluster_name }}"
+          description: "Disk is crossing (> 70% ) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostDiskSpaceFillingUpCritical
+        expr: 100 - (node_filesystem_avail_bytes{job="node-exporter"} * 100) / node_filesystem_size_bytes{job="node-exporter"} > 90 and ON (instance, device, mountpoint) node_filesystem_readonly{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk space is filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is crossing (> 90% ) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostInodesFillingUpWarn
+        expr: 100 - node_filesystem_files_free{job="node-exporter"} / node_filesystem_files{job="node-exporter"} * 100 > 70 and ON (instance, device, mountpoint) node_filesystem_readonly{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host inodes filling Up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is running out of available inodes (> 70%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostInodesFillingUpCritical
+        expr: 100 - node_filesystem_files_free{job="node-exporter"} / node_filesystem_files{job="node-exporter"} * 100 > 90 and ON (instance, device, mountpoint) node_filesystem_readonly{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host inodes filling Up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is running out of available inodes (> 90%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadLatencyWarn
+        expr: (node_disk_read_time_seconds_total{job="node-exporter"}) / (node_disk_reads_completed_total{job="node-exporter"})  > 0.1  and (node_disk_reads_completed_total{job="node-exporter"}) > 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk read latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk read latency is increasing (read operations > 0.1s)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadLatencyCritical
+        expr: (node_disk_read_time_seconds_total{job="node-exporter"}) / (node_disk_reads_completed_total{job="node-exporter"})  > 0.5  and (node_disk_reads_completed_total{job="node-exporter"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk read latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk read latency is increasing (read operations > 0.5s) on host {{ $labels.instance }}  of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskWriteLatencyWarn
+        expr: (node_disk_write_time_seconds_total{job="node-exporter"}) / (node_disk_writes_completed_total{job="node-exporter"})  > 0.1 and (node_disk_writes_completed_total{job="node-exporter"}) > 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk write latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk write latency is increasing (write operations > 0.1s) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostUnusualDiskWriteLatencyCritical
+        expr: (node_disk_write_time_seconds_total{job="node-exporter"}) / (node_disk_writes_completed_total{job="node-exporter"})  > 0.5 and (node_disk_writes_completed_total{job="node-exporter"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk write latency ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk write latency is increasing (write operations > 0.5s) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostHighCpuUtilizationWarn(Host)
+        expr: sum by (instance) (node_cpu_seconds_total{mode!="idle", job="node-exporter"}) / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 70
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host high CPU load on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is crossing (> 70%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostHighCpuUtilizationCritical(Host)
+        expr: sum by (instance) (node_cpu_seconds_total{mode!="idle", job="node-exporter"}) / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host high CPU load on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is crossing (> 90%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostHighCpuUtilizationWarn(Core)
+        expr: sum by (instance, cpu) (node_cpu_seconds_total{mode!="idle", job="node-exporter"}) / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 70
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host high CPU load on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is crossing (> 70%) for ({{ $labels.cpu }}) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostHighCpuUtilizationCritical(Core)
+        expr: sum by (instance, cpu) (node_cpu_seconds_total{mode!="idle", job="node-exporter"}) / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host high CPU load on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is crossing (> 90%) for ({{ $labels.cpu }}) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostCpuStealWarn(Host)
+        expr: sum by (instance)(node_cpu_seconds_total{mode="steal", job="node-exporter"})  / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 3
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is > 3% on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. "
+
+      - alert: HostCpuStealCritical(Host)
+        expr: sum by (instance)(node_cpu_seconds_total{mode="steal", job="node-exporter"})  / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is (> 5%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. "
+
+      - alert: HostCpuStealWarn(Core)
+        expr: sum by (instance, cpu)(node_cpu_seconds_total{mode="steal", job="node-exporter"})  / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 3
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is (> 3%) for ({{ $labels.cpu }}) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. "
+
+      - alert: HostCpuStealCritical(Core)
+        expr: sum by (instance ,cpu)(node_cpu_seconds_total{mode="steal", job="node-exporter"})  / on(instance) group_left sum by (instance)((node_cpu_seconds_total{job="node-exporter"})) * 100 > 5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is (> 5%) for ({{ $labels.cpu }}) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. "
+
+      - alert: HostNetworkReceiveErrorsWarn
+        expr: ((node_network_receive_errs_total{job="node-exporter"}) / (node_network_receive_packets_total{job="node-exporter"})) * 100 > 3
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Receive Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance interface has encountered {{ $value }} receive errors for {{ $labels.device }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostNetworkReceiveErrorsCritical
+        expr: ((node_network_receive_errs_total{job="node-exporter"}) / (node_network_receive_packets_total{job="node-exporter"})) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Receive Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance interface has encountered {{ $value }} receive errors for {{ $labels.device }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }} "
+
+      - alert: HostNetworkTransmitErrorsWarn
+        expr:  ((node_network_transmit_errs_total{job="node-exporter"}) / (node_network_transmit_packets_total{job="node-exporter"})) * 100 > 3
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Transmit Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance has encountered {{ $value }} transmit errors for {{ $labels.device }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostNetworkTransmitErrorsCritical
+        expr:  ((node_network_transmit_errs_total{job="node-exporter"}) / (node_network_transmit_packets_total{job="node-exporter"})) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Transmit Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance has encountered {{ $value }} transmit errors for {{ $labels.device }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. VALUE = {{ $value }}"
+
+      - alert: HostNetworkInterfaceSaturatedWarn
+        expr: ((node_network_receive_bytes_total{job="node-exporter"}) + (node_network_transmit_bytes_total{job="node-exporter"})) / (node_network_speed_bytes{job="node-exporter"}) > 0.8
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Interface Saturated ({{ $labels.instance }}:{{ $labels.interface }}) of cluster {{ $labels.cluster_name }}"
+          description: "The network interface is getting overloaded (> 0.8) on host  {{ $labels.instance }} of cluster {{ $labels.cluster_name }} {{ $value }}.  VALUE = {{ $value }}"
+
+      - alert: HostNetworkInterfaceSaturatedCritical
+        expr: ((node_network_receive_bytes_total{job="node-exporter"}) + (node_network_transmit_bytes_total{job="node-exporter"})) / (node_network_speed_bytes{job="node-exporter"}) > 0.9
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Interface Saturated on ({{ $labels.instance }}:{{ $labels.interface }}) of cluster {{ $labels.cluster_name }}"
+          description: "The network interface is getting overloaded (> 0.9) {{ $value }} on host {{ $labels.instance }}:{{ $labels.interface }} of cluster {{ $labels.cluster_name }}.  VALUE = {{ $value }}"
+
+      - alert: HostClockNotSynchronisingWarn
+        expr: min_over_time(node_timex_sync_status{job="node-exporter"}[2m]) == 0 and node_timex_maxerror_seconds{job="node-exporter"} >= 16
+        for: 2m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host clock not synchronising on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Clock not synchronising on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}.  VALUE = {{ $value }}"
+
+      - alert: HostSwapInWarn
+        expr: (node_vmstat_pswpin{job="node-exporter"})  > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host PageSwapIn value is too high on {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapIn(data from swap space on disk back into the physical memory (RAM)) value exceeds 5 on host {{ $labels.instance }}  of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostSwapInCritical
+        expr: (node_vmstat_pswpin{job="node-exporter"})  > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host PageSwapIn value is too high on {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapIn(data from swap space on disk back into the physical memory (RAM)) value exceeds 10 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostSwapOutWarn
+        expr: (node_vmstat_pswpout{job="node-exporter"}) > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host PageSwapOut value is too high on {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapOut(move data from RAM to swap space on disk to free up space in memory) value exceeds 5 on host {{ $labels.instance }}  of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostSwapOutCritical
+        expr: (node_vmstat_pswpout{job="node-exporter"}) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host PageSwapOut value is too high on {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapOut(move data from RAM to swap space on disk to free up space in physical memory) value exceeds 10 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+
+      - alert: HostMemoryFillingUpWarn(Rate)
+        expr: (rate(node_memory_MemAvailable_bytes{job="node-exporter"}[ 1m]) / node_memory_MemTotal_bytes{job="node-exporter"}) * 100 > 15
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host memory filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Node memory is filling up (> 15%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostMemoryFillingUpCritical(Rate)
+        expr: (rate(node_memory_MemAvailable_bytes{job="node-exporter"}[ 1m]) / node_memory_MemTotal_bytes{job="node-exporter"}) * 100 > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host memory filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Node memory is filling up (> 30%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostMemoryUnderMemoryPressureWarn(Rate)
+        expr: rate(node_vmstat_pgmajfault{job="node-exporter"}[1m]) > 3
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host memory under memory pressure on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "High rate of major page faults on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostMemoryUnderMemoryPressureCritical(Rate)
+        expr: rate(node_vmstat_pgmajfault{job="node-exporter"}[1m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host memory under memory pressure on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "High rate of major page faults on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostDiskSpaceFillingUpWarn(Rate)
+        expr: avg by (instance)(rate(node_filesystem_avail_bytes{job="node-exporter"}[1m]) * 100 / node_filesystem_size_bytes{job="node-exporter"}) > 15
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host disk space as filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is crossing (> 15% ) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostDiskSpaceFillingUpCritical(Rate)
+        expr: avg by (instance)(rate(node_filesystem_avail_bytes{job="node-exporter"}[1m]) * 100 / node_filesystem_size_bytes{job="node-exporter"}) > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host disk space as filling up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is crossing (> 30% ) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostInodesFillingUpWarn(Rate)
+        expr: (rate(node_filesystem_files_free{job="node-exporter"}[1m])) / node_filesystem_files{job="node-exporter"} * 100 > 20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host inodes filling Up on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is running out of available inodes (> 20%) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostInodesFillingUpCritical(Rate)
+        expr: (rate(node_filesystem_files_free{job="node-exporter"}[1m])) / node_filesystem_files{job="node-exporter"} * 100 > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host inodes filling Up of ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk is running out of available inodes (> 30%)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadLatencyWarn(Rate)
+        expr: rate(node_disk_read_time_seconds_total{job="node-exporter"}[1m]) / rate(node_disk_reads_completed_total{job="node-exporter"}[1m]) > 0.05 and rate(node_disk_reads_completed_total{job="node-exporter"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk read latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk Read latency is increasing (read operations > 0.05s)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostUnusualDiskReadLatencyCritical(Rate)
+        expr: rate(node_disk_read_time_seconds_total{job="node-exporter"}[1m]) / rate(node_disk_reads_completed_total{job="node-exporter"}[1m]) > 0.1 and rate(node_disk_reads_completed_total{job="node-exporter"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk read latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk Read latency is increasing (read operations > 0.1s)   on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostUnusualDiskWriteLatencyWarn(Rate)
+        expr: rate(node_disk_write_time_seconds_total{job="node-exporter"}[1m]) / rate(node_disk_writes_completed_total{job="node-exporter"}[1m]) > 0.05 and rate(node_disk_writes_completed_total{job="node-exporter"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk write latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk write latency is increasing (write operations > 0.05s) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostUnusualDiskWriteLatencyCritical(Rate)
+        expr: rate(node_disk_write_time_seconds_total{job="node-exporter"}[1m]) / rate(node_disk_writes_completed_total{job="node-exporter"}[1m]) > 0.1 and rate(node_disk_writes_completed_total{job="node-exporter"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk write latency on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk write latency is increasing (write operations > 0.1s)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateCPUutilizationWarn(Host)
+        expr: (sum by(instance) (rate(node_cpu_seconds_total{job="node-exporter", mode!="idle"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host high CPU utilization on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is > 20%  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateCPUutilizationCritical(Host)
+        expr: (sum by(instance) (rate(node_cpu_seconds_total{job="node-exporter", mode!="idle"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host high CPU utilization on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is > 30%  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateCPUutilizationWarn(Core)
+        expr: (sum by(instance, cpu) (rate(node_cpu_seconds_total{job="node-exporter", mode!="idle"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host high CPU utilization on ({{ $labels.instance }}:{{ $labels.cpu }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is > 20%  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateCPUutilizationCritical(Core)
+        expr: (sum by(instance, cpu) (rate(node_cpu_seconds_total{job="node-exporter", mode!="idle"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host high CPU Utilization on ({{ $labels.instance }}:{{ $labels.cpu }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU utilization is > 30%  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostCpuStealRate(Host)
+        expr: (sum by(instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="steal"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is > 5% on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. VALUE = {{ $value }}"
+
+      - alert: HostCpuStealRate(Host)
+        expr: (sum by(instance) (rate(node_cpu_seconds_total{job="node-exporter", mode="steal"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 8
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is > 8% on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. VALUE = {{ $value }}"
+
+      - alert: HostCpuStealRate(Core)
+        expr: (sum by(instance, cpu) (rate(node_cpu_seconds_total{job="node-exporter", mode="steal"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}:{{ $labels.cpu }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is > 5% on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. VALUE = {{ $value }}"
+
+      - alert: HostCpuStealRate(Core)
+        expr: (sum by(instance, cpu) (rate(node_cpu_seconds_total{job="node-exporter", mode="steal"}[1m])) / on(instance) group_left sum by (instance)((rate(node_cpu_seconds_total{job="node-exporter"}[1m])))) * 100 > 8
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host CPU steal on ({{ $labels.instance }}:{{ $labels.cpu }}) of cluster {{ $labels.cluster_name }}"
+          description: "CPU steal is > 8% on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. A noisy neighbor is killing VM performances or a spot instance may be out of credit. VALUE = {{ $value }}"
+
+      - alert: HostContextSwitchingWarn(Rate)
+        expr: (rate(node_context_switches_total{job="node-exporter"}[1m])) / (count without(cpu, mode) (node_cpu_seconds_total{mode="idle", job="node-exporter"})) > 1000
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host context switching on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Context switching is increasing (> 1000 /s) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostContextSwitchingCritical(Rate)
+        expr: (rate(node_context_switches_total{job="node-exporter"}[1m])) / (count without(cpu, mode) (node_cpu_seconds_total{mode="idle", job="node-exporter"})) > 2000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host context switching on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Context switching is increasing (> 2000 /s) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostNetworkReceiveErrorsWarn(Rate)
+        expr: rate(node_network_receive_errs_total{job="node-exporter"}[30s]) / rate(node_network_receive_packets_total{job="node-exporter"}[30s]) > 3
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Receive Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance interface has encountered {{ $value }} receive errors on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostNetworkReceiveErrorsCritical(Rate)
+        expr: rate(node_network_receive_errs_total{job="node-exporter"}[30s]) / rate(node_network_receive_packets_total{job="node-exporter"}[30s]) > 5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Receive Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance interface has encountered {{ $value }} receive errors on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostNetworkTransmitErrorsWarn(Rate)
+        expr: rate(node_network_transmit_errs_total{job="node-exporter"}[30s]) / rate(node_network_transmit_packets_total{job="node-exporter"}[30s]) > 3
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Transmit Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance has encountered {{ $value }} transmit errors on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostNetworkTransmitErrorsCritical(Rate)
+        expr: rate(node_network_transmit_errs_total{job="node-exporter"}[30s]) / rate(node_network_transmit_packets_total{job="node-exporter"}[30s]) > 5
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Transmit Errors on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Instance has encountered {{ $value }} transmit errors on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}  VALUE = {{ $value }}"
+
+      - alert: HostNetworkInterfaceSaturatedWarn(Rate)
+        expr: ((rate(node_network_receive_bytes_total{job="node-exporter"}[1m]) + rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])) / (node_network_speed_bytes{job="node-exporter"})) * 100 > 80
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host Network Interface Saturated on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "The network interface rate is getting overloaded {{ $value }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}.  VALUE = {{ $value }}"
+
+      - alert: HostNetworkInterfaceSaturatedCritical(Rate)
+        expr: ((rate(node_network_receive_bytes_total{job="node-exporter"}[1m]) + rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])) / (node_network_speed_bytes{job="node-exporter"})) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host Network Interface Saturated on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "The network interface rate is getting overloaded {{ $value }} on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}.  VALUE = {{ $value }}"
+
+      - alert: HostSwapInRateWarn
+        expr: rate(node_vmstat_pswpin{job="node-exporter"}[1m]) > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host PageSwapIn rate is too high on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapIn rate exceeds 5 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current rate is {{ $value }}."
+
+      - alert: HostSwapInRateCritical
+        expr: rate(node_vmstat_pswpin{job="node-exporter"}[1m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PageSwapIn rate is too high on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapIn rate exceeds 10 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current rate is {{ $value }}."
+
+      - alert: HostSwapOutRateWarn
+        expr: rate(node_vmstat_pswpout{job="node-exporter"}[1m]) > 5
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "PageSwapOut rate is too high on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapOut rate exceeds 5 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current rate is {{ $value }}."
+
+      - alert: HostSwapOutRatecritical
+        expr: rate(node_vmstat_pswpout{job="node-exporter"}[1m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PageSwapOut rate is too high on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "PageSwapOut rate exceeds 10 on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current rate is {{ $value }}."
+
+      - alert: HostDiskReadIOPSWarn(Host)
+        expr: sum by(instance) (rate(node_disk_reads_completed_total{job="node-exporter"}[1m])) > 300
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "High disk read IOPS detected on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk read IOPS rate (> 300) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskReadIOPSCritical(Host)
+        expr: sum by(instance) (rate(node_disk_reads_completed_total{job="node-exporter"}[1m])) > 500
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High disk read IOPS detected on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk read IOPS rate (> 500) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskReadIOPSWarn(Device)
+        expr: sum by(instance, device) (rate(node_disk_reads_completed_total{job="node-exporter"}[1m])) > 100
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "High disk read IOPS detected on host ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk read IOPS rate (> 100) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskReadIOPSCritical(Device)
+        expr: sum by(instance, device) (rate(node_disk_reads_completed_total{job="node-exporter"}[1m])) > 250
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High disk read IOPS detected on host ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk read IOPS rate (> 250) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskWriteIOPSWarn(Host)
+        expr: sum by(instance) (rate(node_disk_writes_completed_total{job="node-exporter"}[1m])) > 300
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "High disk write IOPS detected on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk write IOPS rate (> 300) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskWriteIOPSCritical(Host)
+        expr: sum by(instance) (rate(node_disk_writes_completed_total{job="node-exporter"}[1m])) > 500
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High disk write IOPS detected on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk write IOPS rate (> 500) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskWriteIOPSWarn(Device)
+        expr: sum by(instance, device) (rate(node_disk_writes_completed_total{job="node-exporter"}[1m])) > 100
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "High disk write IOPS detected on host ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk write IOPS rate (> 100) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostDiskWriteIOPSCritical(Device)
+        expr: sum by(instance, device) (rate(node_disk_writes_completed_total{job="node-exporter"}[1m])) > 250
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High disk write IOPS detected on host ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Sustained high disk write IOPS rate (> 250) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }}. Current value is {{ $value }}."
+
+      - alert: HostRateUnusualNetworkThroughputInWarn(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m]))))  > 20  or  100 -  (((sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual network throughput in rate ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably receiving data (> 20/ < -20%)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputInCritical(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m]))))  > 30  or  100 -  (((sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual network throughput in rate ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably receiving data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputInWarn(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m]))))  > 20  or  100 -  (((sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual network throughput in rate ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably receiving data (> 20/ < -20 %)  on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputInCritical(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m]))))  > 30  or  100 -  (((sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[30s]))) * 100) / (sum by (instance, device)(rate(node_network_receive_bytes_total{job="node-exporter"}[1m]))))  < -30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual network throughput in rate ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably receiving data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputOutWarn(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])))) > 20  or  100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual network throughput out rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably sending data (> 20/ < -20 %) on {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputOutCritical(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m]))))  > 30 or  100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual network throughput out rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably sending data (> 30/ < -30 %)  on {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputOutWarn(Device)
+        expr: 100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])))) > 20  or  100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 1m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual network throughput out rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably sending data (> 20/ < -20 %) on {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostRateUnusualNetworkThroughputOutCritical(Device)
+        expr: 100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m]))))  > 30  or  100 -  (((sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[30s]))) * 100) /  (sum by (instance)(rate(node_network_transmit_bytes_total{job="node-exporter"}[1m]))))  < -30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual network throughput out rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Host network interfaces are probably sending data (> 30/ < -30 %)  on {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }}"
+
+      - alert: HostUnusualDiskReadRateWarn(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) > 20  or 100 -  (((sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk read rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably reading data (> 20/ < -20 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadRateCritical(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) > 30  or  100 -  (((sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk read rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably reading less data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadRateWarn(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) > 20  or  100 -  (((sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk read rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably reading data (> 20/ < -20 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskReadRateCritical(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) > 30  or  100 -  (((sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_read_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk read rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably reading data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskWriteRateWarn(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) > 20 or  100 -  (((sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk write rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably writing data (> 20/ < -20 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskWriteRateCritical(Host)
+        expr: 100 -  (((sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) > 30  or  100 -  (((sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk write rate on ({{ $labels.instance }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably writing data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskWriteRateWarn(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) > 20  or  100 -  (((sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) < -20
+        for: 30s
+        labels:
+          severity: warn
+        annotations:
+          summary: "Host unusual disk write rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably writing data (> 20/ < -20 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
+
+      - alert: HostUnusualDiskWriteRateCritical(Device)
+        expr: 100 -  (((sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) > 30  or  100 -  (((sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[30s]))) * 100)  /  (sum by (instance, device)(rate(node_disk_written_bytes_total{job="node-exporter"}[1m])))) < -30
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unusual disk write rate on ({{ $labels.instance }}:{{ $labels.device }}) of cluster {{ $labels.cluster_name }}"
+          description: "Disk rate is probably writing data (> 30/ < -30 %) on host {{ $labels.instance }} of cluster {{ $labels.cluster_name }} VALUE = {{ $value }} "
