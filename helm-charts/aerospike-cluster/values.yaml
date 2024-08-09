@@ -21,98 +21,81 @@ customLabels: {}
 
 ## Aerospike access control configuration
 aerospikeAccessControl: {}
-  # users:
-  #   - name: admin
-  #     secretName: auth-secret
-  #     roles:
-  #       - sys-admin
-  #       - user-admin
-  # adminPolicy:
-  #   # timeout in milliseconds
-  #   timeout: 1000
-  # roles:
-  #   - name:
-  #     privileges: []
-  #     whitelist: []
+#   users:
+#     - name: admin
+#       secretName: auth-secret
+#       roles:
+#         - sys-admin
+#         - user-admin
+#   adminPolicy:
+#     # timeout in milliseconds
+#     timeout: 1000
+#   roles:
+#     - name:
+#       privileges: []
+#       whitelist: []
 
 ## Aerospike Configuration
 aerospikeConfig:
-  # service:
-  #   feature-key-file: /etc/aerospike/secrets/features.conf
-
-  # security:
-  #   enable-security: false
-
-  # network:
-  #   service:
-  #     port: 3000
-  #   fabric:
-  #     port: 3001
-  #   heartbeat:
-  #     port: 3002
-
-  # namespaces:
-  #   - name: test
-  #     replication-factor: 2
-  #     storage-engine:
-  #       type: memory
-  #       data-size: 1073741824 # 1GiB
-
-
-## Aerospike secrets
-## To add feature key file, tls certificates etc.
-## We may be able to add feature key file, certificates and other secrets dynamically during helm install
-## when,
-## 1. operator supports adding multiple secret sources, or
-## 2. https://github.com/helm/helm/pull/8841 feature is added.
-
-# aerospikeSecretName: aerospike-secrets
-# aerospikeSecretMountPath: /etc/aerospike/secrets/
+#   service:
+#     feature-key-file: /etc/aerospike/secrets/features.conf
+#
+#   network:
+#     service:
+#       port: 3000
+#     fabric:
+#       port: 3001
+#     heartbeat:
+#       port: 3002
+#
+#   namespaces:
+#     - name: test
+#       replication-factor: 2
+#       storage-engine:
+#         type: memory
+#         data-size: 1073741824 # 1GiB
 
 ## Network policy
 aerospikeNetworkPolicy: {}
-  # access: pod
-  # alternateAccess: hostExternal
-  # tlsAccess: pod
-  # tlsAlternateAccess: hostExternal
+#   access: pod
+#   alternateAccess: hostExternal
+#   tlsAccess: pod
+#   tlsAlternateAccess: hostExternal
 
 ## Pod spec
 podSpec: {}
-  # Multi pod per host
-  # multiPodPerHost: true
-  # sidecars:
-  #   - name: aerospike-prometheus-exporter
-  #     image: "aerospike/aerospike-prometheus-exporter:1.1.6"
-  #     ports:
-  #     - containerPort: 9145
-  #       name: exporter
+##  Multi pod per host
+#   multiPodPerHost: true
+#    sidecars:
+#      - name: aerospike-prometheus-exporter
+#        image: aerospike/aerospike-prometheus-exporter:v1.18.0
+#        ports:
+#          - containerPort: 9145
+#            name: exporter
 
 ## Rack configuration
 rackConfig: {}
 
 ## Storage configuration
 storage: {}
-  # volumes:
-  # - name: aerospike-config-secret
-  #   source:
-  #     secret:
-  #       secretName: aerospike-secret
-  #   aerospike:
-  #     path: /etc/aerospike/secrets
+#   volumes:
+#   - name: aerospike-config-secret
+#     source:
+#       secret:
+#         secretName: aerospike-secret
+#     aerospike:
+#       path: /etc/aerospike/secrets
 
 ## Validation policy
 validationPolicy: {}
-  # skipWorkDirValidate: true
-  # skipXdrDlogFileValidate: true
+#   skipWorkDirValidate: true
+#   skipXdrDlogFileValidate: true
 
 ## seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
 seedsFinderServices: {}
 
 ## operatorClientCert defines certificates to connect to Aerospike
 operatorClientCert: {}
-
-## Dev Mode
-devMode: false
 
 ## maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable
 ## before application disruption.
@@ -133,3 +116,9 @@ rosterNodeBlockList: []
 ## Replace the value with kubernetes cluster node name which needs to be blocked.
 k8sNodeBlockList: []
 #  - <node-name>
+
+## Pause reconciliation of the cluster
+paused: false
+
+## Dev Mode
+devMode: false
