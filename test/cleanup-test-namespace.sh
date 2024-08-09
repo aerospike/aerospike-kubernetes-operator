@@ -7,12 +7,24 @@
 #
 ################################################
 
+echo "Cleaning up s3 bucket contents s3://aerospike-kubernetes-operator-test"
+aws s3 rm s3://aerospike-kubernetes-operator-test --recursive
+
 namespaces="test test1 test2 aerospike"
 
 for namespace in $namespaces; do
   # Delete Aerospike clusters
   echo "Removing Aerospike clusters from namespace: $namespace"
   kubectl -n "$namespace" delete aerospikecluster --all
+
+  echo "Removing Aerospike restore from namespace: $namespace"
+  kubectl -n "$namespace" delete aerospikerestore --all
+
+  echo "Removing Aerospike backup from namespace: $namespace"
+  kubectl -n "$namespace" delete aerospikebackup --all
+
+    echo "Removing Aerospike backup service from namespace: $namespace"
+    kubectl -n "$namespace" delete aerospikebackupservice --all
 
   # Force delete pods
   kubectl -n "$namespace" delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --ignore-not-found
@@ -27,6 +39,7 @@ for namespace in $namespaces; do
 
   echo "Removing serviceaccount from namespace: $namespace"
   kubectl -n "$namespace" delete serviceaccount aerospike-operator-controller-manager --ignore-not-found
+  kubectl -n "$namespace" delete serviceaccount aerospike-backup-service --ignore-not-found
 
 done
 
@@ -43,6 +56,9 @@ kubectl delete clusterserviceversion -n $OPERATOR_NS $(kubectl get clusterservic
 kubectl delete job $(kubectl get job -o=jsonpath='{.items[?(@.status.succeeded==1)].metadata.name}' -n $OPERATOR_NS) -n $OPERATOR_NS --ignore-not-found
 kubectl delete CatalogSource $(kubectl get CatalogSource -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') --ignore-not-found
 kubectl delete crd aerospikeclusters.asdb.aerospike.com --ignore-not-found
+kubectl delete crd aerospikerestores.asdb.aerospike.com --ignore-not-found
+kubectl delete crd aerospikebackups.asdb.aerospike.com --ignore-not-found
+kubectl delete crd aerospikebackupservices.asdb.aerospike.com --ignore-not-found
 
 # Delete webhook configurations. Web hooks from older versions linger around and intercept requests.
 kubectl delete mutatingwebhookconfigurations.admissionregistration.k8s.io $(kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io | grep aerospike | cut -f 1 -d " ")

@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -69,7 +70,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		}
 
 		if err = r.Client.Create(
-			context.TODO(), service, createOption,
+			context.TODO(), service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to create headless service for statefulset: %v",
@@ -141,7 +142,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 			}
 
 			if nErr := r.Client.Create(
-				context.TODO(), service, createOption,
+				context.TODO(), service, common.CreateOption,
 			); nErr != nil {
 				return nErr
 			}
@@ -191,7 +192,7 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 
 	if updateLBService {
 		if err := r.Client.Update(
-			context.TODO(), service, updateOption,
+			context.TODO(), service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to update service %s: %v", service.Name, err,
@@ -250,7 +251,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 		}
 
 		if err := r.Client.Create(
-			context.TODO(), service, createOption,
+			context.TODO(), service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
 				"failed to create new service for pod %s: %v", pName, err,
@@ -315,7 +316,7 @@ func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) er
 
 	service.Spec.Ports = servicePorts
 	if err := r.Client.Update(
-		context.TODO(), service, updateOption,
+		context.TODO(), service, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf(
 			"failed to update service %s: %v", service.Name, err,

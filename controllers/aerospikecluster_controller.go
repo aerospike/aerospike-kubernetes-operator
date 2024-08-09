@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"runtime"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -20,22 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
 const patchFieldOwner = "aerospike-kuberneter-operator"
 const finalizerName = "asdb.aerospike.com/storage-finalizer"
-
-// Number of Reconcile threads to run Reconcile operations
-var maxConcurrentReconciles = runtime.NumCPU() * 2
-
-var (
-	updateOption = &client.UpdateOptions{
-		FieldManager: "aerospike-operator",
-	}
-	createOption = &client.CreateOptions{
-		FieldManager: "aerospike-operator",
-	}
-)
 
 // AerospikeClusterReconciler reconciles AerospikeClusters
 type AerospikeClusterReconciler struct {
@@ -65,7 +53,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		WithOptions(
 			controller.Options{
-				MaxConcurrentReconciles: maxConcurrentReconciles,
+				MaxConcurrentReconciles: common.MaxConcurrentReconciles,
 			},
 		).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})).
