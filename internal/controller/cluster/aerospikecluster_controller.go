@@ -42,10 +42,10 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(
 			&appsv1.StatefulSet{}, builder.WithPredicates(
 				predicate.Funcs{
-					CreateFunc: func(e event.CreateEvent) bool {
+					CreateFunc: func(_ event.CreateEvent) bool {
 						return false
 					},
-					UpdateFunc: func(e event.UpdateEvent) bool {
+					UpdateFunc: func(_ event.UpdateEvent) bool {
 						return false
 					},
 				},

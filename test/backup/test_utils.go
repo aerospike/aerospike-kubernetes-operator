@@ -213,6 +213,7 @@ func waitForBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup,
 				pkgLog.Info("Backup status not updated yet")
 				return false, nil
 			}
+
 			return true, nil
 		})
 }
@@ -280,7 +281,7 @@ func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.Aerosp
 	// Wait for Service LB IP to be populated
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
-			if err := k8sClient.Get(testCtx,
+			if err := k8sClient.Get(ctx,
 				types.NamespacedName{
 					Name:      backup.Spec.BackupService.Name,
 					Namespace: backup.Spec.BackupService.Namespace,
@@ -305,7 +306,7 @@ func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.Aerosp
 
 	// Wait for Backup service to be ready
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
-		func(ctx context.Context) (bool, error) {
+		func(_ context.Context) (bool, error) {
 			config, err := serviceClient.GetBackupServiceConfig()
 			if err != nil {
 				pkgLog.Error(err, "Failed to get backup service config")
@@ -331,7 +332,7 @@ func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBa
 	// Wait for Service LB IP to be populated
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
-			if err := k8sClient.Get(testCtx,
+			if err := k8sClient.Get(ctx,
 				types.NamespacedName{
 					Name:      backup.Spec.BackupService.Name,
 					Namespace: backup.Spec.BackupService.Namespace,
@@ -365,7 +366,7 @@ func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBa
 	}
 
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
-		func(ctx context.Context) (bool, error) {
+		func(_ context.Context) (bool, error) {
 			for routineName := range config.BackupRoutines {
 				backups, err := serviceClient.GetFullBackupsForRoutine(routineName)
 				if err != nil {

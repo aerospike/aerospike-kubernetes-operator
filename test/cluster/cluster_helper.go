@@ -578,7 +578,9 @@ func validateMigrateFillDelay(
 			if err != nil {
 				return false, err
 			}
+
 			svcConfs := confs["service"].(lib.Stats)
+
 			current, exists := svcConfs["migrate-fill-delay"]
 			if !exists {
 				return false, fmt.Errorf("migrate-fill-delay missing from the Aerospike Service config")

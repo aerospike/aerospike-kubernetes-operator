@@ -229,7 +229,7 @@ func handleValues(
 			// array replaced by non-array
 			patch = append(patch, NewPatch("replace", p, bv))
 		} else {
-			minLen := min(len(at), len(bt))
+			minLen := minimum(len(at), len(bt))
 			for i := 0; i < minLen; i++ {
 				// Patch matching indices.
 				patch, err = handleValues(at[i], bt[i], makePath(p, i), patch)
@@ -299,7 +299,7 @@ func compareArray(av, bv []interface{}, p string) []PatchOperation { //nolint:un
 	return retVal
 }
 
-func min(x, y int) int {
+func minimum(x, y int) int {
 	if x < y {
 		return x
 	}

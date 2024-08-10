@@ -130,7 +130,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: go-lint
-go-lint: golanci-lint ## Run golangci-lint against code.
+go-lint: golangci-lint ## Run golangci-lint against code.
 	$(GOLANGCI_LINT) run
 
 .PHONY: go-lint-fix
@@ -245,7 +245,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_TOOLS_VERSION ?= v0.14.0
 ENVTEST_VERSION ?= release-0.17
-GOLANGCI_LINT_VERSION ?= v1.57.2
+GOLANGCI_LINT_VERSION ?= v1.59.1
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.36.0

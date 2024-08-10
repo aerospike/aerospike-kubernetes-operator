@@ -397,24 +397,31 @@ func loadCertAndKeyFromSecret(
 		return nil, err
 	}
 
-	if crtData, crtExists := found.Data[secretSource.ClientCertFilename]; !crtExists {
+	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
+	if !crtExists {
 		return nil, fmt.Errorf(
 			"can't find certificate \"%s\" in secret %+v",
 			secretSource.ClientCertFilename, secretName,
 		)
-	} else if keyData, keyExists := found.Data[secretSource.ClientKeyFilename]; !keyExists {
+	}
+
+	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
+	if !keyExists {
 		return nil, fmt.Errorf(
 			"can't find certificate \"%s\" in secret %+v",
 			secretSource.ClientKeyFilename, secretName,
 		)
-	} else if cert, err := tls.X509KeyPair(crtData, keyData); err != nil {
+	}
+
+	cert, err := tls.X509KeyPair(crtData, keyData)
+	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to load X509 key pair for cluster from secret %+v: %w",
 			secretName, err,
 		)
-	} else {
-		return &cert, nil
 	}
+
+	return &cert, nil
 }
 
 func namespacedSecret(
