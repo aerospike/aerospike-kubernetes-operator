@@ -5,6 +5,7 @@ labels:
   - includeSelectors: true
     pairs:
       app.kubernetes.io/component: aerospike-prometheus
+      app: aerospike-monitoring-stack-prometheus
 
 resources:
   - statefulset.yaml

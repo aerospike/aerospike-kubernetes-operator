@@ -3,24 +3,13 @@ kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-prometheus
   namespace: monitoring
-  labels: &Labels
-    app: aerospike-monitoring-stack-prometheus
-    chart: aerospike-monitoring-stack
-    release: aerospike-monitoring-stack
-    app.kubernetes.io/component: prometheus
-    unique-app: aerospike-monitoring-stack-prometheus
 spec:
   serviceName: aerospike-monitoring-stack-prometheus
   replicas: 1
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
-  selector:
-    matchLabels: *Labels
   template:
-    metadata:
-      labels: *Labels
-      annotations:
     spec:
       serviceAccountName: aerospike-monitoring-stack
       containers:
@@ -59,7 +48,7 @@ spec:
             - name: "prometheus-data"
               mountPath: /data
             - mountPath: /etc/prometheus/alert-rules.d
-              name: alertmanagerrules
+              name: alert-manager-rules
       terminationGracePeriodSeconds: 120
       securityContext:
         fsGroup: 65534
@@ -67,10 +56,10 @@ spec:
         - name: config-volume
           configMap:
             name: aerospike-monitoring-stack-prometheus-config
-        - name: "prometheus-data"
+        - name: prometheus-data
           persistentVolumeClaim:
-            claimName: prometheusdata
-        - name: alertmanagerrules
+            claimName: prometheus-data
+        - name: alert-manager-rules
           configMap:
               defaultMode: 420
               name: alert-rules-config

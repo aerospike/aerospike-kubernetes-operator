@@ -1,7 +1,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: grafanadata
+  name: grafana-data
+  namespace: monitoring
 spec:
   accessModes:
     - ReadWriteOnce

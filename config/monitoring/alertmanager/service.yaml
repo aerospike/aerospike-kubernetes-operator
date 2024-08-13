@@ -3,14 +3,7 @@ kind: Service
 metadata:
   name: aerospike-monitoring-stack-alertmanager
   namespace: monitoring
-  labels:
-    app: aerospike-monitoring-stack-alertmanager
-    chart: aerospike-monitoring-stack
-    release: aerospike-monitoring-stack
-    app.kubernetes.io/component: aerospike-alertmanager
 spec:
   ports:
     - name: http
       port: 9093
-  selector:
-    app: aerospike-monitoring-stack-alertmanager

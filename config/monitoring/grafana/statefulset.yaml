@@ -3,21 +3,10 @@ kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-grafana
   namespace: monitoring
-  labels: &Labels
-    app: aerospike-monitoring-stack-grafana
-    chart: aerospike-monitoring-stack
-    release: aerospike-monitoring-stack
-    app.kubernetes.io/component: grafana
-    unique-app: aerospike-monitoring-stack-grafana
 spec:
   serviceName: aerospike-monitoring-stack-grafana
   replicas: 1
-  selector:
-    matchLabels: *Labels
   template:
-    metadata:
-      labels: *Labels
-      annotations:
     spec:
       serviceAccountName: aerospike-monitoring-stack
       terminationGracePeriodSeconds: 120
@@ -38,7 +27,7 @@ spec:
             - name: node-dashboard
               mountPath: "/var/lib/grafana/dashboards/node.json"
               subPath: node.json
-            - name: grafanadata
+            - name: grafana-data
               mountPath: "/data"
           ports:
             - name: service
@@ -93,6 +82,6 @@ spec:
           configMap:
             defaultMode: 420
             name: node-dashboard
-        - name: grafanadata
+        - name: grafana-data
           persistentVolumeClaim:
-            claimName: grafanadata
+            claimName: grafana-data

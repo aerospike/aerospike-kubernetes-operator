@@ -3,9 +3,7 @@ kind: ClusterRole
 metadata:
   labels:
     app: aerospike-monitoring-stack
-    chart: aerospike-monitoring-stack
-    release: aerospike-monitoring-stack
-  name: aerospike-monitoring-stack-aerospike-monitoring-stack
+  name: aerospike-monitoring-stack
 rules:
   - apiGroups:
       - ""

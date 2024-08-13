@@ -3,14 +3,7 @@ kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-alertmanager
   namespace: monitoring
-  labels:
-    app: aerospike-monitoring-stack-alertmanager
-    chart: aerospike-monitoring-stack
-    release: aerospike-monitoring-stack
-    app.kubernetes.io/component: aerospike-alertmanager
-    unique-app: aerospike-monitoring-stack-alertmanager
 spec:
-  selector: {}
   template:
     spec:
       containers:
@@ -35,17 +28,17 @@ spec:
               port: 9093
           volumeMounts:
             - mountPath: /etc/alertmanager
-              name: alertmanagerconf
+              name: alertmanager-conf
             - mountPath: /alertmanager
-              name: alertmanagerdata
+              name: alertmanager-data
       securityContext:
         fsGroup: 26
       serviceAccountName: aerospike-monitoring-stack
       volumes:
-        - name: alertmanagerdata
+        - name: alertmanager-data
           persistentVolumeClaim:
-            claimName: alertmanagerdata
-        - name: alertmanagerconf
+            claimName: alertmanager-data
+        - name: alertmanager-conf
           configMap:
             defaultMode: 420
             name: alertmanager-config

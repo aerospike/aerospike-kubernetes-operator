@@ -5,6 +5,7 @@ labels:
   - includeSelectors: true
     pairs:
       app.kubernetes.io/component: aerospike-grafana
+      app: aerospike-monitoring-stack-grafana
 
 resources:
   - statefulset.yaml
@@ -21,7 +22,7 @@ configMapGenerator:
       - config/grafana.ini
   - name: grafana-dashboards
     files:
-      - config/aerospike_grafana_dashboards.yaml
+      - config/aerospike_grafana_dashboards_config.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
