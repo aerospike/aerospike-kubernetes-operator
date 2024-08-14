@@ -126,3 +126,6 @@ spec:
   {{- with .Values.k8sNodeBlockList }}
   k8sNodeBlockList: {{- toYaml . | nindent 4 }}
   {{- end }}
+
+  ## Pause reconciliation of the cluster
+  paused: {{ .Values.paused }}
