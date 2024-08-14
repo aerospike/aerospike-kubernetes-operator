@@ -86,7 +86,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
-			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 
 			if res = r.reconcileRack(
 				found, state, ignorablePodNames, failedPods,
@@ -94,7 +94,7 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 				return res
 			}
 
-			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 		}
 
 		// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
@@ -114,14 +114,14 @@ func (r *SingleClusterReconciler) reconcileRacks() reconcileResult {
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
 		if len(failedPods) != 0 {
-			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 
 			if _, res = r.rollingRestartRack(found, state, ignorablePodNames, nil,
 				failedPods); !res.isSuccess {
 				return res
 			}
 
-			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", failedPods)
+			r.Log.Info("Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods))
 			// Requeue after 1 second to fetch latest CR object with updated pod status
 			return reconcileRequeueAfter(1)
 		}
@@ -1824,26 +1824,8 @@ func isContainerNameInStorageVolumeAttachments(
 	return false
 }
 
-func splitRacks(nodes, racks int) []int {
-	nodesPerRack, extraNodes := nodes/racks, nodes%racks
-
-	// Distributing nodes in given racks
-	var topology []int
-
-	for rackIdx := 0; rackIdx < racks; rackIdx++ {
-		nodesForThisRack := nodesPerRack
-		if rackIdx < extraNodes {
-			nodesForThisRack++
-		}
-
-		topology = append(topology, nodesForThisRack)
-	}
-
-	return topology
-}
-
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
-	topology := splitRacks(
+	topology := asdbv1.DistributeItems(
 		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
 	)
 

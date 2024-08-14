@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.9"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 3.3.0
+VERSION ?= 3.3.1
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -140,7 +140,7 @@ go-lint: golanci-lint ## Run golangci-lint against code.
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -progress -v -timeout=12h0m0s -focus=${FOCUS} --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -show-node-events -v -timeout=12h0m0s -focus=${FOCUS} --junit-report="junit.xml"  -- ${ARGS}
 
 ##@ Build
 
@@ -254,7 +254,7 @@ submodules: ## Pull and update git submodules recursively
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:3.3.0 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:3.3.1 make bundle
 .PHONY: bundle
 bundle: manifests kustomize
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)

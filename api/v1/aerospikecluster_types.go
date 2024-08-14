@@ -124,6 +124,31 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Kubernetes Node BlockList"
 	// +kubebuilder:validation:MinItems:=1
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
+	// Operations is a list of on-demand operations to be performed on the Aerospike cluster.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
+	// +kubebuilder:validation:MaxItems:=1
+	Operations []OperationSpec `json:"operations,omitempty"`
+}
+
+type OperationKind string
+
+const (
+	// OperationWarmRestart is the on-demand operation that leads to the warm restart of the aerospike pods
+	// (Restarting ASD in the pods). https://aerospike.com/docs/cloud/kubernetes/operator/Warm-restart
+	OperationWarmRestart OperationKind = "WarmRestart"
+
+	// OperationPodRestart is the on-demand operation that leads to the restart of aerospike pods.
+	OperationPodRestart OperationKind = "PodRestart"
+)
+
+type OperationSpec struct {
+	// Kind is the type of operation to be performed on the Aerospike cluster.
+	// +kubebuilder:validation:Enum=WarmRestart;PodRestart
+	Kind OperationKind `json:"kind"`
+	// +kubebuilder:validation:MaxLength=20
+	// +kubebuilder:validation:MinLength=1
+	ID      string   `json:"id"`
+	PodList []string `json:"podList,omitempty"`
 }
 
 type SeedsFinderServices struct {
@@ -699,6 +724,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
 	// K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods.
 	K8sNodeBlockList []string `json:"k8sNodeBlockList,omitempty"`
+	// Operations is a list of on-demand operation to be performed on the Aerospike cluster.
+	Operations []OperationSpec `json:"operations,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -924,7 +951,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.3.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.3.1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
@@ -1044,6 +1071,12 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.K8sNodeBlockList = *k8sNodeBlockList
 	}
 
+	if len(spec.Operations) != 0 {
+		operations := lib.DeepCopy(&spec.Operations).(*[]OperationSpec)
+
+		status.Operations = *operations
+	}
+
 	return &status, nil
 }
 
@@ -1141,6 +1174,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.K8sNodeBlockList) != 0 {
 		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
 		spec.K8sNodeBlockList = *k8sNodeBlockList
+	}
+
+	if len(status.Operations) != 0 {
+		operations := lib.DeepCopy(&status.Operations).(*[]OperationSpec)
+		spec.Operations = *operations
 	}
 
 	return &spec, nil

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 3.3.0
+    aerospike-kubernetes-operator/version: 3.3.1
     controller-gen.kubebuilder.io/version: v0.12.1
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -312,6 +312,32 @@ spec:
                   This value is used to create PodDisruptionBudget. Defaults to 1.
                   Refer Aerospike documentation for more details.
                 x-kubernetes-int-or-string: true
+              operations:
+                description: Operations is a list of on-demand operations to be performed
+                  on the Aerospike cluster.
+                items:
+                  properties:
+                    id:
+                      maxLength: 20
+                      minLength: 1
+                      type: string
+                    kind:
+                      description: Kind is the type of operation to be performed on
+                        the Aerospike cluster.
+                      enum:
+                      - WarmRestart
+                      - PodRestart
+                      type: string
+                    podList:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - id
+                  - kind
+                  type: object
+                maxItems: 1
+                type: array
               operatorClientCert:
                 description: Certificates to connect to Aerospike.
                 properties:
@@ -9651,6 +9677,31 @@ spec:
                   is the port requested by the user. Deprecated: MultiPodPerHost is
                   now part of podSpec"
                 type: boolean
+              operations:
+                description: Operations is a list of on-demand operation to be performed
+                  on the Aerospike cluster.
+                items:
+                  properties:
+                    id:
+                      maxLength: 20
+                      minLength: 1
+                      type: string
+                    kind:
+                      description: Kind is the type of operation to be performed on
+                        the Aerospike cluster.
+                      enum:
+                      - WarmRestart
+                      - PodRestart
+                      type: string
+                    podList:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - id
+                  - kind
+                  type: object
+                type: array
               operatorClientCertSpec:
                 description: Certificates to connect to Aerospike. If omitted then
                   certs are taken from the secret 'aerospike-secret'.

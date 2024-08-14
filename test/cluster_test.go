@@ -245,7 +245,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
 
-						// As pod is in pending state, CR object will be won't reach the final phase.
+						// As pod is in pending state, CR object won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
@@ -255,7 +255,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.Image = nextImage
-						// As pod is in pending state, CR object will be won't reach the final phase.
+						// As pod is in pending state, CR object won't reach the final phase.
 						// So expectedPhases can be InProgress or Completed
 						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					}, 1*time.Minute).ShouldNot(HaveOccurred())
@@ -273,11 +273,41 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					// There should be only one pending pod
 					Expect(counter).To(Equal(1))
 
+					By("Executing on-demand operation")
+					Eventually(func() error {
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						operations := []asdbv1.OperationSpec{
+							{
+								Kind: asdbv1.OperationWarmRestart,
+								ID:   "1",
+							},
+						}
+						aeroCluster.Spec.Operations = operations
+						// As pod is in pending state, CR object won't reach the final phase.
+						// So expectedPhases can be InProgress or Completed
+						return updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
+					}, 1*time.Minute).ShouldNot(HaveOccurred())
+
+					By("Verify pending pod")
+					podList, err = getPodList(aeroCluster, k8sClient)
+
+					counter = 0
+
+					for idx := range podList.Items {
+						if podList.Items[idx].Status.Phase == v1.PodPending {
+							counter++
+						}
+					}
+					// There should be only one pending pod
+					Expect(counter).To(Equal(1))
+
 					By("Scale down 1 pod")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					aeroCluster.Spec.Size--
-					// As pod is in pending state, CR object will be won't reach the final phase.
+					// As pod is in pending state, CR object won't reach the final phase.
 					// So expectedPhases can be InProgress or Completed
 					err = updateClusterWithExpectedPhases(k8sClient, ctx, aeroCluster, expectedPhases)
 					Expect(err).ToNot(HaveOccurred())
@@ -320,6 +350,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					err = k8sClient.Update(ctx, pod)
 					Expect(err).ToNot(HaveOccurred())
 
+					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
