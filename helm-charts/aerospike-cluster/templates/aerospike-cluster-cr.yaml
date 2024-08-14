@@ -128,4 +128,4 @@ spec:
   {{- end }}
 
   ## Pause reconciliation of the cluster
-  paused: { { .Values.paused } }
+  paused: {{ .Values.paused }}
