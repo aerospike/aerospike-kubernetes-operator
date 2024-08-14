@@ -2,9 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-prometheus
-  namespace: monitoring
 spec:
-  serviceName: aerospike-monitoring-stack-prometheus
   replicas: 1
   podManagementPolicy: Parallel
   updateStrategy:
@@ -40,8 +38,6 @@ spec:
             timeoutSeconds: 10
             successThreshold: 1
             failureThreshold: 3
-          resources:
-            {}
           volumeMounts:
             - name: config-volume
               mountPath: /etc/prometheus

@@ -2,9 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: aerospike-monitoring-stack-grafana
-  namespace: monitoring
 spec:
-  serviceName: aerospike-monitoring-stack-grafana
   replicas: 1
   template:
     spec:
