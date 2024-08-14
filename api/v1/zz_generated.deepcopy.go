@@ -203,6 +203,11 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Paused != nil {
+		in, out := &in.Paused, &out.Paused
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Operations != nil {
 		in, out := &in.Operations, &out.Operations
 		*out = make([]OperationSpec, len(*in))
