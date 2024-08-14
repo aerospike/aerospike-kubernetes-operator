@@ -20,7 +20,7 @@ do
       a ) ARGS="$OPTARG" ;;
       r ) REGISTRY="$OPTARG" ;;
       p ) CRED_PATH="$OPTARG" ;;
-      n ) NAMESPACE="$OPTARG" ;;
+      n ) REGISTRY_NAMESPACE="$OPTARG" ;;
 
    esac
 done
@@ -28,7 +28,7 @@ done
 # Defaults
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
-NAMESPACE=${NAMESPACE:-aerospike}
+REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-aerospike}
 
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -62,7 +62,7 @@ echo "| Starting tests.... |"
 echo "---------------------"
 
 export CUSTOM_INIT_REGISTRY="$REGISTRY"
-export CUSTOM_INIT_REGISTRY_NAMESPACE="$NAMESPACE"
+export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
 make test FOCUS="$FOCUS" ARGS="$ARGS"

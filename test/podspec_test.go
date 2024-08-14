@@ -449,7 +449,7 @@ var _ = Describe(
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					By("Using registry in CR")
+					By("Using registry and namespace in CR")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -474,27 +474,28 @@ var _ = Describe(
 						operatorEnvVarRegistryNamespace)
 				})
 
-				It("Should be able to recover cluster after setting correct aerospike-init custom registry", func() {
+				It("Should be able to recover cluster after setting correct aerospike-init custom registry/namespace", func() {
 					operatorEnvVarRegistry := "docker.io"
 					operatorEnvVarRegistryNamespace := "aerospike"
-					incorrectCustomRegistry := "incorrect.registry"
+					incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 					By("Using incorrect registry in CR")
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = incorrectCustomRegistry
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &operatorEnvVarRegistryNamespace
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &incorrectCustomRegistryNamespace
 					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 					Expect(err).Should(HaveOccurred())
+
+					validateImageRegistryNamespace(k8sClient, ctx, aeroCluster, operatorEnvVarRegistry,
+						incorrectCustomRegistryNamespace)
 
 					By("Using correct registry name")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Empty imageRegistry, should use operator envVar docker.io
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = operatorEnvVarRegistry
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &operatorEnvVarRegistryNamespace
+					// Nil ImageRegistryNamespace, should use operator envVar aerospike
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
