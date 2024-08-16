@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
@@ -535,4 +537,63 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 	passFile := passFileTmp.(string)
 
 	return &passFile
+}
+
+func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
+	minVersion := ""
+
+	for idx := range pods {
+		if pods[idx].InitImage != "" {
+			version, err := GetImageVersion(pods[idx].InitImage)
+			if err != nil {
+				return "", err
+			}
+
+			if minVersion == "" {
+				minVersion = version
+				continue
+			}
+
+			val, err := lib.CompareVersions(version, minVersion)
+			if err != nil {
+				return "", fmt.Errorf("failed to check image version: %v", err)
+			}
+
+			if val < 0 {
+				minVersion = version
+			}
+		} else {
+			return baseInitVersion, nil
+		}
+	}
+
+	return minVersion, nil
+}
+
+func DistributeItems(totalItems, totalGroups int) []int {
+	itemsPerGroup, extraItems := totalItems/totalGroups, totalItems%totalGroups
+
+	// Distributing nodes in given racks
+	var topology []int
+
+	for groupIdx := 0; groupIdx < totalGroups; groupIdx++ {
+		itemsForThisGroup := itemsPerGroup
+		if groupIdx < extraItems {
+			itemsForThisGroup++
+		}
+
+		topology = append(topology, itemsForThisGroup)
+	}
+
+	return topology
+}
+
+func GetAllPodNames(pods map[string]AerospikePodStatus) sets.Set[string] {
+	podNames := make(sets.Set[string])
+
+	for podName := range pods {
+		podNames.Insert(podName)
+	}
+
+	return podNames
 }

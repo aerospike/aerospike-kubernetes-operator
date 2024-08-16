@@ -119,17 +119,6 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// GetPod get pod from pod list by name
-func GetPod(podName string, pods []corev1.Pod) *corev1.Pod {
-	for idx := range pods {
-		if podName == pods[idx].Name {
-			return &pods[idx]
-		}
-	}
-
-	return nil
-}
-
 // GetRackIDFromPodName returns the rack id given a pod name.
 func GetRackIDFromPodName(podName string) (*int, error) {
 	parts := strings.Split(podName, "-")
