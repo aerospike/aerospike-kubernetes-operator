@@ -100,9 +100,9 @@ func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
 }
 
 func (r *AerospikeRestore) validateRestoreConfig() error {
-	restoreConfigInMap := make(map[string]interface{})
+	restoreConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreConfigInMap); err != nil {
+	if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreConfig); err != nil {
 		return err
 	}
 
@@ -110,15 +110,15 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 	case Full, Incremental:
 		var restoreRequest model.RestoreRequest
 
-		if _, ok := restoreConfigInMap[common.RoutineKey]; ok {
+		if _, ok := restoreConfig[common.RoutineKey]; ok {
 			return fmt.Errorf("routine field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
-		if _, ok := restoreConfigInMap[common.TimeKey]; ok {
+		if _, ok := restoreConfig[common.TimeKey]; ok {
 			return fmt.Errorf("time field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
-		if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreRequest); err != nil {
+		if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &restoreRequest); err != nil {
 			return err
 		}
 
@@ -127,11 +127,11 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 	case Timestamp:
 		var restoreRequest model.RestoreTimestampRequest
 
-		if _, ok := restoreConfigInMap[common.SourceKey]; ok {
+		if _, ok := restoreConfig[common.SourceKey]; ok {
 			return fmt.Errorf("source field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
-		if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreRequest); err != nil {
+		if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &restoreRequest); err != nil {
 			return err
 		}
 

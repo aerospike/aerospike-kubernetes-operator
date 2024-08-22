@@ -56,6 +56,21 @@ var _ = Describe(
 						ContainSubstring("name should start with %s", namePrefix(backupNsNm)))
 				})
 
+				It("Should fail when un-supported field is given in backup config", func() {
+					config := getBackupConfigInMap(namePrefix(backupNsNm))
+					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["unknown"] = "unknown"
+					config[common.BackupRoutinesKey] = routines
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backup = newBackupWithConfig(backupNsNm, configBytes)
+					err = CreateBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("unknown field"))
+				})
+
 				It("Should fail when more than 1 cluster is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
 					aeroCluster := config[common.AerospikeClusterKey].(map[string]interface{})

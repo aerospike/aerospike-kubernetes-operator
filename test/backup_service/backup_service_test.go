@@ -27,13 +27,27 @@ var _ = Describe(
 
 		Context(
 			"When doing Invalid operations", func() {
-				It("Should fail when wrong format backup config is given", func() {
+				It("Should fail when wrong format backup service config is given", func() {
 					badConfig, gErr := getWrongBackupServiceConfBytes()
 					Expect(gErr).ToNot(HaveOccurred())
 					backupService = newBackupServiceWithConfig(badConfig)
 
 					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).To(HaveOccurred())
+				})
+
+				It("Should fail when un-supported field is given in backup service config", func() {
+					configMap := getBackupServiceConfMap()
+					configMap["unknown"] = "unknown"
+
+					configBytes, mErr := json.Marshal(configMap)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					backupService = newBackupServiceWithConfig(configBytes)
+
+					err = DeployBackupService(k8sClient, backupService)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("unknown field"))
 				})
 
 				It("Should fail when wrong image is given", func() {

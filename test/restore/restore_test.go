@@ -46,6 +46,19 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
+				It("Should fail when un-supported field is given in restore config", func() {
+					config := getRestoreConfigInMap(backupDataPath)
+					config["unknown"] = "unknown"
+
+					configBytes, mErr := json.Marshal(config)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Full, configBytes)
+					err = createRestore(k8sClient, restore)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("unknown field"))
+				})
+
 				It("Should fail when spec is updated", func() {
 					restore, err = newRestore(restoreNsNm, asdbv1beta1.Full)
 					Expect(err).ToNot(HaveOccurred())

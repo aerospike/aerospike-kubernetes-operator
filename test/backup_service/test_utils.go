@@ -231,12 +231,10 @@ func getBackupServiceConfMap() map[string]interface{} {
 			"test-policy": map[string]interface{}{
 				"parallel":     3,
 				"remove-files": "KeepAll",
-				"type":         1,
 			},
 			"test-policy1": map[string]interface{}{
 				"parallel":     3,
 				"remove-files": "KeepAll",
-				"type":         1,
 			},
 		},
 		common.StorageKey: map[string]interface{}{

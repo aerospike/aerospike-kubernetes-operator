@@ -151,7 +151,7 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 
 	var backupSvcConfig model.Config
 
-	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &backupSvcConfig); err != nil {
+	if err := yaml.UnmarshalStrict(backupSvc.Spec.Config.Raw, &backupSvcConfig); err != nil {
 		return err
 	}
 
@@ -218,7 +218,7 @@ func (r *AerospikeBackup) getValidatedAerospikeClusters(backupConfig map[string]
 
 	aeroClusters := make(map[string]*model.AerospikeCluster)
 
-	if err := yaml.Unmarshal(clusterBytes, &aeroClusters); err != nil {
+	if err := yaml.UnmarshalStrict(clusterBytes, &aeroClusters); err != nil {
 		return nil, err
 	}
 
@@ -304,7 +304,7 @@ func (r *AerospikeBackup) getValidatedBackupRoutines(
 
 	backupRoutines := make(map[string]*model.BackupRoutine)
 
-	if err := yaml.Unmarshal(routineBytes, &backupRoutines); err != nil {
+	if err := yaml.UnmarshalStrict(routineBytes, &backupRoutines); err != nil {
 		return nil, err
 	}
 

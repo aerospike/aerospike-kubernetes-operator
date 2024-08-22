@@ -89,7 +89,7 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	var config model.Config
 
-	if err := yaml.Unmarshal(r.Spec.Config.Raw, &config); err != nil {
+	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
 		return err
 	}
 
