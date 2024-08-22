@@ -116,59 +116,54 @@ func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
 func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	cm, err := r.getBackupSvcConfigMap()
 	if err != nil {
-		return fmt.Errorf("backup Service configMap not found, name: %s",
-			r.aeroBackup.Spec.BackupService.String())
+		return fmt.Errorf("failed to fetch Backup Service configMap, name: %s, error %v",
+			r.aeroBackup.Spec.BackupService.String(), err.Error())
 	}
 
 	r.Log.Info("Updating existing ConfigMap for Backup",
 		"name", r.aeroBackup.Spec.BackupService.String(),
 	)
 
-	specBackupConfigMap, err := r.getBackupConfigInMap()
+	specBackupConfig, err := r.getBackupConfigInMap()
 	if err != nil {
 		return err
 	}
 
-	backupSvcConfigMap := make(map[string]interface{})
+	backupSvcConfig := make(map[string]interface{})
 
 	data := cm.Data[common.BackupServiceConfigYAML]
 
-	err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+	err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 	if err != nil {
 		return err
 	}
 
-	if _, ok := backupSvcConfigMap[common.AerospikeClustersKey]; !ok {
-		backupSvcConfigMap[common.AerospikeClustersKey] = make(map[string]interface{})
+	clusterMap, err := common.GetConfigSection(backupSvcConfig, common.AerospikeClustersKey)
+	if err != nil {
+		return err
 	}
 
-	clusterMap, ok := backupSvcConfigMap[common.AerospikeClustersKey].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("aerospike-clusters is not a map")
-	}
-
-	cluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	cluster := specBackupConfig[common.AerospikeClusterKey].(map[string]interface{})
 
 	var clusterName string
 
-	// There will always be only one cluster in the backup config
+	// There will always be only one cluster in the backup config.
+	// Cluster name in the CR will always be unique.
+	// Uniqueness is maintained by having a prefix with format <backup-namespace>-<backup-name>-<cluster-name>.
+	// It is enforced by the webhook.
 	for name, clusterInfo := range cluster {
 		clusterName = name
 		clusterMap[name] = clusterInfo
 	}
 
-	backupSvcConfigMap[common.AerospikeClustersKey] = clusterMap
+	backupSvcConfig[common.AerospikeClustersKey] = clusterMap
 
-	if _, ok = backupSvcConfigMap[common.BackupRoutinesKey]; !ok {
-		backupSvcConfigMap[common.BackupRoutinesKey] = make(map[string]interface{})
+	routineMap, err := common.GetConfigSection(backupSvcConfig, common.BackupRoutinesKey)
+	if err != nil {
+		return err
 	}
 
-	routineMap, ok := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("backup-routines is not a map")
-	}
-
-	routines := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+	routines := specBackupConfig[common.BackupRoutinesKey].(map[string]interface{})
 
 	// Remove the routines which are not in spec
 	routinesToBeDeleted := r.routinesToDelete(routines, routineMap, clusterName)
@@ -182,9 +177,9 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 		routineMap[name] = routine
 	}
 
-	backupSvcConfigMap[common.BackupRoutinesKey] = routineMap
+	backupSvcConfig[common.BackupRoutinesKey] = routineMap
 
-	updatedConfig, err := yaml.Marshal(backupSvcConfigMap)
+	updatedConfig, err := yaml.Marshal(backupSvcConfig)
 	if err != nil {
 		return err
 	}
@@ -223,35 +218,35 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 		"name", r.aeroBackup.Spec.BackupService.String(),
 	)
 
-	specBackupConfigMap, err := r.getBackupConfigInMap()
+	specBackupConfig, err := r.getBackupConfigInMap()
 	if err != nil {
 		return err
 	}
 
-	backupSvcConfigMap := make(map[string]interface{})
+	backupSvcConfig := make(map[string]interface{})
 
 	data := cm.Data[common.BackupServiceConfigYAML]
 
-	err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+	err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 	if err != nil {
 		return err
 	}
 
 	var clusterName string
 
-	if clusterIface, ok := backupSvcConfigMap[common.AerospikeClustersKey]; ok {
+	if clusterIface, ok := backupSvcConfig[common.AerospikeClustersKey]; ok {
 		if clusterMap, ok := clusterIface.(map[string]interface{}); ok {
-			currentCluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+			currentCluster := specBackupConfig[common.AerospikeClusterKey].(map[string]interface{})
 			for name := range currentCluster {
 				clusterName = name
 				delete(clusterMap, name)
 			}
 
-			backupSvcConfigMap[common.AerospikeClustersKey] = clusterMap
+			backupSvcConfig[common.AerospikeClustersKey] = clusterMap
 		}
 	}
 
-	if routineIface, ok := backupSvcConfigMap[common.BackupRoutinesKey]; ok {
+	if routineIface, ok := backupSvcConfig[common.BackupRoutinesKey]; ok {
 		if routineMap, ok := routineIface.(map[string]interface{}); ok {
 			routinesToBeDelete := r.routinesToDelete(nil, routineMap, clusterName)
 
@@ -259,11 +254,11 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 				delete(routineMap, routinesToBeDelete[idx])
 			}
 
-			backupSvcConfigMap[common.BackupRoutinesKey] = routineMap
+			backupSvcConfig[common.BackupRoutinesKey] = routineMap
 		}
 	}
 
-	updatedConfig, err := yaml.Marshal(backupSvcConfigMap)
+	updatedConfig, err := yaml.Marshal(backupSvcConfig)
 	if err != nil {
 		return err
 	}
@@ -335,22 +330,22 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		return err
 	}
 
-	backupSvcConfigMap, err := serviceClient.GetBackupServiceConfig()
+	backupSvcConfig, err := serviceClient.GetBackupServiceConfig()
 	if err != nil {
 		return err
 	}
 
-	r.Log.Info("Fetched backup service config", "config", backupSvcConfigMap)
+	r.Log.Info("Fetched backup service config", "config", backupSvcConfig)
 
-	specBackupConfigMap, err := r.getBackupConfigInMap()
+	specBackupConfig, err := r.getBackupConfigInMap()
 	if err != nil {
 		return err
 	}
 
-	if specBackupConfigMap[common.AerospikeClusterKey] != nil {
-		cluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	if specBackupConfig[common.AerospikeClusterKey] != nil {
+		cluster := specBackupConfig[common.AerospikeClusterKey].(map[string]interface{})
 
-		currentClusters, gErr := common.GetConfigSection(backupSvcConfigMap, common.AerospikeClustersKey)
+		currentClusters, gErr := common.GetConfigSection(backupSvcConfig, common.AerospikeClustersKey)
 		if gErr != nil {
 			return gErr
 		}
@@ -380,10 +375,10 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		}
 	}
 
-	if specBackupConfigMap[common.BackupRoutinesKey] != nil {
-		routines := specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+	if specBackupConfig[common.BackupRoutinesKey] != nil {
+		routines := specBackupConfig[common.BackupRoutinesKey].(map[string]interface{})
 
-		currentRoutines, gErr := common.GetConfigSection(backupSvcConfigMap, common.BackupRoutinesKey)
+		currentRoutines, gErr := common.GetConfigSection(backupSvcConfig, common.BackupRoutinesKey)
 		if gErr != nil {
 			return gErr
 		}
@@ -414,7 +409,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	// If there are routines that are removed, unregister them
-	err = r.unregisterBackupRoutines(serviceClient, backupSvcConfigMap, specBackupConfigMap)
+	err = r.deregisterBackupRoutines(serviceClient, backupSvcConfig, specBackupConfig)
 	if err != nil {
 		return err
 	}
@@ -453,18 +448,18 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 		return err
 	}
 
-	specBackupConfigMap, err := r.getBackupConfigInMap()
+	specBackupConfig, err := r.getBackupConfigInMap()
 	if err != nil {
 		return err
 	}
 
-	err = r.unregisterBackupRoutines(serviceClient, backupSvcConfig, specBackupConfigMap)
+	err = r.deregisterBackupRoutines(serviceClient, backupSvcConfig, specBackupConfig)
 	if err != nil {
 		return err
 	}
 
-	if specBackupConfigMap[common.AerospikeClusterKey] != nil {
-		cluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	if specBackupConfig[common.AerospikeClusterKey] != nil {
+		cluster := specBackupConfig[common.AerospikeClusterKey].(map[string]interface{})
 
 		currentClusters, gErr := common.GetConfigSection(backupSvcConfig, common.AerospikeClustersKey)
 		if gErr != nil {
@@ -490,17 +485,17 @@ func (r *SingleBackupReconciler) unregisterBackup() error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) unregisterBackupRoutines(
+func (r *SingleBackupReconciler) deregisterBackupRoutines(
 	serviceClient *backup_service.Client,
-	backupSvcConfigMap,
-	specBackupConfigMap map[string]interface{},
+	backupSvcConfig,
+	specBackupConfig map[string]interface{},
 ) error {
-	allRoutines, err := common.GetConfigSection(backupSvcConfigMap, common.BackupRoutinesKey)
+	allRoutines, err := common.GetConfigSection(backupSvcConfig, common.BackupRoutinesKey)
 	if err != nil {
 		return err
 	}
 
-	cluster := specBackupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	cluster := specBackupConfig[common.AerospikeClusterKey].(map[string]interface{})
 
 	var clusterName string
 
@@ -513,7 +508,7 @@ func (r *SingleBackupReconciler) unregisterBackupRoutines(
 
 	// Ignore routines from the spec if the backup is being deleted
 	if r.aeroBackup.DeletionTimestamp.IsZero() {
-		specRoutines = specBackupConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+		specRoutines = specBackupConfig[common.BackupRoutinesKey].(map[string]interface{})
 	}
 
 	routinesToBeDelete := r.routinesToDelete(specRoutines, allRoutines, clusterName)
@@ -576,11 +571,11 @@ func (r *SingleBackupReconciler) routinesToDelete(
 }
 
 func (r *SingleBackupReconciler) getBackupConfigInMap() (map[string]interface{}, error) {
-	backupConfigMap := make(map[string]interface{})
+	backupConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfigMap); err != nil {
-		return backupConfigMap, err
+	if err := yaml.Unmarshal(r.aeroBackup.Spec.Config.Raw, &backupConfig); err != nil {
+		return backupConfig, err
 	}
 
-	return backupConfigMap, nil
+	return backupConfig, nil
 }

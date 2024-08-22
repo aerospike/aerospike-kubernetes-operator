@@ -96,7 +96,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{Requeue: true}, err
+		return reconcile.Result{}, err
 	}
 
 	cr := SingleClusterReconciler{

@@ -39,7 +39,7 @@ type RestoreType string
 const (
 	Full        RestoreType = "Full"
 	Incremental RestoreType = "Incremental"
-	TimeStamp   RestoreType = "TimeStamp"
+	Timestamp   RestoreType = "Timestamp"
 )
 
 // AerospikeRestoreSpec defines the desired state of AerospikeRestore
@@ -53,9 +53,9 @@ type AerospikeRestoreSpec struct {
 	BackupService BackupService `json:"backupService"`
 
 	// Type is the type of restore. It can of type Full, Incremental, and Timestamp.
-	// Based on the restore type, relevant restore config is given.
+	// Based on the restore type, the relevant restore config should be given.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Type"
-	// +kubebuilder:validation:Enum=Full;Incremental;TimeStamp
+	// +kubebuilder:validation:Enum=Full;Incremental;Timestamp
 	Type RestoreType `json:"type"`
 
 	// Config is the free form configuration for the restore in YAML format.
@@ -86,7 +86,7 @@ type AerospikeRestoreStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
-// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeRestore is the Schema for the aerospikerestores API

@@ -60,12 +60,12 @@ type AerospikeBackupServiceSpec struct {
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Volume"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service SecretMounts"
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
 	// Service defines the Kubernetes service configuration for the backup service.
 	// It is used to expose the backup service deployment. By default, the service type is ClusterIP.
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="K8s Service"
 	Service *Service `json:"service,omitempty"`
 }
 
@@ -106,7 +106,7 @@ type AerospikeBackupServiceStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
-// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // AerospikeBackupService is the Schema for the aerospikebackupservices API

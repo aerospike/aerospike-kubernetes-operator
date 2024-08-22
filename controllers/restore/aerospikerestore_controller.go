@@ -59,7 +59,7 @@ func (r *AerospikeRestoreReconciler) Reconcile(_ context.Context, request ctrl.R
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{Requeue: true}, err
+		return reconcile.Result{}, err
 	}
 
 	cr := SingleRestoreReconciler{

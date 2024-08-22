@@ -19,7 +19,7 @@ import (
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 )
 
-// SingleClusterReconciler reconciles a single AerospikeRestore
+// SingleRestoreReconciler reconciles a single AerospikeRestore
 type SingleRestoreReconciler struct {
 	client.Client
 	Recorder    record.EventRecorder
@@ -83,8 +83,8 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Incremental),
 			r.aeroRestore.Spec.Config.Raw)
 
-	case asdbv1beta1.TimeStamp:
-		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.TimeStamp),
+	case asdbv1beta1.Timestamp:
+		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Timestamp),
 			r.aeroRestore.Spec.Config.Raw)
 
 	default:

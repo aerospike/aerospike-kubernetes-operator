@@ -1,12 +1,6 @@
 apiVersion: asdb.aerospike.com/v1beta1
 kind: AerospikeBackup
 metadata:
-  labels:
-    app.kubernetes.io/name: aerospikebackup
-    app.kubernetes.io/instance: aerospikebackup-sample
-    app.kubernetes.io/part-of: aerospike-kubernetes-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikebackup
   namespace: aerospike
 spec:
@@ -18,7 +12,7 @@ spec:
 #      routineName: aerospike-aerospikebackup-test-routine
   config:
     aerospike-cluster:
-      aerospike-aerospikebackup-test-cluster:
+      aerospike-aerospikebackup-test-cluster:  # Name format: <backup-namespace>-<backup-name>-<cluster-name>
         credentials:
           password: admin123
           user: admin
@@ -26,7 +20,7 @@ spec:
           - host-name: aerocluster.aerospike.svc.cluster.local
             port: 3000
     backup-routines:
-      aerospike-aerospikebackup-test-routine:
+      aerospike-aerospikebackup-test-routine:  # Name format: <backup-namespace>-<backup-name>-<routine-name>
         backup-policy: test-policy
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"

@@ -60,7 +60,7 @@ var _ = Describe(
 
 					err = k8sClient.Update(testCtx, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("AerospikeRestore Spec is immutable"))
+					Expect(err.Error()).To(ContainSubstring("aerospikeRestore Spec is immutable"))
 				})
 
 				It("Should fail restore when wrong backup path is given", func() {
@@ -75,7 +75,7 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
-				It("Should fail when routine/time is not given for TimeStamp restore type", func() {
+				It("Should fail when routine/time is not given for Timestamp restore type", func() {
 					// getRestoreConfigInMap returns restore config without a routine, time and with source type
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
 					delete(restoreConfig, common.SourceKey)
@@ -83,15 +83,15 @@ var _ = Describe(
 					configBytes, mErr := json.Marshal(restoreConfig)
 					Expect(mErr).ToNot(HaveOccurred())
 
-					restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.TimeStamp, configBytes)
+					restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("restore point in time should be positive"))
 				})
 
-				It("Should fail when source field is given for TimeStamp restore type", func() {
-					restore, err = newRestore(restoreNsNm, asdbv1beta1.TimeStamp)
+				It("Should fail when source field is given for Timestamp restore type", func() {
+					restore, err = newRestore(restoreNsNm, asdbv1beta1.Timestamp)
 					Expect(err).ToNot(HaveOccurred())
 
 					err = createRestore(k8sClient, restore)
@@ -151,7 +151,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should complete restore for TimeStamp restore type", func() {
+					"Should complete restore for Timestamp restore type", func() {
 						restoreConfig := getRestoreConfigInMap(backupDataPath)
 						delete(restoreConfig, common.SourceKey)
 
@@ -168,7 +168,7 @@ var _ = Describe(
 						configBytes, err := json.Marshal(restoreConfig)
 						Expect(err).ToNot(HaveOccurred())
 
-						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.TimeStamp, configBytes)
+						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
 
 						err = createRestore(k8sClient, restore)
 						Expect(err).ToNot(HaveOccurred())

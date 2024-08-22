@@ -22,7 +22,7 @@ spec:
       name: Backup Service Namespace
       type: string
     - jsonPath: .status.phase
-      name: Status
+      name: Phase
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -75,12 +75,12 @@ spec:
                 type: string
               type:
                 description: Type is the type of restore. It can of type Full, Incremental,
-                  and Timestamp. Based on the restore type, relevant restore config
-                  is given.
+                  and Timestamp. Based on the restore type, the relevant restore config
+                  should be given.
                 enum:
                 - Full
                 - Incremental
-                - TimeStamp
+                - Timestamp
                 type: string
             required:
             - backupService

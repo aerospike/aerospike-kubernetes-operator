@@ -52,7 +52,8 @@ var _ = Describe(
 					backup = newBackupWithConfig(backupNsNm, configBytes)
 					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("name should start with %s", namePrefix(backupNsNm)))
+					Expect(err.Error()).To(
+						ContainSubstring("name should start with %s", namePrefix(backupNsNm)))
 				})
 
 				It("Should fail when more than 1 cluster is given in backup config", func() {
@@ -67,6 +68,8 @@ var _ = Describe(
 					backup = newBackupWithConfig(backupNsNm, configBytes)
 					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("only one aerospike cluster is allowed in backup config"))
 				})
 
 				It("Should fail when on-demand backup is given at the time of creation", func() {
@@ -82,6 +85,8 @@ var _ = Describe(
 
 					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("onDemand backups config cannot be specified while creating backup"))
 				})
 
 				It("Should fail when non-existing routine is given in on-demand backup", func() {
@@ -103,6 +108,8 @@ var _ = Describe(
 
 					err = updateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("invalid onDemand config, backup routine non-existing-routine not found"))
 				})
 
 				It("Should fail when backup service is not present", func() {
@@ -113,6 +120,8 @@ var _ = Describe(
 
 					err = CreateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("not found"))
 				})
 
 				It("Should fail when backup service reference is updated", func() {
@@ -129,6 +138,8 @@ var _ = Describe(
 
 					err = updateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(
+						ContainSubstring("backup service cannot be updated"))
 				})
 
 				It("Should fail when non-existing policy is referred in Backup routine", func() {
@@ -283,7 +294,8 @@ var _ = Describe(
 
 					err = updateBackup(k8sClient, backup)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("aerospike-cluster name update is not allowed"))
+					Expect(err.Error()).To(
+						ContainSubstring("aerospike-cluster name cannot be updated"))
 				})
 
 				It("Should fail when on-demand backup is added along with backup-config update", func() {
@@ -379,20 +391,20 @@ var _ = Describe(
 
 				// Add a routine to the configMap
 				data := cm.Data[common.BackupServiceConfigYAML]
-				backupSvcConfigMap := make(map[string]interface{})
+				backupSvcConfig := make(map[string]interface{})
 
-				err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+				err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 				Expect(err).ToNot(HaveOccurred())
 
-				backupRoutines := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines := backupSvcConfig[common.BackupRoutinesKey].(map[string]interface{})
 				// Add a new routine with a different name
 				newRoutineName := namePrefix(backupNsNm) + "-" + "test-routine1"
 				backupRoutines[newRoutineName] =
 					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"]
 
-				backupSvcConfigMap[common.BackupRoutinesKey] = backupRoutines
+				backupSvcConfig[common.BackupRoutinesKey] = backupRoutines
 
-				newData, mErr := yaml.Marshal(backupSvcConfigMap)
+				newData, mErr := yaml.Marshal(backupSvcConfig)
 				Expect(mErr).ToNot(HaveOccurred())
 
 				cm.Data[common.BackupServiceConfigYAML] = string(newData)
@@ -421,12 +433,12 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				data = cm.Data[common.BackupServiceConfigYAML]
-				backupSvcConfigMap = make(map[string]interface{})
+				backupSvcConfig = make(map[string]interface{})
 
-				err = yaml.Unmarshal([]byte(data), &backupSvcConfigMap)
+				err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 				Expect(err).ToNot(HaveOccurred())
 
-				backupRoutines = backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines = backupSvcConfig[common.BackupRoutinesKey].(map[string]interface{})
 				_, ok := backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine1"]
 				Expect(ok).To(BeFalse())
 			})

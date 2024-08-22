@@ -635,7 +635,7 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 	case "Incremental":
 		url = c.API("/restore/incremental")
 
-	case "TimeStamp":
+	case "Timestamp":
 		url = c.API("/restore/timestamp")
 
 	default:

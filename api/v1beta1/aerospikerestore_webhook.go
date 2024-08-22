@@ -32,9 +32,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
-// log is for logging in this package.
-var aerospikeRestoreLog = logf.Log.WithName("aerospikerestore-resource")
-
 const defaultPollingPeriod time.Duration = 60 * time.Second
 
 func (r *AerospikeRestore) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -50,7 +47,9 @@ var _ webhook.Defaulter = &AerospikeRestore{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeRestore) Default() {
-	aerospikeRestoreLog.Info("default", "name", r.Name)
+	arLog := logf.Log.WithName(namespacedName(r))
+
+	arLog.Info("Setting defaults for aerospikeRestore")
 
 	if r.Spec.PollingPeriod.Duration.Seconds() == 0 {
 		r.Spec.PollingPeriod.Duration = defaultPollingPeriod
@@ -64,7 +63,9 @@ var _ webhook.Validator = &AerospikeRestore{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
-	aerospikeRestoreLog.Info("validate create", "name", r.Name)
+	arLog := logf.Log.WithName(namespacedName(r))
+
+	arLog.Info("Validate create")
 
 	if err := r.validateRestoreConfig(); err != nil {
 		return nil, err
@@ -75,12 +76,14 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	aerospikeRestoreLog.Info("validate update", "name", r.Name)
+	arLog := logf.Log.WithName(namespacedName(r))
+
+	arLog.Info("Validate update")
 
 	oldRestore := old.(*AerospikeRestore)
 
 	if !reflect.DeepEqual(oldRestore.Spec, r.Spec) {
-		return nil, fmt.Errorf("AerospikeRestore Spec is immutable")
+		return nil, fmt.Errorf("aerospikeRestore Spec is immutable")
 	}
 
 	return nil, nil
@@ -88,7 +91,9 @@ func (r *AerospikeRestore) ValidateUpdate(old runtime.Object) (admission.Warning
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
-	aerospikeRestoreLog.Info("validate delete", "name", r.Name)
+	arLog := logf.Log.WithName(namespacedName(r))
+
+	arLog.Info("Validate delete")
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
@@ -119,7 +124,7 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 
 		return restoreRequest.Validate()
 
-	case TimeStamp:
+	case Timestamp:
 		var restoreRequest model.RestoreTimestampRequest
 
 		if _, ok := restoreConfigInMap[common.SourceKey]; ok {

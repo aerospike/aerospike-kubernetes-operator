@@ -38,20 +38,20 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 )
 
-// log is for logging in this package.
-var aerospikeBackupLog = logf.Log.WithName("aerospikebackup-resource")
-
 func (r *AerospikeBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
 }
 
+// Implemented Defaulter interface for future reference
 var _ webhook.Defaulter = &AerospikeBackup{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeBackup) Default() {
-	aerospikeBackupLog.Info("default", "name", r.Name)
+	abLog := logf.Log.WithName(namespacedName(r))
+
+	abLog.Info("Setting defaults for aerospikeBackup")
 }
 
 //nolint:lll // for readability
@@ -61,9 +61,11 @@ var _ webhook.Validator = &AerospikeBackup{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
-	aerospikeBackupLog.Info("validate create", "name", r.Name)
+	abLog := logf.Log.WithName(namespacedName(r))
 
-	if len(r.Spec.OnDemandBackups) != 0 && r.Spec.Config.Raw != nil {
+	abLog.Info("Validate create")
+
+	if len(r.Spec.OnDemandBackups) != 0 {
 		return nil, fmt.Errorf("onDemand backups config cannot be specified while creating backup")
 	}
 
@@ -76,7 +78,9 @@ func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	aerospikeBackupLog.Info("validate update", "name", r.Name)
+	abLog := logf.Log.WithName(namespacedName(r))
+
+	abLog.Info("Validate update")
 
 	oldObj := old.(*AerospikeBackup)
 
@@ -101,32 +105,34 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackup) ValidateDelete() (admission.Warnings, error) {
-	aerospikeBackupLog.Info("validate delete", "name", r.Name)
+	abLog := logf.Log.WithName(namespacedName(r))
+
+	abLog.Info("Validate delete")
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
 }
 
 func (r *AerospikeBackup) validateBackupConfig() error {
-	backupConfigMap := make(map[string]interface{})
+	backupConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.Spec.Config.Raw, &backupConfigMap); err != nil {
+	if err := yaml.Unmarshal(r.Spec.Config.Raw, &backupConfig); err != nil {
 		return err
 	}
 
-	if _, ok := backupConfigMap[common.ServiceKey]; ok {
+	if _, ok := backupConfig[common.ServiceKey]; ok {
 		return fmt.Errorf("service field cannot be specified in backup config")
 	}
 
-	if _, ok := backupConfigMap[common.BackupPoliciesKey]; ok {
+	if _, ok := backupConfig[common.BackupPoliciesKey]; ok {
 		return fmt.Errorf("backup-policies field cannot be specified in backup config")
 	}
 
-	if _, ok := backupConfigMap[common.StorageKey]; ok {
+	if _, ok := backupConfig[common.StorageKey]; ok {
 		return fmt.Errorf("storage field cannot be specified in backup config")
 	}
 
-	if _, ok := backupConfigMap[common.SecretAgentsKey]; ok {
+	if _, ok := backupConfig[common.SecretAgentsKey]; ok {
 		return fmt.Errorf("secret-agent field cannot be specified in backup config")
 	}
 
@@ -149,30 +155,18 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return err
 	}
 
-	aeroClusters, err := r.validateAerospikeCluster(&backupSvcConfig, backupConfigMap)
+	aeroClusters, err := r.getValidatedAerospikeClusters(backupConfig)
 	if err != nil {
 		return err
 	}
 
-	err = r.validateBackupRoutines(&backupSvcConfig, backupConfigMap, aeroClusters)
+	backupRoutines, err := r.getValidatedBackupRoutines(backupConfig, aeroClusters)
 	if err != nil {
 		return err
 	}
 
-	// Add empty placeholders for missing backupSvcConfig sections. This is required for validation to work.
-	if backupSvcConfig.ServiceConfig == nil {
-		backupSvcConfig.ServiceConfig = &model.BackupServiceConfig{}
-	}
-
-	if backupSvcConfig.ServiceConfig.HTTPServer == nil {
-		backupSvcConfig.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
-	}
-
-	if backupSvcConfig.ServiceConfig.Logger == nil {
-		backupSvcConfig.ServiceConfig.Logger = &model.LoggerConfig{}
-	}
-
-	if err := backupSvcConfig.Validate(); err != nil {
+	err = updateValidateBackupSvcConfig(aeroClusters, backupRoutines, &backupSvcConfig)
+	if err != nil {
 		return err
 	}
 
@@ -206,14 +200,13 @@ func getK8sClient() (client.Client, error) {
 	return cl, nil
 }
 
-func (r *AerospikeBackup) validateAerospikeCluster(backupSvcConfig *model.Config,
-	backupConfigMap map[string]interface{},
+func (r *AerospikeBackup) getValidatedAerospikeClusters(backupConfig map[string]interface{},
 ) (map[string]*model.AerospikeCluster, error) {
-	if _, ok := backupConfigMap[common.AerospikeClusterKey]; !ok {
+	if _, ok := backupConfig[common.AerospikeClusterKey]; !ok {
 		return nil, fmt.Errorf("aerospike-cluster field is required field in backup config")
 	}
 
-	cluster, ok := backupConfigMap[common.AerospikeClusterKey].(map[string]interface{})
+	cluster, ok := backupConfig[common.AerospikeClusterKey].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("aerospike-cluster field is not in the right format")
 	}
@@ -230,19 +223,13 @@ func (r *AerospikeBackup) validateAerospikeCluster(backupSvcConfig *model.Config
 	}
 
 	if len(aeroClusters) != 1 {
-		return aeroClusters, fmt.Errorf("only one aerospike cluster is allowed in backup backupSvcConfig")
+		return aeroClusters, fmt.Errorf("only one aerospike cluster is allowed in backup config")
 	}
 
-	if len(backupSvcConfig.AerospikeClusters) == 0 {
-		backupSvcConfig.AerospikeClusters = make(map[string]*model.AerospikeCluster)
-	}
-
-	for clusterName, aeroCluster := range aeroClusters {
+	for clusterName := range aeroClusters {
 		if err := validateName(r.NamePrefix(), clusterName); err != nil {
 			return nil, fmt.Errorf("invalid cluster name %s, %s", clusterName, err.Error())
 		}
-
-		backupSvcConfig.AerospikeClusters[clusterName] = aeroCluster
 	}
 
 	return aeroClusters, nil
@@ -259,7 +246,8 @@ func (r *AerospikeBackup) validateOnDemandBackupsUpdate(oldObj *AerospikeBackup)
 		// Check if onDemand backup spec is updated
 		if r.Spec.OnDemandBackups[0].ID == oldObj.Spec.OnDemandBackups[0].ID &&
 			!reflect.DeepEqual(r.Spec.OnDemandBackups[0], oldObj.Spec.OnDemandBackups[0]) {
-			return fmt.Errorf("onDemand backup cannot be updated")
+			return fmt.Errorf("existing onDemand backup cannot be updated. " +
+				"However, It can be removed and a new onDemand backup can be added")
 		}
 
 		// Check if previous onDemand backup is completed before allowing new onDemand backup
@@ -289,39 +277,39 @@ func (r *AerospikeBackup) validateAerospikeClusterUpdate(oldObj *AerospikeBackup
 
 	for clusterName := range newCluster {
 		if _, ok := oldCluster[clusterName]; !ok {
-			return fmt.Errorf("aerospike-cluster name update is not allowed")
+			return fmt.Errorf("aerospike-cluster name cannot be updated")
 		}
 	}
 
 	return nil
 }
 
-func (r *AerospikeBackup) validateBackupRoutines(backupSvcConfig *model.Config,
-	backupSvcConfigMap map[string]interface{},
+func (r *AerospikeBackup) getValidatedBackupRoutines(
+	backupConfig map[string]interface{},
 	aeroClusters map[string]*model.AerospikeCluster,
-) error {
-	if _, ok := backupSvcConfigMap[common.BackupRoutinesKey]; !ok {
-		return fmt.Errorf("backup-routines field is required in backup config")
+) (map[string]*model.BackupRoutine, error) {
+	if _, ok := backupConfig[common.BackupRoutinesKey]; !ok {
+		return nil, fmt.Errorf("backup-routines field is required in backup config")
 	}
 
-	routines, ok := backupSvcConfigMap[common.BackupRoutinesKey].(map[string]interface{})
+	routines, ok := backupConfig[common.BackupRoutinesKey].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("backup-routines field is not in the right format")
+		return nil, fmt.Errorf("backup-routines field is not in the right format")
 	}
 
 	routineBytes, rErr := yaml.Marshal(routines)
 	if rErr != nil {
-		return rErr
+		return nil, rErr
 	}
 
 	backupRoutines := make(map[string]*model.BackupRoutine)
 
 	if err := yaml.Unmarshal(routineBytes, &backupRoutines); err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(backupRoutines) == 0 {
-		return fmt.Errorf("backup-routines field is empty")
+		return nil, fmt.Errorf("backup-routines field cannot be empty")
 	}
 
 	// validate:
@@ -329,23 +317,52 @@ func (r *AerospikeBackup) validateBackupRoutines(backupSvcConfig *model.Config,
 	// 2. if only correct aerospike cluster (the one referred in Backup CR) is used in backup routines
 	for routineName, routine := range backupRoutines {
 		if err := validateName(r.NamePrefix(), routineName); err != nil {
-			return fmt.Errorf("invalid backup routine name %s, %s", routineName, err.Error())
+			return nil, fmt.Errorf("invalid backup routine name %s, %s", routineName, err.Error())
 		}
 
 		if _, ok := aeroClusters[routine.SourceCluster]; !ok {
-			return fmt.Errorf("cluster %s not found in backup aerospike-cluster config", routine.SourceCluster)
+			return nil, fmt.Errorf("cluster %s not found in backup aerospike-cluster config", routine.SourceCluster)
 		}
+	}
+
+	return backupRoutines, nil
+}
+
+func updateValidateBackupSvcConfig(
+	clusters map[string]*model.AerospikeCluster,
+	routines map[string]*model.BackupRoutine,
+	backupSvcConfig *model.Config,
+) error {
+	if len(backupSvcConfig.AerospikeClusters) == 0 {
+		backupSvcConfig.AerospikeClusters = make(map[string]*model.AerospikeCluster)
+	}
+
+	for name, cluster := range clusters {
+		backupSvcConfig.AerospikeClusters[name] = cluster
 	}
 
 	if len(backupSvcConfig.BackupRoutines) == 0 {
 		backupSvcConfig.BackupRoutines = make(map[string]*model.BackupRoutine)
 	}
 
-	for name, routine := range backupRoutines {
+	for name, routine := range routines {
 		backupSvcConfig.BackupRoutines[name] = routine
 	}
 
-	return nil
+	// Add empty placeholders for missing backupSvcConfig sections. This is required for validation to work.
+	if backupSvcConfig.ServiceConfig == nil {
+		backupSvcConfig.ServiceConfig = &model.BackupServiceConfig{}
+	}
+
+	if backupSvcConfig.ServiceConfig.HTTPServer == nil {
+		backupSvcConfig.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+	}
+
+	if backupSvcConfig.ServiceConfig.Logger == nil {
+		backupSvcConfig.ServiceConfig.Logger = &model.LoggerConfig{}
+	}
+
+	return backupSvcConfig.Validate()
 }
 
 func (r *AerospikeBackup) NamePrefix() string {

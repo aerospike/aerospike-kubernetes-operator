@@ -1,16 +1,10 @@
 apiVersion: asdb.aerospike.com/v1beta1
 kind: AerospikeBackupService
 metadata:
-  labels:
-    app.kubernetes.io/name: aerospikebackupservice
-    app.kubernetes.io/instance: aerospikebackupservice-sample
-    app.kubernetes.io/part-of: aerospike-kubernetes-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:1.0.0
+  image: aerospike/aerospike-backup-service:1.0.0
   config:
     service:
       http:

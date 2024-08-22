@@ -667,8 +667,6 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 
 	r.aeroBackupService.Status = *status
 
-	r.Log.Info(fmt.Sprintf("Updating status: %+v", r.aeroBackupService.Status))
-
 	return r.Client.Status().Update(context.Background(), r.aeroBackupService)
 }
 

@@ -29,20 +29,20 @@ import (
 	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
 )
 
-// log is for logging in this package.
-var aerospikeBackupServiceLog = logf.Log.WithName("aerospikebackupservice-resource")
-
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
 }
 
+// Implemented Defaulter interface for future reference
 var _ webhook.Defaulter = &AerospikeBackupService{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *AerospikeBackupService) Default() {
-	aerospikeBackupServiceLog.Info("default", "name", r.Name)
+	absLog := logf.Log.WithName(namespacedName(r))
+
+	absLog.Info("Setting defaults for aerospikeBackupService")
 }
 
 //nolint:lll // for readability
@@ -52,7 +52,9 @@ var _ webhook.Validator = &AerospikeBackupService{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
-	aerospikeBackupServiceLog.Info("validate create", "name", r.Name)
+	absLog := logf.Log.WithName(namespacedName(r))
+
+	absLog.Info("Validate create")
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
@@ -63,7 +65,9 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
-	aerospikeBackupServiceLog.Info("validate update", "name", r.Name)
+	absLog := logf.Log.WithName(namespacedName(r))
+
+	absLog.Info("Validate update")
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
@@ -74,7 +78,9 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
-	aerospikeBackupServiceLog.Info("validate delete", "name", r.Name)
+	absLog := logf.Log.WithName(namespacedName(r))
+
+	absLog.Info("Validate delete")
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil

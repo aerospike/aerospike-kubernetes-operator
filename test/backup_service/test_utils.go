@@ -23,7 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-const BackupServiceImage = "aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service:1.0.0"
+const BackupServiceImage = "aerospike/aerospike-backup-service:1.0.0"
 
 const (
 	timeout   = 2 * time.Minute

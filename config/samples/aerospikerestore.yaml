@@ -1,12 +1,6 @@
 apiVersion: asdb.aerospike.com/v1beta1
 kind: AerospikeRestore
 metadata:
-  labels:
-    app.kubernetes.io/name: aerospikerestore
-    app.kubernetes.io/instance: aerospikerestore-sample
-    app.kubernetes.io/part-of: aerospike-kubernetes-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: aerospike-kubernetes-operator
   name: aerospikerestore-sample
   namespace: aerospike
 spec:
