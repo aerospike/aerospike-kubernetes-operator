@@ -1,0 +1,40 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackupService
+metadata:
+  name: aerospikebackupservice-sample
+  namespace: aerospike
+spec:
+  image: aerospike/aerospike-backup-service:1.0.0
+  config:
+    service:
+      http:
+        port: 8081
+    backup-policies:
+      test-policy:
+        parallel: 3
+        remove-files: KeepAll
+        type: 1
+      test-policy1:
+        parallel: 3
+        remove-files: KeepAll
+        type: 1
+    storage:
+      local:
+        path: /localStorage
+        type: local
+      s3Storage:
+        type: aws-s3
+        path: "s3://aerospike-kubernetes-operator-test"
+        s3-region: us-east-1
+        s3-profile: default
+
+  secrets:
+    - secretName: aws-secret
+      volumeMount:
+        name: aws-secret
+        mountPath: /root/.aws/credentials
+        subPath: credentials
+
+  service:
+    type: LoadBalancer
+

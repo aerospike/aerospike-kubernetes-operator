@@ -1,0 +1,36 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackup
+metadata:
+  name: aerospikebackup
+  namespace: aerospike
+spec:
+  backupService:
+    name: aerospikebackupservice-sample
+    namespace: aerospike
+#  onDemandBackups:
+#    - id: first-ad-hoc-backup
+#      routineName: aerospike-aerospikebackup-test-routine
+  config:
+    aerospike-cluster:
+      aerospike-aerospikebackup-test-cluster:  # Name format: <backup-namespace>-<backup-name>-<cluster-name>
+        credentials:
+          password: admin123
+          user: admin
+        seed-nodes:
+          - host-name: aerocluster.aerospike.svc.cluster.local
+            port: 3000
+    backup-routines:
+      aerospike-aerospikebackup-test-routine:  # Name format: <backup-namespace>-<backup-name>-<routine-name>
+        backup-policy: test-policy
+        interval-cron: "@daily"
+        incr-interval-cron: "@hourly"
+        namespaces: ["test"]
+        source-cluster: aerospike-aerospikebackup-test-cluster
+        storage: local
+      aerospike-aerospikebackup-test-routine1:
+        backup-policy: test-policy1
+        interval-cron: "@daily"
+        incr-interval-cron: "@hourly"
+        namespaces: [ "test" ]
+        source-cluster: aerospike-aerospikebackup-test-cluster
+        storage: s3Storage
