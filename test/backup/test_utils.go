@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/pkg/model"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
