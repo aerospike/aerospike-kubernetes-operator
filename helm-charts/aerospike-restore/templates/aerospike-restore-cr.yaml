@@ -11,8 +11,7 @@ metadata:
 spec:
   # Aerospike Backup Service reference
   backupService:
-    name: {{ .Values.backupService.name}}
-    namespace: {{ .Values.backupService.namespace }}
+    {{- .Values.backupService | toYaml | nindent 4 }}
 
   # Aerospike Restore type
   type: {{ .Values.type }}

@@ -13,7 +13,7 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
-Aerospike Backup Service common name.
+Aerospike Backup common name.
 */}}
 {{- define "aerospike-backup.commonName" -}}
 {{- if .Values.commonName -}}

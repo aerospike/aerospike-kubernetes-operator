@@ -42,7 +42,7 @@ helm install aerospike-backup aerospike/aerospike-backup \
 |----------------------------------|------------------------------------------------------|------------|
 | `customLabels`                   | Custom labels to add on the AerospikeBackup resource | `{}` (nil) |
 | `backupService.name`             | Aerospike backup service name                        |            |
-| `backupService.name`             | Aerospike backup service namespace                   |            |
+| `backupService.namespace`        | Aerospike backup service namespace                   |            |
 | `backupConfig`                   | Aerospike backup configuration                       | `{}` (nil) |
 | `onDemandBackups[*].id`          | Unique identifier for the on-demand backup           |            |
 | `onDemandBackups[*].routineName` | Routine name used to trigger on-demand backup        |            |

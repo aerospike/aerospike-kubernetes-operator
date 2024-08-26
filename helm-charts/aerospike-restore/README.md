@@ -38,14 +38,14 @@ helm install aerospike-restore aerospike/aerospike-restore \
 
 ## Configurations
 
-| Name                 | Description                                                       | Default    |
-|----------------------|-------------------------------------------------------------------|------------|
-| `customLabels`       | Custom labels to add on the AerospikeRestore resource             | `{}` (nil) |
-| `backupService.name` | Aerospike backup service name                                     |            |
-| `backupService.name` | Aerospike backup service namespace                                |            |
-| `type`               | Type of restore. It can of type Full, Incremental, and Timestamp. | `Full`     |
-| `restoreConfig`      | Aerospike restore configuration                                   | `{}` (nil) |
-| `pollingPeriod`      | Polling period for restore operation status                       | `60s`      |
+| Name                 | Description                                                          | Default    |
+|----------------------|----------------------------------------------------------------------|------------|
+| `customLabels`       | Custom labels to add on the AerospikeRestore resource                | `{}` (nil) |
+| `backupService.name` | Aerospike backup service name                                        |            |
+| `backupService.name` | Aerospike backup service namespace                                   |            |
+| `type`               | Type of restore. It can be of type Full, Incremental, and Timestamp. | `Full`     |
+| `restoreConfig`      | Aerospike restore configuration                                      | `{}` (nil) |
+| `pollingPeriod`      | Polling period for restore operation status                          | `60s`      |
 
 ### Configurations Explained
 

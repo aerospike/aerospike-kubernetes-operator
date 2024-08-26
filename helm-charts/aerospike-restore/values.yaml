@@ -13,7 +13,7 @@ backupService: {}
 #  name: aerospikebackupservice
 #  namespace: aerospike
 
-## Type is the type of restore. It can of type Full, Incremental, and Timestamp.
+## Type is the type of restore. It can be of type Full, Incremental, and Timestamp.
 ## Based on the restore type, relevant restore config is given.
 type: Full
 
