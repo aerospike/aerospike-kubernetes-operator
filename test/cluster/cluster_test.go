@@ -116,6 +116,7 @@ func PauseReconcileTest(ctx goctx.Context) {
 		"Should pause reconcile", func() {
 			// Testing over upgrade as it is a long-running operation
 			By("1. Start upgrade and pause at partial upgrade")
+
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -146,10 +147,12 @@ func PauseReconcileTest(ctx goctx.Context) {
 			).Should(BeTrue())
 
 			By("Pause reconcile")
+
 			err = setPauseFlag(ctx, clusterNamespacedName, ptr.To(true))
 			Expect(err).ToNot(HaveOccurred())
 
 			By("2. Upgrade should fail")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -161,10 +164,12 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 			// Resume reconcile and Wait for all pods to be upgraded
 			By("3. Resume reconcile and upgrade should succeed")
+
 			err = setPauseFlag(ctx, clusterNamespacedName, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Upgrade should succeed")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
