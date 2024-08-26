@@ -4,11 +4,11 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 3.3.0
+  tag: 3.3.1
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
-## authentication, a secret containining credentials can be added
+## authentication, a secret containing credentials can be added
 ## imagePullSecrets:
 ##   - secret_with_credentials_to_custom_registry
 imagePullSecrets: {}

@@ -81,6 +81,13 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, nil
 	}
 
+	// Pause the reconciliation for the AerospikeCluster if the paused field is set to true.
+	// Deletion of the AerospikeCluster will not be paused.
+	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
+		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
+		return reconcile.Result{}, nil
+	}
+
 	// Set the status to AerospikeClusterInProgress before starting any operations
 	if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
 		return reconcile.Result{}, err
@@ -301,8 +308,10 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 	return reconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl(selectedPods []corev1.Pod,
-	ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
+	selectedPods []corev1.Pod,
+	ignorablePodNames sets.Set[string],
+) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
@@ -506,8 +515,6 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 	if err := r.patchStatus(newAeroCluster); err != nil {
 		return fmt.Errorf("error updating status: %w", err)
 	}
-
-	r.aeroCluster.Status.AerospikeClusterStatusSpec.AerospikeAccessControl = statusAerospikeAccessControl
 
 	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
 
@@ -961,7 +968,9 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
-				initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+				initializedVolumes = append(
+					initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID),
+				)
 			}
 		}
 

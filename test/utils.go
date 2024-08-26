@@ -26,6 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -212,7 +213,7 @@ func createAuthSecret(
 	labels map[string]string, secretName, pass string,
 ) error {
 	// Create authSecret
-	as := &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: namespace,
@@ -224,7 +225,7 @@ func createAuthSecret(
 		},
 	}
 	// use test context's create helper to create the object and add a cleanup function for the new object
-	err := k8sClient.Create(ctx, as)
+	err := k8sClient.Create(ctx, secret)
 	if !errors.IsAlreadyExists(err) {
 		return err
 	}
@@ -287,16 +288,20 @@ func isClusterStateValid(
 		return false
 	}
 
-	// Validate status
-	statusToSpec, err := asdbv1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
-	if err != nil {
-		pkgLog.Error(err, "Failed to copy spec in status", "err", err)
-		return false
-	}
+	// Do not compare status with spec if cluster reconciliation is paused
+	// `paused` flag only exists in the spec and not in the status.
+	if !asdbv1.GetBool(aeroCluster.Spec.Paused) {
+		// Validate status
+		statusToSpec, err := asdbv1.CopyStatusToSpec(&newCluster.Status.AerospikeClusterStatusSpec)
+		if err != nil {
+			pkgLog.Error(err, "Failed to copy spec in status", "err", err)
+			return false
+		}
 
-	if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-		pkgLog.Info("Cluster status is not matching the spec")
-		return false
+		if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
+			pkgLog.Info("Cluster status is not matching the spec")
+			return false
+		}
 	}
 
 	// TODO: This is not valid for tests where maxUnavailablePods flag is used.
@@ -322,6 +327,8 @@ func isClusterStateValid(
 				aeroCluster.Spec.Image,
 			),
 		)
+
+		return false
 	}
 
 	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {
@@ -815,4 +822,46 @@ func getPasswordFromSecret(k8sClient client.Client,
 	}
 
 	return string(passBytes), nil
+}
+
+func getAerospikeClient(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
+	policy := getClientPolicy(aeroCluster, k8sClient)
+	policy.FailIfNotConnected = false
+	policy.Timeout = time.Minute * 2
+	policy.UseServicesAlternate = true
+	policy.ConnectionQueueSize = 100
+	policy.LimitConnectionsToQueueSize = true
+
+	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
+
+	for podName := range aeroCluster.Status.Pods {
+		pod := aeroCluster.Status.Pods[podName]
+
+		host, err := createHost(&pod)
+		if err != nil {
+			return nil, err
+		}
+
+		hostList = append(hostList, host)
+	}
+
+	asClient, err := as.NewClientWithPolicyAndHost(policy, hostList...)
+	if asClient == nil {
+		return nil, fmt.Errorf(
+			"failed to create aerospike cluster asClient: %v", err,
+		)
+	}
+
+	_, _ = asClient.WarmUp(-1)
+
+	// Wait for 5 minutes for cluster to connect
+	for j := 0; j < 150; j++ {
+		if isConnected := asClient.IsConnected(); isConnected {
+			break
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+
+	return asClient, nil
 }

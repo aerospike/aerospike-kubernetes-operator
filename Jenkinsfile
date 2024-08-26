@@ -80,8 +80,8 @@ pipeline {
                                sh "./snyk-linux test  --severity-threshold=high --fail-on=all"
 
                                // Scan the operator images
-                               sh "./snyk-linux container test  ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
-                               sh "./snyk-linux container test  ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
+                               sh "./snyk-linux container test ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
+                               sh "./snyk-linux container test ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
                            }
                         }
                     }
@@ -119,7 +119,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "3.3.0"
+    def prefix = "3.3.1"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")

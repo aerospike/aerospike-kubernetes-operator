@@ -2192,6 +2192,8 @@ var _ = Describe(
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				// Setting incorrect secret name so that access control reconciler could not set the password for admin.
+				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = "incorrectSecretName"
 				// This file is already added in the storage volume backed by the secret.
 				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 					"default-password-file": "/etc/aerospike/secret/password.conf",
@@ -2215,6 +2217,7 @@ var _ = Describe(
 				Eventually(func() error {
 					clientPolicy := getClientPolicy(aeroCluster, k8sClient)
 					clientPolicy.Password = pass
+					clientPolicy.FailIfNotConnected = true
 
 					client, cerr := getClientWithPolicy(
 						pkgLog, aeroCluster, k8sClient, clientPolicy)
@@ -2232,11 +2235,27 @@ var _ = Describe(
 					return nil
 				}, 5*time.Minute).ShouldNot(HaveOccurred())
 
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Set correct secret name for admin user credentials.
+				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = authSecretName
+
+				err = updateCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
 				By("Try scaleup")
 				err = scaleUpClusterTest(
 					k8sClient, ctx, clusterNamespacedName, 1,
 				)
 				Expect(err).ToNot(HaveOccurred())
+
+				if aeroCluster != nil {
+					err = deleteCluster(
+						k8sClient, ctx, aeroCluster,
+					)
+					Expect(err).ToNot(HaveOccurred())
+				}
 			})
 		})
 	},
