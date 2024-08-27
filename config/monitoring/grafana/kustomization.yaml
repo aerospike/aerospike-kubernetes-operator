@@ -4,25 +4,27 @@ kind: Kustomization
 labels:
   - includeSelectors: true
     pairs:
-      app.kubernetes.io/component: aerospike-grafana
-      app: aerospike-monitoring-stack-grafana
+      app.kubernetes.io/name: aerospike-grafana
+      app.kubernetes.io/component: grafana
 
 resources:
   - statefulset.yaml
   - pvc.yaml
   - service.yaml
-  - dashboards
 
 configMapGenerator:
-  - name: aerospike-monitoring-stack-grafana-provisioning-datasources
+  - name: grafana-provisioning-datasources
     files:
       - config/aerospike_grafana_datasource.yaml
-  - name: aerospike-monitoring-stack-grafana-config
+  - name: grafana-config
     files:
       - config/grafana.ini
-  - name: grafana-dashboards
+  - name: grafana-dashboard-config
     files:
       - config/aerospike_grafana_dashboards_config.yaml
+  - name: download-script-configmap
+    files:
+      - config/download_files.sh
 
 generatorOptions:
   disableNameSuffixHash: true

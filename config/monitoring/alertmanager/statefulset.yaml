@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: aerospike-monitoring-stack-alertmanager
+  name: alertmanager
 spec:
   template:
     spec:
@@ -32,12 +32,12 @@ spec:
               name: alertmanager-data
       securityContext:
         fsGroup: 26
-      serviceAccountName: aerospike-monitoring-stack
+      serviceAccountName: aerospike-monitoring-stack-prometheus
       volumes:
         - name: alertmanager-data
           persistentVolumeClaim:
-            claimName: alertmanager-data
+            claimName: aerospike-monitoring-stack-alertmanager-data
         - name: alertmanager-conf
           configMap:
             defaultMode: 420
-            name: alertmanager-config
+            name: aerospike-monitoring-stack-alertmanager-config

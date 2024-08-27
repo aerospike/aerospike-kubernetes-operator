@@ -38,6 +38,18 @@ scrape_configs:
           names:
             - default
             - aerospike
+#  - job_name: "kubernetes-cadvisor"
+#    scheme: https
+#    metrics_path: /metrics/cadvisor
+#    kubernetes_sd_configs:
+#      - role: node
+#    tls_config:
+#      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+#    authorization:
+#      credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+#    relabel_configs:
+#      - action: labelmap
+#        regex: __meta_kubernetes_node_label_(.+)
   - job_name: 'event_exporter' # https://github.com/caicloud/event_exporter/blob/master/deploy/README.md
     static_configs:
       - targets: ['event-exporter:9102']

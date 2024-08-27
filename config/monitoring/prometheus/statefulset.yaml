@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: aerospike-monitoring-stack-prometheus
+  name: prometheus
 spec:
   replicas: 1
   podManagementPolicy: Parallel
@@ -9,7 +9,7 @@ spec:
     type: RollingUpdate
   template:
     spec:
-      serviceAccountName: aerospike-monitoring-stack
+      serviceAccountName: aerospike-monitoring-stack-prometheus
       containers:
         - name: prometheus-server
           image: "prom/prometheus:latest"
@@ -41,7 +41,7 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/prometheus
-            - name: "prometheus-data"
+            - name: prometheus-data
               mountPath: /data
             - mountPath: /etc/prometheus/alert-rules.d
               name: alert-manager-rules
@@ -54,8 +54,8 @@ spec:
             name: aerospike-monitoring-stack-prometheus-config
         - name: prometheus-data
           persistentVolumeClaim:
-            claimName: prometheus-data
+            claimName: aerospike-monitoring-stack-prometheus-data
         - name: alert-manager-rules
           configMap:
               defaultMode: 420
-              name: alert-rules-config
+              name: aerospike-monitoring-stack-alert-rules-config

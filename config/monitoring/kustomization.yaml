@@ -3,10 +3,12 @@ kind: Kustomization
 namespace: monitoring
 
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
     pairs:
-      app.kubernetes.io/name: aerospike-monitoring
-      vendor: aerospike
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/part-of: aerospike-monitoring-stack
+
+namePrefix: aerospike-monitoring-stack-
 
 resources:
   - grafana

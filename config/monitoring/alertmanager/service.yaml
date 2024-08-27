@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: aerospike-monitoring-stack-alertmanager
+  name: alertmanager
 spec:
   ports:
     - name: http

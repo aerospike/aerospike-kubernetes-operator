@@ -1,9 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app: aerospike-monitoring-stack
-  name: aerospike-monitoring-stack
+  name: prometheus
 rules:
   - apiGroups:
       - ""

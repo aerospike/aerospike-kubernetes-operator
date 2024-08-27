@@ -4,8 +4,8 @@ kind: Kustomization
 labels:
   - includeSelectors: true
     pairs:
-      app.kubernetes.io/component: aerospike-alertmanager
-      app: aerospike-monitoring-stack-alertmanager
+      app.kubernetes.io/name: aerospike-alertmanager
+      app.kubernetes.io/component: alertmanager
 
 resources:
   - statefulset.yaml

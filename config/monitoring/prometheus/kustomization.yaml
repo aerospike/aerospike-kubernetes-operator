@@ -4,8 +4,8 @@ kind: Kustomization
 labels:
   - includeSelectors: true
     pairs:
-      app.kubernetes.io/component: aerospike-prometheus
-      app: aerospike-monitoring-stack-prometheus
+      app.kubernetes.io/name: aerospike-prometheus
+      app.kubernetes.io/component: prometheus
 
 resources:
   - statefulset.yaml
@@ -16,7 +16,7 @@ resources:
   - clusterrolebinding.yaml
 
 configMapGenerator:
-  - name: aerospike-monitoring-stack-prometheus-config
+  - name: prometheus-config
     files:
       - config/prometheus.yml
   - name: alert-rules-config

@@ -1,7 +1,7 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: aerospike-monitoring-stack-prometheus
+  name: prometheus
 spec:
   ports:
     - name: http
