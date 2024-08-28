@@ -28,7 +28,7 @@ certs:
   webhookServerCertSecretName: "webhook-server-cert"
 
 ##  Operator configurations
-watchNamespaces: "default"
+watchNamespaces: "default,aerospike"
 
 # Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io"

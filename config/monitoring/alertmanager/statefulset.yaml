@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: alertmanager
+spec:
+  template:
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:latest
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+            - --log.level=info
+            - --cluster.advertise-address=0.0.0.0:9093
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 25
+            periodSeconds: 20
+          ports:
+            - containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+          volumeMounts:
+            - mountPath: /etc/alertmanager
+              name: alertmanager-conf
+            - mountPath: /alertmanager
+              name: alertmanager-data
+      securityContext:
+        fsGroup: 26
+      serviceAccountName: aerospike-monitoring-stack-prometheus
+      volumes:
+        - name: alertmanager-data
+          persistentVolumeClaim:
+            claimName: aerospike-monitoring-stack-alertmanager-data
+        - name: alertmanager-conf
+          configMap:
+            defaultMode: 420
+            name: aerospike-monitoring-stack-alertmanager-config

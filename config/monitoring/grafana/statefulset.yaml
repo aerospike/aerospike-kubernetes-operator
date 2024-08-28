@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  template:
+    spec:
+      serviceAccountName: aerospike-monitoring-stack-prometheus
+      terminationGracePeriodSeconds: 120
+      initContainers:
+        - name: download-dashboards
+          image: alpine:latest
+          command: ["/bin/sh"]
+          args: [ "-c", "/bin/sh -x /mnt/scripts/download_files.sh" ]
+          volumeMounts:
+            - name: dashboards
+              mountPath: /mnt/data
+            - name: script-volume
+              mountPath: /mnt/scripts
+      containers:
+        - name: grafana
+          image: "grafana/grafana:latest"
+          imagePullPolicy: "IfNotPresent"
+          volumeMounts:
+            - name: grafana-config
+              mountPath: "/etc/grafana/"
+            - name: grafana-provisioning-datasources
+              mountPath: "/etc/grafana/provisioning/datasources"
+            - name: grafana-dashboard-config
+              mountPath: "/etc/grafana/provisioning/dashboards"
+            - name: grafana-data
+              mountPath: "/data"
+            - name: dashboards
+              mountPath: "/var/lib/grafana/dashboards"
+          ports:
+            - name: service
+              containerPort: 80
+              protocol: TCP
+            - name: grafana
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+            - name: GF_PATHS_DATA
+              value: /data/grafana/data
+      securityContext:
+        fsGroup: 472
+      volumes:
+        - name: grafana-config
+          configMap:
+            name: aerospike-monitoring-stack-grafana-config
+        - name: grafana-provisioning-datasources
+          configMap:
+            name: aerospike-monitoring-stack-grafana-provisioning-datasources
+        - name: grafana-dashboard-config
+          configMap:
+            defaultMode: 420
+            name: aerospike-monitoring-stack-grafana-dashboard-config
+        - name: script-volume
+          configMap:
+            name: aerospike-monitoring-stack-download-script
+        - name: grafana-data
+          persistentVolumeClaim:
+            claimName: aerospike-monitoring-stack-grafana-data
+        - name: dashboards
+          emptyDir: {}
