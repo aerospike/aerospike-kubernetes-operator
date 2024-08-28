@@ -22,7 +22,7 @@ configMapGenerator:
   - name: grafana-dashboard-config
     files:
       - config/aerospike_grafana_dashboards_config.yaml
-  - name: download-script-configmap
+  - name: download-script
     files:
       - config/download_files.sh
 

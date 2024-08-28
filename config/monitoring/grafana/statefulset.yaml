@@ -10,7 +10,7 @@ spec:
       terminationGracePeriodSeconds: 120
       initContainers:
         - name: download-dashboards
-          image: docker.io/curlimages/curl:7.85.0
+          image: alpine:latest
           command: ["/bin/sh"]
           args: [ "-c", "/bin/sh -x /mnt/scripts/download_files.sh" ]
           volumeMounts:
@@ -80,7 +80,7 @@ spec:
             name: aerospike-monitoring-stack-grafana-dashboard-config
         - name: script-volume
           configMap:
-            name: aerospike-monitoring-stack-download-script-configmap
+            name: aerospike-monitoring-stack-download-script
         - name: grafana-data
           persistentVolumeClaim:
             claimName: aerospike-monitoring-stack-grafana-data
