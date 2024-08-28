@@ -7,7 +7,7 @@ alerting:
         - role: pod
           selectors:
             - role: pod
-              label: app.kubernetes.io/component=aerospike-alertmanager
+              label: app.kubernetes.io/component=alertmanager
 rule_files:
   - "/etc/prometheus/alert-rules.d/aerospike_rules.yml"
   - "/etc/prometheus/alert-rules.d/node_exporter_alerts.yml"
