@@ -1,14 +1,12 @@
 pipeline {
     agent any
     tools {
-        go 'go-1.21'
+        go 'go-1.22'
     }
 
     environment {
         GOPATH="/var/lib/jenkins/go"
-        // Operator sdk command "operator-sdk" should be present in PATH or at
-        // /usr/local/operator-sdk-1.28.0/
-        PATH="/usr/local/operator-sdk-1.28.0/:${GOPATH}/bin:/usr/local/bin:${env.PATH}"
+        PATH="${GOPATH}/bin:/usr/local/bin:${env.PATH}"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
         DOCKER_REGISTRY="docker.io"
