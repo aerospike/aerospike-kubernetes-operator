@@ -6,9 +6,9 @@ pipeline {
 
     environment {
         GOPATH="/var/lib/jenkins/go"
-        PATH="${GOPATH}/bin:/usr/local/bin:${env.PATH}"
         GO_REPO_ROOT="${env.GOPATH}/src/github.com"
         GO_REPO="${env.GO_REPO_ROOT}/aerospike-kubernetes-operator"
+        PATH="${GOPATH}/bin:/usr/local/bin:${env.PATH}:${GO_REPO}/bin"
         DOCKER_REGISTRY="docker.io"
         DOCKER_ACCOUNT="aerospike"
         OPERATOR_NAME = "aerospike-kubernetes-operator"
