@@ -249,6 +249,16 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		}
 	}
 
+	if r.IsReclusterNeeded() {
+		if err = deployment.InfoRecluster(
+			r.Log,
+			r.getClientPolicy(), allHostConns,
+		); err != nil {
+			r.Log.Error(err, "Failed to do recluster")
+			return reconcile.Result{}, err
+		}
+	}
+
 	// Update the AerospikeCluster status.
 	if err = r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update AerospikeCluster status")
@@ -1022,4 +1032,49 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 
 	return r.Client.Update(ctx, aeroCluster, common.UpdateOption)
+}
+
+func (r *SingleClusterReconciler) IsReclusterNeeded() bool {
+	// Return false if dynamic configuration updates are disabled
+	if !asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) {
+		return false
+	}
+
+	for specIdx := range r.aeroCluster.Spec.RackConfig.Racks {
+		for statusIdx := range r.aeroCluster.Status.RackConfig.Racks {
+			if r.aeroCluster.Spec.RackConfig.Racks[specIdx].ID == r.aeroCluster.Status.RackConfig.Racks[statusIdx].ID &&
+				r.IsReclusterNeededForRack(&r.aeroCluster.Spec.RackConfig.Racks[specIdx],
+					&r.aeroCluster.Status.RackConfig.Racks[statusIdx]) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (r *SingleClusterReconciler) IsReclusterNeededForRack(specRack, statusRack *asdbv1.Rack) bool {
+	specNamespaces, ok := specRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	if !ok {
+		return false
+	}
+
+	statusNamespaces, ok := statusRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	if !ok {
+		return false
+	}
+
+	for _, specNamespace := range specNamespaces {
+		for _, statusNamespace := range statusNamespaces {
+			if specNamespace.(map[string]interface{})["name"] != statusNamespace.(map[string]interface{})["name"] {
+				continue
+			}
+
+			if specNamespace.(map[string]interface{})["active-rack"] != statusNamespace.(map[string]interface{})["active-rack"] {
+				return true
+			}
+		}
+	}
+
+	return false
 }

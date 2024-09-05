@@ -607,6 +607,87 @@ var _ = Describe(
 				)
 			},
 		)
+
+		Context(
+			"When changing fields those need recluster", func() {
+				BeforeEach(
+					func() {
+						// Create a 4 node cluster
+						aeroCluster := createNonSCDummyAerospikeCluster(
+							clusterNamespacedName, 4,
+						)
+						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
+						aeroCluster.Spec.Image = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc:7.2.0.0-rc1"
+						aeroCluster.Spec.PodSpec.ImagePullSecrets = []v1.LocalObjectReference{
+							{
+								Name: "regcred",
+							},
+						}
+						aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks,
+							asdbv1.Rack{
+								ID: 1,
+							},
+							asdbv1.Rack{
+								ID: 2,
+							})
+						aeroCluster.Spec.RackConfig.Namespaces = []string{
+							"test",
+						}
+						err := deployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					},
+				)
+
+				It(
+					"Should update active-rack dynamically", func() {
+
+						By("Modify dynamic config by adding fields")
+
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						podPIDMap, err := getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+						nsList[0].(map[string]interface{})["active-rack"] = 1
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Fetch and verify dynamic configs")
+
+						pod := aeroCluster.Status.Pods["dynamic-config-test-1-0"]
+
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						confs := strings.Split(info["namespace/test"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "effective_active_rack") {
+								keyValue := strings.Split(conf, "=")
+								Expect(keyValue[1]).To(Equal("1"))
+							}
+						}
+
+						By("Verify no warm/cold restarts in Pods")
+
+						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+					},
+				)
+			},
+		)
 	},
 )
 

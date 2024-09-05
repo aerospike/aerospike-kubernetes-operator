@@ -60,12 +60,12 @@ spec:
         path: resources
       - description: SecretMounts is the list of secret to be mounted in the backup
           service.
-        displayName: Backup Service Volume
+        displayName: Backup Service SecretMounts
         path: secrets
       - description: Service defines the Kubernetes service configuration for the
           backup service. It is used to expose the backup service deployment. By default,
           the service type is ClusterIP.
-        displayName: Backup Service
+        displayName: K8s Service
         path: service
       version: v1beta1
     - description: AerospikeCluster is the schema for the AerospikeCluster API
@@ -235,7 +235,8 @@ spec:
         displayName: Restore Service Polling Period
         path: pollingPeriod
       - description: Type is the type of restore. It can of type Full, Incremental,
-          and Timestamp. Based on the restore type, relevant restore config is given.
+          and Timestamp. Based on the restore type, the relevant restore config should
+          be given.
         displayName: Restore Type
         path: type
       version: v1beta1
