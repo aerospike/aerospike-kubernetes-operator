@@ -82,8 +82,7 @@ spec:
               type:
                 description: |-
                   Type is the type of restore. It can of type Full, Incremental, and Timestamp.
-                  Based on the restore type, the relevant restore config
-                  should be given.
+                  Based on the restore type, the relevant restore config should be given.
                 enum:
                 - Full
                 - Incremental

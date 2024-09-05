@@ -315,7 +315,7 @@ submodules: ## Pull and update git submodules recursively
 # For OpenShift bundles run
 # CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.6 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:3.3.1 make bundle
 .PHONY: bundle
-bundle: manifests kustomize
+bundle: manifests kustomize operator-sdk
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd $(ROOT_DIR)/config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
