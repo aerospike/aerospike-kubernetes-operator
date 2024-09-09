@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 

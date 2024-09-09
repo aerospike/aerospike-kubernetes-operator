@@ -66,18 +66,22 @@ func waitForAerospikeCluster(
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
+
 			if err != nil {
 				if errors.IsNotFound(err) {
 					pkgLog.Info(
 						"Waiting for availability of %s AerospikeCluster\n",
 						"name", aeroCluster.Name,
 					)
+
 					return false, nil
 				}
+
 				return false, err
 			}
 
 			isValid = isClusterStateValid(aeroCluster, newCluster, replicas, expectedPhases)
+
 			return isValid, nil
 		},
 	)

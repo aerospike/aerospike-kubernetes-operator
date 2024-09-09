@@ -13,11 +13,9 @@ spec:
       test-policy:
         parallel: 3
         remove-files: KeepAll
-        type: 1
       test-policy1:
         parallel: 3
         remove-files: KeepAll
-        type: 1
     storage:
       local:
         path: /localStorage

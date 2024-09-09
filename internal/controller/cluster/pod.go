@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -872,6 +872,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			}
 
 			ignorablePodNames.Insert(failedPod[podIdx])
+
 			failedAllowed--
 		}
 	}
@@ -1474,7 +1475,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
+	return retry.OnError(retry.DefaultBackoff, func(_ error) bool {
 		// Customize the error check for retrying, return true to retry, false to stop retrying
 		return true
 	}, func() error {
@@ -1488,6 +1489,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		}
 
 		r.Log.Info("Pod status patched successfully")
+
 		return nil
 	})
 }

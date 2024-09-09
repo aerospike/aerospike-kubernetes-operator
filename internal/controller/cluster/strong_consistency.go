@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	gosets "github.com/deckarep/golang-set/v2"

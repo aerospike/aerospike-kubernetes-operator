@@ -116,6 +116,7 @@ func PauseReconcileTest(ctx goctx.Context) {
 		"Should pause reconcile", func() {
 			// Testing over upgrade as it is a long-running operation
 			By("1. Start upgrade and pause at partial upgrade")
+
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -146,10 +147,12 @@ func PauseReconcileTest(ctx goctx.Context) {
 			).Should(BeTrue())
 
 			By("Pause reconcile")
+
 			err = setPauseFlag(ctx, clusterNamespacedName, ptr.To(true))
 			Expect(err).ToNot(HaveOccurred())
 
 			By("2. Upgrade should fail")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -161,10 +164,12 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 			// Resume reconcile and Wait for all pods to be upgraded
 			By("3. Resume reconcile and upgrade should succeed")
+
 			err = setPauseFlag(ctx, clusterNamespacedName, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Upgrade should succeed")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -249,6 +254,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 				"migrate-fill-delay-cluster", namespace,
 			)
 			migrateFillDelay := int64(120)
+
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
@@ -326,13 +332,16 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				func() {
 					nodeList, err = getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
+
 					size := len(nodeList.Items)
 
 					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, size)
 
 					By("Scale up 1 pod to make that pod pending due to lack of k8s nodes")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					aeroCluster.Spec.Size++
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -372,6 +381,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					).ShouldNot(HaveOccurred())
 
 					By("Verify pending pod")
+
 					podList, err = getPodList(aeroCluster, k8sClient)
 
 					var counter int
@@ -404,6 +414,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					).ShouldNot(HaveOccurred())
 
 					By("Verify pending pod")
+
 					podList, err = getPodList(aeroCluster, k8sClient)
 
 					counter = 0
@@ -417,8 +428,10 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(counter).To(Equal(1))
 
 					By("Scale down 1 pod")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					aeroCluster.Spec.Size--
 					// As pod is in pending state, CR object won't reach the final phase.
 					// So expectedPhases can be InProgress or Completed
@@ -426,6 +439,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Verify if all pods are running")
+
 					podList, err = getPodList(aeroCluster, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -452,6 +466,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			It(
 				"Should allow rack deletion with failed pods in different rack", func() {
 					By("Fail 1-1 aerospike pod")
+
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
 					pod := &v1.Pod{}
 
@@ -469,8 +484,10 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 					aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1)
@@ -507,6 +524,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			It(
 				"Should allow namespace addition and removal with failed pod", func() {
 					By("Fail 1-1 aerospike pod")
+
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
 					pod := &v1.Pod{}
 
@@ -523,8 +541,10 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
@@ -537,8 +557,10 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("RollingRestart by re-using previously removed namespace storage")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					nsList = aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 					nsList = append(nsList, getNonSCNamespaceConfig("barnew", "/test/dev/xvdf1"))
 					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
@@ -616,6 +638,7 @@ func DeployClusterForAllImagesPost490(ctx goctx.Context) {
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Validating Readiness probe")
+
 				err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -635,7 +658,7 @@ func DeployClusterForDiffStorageTest(
 	}
 
 	repFact := nHosts
-
+	//nolint:wsl //Comments are for test-case description
 	Context(
 		"Positive", func() {
 			// Cluster with n nodes, enterprise can be more than 8
@@ -657,6 +680,7 @@ func DeployClusterForDiffStorageTest(
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				},
 			)
@@ -849,6 +873,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Modifying unused TLS configuration")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -866,6 +891,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Removing unused TLS configuration")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -879,6 +905,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Changing ca-file to ca-path in TLS configuration")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -923,6 +950,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 			It(
 				"Try update operations", func() {
 					By("Modifying name of used TLS configuration")
+
 					aeroCluster, err := getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -939,6 +967,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).Should(HaveOccurred())
 
 					By("Modifying ca-file of used TLS configuration")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -955,6 +984,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating both ca-file and ca-path in TLS configuration")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -971,6 +1001,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating tls-name in service network config")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -985,6 +1016,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating tls-port in service network config")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -1001,6 +1033,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					// Should fail when changing network config from tls to non-tls in a single step.
 					// Ideally first tls and non-tls config both has to set and then remove tls config.
 					By("Updating tls to non-tls in single step in service network config")
+
 					aeroCluster, err = getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
@@ -1594,6 +1627,7 @@ func negativeDeployClusterValidationTest(
 											)
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 											if _, ok :=
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
@@ -1615,6 +1649,7 @@ func negativeDeployClusterValidationTest(
 											)
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 											if _, ok :=
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.Storage.Volumes = []asdbv1.VolumeSpec{
@@ -1680,6 +1715,7 @@ func negativeDeployClusterValidationTest(
 											)
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
@@ -1700,6 +1736,7 @@ func negativeDeployClusterValidationTest(
 											)
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 												devList = append(
@@ -1749,6 +1786,7 @@ func negativeDeployClusterValidationTest(
 											)
 											namespaceConfig :=
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
@@ -1855,9 +1893,6 @@ func negativeDeployClusterValidationTest(
 									Expect(err).Should(HaveOccurred())
 								},
 							)
-
-							// Logging conf
-							// XDR conf
 						},
 					)
 				},
@@ -2087,6 +2122,7 @@ func negativeUpdateClusterValidationTest(
 								k8sClient, ctx, clusterNamespacedName,
 							)
 							Expect(err).ToNot(HaveOccurred())
+
 							defaultDNS := v1.DNSDefault
 							aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
 							err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -2101,6 +2137,7 @@ func negativeUpdateClusterValidationTest(
 								k8sClient, ctx, clusterNamespacedName,
 							)
 							Expect(err).ToNot(HaveOccurred())
+
 							noneDNS := v1.DNSNone
 							aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
 							err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -2383,9 +2420,6 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).Should(HaveOccurred())
 								},
 							)
-
-							// Logging conf
-							// XDR conf
 						},
 					)
 				},

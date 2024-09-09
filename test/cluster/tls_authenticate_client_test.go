@@ -446,6 +446,7 @@ func doTestTLSAuthenticateClientDomainList(ctx goctx.Context) {
 			)
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
+
 			tlsAuthenticateClient, err := getTLSAuthenticateClient(aeroCluster)
 			if err != nil {
 				Expect(err).ToNot(HaveOccurred())

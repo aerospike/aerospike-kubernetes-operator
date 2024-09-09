@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"context"
@@ -231,15 +231,19 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 			if err != nil {
 				return err
 			}
+
 			if !d.IsDir() {
 				var caData []byte
+
 				if caData, err = os.ReadFile(path); err != nil {
 					return err
 				}
+
 				serverPool.AppendCertsFromPEM(caData)
 				r.Log.Info("Loaded CA certs from file.", "ca-path", caPath,
 					"file", path)
 			}
+
 			return nil
 		},
 	)
@@ -357,28 +361,36 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 		return nil, err
 	}
 
-	if crtData, crtExists := found.Data[secretSource.ClientCertFilename]; !crtExists {
+	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
+	if !crtExists {
 		return nil, fmt.Errorf(
 			"can't find certificate `%s` in secret %+v",
 			secretSource.ClientCertFilename, secretName,
 		)
-	} else if keyData, keyExists := found.Data[secretSource.ClientKeyFilename]; !keyExists {
+	}
+
+	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
+	if !keyExists {
 		return nil, fmt.Errorf(
 			"can't find client key `%s` in secret %+v",
 			secretSource.ClientKeyFilename, secretName,
 		)
-	} else if cert, err := tls.X509KeyPair(crtData, keyData); err != nil {
+	}
+
+	cert, err := tls.X509KeyPair(crtData, keyData)
+	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to load X509 key pair for cluster from secret %+v: %w",
 			secretName, err,
 		)
-	} else {
-		r.Log.Info(
-			"Loading Aerospike Cluster client cert from secret", "secret",
-			secretName,
-		)
-		return &cert, nil
 	}
+
+	r.Log.Info(
+		"Loading Aerospike Cluster client cert from secret", "secret",
+		secretName,
+	)
+
+	return &cert, nil
 }
 
 func namespacedSecret(

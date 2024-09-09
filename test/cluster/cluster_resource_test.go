@@ -95,6 +95,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 				if checkAeroServer {
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = resources
 				}
+
 				if checkAeroInit {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
@@ -145,6 +146,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 				if checkAeroServer {
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = resources
 				}
+
 				if checkAeroInit {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
