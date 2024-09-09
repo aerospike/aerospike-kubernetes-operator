@@ -11,7 +11,7 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "b:c:f:a:r:p:n:" opt
+while getopts "b:c:f:a:r:p:n:t:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -21,6 +21,7 @@ do
       r ) REGISTRY="$OPTARG" ;;
       p ) CRED_PATH="$OPTARG" ;;
       n ) REGISTRY_NAMESPACE="$OPTARG" ;;
+      t ) INIT_IMAGE_NAME_AND_TAG="$OPTARG" ;;
 
    esac
 done
@@ -29,6 +30,7 @@ done
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
 REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-aerospike}
+INIT_IMAGE_NAME_AND_TAG=${INIT_IMAGE_NAME_AND_TAG:-aerospike-kubernetes-init:2.2.1}
 
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -63,6 +65,7 @@ echo "---------------------"
 
 export CUSTOM_INIT_REGISTRY="$REGISTRY"
 export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
+export CUSTOM_INIT_NAMETAG="$INIT_IMAGE_NAME_AND_TAG"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
 make test FOCUS="$FOCUS" ARGS="$ARGS"

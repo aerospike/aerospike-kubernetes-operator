@@ -70,8 +70,11 @@ const (
 const (
 	AerospikeServerContainerName                   = "aerospike-server"
 	AerospikeInitContainerName                     = "aerospike-init"
+	AerospikeInitContainerNameAndTag               = "nameAndTag"
+	AerospikeInitContainerRegistry                 = "registry"
 	AerospikeInitContainerRegistryEnvVar           = "AEROSPIKE_KUBERNETES_INIT_REGISTRY"
 	AerospikeInitContainerRegistryNamespaceEnvVar  = "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE"
+	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAMETAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
 	AerospikeInitContainerDefaultRepoAndTag        = "aerospike-kubernetes-init:2.2.1"
@@ -122,19 +125,20 @@ func GetWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
 	return DefaultWorkDirectory
 }
 
-func getInitContainerImage(registry, namespace string) string {
+func getInitContainerImage(registry, namespace, repoAndTag string) string {
 	return fmt.Sprintf(
 		"%s/%s/%s", strings.TrimSuffix(registry, "/"),
 		strings.TrimSuffix(namespace, "/"),
-		AerospikeInitContainerDefaultRepoAndTag,
+		repoAndTag,
 	)
 }
 
 func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
-	registry := getInitContainerImageRegistry(aeroCluster)
+	registry := getInitContainerImageValue(aeroCluster, AerospikeInitContainerRegistry)
 	namespace := getInitContainerImageRegistryNamespace(aeroCluster)
+	repoAndTag := getInitContainerImageValue(aeroCluster, AerospikeInitContainerNameAndTag)
 
-	return getInitContainerImage(registry, namespace)
+	return getInitContainerImage(registry, namespace, repoAndTag)
 }
 
 func getInitContainerImageRegistryNamespace(aeroCluster *AerospikeCluster) string {
@@ -159,26 +163,49 @@ func getInitContainerImageRegistryNamespace(aeroCluster *AerospikeCluster) strin
 	return *namespace
 }
 
-func getInitContainerImageRegistry(aeroCluster *AerospikeCluster) string {
-	// Given in CR
-	registry := ""
-	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
-		registry = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
-	}
+func getInitContainerImageValue(aeroCluster *AerospikeCluster, valueType string) string {
+	var value string
 
-	if registry == "" {
-		// Given in EnvVar
-		envRegistry, found := os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
-		if found {
-			registry = envRegistry
+	// Check in CR based on the valueType
+	if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
+		switch valueType {
+		case AerospikeInitContainerRegistry:
+			value = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry
+		case AerospikeInitContainerNameAndTag:
+			value = aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag
 		}
 	}
 
-	if registry == "" {
-		return AerospikeInitContainerDefaultRegistry
+	// Check in EnvVar if not found in CR
+	if value == "" {
+		var (
+			envVar string
+			found  bool
+		)
+
+		switch valueType {
+		case AerospikeInitContainerRegistry:
+			envVar, found = os.LookupEnv(AerospikeInitContainerRegistryEnvVar)
+		case AerospikeInitContainerNameAndTag:
+			envVar, found = os.LookupEnv(AerospikeInitContainerNameTagEnvVar)
+		}
+
+		if found {
+			value = envVar
+		}
 	}
 
-	return registry
+	// Return default values if still not found
+	if value == "" {
+		switch valueType {
+		case AerospikeInitContainerRegistry:
+			return AerospikeInitContainerDefaultRegistry
+		case AerospikeInitContainerNameAndTag:
+			return AerospikeInitContainerDefaultRepoAndTag
+		}
+	}
+
+	return value
 }
 
 func ClusterNamespacedName(aeroCluster *AerospikeCluster) string {

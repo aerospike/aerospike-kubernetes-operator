@@ -59,6 +59,8 @@ spec:
           value: {{ .Values.aerospikeKubernetesInitRegistry }}
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE
           value: {{ .Values.aerospikeKubernetesInitRegistryNamespace }}
+        - name: AEROSPIKE_KUBERNETES_INIT_NAMETAG
+          value: {{ .Values.aerospikeKubernetesInitNameTag }}
         {{- if .Values.extraEnv }}
         {{- range $key, $value := .Values.extraEnv }}
         - name: "{{ $key }}"

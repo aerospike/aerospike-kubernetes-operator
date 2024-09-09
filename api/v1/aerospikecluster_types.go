@@ -320,6 +320,8 @@ type AerospikeInitContainerSpec struct { //nolint:govet // for readability
 	ImageRegistry string `json:"imageRegistry,omitempty"`
 	// ImageRegistryNamespace is the name of namespace in registry for aerospike-init container image
 	ImageRegistryNamespace *string `json:"imageRegistryNamespace,omitempty"`
+	// ImageNameAndTag is the name:tag of aerospike-init container image
+	ImageNameAndTag string `json:"imageNameAndTag,omitempty"`
 	// SecurityContext that will be added to aerospike-init container created by operator.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	// Define resources requests and limits for Aerospike init Container.

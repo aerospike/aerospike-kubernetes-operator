@@ -64,6 +64,9 @@ spec:
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE
           # this is the namespace in registry used to pull aerospike-init image
           value: aerospike
+        - name: AEROSPIKE_KUBERNETES_INIT_NAMETAG
+          # this is the name and tag of aerospike-init image
+          value: aerospike-kubernetes-init:2.2.1
       serviceAccountName: controller-manager
 
       terminationGracePeriodSeconds: 10

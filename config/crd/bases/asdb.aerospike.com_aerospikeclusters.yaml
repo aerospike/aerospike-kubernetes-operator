@@ -618,6 +618,10 @@ spec:
                     description: AerospikeInitContainerSpec configures the aerospike-init
                       container created by the operator.
                     properties:
+                      imageNameAndTag:
+                        description: ImageNameAndTag is the name:tag of aerospike-init
+                          container image
+                        type: string
                       imageRegistry:
                         description: ImageRegistry is the name of image registry for
                           aerospike-init container image ImageRegistry, e.g. docker.io,
@@ -9995,6 +9999,10 @@ spec:
                     description: AerospikeInitContainerSpec configures the aerospike-init
                       container created by the operator.
                     properties:
+                      imageNameAndTag:
+                        description: ImageNameAndTag is the name:tag of aerospike-init
+                          container image
+                        type: string
                       imageRegistry:
                         description: ImageRegistry is the name of image registry for
                           aerospike-init container image ImageRegistry, e.g. docker.io,
