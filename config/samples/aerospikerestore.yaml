@@ -1,0 +1,26 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeRestore
+metadata:
+  name: aerospikerestore-sample
+  namespace: aerospike
+spec:
+  backupService:
+    name: aerospikebackupservice-sample
+    namespace: aerospike
+  type: Full
+  config:
+    destination:
+      label: destinationCluster
+      credentials:
+        password: admin123
+        user: admin
+      seed-nodes:
+        - host-name: aerocluster.test.svc.cluster.local
+          port: 3000
+    policy:
+      parallel: 3
+      no-generation: true
+      no-indexes: true
+    source:
+      "path": "/localStorage/aerospike-aerospikebackup-test-routine/backup/1722326391329/data/test"
+      "type": local

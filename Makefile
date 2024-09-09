@@ -1,4 +1,4 @@
-# # /bin/sh does not support source command needed in make test
+# # /bin/sh does not support source command needed in make all-test
 #SHELL := /bin/bash
 
 ROOT_DIR=$(shell git rev-parse --show-toplevel)
@@ -113,6 +113,9 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikeclusters.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikeclusters.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikebackupservices.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikebackupservices.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikebackups.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikebackups.asdb.aerospike.com.yaml
+	cp $(ROOT_DIR)/config/crd/bases/asdb.aerospike.com_aerospikerestores.yaml $(ROOT_DIR)/helm-charts/aerospike-kubernetes-operator/crds/customresourcedefinition_aerospikerestores.asdb.aerospike.com.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -137,10 +140,27 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 go-lint: golanci-lint ## Run golangci-lint against code.
 	$(GOLANGCI_LINT) run
 
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+.PHONY: all-test
+all-test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -r --keep-going -show-node-events -v -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+
+.PHONY: cluster-test
+cluster-test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./cluster -show-node-events -timeout=12h0m0s --junit-report="junit.xml"  -- ${ARGS}
+
+
+.PHONY: backup-service-test
+backup-service-test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./backup_service -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
+
+.PHONY: backup-test
+backup-test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./backup -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
+
+.PHONY: restore-test
+restore-test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out -show-node-events -v -timeout=12h0m0s -focus=${FOCUS} --junit-report="junit.xml"  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile cover.out --keep-separate-coverprofiles -v . ./restore -show-node-events -timeout=1h0m0s --junit-report="junit.xml"  -- ${ARGS}
 
 ##@ Build
 

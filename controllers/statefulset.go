@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -185,7 +186,7 @@ func (r *SingleClusterReconciler) createSTS(
 		return nil, err
 	}
 
-	if err := r.Client.Create(context.TODO(), st, createOption); err != nil {
+	if err := r.Client.Create(context.TODO(), st, common.CreateOption); err != nil {
 		return nil, fmt.Errorf("failed to create new StatefulSet: %v", err)
 	}
 
@@ -432,7 +433,7 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 			}
 
 			if err = r.Client.Create(
-				context.TODO(), confMap, createOption,
+				context.TODO(), confMap, common.CreateOption,
 			); err != nil {
 				return fmt.Errorf(
 					"failed to create new confMap for StatefulSet: %v", err,
@@ -474,7 +475,7 @@ func (r *SingleClusterReconciler) buildSTSConfigMap(
 	confMap.Data = configMapData
 
 	if err := r.Client.Update(
-		context.TODO(), confMap, updateOption,
+		context.TODO(), confMap, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
 	}
@@ -504,7 +505,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	}
 
 	if err := r.Client.Update(
-		context.TODO(), confMap, updateOption,
+		context.TODO(), confMap, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
 	}
@@ -660,7 +661,7 @@ func (r *SingleClusterReconciler) updateSTS(
 
 		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
-		return r.Client.Update(context.TODO(), found, updateOption)
+		return r.Client.Update(context.TODO(), found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
 			"failed to update StatefulSet %s: %v",
@@ -1197,7 +1198,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 
 			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
 
-			if err := r.Client.Update(context.TODO(), statefulSet, updateOption); err != nil {
+			if err := r.Client.Update(context.TODO(), statefulSet, common.UpdateOption); err != nil {
 				return fmt.Errorf(
 					"failed to update StatefulSet %s: %v",
 					statefulSet.Name,

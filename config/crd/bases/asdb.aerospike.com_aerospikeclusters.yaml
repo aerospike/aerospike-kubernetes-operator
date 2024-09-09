@@ -382,6 +382,10 @@ spec:
                       list by the operator
                     type: string
                 type: object
+              paused:
+                description: Paused flag is used to pause the reconciliation for the
+                  AerospikeCluster.
+                type: boolean
               podSpec:
                 description: Specify additional configuration for the Aerospike pods
                 properties:

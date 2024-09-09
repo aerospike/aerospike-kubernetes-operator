@@ -22,6 +22,7 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -81,6 +82,13 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, nil
 	}
 
+	// Pause the reconciliation for the AerospikeCluster if the paused field is set to true.
+	// Deletion of the AerospikeCluster will not be paused.
+	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
+		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
+		return reconcile.Result{}, nil
+	}
+
 	// Set the status to AerospikeClusterInProgress before starting any operations
 	if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
 		return reconcile.Result{}, err
@@ -120,18 +128,18 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	}
 
 	// Reconcile all racks
-	if res := r.reconcileRacks(); !res.isSuccess {
-		if res.err != nil {
+	if res := r.reconcileRacks(); !res.IsSuccess {
+		if res.Err != nil {
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
 				"Failed to reconcile Racks for cluster %s/%s",
 				r.aeroCluster.Namespace, r.aeroCluster.Name,
 			)
 
-			recErr = res.err
+			recErr = res.Err
 		}
 
-		return res.result, recErr
+		return res.Result, recErr
 	}
 
 	if err := r.reconcilePDB(); err != nil {
@@ -215,20 +223,20 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 		false, ignorablePodNames,
-	); !res.isSuccess {
-		r.Log.Error(res.err, "Failed to revert migrate-fill-delay")
+	); !res.IsSuccess {
+		r.Log.Error(res.Err, "Failed to revert migrate-fill-delay")
 
-		recErr = res.err
+		recErr = res.Err
 
 		return reconcile.Result{}, recErr
 	}
 
 	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
 		if !r.IsStatusEmpty() {
-			if res := r.waitForClusterStability(policy, allHostConns); !res.isSuccess {
-				recErr = res.err
+			if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
+				recErr = res.Err
 
-				return res.result, recErr
+				return res.Result, recErr
 			}
 		}
 
@@ -255,8 +263,8 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	// Try to recover pods only when MaxIgnorablePods is set
 	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		if res := r.recoverIgnorablePods(); !res.isSuccess {
-			return res.getResult()
+		if res := r.recoverIgnorablePods(); !res.IsSuccess {
+			return res.GetResult()
 		}
 	}
 
@@ -265,11 +273,11 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	return reconcile.Result{}, nil
 }
 
-func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
+func (r *SingleClusterReconciler) recoverIgnorablePods() common.ReconcileResult {
 	podList, gErr := r.getClusterPodList()
 	if gErr != nil {
 		r.Log.Error(gErr, "Failed to get cluster pod list")
-		return reconcileError(gErr)
+		return common.ReconcileError(gErr)
 	}
 
 	r.Log.Info("Try to recover failed/pending pods if any")
@@ -281,12 +289,12 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 			anyPodFailed = true
 
 			if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
-				return reconcileError(err)
+				return common.ReconcileError(err)
 			}
 
 			if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
 				r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
-				return reconcileError(err)
+				return common.ReconcileError(err)
 			}
 
 			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
@@ -295,14 +303,16 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() reconcileResult {
 
 	if anyPodFailed {
 		r.Log.Info("Found failed/pending pod(s), requeuing")
-		return reconcileRequeueAfter(0)
+		return common.ReconcileRequeueAfter(0)
 	}
 
-	return reconcileSuccess()
+	return common.ReconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) validateAndReconcileAccessControl(selectedPods []corev1.Pod,
-	ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
+	selectedPods []corev1.Pod,
+	ignorablePodNames sets.Set[string],
+) error {
 	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
 	if err != nil {
 		return err
@@ -959,7 +969,9 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
-				initializedVolumes = append(initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID))
+				initializedVolumes = append(
+					initializedVolumes, fmt.Sprintf("%s@%s", oldFormatInitVolNames[oldVolIdx], pvcUID),
+				)
 			}
 		}
 
@@ -1009,5 +1021,5 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 
 	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 
-	return r.Client.Update(ctx, aeroCluster, updateOption)
+	return r.Client.Update(ctx, aeroCluster, common.UpdateOption)
 }

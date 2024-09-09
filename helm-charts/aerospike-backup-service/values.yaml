@@ -1,0 +1,69 @@
+## Default values for aerospike-backup-service.
+## This is a YAML-formatted file.
+## Declare variables to be passed into your templates.
+
+## Aerospike Backup Service common name
+## Defaults to release name truncated to 63 characters (with hyphens removed)
+# commonName: aerobackupservice
+
+nameOverride: ""
+
+## Image is the image for the backup service.
+image:
+  repository: aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service
+  tag: "1.0.0"
+
+## Custom labels that will be applied on the AerospikeBackupService resource
+customLabels: {}
+
+## ServiceAccount to be used for the Aerospike Backup Service pod
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+
+## Config is the free form configuration for the backup service in YAML format.
+## This config is used to start the backup service. The config is passed as a file to the backup service.
+backupServiceConfig: {}
+#  service:
+#    http:
+#      port: 8080
+#  backup-policies:
+#    test-policy:
+#      parallel: 3
+#      remove-files: KeepAll
+#      type: 1
+#  storage:
+#    local:
+#      path: /localStorage
+#      type: local
+#    s3Storage:
+#      type: aws-s3
+#      path: "s3://test-bucket"
+#      s3-region: us-east-1
+#      s3-profile: default
+
+## SecretMounts is the list of secret to be mounted in the backup service.
+secrets: []
+#  - secretName: aws-secret
+#    volumeMount:
+#      name: aws-secret
+#      mountPath: /root/.aws/credentials
+#      subPath: credentials
+
+## Resources define the requests and limits for the backup service container.
+## Resources.Limits should be more than Resources.Requests.
+resources: {}
+#  limits:
+#    cpu: 100m
+#    memory: 128Mi
+#  requests:
+#    cpu: 100m
+#    memory: 128Mi
+
+## Service defines the Kubernetes service configuration for the backup service.
+## It is used to expose the backup service deployment. By default, the service type is ClusterIP.
+service: {}
+#  type: ClusterIP
+

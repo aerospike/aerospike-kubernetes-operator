@@ -1,0 +1,23 @@
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackup
+metadata:
+  name: {{ template "aerospike-backup.commonName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aerospike-backup.labels" . | nindent 4 }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  # Aerospike Backup Service reference
+  backupService:
+    {{- .Values.backupService | toYaml | nindent 4 }}
+
+  # Aerospike Backup configuration
+  config:
+    {{- .Values.backupConfig | toYaml | nindent 4 }}
+
+  # On-demand backups configuration
+  {{- with .Values.onDemandBackups }}
+  onDemandBackups: {{- toYaml . | nindent 4 }}
+  {{- end }}
