@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.12.1
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: aerospikebackups.asdb.aerospike.com
 spec:
   group: asdb.aerospike.com
@@ -30,14 +30,19 @@ spec:
         description: AerospikeBackup is the Schema for the aerospikebackup API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -46,9 +51,9 @@ spec:
               for a given AerospikeCluster
             properties:
               backupService:
-                description: BackupService is the backup service reference i.e. name
-                  and namespace. It is used to communicate to the backup service to
-                  trigger backups. This field is immutable
+                description: |-
+                  BackupService is the backup service reference i.e. name and namespace.
+                  It is used to communicate to the backup service to trigger backups. This field is immutable
                 properties:
                   name:
                     description: Backup service name
@@ -61,9 +66,9 @@ spec:
                 - namespace
                 type: object
               config:
-                description: 'Config is the free form configuration for the backup
-                  in YAML format. This config is used to trigger backups. It includes:
-                  aerospike-cluster, backup-routines.'
+                description: |-
+                  Config is the free form configuration for the backup in YAML format.
+                  This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               onDemandBackups:
@@ -110,9 +115,9 @@ spec:
                 - namespace
                 type: object
               config:
-                description: 'Config is the configuration for the backup in YAML format.
-                  This config is used to trigger backups. It includes: aerospike-cluster,
-                  backup-routines.'
+                description: |-
+                  Config is the configuration for the backup in YAML format.
+                  This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               onDemandBackups:

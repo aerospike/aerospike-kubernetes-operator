@@ -246,15 +246,19 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 	// Restart 1 node at a time
 	It("Should restart one pod at a time", func() {
 		By("Using default RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count")
+
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
+
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("1%")
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
 		err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -291,6 +295,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 	// Restart batch of nodes
 	It("Should do BatchRollingRestart", func() {
 		By("Use RollingUpdateBatchSize PCT")
+
 		err := batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -298,6 +303,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
+
 		err = batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -308,8 +314,10 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 	// User should be able to change RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count when restart is going on
 	It("Should allow multiple changes in RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count", func() {
 		By("Update RollingUpdateBatchSize Count")
+
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
 		err = k8sClient.Update(ctx, aeroCluster)
@@ -318,8 +326,10 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
+
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
 		err = k8sClient.Update(ctx, aeroCluster)
@@ -328,6 +338,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
+
 		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "1Gi")
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -357,13 +368,16 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 	// Restart 1 node at a time
 	It("Should upgrade one pod at a time", func() {
 		By("Using default RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count")
+
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.Image = availableImage1
 		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
+
 		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, percent("1%"), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -398,6 +412,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 	// Restart batch of nodes
 	It("Should do BatchUpgrade", func() {
 		By("Use RollingUpdateBatchSize PCT")
+
 		err := batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -405,6 +420,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
+
 		err = batchUpgradeTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
@@ -415,8 +431,10 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 	// User should be able to change RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count when restart is going on
 	It("Should allow multiple changes in RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count", func() {
 		By("Update RollingUpdateBatchSize Count")
+
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
 		aeroCluster.Spec.Image = availableImage1
 		err = k8sClient.Update(ctx, aeroCluster)
@@ -425,8 +443,10 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
+
 		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
+
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
 		aeroCluster.Spec.Image = latestImage
 		err = k8sClient.Update(ctx, aeroCluster)
@@ -435,6 +455,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
+
 		err = upgradeTest(k8sClient, ctx, clusterNamespacedName, count(3), availableImage1)
 		Expect(err).ToNot(HaveOccurred())
 	})

@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 const defaultPollingPeriod time.Duration = 60 * time.Second

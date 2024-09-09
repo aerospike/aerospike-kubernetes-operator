@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/abhishekdwivedi3060/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/pkg/model"
 )
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {

@@ -272,10 +272,12 @@ func waitForClusterScaleDown(
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
+
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil
 				}
+
 				return false, err
 			}
 
@@ -289,6 +291,7 @@ func waitForClusterScaleDown(
 			if err != nil {
 				return false, err
 			}
+
 			if len(podList.Items) < replicas {
 				err := fmt.Errorf("cluster pods number can not go below replica size")
 				return false, err
@@ -318,10 +321,12 @@ func waitForClusterRollingRestart(
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
+
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil
 				}
+
 				return false, err
 			}
 
@@ -360,6 +365,7 @@ func waitForClusterUpgrade(
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
+
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil

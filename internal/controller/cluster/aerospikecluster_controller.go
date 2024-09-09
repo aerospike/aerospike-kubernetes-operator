@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 const patchFieldOwner = "aerospike-kuberneter-operator"
@@ -42,10 +42,10 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(
 			&appsv1.StatefulSet{}, builder.WithPredicates(
 				predicate.Funcs{
-					CreateFunc: func(e event.CreateEvent) bool {
+					CreateFunc: func(_ event.CreateEvent) bool {
 						return false
 					},
-					UpdateFunc: func(e event.UpdateEvent) bool {
+					UpdateFunc: func(_ event.UpdateEvent) bool {
 						return false
 					},
 				},
