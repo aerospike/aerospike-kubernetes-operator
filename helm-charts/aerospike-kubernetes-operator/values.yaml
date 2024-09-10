@@ -36,8 +36,8 @@ aerospikeKubernetesInitRegistry: "docker.io"
 ## Resources - limits / requests
 resources:
   limits:
-    cpu: 200m
-    memory: 256Mi
+    cpu: 400m
+    memory: 512Mi
   requests:
     cpu: 10m
     memory: 64Mi
