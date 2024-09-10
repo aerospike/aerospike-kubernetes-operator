@@ -658,7 +658,7 @@ func DeployClusterForDiffStorageTest(
 	}
 
 	repFact := nHosts
-
+	//nolint:wsl //Comments are for test-case description
 	Context(
 		"Positive", func() {
 			// Cluster with n nodes, enterprise can be more than 8
