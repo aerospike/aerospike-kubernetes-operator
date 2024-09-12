@@ -30,7 +30,7 @@ var backupServiceName, backupServiceNamespace string
 
 var backupDataPath string
 
-var pkgLog = ctrl.Log.WithName("restore")
+var pkgLog = ctrl.Log.WithName("aerospikerestore")
 
 var backupNsNm = types.NamespacedName{
 	Name:      "sample-backup",

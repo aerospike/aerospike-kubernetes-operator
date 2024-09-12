@@ -33,7 +33,7 @@ var testCtx = context.TODO()
 
 var backupServiceName, backupServiceNamespace string
 
-var pkgLog = ctrl.Log.WithName("backup")
+var pkgLog = ctrl.Log.WithName("aerospikebackup")
 
 var aerospikeNsNm = types.NamespacedName{
 	Name:      "aerocluster",

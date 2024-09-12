@@ -34,7 +34,7 @@ const (
 
 var testCtx = context.TODO()
 
-var pkgLog = ctrl.Log.WithName("backupservice")
+var pkgLog = ctrl.Log.WithName("aerospikebackupservice")
 
 func NewBackupService() (*asdbv1beta1.AerospikeBackupService, error) {
 	configBytes, err := getBackupServiceConfBytes()

@@ -47,7 +47,7 @@ const (
 var (
 	storageClass = "ssd"
 	namespace    = "test"
-	pkgLog       = ctrl.Log.WithName("cluster")
+	pkgLog       = ctrl.Log.WithName("aerospikecluster")
 )
 
 const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
