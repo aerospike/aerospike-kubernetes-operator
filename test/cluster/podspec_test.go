@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,8 +16,10 @@ import (
 )
 
 var (
-	customInitRegistryEnvVar  = "CUSTOM_INIT_REGISTRY"
-	imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
+	customInitRegistryEnvVar          = "CUSTOM_INIT_REGISTRY"
+	customInitRegistryNamespaceEnvVar = "CUSTOM_INIT_REGISTRY_NAMESPACE"
+	customInitNameAndTagEnvVar        = "CUSTOM_INIT_NAME_TAG"
+	imagePullSecretNameEnvVar         = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
 )
 
 var _ = Describe(
@@ -427,9 +429,13 @@ var _ = Describe(
 					}
 				})
 
-				It("Should be able to set/update aerospike-init custom registry", func() {
+				It("Should be able to set/update aerospike-init custom registry, namespace and name", func() {
 					operatorEnvVarRegistry := "docker.io"
+					operatorEnvVarRegistryNamespace := "aerospike"
+					operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.1"
 					customRegistry := getEnvVar(customInitRegistryEnvVar)
+					customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
+					customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
 					imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
 
 					By("Updating imagePullSecret")
@@ -445,26 +451,62 @@ var _ = Describe(
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					By("Using registry in CR")
+					By("Using registry, namespace and name in CR")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitNameAndTag
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					validateImageRegistry(k8sClient, ctx, aeroCluster, customRegistry)
+					validateInitImage(k8sClient, aeroCluster, customRegistry,
+						customRegistryNamespace, customInitNameAndTag)
 
-					By("Using envVar registry")
+					By("Using envVar registry, namespace and name")
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Empty imageRegistry, should use operator envVar docker.io
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					validateImageRegistry(k8sClient, ctx, aeroCluster, operatorEnvVarRegistry)
+					validateInitImage(k8sClient, aeroCluster, operatorEnvVarRegistry,
+						operatorEnvVarRegistryNamespace, operatorEnvVarNameAndTag)
+				})
+
+				It("Should be able to recover cluster after setting correct aerospike-init custom registry/namespace", func() {
+					operatorEnvVarRegistry := "docker.io"
+					operatorEnvVarRegistryNamespace := "aerospike"
+					operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.1"
+					incorrectCustomRegistryNamespace := "incorrectnamespace"
+
+					By("Using incorrect registry namespace in CR")
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &incorrectCustomRegistryNamespace
+					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
+					Expect(err).Should(HaveOccurred())
+
+					validateInitImage(k8sClient, aeroCluster, operatorEnvVarRegistry,
+						incorrectCustomRegistryNamespace, operatorEnvVarNameAndTag)
+
+					By("Using correct registry namespace in CR")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Nil ImageRegistryNamespace, should use operator envVar aerospike
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					validateInitImage(k8sClient, aeroCluster, operatorEnvVarRegistry,
+						operatorEnvVarRegistryNamespace, operatorEnvVarNameAndTag)
 				})
 			})
 		Context(
@@ -521,7 +563,6 @@ var _ = Describe(
 				)
 			},
 		)
-
 	},
 )
 
@@ -532,15 +573,16 @@ func getEnvVar(envVar string) string {
 	return envVarVal
 }
 
-func validateImageRegistry(
-	k8sClient client.Client, _ goctx.Context, aeroCluster *asdbv1.AerospikeCluster, registry string,
-) {
+func validateInitImage(k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+	registry, namespace, nameAndTag string) {
 	stsList, err := getSTSList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
 
+	expectedImage := fmt.Sprintf("%s/%s/%s", registry, namespace, nameAndTag)
+
 	for stsIndex := range stsList.Items {
 		image := stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0].Image
-		hasPrefix := strings.HasPrefix(image, registry)
-		Expect(hasPrefix).To(BeTrue(), fmt.Sprintf("expected registry %s, found image %s", registry, image))
+		Expect(image == expectedImage).To(BeTrue(), fmt.Sprintf("expected init image %s, found image %s",
+			expectedImage, image))
 	}
 }

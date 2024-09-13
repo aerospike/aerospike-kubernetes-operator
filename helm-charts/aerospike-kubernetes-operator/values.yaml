@@ -33,6 +33,12 @@ watchNamespaces: "default,aerospike"
 # Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io"
 
+# Namespace in registry used to pull aerospike-init image
+aerospikeKubernetesInitRegistryNamespace: "aerospike"
+
+# Name and tag of aerospike-init image
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.2.1"
+
 ## Resources - limits / requests
 resources:
   limits:

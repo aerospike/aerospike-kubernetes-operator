@@ -250,7 +250,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200m")
 		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -279,7 +279,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		// schedule batch of pods
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), "1Gi")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), "200m")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
@@ -288,7 +288,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		// Schedule batch of pods
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10), "2Gi")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10), "300m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -299,7 +299,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		err := batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), "1Gi")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), "200m")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
@@ -307,7 +307,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		err = batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "2Gi")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "300m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -319,7 +319,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("1Gi")
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200m")
 		err = k8sClient.Update(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -339,7 +339,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 		By("Again Update RollingUpdateBatchSize Count")
 
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "1Gi")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "200m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 }
