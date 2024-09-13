@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"bytes"
@@ -66,6 +66,7 @@ func init() {
 			if err != nil {
 				return err
 			}
+
 			if !d.IsDir() {
 				content, err := fs.ReadFile(scripts, path)
 				if err != nil {
@@ -76,9 +77,11 @@ func init() {
 				if err != nil {
 					return err
 				}
+
 				key := filepath.Base(path)
 				scriptTemplates[key] = evaluated
 			}
+
 			return nil
 		},
 	)

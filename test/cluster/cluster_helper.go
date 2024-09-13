@@ -47,7 +47,7 @@ const (
 var (
 	storageClass = "ssd"
 	namespace    = "test"
-	pkgLog       = ctrl.Log.WithName("cluster")
+	pkgLog       = ctrl.Log.WithName("aerospikecluster")
 )
 
 const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec // for testing
@@ -578,7 +578,9 @@ func validateMigrateFillDelay(
 			if err != nil {
 				return false, err
 			}
+
 			svcConfs := confs["service"].(lib.Stats)
+
 			current, exists := svcConfs["migrate-fill-delay"]
 			if !exists {
 				return false, fmt.Errorf("migrate-fill-delay missing from the Aerospike Service config")

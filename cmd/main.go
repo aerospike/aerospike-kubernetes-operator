@@ -16,19 +16,20 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	// +kubebuilder:scaffold:imports
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/controllers"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/backup"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/controllers/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/restore"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
 )
 
@@ -85,14 +86,17 @@ func main() {
 	if strings.Contains(watchNs, ",") {
 		nsList := strings.Split(watchNs, ",")
 
-		var newNsList []string
+		namespaces := make(map[string]cache.Config)
+
 		for _, ns := range nsList {
-			newNsList = append(newNsList, strings.TrimSpace(ns))
+			namespaces[strings.TrimSpace(ns)] = cache.Config{}
 		}
 
-		options.Cache.Namespaces = newNsList
+		options.Cache.DefaultNamespaces = namespaces
 	} else {
-		options.Cache.Namespaces = []string{watchNs}
+		options.Cache.DefaultNamespaces = map[string]cache.Config{
+			watchNs: {},
+		}
 	}
 
 	kubeConfig := ctrl.GetConfigOrDie()
@@ -137,11 +141,11 @@ func main() {
 	eventBroadcaster.StartStructuredLogging(0)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 
-	if err = (&aerospikecluster.AerospikeClusterReconciler{
+	if err = (&cluster.AerospikeClusterReconciler{
 		Client:     client,
 		KubeClient: kubeClient,
 		KubeConfig: kubeConfig,
-		Log:        ctrl.Log.WithName("controllers").WithName("AerospikeCluster"),
+		Log:        ctrl.Log.WithName("controller").WithName("AerospikeCluster"),
 		Scheme:     mgr.GetScheme(),
 		Recorder: eventBroadcaster.NewRecorder(
 			mgr.GetScheme(), v1.EventSource{Component: "aerospikeCluster-controller"},
@@ -162,7 +166,7 @@ func main() {
 	if err = (&backupservice.AerospikeBackupServiceReconciler{
 		Client: client,
 		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeBackupService"),
+		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackupService"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackupService")
 		os.Exit(1)
@@ -176,7 +180,7 @@ func main() {
 	if err = (&backup.AerospikeBackupReconciler{
 		Client: client,
 		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeBackup"),
+		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackup"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackup")
 		os.Exit(1)
@@ -190,7 +194,7 @@ func main() {
 	if err = (&restore.AerospikeRestoreReconciler{
 		Client: client,
 		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("AerospikeRestore"),
+		Log:    ctrl.Log.WithName("controller").WithName("AerospikeRestore"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeRestore")
 		os.Exit(1)

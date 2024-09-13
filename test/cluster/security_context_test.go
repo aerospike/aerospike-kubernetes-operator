@@ -38,6 +38,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext applied", func() {
 			By("DeployCluster with SecurityContext")
+
 			clusterNamespacedName := getNamespacedName(
 				"security-context-create", namespace,
 			)
@@ -50,9 +51,11 @@ func securityContextTest(
 					SupplementalGroups: []int64{1000},
 				}
 			}
+
 			if checkAeroServer {
 				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
+
 			if checkAeroInit {
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
@@ -73,6 +76,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext updated", func() {
 			By("DeployCluster")
+
 			clusterNamespacedName := getNamespacedName(
 				"security-context-updated", namespace,
 			)
@@ -84,6 +88,7 @@ func securityContextTest(
 			Expect(err).ToNot(HaveOccurred())
 
 			By("UpdateCluster with SecurityContext")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -92,9 +97,11 @@ func securityContextTest(
 					SupplementalGroups: []int64{1000},
 				}
 			}
+
 			if checkAeroServer {
 				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
+
 			if checkAeroInit {
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
@@ -113,9 +120,11 @@ func securityContextTest(
 			if checkPodSpec {
 				aeroCluster.Spec.PodSpec.SecurityContext = nil
 			}
+
 			if checkAeroServer {
 				aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext = nil
 			}
+
 			if checkAeroInit {
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = nil
 			}

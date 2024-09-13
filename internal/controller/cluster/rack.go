@@ -1,4 +1,4 @@
-package controllers
+package cluster
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/controllers/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -1108,15 +1108,6 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		if err != nil {
 			return found, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
 		}
-	}
-
-	if len(failedPods) != 0 && r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
-		return found, common.ReconcileError(
-			fmt.Errorf(
-				"cannot Rolling restart AerospikeCluster. " +
-					"A pod is already in failed state due to image related issues",
-			),
-		)
 	}
 
 	err = r.updateSTS(found, rackState)

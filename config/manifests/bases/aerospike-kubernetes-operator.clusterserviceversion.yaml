@@ -25,14 +25,14 @@ spec:
       kind: AerospikeBackup
       name: aerospikebackups.asdb.aerospike.com
       specDescriptors:
-      - description: BackupService is the backup service reference i.e. name and namespace.
-          It is used to communicate to the backup service to trigger backups. This
-          field is immutable
+      - description: |-
+          BackupService is the backup service reference i.e. name and namespace.
+          It is used to communicate to the backup service to trigger backups. This field is immutable
         displayName: Backup Service
         path: backupService
-      - description: 'Config is the free form configuration for the backup in YAML
-          format. This config is used to trigger backups. It includes: aerospike-cluster,
-          backup-routines.'
+      - description: |-
+          Config is the free form configuration for the backup in YAML format.
+          This config is used to trigger backups. It includes: aerospike-cluster, backup-routines.
         displayName: Backup Config
         path: config
       - description: OnDemandBackups is the configuration for on-demand backups.
@@ -45,26 +45,27 @@ spec:
       kind: AerospikeBackupService
       name: aerospikebackupservices.asdb.aerospike.com
       specDescriptors:
-      - description: 'Config is the free form configuration for the backup service
-          in YAML format. This config is used to start the backup service. The config
-          is passed as a file to the backup service. It includes: service, backup-policies,
-          storage, secret-agent.'
+      - description: |-
+          Config is the free form configuration for the backup service in YAML format.
+          This config is used to start the backup service. The config is passed as a file to the backup service.
+          It includes: service, backup-policies, storage, secret-agent.
         displayName: Backup Service Config
         path: config
       - description: Image is the image for the backup service.
         displayName: Backup Service Image
         path: image
-      - description: Resources defines the requests and limits for the backup service
-          container. Resources.Limits should be more than Resources.Requests.
+      - description: |-
+          Resources defines the requests and limits for the backup service container.
+          Resources.Limits should be more than Resources.Requests.
         displayName: Resources
         path: resources
       - description: SecretMounts is the list of secret to be mounted in the backup
           service.
         displayName: Backup Service SecretMounts
         path: secrets
-      - description: Service defines the Kubernetes service configuration for the
-          backup service. It is used to expose the backup service deployment. By default,
-          the service type is ClusterIP.
+      - description: |-
+          Service defines the Kubernetes service configuration for the backup service.
+          It is used to expose the backup service deployment. By default, the service type is ClusterIP.
         displayName: K8s Service
         path: service
       version: v1beta1
@@ -98,25 +99,25 @@ spec:
       - description: Disable the PodDisruptionBudget creation for the Aerospike cluster.
         displayName: Disable PodDisruptionBudget
         path: disablePDB
-      - description: EnableDynamicConfigUpdate enables dynamic config update flow
-          of the operator. If enabled, operator will try to update the Aerospike config
-          dynamically. In case of inconsistent state during dynamic config update,
-          operator falls back to rolling restart.
+      - description: |-
+          EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
+          If enabled, operator will try to update the Aerospike config dynamically.
+          In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
         displayName: Enable Dynamic Config Update
         path: enableDynamicConfigUpdate
       - description: Aerospike server image
         displayName: Server Image
         path: image
-      - description: K8sNodeBlockList is a list of Kubernetes nodes which are not
-          used for Aerospike pods. Pods are not scheduled on these nodes. Pods are
-          migrated from these nodes if already present. This is useful for the maintenance
-          of Kubernetes nodes.
+      - description: |-
+          K8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods. Pods are not scheduled on
+          these nodes. Pods are migrated from these nodes if already present. This is useful for the maintenance of
+          Kubernetes nodes.
         displayName: Kubernetes Node BlockList
         path: k8sNodeBlockList
-      - description: MaxUnavailable is the percentage/number of pods that can be allowed
-          to go down or unavailable before application disruption. This value is used
-          to create PodDisruptionBudget. Defaults to 1. Refer Aerospike documentation
-          for more details.
+      - description: |-
+          MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
+          disruption. This value is used to create PodDisruptionBudget. Defaults to 1.
+          Refer Aerospike documentation for more details.
         displayName: Max Unavailable
         path: maxUnavailable
       - description: Operations is a list of on-demand operations to be performed
@@ -132,16 +133,18 @@ spec:
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec
-      - description: RackConfig Configures the operator to deploy rack aware Aerospike
-          cluster. Pods will be deployed in given racks based on given configuration
+      - description: |-
+          RackConfig Configures the operator to deploy rack aware Aerospike cluster.
+          Pods will be deployed in given racks based on given configuration
         displayName: Rack Config
         path: rackConfig
       - description: RosterNodeBlockList is a list of blocked nodeIDs from roster
           in a strong-consistency setup
         displayName: Roster Node BlockList
         path: rosterNodeBlockList
-      - description: SeedsFinderServices creates additional Kubernetes service that
-          allow clients to discover Aerospike cluster nodes.
+      - description: |-
+          SeedsFinderServices creates additional Kubernetes service that allow
+          clients to discover Aerospike cluster nodes.
         displayName: Seeds Finder Services
         path: seedsFinderServices
       - description: Aerospike cluster size
@@ -191,12 +194,14 @@ spec:
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec
-      - description: RackConfig Configures the operator to deploy rack aware Aerospike
-          cluster. Pods will be deployed in given racks based on given configuration
+      - description: |-
+          RackConfig Configures the operator to deploy rack aware Aerospike cluster.
+          Pods will be deployed in given racks based on given configuration
         displayName: Rack Config
         path: rackConfig
-      - description: SeedsFinderServices creates additional Kubernetes service that
-          allow clients to discover Aerospike cluster nodes.
+      - description: |-
+          SeedsFinderServices creates additional Kubernetes service that allow
+          clients to discover Aerospike cluster nodes.
         displayName: Seeds Finder Services
         path: seedsFinderServices
       - description: Aerospike cluster size
@@ -219,24 +224,25 @@ spec:
       kind: AerospikeRestore
       name: aerospikerestores.asdb.aerospike.com
       specDescriptors:
-      - description: BackupService is the backup service reference i.e. name and namespace.
-          It is used to communicate to the backup service to trigger restores. This
-          field is immutable
+      - description: |-
+          BackupService is the backup service reference i.e. name and namespace.
+          It is used to communicate to the backup service to trigger restores. This field is immutable
         displayName: Backup Service
         path: backupService
-      - description: 'Config is the free form configuration for the restore in YAML
-          format. This config is used to trigger restores. It includes: destination,
-          policy, source, secret-agent, time and routine.'
+      - description: |-
+          Config is the free form configuration for the restore in YAML format.
+          This config is used to trigger restores. It includes: destination, policy, source, secret-agent, time and routine.
         displayName: Restore Config
         path: config
-      - description: PollingPeriod is the polling period for restore operation status.
+      - description: |-
+          PollingPeriod is the polling period for restore operation status.
           It is used to poll the restore service to fetch restore operation status.
           Default is 60 seconds.
         displayName: Restore Service Polling Period
         path: pollingPeriod
-      - description: Type is the type of restore. It can of type Full, Incremental,
-          and Timestamp. Based on the restore type, the relevant restore config should
-          be given.
+      - description: |-
+          Type is the type of restore. It can of type Full, Incremental, and Timestamp.
+          Based on the restore type, the relevant restore config should be given.
         displayName: Restore Type
         path: type
       version: v1beta1
