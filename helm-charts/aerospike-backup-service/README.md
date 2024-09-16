@@ -38,17 +38,17 @@ helm install aerospike-backup-service aerospike/aerospike-backup-service \
 
 ## Configurations
 
-| Name                         | Description                                                                   | Default                                                                      |
-|------------------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `image.repository`           | Aerospike backup service container image repository                           | `aerospike.jfrog.io/ecosystem-container-prod-local/aerospike-backup-service` |
-| `image.tag`                  | Aerospike backup service container image tag                                  | `1.0.0`                                                                      |
-| `customLabels`               | Custom labels to add on the AerospikeBackupService resource                   | `{}` (nil)                                                                   |
-| `serviceAccount.create`      | Enable ServiceAccount creation for Aerospike backup service.                  | true                                                                         |
-| `serviceAccount.annotations` | ServiceAccount annotations                                                    | `{}` (nil)                                                                   |
-| `backupServiceConfig`        | Aerospike backup service configuration                                        | `{}` (nil)                                                                   |
-| `secrets`                    | Secrets to be mounted in the Aerospike Backup Service pod like aws creds etc. | `[]` (nil)                                                                   |
-| `resources`                  | Aerospike backup service pod resource requirements                            | `{}` (nil)                                                                   |
-| `service`                    | Kubernetes service configuration for Aerospike backup service                 | `{}` (nil)                                                                   |
+| Name                         | Description                                                                   | Default                              |
+|------------------------------|-------------------------------------------------------------------------------|--------------------------------------|
+| `image.repository`           | Aerospike backup service container image repository                           | `aerospike/aerospike-backup-service` |
+| `image.tag`                  | Aerospike backup service container image tag                                  | `2.0.0`                              |
+| `customLabels`               | Custom labels to add on the AerospikeBackupService resource                   | `{}` (nil)                           |
+| `serviceAccount.create`      | Enable ServiceAccount creation for Aerospike backup service.                  | true                                 |
+| `serviceAccount.annotations` | ServiceAccount annotations                                                    | `{}` (nil)                           |
+| `backupServiceConfig`        | Aerospike backup service configuration                                        | `{}` (nil)                           |
+| `secrets`                    | Secrets to be mounted in the Aerospike Backup Service pod like aws creds etc. | `[]` (nil)                           |
+| `resources`                  | Aerospike backup service pod resource requirements                            | `{}` (nil)                           |
+| `service`                    | Kubernetes service configuration for Aerospike backup service                 | `{}` (nil)                           |
 
 
 ### Configurations Explained
