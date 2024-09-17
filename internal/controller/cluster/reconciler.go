@@ -231,6 +231,16 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
+	if r.IsReclusterNeeded() {
+		if err = deployment.InfoRecluster(
+			r.Log,
+			r.getClientPolicy(), allHostConns,
+		); err != nil {
+			r.Log.Error(err, "Failed to do recluster")
+			return reconcile.Result{}, err
+		}
+	}
+
 	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
 		if !r.IsStatusEmpty() {
 			if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
@@ -246,16 +256,6 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 			recErr = err
 
 			return reconcile.Result{}, recErr
-		}
-	}
-
-	if r.IsReclusterNeeded() {
-		if err = deployment.InfoRecluster(
-			r.Log,
-			r.getClientPolicy(), allHostConns,
-		); err != nil {
-			r.Log.Error(err, "Failed to do recluster")
-			return reconcile.Result{}, err
 		}
 	}
 
