@@ -616,8 +616,24 @@ var _ = Describe(
 						aeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 4,
 						)
+						aeroCluster.Spec.Storage.Volumes = append(
+							aeroCluster.Spec.Storage.Volumes,
+							asdbv1.VolumeSpec{
+								Name: "ns1",
+								Source: asdbv1.VolumeSource{
+									PersistentVolume: &asdbv1.PersistentVolumeSpec{
+										Size:         resource.MustParse("1Gi"),
+										StorageClass: storageClass,
+										VolumeMode:   v1.PersistentVolumeBlock,
+									},
+								},
+								Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+									Path: "/test/dev/xvdf1",
+								},
+							},
+						)
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						aeroCluster.Spec.Image = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc:7.2.0.0-rc1"
+						aeroCluster.Spec.Image = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc:7.2.0.0-rc2"
 						aeroCluster.Spec.PodSpec.ImagePullSecrets = []v1.LocalObjectReference{
 							{
 								Name: "regcred",
@@ -632,7 +648,11 @@ var _ = Describe(
 							})
 						aeroCluster.Spec.RackConfig.Namespaces = []string{
 							"test",
+							"test1",
 						}
+						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+						nsList = append(nsList, getSCNamespaceConfig("test1", "/test/dev/xvdf1"))
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
@@ -662,6 +682,7 @@ var _ = Describe(
 
 						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 						nsList[0].(map[string]interface{})["active-rack"] = 1
+						nsList[1].(map[string]interface{})["active-rack"] = 2
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -678,6 +699,17 @@ var _ = Describe(
 							if strings.Contains(conf, "effective_active_rack") {
 								keyValue := strings.Split(conf, "=")
 								Expect(keyValue[1]).To(Equal("1"))
+							}
+						}
+
+						info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test1", &pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						confs = strings.Split(info["namespace/test1"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "effective_active_rack") {
+								keyValue := strings.Split(conf, "=")
+								Expect(keyValue[1]).To(Equal("2"))
 							}
 						}
 
