@@ -231,6 +231,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
+	// Doing recluster before setting up roster to get the latest observed node list from server.
 	if r.IsReclusterNeeded() {
 		if err = deployment.InfoRecluster(
 			r.Log,
