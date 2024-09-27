@@ -35,8 +35,8 @@ func CheckPodFailed(pod *corev1.Pod) error {
 	}
 
 	if pod.Status.Phase == corev1.PodPending {
-		if isPodUnschedulable, err := IsPodReasonUnschedulable(pod); isPodUnschedulable {
-			return fmt.Errorf("pod %s is in unschedulable state and reason is %v", pod.Name, err)
+		if isPodUnschedulable, reason := IsPodReasonUnschedulable(pod); isPodUnschedulable {
+			return fmt.Errorf("pod %s is in unschedulable state and reason is %s", pod.Name, reason)
 		}
 	}
 
@@ -202,13 +202,13 @@ func isPodError(reason string) bool {
 	return strings.HasSuffix(reason, "Error")
 }
 
-func IsPodReasonUnschedulable(pod *corev1.Pod) (bool, error) {
+func IsPodReasonUnschedulable(pod *corev1.Pod) (isPodUnschedulable bool, reason string) {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
 			condition.Reason == corev1.PodReasonSchedulerError) {
-			return true, fmt.Errorf("%s", condition.Message)
+			return true, condition.Message
 		}
 	}
 
-	return false, nil
+	return false, ""
 }
