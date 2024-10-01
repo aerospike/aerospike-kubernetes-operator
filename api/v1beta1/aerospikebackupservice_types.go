@@ -41,6 +41,7 @@ const (
 )
 
 // AerospikeBackupServiceSpec defines the desired state of AerospikeBackupService
+// +k8s:openapi-gen=true
 //
 //nolint:govet // for readability
 type AerospikeBackupServiceSpec struct {
@@ -104,6 +105,7 @@ type AerospikeBackupServiceStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.3.1"
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
