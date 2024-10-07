@@ -854,7 +854,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			pod := &podList.Items[podIdx]
 
 			if !utils.IsPodRunningAndReady(pod) {
-				if utils.IsPodReasonUnschedulable(pod) {
+				if isPodUnschedulable, _ := utils.IsPodReasonUnschedulable(pod); isPodUnschedulable {
 					pendingPod = append(pendingPod, pod.Name)
 					continue
 				}

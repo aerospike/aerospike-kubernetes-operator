@@ -4,7 +4,7 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike/aerospike-backup-service:1.0.0
+  image: aerospike/aerospike-backup-service:2.0.0
   config:
     service:
       http:
