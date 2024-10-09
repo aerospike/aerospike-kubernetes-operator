@@ -60,6 +60,17 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
+				It("Should fail when duplicate volume names are given in secrets", func() {
+					backupService, err = NewBackupService()
+					Expect(err).ToNot(HaveOccurred())
+					secretCopy := backupService.Spec.SecretMounts[0]
+					backupService.Spec.SecretMounts = append(backupService.Spec.SecretMounts, secretCopy)
+
+					err = deployBackupServiceWithTO(k8sClient, backupService, 5*time.Second)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("duplicate volume name"))
+				})
+
 				It("Should fail when aerospike-clusters field is given", func() {
 					configMap := getBackupServiceConfMap()
 					configMap[common.AerospikeClustersKey] = map[string]interface{}{

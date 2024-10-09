@@ -23,7 +23,7 @@ require (
 	github.com/aerospike/aerospike-backup-service v0.0.0-20240822110128-dc2b4811b9d3
 	github.com/aerospike/aerospike-client-go/v7 v7.6.1
 	github.com/deckarep/golang-set/v2 v2.3.1
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.1
 	golang.org/x/crypto v0.24.0
 	golang.org/x/net v0.26.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
