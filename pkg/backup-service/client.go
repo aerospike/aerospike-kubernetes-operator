@@ -117,7 +117,7 @@ func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
 func (c *Client) ApplyConfig() error {
 	url := c.API("/config/apply")
 
-	resp, err := http.Get(url)
+	resp, err := http.Post(url, "application/json", nil)
 	if err != nil {
 		return err
 	}

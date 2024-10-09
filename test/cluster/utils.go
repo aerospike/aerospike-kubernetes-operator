@@ -604,6 +604,30 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 	return confs[configContext].(lib.Stats), nil
 }
 
+func requestInfoFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, cmd string, pod *asdbv1.AerospikePodStatus) (map[string]string, error) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return nil, err
+	}
+
+	host, err := createHost(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	asinfo := info.NewAsInfo(
+		log, host, getClientPolicy(aeroCluster, k8sClient),
+	)
+
+	confs, err := asinfo.RequestInfo(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return confs, nil
+}
+
 func getPasswordFromSecret(k8sClient client.Client,
 	secretNamespcedName types.NamespacedName, passFileName string,
 ) (string, error) {
