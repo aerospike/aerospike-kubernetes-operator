@@ -708,9 +708,42 @@ func doTestNetworkPolicy(
 		},
 	)
 
+	It("PodOnlyNetwork: Should not set the hostPort", func() {
+		clusterNamespacedName := getNamespacedName(
+			"pod-network-cluster", test.MultiClusterNs1)
+
+		networkPolicy := asdbv1.AerospikeNetworkPolicy{
+			AccessType:             asdbv1.AerospikeNetworkTypePod,
+			AlternateAccessType:    asdbv1.AerospikeNetworkTypePod,
+			TLSAccessType:          asdbv1.AerospikeNetworkTypePod,
+			TLSAlternateAccessType: asdbv1.AerospikeNetworkTypePod,
+		}
+
+		aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+			clusterNamespacedName, &networkPolicy, multiPodPerHost,
+			enableTLS,
+		)
+
+		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		podList, err := getPodList(aeroCluster, k8sClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(podList.Items)).ToNot(BeZero())
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+			container := pod.Spec.Containers[0]
+			Expect(container.Ports).ToNot(BeNil())
+
+			for _, port := range container.Ports {
+				Expect(port.HostPort).To(BeZero())
+			}
+		}
+	})
 	// test-case valid only for multiPodPerHost true
 	if multiPodPerHost {
-		It("OnlyPodNetwork: should create cluster without nodePort service", func() {
+		It("PodOnlyNetwork: should create cluster without nodePort service", func() {
 			clusterNamespacedName := getNamespacedName(
 				"pod-network-cluster", test.MultiClusterNs1)
 

@@ -235,7 +235,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	if r.IsReclusterNeeded() {
 		if err = deployment.InfoRecluster(
 			r.Log,
-			r.getClientPolicy(), allHostConns,
+			policy, allHostConns,
 		); err != nil {
 			r.Log.Error(err, "Failed to do recluster")
 			return reconcile.Result{}, err
@@ -1041,6 +1041,8 @@ func (r *SingleClusterReconciler) IsReclusterNeeded() bool {
 		return false
 	}
 
+	// Check for any active-rack addition/update across all the namespaces.
+	// If there is any active-rack change, recluster is required.
 	for specIdx := range r.aeroCluster.Spec.RackConfig.Racks {
 		for statusIdx := range r.aeroCluster.Status.RackConfig.Racks {
 			if r.aeroCluster.Spec.RackConfig.Racks[specIdx].ID == r.aeroCluster.Status.RackConfig.Racks[statusIdx].ID &&
