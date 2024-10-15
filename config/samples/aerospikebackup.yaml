@@ -12,7 +12,8 @@ spec:
 #      routineName: aerospike-aerospikebackup-test-routine
   config:
     aerospike-cluster:
-      aerospike-aerospikebackup-test-cluster:  # Name format: <backup-namespace>-<backup-name>-<cluster-name>
+      # Name format: The name must begin with the prefix <backup-namespace>-<backup-name>
+      aerospike-aerospikebackup-test-cluster:
         credentials:
           password: admin123
           user: admin
@@ -20,7 +21,8 @@ spec:
           - host-name: aerocluster.aerospike.svc.cluster.local
             port: 3000
     backup-routines:
-      aerospike-aerospikebackup-test-routine:  # Name format: <backup-namespace>-<backup-name>-<routine-name>
+      # Name format: The name must begin with the prefix <backup-namespace>-<backup-name>
+      aerospike-aerospikebackup-test-routine:
         backup-policy: test-policy
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"

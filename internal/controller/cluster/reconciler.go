@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -463,9 +464,15 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPhase) error {
 	if r.aeroCluster.Status.Phase != phase {
-		r.aeroCluster.Status.Phase = phase
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Client.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
+				return err
+			}
 
-		if err := r.Client.Status().Update(context.Background(), r.aeroCluster); err != nil {
+			r.aeroCluster.Status.Phase = phase
+
+			return r.Client.Status().Update(context.Background(), r.aeroCluster)
+		}); err != nil {
 			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
 			return err
 		}

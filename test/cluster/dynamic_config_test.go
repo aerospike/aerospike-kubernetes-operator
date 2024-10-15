@@ -633,12 +633,7 @@ var _ = Describe(
 							},
 						)
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						aeroCluster.Spec.Image = "aerospike.jfrog.io/docker/aerospike/aerospike-server-enterprise-rc:7.2.0.0-rc2"
-						aeroCluster.Spec.PodSpec.ImagePullSecrets = []v1.LocalObjectReference{
-							{
-								Name: "regcred",
-							},
-						}
+
 						aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks,
 							asdbv1.Rack{
 								ID: 1,
