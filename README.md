@@ -26,6 +26,8 @@ The Operator supports the following capabilities:
 * Configure persistent storage and resource allocation
 * Standardize and validate configurations
 * Cluster security management
+* Aerospike cluster monitoring
+* Backup and restore Aerospike clusters
 
 ## Building and quick start
 
@@ -82,8 +84,8 @@ operator using OLM.
 
 ### Install operator-sdk
 
-Install operator-sdk version 1.28.0 using the
-installation [guide](https://v1-28-x.sdk.operatorframework.io/docs/installation/)
+Install operator-sdk version 1.36.0 using the
+installation [guide](https://v1-36-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle
 
