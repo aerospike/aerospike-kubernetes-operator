@@ -92,6 +92,7 @@ func (r *SingleClusterReconciler) createSTS(
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
 		r.aeroCluster.Spec.AerospikeConfig,
+		&r.aeroCluster.Spec.AerospikeNetworkPolicy,
 	)
 
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
@@ -608,6 +609,7 @@ func (r *SingleClusterReconciler) updateSTSPorts(
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
 		r.aeroCluster.Spec.AerospikeConfig,
+		&r.aeroCluster.Spec.AerospikeNetworkPolicy,
 	)
 
 	st.Spec.Template.Spec.Containers[0].Ports = ports
@@ -1539,12 +1541,24 @@ func addVolumeDeviceInContainer(
 }
 
 func getSTSContainerPort(
-	multiPodPerHost *bool, aeroConf *asdbv1.AerospikeConfigSpec,
+	multiPodPerHost *bool, aeroConf *asdbv1.AerospikeConfigSpec, aeroNetworkPolicy *asdbv1.AerospikeNetworkPolicy,
 ) []corev1.ContainerPort {
 	ports := make([]corev1.ContainerPort, 0, len(defaultContainerPorts))
 	portNames := make([]string, 0, len(defaultContainerPorts))
+	podOnlyNetwork := true
 
-	// Sorting defaultContainerPorts to fetch map in ordered manner.
+	// Check for podOnlyNetwork for all TLS and nonTLS fields.
+	if svcPort := asdbv1.GetServicePort(aeroConf); svcPort != nil {
+		podOnlyNetwork = aeroNetworkPolicy.AccessType == asdbv1.AerospikeNetworkTypePod &&
+			aeroNetworkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypePod
+	}
+
+	if _, tlsSvcPort := asdbv1.GetServiceTLSNameAndPort(aeroConf); tlsSvcPort != nil {
+		podOnlyNetwork = podOnlyNetwork && aeroNetworkPolicy.TLSAccessType == asdbv1.AerospikeNetworkTypePod &&
+			aeroNetworkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypePod
+	}
+
+	// Sorting defaultContainerPorts to fetch map in an ordered manner.
 	// Helps reduce unnecessary sts object updates.
 	for portName := range defaultContainerPorts {
 		portNames = append(portNames, portName)
@@ -1567,11 +1581,12 @@ func getSTSContainerPort(
 			ContainerPort: int32(*configPort),
 		}
 		// Single pod per host. Enable hostPort setting
+		// when pod only network is not defined.
 		// The hostPort setting applies to the Kubernetes containers.
 		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 		// where the hostIP is the IP address of the Kubernetes node where
 		// the container is running and the hostPort is the port requested by the user
-		if !asdbv1.GetBool(multiPodPerHost) && portInfo.exposedOnHost {
+		if !asdbv1.GetBool(multiPodPerHost) && portInfo.exposedOnHost && !podOnlyNetwork {
 			containerPort.HostPort = containerPort.ContainerPort
 		}
 

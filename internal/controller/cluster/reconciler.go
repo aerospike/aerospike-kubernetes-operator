@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -229,6 +230,17 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		recErr = res.Err
 
 		return reconcile.Result{}, recErr
+	}
+
+	// Doing recluster before setting up roster to get the latest observed node list from server.
+	if r.IsReclusterNeeded() {
+		if err = deployment.InfoRecluster(
+			r.Log,
+			policy, allHostConns,
+		); err != nil {
+			r.Log.Error(err, "Failed to do recluster")
+			return reconcile.Result{}, err
+		}
 	}
 
 	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
@@ -452,9 +464,15 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPhase) error {
 	if r.aeroCluster.Status.Phase != phase {
-		r.aeroCluster.Status.Phase = phase
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Client.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
+				return err
+			}
 
-		if err := r.Client.Status().Update(context.Background(), r.aeroCluster); err != nil {
+			r.aeroCluster.Status.Phase = phase
+
+			return r.Client.Status().Update(context.Background(), r.aeroCluster)
+		}); err != nil {
 			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
 			return err
 		}
@@ -1022,4 +1040,51 @@ func (r *SingleClusterReconciler) AddAPIVersionLabel(ctx context.Context) error 
 	aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 
 	return r.Client.Update(ctx, aeroCluster, common.UpdateOption)
+}
+
+func (r *SingleClusterReconciler) IsReclusterNeeded() bool {
+	// Return false if dynamic configuration updates are disabled
+	if !asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) {
+		return false
+	}
+
+	// Check for any active-rack addition/update across all the namespaces.
+	// If there is any active-rack change, recluster is required.
+	for specIdx := range r.aeroCluster.Spec.RackConfig.Racks {
+		for statusIdx := range r.aeroCluster.Status.RackConfig.Racks {
+			if r.aeroCluster.Spec.RackConfig.Racks[specIdx].ID == r.aeroCluster.Status.RackConfig.Racks[statusIdx].ID &&
+				r.IsReclusterNeededForRack(&r.aeroCluster.Spec.RackConfig.Racks[specIdx],
+					&r.aeroCluster.Status.RackConfig.Racks[statusIdx]) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (r *SingleClusterReconciler) IsReclusterNeededForRack(specRack, statusRack *asdbv1.Rack) bool {
+	specNamespaces, ok := specRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	if !ok {
+		return false
+	}
+
+	statusNamespaces, ok := statusRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	if !ok {
+		return false
+	}
+
+	for _, specNamespace := range specNamespaces {
+		for _, statusNamespace := range statusNamespaces {
+			if specNamespace.(map[string]interface{})["name"] != statusNamespace.(map[string]interface{})["name"] {
+				continue
+			}
+
+			if specNamespace.(map[string]interface{})["active-rack"] != statusNamespace.(map[string]interface{})["active-rack"] {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"fmt"
 
+	set "github.com/deckarep/golang-set/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -60,6 +61,10 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 		return nil, err
 	}
 
+	if err := r.validateBackupServiceSecrets(); err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 
@@ -70,6 +75,10 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 	absLog.Info("Validate update")
 
 	if err := r.validateBackupServiceConfig(); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceSecrets(); err != nil {
 		return nil, err
 	}
 
@@ -115,4 +124,18 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	}
 
 	return config.Validate()
+}
+
+func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
+	volumeNameSet := set.NewSet[string]()
+
+	for _, secret := range r.Spec.SecretMounts {
+		if volumeNameSet.Contains(secret.VolumeMount.Name) {
+			return fmt.Errorf("duplicate volume name %s found in secrets field", secret.VolumeMount.Name)
+		}
+
+		volumeNameSet.Add(secret.VolumeMount.Name)
+	}
+
+	return nil
 }

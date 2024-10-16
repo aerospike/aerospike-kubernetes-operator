@@ -243,10 +243,11 @@ func getBackupServiceConfMap() map[string]interface{} {
 				"type": "local",
 			},
 			"s3Storage": map[string]interface{}{
-				"type":       "aws-s3",
-				"path":       "s3://aerospike-kubernetes-operator-test",
-				"s3-region":  "us-east-1",
-				"s3-profile": "default",
+				"type":                 "aws-s3",
+				"path":                 "s3://aerospike-kubernetes-operator-test",
+				"s3-region":            "us-east-1",
+				"s3-endpoint-override": "",
+				"s3-profile":           "default",
 			},
 		},
 	}

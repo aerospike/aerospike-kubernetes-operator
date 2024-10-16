@@ -3,7 +3,7 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.22
 
 require (
-	github.com/aerospike/aerospike-management-lib v1.4.0
+	github.com/aerospike/aerospike-management-lib v1.5.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.4.2
@@ -23,7 +23,7 @@ require (
 	github.com/aerospike/aerospike-backup-service v0.0.0-20240822110128-dc2b4811b9d3
 	github.com/aerospike/aerospike-client-go/v7 v7.6.1
 	github.com/deckarep/golang-set/v2 v2.3.1
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.1
 	golang.org/x/crypto v0.24.0
 	golang.org/x/net v0.26.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
