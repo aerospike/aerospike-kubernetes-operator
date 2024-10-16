@@ -812,7 +812,6 @@ var sliceConfTypeVal = map[string][]string{
 	"security.log.report-data-op-user":   {"admin"},
 	"xdr.dcs._.namespaces._.ship-sets":   {"testset"},
 	"xdr.dcs._.namespaces._.ignore-sets": {"testset"},
-	"xdr.dcs._.namespaces._.ship-bins":   {"testbin"},
 	"xdr.dcs._.namespaces._.ignore-bins": {"testbin"},
 }
 
