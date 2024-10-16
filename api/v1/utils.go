@@ -75,7 +75,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.2.1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.2.2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -132,11 +132,15 @@ func getInitContainerImage(registry, namespace, repoAndTag string) string {
 }
 
 func GetAerospikeInitContainerImage(aeroCluster *AerospikeCluster) string {
-	registry := getInitContainerImageValue(aeroCluster, AerospikeInitContainerRegistryEnvVar,
-		AerospikeInitContainerDefaultRegistry)
+	registry := getInitContainerImageValue(
+		aeroCluster, AerospikeInitContainerRegistryEnvVar,
+		AerospikeInitContainerDefaultRegistry,
+	)
 	namespace := getInitContainerImageRegistryNamespace(aeroCluster)
-	repoAndTag := getInitContainerImageValue(aeroCluster, AerospikeInitContainerNameTagEnvVar,
-		AerospikeInitContainerDefaultNameAndTag)
+	repoAndTag := getInitContainerImageValue(
+		aeroCluster, AerospikeInitContainerNameTagEnvVar,
+		AerospikeInitContainerDefaultNameAndTag,
+	)
 
 	return getInitContainerImage(registry, namespace, repoAndTag)
 }

@@ -83,7 +83,7 @@ type AerospikeBackupStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.3.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=3.4.0"
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
