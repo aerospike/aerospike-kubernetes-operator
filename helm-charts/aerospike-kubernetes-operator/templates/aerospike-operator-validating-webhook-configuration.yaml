@@ -29,3 +29,63 @@ webhooks:
     resources:
     - aerospikeclusters
   sideEffects: None
+- admissionReviewVersions:
+    - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikebackup
+  failurePolicy: Fail
+  name: vaerospikebackup.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackups
+  sideEffects: None
+- admissionReviewVersions:
+    - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikebackupservice
+  failurePolicy: Fail
+  name: vaerospikebackupservice.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackupservices
+  sideEffects: None
+- admissionReviewVersions:
+    - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikerestore
+  failurePolicy: Fail
+  name: vaerospikerestore.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikerestores
+  sideEffects: None

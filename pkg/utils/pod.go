@@ -30,11 +30,14 @@ func CheckPodFailed(pod *corev1.Pod) error {
 
 	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
 	if pod.Status.Phase == corev1.PodFailed {
-		return fmt.Errorf("pod %s has failed status", pod.Name)
+		return fmt.Errorf("pod %s has failed status with reason: %s and message: %s",
+			pod.Name, pod.Status.Reason, pod.Status.Message)
 	}
 
-	if pod.Status.Phase == corev1.PodPending && IsPodReasonUnschedulable(pod) {
-		return fmt.Errorf("pod %s is in unschedulable state", pod.Name)
+	if pod.Status.Phase == corev1.PodPending {
+		if isPodUnschedulable, reason := IsPodReasonUnschedulable(pod); isPodUnschedulable {
+			return fmt.Errorf("pod %s is in unschedulable state and reason is %s", pod.Name, reason)
+		}
 	}
 
 	// grab the status of every container in the pod (including its init containers)
@@ -73,7 +76,8 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 
 	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
 	if pod.Status.Phase == corev1.PodFailed {
-		return fmt.Errorf("pod has failed status")
+		return fmt.Errorf("pod %s has failed status with reason: %s and message: %s",
+			pod.Name, pod.Status.Reason, pod.Status.Message)
 	}
 
 	// grab the status of every container in the pod (including its init containers)
@@ -198,13 +202,13 @@ func isPodError(reason string) bool {
 	return strings.HasSuffix(reason, "Error")
 }
 
-func IsPodReasonUnschedulable(pod *corev1.Pod) bool {
+func IsPodReasonUnschedulable(pod *corev1.Pod) (isPodUnschedulable bool, reason string) {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
 			condition.Reason == corev1.PodReasonSchedulerError) {
-			return true
+			return true, condition.Message
 		}
 	}
 
-	return false
+	return false, ""
 }

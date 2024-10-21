@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/name: aerospike-prometheus
+      app.kubernetes.io/component: prometheus
+
+resources:
+  - statefulset.yaml
+  - pvc.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - config/prometheus.yml
+  - name: alert-rules-config
+    files:
+      - config/alert-rules/aerospike_rules.yml
+      - config/alert-rules/node_exporter_alerts.yml
+
+generatorOptions:
+  disableNameSuffixHash: true

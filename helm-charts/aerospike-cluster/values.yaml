@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 7.1.0.0
+  tag: 7.2.0.1
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containing credentials can be added
@@ -119,6 +119,12 @@ k8sNodeBlockList: []
 
 ## Pause reconciliation of the cluster
 paused: false
+
+operations: []
+#  - kind: "WarmRestart"
+#    id: "1"
+#    podList:
+#      - podName: "aerospike-cluster-0"
 
 ## Dev Mode
 devMode: false

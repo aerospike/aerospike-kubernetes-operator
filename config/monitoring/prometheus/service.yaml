@@ -1,0 +1,11 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: prometheus
+spec:
+  ports:
+    - name: http
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+  sessionAffinity: ClientIP

@@ -24,6 +24,26 @@ webhooks:
     resources:
     - aerospikeclusters
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-asdb-aerospike-com-v1beta1-aerospikerestore
+  failurePolicy: Fail
+  name: maerospikerestore.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikerestores
+  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -49,4 +69,64 @@ webhooks:
     - UPDATE
     resources:
     - aerospikeclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikebackup
+  failurePolicy: Fail
+  name: vaerospikebackup.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikebackupservice
+  failurePolicy: Fail
+  name: vaerospikebackupservice.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackupservices
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-asdb-aerospike-com-v1beta1-aerospikerestore
+  failurePolicy: Fail
+  name: vaerospikerestore.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikerestores
   sideEffects: None

@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/name: aerospike-grafana
+      app.kubernetes.io/component: grafana
+
+resources:
+  - statefulset.yaml
+  - pvc.yaml
+  - service.yaml
+
+configMapGenerator:
+  - name: grafana-provisioning-datasources
+    files:
+      - config/aerospike_grafana_datasource.yaml
+  - name: grafana-config
+    files:
+      - config/grafana.ini
+  - name: grafana-dashboard-config
+    files:
+      - config/aerospike_grafana_dashboards_config.yaml
+  - name: download-script
+    files:
+      - config/download_files.sh
+
+generatorOptions:
+  disableNameSuffixHash: true

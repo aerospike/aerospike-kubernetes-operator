@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 const (
@@ -140,6 +141,15 @@ func LabelsForAerospikeClusterRack(
 func LabelsForPodAntiAffinity(clName string) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	return labels
+}
+
+// LabelsForAerospikeBackupService returns the labels for selecting the resources
+// belonging to the given AerospikeBackupService CR name.
+func LabelsForAerospikeBackupService(clName string) map[string]string {
+	return map[string]string{
+		asdbv1.AerospikeAppLabel:            common.AerospikeBackupService,
+		asdbv1.AerospikeCustomResourceLabel: clName,
+	}
 }
 
 // MergeLabels merges operator an user defined labels
