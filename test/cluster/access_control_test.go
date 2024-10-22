@@ -1,5 +1,3 @@
-//go:build !noac
-
 package cluster
 
 import (
@@ -22,6 +20,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	acl "github.com/aerospike/aerospike-management-lib/accesscontrol"
 )
 
 const (
@@ -2414,7 +2413,7 @@ func validateRoles(
 
 	// Check values.
 	if len(
-		aerospikecluster.SliceSubtract(
+		acl.SliceSubtract(
 			expectedRoleNames, currentRoleNames,
 		),
 	) != 0 {
@@ -2440,7 +2439,7 @@ func validateRoles(
 		var currentPrivilegeNames []string
 
 		for _, privilege := range asRole.Privileges {
-			temp, _ := aerospikecluster.AerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
+			temp, _ := acl.AerospikePrivilegeToPrivilegeString([]as.Privilege{privilege})
 			currentPrivilegeNames = append(currentPrivilegeNames, temp[0])
 		}
 
@@ -2454,7 +2453,7 @@ func validateRoles(
 
 		// Check values.
 		if len(
-			aerospikecluster.SliceSubtract(
+			acl.SliceSubtract(
 				expectedPrivilegeNames, currentPrivilegeNames,
 			),
 		) != 0 {
@@ -2530,7 +2529,7 @@ func validateUsers(
 
 	// Check values.
 	if len(
-		aerospikecluster.SliceSubtract(
+		acl.SliceSubtract(
 			expectedUserNames, currentUserNames,
 		),
 	) != 0 {
@@ -2571,7 +2570,7 @@ func validateUsers(
 
 		// Check values.
 		if len(
-			aerospikecluster.SliceSubtract(
+			acl.SliceSubtract(
 				expectedRoleNames, currentRoleNames,
 			),
 		) != 0 {

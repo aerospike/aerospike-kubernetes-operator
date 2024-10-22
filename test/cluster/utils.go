@@ -28,6 +28,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
 
@@ -587,14 +588,10 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 		return nil, err
 	}
 
-	host, err := createHost(pod)
+	asinfo, err := getASInfo(log, pod, getClientPolicy(aeroCluster, k8sClient))
 	if err != nil {
 		return nil, err
 	}
-
-	asinfo := info.NewAsInfo(
-		log, host, getClientPolicy(aeroCluster, k8sClient),
-	)
 
 	confs, err := getAsConfig(asinfo, configContext)
 	if err != nil {
@@ -604,28 +601,29 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 	return confs[configContext].(lib.Stats), nil
 }
 
-func requestInfoFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, cmd string, pod *asdbv1.AerospikePodStatus) (map[string]string, error) {
-	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	if err != nil {
-		return nil, err
-	}
-
+func getASInfo(log logr.Logger, pod *asdbv1.AerospikePodStatus, policy *as.ClientPolicy) (*info.AsInfo, error) {
 	host, err := createHost(pod)
 	if err != nil {
 		return nil, err
 	}
 
-	asinfo := info.NewAsInfo(
-		log, host, getClientPolicy(aeroCluster, k8sClient),
-	)
+	return info.NewAsInfo(log, host, policy), nil
+}
 
-	confs, err := asinfo.RequestInfo(cmd)
+func getNamespaceStats(log logr.Logger, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster, ns string,
+	pod *corev1.Pod) (map[string]string, error) {
+	hostConn, err := newHostConn(log, aeroCluster, pod, k8sClient)
 	if err != nil {
 		return nil, err
 	}
 
-	return confs, nil
+	stats, err := deployment.GetNamespaceStats([]*deployment.HostConn{hostConn}, getClientPolicy(aeroCluster,
+		k8sClient), ns)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats[hostConn.ID], nil
 }
 
 func getPasswordFromSecret(k8sClient client.Client,
