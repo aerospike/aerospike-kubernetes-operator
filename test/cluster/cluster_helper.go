@@ -28,7 +28,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 const (
@@ -501,14 +500,10 @@ func validateAerospikeConfigServiceClusterUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod)
+		asinfo, err := getASInfo(log, &pod, getClientPolicy(aeroCluster, k8sClient))
 		if err != nil {
 			return err
 		}
-
-		asinfo := info.NewAsInfo(
-			log, host, getClientPolicy(aeroCluster, k8sClient),
-		)
 
 		confs, err := getAsConfig(asinfo, "service")
 		if err != nil {
@@ -566,12 +561,11 @@ func validateMigrateFillDelay(
 		return fmt.Errorf("pod %s missing from the status", firstPodName)
 	}
 
-	host, err := createHost(&firstPod)
+	asinfo, err := getASInfo(log, &firstPod, getClientPolicy(aeroCluster, k8sClient))
 	if err != nil {
 		return err
 	}
 
-	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 	err = wait.PollUntilContextTimeout(ctx,
 		retryInterval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			confs, err := getAsConfig(asinfo, "service")

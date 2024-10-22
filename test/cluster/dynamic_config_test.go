@@ -23,7 +23,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 type podID struct {
@@ -684,29 +683,16 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-1-0"]
-
-						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+						podList, err := getPodList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 
-						confs := strings.Split(info["namespace/test"], ";")
-						for _, conf := range confs {
-							if strings.Contains(conf, "effective_active_rack") {
-								keyValue := strings.Split(conf, "=")
-								Expect(keyValue[1]).To(Equal("1"))
-							}
-						}
-
-						info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test1", &pod)
+						stats, err := getNamespaceStats(logger, k8sClient, aeroCluster, "test", &podList.Items[0])
 						Expect(err).ToNot(HaveOccurred())
+						Expect(stats["effective_active_rack"]).To(Equal("1"))
 
-						confs = strings.Split(info["namespace/test1"], ";")
-						for _, conf := range confs {
-							if strings.Contains(conf, "effective_active_rack") {
-								keyValue := strings.Split(conf, "=")
-								Expect(keyValue[1]).To(Equal("2"))
-							}
-						}
+						stats, err = getNamespaceStats(logger, k8sClient, aeroCluster, "test1", &podList.Items[0])
+						Expect(err).ToNot(HaveOccurred())
+						Expect(stats["effective_active_rack"]).To(Equal("2"))
 
 						By("Verify no warm/cold restarts in Pods")
 
@@ -1075,14 +1061,10 @@ func getAerospikeConfigFromNodeAndSpec(aeroCluster *asdbv1.AerospikeCluster) (fl
 
 	pod := aeroCluster.Status.Pods[pods.Items[0].Name]
 
-	host, err := createHost(&pod)
+	asinfo, err := getASInfo(logger, &pod, getClientPolicy(aeroCluster, k8sClient))
 	if err != nil {
 		return nil, nil, err
 	}
-
-	asinfo := info.NewAsInfo(
-		logger, host, getClientPolicy(aeroCluster, k8sClient),
-	)
 
 	serverConf, err := asconfig.GenerateConf(logger, asinfo, false)
 	if err != nil {

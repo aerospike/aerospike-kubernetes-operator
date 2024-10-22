@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +37,7 @@ type SingleClusterReconciler struct {
 	KubeClient  *kubernetes.Clientset
 	KubeConfig  *rest.Config
 	Scheme      *k8sRuntime.Scheme
-	Log         logr.Logger
+	Log         logger
 }
 
 func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error) {

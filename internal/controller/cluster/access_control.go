@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	acl "github.com/aerospike/aerospike-management-lib/accesscontrol"
 )
+
+// logger type alias.
+type logger = logr.Logger
 
 // AerospikeAdminCredentials to use for aerospike clients.
 //
