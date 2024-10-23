@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    spec:
+      serviceAccountName: aerospike-monitoring-stack-prometheus
+      containers:
+        - name: prometheus-server
+          image: "prom/prometheus:latest"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/data
+            - --web.listen-address=:9090
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+            - name: prometheus-data
+              mountPath: /data
+            - mountPath: /etc/prometheus/alert-rules.d
+              name: alert-manager-rules
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 65534
+      volumes:
+        - name: config-volume
+          configMap:
+            name: aerospike-monitoring-stack-prometheus-config
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: aerospike-monitoring-stack-prometheus-data
+        - name: alert-manager-rules
+          configMap:
+              defaultMode: 420
+              name: aerospike-monitoring-stack-alert-rules-config

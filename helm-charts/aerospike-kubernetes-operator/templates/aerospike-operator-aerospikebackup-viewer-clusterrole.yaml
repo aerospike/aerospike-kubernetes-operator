@@ -1,0 +1,25 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aerospike-operator-aerospikebackup-viewer-role
+  labels:
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+rules:
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - asdb.aerospike.com
+  resources:
+  - aerospikebackups/status
+  verbs:
+  - get
+{{- end }}
