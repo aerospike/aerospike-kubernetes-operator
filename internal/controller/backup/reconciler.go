@@ -42,6 +42,12 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 			return reconcile.Result{}, err
 		}
 
+		r.Log.Info("Deleted AerospikeBackup")
+		r.Recorder.Eventf(
+			r.aeroBackup, corev1.EventTypeNormal, "Deleted",
+			"Deleted AerospikeBackup %s/%s", r.aeroBackup.Namespace,
+			r.aeroBackup.Name,
+		)
 		// Stop reconciliation as the backup is being deleted
 		return reconcile.Result{}, nil
 	}
@@ -54,16 +60,28 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 
 	if err := r.reconcileConfigMap(); err != nil {
 		r.Log.Error(err, "Failed to reconcile config map")
+		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
+			"ConfigMapReconcileFailed", "Failed to reconcile config map %s/%s",
+			r.aeroBackup.Namespace, r.aeroBackup.Name)
+
 		return reconcile.Result{}, err
 	}
 
 	if err := r.reconcileBackup(); err != nil {
 		r.Log.Error(err, "Failed to reconcile backup")
+		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
+			"BackupReconcileFailed", "Failed to reconcile backup %s/%s",
+			r.aeroBackup.Namespace, r.aeroBackup.Name)
+
 		return reconcile.Result{}, err
 	}
 
 	if err := r.updateStatus(); err != nil {
 		r.Log.Error(err, "Failed to update status")
+		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
+			"StatusUpdateFailed", "Failed to update AerospikeBackup status %s/%s",
+			r.aeroBackup.Namespace, r.aeroBackup.Name)
+
 		return reconcile.Result{}, err
 	}
 
@@ -309,7 +327,7 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
 		"routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
 
-	r.Log.Info("Reconciled scheduled backup")
+	r.Log.Info("Reconciled on-demand backup")
 
 	return nil
 }
