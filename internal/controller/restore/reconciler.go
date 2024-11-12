@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -31,6 +32,13 @@ type SingleRestoreReconciler struct {
 
 func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	if !r.aeroRestore.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.Log.Info("Deleted AerospikeRestore")
+		r.Recorder.Eventf(
+			r.aeroRestore, corev1.EventTypeNormal, "Deleted",
+			"Deleted AerospikeRestore %s/%s", r.aeroRestore.Namespace,
+			r.aeroRestore.Name,
+		)
+
 		// Stop reconciliation as the Aerospike restore is being deleted
 		return reconcile.Result{}, nil
 	}
@@ -41,6 +49,10 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	if res := r.reconcileRestore(); !res.IsSuccess {
 		if res.Err != nil {
+			r.Log.Error(res.Err, "Failed to reconcile restore")
+			r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreReconcileFailed",
+				"Failed to reconcile restore %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+
 			return res.Result, res.Err
 		}
 
@@ -48,6 +60,10 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 	}
 
 	if err := r.checkRestoreStatus(); err != nil {
+		r.Log.Error(err, "Failed to check restore status")
+		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "CheckStatusFailed",
+			"Failed to check restore status %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+
 		return ctrl.Result{}, err
 	}
 

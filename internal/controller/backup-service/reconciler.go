@@ -63,6 +63,13 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}()
 
 	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.Log.Info("Deleted AerospikeBackupService")
+		r.Recorder.Eventf(
+			r.aeroBackupService, corev1.EventTypeNormal, "Deleted",
+			"Deleted AerospikeBackupService %s/%s", r.aeroBackupService.Namespace,
+			r.aeroBackupService.Name,
+		)
+
 		// Stop reconciliation as the Aerospike Backup service is being deleted
 		return reconcile.Result{}, nil
 	}
@@ -73,21 +80,44 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	if err := r.reconcileConfigMap(); err != nil {
+		r.Log.Error(err, "Failed to reconcile config map")
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
+			"ConfigMapReconcileFailed", "Failed to reconcile config map %s/%s",
+			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+
 		recErr = err
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileDeployment(); err != nil {
+		r.Log.Error(err, "Failed to reconcile deployment")
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
+			"DeploymentReconcileFailed", "Failed to reconcile deployment %s/%s",
+			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+
 		recErr = err
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileService(); err != nil {
+		r.Log.Error(err, "Failed to reconcile service")
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
+			"ServiceReconcileFailed", "Failed to reconcile service %s/%s",
+			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+
 		recErr = err
+
 		return ctrl.Result{}, err
 	}
 
 	if err := r.updateStatus(); err != nil {
+		r.Log.Error(err, "Failed to update status")
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
+			"StatusUpdateFailed", "Failed to update AerospikeBackupService status %s/%s",
+			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+
 		return ctrl.Result{}, err
 	}
 
