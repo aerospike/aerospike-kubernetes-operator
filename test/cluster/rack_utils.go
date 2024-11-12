@@ -18,7 +18,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
-	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 type RackState struct {
@@ -146,12 +145,10 @@ func isNamespaceRackEnabled(
 		pod = aeroCluster.Status.Pods[podName]
 	}
 
-	host, err := createHost(&pod)
+	asinfo, err := getASInfo(log, &pod, getClientPolicy(aeroCluster, k8sClient))
 	if err != nil {
 		return false, err
 	}
-
-	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
 
 	confs, err := getAsConfig(asinfo, "racks")
 	if err != nil {
