@@ -610,7 +610,7 @@ func getASInfo(log logr.Logger, pod *asdbv1.AerospikePodStatus, policy *as.Clien
 	return info.NewAsInfo(log, host, policy), nil
 }
 
-func getNamespaceStats(log logr.Logger, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster, ns string,
+func getNamespaceStatsPerHost(log logr.Logger, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster, ns string,
 	pod *corev1.Pod) (map[string]string, error) {
 	hostConn, err := newHostConn(log, aeroCluster, pod, k8sClient)
 	if err != nil {

@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +32,7 @@ type AerospikeClusterReconciler struct {
 	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
 	Scheme     *k8sRuntime.Scheme
-	Log        logger
+	Log        logr.Logger
 }
 
 // SetupWithManager sets up the controller with the Manager

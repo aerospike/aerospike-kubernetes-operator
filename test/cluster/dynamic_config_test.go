@@ -686,11 +686,11 @@ var _ = Describe(
 						podList, err := getPodList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 
-						stats, err := getNamespaceStats(logger, k8sClient, aeroCluster, "test", &podList.Items[0])
+						stats, err := getNamespaceStatsPerHost(logger, k8sClient, aeroCluster, "test", &podList.Items[0])
 						Expect(err).ToNot(HaveOccurred())
 						Expect(stats["effective_active_rack"]).To(Equal("1"))
 
-						stats, err = getNamespaceStats(logger, k8sClient, aeroCluster, "test1", &podList.Items[0])
+						stats, err = getNamespaceStatsPerHost(logger, k8sClient, aeroCluster, "test1", &podList.Items[0])
 						Expect(err).ToNot(HaveOccurred())
 						Expect(stats["effective_active_rack"]).To(Equal("2"))
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -1439,7 +1440,7 @@ func mutateMap(in asconfig.Conf, funcs []mapping) {
 	}
 }
 
-func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
+func getFlatConfig(log logr.Logger, confStr string) (*asconfig.Conf, error) {
 	asConf, err := asconfig.FromConfFile(log, strings.NewReader(confStr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)

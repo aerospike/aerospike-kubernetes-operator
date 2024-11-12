@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	acl "github.com/aerospike/aerospike-management-lib/accesscontrol"
 )
-
-// logger type alias.
-type logger = logr.Logger
 
 // AerospikeAdminCredentials to use for aerospike clients.
 //
@@ -263,47 +259,45 @@ type AerospikeUserPasswordProvider interface {
 func (r *SingleClusterReconciler) recordACLEvent(cmd acl.AerospikeAccessControlReconcileCmd, failed bool) {
 	var eventType, message, reason string
 
+	if failed {
+		eventType = corev1.EventTypeWarning
+	} else {
+		eventType = corev1.EventTypeNormal
+	}
+
 	switch v := cmd.(type) {
 	case acl.AerospikeUserCreateUpdate:
 		if failed {
-			eventType = corev1.EventTypeWarning
 			reason = "UserCreateOrUpdateFailed"
 			message = fmt.Sprintf("Failed to Create or Update User %s", v.Name)
 		} else {
-			eventType = corev1.EventTypeNormal
 			reason = "UserCreatedOrUpdated"
 			message = fmt.Sprintf("Created or Updated User %s", v.Name)
 		}
 
 	case acl.AerospikeUserDrop:
 		if failed {
-			eventType = corev1.EventTypeWarning
 			reason = "UserDeleteFailed"
 			message = fmt.Sprintf("Failed to Drop User %s", v.Name)
 		} else {
-			eventType = corev1.EventTypeNormal
 			reason = "UserDeleted"
 			message = fmt.Sprintf("Dropped User %s", v.Name)
 		}
 
 	case acl.AerospikeRoleCreateUpdate:
 		if failed {
-			eventType = corev1.EventTypeWarning
 			reason = "RoleCreateOrUpdateFailed"
 			message = fmt.Sprintf("Failed to Create or Update Role %s", v.Name)
 		} else {
-			eventType = corev1.EventTypeNormal
 			reason = "RoleCreatedOrUpdated"
 			message = fmt.Sprintf("Created or Updated Role %s", v.Name)
 		}
 
 	case acl.AerospikeRoleDrop:
 		if failed {
-			eventType = corev1.EventTypeWarning
 			reason = "RoleDeleteFailed"
 			message = fmt.Sprintf("Failed to Drop Role %s", v.Name)
 		} else {
-			eventType = corev1.EventTypeNormal
 			reason = "RoleDeleted"
 			message = fmt.Sprintf("Dropped Role %s", v.Name)
 		}
