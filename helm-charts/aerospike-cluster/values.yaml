@@ -121,10 +121,10 @@ k8sNodeBlockList: []
 paused: false
 
 operations: []
-#  - kind: "WarmRestart"
-#    id: "1"
+#  - kind: WarmRestart
+#    id: warm-restart-1
 #    podList:
-#      - podName: "aerospike-cluster-0"
+#      - aerospike-cluster-0-1
 
 ## Dev Mode
 devMode: false

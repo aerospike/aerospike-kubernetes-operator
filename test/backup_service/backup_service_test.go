@@ -2,7 +2,6 @@ package backupservice
 
 import (
 	"encoding/json"
-	"net/http"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -11,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 var _ = Describe(
@@ -73,7 +71,7 @@ var _ = Describe(
 
 				It("Should fail when aerospike-clusters field is given", func() {
 					configMap := getBackupServiceConfMap()
-					configMap[common.AerospikeClustersKey] = map[string]interface{}{
+					configMap[asdbv1beta1.AerospikeClustersKey] = map[string]interface{}{
 						"test-cluster": map[string]interface{}{
 							"credentials": map[string]interface{}{
 								"password": "admin123",
@@ -101,7 +99,7 @@ var _ = Describe(
 
 				It("Should fail when backup-routines field is given", func() {
 					configMap := getBackupServiceConfMap()
-					configMap[common.BackupRoutinesKey] = map[string]interface{}{
+					configMap[asdbv1beta1.BackupRoutinesKey] = map[string]interface{}{
 						"test-routine": map[string]interface{}{
 							"backup-policy":      "test-policy",
 							"interval-cron":      "@daily",
@@ -133,7 +131,8 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Should restart backup service deployment pod when config is changed", func() {
+			It("Should restart backup service deployment pod when static fields are changes in backup service "+
+				"config", func() {
 				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
@@ -149,7 +148,7 @@ var _ = Describe(
 				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Change config
+				By("Change static fields")
 				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8080}}}`)
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -159,6 +158,42 @@ var _ = Describe(
 				Expect(len(podList.Items)).To(Equal(1))
 
 				Expect(podList.Items[0].ObjectMeta.UID).ToNot(Equal(PodUID))
+			})
+
+			It("Should do hot-reload when dynamic fields are changed in backup service config", func() {
+				backupService, err = NewBackupService()
+				backupService.Spec.Service = &asdbv1beta1.Service{Type: corev1.ServiceTypeLoadBalancer}
+				Expect(err).ToNot(HaveOccurred())
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				podList, gErr := getBackupServicePodList(k8sClient, backupService)
+				Expect(gErr).ToNot(HaveOccurred())
+				Expect(len(podList.Items)).To(Equal(1))
+
+				PodUID := podList.Items[0].ObjectMeta.UID
+
+				// Get backup service object
+				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Change dynamic fields")
+				// Remove all backup policies and storage entries
+				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8081}}}`)
+				err = updateBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				podList, err = getBackupServicePodList(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(podList.Items)).To(Equal(1))
+
+				Expect(podList.Items[0].ObjectMeta.UID).To(Equal(PodUID))
+
+				config, gErr := GetAPIBackupSvcConfig(k8sClient, backupService.Name, backupService.Namespace)
+				Expect(gErr).ToNot(HaveOccurred())
+				Expect(config).ToNot(BeNil())
+				Expect(config[asdbv1beta1.BackupRoutinesKey]).To(BeNil())
+				Expect(config[asdbv1beta1.StorageKey]).To(BeNil())
 			})
 
 			It("Should restart backup service deployment pod when pod spec is changed", func() {
@@ -180,7 +215,7 @@ var _ = Describe(
 				// Change Pod spec
 				backupService.Spec.Resources = &corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
-						corev1.ResourceCPU: resource.MustParse("0.5"),
+						corev1.ResourceCPU: resource.MustParse("0.2"),
 					},
 				}
 
@@ -218,29 +253,9 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 				Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 
-				Eventually(func() bool {
-					svc, err = getBackupK8sServiceObj(k8sClient, name, namespace)
-					if err != nil {
-						return false
-					}
-					return svc.Status.LoadBalancer.Ingress != nil
-				}, timeout, interval).Should(BeTrue())
-
-				// Check backup service health using LB IP
-				Eventually(func() bool {
-					resp, err := http.Get("http://" + svc.Status.LoadBalancer.Ingress[0].IP + ":8081/health")
-					if err != nil {
-						pkgLog.Error(err, "Failed to get health")
-						return false
-					}
-
-					defer resp.Body.Close()
-
-					return resp.StatusCode == http.StatusOK
-				}, timeout, interval).Should(BeTrue())
-
+				_, err = GetAPIBackupSvcConfig(k8sClient, backupService.Name, backupService.Namespace)
+				Expect(err).ToNot(HaveOccurred())
 			})
-
 		})
 	},
 )
