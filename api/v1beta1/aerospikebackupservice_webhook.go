@@ -27,7 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v2/pkg/validation"
 )
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -96,7 +97,7 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 }
 
 func (r *AerospikeBackupService) validateBackupServiceConfig() error {
-	var config model.Config
+	var config dto.Config
 
 	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
 		return err
@@ -111,19 +112,15 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	}
 
 	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig == nil {
-		config.ServiceConfig = &model.BackupServiceConfig{}
-	}
-
 	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
 	}
 
 	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &model.LoggerConfig{}
+		config.ServiceConfig.Logger = &dto.LoggerConfig{}
 	}
 
-	return config.Validate()
+	return validation.ValidateConfiguration(&config)
 }
 
 func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
