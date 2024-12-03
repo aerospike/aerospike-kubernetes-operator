@@ -34,7 +34,7 @@ var _ = BeforeSuite(
 		By("Bootstrapping test environment")
 
 		var err error
-		testEnv, _, k8sClient, _, _, err = test.BootStrapTestEnv(scheme)
+		testEnv, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

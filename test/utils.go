@@ -6,7 +6,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -18,7 +17,7 @@ import (
 )
 
 func BootStrapTestEnv(scheme *runtime.Scheme) (testEnv *envtest.Environment, cfg *rest.Config,
-	k8sClient client.Client, k8sClientSet *kubernetes.Clientset, dynamicClient *dynamic.DynamicClient, err error) {
+	k8sClient client.Client, k8sClientSet *kubernetes.Clientset, err error) {
 	t := true
 	testEnv = &envtest.Environment{
 		UseExistingCluster: &t,
@@ -27,12 +26,12 @@ func BootStrapTestEnv(scheme *runtime.Scheme) (testEnv *envtest.Environment, cfg
 	cfg, err = testEnv.Start()
 
 	if err != nil {
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
+		return testEnv, cfg, k8sClient, k8sClientSet, err
 	}
 
 	if cfg == nil {
 		err = fmt.Errorf("cfg is nil")
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
+		return testEnv, cfg, k8sClient, k8sClientSet, err
 	}
 
 	utilRuntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -47,26 +46,20 @@ func BootStrapTestEnv(scheme *runtime.Scheme) (testEnv *envtest.Environment, cfg
 	)
 
 	if err != nil {
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
+		return testEnv, cfg, k8sClient, k8sClientSet, err
 	}
 
 	if k8sClient == nil {
 		err = fmt.Errorf("k8sClient is nil")
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
+		return testEnv, cfg, k8sClient, k8sClientSet, err
 	}
 
 	k8sClientSet = kubernetes.NewForConfigOrDie(cfg)
 
 	if k8sClientSet == nil {
 		err = fmt.Errorf("k8sClientSet is nil")
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
+		return testEnv, cfg, k8sClient, k8sClientSet, err
 	}
 
-	dynamicClient = dynamic.NewForConfigOrDie(cfg)
-	if dynamicClient == nil {
-		err = fmt.Errorf("dynamicClient is nil")
-		return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err
-	}
-
-	return testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, nil
+	return testEnv, cfg, k8sClient, k8sClientSet, nil
 }

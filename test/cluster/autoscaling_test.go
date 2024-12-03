@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 )
 
 var _ = FDescribe("AutoScaler", func() {
@@ -52,6 +53,9 @@ var _ = FDescribe("AutoScaler", func() {
 					Version:  "v1",                 // API version
 					Resource: "aerospikeclusters",  // Replace with your resource
 				}
+
+				dynamicClient := dynamic.NewForConfigOrDie(cfg)
+				Expect(dynamicClient).ToNot(BeNil())
 
 				scale, err := dynamicClient.Resource(gvr).Namespace(aeroCluster.Namespace).Get(context.TODO(),
 					aeroCluster.GetName(), metav1.GetOptions{}, "scale")
