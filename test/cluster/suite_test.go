@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -50,6 +51,8 @@ var k8sClient client.Client
 var cfg *rest.Config
 
 var k8sClientSet *kubernetes.Clientset
+
+var dynamicClient *dynamic.DynamicClient
 
 var projectRoot string
 
@@ -96,7 +99,7 @@ var _ = BeforeSuite(
 			*defaultNetworkType))
 
 		var err error
-		testEnv, cfg, k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme)
+		testEnv, cfg, k8sClient, k8sClientSet, dynamicClient, err = test.BootStrapTestEnv(scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		projectRoot, err = getGitRepoRootPath()
