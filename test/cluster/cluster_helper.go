@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -54,6 +55,14 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
+
+// constants for writing data to aerospike
+const (
+	setName  = "test"
+	key      = "key1"
+	binName  = "testBin"
+	binValue = "binValue"
+)
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
@@ -667,6 +676,22 @@ func upgradeClusterTest(
 }
 
 func getCluster(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) (*asdbv1.AerospikeCluster, error) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
+
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	return aeroCluster, nil
+}
+
+// GetCluster is the public variant of getCluster
+// Remove this when getCluster will be made public
+func GetCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName,
 ) (*asdbv1.AerospikeCluster, error) {
@@ -1697,4 +1722,93 @@ func getAeroClusterPVCList(
 	}
 
 	return pvcList.Items, nil
+}
+
+func WriteDataToCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string,
+) error {
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
+	)
+
+	wp := as.NewWritePolicy(0, 0)
+
+	for _, ns := range namespaces {
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return err
+		}
+
+		if err := asClient.Put(
+			wp, newKey, as.BinMap{
+				binName: binValue,
+			},
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func CheckDataInCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string,
+) (map[string]bool, error) {
+	data := make(map[string]bool)
+
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
+	)
+
+	for _, ns := range namespaces {
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return nil, err
+		}
+
+		record, err := asClient.Get(nil, newKey)
+		if err != nil {
+			return nil, nil
+		}
+
+		if bin, exists := record.Bins[binName]; exists {
+			value, ok := bin.(string)
+
+			if !ok {
+				return nil, fmt.Errorf(
+					"Bin-Name: %s - conversion to bin value failed", binName,
+				)
+			}
+
+			if value == binValue {
+				data[ns] = true
+			} else {
+				return nil, fmt.Errorf(
+					"bin: %s exsists but the value is changed", binName,
+				)
+			}
+		} else {
+			data[ns] = false
+		}
+	}
+
+	return data, nil
 }

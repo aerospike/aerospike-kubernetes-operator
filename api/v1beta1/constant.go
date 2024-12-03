@@ -1,4 +1,4 @@
-package common
+package v1beta1
 
 // Backup Config relate keys
 const (
@@ -15,12 +15,14 @@ const (
 
 // Restore config fields
 const (
-	RoutineKey = "routine"
-	TimeKey    = "time"
-	SourceKey  = "source"
+	RoutineKey        = "routine"
+	TimeKey           = "time"
+	SourceKey         = "source"
+	BackupDataPathKey = "backup-data-path"
 )
 
 const (
-	HTTPKey                = "http"
-	AerospikeBackupService = "aerospike-backup-service"
+	HTTPKey                   = "http"
+	AerospikeBackupServiceKey = "aerospike-backup-service"
+	RefreshKey                = AerospikeBackupServiceKey + "/refresh"
 )
