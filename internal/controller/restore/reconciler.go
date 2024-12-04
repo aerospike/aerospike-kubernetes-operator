@@ -125,6 +125,9 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 		return common.ReconcileError(err)
 	}
 
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreTriggered",
+		"Triggered restore %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+
 	r.aeroRestore.Status.JobID = jobID
 
 	if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
@@ -147,6 +150,8 @@ func (r *SingleRestoreReconciler) checkRestoreStatus() error {
 	}
 
 	r.Log.Info(fmt.Sprintf("Restore status: %+v", restoreStatus))
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreStatus",
+		"Restore status: %+v", restoreStatus)
 
 	if status, ok := restoreStatus["status"]; ok {
 		r.aeroRestore.Status.Phase = statusToPhase(status.(string))

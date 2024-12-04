@@ -61,8 +61,8 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 	if err := r.reconcileConfigMap(); err != nil {
 		r.Log.Error(err, "Failed to reconcile config map")
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
-			"ConfigMapReconcileFailed", "Failed to reconcile config map %s/%s",
-			r.aeroBackup.Namespace, r.aeroBackup.Name)
+			"ConfigMapReconcileFailed", "Failed to reconcile config map %s",
+			r.aeroBackup.Spec.BackupService.String())
 
 		return reconcile.Result{}, err
 	}
@@ -216,6 +216,9 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	r.Log.Info("Updated Backup Service ConfigMap for Backup",
 		"name", r.aeroBackup.Spec.BackupService.String(),
 	)
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "ConfigMapUpdated",
+		"Updated Backup Service ConfigMap %s for Backup %s/%s", r.aeroBackup.Spec.BackupService.String(),
+		r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	return nil
 }
@@ -326,6 +329,8 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 
 	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
 		"routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
+		"Scheduled on-demand backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	r.Log.Info("Reconciled on-demand backup")
 
@@ -439,6 +444,8 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	r.Log.Info("Reconciled scheduled backup")
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupReconciled",
+		"Reconciled scheduled backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	return nil
 }

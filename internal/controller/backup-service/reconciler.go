@@ -168,6 +168,8 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 		r.Log.Info("Created new Backup Service ConfigMap",
 			"name", getBackupServiceName(r.aeroBackupService))
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapCreated",
+			"Created new Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 		return nil
 	}
@@ -213,6 +215,8 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 	r.Log.Info("Updated Backup Service ConfigMap",
 		"name", getBackupServiceName(r.aeroBackupService))
+	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapUpdated",
+		"Updated Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 	return nil
 }
@@ -257,6 +261,11 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		if err != nil {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
+
+		r.Log.Info("Created Backup Service deployment",
+			"name", getBackupServiceName(r.aeroBackupService))
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentCreated",
+			"Created Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 		return r.waitForDeploymentToBeReady()
 	}
@@ -508,6 +517,11 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			return fmt.Errorf("failed to create Backup Service: %v", err)
 		}
 
+		r.Log.Info("Created Backup Service",
+			"name", getBackupServiceName(r.aeroBackupService))
+		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceCreated",
+			"Created Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+
 		return nil
 	}
 
@@ -528,6 +542,8 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 	}
 
 	r.Log.Info("Updated Backup Service", "name", getBackupServiceName(r.aeroBackupService))
+	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceUpdated",
+		"Updated Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 	return nil
 }
