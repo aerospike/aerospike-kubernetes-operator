@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -67,7 +68,19 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 
 	arLog.Info("Validate create")
 
-	if err := r.validateRestoreConfig(); err != nil {
+	k8sClient, gErr := getK8sClient()
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	if err := validateBackupSvcSupportedVersion(k8sClient,
+		r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateRestoreConfig(k8sClient); err != nil {
 		return nil, err
 	}
 
@@ -99,14 +112,15 @@ func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *AerospikeRestore) validateRestoreConfig() error {
+func (r *AerospikeRestore) validateRestoreConfig(k8sClient client.Client) error {
 	restoreConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreConfig); err != nil {
 		return err
 	}
 
-	backupSvcConfig, err := getBackupServiceFullConfig(r.Spec.BackupService.Name, r.Spec.BackupService.Namespace)
+	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace)
 	if err != nil {
 		return err
 	}

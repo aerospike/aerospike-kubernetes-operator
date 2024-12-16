@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -59,11 +60,23 @@ func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 
 	abLog.Info("Validate create")
 
+	k8sClient, gErr := getK8sClient()
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	if err := validateBackupSvcSupportedVersion(k8sClient,
+		r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace,
+	); err != nil {
+		return nil, err
+	}
+
 	if len(r.Spec.OnDemandBackups) != 0 {
 		return nil, fmt.Errorf("onDemand backups config cannot be specified while creating backup")
 	}
 
-	if err := r.validateBackupConfig(); err != nil {
+	if err := r.validateBackupConfig(k8sClient); err != nil {
 		return nil, err
 	}
 
@@ -78,11 +91,23 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 
 	oldObj := old.(*AerospikeBackup)
 
+	k8sClient, gErr := getK8sClient()
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	if err := validateBackupSvcSupportedVersion(k8sClient,
+		r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace,
+	); err != nil {
+		return nil, err
+	}
+
 	if !reflect.DeepEqual(r.Spec.BackupService, oldObj.Spec.BackupService) {
 		return nil, fmt.Errorf("backup service cannot be updated")
 	}
 
-	if err := r.validateBackupConfig(); err != nil {
+	if err := r.validateBackupConfig(k8sClient); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +132,7 @@ func (r *AerospikeBackup) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *AerospikeBackup) validateBackupConfig() error {
+func (r *AerospikeBackup) validateBackupConfig(k8sClient client.Client) error {
 	backupConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.Spec.Config.Raw, &backupConfig); err != nil {
@@ -130,7 +155,8 @@ func (r *AerospikeBackup) validateBackupConfig() error {
 		return fmt.Errorf("secret-agent field cannot be specified in backup config")
 	}
 
-	backupSvcConfig, err := getBackupServiceFullConfig(r.Spec.BackupService.Name, r.Spec.BackupService.Namespace)
+	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace)
 	if err != nil {
 		return err
 	}
