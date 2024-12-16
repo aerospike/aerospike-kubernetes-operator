@@ -43,6 +43,12 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, nil
 	}
 
+	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreCompleted {
+		// Stop reconciliation as the Aerospike restore is already completed
+		r.Log.Info("Restore already completed, skipping reconciliation")
+		return reconcile.Result{}, nil
+	}
+
 	if err := r.setStatusPhase(asdbv1beta1.AerospikeRestoreInProgress); err != nil {
 		return ctrl.Result{}, err
 	}

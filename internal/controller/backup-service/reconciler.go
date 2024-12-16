@@ -64,6 +64,13 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		}
 	}()
 
+	// Skip reconcile if the backup service version is less thatn 2.0.0.
+	// This is to avoid rolling restart of the backup service pods after AKO upgrade
+	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
+		r.Log.Info("Skipping reconcile as backup service version is less than 2.0.0")
+		return reconcile.Result{}, nil
+	}
+
 	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleted AerospikeBackupService")
 		r.Recorder.Eventf(
@@ -163,7 +170,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			context.TODO(), cm, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to create ConfigMap: %v",
+				"failed to create ConfigMap: %w",
 				err,
 			)
 		}
@@ -194,10 +201,25 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	currentDataMap[asdbv1beta1.ServiceKey] = desiredDataMap[asdbv1beta1.ServiceKey]
-	currentDataMap[asdbv1beta1.BackupPoliciesKey] = desiredDataMap[asdbv1beta1.BackupPoliciesKey]
-	currentDataMap[asdbv1beta1.StorageKey] = desiredDataMap[asdbv1beta1.StorageKey]
-	currentDataMap[asdbv1beta1.SecretAgentsKey] = desiredDataMap[asdbv1beta1.SecretAgentsKey]
+	// Sync keys
+	keys := []string{
+		asdbv1beta1.ServiceKey,
+		asdbv1beta1.BackupPoliciesKey,
+		asdbv1beta1.StorageKey,
+		asdbv1beta1.SecretAgentsKey,
+	}
+
+	for _, key := range keys {
+		if value, ok := desiredDataMap[key]; ok {
+			currentDataMap[key] = value
+		} else {
+			delete(currentDataMap, key)
+		}
+	}
+
+	// Remove old "secret-agent: null" from configMap
+	// This was added internally in AKO (3.4) during backup service configMap update
+	delete(currentDataMap, "secret-agent")
 
 	updatedConfig, err := yaml.Marshal(currentDataMap)
 	if err != nil {
