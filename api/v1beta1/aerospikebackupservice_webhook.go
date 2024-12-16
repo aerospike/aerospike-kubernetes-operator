@@ -31,6 +31,8 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v2/pkg/validation"
 )
 
+const minSupportedVersion = "3.0.0"
+
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
@@ -58,6 +60,10 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 	absLog.Info("Validate create")
 
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
+
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
 	}
@@ -74,6 +80,10 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 	absLog := logf.Log.WithName(namespacedName(r))
 
 	absLog.Info("Validate update")
+
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err

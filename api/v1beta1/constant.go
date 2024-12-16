@@ -8,7 +8,7 @@ const (
 	StorageKey              = "storage"
 	BackupRoutinesKey       = "backup-routines"
 	BackupPoliciesKey       = "backup-policies"
-	SecretAgentsKey         = "secret-agent"
+	SecretAgentsKey         = "secret-agents"
 	SourceClusterKey        = "source-cluster"
 	BackupServiceConfigYAML = "aerospike-backup-service.yml"
 )
