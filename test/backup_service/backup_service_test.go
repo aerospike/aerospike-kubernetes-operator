@@ -58,6 +58,34 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
+				It("Should fail when backup service version 2.0 image is given", func() {
+					backupService, err = NewBackupService()
+					Expect(err).ToNot(HaveOccurred())
+
+					backupService.Spec.Image = BackupServiceVersion2Image
+
+					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("Minimum supported version is 3.0.0"))
+				})
+
+				It("Should fail when backup service image version is downgraded to 2.0", func() {
+					backupService, err = NewBackupService()
+					Expect(err).ToNot(HaveOccurred())
+					err = DeployBackupService(k8sClient, backupService)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Downgrading image version to 2.0")
+					backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+					Expect(err).ToNot(HaveOccurred())
+
+					backupService.Spec.Image = BackupServiceVersion2Image
+
+					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("Minimum supported version is 3.0.0"))
+				})
+
 				It("Should fail when duplicate volume names are given in secrets", func() {
 					backupService, err = NewBackupService()
 					Expect(err).ToNot(HaveOccurred())

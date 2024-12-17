@@ -110,15 +110,16 @@ func (r *SingleBackupReconciler) addFinalizer(finalizerName string) error {
 
 func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
 	if utils.ContainsString(r.aeroBackup.ObjectMeta.Finalizers, finalizerName) {
+		r.Log.Info("Removing finalizer")
+
 		if err := r.removeBackupInfoFromConfigMap(); err != nil {
 			return err
 		}
 
-		if err := r.unregisterBackup(); err != nil {
+		if err := common.ReloadBackupServiceConfigInPods(r.Client, r.Log, &r.aeroBackup.Spec.BackupService); err != nil {
 			return err
 		}
 
-		r.Log.Info("Removing finalizer")
 		// Remove finalizer from the list
 		r.aeroBackup.ObjectMeta.Finalizers = utils.RemoveString(
 			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
@@ -127,6 +128,8 @@ func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
 		if err := r.Client.Update(context.TODO(), r.aeroBackup); err != nil {
 			return err
 		}
+
+		r.Log.Info("Removed finalizer")
 	}
 
 	return nil
@@ -428,17 +431,9 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	if hotReloadRequired {
-		r.Log.Info("Reload backup service config")
+		r.Log.Info("Reloading backup service config")
 
-		err = common.RefreshBackupServiceConfigInPods(r.Client,
-			r.aeroBackup.Spec.BackupService.Name,
-			r.aeroBackup.Spec.BackupService.Namespace,
-		)
-		if err != nil {
-			return err
-		}
-
-		err = serviceClient.ApplyConfig()
+		err = common.ReloadBackupServiceConfigInPods(r.Client, r.Log, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return err
 		}
@@ -460,29 +455,6 @@ func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 			r.Log.Error(err, "Failed to schedule backup")
 			return err
 		}
-	}
-
-	return nil
-}
-
-func (r *SingleBackupReconciler) unregisterBackup() error {
-	// Add annotations in the pod to force instant content refresh
-	if err := common.RefreshBackupServiceConfigInPods(r.Client,
-		r.aeroBackup.Spec.BackupService.Name,
-		r.aeroBackup.Spec.BackupService.Namespace,
-	); err != nil {
-		return err
-	}
-
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
-	if err != nil {
-		return err
-	}
-
-	// Apply the updated configuration for the changes to take effect
-	err = serviceClient.ApplyConfig()
-	if err != nil {
-		return err
 	}
 
 	return nil

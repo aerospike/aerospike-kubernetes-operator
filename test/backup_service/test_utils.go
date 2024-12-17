@@ -23,7 +23,8 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0"
+const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0.1"
+const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
 	timeout   = 2 * time.Minute

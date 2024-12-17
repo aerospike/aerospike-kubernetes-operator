@@ -25,7 +25,6 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v2/pkg/validation"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -368,19 +367,11 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 		return r.restartBackupSvcPod()
 	}
 
-	if err := common.RefreshBackupServiceConfigInPods(r.Client, r.aeroBackupService.Name,
-		r.aeroBackupService.Namespace); err != nil {
-		return err
-	}
-
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &asdbv1beta1.BackupService{
-		Name: r.aeroBackupService.Name, Namespace: r.aeroBackupService.Namespace,
-	})
-	if err != nil {
-		return err
-	}
-
-	return serviceClient.ApplyConfig()
+	return common.ReloadBackupServiceConfigInPods(r.Client, r.Log,
+		&asdbv1beta1.BackupService{
+			Name:      r.aeroBackupService.Name,
+			Namespace: r.aeroBackupService.Namespace},
+	)
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {

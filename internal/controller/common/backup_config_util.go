@@ -3,15 +3,20 @@ package common
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
@@ -45,11 +50,15 @@ func GetBackupServicePodList(k8sClient client.Client, name, namespace string) (*
 	return &podList, nil
 }
 
-func RefreshBackupServiceConfigInPods(k8sClient client.Client, name, namespace string) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+func ReloadBackupServiceConfigInPods(
+	k8sClient client.Client,
+	log logr.Logger,
+	backupSvc *v1beta1.BackupService,
+) error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		podList, err := GetBackupServicePodList(k8sClient,
-			name,
-			namespace,
+			backupSvc.Name,
+			backupSvc.Namespace,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to get backup service pod list, error: %v", err)
@@ -63,13 +72,15 @@ func RefreshBackupServiceConfigInPods(k8sClient client.Client, name, namespace s
 				annotations = make(map[string]string)
 			}
 
-			count, ok := annotations[v1beta1.RefreshKey]
+			count, ok := annotations[v1beta1.ForceRefreshKey]
 			if ok {
 				countInt, _ := strconv.Atoi(count)
-				annotations[v1beta1.RefreshKey] = fmt.Sprintf("%d", countInt+1)
+				annotations[v1beta1.ForceRefreshKey] = fmt.Sprintf("%d", countInt+1)
 			} else {
-				annotations[v1beta1.RefreshKey] = "1"
+				annotations[v1beta1.ForceRefreshKey] = "1"
 			}
+
+			annotations[v1beta1.RefreshTimeKey] = time.Now().Format(time.RFC3339)
 
 			pod.Annotations = annotations
 
@@ -78,9 +89,64 @@ func RefreshBackupServiceConfigInPods(k8sClient client.Client, name, namespace s
 			}
 		}
 
-		// Waiting for 1 second so that pods get the latest configMap update.
-		time.Sleep(1 * time.Second)
-
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Waiting for 1 second so that pods get the latest configMap update.
+	time.Sleep(1 * time.Second)
+
+	backupServiceClient, err := backup_service.GetBackupServiceClient(k8sClient, backupSvc)
+	if err != nil {
+		return err
+	}
+
+	err = backupServiceClient.ApplyConfig()
+	if err != nil {
+		return err
+	}
+
+	// TODO:// uncomment this when backup service removes default fields from the GET config API response
+	// return validateBackupSvcConfigReload(k8sClient, backupServiceClient, log, backupSvc)
+	return nil
+}
+
+//nolint:unused // for future use
+func validateBackupSvcConfigReload(k8sClient client.Client,
+	backupServiceClient *backup_service.Client,
+	log logr.Logger,
+	backupSvc *v1beta1.BackupService,
+) error {
+	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
+	if err != nil {
+		return err
+	}
+
+	var cm corev1.ConfigMap
+
+	if err := k8sClient.Get(context.TODO(), types.NamespacedName{
+		Namespace: backupSvc.Namespace,
+		Name:      backupSvc.Name,
+	}, &cm); err != nil {
+		return err
+	}
+
+	configMapBackupSvcConfig := make(map[string]interface{})
+
+	data := cm.Data[v1beta1.BackupServiceConfigYAML]
+
+	if err := yaml.Unmarshal([]byte(data), &configMapBackupSvcConfig); err != nil {
+		return err
+	}
+
+	log.Info(fmt.Sprintf("API Backup Service Config: %v", apiBackupSvcConfig))
+	log.Info(fmt.Sprintf("ConfigMap Backup Service Config: %v", configMapBackupSvcConfig))
+
+	if !reflect.DeepEqual(apiBackupSvcConfig, configMapBackupSvcConfig) {
+		log.Info("Backup service config not yet updated in pods, requeue")
+		return fmt.Errorf("backup service config not yet updated in pods")
+	}
+
+	return nil
 }
