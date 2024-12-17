@@ -27,8 +27,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v2/pkg/validation"
 )
+
+const minSupportedVersion = "3.0.0"
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -57,6 +60,10 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 	absLog.Info("Validate create")
 
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
+
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
 	}
@@ -73,6 +80,10 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 	absLog := logf.Log.WithName(namespacedName(r))
 
 	absLog.Info("Validate update")
+
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
 
 	if err := r.validateBackupServiceConfig(); err != nil {
 		return nil, err
@@ -96,7 +107,7 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 }
 
 func (r *AerospikeBackupService) validateBackupServiceConfig() error {
-	var config model.Config
+	var config dto.Config
 
 	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
 		return err
@@ -111,19 +122,15 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	}
 
 	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig == nil {
-		config.ServiceConfig = &model.BackupServiceConfig{}
-	}
-
 	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
 	}
 
 	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &model.LoggerConfig{}
+		config.ServiceConfig.Logger = &dto.LoggerConfig{}
 	}
 
-	return config.Validate()
+	return validation.ValidateConfiguration(&config)
 }
 
 func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
