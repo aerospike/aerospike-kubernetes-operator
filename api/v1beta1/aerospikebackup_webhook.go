@@ -91,6 +91,10 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 
 	oldObj := old.(*AerospikeBackup)
 
+	if !reflect.DeepEqual(r.Spec.BackupService, oldObj.Spec.BackupService) {
+		return nil, fmt.Errorf("backup service cannot be updated")
+	}
+
 	k8sClient, gErr := getK8sClient()
 	if gErr != nil {
 		return nil, gErr
@@ -101,10 +105,6 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 		r.Spec.BackupService.Namespace,
 	); err != nil {
 		return nil, err
-	}
-
-	if !reflect.DeepEqual(r.Spec.BackupService, oldObj.Spec.BackupService) {
-		return nil, fmt.Errorf("backup service cannot be updated")
 	}
 
 	if err := r.validateBackupConfig(k8sClient); err != nil {
