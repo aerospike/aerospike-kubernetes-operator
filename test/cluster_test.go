@@ -15,6 +15,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var _ = Describe(
@@ -79,8 +80,105 @@ var _ = Describe(
 				UpdateClusterPre600(ctx)
 			},
 		)
+		Context(
+			"ValidateAerospikeBenchmarkConfigs", func() {
+				ValidateAerospikeBenchmarkConfigs(ctx)
+			},
+		)
 	},
 )
+
+// Historically, all benchmark configurations were represented as single literal fields in the configuration.
+// The presence of these fields indicated that the corresponding benchmark was enabled.
+// However, AER-6767(https://aerospike.atlassian.net/browse/AER-6767) restricted a two-literal benchmark
+// configuration format (e.g., "enable-benchmarks-read true")
+// Here validating that benchmark configurations are working as expected with all server versions.
+func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
+	Context(
+		"ValidateAerospikeBenchmarkConfigs", func() {
+			clusterNamespacedName := getNamespacedName(
+				"deploy-cluster-benchmark", namespace,
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				},
+			)
+
+			It(
+				"benchmarking should work in all aerospike server version", func() {
+					By("Deploying cluster which does not have the fix for AER-6767")
+					imageBeforeFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.2")
+					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
+					namespaceConfig :=
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+					namespaceConfig["enable-benchmarks-read"] = false
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Validating benchmarking is disabled")
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					pod := aeroCluster.Status.Pods["deploy-cluster-benchmark-0-0"]
+					nsConfs, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
+
+					By("updating cluster to enable benchmarking")
+					namespaceConfig =
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+					namespaceConfig["enable-benchmarks-read"] = true
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
+
+					By("Updating cluster which has the fix for AER-6767")
+					imageAfterFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.10")
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					aeroCluster.Spec.Image = imageAfterFix
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
+
+					By("updating cluster to disable benchmarking")
+					namespaceConfig =
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+					namespaceConfig["enable-benchmarks-read"] = false
+					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
+				},
+			)
+		},
+	)
+}
 
 func UpdateClusterPre600(ctx goctx.Context) {
 	Context(
