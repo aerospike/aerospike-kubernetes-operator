@@ -122,7 +122,8 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	// [Backward Compatibility Fix]
 	// Historically, all benchmark configurations were represented as single literal fields in the configuration.
 	// The presence of these fields indicated that the corresponding benchmark was enabled.
-	// However, AER-6767 restricted a two-literal benchmark configuration format (e.g., "enable-benchmarks-read true").
+	// However, AER-6767(https://aerospike.atlassian.net/browse/AER-6767) restricted a two-literal benchmark
+	// configuration format (e.g., "enable-benchmarks-read true").
 	// Handling this change leads to hash mismatches during AKO upgrades, leading to unnecessary warm restarts.
 	// Solution: For hash calculations, replace the new benchmark configuration format with the old format
 	// to maintain compatibility and prevent these issues.
