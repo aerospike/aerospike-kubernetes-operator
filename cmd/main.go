@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strconv"
 	"strings"
 
@@ -20,13 +21,13 @@ import (
 	crClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
-
 	// +kubebuilder:scaffold:imports
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/restore"
@@ -46,13 +47,24 @@ func init() {
 }
 
 func main() {
-	var configFile string
-
-	flag.StringVar(&configFile, "config", "controller_manager_config.yaml",
-		"The controller will load its initial configuration from this file. "+
-			"Omit this flag to use the default configuration values. "+
-			"Command-line flags override configuration from this file.",
+	var (
+		metricsAddr        string
+		healthAddr         string
+		webhookPort        int
+		leaderResourceName string
+		leaderElect        bool
 	)
+
+	flag.StringVar(&metricsAddr, "metrics-addr", "127.0.0.1:8080",
+		"The address the metric endpoint binds to.")
+	flag.StringVar(&healthAddr, "health-addr", ":8081",
+		"The address the health endpoint binds to.")
+	flag.StringVar(&leaderResourceName, "resource-name", "",
+		"Name of the resource that will be used as the leader election lock.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443,
+		"Webhook server port.")
+	flag.BoolVar(&leaderElect, "leader-elect", true,
+		"Enable leader election for controller manager.")
 
 	opts := zap.Options{
 		Development: true,
@@ -70,16 +82,16 @@ func main() {
 
 	// Create a new controller option for controller manager
 	options := ctrl.Options{
-		Scheme: scheme,
-	}
-
-	//nolint:staticcheck // Remove it when this function is removed by controller-runtime
-	// For future ref: Need to implement custom config loader when this function is removed by controller-runtime
-	// Issue: https://github.com/kubernetes-sigs/controller-runtime/issues/895
-	options, err = options.AndFrom(ctrl.ConfigFile().AtPath(configFile))
-	if err != nil {
-		setupLog.Error(err, "unable to load the config file")
-		os.Exit(1)
+		Scheme:                 scheme,
+		HealthProbeBindAddress: healthAddr,
+		LeaderElectionID:       leaderResourceName,
+		LeaderElection:         leaderElect,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: webhookPort,
+		}),
 	}
 
 	// Add support for multiple namespaces given in WATCH_NAMESPACE (e.g. ns1,ns2)

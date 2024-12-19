@@ -28,7 +28,11 @@ spec:
       - command:
         - /manager
         args:
-        - --config=controller_manager_config.yaml
+        - --metrics-addr=127.0.0.1:8080
+        - --health-addr=:8081
+        - --webhook-port=9443
+        - --resource-name=96242fdf.aerospike.com
+        - --leader-elect=true
         - --zap-log-level=info
         image: controller:latest
         name: manager

@@ -24,7 +24,7 @@ func (h *mutatingHandler) Handle(
 ) admission.Response {
 	obj := &AerospikeCluster{}
 
-	if err := h.decoder.Decode(req, obj); err != nil {
+	if err := (*h.decoder).Decode(req, obj); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
