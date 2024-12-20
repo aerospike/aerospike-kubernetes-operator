@@ -3,9 +3,9 @@ type: application
 name: aerospike-backup-service
 
 # version tracks chart changes
-version: 3.4.0
+version: 3.4.1
 # appVersion tracks operator version
-appVersion: 3.4.0
+appVersion: 3.4.1
 
 description: A Helm chart for Aerospike Backup Service Custom Resource
 icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
