@@ -18,7 +18,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-var _ = Describe(
+var _ = FDescribe(
 	"AerospikeCluster", func() {
 
 		ctx := goctx.TODO()

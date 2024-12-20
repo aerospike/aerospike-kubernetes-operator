@@ -13,5 +13,5 @@ configMapGenerator:
   name: manager-config
 images:
 - name: controller
-  newName: docker.io/aerospike/aerospike-kubernetes-operator-nightly
-  newTag: 3.4.0
+  newName: docker.io/tanmayj10/aerospike-kubernetes-operator
+  newTag: masterforvul
