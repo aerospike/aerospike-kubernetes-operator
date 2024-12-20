@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     aerospike-kubernetes-operator/version: 3.4.0
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: aerospikerestores.asdb.aerospike.com
 spec:
   group: asdb.aerospike.com

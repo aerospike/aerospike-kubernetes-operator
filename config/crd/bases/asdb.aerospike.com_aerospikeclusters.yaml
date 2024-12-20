@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     aerospike-kubernetes-operator/version: 3.4.0
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: aerospikeclusters.asdb.aerospike.com
 spec:
   group: asdb.aerospike.com
@@ -2593,9 +2593,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -4266,9 +4264,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -11525,9 +11521,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -13198,9 +13192,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -20599,9 +20591,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -22271,9 +22261,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -29416,9 +29404,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
@@ -31088,9 +31074,7 @@ spec:
                                   referred to by services.
                                 type: string
                               protocol:
-                                allOf:
-                                - default: TCP
-                                - default: TCP
+                                default: TCP
                                 description: |-
                                   Protocol for port. Must be UDP, TCP, or SCTP.
                                   Defaults to "TCP".
