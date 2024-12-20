@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -449,6 +450,9 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 		newAeroCluster.Status.IsReadinessProbeEnabled = clusterReadinessEnable
 	}
+
+	selector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(newAeroCluster.Name))
+	newAeroCluster.Status.Selector = selector.String()
 
 	err = r.patchStatus(newAeroCluster)
 	if err != nil {
