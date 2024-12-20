@@ -1,15 +1,20 @@
 package backupservice
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
@@ -122,6 +127,41 @@ var _ = Describe(
 					Expect(err.Error()).To(
 						ContainSubstring("backup-routines field cannot be specified in backup service config"))
 				})
+
+				It("Should fail adding reserved label", func() {
+					backupService, err = NewBackupService()
+					Expect(err).ToNot(HaveOccurred())
+					backupService.Spec.ServicePodSpec.ObjectMeta.Labels = map[string]string{
+						asdbv1.AerospikeAppLabel: "test",
+					}
+					err = DeployBackupService(k8sClient, backupService)
+					Expect(err).Should(HaveOccurred())
+				})
+
+				It("Should fail for request exceeding limit", func() {
+					backupService, err = NewBackupService()
+					Expect(err).ToNot(HaveOccurred())
+
+					resourceMem := resource.MustParse("3Gi")
+					resourceCPU := resource.MustParse("250m")
+					limitMem := resource.MustParse("2Gi")
+					limitCPU := resource.MustParse("200m")
+
+					resources := &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resourceCPU,
+							corev1.ResourceMemory: resourceMem,
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    limitCPU,
+							corev1.ResourceMemory: limitMem,
+						},
+					}
+
+					backupService.Spec.ServicePodSpec.ServiceContainerSpec.Resources = resources
+					err = DeployBackupService(k8sClient, backupService)
+					Expect(err).Should(HaveOccurred())
+				})
 			},
 		)
 
@@ -178,9 +218,9 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change Pod spec
-				backupService.Spec.Resources = &corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						corev1.ResourceCPU: resource.MustParse("0.5"),
+				backupService.Spec.ServicePodSpec = asdbv1beta1.ServicePodSpec{
+					ObjectMeta: asdbv1beta1.AerospikeObjectMeta{
+						Labels: map[string]string{"label-test-1": "test-1"},
 					},
 				}
 
@@ -197,11 +237,11 @@ var _ = Describe(
 			It("Should change K8s service type when service type is changed in CR", func() {
 				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				err := DeployBackupService(k8sClient, backupService)
+				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				svc, err := getBackupK8sServiceObj(k8sClient, name, namespace)
-				Expect(err).ToNot(HaveOccurred())
+				svc, sErr := getBackupK8sServiceObj(k8sClient, name, namespace)
+				Expect(sErr).ToNot(HaveOccurred())
 				Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeClusterIP))
 
 				// Get backup service object
@@ -228,9 +268,9 @@ var _ = Describe(
 
 				// Check backup service health using LB IP
 				Eventually(func() bool {
-					resp, err := http.Get("http://" + svc.Status.LoadBalancer.Ingress[0].IP + ":8081/health")
-					if err != nil {
-						pkgLog.Error(err, "Failed to get health")
+					resp, gErr := http.Get("http://" + svc.Status.LoadBalancer.Ingress[0].IP + ":8081/health")
+					if gErr != nil {
+						pkgLog.Error(gErr, "Failed to get health")
 						return false
 					}
 
@@ -241,6 +281,176 @@ var _ = Describe(
 
 			})
 
+			It("Should validate annotations and labels addition", func() {
+				backupService, err = NewBackupService()
+				Expect(err).ToNot(HaveOccurred())
+				backupService.Spec.ServicePodSpec.ObjectMeta.Labels = map[string]string{"label-test-1": "test-1"}
+				backupService.Spec.ServicePodSpec.ObjectMeta.Annotations = map[string]string{"annotation-test-1": "test-1"}
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				Expect(err).ToNot(HaveOccurred())
+				deploy, dErr := getBackupServiceDeployment(k8sClient, backupService)
+				Expect(dErr).ToNot(HaveOccurred())
+
+				By("Validating Annotations")
+				actual := deploy.Spec.Template.ObjectMeta.Annotations
+				valid := validateLabelsOrAnnotations(actual, map[string]string{"annotation-test-1": "test-1"})
+				Expect(valid).To(
+					BeTrue(), "Unable to find annotations",
+				)
+
+				By("Validating Labels")
+				actual = deploy.Spec.Template.ObjectMeta.Labels
+				valid = validateLabelsOrAnnotations(actual, map[string]string{"label-test-1": "test-1"})
+				Expect(valid).To(
+					BeTrue(), "Unable to find labels",
+				)
+			})
+
+			It("Should validate SchedulingPolicy", func() {
+				backupService, err = NewBackupService()
+				Expect(err).ToNot(HaveOccurred())
+
+				nodeList, nErr := getNodeList(context.TODO(), k8sClient)
+				Expect(nErr).ToNot(HaveOccurred())
+				Expect(len(nodeList.Items)).ToNot(BeZero())
+
+				By("Validating Affinity")
+				nodeName := nodeList.Items[0].Name
+				affinity := &corev1.Affinity{}
+				ns := &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "kubernetes.io/hostname",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{nodeName},
+								},
+							},
+						},
+					},
+				}
+				affinity.NodeAffinity = &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: ns,
+				}
+				backupService.Spec.ServicePodSpec.Affinity = affinity
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				Expect(err).ToNot(HaveOccurred())
+				podList, gErr := getBackupServicePodList(k8sClient, backupService)
+				Expect(gErr).ToNot(HaveOccurred())
+				Expect(len(podList.Items)).To(Equal(1))
+				Expect(podList.Items[0].Spec.NodeName).Should(Equal(nodeName))
+			})
+
+			It("Should validate container resources and securitycontext", func() {
+				backupService, err = NewBackupService()
+				Expect(err).ToNot(HaveOccurred())
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				resourceMem := resource.MustParse("1Gi")
+				resourceCPU := resource.MustParse("200m")
+				limitMem := resource.MustParse("2Gi")
+				limitCPU := resource.MustParse("300m")
+
+				res := &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resourceCPU,
+						corev1.ResourceMemory: resourceMem,
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    limitCPU,
+						corev1.ResourceMemory: limitMem,
+					},
+				}
+
+				sc := &corev1.SecurityContext{Privileged: new(bool)}
+
+				By("Validating Resources")
+				updateBackupServiceResources(k8sClient, res)
+
+				By("Remove Resources")
+				updateBackupServiceResources(k8sClient, nil)
+
+				By("Validating SecurityContext")
+				updateBackupServiceSecurityContext(k8sClient, sc)
+
+				By("Remove SecurityContext")
+				updateBackupServiceSecurityContext(k8sClient, nil)
+			})
 		})
 	},
 )
+
+func updateBackupServiceResources(k8sClient client.Client, res *corev1.ResourceRequirements) {
+	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+	Expect(err).ToNot(HaveOccurred())
+
+	backupService.Spec.ServicePodSpec.ServiceContainerSpec.Resources = res
+	err = updateBackupService(k8sClient, backupService)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = validateBackupServiceResources(k8sClient, res)
+	Expect(err).ToNot(HaveOccurred())
+}
+
+func validateBackupServiceResources(k8sClient client.Client, res *corev1.ResourceRequirements) error {
+	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+	if err != nil {
+		return err
+	}
+
+	deploy, err := getBackupServiceDeployment(k8sClient, backupService)
+	if err != nil {
+		return err
+	}
+
+	// res can not be null in deploy spec
+	if res == nil {
+		res = &corev1.ResourceRequirements{}
+	}
+
+	actual := deploy.Spec.Template.Spec.Containers[0].Resources
+	if !reflect.DeepEqual(&actual, res) {
+		return fmt.Errorf("resource not matching. want %v, got %v", *res, actual)
+	}
+
+	return nil
+}
+
+func updateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.SecurityContext) {
+	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+	Expect(err).ToNot(HaveOccurred())
+
+	backupService.Spec.ServicePodSpec.ServiceContainerSpec.SecurityContext = sc
+	err = updateBackupService(k8sClient, backupService)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = validateBackupServiceSecurityContext(k8sClient, sc)
+	Expect(err).ToNot(HaveOccurred())
+}
+
+func validateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.SecurityContext) error {
+	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+	if err != nil {
+		return err
+	}
+
+	deploy, err := getBackupServiceDeployment(k8sClient, backupService)
+	if err != nil {
+		return err
+	}
+
+	actual := deploy.Spec.Template.Spec.Containers[0].SecurityContext
+	if !reflect.DeepEqual(actual, sc) {
+		return fmt.Errorf("security context not matching")
+	}
+
+	return nil
+}

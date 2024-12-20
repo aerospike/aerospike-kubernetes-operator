@@ -55,8 +55,12 @@ type AerospikeBackupServiceSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config"
 	Config runtime.RawExtension `json:"config"`
 
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
+	ServicePodSpec ServicePodSpec `json:"servicePodSpec,omitempty"`
+
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
+	// Deprecated: Resources field is now part of serviceContainerSpec
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
@@ -82,9 +86,7 @@ type AerospikeBackupServiceStatus struct {
 	// It includes: service, backup-policies, storage, secret-agent.
 	Config runtime.RawExtension `json:"config,omitempty"`
 
-	// Resources defines the requests and limits for the backup service container.
-	// Resources.Limits should be more than Resources.Requests.
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	ServicePodSpec ServicePodSpec `json:"servicePodSpec,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
@@ -101,6 +103,27 @@ type AerospikeBackupServiceStatus struct {
 
 	// Port is the listening port of backup service
 	Port int32 `json:"port,omitempty"`
+}
+
+type ServicePodSpec struct {
+	// ServiceContainerSpec configures the backup service container
+	// created by the operator.
+	ServiceContainerSpec ServiceContainerSpec `json:"serviceContainer,omitempty"`
+
+	ObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
+
+	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
+	SchedulingPolicy `json:",inline"`
+
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
+
+type ServiceContainerSpec struct {
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+
+	// Resources defines the requests and limits for the backup service container.
+	// Resources.Limits should be more than Resources.Requests.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // +kubebuilder:object:root=true

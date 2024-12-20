@@ -298,3 +298,41 @@ func DeleteBackupService(
 
 	return nil
 }
+
+func getBackupServiceDeployment(k8sClient client.Client,
+	backupService *asdbv1beta1.AerospikeBackupService) (*app.Deployment, error) {
+	deployment := &app.Deployment{}
+	if err := k8sClient.Get(context.TODO(), types.NamespacedName{
+		Namespace: backupService.Namespace,
+		Name:      backupService.Name,
+	}, deployment); err != nil {
+		return nil, err
+	}
+
+	return deployment, nil
+}
+
+func validateLabelsOrAnnotations(
+	actual map[string]string, expected map[string]string,
+) bool {
+	for key, val := range expected {
+		if v, ok := actual[key]; ok {
+			if v == val {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func getNodeList(ctx context.Context, k8sClient client.Client) (
+	*corev1.NodeList, error,
+) {
+	nodeList := &corev1.NodeList{}
+	if err := k8sClient.List(ctx, nodeList); err != nil {
+		return nil, err
+	}
+
+	return nodeList, nil
+}
