@@ -9,11 +9,11 @@ import (
 
 type mutatingHandler struct {
 	// aeroCluster *AerospikeCluster
-	decoder *admission.Decoder
+	decoder admission.Decoder
 }
 
 // InjectDecoder injects the decoder into a mutatingHandler.
-func (h *mutatingHandler) InjectDecoder(d *admission.Decoder) error {
+func (h *mutatingHandler) InjectDecoder(d admission.Decoder) error {
 	h.decoder = d
 	return nil
 }
