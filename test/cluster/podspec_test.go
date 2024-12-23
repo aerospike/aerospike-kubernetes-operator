@@ -459,7 +459,7 @@ var _ = Describe(
 					"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.2"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.3"
 						customRegistry := getEnvVar(customInitRegistryEnvVar)
 						customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
@@ -516,7 +516,7 @@ var _ = Describe(
 					func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.2"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.3"
 						incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 						By("Using incorrect registry namespace in CR")
