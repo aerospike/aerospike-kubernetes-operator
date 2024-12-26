@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -72,14 +71,6 @@ func ReloadBackupServiceConfigInPods(
 
 			if annotations == nil {
 				annotations = make(map[string]string)
-			}
-
-			count, ok := annotations[v1beta1.ForceRefreshKey]
-			if ok {
-				countInt, _ := strconv.Atoi(count)
-				annotations[v1beta1.ForceRefreshKey] = fmt.Sprintf("%d", countInt+1)
-			} else {
-				annotations[v1beta1.ForceRefreshKey] = "1"
 			}
 
 			annotations[v1beta1.RefreshTimeKey] = time.Now().Format(time.RFC3339)
