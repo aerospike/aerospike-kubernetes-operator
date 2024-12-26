@@ -22,7 +22,7 @@ spec:
           path: /localStorage
       s3Storage:
         s3-storage:
-          bucket: "aerospike-kubernetes-operator-test"
+          bucket: aerospike-kubernetes-operator-test
           s3-region: us-east-1
           s3-profile: default
 
@@ -35,4 +35,3 @@ spec:
 
   service:
     type: LoadBalancer
-

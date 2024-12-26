@@ -82,6 +82,8 @@ func ValidateBackupSvcVersion(image string) error {
 	return nil
 }
 
+// validateBackupSvcSupportedVersion validates the supported backup service version.
+// It returns an error if the backup service version is less than 3.0.0.
 func validateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) error {
 	var backupSvc AerospikeBackupService
 

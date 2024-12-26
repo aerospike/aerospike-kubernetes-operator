@@ -60,24 +60,12 @@ func (r *AerospikeBackup) ValidateCreate() (admission.Warnings, error) {
 
 	abLog.Info("Validate create")
 
-	k8sClient, gErr := getK8sClient()
-	if gErr != nil {
-		return nil, gErr
-	}
-
-	if err := validateBackupSvcSupportedVersion(k8sClient,
-		r.Spec.BackupService.Name,
-		r.Spec.BackupService.Namespace,
-	); err != nil {
+	if err := r.validate(); err != nil {
 		return nil, err
 	}
 
 	if len(r.Spec.OnDemandBackups) != 0 {
 		return nil, fmt.Errorf("onDemand backups config cannot be specified while creating backup")
-	}
-
-	if err := r.validateBackupConfig(k8sClient); err != nil {
-		return nil, err
 	}
 
 	return nil, nil
@@ -95,19 +83,7 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 		return nil, fmt.Errorf("backup service cannot be updated")
 	}
 
-	k8sClient, gErr := getK8sClient()
-	if gErr != nil {
-		return nil, gErr
-	}
-
-	if err := validateBackupSvcSupportedVersion(k8sClient,
-		r.Spec.BackupService.Name,
-		r.Spec.BackupService.Namespace,
-	); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupConfig(k8sClient); err != nil {
+	if err := r.validate(); err != nil {
 		return nil, err
 	}
 
@@ -120,6 +96,22 @@ func (r *AerospikeBackup) ValidateUpdate(old runtime.Object) (admission.Warnings
 	}
 
 	return nil, nil
+}
+
+func (r *AerospikeBackup) validate() error {
+	k8sClient, gErr := getK8sClient()
+	if gErr != nil {
+		return gErr
+	}
+
+	if err := validateBackupSvcSupportedVersion(k8sClient,
+		r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace,
+	); err != nil {
+		return err
+	}
+
+	return r.validateBackupConfig(k8sClient)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

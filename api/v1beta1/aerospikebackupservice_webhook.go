@@ -60,19 +60,7 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 	absLog.Info("Validate create")
 
-	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return r.validate()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -81,19 +69,7 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 
 	absLog.Info("Validate update")
 
-	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return r.validate()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -103,6 +79,22 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 	absLog.Info("Validate delete")
 
 	// TODO(user): fill in your validation logic upon object deletion.
+	return nil, nil
+}
+
+func (r *AerospikeBackupService) validate() (admission.Warnings, error) {
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceConfig(); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceSecrets(); err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 

@@ -58,7 +58,7 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 				})
 
-				It("Should fail when backup service version 2.0 image is given", func() {
+				It("Should fail when backup service version is less than 3.0.0", func() {
 					backupService, err = NewBackupService()
 					Expect(err).ToNot(HaveOccurred())
 
@@ -159,7 +159,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Should restart backup service deployment pod when static fields are changes in backup service "+
+			It("Should restart backup service deployment pod when static fields are changed in backup service "+
 				"config", func() {
 				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
@@ -177,6 +177,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Change static fields")
+				// Changing static field 'port' to 8080 and removing dynamic fields like backup policies and storage
 				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8080}}}`)
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -206,7 +207,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Change dynamic fields")
-				// Remove all backup policies and storage entries
+				// Keeping static field 'port' same and removing dynamic fields like backup policies and storage
 				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8081}}}`)
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())

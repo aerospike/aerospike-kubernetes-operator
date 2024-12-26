@@ -35,14 +35,13 @@ backupServiceConfig: {}
 #      remove-files: KeepAll
 #  storage:
 #    local:
-#      path: /localStorage
-#      type: local
+#      local-storage:
+#        path: /localStorage
 #    s3Storage:
-#      type: aws-s3
-#      path: "s3://test-bucket"
-#      s3-region: us-east-1
-#      s3-endpoint-override: ""
-#      s3-profile: default
+#      s3-storage:
+#        bucket: aerospike-kubernetes-operator-test
+#        s3-region: us-east-1
+#        s3-profile: default
 
 ## SecretMounts is the list of secret to be mounted in the backup service.
 secrets: []

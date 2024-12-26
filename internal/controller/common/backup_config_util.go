@@ -55,6 +55,8 @@ func ReloadBackupServiceConfigInPods(
 	log logr.Logger,
 	backupSvc *v1beta1.BackupService,
 ) error {
+	log.Info("Reloading backup service config")
+
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		podList, err := GetBackupServicePodList(k8sClient,
 			backupSvc.Name,
@@ -109,6 +111,8 @@ func ReloadBackupServiceConfigInPods(
 
 	// TODO:// uncomment this when backup service removes default fields from the GET config API response
 	// return validateBackupSvcConfigReload(k8sClient, backupServiceClient, log, backupSvc)
+	log.Info("Reloaded backup service config")
+
 	return nil
 }
 

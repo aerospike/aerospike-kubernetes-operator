@@ -93,7 +93,7 @@ var _ = Describe(
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand",
-							RoutineName: "test-routine",
+							RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
 						},
 					}
 
@@ -250,8 +250,9 @@ var _ = Describe(
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
 					config[asdbv1beta1.StorageKey] = map[string]interface{}{
 						"local": map[string]interface{}{
-							"path": "/localStorage",
-							"type": "local",
+							"local-storage": map[string]interface{}{
+								"path": "/localStorage",
+							},
 						},
 					}
 
