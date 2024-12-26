@@ -39,7 +39,7 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 	if !r.aeroBackup.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleting AerospikeBackup")
 
-		if err := r.removeFinalizer(finalizerName); err != nil {
+		if err := r.cleanUpAndRemoveFinalizer(finalizerName); err != nil {
 			r.Log.Error(err, "Failed to remove finalizer")
 			return reconcile.Result{}, err
 		}
@@ -108,7 +108,7 @@ func (r *SingleBackupReconciler) addFinalizer(finalizerName string) error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) removeFinalizer(finalizerName string) error {
+func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(finalizerName string) error {
 	if utils.ContainsString(r.aeroBackup.ObjectMeta.Finalizers, finalizerName) {
 		r.Log.Info("Removing finalizer")
 
@@ -374,71 +374,38 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 		clusterName       string
 	)
 
-	if specBackupConfig[asdbv1beta1.AerospikeClusterKey] != nil {
-		cluster := specBackupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
+	if cluster, ok := specBackupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{}); ok {
+		hotReloadRequired = r.checkForConfigUpdate(
+			cluster,
+			asdbv1beta1.AerospikeClustersKey,
+			backupSvcConfig,
+		)
 
-		currentClusters, gErr := common.GetConfigSection(backupSvcConfig, asdbv1beta1.AerospikeClustersKey)
-		if gErr != nil {
-			return gErr
-		}
-
-		for name, clusterConfig := range cluster {
+		for name := range cluster {
 			clusterName = name
-
-			if _, ok := currentClusters[name]; ok {
-				// Only update if there is any change
-				if !reflect.DeepEqual(currentClusters[name], clusterConfig) {
-					r.Log.Info("Cluster config has been changed, updating it", "cluster", name)
-
-					hotReloadRequired = true
-				}
-			} else {
-				r.Log.Info("Adding new cluster", "cluster", name)
-
-				hotReloadRequired = true
-			}
 		}
 	}
 
-	if specBackupConfig[asdbv1beta1.BackupRoutinesKey] != nil {
-		routines := specBackupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+	// Skip further checks if hotReloadRequired is already true
+	if !hotReloadRequired {
+		if routines, ok := specBackupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{}); ok {
+			hotReloadRequired = r.checkForConfigUpdate(
+				routines,
+				asdbv1beta1.BackupRoutinesKey,
+				backupSvcConfig,
+			)
 
-		currentRoutines, gErr := common.GetConfigSection(backupSvcConfig, asdbv1beta1.BackupRoutinesKey)
-		if gErr != nil {
-			return gErr
-		}
-
-		for name, routine := range routines {
-			if _, ok := currentRoutines[name]; ok {
-				// Only update if there is any change
-				if !reflect.DeepEqual(currentRoutines[name], routine) {
-					r.Log.Info("Routine config has been changed, updating it", "routine", name)
-
-					hotReloadRequired = true
-				}
-			} else {
-				r.Log.Info("Adding new backup routine", "routine", name)
-
-				hotReloadRequired = true
+			if !hotReloadRequired {
+				hotReloadRequired = r.checkForDeletedRoutines(routines, backupSvcConfig, clusterName)
 			}
-		}
-
-		// If there are routines that are removed, unregister them
-		routinesToBeDelete := r.routinesToDelete(routines, currentRoutines, clusterName)
-		if len(routinesToBeDelete) > 0 {
-			hotReloadRequired = true
 		}
 	}
 
 	if hotReloadRequired {
-		r.Log.Info("Reloading backup service config")
-
 		err = common.ReloadBackupServiceConfigInPods(r.Client, r.Log, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return err
 		}
-
-		r.Log.Info("Reloaded backup service")
 	}
 
 	r.Log.Info("Reconciled scheduled backup")
@@ -448,6 +415,59 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	return nil
 }
 
+func (r *SingleBackupReconciler) checkForConfigUpdate(
+	desiredConfig map[string]interface{},
+	sectionKey string,
+	backupSvcConfig map[string]interface{},
+) bool {
+	updated := false
+
+	currentConfig, err := common.GetConfigSection(backupSvcConfig, sectionKey)
+	if err != nil {
+		r.Log.Error(err, "Failed to fetch config section", "section", sectionKey)
+		return false
+	}
+
+	for name, config := range desiredConfig {
+		if existingConfig, exists := currentConfig[name]; exists {
+			if !reflect.DeepEqual(existingConfig, config) {
+				r.Log.Info(
+					fmt.Sprintf("%s config has changed, updating", sectionKey), "name", name,
+				)
+
+				updated = true
+			}
+		} else {
+			r.Log.Info(
+				fmt.Sprintf("Adding new entry in %s config", sectionKey), "name", name,
+			)
+
+			updated = true
+		}
+	}
+
+	return updated
+}
+
+func (r *SingleBackupReconciler) checkForDeletedRoutines(
+	desired map[string]interface{},
+	currentConfig map[string]interface{},
+	clusterName string,
+) bool {
+	currentRoutines, err := common.GetConfigSection(currentConfig, asdbv1beta1.BackupRoutinesKey)
+	if err != nil {
+		r.Log.Error(err, "Failed to fetch current routines")
+		return false
+	}
+
+	toDelete := r.routinesToDelete(desired, currentRoutines, clusterName)
+	if len(toDelete) > 0 {
+		r.Log.Info("Routines to be deleted", "count", len(toDelete))
+		return true
+	}
+
+	return false
+}
 func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 	// Schedule on-demand backup if given
 	if len(r.aeroBackup.Spec.OnDemandBackups) > 0 {

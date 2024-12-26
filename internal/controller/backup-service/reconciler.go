@@ -63,10 +63,10 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		}
 	}()
 
-	// Skip reconcile if the backup service version is less thatn 2.0.0.
+	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is to avoid rolling restart of the backup service pods after AKO upgrade
 	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
-		r.Log.Info("Skipping reconcile as backup service version is less than 2.0.0")
+		r.Log.Info("Skipping reconcile as backup service version is less than 3.0.0")
 		return reconcile.Result{}, nil
 	}
 
@@ -338,7 +338,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 	// If there is a change in config hash, then reload the config or restart the deployment pod
 	if desiredHash != currentHash {
-		r.Log.Info("BackupService config is updated")
+		r.Log.Info("BackupService config mismatch, will reload the config")
 
 		if err := r.updateBackupSvcConfig(); err != nil {
 			return err
