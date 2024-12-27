@@ -33,15 +33,15 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	nextServerVersion   = "7.2.0.1_1"
-	latestServerVersion = "7.2.0.1"
+	nextServerVersion   = "8.0.0.0-rc1_1"
+	latestServerVersion = "8.0.0.0-rc1"
 	invalidVersion      = "3.0.0.4"
 
 	post6Version = "7.0.0.0"
 	pre6Version  = "5.7.0.17"
 	version6     = "6.0.0.5"
 
-	latestSchemaVersion = "7.2.0"
+	latestSchemaVersion = "8.0.0"
 )
 
 var (

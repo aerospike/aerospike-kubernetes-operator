@@ -20,7 +20,7 @@ import (
 const batchClusterName = "batch-restart"
 
 var (
-	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "7.2.0.99")
+	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "8.0.0.99")
 	availableImage1  = nextImage
 )
 

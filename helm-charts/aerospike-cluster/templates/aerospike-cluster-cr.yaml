@@ -16,7 +16,7 @@ spec:
   size: {{ .Values.replicas }}
 
   # Aerospike server docker image
-  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "7.2.0.1" }}
+  image: {{ .Values.image.repository | default "aerospike/aerospike-server-enterprise" }}:{{ .Values.image.tag | default "8.0.0.0" }}
 
   ## maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable
   ## before application disruption.

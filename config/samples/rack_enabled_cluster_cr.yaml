@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:7.2.0.1
+  image: aerospike/aerospike-server-enterprise:8.0.0.0-rc1
   rackConfig:
     namespaces:
       - test
@@ -16,7 +16,7 @@ spec:
         zone: us-west1-a
       - id: 2
         # Change to the zone for your k8s cluster.
-        zone: us-west1-b
+        zone: us-west1-a
 
   storage:
     filesystemVolumePolicy:

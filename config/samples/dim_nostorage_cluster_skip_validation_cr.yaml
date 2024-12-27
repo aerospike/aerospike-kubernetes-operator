@@ -20,7 +20,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:7.2.0.1
+  image: aerospike/aerospike-server-enterprise:8.0.0.0-rc1
   podSpec:
     multiPodPerHost: true
 
