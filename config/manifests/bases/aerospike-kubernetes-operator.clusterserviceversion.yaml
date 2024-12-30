@@ -54,9 +54,14 @@ spec:
       - description: Image is the image for the backup service.
         displayName: Backup Service Image
         path: image
+      - description: Specify additional configuration for the AerospikeBackupService
+          pods
+        displayName: Pod Configuration
+        path: podSpec
       - description: |-
           Resources defines the requests and limits for the backup service container.
           Resources.Limits should be more than Resources.Requests.
+          Deprecated: Resources field is now part of podSpec.serviceContainer
         displayName: Resources
         path: resources
       - description: SecretMounts is the list of secret to be mounted in the backup

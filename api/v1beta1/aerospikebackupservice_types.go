@@ -55,12 +55,13 @@ type AerospikeBackupServiceSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service Config"
 	Config runtime.RawExtension `json:"config"`
 
+	// Specify additional configuration for the AerospikeBackupService pods
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
-	ServicePodSpec ServicePodSpec `json:"servicePodSpec,omitempty"`
+	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
-	// Deprecated: Resources field is now part of serviceContainerSpec
+	// Deprecated: Resources field is now part of spec.podSpec.serviceContainer
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
@@ -86,7 +87,8 @@ type AerospikeBackupServiceStatus struct {
 	// It includes: service, backup-policies, storage, secret-agent.
 	Config runtime.RawExtension `json:"config,omitempty"`
 
-	ServicePodSpec ServicePodSpec `json:"servicePodSpec,omitempty"`
+	// Specify additional configuration for the AerospikeBackupService pods
+	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
@@ -110,11 +112,14 @@ type ServicePodSpec struct {
 	// created by the operator.
 	ServiceContainerSpec ServiceContainerSpec `json:"serviceContainer,omitempty"`
 
+	// MetaData to add to the pod.
 	ObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 
 	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
 	SchedulingPolicy `json:",inline"`
 
+	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of
+	// the images used by this PodSpec.
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 

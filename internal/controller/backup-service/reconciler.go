@@ -395,25 +395,25 @@ func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.
 	r.updateDeploymentSchedulingPolicy(deploy)
 
 	defaultLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
-	userDefinedLabels := r.aeroBackupService.Spec.ServicePodSpec.ObjectMeta.Labels
+	userDefinedLabels := r.aeroBackupService.Spec.PodSpec.ObjectMeta.Labels
 	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
 	deploy.Spec.Template.ObjectMeta.Labels = mergedLabels
 
-	deploy.Spec.Template.ObjectMeta.Annotations = r.aeroBackupService.Spec.ServicePodSpec.ObjectMeta.Annotations
+	deploy.Spec.Template.ObjectMeta.Annotations = r.aeroBackupService.Spec.PodSpec.ObjectMeta.Annotations
 
-	deploy.Spec.Template.Spec.ImagePullSecrets = r.aeroBackupService.Spec.ServicePodSpec.ImagePullSecrets
+	deploy.Spec.Template.Spec.ImagePullSecrets = r.aeroBackupService.Spec.PodSpec.ImagePullSecrets
 
 	r.updateBackupServiceContainer(deploy)
 }
 
 func (r *SingleBackupServiceReconciler) updateDeploymentSchedulingPolicy(deploy *app.Deployment) {
-	deploy.Spec.Template.Spec.Affinity = r.aeroBackupService.Spec.ServicePodSpec.Affinity
-	deploy.Spec.Template.Spec.NodeSelector = r.aeroBackupService.Spec.ServicePodSpec.NodeSelector
-	deploy.Spec.Template.Spec.Tolerations = r.aeroBackupService.Spec.ServicePodSpec.Tolerations
+	deploy.Spec.Template.Spec.Affinity = r.aeroBackupService.Spec.PodSpec.Affinity
+	deploy.Spec.Template.Spec.NodeSelector = r.aeroBackupService.Spec.PodSpec.NodeSelector
+	deploy.Spec.Template.Spec.Tolerations = r.aeroBackupService.Spec.PodSpec.Tolerations
 }
 
 func (r *SingleBackupServiceReconciler) updateBackupServiceContainer(deploy *app.Deployment) {
-	resources := r.aeroBackupService.Spec.ServicePodSpec.ServiceContainerSpec.Resources
+	resources := r.aeroBackupService.Spec.PodSpec.ServiceContainerSpec.Resources
 	if resources != nil {
 		deploy.Spec.Template.Spec.Containers[0].Resources = *resources
 	} else {
@@ -421,7 +421,7 @@ func (r *SingleBackupServiceReconciler) updateBackupServiceContainer(deploy *app
 	}
 
 	deploy.Spec.Template.Spec.Containers[0].SecurityContext =
-		r.aeroBackupService.Spec.ServicePodSpec.ServiceContainerSpec.SecurityContext
+		r.aeroBackupService.Spec.PodSpec.ServiceContainerSpec.SecurityContext
 }
 
 func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMount, []corev1.Volume) {
@@ -703,8 +703,8 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status := asdbv1beta1.AerospikeBackupServiceStatus{}
 	status.Image = r.aeroBackupService.Spec.Image
 	status.Config = r.aeroBackupService.Spec.Config
-	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.ServicePodSpec).(asdbv1beta1.ServicePodSpec)
-	status.ServicePodSpec = statusServicePodSpec
+	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.PodSpec).(asdbv1beta1.ServicePodSpec)
+	status.PodSpec = statusServicePodSpec
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service
 

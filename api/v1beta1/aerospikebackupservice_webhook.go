@@ -49,8 +49,8 @@ func (r *AerospikeBackupService) Default() {
 
 	absLog.Info("Setting defaults for aerospikeBackupService")
 
-	if r.Spec.Resources != nil && r.Spec.ServicePodSpec.ServiceContainerSpec.Resources == nil {
-		r.Spec.ServicePodSpec.ServiceContainerSpec.Resources = r.Spec.Resources
+	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
+		r.Spec.PodSpec.ServiceContainerSpec.Resources = r.Spec.Resources
 	}
 }
 
@@ -73,15 +73,7 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 		return nil, err
 	}
 
-	warn, err := r.validateServicePodSpec()
-
-	if err != nil {
-		return nil, err
-	} else if warn != nil {
-		return warn, nil
-	}
-
-	return nil, nil
+	return r.validateServicePodSpec()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -98,15 +90,7 @@ func (r *AerospikeBackupService) ValidateUpdate(oldObj runtime.Object) (admissio
 		return nil, err
 	}
 
-	warn, err := r.validateServicePodSpec()
-
-	if err != nil {
-		return nil, err
-	} else if warn != nil {
-		return warn, nil
-	}
-
-	return nil, nil
+	return r.validateServicePodSpec()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -165,53 +149,43 @@ func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
 }
 
 func (r *AerospikeBackupService) validateServicePodSpec() (admission.Warnings, error) {
-	warn, err := r.validateResourcesField()
-	if warn != nil {
-		return warn, nil
-	} else if err != nil {
+	if err := validateObjectMeta(&r.Spec.PodSpec.ObjectMeta); err != nil {
 		return nil, err
 	}
 
-	if err := r.validateResourceLimitsAndRequests(); err != nil {
-		return nil, err
-	}
-
-	if err := validateObjectMeta(&r.Spec.ServicePodSpec.ObjectMeta); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return r.validateResources()
 }
-func (r *AerospikeBackupService) validateResourcesField() (admission.Warnings, error) {
-	if r.Spec.Resources != nil && r.Spec.ServicePodSpec.ServiceContainerSpec.Resources != nil {
-		if !reflect.DeepEqual(r.Spec.Resources, r.Spec.ServicePodSpec.ServiceContainerSpec.Resources) {
-			return nil, fmt.Errorf("resources mismatched, different resources requirements shouldn't be allowed")
+func (r *AerospikeBackupService) validateResources() (admission.Warnings, error) {
+	var warn admission.Warnings
+
+	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		if !reflect.DeepEqual(r.Spec.Resources, r.Spec.PodSpec.ServiceContainerSpec.Resources) {
+			return nil, fmt.Errorf("resources mismatch, different resources requirements found in " +
+				"spec.resources and spec.podSpec.serviceContainer.resources")
 		} else {
-			return []string{"resources field in spec is deprecated, " +
-				"resources field is now part of servicePodSpec.serviceContainer"}, nil
+			warn = []string{"spec.resources field is deprecated, " +
+				"resources field is now part of spec.podSpec.serviceContainer"}
 		}
 	}
 
-	return nil, nil
-}
-func (r *AerospikeBackupService) validateResourceLimitsAndRequests() error {
-	if r.Spec.ServicePodSpec.ServiceContainerSpec.Resources != nil {
-		resources := r.Spec.ServicePodSpec.ServiceContainerSpec.Resources
+	if r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		resources := r.Spec.PodSpec.ServiceContainerSpec.Resources
 		if resources.Limits != nil && resources.Requests != nil &&
 			((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
 				(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
-			return fmt.Errorf("resources.Limits cannot be less than resource.Requests. Resources %v",
+			return warn, fmt.Errorf("resources.Limits cannot be less than resource.Requests. Resources %v",
 				resources)
 		}
 	}
 
-	return nil
+	return warn, nil
 }
+
 func validateObjectMeta(objectMeta *AerospikeObjectMeta) error {
 	for label := range objectMeta.Labels {
 		if label == asdbv1.AerospikeAppLabel || label == asdbv1.AerospikeCustomResourceLabel {
 			return fmt.Errorf(
-				"label: %s is automatically defined by operator and shouldn't be specified by user",
+				"label: %s is internally set by operator and shouldn't be specified by user",
 				label,
 			)
 		}
