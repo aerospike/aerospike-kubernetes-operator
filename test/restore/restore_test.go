@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 var _ = Describe(
@@ -91,7 +90,8 @@ var _ = Describe(
 				It("Should fail when routine/time is not given for Timestamp restore type", func() {
 					// getRestoreConfigInMap returns restore config without a routine, time and with source type
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
-					delete(restoreConfig, common.SourceKey)
+					delete(restoreConfig, asdbv1beta1.SourceKey)
+					delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
 
 					configBytes, mErr := json.Marshal(restoreConfig)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -114,7 +114,7 @@ var _ = Describe(
 
 				It("Should fail when routine field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
-					restoreConfig[common.RoutineKey] = "test-routine"
+					restoreConfig[asdbv1beta1.RoutineKey] = "test-routine"
 
 					configBytes, mErr := json.Marshal(restoreConfig)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -128,7 +128,7 @@ var _ = Describe(
 
 				It("Should fail when time field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
-					restoreConfig[common.TimeKey] = 1722408895094
+					restoreConfig[asdbv1beta1.TimeKey] = 1722408895094
 
 					configBytes, mErr := json.Marshal(restoreConfig)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -150,6 +150,10 @@ var _ = Describe(
 
 						err = createRestore(k8sClient, restore)
 						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+
 					},
 				)
 
@@ -160,23 +164,27 @@ var _ = Describe(
 
 						err = createRestore(k8sClient, restore)
 						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+
 					},
 				)
 
 				It(
 					"Should complete restore for Timestamp restore type", func() {
 						restoreConfig := getRestoreConfigInMap(backupDataPath)
-						delete(restoreConfig, common.SourceKey)
+						delete(restoreConfig, asdbv1beta1.SourceKey)
+						delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
 
 						parts := strings.Split(backupDataPath, "/")
-
 						time := parts[len(parts)-3]
 						timeInt, err := strconv.Atoi(time)
 						Expect(err).ToNot(HaveOccurred())
 
 						// increase time by 1 millisecond to consider the latest backup under time bound
-						restoreConfig[common.TimeKey] = int64(timeInt) + 1
-						restoreConfig[common.RoutineKey] = parts[len(parts)-5]
+						restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 1
+						restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
 
 						configBytes, err := json.Marshal(restoreConfig)
 						Expect(err).ToNot(HaveOccurred())
@@ -185,6 +193,10 @@ var _ = Describe(
 
 						err = createRestore(k8sClient, restore)
 						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+
 					},
 				)
 			})

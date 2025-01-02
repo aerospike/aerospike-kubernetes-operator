@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 var _ = Describe(
@@ -58,9 +57,9 @@ var _ = Describe(
 
 				It("Should fail when un-supported field is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["unknown"] = "unknown"
-					config[common.BackupRoutinesKey] = routines
+					config[asdbv1beta1.BackupRoutinesKey] = routines
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -73,9 +72,9 @@ var _ = Describe(
 
 				It("Should fail when more than 1 cluster is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					aeroCluster := config[common.AerospikeClusterKey].(map[string]interface{})
+					aeroCluster := config[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
 					aeroCluster["cluster-two"] = aeroCluster["test-cluster"]
-					config[common.AerospikeClusterKey] = aeroCluster
+					config[asdbv1beta1.AerospikeClusterKey] = aeroCluster
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -94,7 +93,7 @@ var _ = Describe(
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand",
-							RoutineName: "test-routine",
+							RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
 						},
 					}
 
@@ -159,10 +158,10 @@ var _ = Describe(
 
 				It("Should fail when non-existing policy is referred in Backup routine", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["backup-policy"] =
 						"non-existing-policy"
-					config[common.BackupRoutinesKey] = routines
+					config[asdbv1beta1.BackupRoutinesKey] = routines
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -174,10 +173,10 @@ var _ = Describe(
 
 				It("Should fail when non-existing cluster is referred in Backup routine", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					routines := config[common.BackupRoutinesKey].(map[string]interface{})
-					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[common.SourceClusterKey] =
+					routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[asdbv1beta1.SourceClusterKey] =
 						"non-existing-cluster"
-					config[common.BackupRoutinesKey] = routines
+					config[asdbv1beta1.BackupRoutinesKey] = routines
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -189,10 +188,10 @@ var _ = Describe(
 
 				It("Should fail when non-existing storage is referred in Backup routine", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					routines := config[common.BackupRoutinesKey].(map[string]interface{})
+					routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 					routines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})["storage"] =
 						"non-existing-storage"
-					config[common.BackupRoutinesKey] = routines
+					config[asdbv1beta1.BackupRoutinesKey] = routines
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -211,7 +210,7 @@ var _ = Describe(
 
 				It("Should fail when service field is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					config[common.ServiceKey] = map[string]interface{}{
+					config[asdbv1beta1.ServiceKey] = map[string]interface{}{
 						"http": map[string]interface{}{
 							"port": 8081,
 						},
@@ -229,7 +228,7 @@ var _ = Describe(
 
 				It("Should fail when backup-policies field is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					config[common.BackupPoliciesKey] = map[string]interface{}{
+					config[asdbv1beta1.BackupPoliciesKey] = map[string]interface{}{
 						"test-policy": map[string]interface{}{
 							"parallel":     3,
 							"remove-files": "KeepAll",
@@ -249,10 +248,11 @@ var _ = Describe(
 
 				It("Should fail when storage field is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					config[common.StorageKey] = map[string]interface{}{
+					config[asdbv1beta1.StorageKey] = map[string]interface{}{
 						"local": map[string]interface{}{
-							"path": "/localStorage",
-							"type": "local",
+							"local-storage": map[string]interface{}{
+								"path": "/localStorage",
+							},
 						},
 					}
 
@@ -268,7 +268,7 @@ var _ = Describe(
 
 				It("Should fail when secret-agent is given in backup config", func() {
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					config[common.SecretAgentsKey] = map[string]interface{}{
+					config[asdbv1beta1.SecretAgentsKey] = map[string]interface{}{
 						"test-agent": map[string]interface{}{
 							"address": "localhost",
 							"port":    4000,
@@ -335,11 +335,11 @@ var _ = Describe(
 
 					// change storage to change overall backup config
 					config := getBackupConfigInMap(namePrefix(backupNsNm))
-					backupRoutines := config[common.BackupRoutinesKey].(map[string]interface{})
-					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[common.StorageKey] =
+					backupRoutines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[asdbv1beta1.StorageKey] =
 						"s3Storage"
 
-					config[common.BackupRoutinesKey] = backupRoutines
+					config[asdbv1beta1.BackupRoutinesKey] = backupRoutines
 
 					configBytes, mErr := json.Marshal(config)
 					Expect(mErr).ToNot(HaveOccurred())
@@ -368,11 +368,11 @@ var _ = Describe(
 
 			It("Should trigger backup when correct backup config with s3 storage is given", func() {
 				config := getBackupConfigInMap(namePrefix(backupNsNm))
-				backupRoutines := config[common.BackupRoutinesKey].(map[string]interface{})
-				backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[common.StorageKey] =
+				backupRoutines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[asdbv1beta1.StorageKey] =
 					"s3Storage"
 
-				config[common.BackupRoutinesKey] = backupRoutines
+				config[asdbv1beta1.BackupRoutinesKey] = backupRoutines
 
 				configBytes, mErr := json.Marshal(config)
 				Expect(mErr).ToNot(HaveOccurred())
@@ -405,24 +405,24 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				// Add a routine to the configMap
-				data := cm.Data[common.BackupServiceConfigYAML]
+				data := cm.Data[asdbv1beta1.BackupServiceConfigYAML]
 				backupSvcConfig := make(map[string]interface{})
 
 				err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 				Expect(err).ToNot(HaveOccurred())
 
-				backupRoutines := backupSvcConfig[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines := backupSvcConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 				// Add a new routine with a different name
 				newRoutineName := namePrefix(backupNsNm) + "-" + "test-routine1"
 				backupRoutines[newRoutineName] =
 					backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"]
 
-				backupSvcConfig[common.BackupRoutinesKey] = backupRoutines
+				backupSvcConfig[asdbv1beta1.BackupRoutinesKey] = backupRoutines
 
 				newData, mErr := yaml.Marshal(backupSvcConfig)
 				Expect(mErr).ToNot(HaveOccurred())
 
-				cm.Data[common.BackupServiceConfigYAML] = string(newData)
+				cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(newData)
 
 				err = k8sClient.Update(testCtx, &cm)
 				Expect(err).ToNot(HaveOccurred())
@@ -447,13 +447,13 @@ var _ = Describe(
 					&cm)
 				Expect(err).ToNot(HaveOccurred())
 
-				data = cm.Data[common.BackupServiceConfigYAML]
+				data = cm.Data[asdbv1beta1.BackupServiceConfigYAML]
 				backupSvcConfig = make(map[string]interface{})
 
 				err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
 				Expect(err).ToNot(HaveOccurred())
 
-				backupRoutines = backupSvcConfig[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines = backupSvcConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 				_, ok := backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine1"]
 				Expect(ok).To(BeFalse())
 			})
@@ -483,7 +483,7 @@ var _ = Describe(
 
 			It("Should unregister backup-routines when removed from backup CR", func() {
 				backupConfig := getBackupConfigInMap(namePrefix(backupNsNm))
-				backupRoutines := backupConfig[common.BackupRoutinesKey].(map[string]interface{})
+				backupRoutines := backupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 				backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine1"] = map[string]interface{}{
 					"backup-policy":      "test-policy1",
 					"interval-cron":      "@daily",
@@ -493,7 +493,7 @@ var _ = Describe(
 					"storage":            "local",
 				}
 
-				backupConfig[common.BackupRoutinesKey] = backupRoutines
+				backupConfig[asdbv1beta1.BackupRoutinesKey] = backupRoutines
 
 				configBytes, err := json.Marshal(backupConfig)
 				Expect(err).ToNot(HaveOccurred())

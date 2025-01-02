@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
 const (
@@ -289,7 +289,7 @@ func createAuthSecret(
 
 func setupBackupServicePreReq(k8sClient client.Client, ctx goctx.Context, namespace string) error {
 	// Create SA for aerospike backup service
-	if err := createServiceAccount(k8sClient, goctx.TODO(), common.AerospikeBackupService, namespace); err != nil {
+	if err := createServiceAccount(k8sClient, goctx.TODO(), v1beta1.AerospikeBackupServiceKey, namespace); err != nil {
 		return err
 	}
 

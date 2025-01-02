@@ -14,8 +14,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test/cluster"
 )
 
 const (
@@ -176,13 +177,13 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 		return fmt.Errorf("restore result is not set")
 	}
 
-	var restoreResult model.RestoreJobStatus
+	var restoreResult dto.RestoreJobStatus
 
 	if err := json.Unmarshal(restore.Status.RestoreResult.Raw, &restoreResult); err != nil {
 		return err
 	}
 
-	if restoreResult.Status != model.JobStatusDone {
+	if restoreResult.Status != dto.JobStatusDone {
 		return fmt.Errorf("restore job status is not done")
 	}
 
@@ -229,8 +230,30 @@ func getRestoreConfigInMap(backupPath string) map[string]interface{} {
 			"no-indexes":    true,
 		},
 		"source": map[string]interface{}{
-			"path": backupPath,
-			"type": "local",
+			"local-storage": map[string]interface{}{
+				"path": "/localStorage",
+			},
 		},
+		"backup-data-path": backupPath,
 	}
+}
+
+func validateRestoredData(k8sClient client.Client) error {
+	aeroCluster, err := cluster.GetCluster(k8sClient, testCtx, destinationAerospikeClusterNsNm)
+	if err != nil {
+		return err
+	}
+
+	records, err := cluster.CheckDataInCluster(aeroCluster, k8sClient, []string{"test"})
+	if err != nil {
+		return err
+	}
+
+	for ns, recordExists := range records {
+		if !recordExists {
+			return fmt.Errorf("namespace: %s - should have records", ns)
+		}
+	}
+
+	return nil
 }

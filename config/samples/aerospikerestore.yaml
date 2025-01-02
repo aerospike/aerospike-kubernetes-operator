@@ -22,5 +22,6 @@ spec:
       no-generation: true
       no-indexes: true
     source:
-      "path": "/localStorage/aerospike-aerospikebackup-test-routine/backup/1722326391329/data/test"
-      "type": local
+      local-storage:
+        path: /localStorage
+    backup-data-path: aerospike-aerospikebackup-test-routine/backup/1733506015827/data/test
