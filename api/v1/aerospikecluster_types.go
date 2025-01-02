@@ -756,8 +756,10 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
 
 	// Phase denotes the current phase of Aerospike cluster operation.
-	Phase    AerospikeClusterPhase `json:"phase,omitempty"`
-	Selector string                `json:"selector"`
+	Phase AerospikeClusterPhase `json:"phase,omitempty"`
+
+	// Selector specifies the label selector for the Aerospike pods.
+	Selector string `json:"selector,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.

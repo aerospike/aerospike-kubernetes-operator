@@ -160,6 +160,16 @@ func isClusterStateValid(
 		return false
 	}
 
+	// Check for status selector only in case of Completed phase
+	if phaseSet.Cardinality() == 1 && phaseSet.Contains(asdbv1.AerospikeClusterCompleted) {
+		selector := labels.SelectorFromSet(operatorUtils.LabelsForAerospikeCluster(newCluster.Name))
+
+		if newCluster.Status.Selector != selector.String() {
+			pkgLog.Info("Cluster status selector is not correct")
+			return false
+		}
+	}
+
 	pkgLog.Info("Cluster state is validated successfully")
 
 	return true

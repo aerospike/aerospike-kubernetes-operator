@@ -16714,6 +16714,8 @@ spec:
                     type: object
                 type: object
               selector:
+                description: Selector specifies the label selector for the Aerospike
+                  pods.
                 type: string
               size:
                 description: Aerospike cluster size
@@ -17308,8 +17310,6 @@ spec:
                 - skipWorkDirValidate
                 - skipXdrDlogFileValidate
                 type: object
-            required:
-            - selector
             type: object
         type: object
     served: true
