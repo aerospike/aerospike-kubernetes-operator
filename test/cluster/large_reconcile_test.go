@@ -253,6 +253,7 @@ func loadDataInCluster(
 
 		fmt.Print(strconv.Itoa(i) + ", ")
 	}
+
 	fmt.Println("added records")
 
 	return nil

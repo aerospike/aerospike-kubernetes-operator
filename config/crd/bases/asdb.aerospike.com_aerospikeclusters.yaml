@@ -16713,6 +16713,10 @@ spec:
                         type: integer
                     type: object
                 type: object
+              selector:
+                description: Selector specifies the label selector for the Aerospike
+                  pods.
+                type: string
               size:
                 description: Aerospike cluster size
                 format: int32
@@ -17311,6 +17315,10 @@ spec:
     served: true
     storage: true
     subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.size
+        statusReplicasPath: .status.size
       status: {}
   - additionalPrinterColumns:
     - jsonPath: .spec.size

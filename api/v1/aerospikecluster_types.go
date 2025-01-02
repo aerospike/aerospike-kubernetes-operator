@@ -757,6 +757,9 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 
 	// Phase denotes the current phase of Aerospike cluster operation.
 	Phase AerospikeClusterPhase `json:"phase,omitempty"`
+
+	// Selector specifies the label selector for the Aerospike pods.
+	Selector string `json:"selector,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
@@ -955,6 +958,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:subresource:scale:specpath=.spec.size,statuspath=.status.size,selectorpath=.status.selector
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
