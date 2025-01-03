@@ -167,6 +167,9 @@ func main() {
 		Client: client,
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackupService"),
+		Recorder: eventBroadcaster.NewRecorder(
+			mgr.GetScheme(), v1.EventSource{Component: "aerospikeBackupService-controller"},
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackupService")
 		os.Exit(1)
@@ -181,6 +184,9 @@ func main() {
 		Client: client,
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackup"),
+		Recorder: eventBroadcaster.NewRecorder(
+			mgr.GetScheme(), v1.EventSource{Component: "aerospikeBackup-controller"},
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeBackup")
 		os.Exit(1)
@@ -195,6 +201,9 @@ func main() {
 		Client: client,
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("AerospikeRestore"),
+		Recorder: eventBroadcaster.NewRecorder(
+			mgr.GetScheme(), v1.EventSource{Component: "aerospikeRestore-controller"},
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AerospikeRestore")
 		os.Exit(1)

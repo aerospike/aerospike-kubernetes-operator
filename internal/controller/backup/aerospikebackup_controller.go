@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,8 +38,9 @@ const finalizerName = "asdb.aerospike.com/backup-finalizer"
 // AerospikeBackupReconciler reconciles a AerospikeBackup object
 type AerospikeBackupReconciler struct {
 	client.Client
-	Scheme *k8sruntime.Scheme
-	Log    logr.Logger
+	Scheme   *k8sruntime.Scheme
+	Recorder record.EventRecorder
+	Log      logr.Logger
 }
 
 //+kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups,verbs=get;list;watch;create;update;patch;delete
@@ -68,6 +70,7 @@ func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Re
 		Client:     r.Client,
 		Log:        log,
 		Scheme:     r.Scheme,
+		Recorder:   r.Recorder,
 	}
 
 	return cr.Reconcile()
