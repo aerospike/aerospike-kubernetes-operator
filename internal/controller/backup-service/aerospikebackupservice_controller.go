@@ -61,7 +61,6 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeBackupService")
 
-			aeroBackupService.Kind = "AerospikeBackupService"
 			aeroBackupService.Namespace = request.Namespace
 			aeroBackupService.Name = request.Name
 			r.Recorder.Eventf(

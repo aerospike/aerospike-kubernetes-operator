@@ -60,7 +60,6 @@ func (r *AerospikeRestoreReconciler) Reconcile(_ context.Context, request ctrl.R
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeRestore")
 
-			aeroRestore.Kind = "AerospikeRestore"
 			aeroRestore.Namespace = request.Namespace
 			aeroRestore.Name = request.Name
 			r.Recorder.Eventf(

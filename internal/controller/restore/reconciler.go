@@ -71,7 +71,7 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
 
-	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "CompletedRestore",
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
 		"Restore completed successfully %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
 
 	return ctrl.Result{}, nil

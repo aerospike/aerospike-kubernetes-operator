@@ -314,7 +314,7 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 		return nil
 	}
 
-	r.Log.Info("Schedule on-demand backup",
+	r.Log.Info("Scheduling on-demand backup",
 		"ID", r.aeroBackup.Spec.OnDemandBackups[0].ID, "routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
 
 	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)

@@ -137,7 +137,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			return err
 		}
 
-		r.Log.Info("Create Backup Service ConfigMap",
+		r.Log.Info("Creating Backup Service ConfigMap",
 			"name", getBackupServiceName(r.aeroBackupService))
 
 		cm = &corev1.ConfigMap{
@@ -166,7 +166,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			)
 		}
 
-		r.Log.Info("Creating Backup Service ConfigMap",
+		r.Log.Info("Created Backup Service ConfigMap",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapCreated",
 			"Created Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -175,7 +175,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 	}
 
 	r.Log.Info(
-		"ConfigMap already exist. Updating existing ConfigMap if required",
+		"Backup Service ConfigMap already exist. Updating existing ConfigMap if required",
 		"name", getBackupServiceName(r.aeroBackupService),
 	)
 
@@ -241,7 +241,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return err
 		}
 
-		r.Log.Info("Create Backup Service deployment",
+		r.Log.Info("Creating Backup Service deployment",
 			"name", getBackupServiceName(r.aeroBackupService))
 
 		deployment, err := r.getDeploymentObject()
@@ -262,7 +262,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
 
-		r.Log.Info("Creating Backup Service deployment",
+		r.Log.Info("Created Backup Service deployment",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentCreated",
 			"Created Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -288,6 +288,8 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		return fmt.Errorf("failed to update Backup service deployment: %v", err)
 	}
 
+	r.Log.Info("Updated Backup Service deployment",
+		"name", getBackupServiceName(r.aeroBackupService))
 	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentUpdated",
 		"Updated Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
@@ -499,7 +501,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			return err
 		}
 
-		r.Log.Info("Create Backup Service",
+		r.Log.Info("Creating Backup Service",
 			"name", getBackupServiceName(r.aeroBackupService))
 
 		svc, err := r.getServiceObject()
@@ -520,7 +522,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			return fmt.Errorf("failed to create Backup Service: %v", err)
 		}
 
-		r.Log.Info("Creating Backup Service",
+		r.Log.Info("Created Backup Service",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceCreated",
 			"Created Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
