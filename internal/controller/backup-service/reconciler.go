@@ -166,10 +166,10 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			)
 		}
 
-		r.Log.Info("Created new Backup Service ConfigMap",
+		r.Log.Info("Creating Backup Service ConfigMap",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapCreated",
-			"Created new Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+			"Created Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 		return nil
 	}
@@ -262,7 +262,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
 
-		r.Log.Info("Created Backup Service deployment",
+		r.Log.Info("Creating Backup Service deployment",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentCreated",
 			"Created Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -287,6 +287,9 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 	if err = r.Client.Update(context.TODO(), &deploy, common.UpdateOption); err != nil {
 		return fmt.Errorf("failed to update Backup service deployment: %v", err)
 	}
+
+	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentUpdated",
+		"Updated Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 	if oldResourceVersion != deploy.ResourceVersion {
 		r.Log.Info("Deployment spec is updated, will result in rolling restart")
@@ -517,7 +520,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			return fmt.Errorf("failed to create Backup Service: %v", err)
 		}
 
-		r.Log.Info("Created Backup Service",
+		r.Log.Info("Creating Backup Service",
 			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceCreated",
 			"Created Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)

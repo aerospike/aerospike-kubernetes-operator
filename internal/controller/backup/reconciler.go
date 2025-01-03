@@ -37,12 +37,13 @@ type SingleBackupReconciler struct {
 func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	// Check DeletionTimestamp to see if the backup is being deleted
 	if !r.aeroBackup.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.Log.Info("Deleting AerospikeBackup")
+
 		if err := r.removeFinalizer(finalizerName); err != nil {
 			r.Log.Error(err, "Failed to remove finalizer")
 			return reconcile.Result{}, err
 		}
 
-		r.Log.Info("Deleted AerospikeBackup")
 		r.Recorder.Eventf(
 			r.aeroBackup, corev1.EventTypeNormal, "Deleted",
 			"Deleted AerospikeBackup %s/%s", r.aeroBackup.Namespace,

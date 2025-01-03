@@ -61,15 +61,13 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeBackupService")
 
-			objectRef := &corev1.ObjectReference{
-				Kind:      "AerospikeBackupService",
-				Namespace: request.Namespace,
-				Name:      request.Name,
-			}
+			aeroBackupService.Kind = "AerospikeBackupService"
+			aeroBackupService.Namespace = request.Namespace
+			aeroBackupService.Name = request.Name
 			r.Recorder.Eventf(
-				objectRef, corev1.EventTypeNormal, "Deleted",
-				"Deleted AerospikeBackupService %s/%s", objectRef.Namespace,
-				objectRef.Name,
+				aeroBackupService, corev1.EventTypeNormal, "Deleted",
+				"Deleted AerospikeBackupService %s/%s", aeroBackupService.Namespace,
+				aeroBackupService.Name,
 			)
 
 			// Request object not found, could have been deleted after Reconcile request.

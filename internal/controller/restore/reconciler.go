@@ -61,7 +61,7 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	if err := r.checkRestoreStatus(); err != nil {
 		r.Log.Error(err, "Failed to check restore status")
-		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "CheckStatusFailed",
+		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreStatusCheckFailed",
 			"Failed to check restore status %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
 
 		return ctrl.Result{}, err
@@ -70,6 +70,9 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreInProgress {
 		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
+
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "CompletedRestore",
+		"Restore completed successfully %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
 
 	return ctrl.Result{}, nil
 }
@@ -150,8 +153,6 @@ func (r *SingleRestoreReconciler) checkRestoreStatus() error {
 	}
 
 	r.Log.Info(fmt.Sprintf("Restore status: %+v", restoreStatus))
-	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreStatus",
-		"Restore status: %+v", restoreStatus)
 
 	if status, ok := restoreStatus["status"]; ok {
 		r.aeroRestore.Status.Phase = statusToPhase(status.(string))
