@@ -20,8 +20,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -36,7 +38,8 @@ import (
 type AerospikeBackupServiceReconciler struct {
 	Scheme *k8sruntime.Scheme
 	client.Client
-	Log logr.Logger
+	Recorder record.EventRecorder
+	Log      logr.Logger
 }
 
 //nolint:lll // for readability
@@ -56,6 +59,16 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
 	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
+			log.Info("Deleted AerospikeBackupService")
+
+			aeroBackupService.Namespace = request.Namespace
+			aeroBackupService.Name = request.Name
+			r.Recorder.Eventf(
+				aeroBackupService, corev1.EventTypeNormal, "Deleted",
+				"Deleted AerospikeBackupService %s/%s", aeroBackupService.Namespace,
+				aeroBackupService.Name,
+			)
+
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
 		}
@@ -68,6 +81,7 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 		Client:            r.Client,
 		Log:               log,
 		Scheme:            r.Scheme,
+		Recorder:          r.Recorder,
 	}
 
 	return cr.Reconcile()
