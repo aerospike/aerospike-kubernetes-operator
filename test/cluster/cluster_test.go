@@ -225,6 +225,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 			It(
 				"benchmarking should work in all aerospike server version", func() {
 					By("Deploying cluster which does not have the fix for AER-6767")
+
 					imageBeforeFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.2")
 					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
@@ -235,6 +236,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Validating benchmarking is disabled")
+
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -244,6 +246,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
 
 					By("updating cluster to enable benchmarking")
+
 					namespaceConfig =
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = true
@@ -257,10 +260,12 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
 
 					By("Updating cluster which has the fix for AER-6767")
+
 					imageAfterFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.10")
 
 					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					aeroCluster.Spec.Image = imageAfterFix
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -274,8 +279,10 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
 
 					By("updating cluster to disable benchmarking")
+
 					namespaceConfig =
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+
 					namespaceConfig["enable-benchmarks-read"] = false
 					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 

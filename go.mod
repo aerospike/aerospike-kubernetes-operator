@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/aerospike/aerospike-backup-service v0.0.0-20240822110128-dc2b4811b9d3
 	github.com/aerospike/aerospike-client-go/v7 v7.6.1
-	github.com/aerospike/aerospike-management-lib v1.5.1-0.20241218170416-d5f34bf50426
+	github.com/aerospike/aerospike-management-lib v1.5.1-0.20250106091653-f0c86baa6cd7
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/evanphx/json-patch v4.12.0+incompatible
