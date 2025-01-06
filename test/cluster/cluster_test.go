@@ -245,7 +245,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
 
-					By("updating cluster to enable benchmarking")
+					By("Updating cluster to enable benchmarking")
 
 					namespaceConfig =
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
@@ -259,7 +259,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
 
-					By("Updating cluster which has the fix for AER-6767")
+					By("Updating cluster server to version which has the fix for AER-6767")
 
 					imageAfterFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.10")
 
@@ -278,7 +278,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
 
-					By("updating cluster to disable benchmarking")
+					By("Updating cluster to disable benchmarking")
 
 					namespaceConfig =
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
