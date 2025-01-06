@@ -3,7 +3,7 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-    capabilities: Seamless Upgrades
+    capabilities: Deep Insights
     categories: Database
     containerImage: controller:latest
     createdAt: dateplaceholder
