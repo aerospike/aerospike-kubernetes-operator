@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/aerospike/aerospike-backup-service/v2 v2.0.1-0.20241205081925-ebbb018935bd
-	github.com/aerospike/aerospike-client-go/v7 v7.7.3
+	github.com/aerospike/aerospike-client-go/v7 v7.8.0
 	github.com/aerospike/aerospike-management-lib v1.5.1-0.20250106091653-f0c86baa6cd7
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.3.1
@@ -27,7 +27,7 @@ require (
 )
 
 require (
-	github.com/aerospike/backup-go v0.2.1-0.20241201083923-4f493baae0f0 // indirect
+	github.com/aerospike/backup-go v0.3.1 // indirect
 	github.com/aws/smithy-go v1.22.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -81,8 +81,8 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241113202542-65e8d215514f // indirect
-	google.golang.org/grpc v1.67.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
+	google.golang.org/grpc v1.67.3 // indirect
 	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
