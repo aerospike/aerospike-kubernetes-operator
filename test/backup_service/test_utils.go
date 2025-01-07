@@ -299,7 +299,6 @@ func DeleteBackupService(
 	return nil
 }
 
-//nolint:unparam // name and namespace is intentionally kept for future use
 func getBackupServiceDeployment(k8sClient client.Client, name, namespace string) (*app.Deployment, error) {
 	deployment := &app.Deployment{}
 	if err := k8sClient.Get(context.TODO(), types.NamespacedName{

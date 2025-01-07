@@ -281,7 +281,7 @@ var _ = Describe(
 
 			})
 
-			It("Should add custom annotations and labels in the backup service deployement pods", func() {
+			It("Should add/update custom annotations and labels in the backup service deployement pods", func() {
 				labels := map[string]string{"label-test-1": "test-1"}
 				annotations := map[string]string{"annotation-test-1": "test-1"}
 
@@ -292,22 +292,7 @@ var _ = Describe(
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				deploy, dErr := getBackupServiceDeployment(k8sClient, name, namespace)
-				Expect(dErr).ToNot(HaveOccurred())
-
-				By("Validating Annotations")
-				actual := deploy.Spec.Template.ObjectMeta.Annotations
-				valid := validateLabelsOrAnnotations(actual, annotations)
-				Expect(valid).To(
-					BeTrue(), "Unable to find annotations",
-				)
-
-				By("Validating Labels")
-				actual = deploy.Spec.Template.ObjectMeta.Labels
-				valid = validateLabelsOrAnnotations(actual, labels)
-				Expect(valid).To(
-					BeTrue(), "Unable to find labels",
-				)
+				validatePodObjectMeta(annotations, labels)
 
 				By("Updating custom annotations and labels")
 				updatedLabels := map[string]string{"label-test-2": "test-2", "label-test-3": "test-3"}
@@ -320,22 +305,7 @@ var _ = Describe(
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				deploy, dErr = getBackupServiceDeployment(k8sClient, name, namespace)
-				Expect(dErr).ToNot(HaveOccurred())
-
-				By("Validating Annotations")
-				actual = deploy.Spec.Template.ObjectMeta.Annotations
-				valid = validateLabelsOrAnnotations(actual, updatedAnnotations)
-				Expect(valid).To(
-					BeTrue(), "Unable to find annotations",
-				)
-
-				By("Validating Labels")
-				actual = deploy.Spec.Template.ObjectMeta.Labels
-				valid = validateLabelsOrAnnotations(actual, updatedLabels)
-				Expect(valid).To(
-					BeTrue(), "Unable to find labels",
-				)
+				validatePodObjectMeta(updatedAnnotations, updatedLabels)
 			})
 
 			It("Should add SchedulingPolicy in the backup service deployement pods", func() {
@@ -380,8 +350,8 @@ var _ = Describe(
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				requestMem := resource.MustParse("1Gi")
-				requestCPU := resource.MustParse("200m")
+				requestMem := resource.MustParse("100Mi")
+				requestCPU := resource.MustParse("20m")
 				limitMem := resource.MustParse("2Gi")
 				limitCPU := resource.MustParse("300m")
 
@@ -469,4 +439,25 @@ func validateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.Se
 	}
 
 	return nil
+}
+
+func validatePodObjectMeta(annotations, labels map[string]string) {
+	deploy, dErr := getBackupServiceDeployment(k8sClient, name, namespace)
+	Expect(dErr).ToNot(HaveOccurred())
+
+	By("Validating Annotations")
+
+	actual := deploy.Spec.Template.ObjectMeta.Annotations
+	valid := validateLabelsOrAnnotations(actual, annotations)
+	Expect(valid).To(
+		BeTrue(), "Annotations mismatch. expected %s, found %s", annotations, actual,
+	)
+
+	By("Validating Labels")
+
+	actual = deploy.Spec.Template.ObjectMeta.Labels
+	valid = validateLabelsOrAnnotations(actual, labels)
+	Expect(valid).To(
+		BeTrue(), "Labels mismatch. expected %s, found %s", labels, actual,
+	)
 }

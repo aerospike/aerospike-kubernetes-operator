@@ -61,7 +61,7 @@ spec:
       - description: |-
           Resources defines the requests and limits for the backup service container.
           Resources.Limits should be more than Resources.Requests.
-          Deprecated: Resources field is now part of podSpec.serviceContainer
+          Deprecated: Resources field is now part of spec.podSpec.serviceContainer
         displayName: Resources
         path: resources
       - description: SecretMounts is the list of secret to be mounted in the backup

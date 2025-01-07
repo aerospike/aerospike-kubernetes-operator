@@ -149,12 +149,13 @@ func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
 }
 
 func (r *AerospikeBackupService) validateServicePodSpec() (admission.Warnings, error) {
-	if err := validateObjectMeta(&r.Spec.PodSpec.ObjectMeta); err != nil {
+	if err := validatePodObjectMeta(&r.Spec.PodSpec.ObjectMeta); err != nil {
 		return nil, err
 	}
 
 	return r.validateResources()
 }
+
 func (r *AerospikeBackupService) validateResources() (admission.Warnings, error) {
 	var warn admission.Warnings
 
@@ -162,10 +163,10 @@ func (r *AerospikeBackupService) validateResources() (admission.Warnings, error)
 		if !reflect.DeepEqual(r.Spec.Resources, r.Spec.PodSpec.ServiceContainerSpec.Resources) {
 			return nil, fmt.Errorf("resources mismatch, different resources requirements found in " +
 				"spec.resources and spec.podSpec.serviceContainer.resources")
-		} else {
-			warn = []string{"spec.resources field is deprecated, " +
-				"resources field is now part of spec.podSpec.serviceContainer"}
 		}
+
+		warn = []string{"spec.resources field is deprecated, " +
+			"resources field is now part of spec.podSpec.serviceContainer"}
 	}
 
 	if r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
@@ -181,7 +182,7 @@ func (r *AerospikeBackupService) validateResources() (admission.Warnings, error)
 	return warn, nil
 }
 
-func validateObjectMeta(objectMeta *AerospikeObjectMeta) error {
+func validatePodObjectMeta(objectMeta *AerospikeObjectMeta) error {
 	for label := range objectMeta.Labels {
 		if label == asdbv1.AerospikeAppLabel || label == asdbv1.AerospikeCustomResourceLabel {
 			return fmt.Errorf(
