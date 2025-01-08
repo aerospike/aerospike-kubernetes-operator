@@ -450,7 +450,7 @@ func validatePodObjectMeta(annotations, labels map[string]string) {
 	actual := deploy.Spec.Template.ObjectMeta.Annotations
 	valid := validateLabelsOrAnnotations(actual, annotations)
 	Expect(valid).To(
-		BeTrue(), "Annotations mismatch. expected %s, found %s", annotations, actual,
+		BeTrue(), "Annotations mismatch. expected %+v, found %+v", annotations, actual,
 	)
 
 	By("Validating Labels")
@@ -458,6 +458,6 @@ func validatePodObjectMeta(annotations, labels map[string]string) {
 	actual = deploy.Spec.Template.ObjectMeta.Labels
 	valid = validateLabelsOrAnnotations(actual, labels)
 	Expect(valid).To(
-		BeTrue(), "Labels mismatch. expected %s, found %s", labels, actual,
+		BeTrue(), "Labels mismatch. expected %+v, found %+v", labels, actual,
 	)
 }
