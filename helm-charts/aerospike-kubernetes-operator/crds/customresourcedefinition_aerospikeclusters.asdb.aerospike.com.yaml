@@ -7937,6 +7937,16 @@ spec:
                   SeedsFinderServices creates additional Kubernetes service that allow
                   clients to discover Aerospike cluster nodes.
                 properties:
+                  headless:
+                    description: |-
+                      Settings for the Headless service created by default to discover Aerospike
+                      Cluster nodes by pod IP.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                    type: object
                   loadBalancer:
                     description: |-
                       LoadBalancer created to discover Aerospike Cluster nodes from outside of
@@ -7978,6 +7988,16 @@ spec:
                         maximum: 65535
                         minimum: 1024
                         type: integer
+                    type: object
+                  pod:
+                    description: |-
+                      Pod service is a NodePort type service created to discover both Aerospike pod ports and IP
+                      addresses. This service is only created if `multiPodPerHost` is set to `true`.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
                     type: object
                 type: object
               size:
@@ -16670,6 +16690,16 @@ spec:
                 description: SeedsFinderServices describes services which are used
                   for seeding Aerospike nodes.
                 properties:
+                  headless:
+                    description: |-
+                      Settings for the Headless service created by default to discover Aerospike
+                      Cluster nodes by pod IP.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                    type: object
                   loadBalancer:
                     description: |-
                       LoadBalancer created to discover Aerospike Cluster nodes from outside of
@@ -16711,6 +16741,16 @@ spec:
                         maximum: 65535
                         minimum: 1024
                         type: integer
+                    type: object
+                  pod:
+                    description: |-
+                      Pod service is a NodePort type service created to discover both Aerospike pod ports and IP
+                      addresses. This service is only created if `multiPodPerHost` is set to `true`.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
                     type: object
                 type: object
               selector:
