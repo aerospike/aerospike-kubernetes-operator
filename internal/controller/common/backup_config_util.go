@@ -100,14 +100,9 @@ func ReloadBackupServiceConfigInPods(
 		return err
 	}
 
-	// TODO:// uncomment this when backup service removes default fields from the GET config API response
-	// return validateBackupSvcConfigReload(k8sClient, backupServiceClient, log, backupSvc)
-	log.Info("Reloaded backup service config")
-
-	return nil
+	return validateBackupSvcConfigReload(k8sClient, backupServiceClient, log, backupSvc)
 }
 
-//nolint:unused // for future use
 func validateBackupSvcConfigReload(k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
 	log logr.Logger,
@@ -142,6 +137,8 @@ func validateBackupSvcConfigReload(k8sClient client.Client,
 		log.Info("Backup service config not yet updated in pods, requeue")
 		return fmt.Errorf("backup service config not yet updated in pods")
 	}
+
+	log.Info("Reloaded backup service config")
 
 	return nil
 }

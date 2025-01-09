@@ -100,9 +100,7 @@ func (r *SingleBackupReconciler) addFinalizer(finalizerName string) error {
 			r.aeroBackup.ObjectMeta.Finalizers, finalizerName,
 		)
 
-		if err := r.Client.Update(context.TODO(), r.aeroBackup); err != nil {
-			return err
-		}
+		return r.Client.Update(context.TODO(), r.aeroBackup)
 	}
 
 	return nil
@@ -267,7 +265,11 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 				delete(clusterMap, name)
 			}
 
-			backupSvcConfig[asdbv1beta1.AerospikeClustersKey] = clusterMap
+			if len(clusterMap) == 0 {
+				delete(backupSvcConfig, asdbv1beta1.AerospikeClustersKey)
+			} else {
+				backupSvcConfig[asdbv1beta1.AerospikeClustersKey] = clusterMap
+			}
 		}
 	}
 
@@ -279,7 +281,11 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 				delete(routineMap, routinesToBeDelete[idx])
 			}
 
-			backupSvcConfig[asdbv1beta1.BackupRoutinesKey] = routineMap
+			if len(routineMap) == 0 {
+				delete(backupSvcConfig, asdbv1beta1.BackupRoutinesKey)
+			} else {
+				backupSvcConfig[asdbv1beta1.BackupRoutinesKey] = routineMap
+			}
 		}
 	}
 

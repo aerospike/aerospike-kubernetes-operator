@@ -3,9 +3,9 @@ module github.com/aerospike/aerospike-kubernetes-operator
 go 1.22
 
 require (
-	github.com/aerospike/aerospike-backup-service/v2 v2.0.1-0.20241205081925-ebbb018935bd
+	github.com/aerospike/aerospike-backup-service/v3 v3.0.0-20250106155823-c865c44e0dc1
 	github.com/aerospike/aerospike-client-go/v7 v7.8.0
-	github.com/aerospike/aerospike-management-lib v1.5.1-0.20250106091653-f0c86baa6cd7
+	github.com/aerospike/aerospike-management-lib v1.6.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/evanphx/json-patch v4.12.0+incompatible

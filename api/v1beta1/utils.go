@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	lib "github.com/aerospike/aerospike-management-lib"
 )

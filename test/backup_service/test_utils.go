@@ -23,7 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0.1"
+const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0.3"
 const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
@@ -230,12 +230,10 @@ func getBackupServiceConfMap() map[string]interface{} {
 		},
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			"test-policy": map[string]interface{}{
-				"parallel":     3,
-				"remove-files": "KeepAll",
+				"parallel": 3,
 			},
 			"test-policy1": map[string]interface{}{
-				"parallel":     3,
-				"remove-files": "KeepAll",
+				"parallel": 3,
 			},
 		},
 		asdbv1beta1.StorageKey: map[string]interface{}{

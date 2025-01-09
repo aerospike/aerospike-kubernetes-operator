@@ -12,10 +12,8 @@ spec:
     backup-policies:
       test-policy:
         parallel: 3
-        remove-files: KeepAll
       test-policy1:
         parallel: 3
-        remove-files: KeepAll
     storage:
       local:
         local-storage:

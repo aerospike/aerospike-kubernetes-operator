@@ -22,6 +22,7 @@ import (
 
 const restAPIVersion = "v1"
 const defaultContextPath = "/"
+const contentTypeJSON = "application/json"
 
 type Client struct {
 	// The address to listen on.
@@ -117,7 +118,7 @@ func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
 func (c *Client) ApplyConfig() error {
 	url := c.API("/config/apply")
 
-	resp, err := http.Post(url, "application/json", nil)
+	resp, err := http.Post(url, contentTypeJSON, nil)
 	if err != nil {
 		return err
 	}
@@ -239,7 +240,7 @@ func (c *Client) AddCluster(name, cluster interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, "application/json", bodyReader)
+	resp, err := http.Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -332,7 +333,7 @@ func (c *Client) AddBackupPolicy(name string, policy interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, "application/json", bodyReader)
+	resp, err := http.Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -399,7 +400,7 @@ func (c *Client) AddBackupRoutine(name string, routine interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, "application/json", bodyReader)
+	resp, err := http.Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -521,7 +522,7 @@ func (c *Client) AddStorage(name string, storage interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, "application/json", bodyReader)
+	resp, err := http.Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -608,7 +609,7 @@ func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error
 		url.RawQuery = query.Encode()
 	}
 
-	resp, err := http.Post(url.String(), "application/json", nil)
+	resp, err := http.Post(url.String(), contentTypeJSON, nil)
 	if err != nil {
 		return err
 	}
@@ -649,7 +650,7 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, "application/json", bodyReader)
+	resp, err := http.Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -710,6 +711,28 @@ func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error
 	}
 
 	return restoreStatus, nil
+}
+
+func (c *Client) CancelRestoreJob(jobID *int64) (int, error) {
+	url := c.API(fmt.Sprintf("/restore/cancel/%d", *jobID))
+
+	resp, err := http.Post(url, contentTypeJSON, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, err
+		}
+
+		return resp.StatusCode, fmt.Errorf("failed to delete restore job, error: %s", string(body))
+	}
+
+	return resp.StatusCode, nil
 }
 
 func (c *Client) API(pattern string) string {

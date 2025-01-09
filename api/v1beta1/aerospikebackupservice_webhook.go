@@ -27,8 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
-	"github.com/aerospike/aerospike-backup-service/v2/pkg/validation"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 )
 
 const minSupportedVersion = "3.0.0"

@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/v2/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
@@ -114,7 +114,7 @@ func getBackupConfigInMap(prefix string) map[string]interface{} {
 		asdbv1beta1.BackupRoutinesKey: map[string]interface{}{
 			fmt.Sprintf("%s-%s", prefix, "test-routine"): map[string]interface{}{
 				"backup-policy":      "test-policy",
-				"interval-cron":      "@daily",
+				"interval-cron":      "*/1 * * * * *",
 				"incr-interval-cron": "@hourly",
 				"namespaces":         []string{"test"},
 				"source-cluster":     fmt.Sprintf("%s-%s", prefix, "test-cluster"),

@@ -18,6 +18,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
 // SingleRestoreReconciler reconciles a single AerospikeRestore
@@ -32,7 +33,13 @@ type SingleRestoreReconciler struct {
 
 func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	if !r.aeroRestore.ObjectMeta.DeletionTimestamp.IsZero() {
-		r.Log.Info("Deleted AerospikeRestore")
+		r.Log.Info("Deleting AerospikeRestore")
+
+		if err := r.cleanUpAndRemoveFinalizer(finalizerName); err != nil {
+			r.Log.Error(err, "Failed to remove finalizer")
+			return reconcile.Result{}, err
+		}
+
 		r.Recorder.Eventf(
 			r.aeroRestore, corev1.EventTypeNormal, "Deleted",
 			"Deleted AerospikeRestore %s/%s", r.aeroRestore.Namespace,
@@ -51,6 +58,12 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	if err := r.setStatusPhase(asdbv1beta1.AerospikeRestoreInProgress); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// The restore is not being deleted, add finalizer if not added already
+	if err := r.addFinalizer(finalizerName); err != nil {
+		r.Log.Error(err, "Failed to add finalizer")
+		return reconcile.Result{}, err
 	}
 
 	if res := r.reconcileRestore(); !res.IsSuccess {
@@ -188,6 +201,67 @@ func (r *SingleRestoreReconciler) setStatusPhase(phase asdbv1beta1.AerospikeRest
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (r *SingleRestoreReconciler) addFinalizer(finalizerName string) error {
+	// The object is not being deleted, so if it does not have our finalizer,
+	// then lets add the finalizer and update the object.
+	if !utils.ContainsString(
+		r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+	) {
+		r.aeroRestore.ObjectMeta.Finalizers = append(
+			r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+		)
+
+		return r.Client.Update(context.TODO(), r.aeroRestore)
+	}
+
+	return nil
+}
+
+func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string) error {
+	if utils.ContainsString(r.aeroRestore.ObjectMeta.Finalizers, finalizerName) {
+		r.Log.Info("Removing finalizer")
+
+		if r.aeroRestore.Status.JobID != nil {
+			if err := r.cancelRestoreJob(); err != nil {
+				return err
+			}
+		}
+
+		// Remove finalizer from the list
+		r.aeroRestore.ObjectMeta.Finalizers = utils.RemoveString(
+			r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+		)
+
+		if err := r.Client.Update(context.TODO(), r.aeroRestore); err != nil {
+			return err
+		}
+
+		r.Log.Info("Removed finalizer")
+	}
+
+	return nil
+}
+
+func (r *SingleRestoreReconciler) cancelRestoreJob() error {
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
+	if err != nil {
+		return err
+	}
+
+	if statusCode, err := serviceClient.CancelRestoreJob(r.aeroRestore.Status.JobID); err != nil {
+		if statusCode == http.StatusNotFound {
+			r.Log.Info("Restore job not found, skipping cancel")
+			return nil
+		}
+
+		return err
+	}
+
+	r.Log.Info("Restore job cancelled successfully")
 
 	return nil
 }
