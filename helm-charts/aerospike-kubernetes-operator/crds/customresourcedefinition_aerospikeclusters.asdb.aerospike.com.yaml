@@ -337,6 +337,8 @@ spec:
                       - PodRestart
                       type: string
                     podList:
+                      description: PodList is the list of pods on which the operation
+                        is to be performed.
                       items:
                         type: string
                       type: array
@@ -8879,6 +8881,8 @@ spec:
                       - PodRestart
                       type: string
                     podList:
+                      description: PodList is the list of pods on which the operation
+                        is to be performed.
                       items:
                         type: string
                       type: array
