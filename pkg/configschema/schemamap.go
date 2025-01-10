@@ -5,10 +5,14 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 //go:embed schemas/json/aerospike
 var schemas embed.FS
+
+const minSupportedVersion = "6.0.0"
 
 type SchemaMap map[string]string
 
@@ -24,6 +28,16 @@ func NewSchemaMap() (SchemaMap, error) {
 			if !d.IsDir() {
 				baseName := filepath.Base(path)
 				if baseName == "README.md" {
+					return nil
+				}
+
+				// Skip schemas for versions less than minSupportedVersion
+				val, err := lib.CompareVersions(baseName, minSupportedVersion)
+				if err != nil {
+					return err
+				}
+
+				if val < 0 {
 					return nil
 				}
 

@@ -326,6 +326,8 @@ spec:
                 items:
                   properties:
                     id:
+                      description: ID is the unique identifier for the operation.
+                        It is used by the operator to track the operation.
                       maxLength: 20
                       minLength: 1
                       type: string
@@ -8870,6 +8872,8 @@ spec:
                 items:
                   properties:
                     id:
+                      description: ID is the unique identifier for the operation.
+                        It is used by the operator to track the operation.
                       maxLength: 20
                       minLength: 1
                       type: string

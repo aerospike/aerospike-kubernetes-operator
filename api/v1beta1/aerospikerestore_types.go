@@ -28,8 +28,10 @@ type AerospikeRestorePhase string
 const (
 	// AerospikeRestoreInProgress means the AerospikeRestore CR is being reconciled and restore operation is going on.
 	AerospikeRestoreInProgress AerospikeRestorePhase = "InProgress"
+
 	// AerospikeRestoreCompleted means the AerospikeRestore CR has been reconciled and restore operation is completed.
 	AerospikeRestoreCompleted AerospikeRestorePhase = "Completed"
+
 	// AerospikeRestoreFailed means the AerospikeRestore CR has been reconciled and restore operation is failed.
 	AerospikeRestoreFailed AerospikeRestorePhase = "Failed"
 )

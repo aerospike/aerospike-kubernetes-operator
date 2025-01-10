@@ -31,10 +31,12 @@ const (
 	// AerospikeBackupServiceInProgress means the AerospikeBackupService CR is being reconciled and operations are
 	// in-progress state. This phase denotes that AerospikeBackupService resources are gradually getting deployed.
 	AerospikeBackupServiceInProgress AerospikeBackupServicePhase = "InProgress"
+
 	// AerospikeBackupServiceCompleted means the AerospikeBackupService CR has been reconciled.
 	// This phase denotes that the AerospikeBackupService resources have been deployed/upgraded successfully and is
 	// ready to use.
 	AerospikeBackupServiceCompleted AerospikeBackupServicePhase = "Completed"
+
 	// AerospikeBackupServiceError means the AerospikeBackupService operation is in error state because of some reason
 	// like incorrect backup service config, incorrect image, etc.
 	AerospikeBackupServiceError AerospikeBackupServicePhase = "Error"
@@ -57,6 +59,7 @@ type AerospikeBackupServiceSpec struct {
 
 	// Specify additional configuration for the AerospikeBackupService pods
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
+	// +optional
 	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
 	// Resources defines the requests and limits for the backup service container.
@@ -137,6 +140,7 @@ type ServicePodSpec struct {
 }
 
 type ServiceContainerSpec struct {
+	// SecurityContext defines the security context for the backup service container.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 
 	// Resources defines the requests and limits for the backup service container.
@@ -187,4 +191,29 @@ type SecretMount struct {
 type Service struct {
 	// Type is the Kubernetes service type.
 	Type corev1.ServiceType `json:"type"`
+}
+
+type AerospikeObjectMeta struct {
+	// Key - Value pair that may be set by external tools to store and retrieve arbitrary metadata
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Key - Value pairs that can be used to organize and categorize scope and select objects
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// SchedulingPolicy controls pod placement on Kubernetes nodes.
+type SchedulingPolicy struct { //nolint:govet // for readability
+	// Affinity rules for pod placement.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Tolerations for this pod.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// NodeSelector constraints for this pod.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
