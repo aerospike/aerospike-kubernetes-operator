@@ -339,7 +339,7 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 
 	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
 		"routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
-	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "OnDemandBackupScheduled",
 		"Scheduled on-demand backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	r.Log.Info("Reconciled on-demand backup")
@@ -415,7 +415,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	r.Log.Info("Reconciled scheduled backup")
-	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupReconciled",
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
 		"Reconciled scheduled backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	return nil

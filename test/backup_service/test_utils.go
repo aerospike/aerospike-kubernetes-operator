@@ -349,3 +349,28 @@ func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupSer
 
 	return backupSvcConfig, nil
 }
+
+func getBackupServiceDeployment(k8sClient client.Client, name, namespace string) (*app.Deployment, error) {
+	deployment := &app.Deployment{}
+	if err := k8sClient.Get(context.TODO(), types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}, deployment); err != nil {
+		return nil, err
+	}
+
+	return deployment, nil
+}
+
+func validateLabelsOrAnnotations(
+	actual map[string]string, expected map[string]string,
+) bool {
+	for key, val := range expected {
+		v, ok := actual[key]
+		if !ok || v != val {
+			return false
+		}
+	}
+
+	return true
+}

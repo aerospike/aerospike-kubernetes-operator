@@ -21,6 +21,7 @@ spec:
   secrets: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  # Deprecated: Resources field is now part of spec.podSpec.serviceContainer
   # Resources for the Aerospike Backup Service pod
   {{- if .Values.resources }}
   resources:
@@ -31,4 +32,9 @@ spec:
   {{- if .Values.service }}
   service:
     {{- .Values.service | toYaml | nindent 4 }}
+  {{- end }}
+
+  # AerospikeBackupService pod configuration
+  {{- with .Values.podSpec }}
+  podSpec: {{- toYaml . | nindent 4 }}
   {{- end }}
