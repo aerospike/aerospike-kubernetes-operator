@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"reflect"
 
 	set "github.com/deckarep/golang-set/v2"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -36,7 +38,9 @@ func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error
 		Complete()
 }
 
-// Implemented Defaulter interface for future reference
+//nolint:lll // for readability
+//+kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
+
 var _ webhook.Defaulter = &AerospikeBackupService{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
@@ -44,6 +48,10 @@ func (r *AerospikeBackupService) Default() {
 	absLog := logf.Log.WithName(namespacedName(r))
 
 	absLog.Info("Setting defaults for aerospikeBackupService")
+
+	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
+		r.Spec.PodSpec.ServiceContainerSpec.Resources = r.Spec.Resources
+	}
 }
 
 //nolint:lll // for readability
@@ -65,11 +73,11 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	return r.validateServicePodSpec()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.Warnings, error) {
+func (r *AerospikeBackupService) ValidateUpdate(oldObj runtime.Object) (admission.Warnings, error) {
 	absLog := logf.Log.WithName(namespacedName(r))
 
 	absLog.Info("Validate update")
@@ -82,7 +90,7 @@ func (r *AerospikeBackupService) ValidateUpdate(_ runtime.Object) (admission.War
 		return nil, err
 	}
 
-	return nil, nil
+	return r.validateServicePodSpec()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -135,6 +143,53 @@ func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
 		}
 
 		volumeNameSet.Add(secret.VolumeMount.Name)
+	}
+
+	return nil
+}
+
+func (r *AerospikeBackupService) validateServicePodSpec() (admission.Warnings, error) {
+	if err := validatePodObjectMeta(&r.Spec.PodSpec.ObjectMeta); err != nil {
+		return nil, err
+	}
+
+	return r.validateResources()
+}
+
+func (r *AerospikeBackupService) validateResources() (admission.Warnings, error) {
+	var warn admission.Warnings
+
+	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		if !reflect.DeepEqual(r.Spec.Resources, r.Spec.PodSpec.ServiceContainerSpec.Resources) {
+			return nil, fmt.Errorf("resources mismatch, different resources requirements found in " +
+				"spec.resources and spec.podSpec.serviceContainer.resources")
+		}
+
+		warn = []string{"spec.resources field is deprecated, " +
+			"resources field is now part of spec.podSpec.serviceContainer"}
+	}
+
+	if r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		resources := r.Spec.PodSpec.ServiceContainerSpec.Resources
+		if resources.Limits != nil && resources.Requests != nil &&
+			((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
+				(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
+			return warn, fmt.Errorf("resources.Limits cannot be less than resource.Requests. Resources %v",
+				resources)
+		}
+	}
+
+	return warn, nil
+}
+
+func validatePodObjectMeta(objectMeta *AerospikeObjectMeta) error {
+	for label := range objectMeta.Labels {
+		if label == asdbv1.AerospikeAppLabel || label == asdbv1.AerospikeCustomResourceLabel {
+			return fmt.Errorf(
+				"label: %s is internally set by operator and shouldn't be specified by user",
+				label,
+			)
+		}
 	}
 
 	return nil

@@ -67,3 +67,15 @@ resources: {}
 service: {}
 #  type: ClusterIP
 
+## Specify additional configuration for the AerospikeBackupService pods
+podSpec: {}
+#  metadata: 
+#    labels:
+#      label-test-1: test1
+#    annotations:
+#      description: "backupservice pod"
+#  serviceContainer:
+#    resources:
+#      limits:
+#        cpu: 100m
+#        memory: 128Mi

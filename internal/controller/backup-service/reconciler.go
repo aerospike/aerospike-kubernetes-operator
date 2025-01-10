@@ -25,6 +25,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 type serviceConfig struct {
@@ -358,12 +359,6 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
-	resources := corev1.ResourceRequirements{}
-
-	if r.aeroBackupService.Spec.Resources != nil {
-		resources = *r.aeroBackupService.Spec.Resources
-	}
-
 	svcConf, err := r.getBackupServiceConfig()
 	if err != nil {
 		return nil, err
@@ -402,7 +397,6 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 							Image:           r.aeroBackupService.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    volumeMounts,
-							Resources:       resources,
 							Ports:           containerPorts,
 						},
 					},
@@ -436,7 +430,42 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 		},
 	}
 
+	r.updateDeploymentFromPodSpec(deploy)
+
 	return deploy, nil
+}
+
+func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.Deployment) {
+	r.updateDeploymentSchedulingPolicy(deploy)
+
+	defaultLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
+	userDefinedLabels := r.aeroBackupService.Spec.PodSpec.ObjectMeta.Labels
+	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
+	deploy.Spec.Template.ObjectMeta.Labels = mergedLabels
+
+	deploy.Spec.Template.ObjectMeta.Annotations = r.aeroBackupService.Spec.PodSpec.ObjectMeta.Annotations
+
+	deploy.Spec.Template.Spec.ImagePullSecrets = r.aeroBackupService.Spec.PodSpec.ImagePullSecrets
+
+	r.updateBackupServiceContainer(deploy)
+}
+
+func (r *SingleBackupServiceReconciler) updateDeploymentSchedulingPolicy(deploy *app.Deployment) {
+	deploy.Spec.Template.Spec.Affinity = r.aeroBackupService.Spec.PodSpec.Affinity
+	deploy.Spec.Template.Spec.NodeSelector = r.aeroBackupService.Spec.PodSpec.NodeSelector
+	deploy.Spec.Template.Spec.Tolerations = r.aeroBackupService.Spec.PodSpec.Tolerations
+}
+
+func (r *SingleBackupServiceReconciler) updateBackupServiceContainer(deploy *app.Deployment) {
+	resources := r.aeroBackupService.Spec.PodSpec.ServiceContainerSpec.Resources
+	if resources != nil {
+		deploy.Spec.Template.Spec.Containers[0].Resources = *resources
+	} else {
+		deploy.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{}
+	}
+
+	deploy.Spec.Template.Spec.Containers[0].SecurityContext =
+		r.aeroBackupService.Spec.PodSpec.ServiceContainerSpec.SecurityContext
 }
 
 func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMount, []corev1.Volume) {
@@ -725,7 +754,8 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status := asdbv1beta1.AerospikeBackupServiceStatus{}
 	status.Image = r.aeroBackupService.Spec.Image
 	status.Config = r.aeroBackupService.Spec.Config
-	status.Resources = r.aeroBackupService.Spec.Resources
+	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.PodSpec).(asdbv1beta1.ServicePodSpec)
+	status.PodSpec = statusServicePodSpec
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service
 

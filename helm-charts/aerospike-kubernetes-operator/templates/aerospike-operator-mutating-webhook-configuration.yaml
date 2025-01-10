@@ -30,6 +30,26 @@ webhooks:
     - aerospikeclusters
   sideEffects: None
 - admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice
+  failurePolicy: Fail
+  name: maerospikebackupservice.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackupservices
+  sideEffects: None
+- admissionReviewVersions:
     - v1
   clientConfig:
     service:
