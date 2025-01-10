@@ -344,7 +344,7 @@ var _ = Describe(
 				Expect(podList.Items[0].Spec.Affinity.NodeAffinity).Should(Equal(nodeAffinity))
 			})
 
-			It("Should add resources and securitycontext in the backup service container", func() {
+			It("Should add resources and securityContext in the backup service container", func() {
 				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
@@ -380,6 +380,20 @@ var _ = Describe(
 				By("Remove SecurityContext")
 				updateBackupServiceSecurityContext(k8sClient, nil)
 			})
+
+			It("Should deploy backup service with custom Service Account", func() {
+				backupService, err = NewBackupService()
+				Expect(err).ToNot(HaveOccurred())
+				backupService.Spec.PodSpec.ServiceAccountName = "default"
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				podList, gErr := getBackupServicePodList(k8sClient, backupService)
+				Expect(gErr).ToNot(HaveOccurred())
+				Expect(len(podList.Items)).To(Equal(1))
+				Expect(podList.Items[0].Spec.ServiceAccountName).Should(Equal("default"))
+			})
+
 		})
 	},
 )
