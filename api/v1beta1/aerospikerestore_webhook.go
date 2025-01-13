@@ -73,7 +73,7 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 		return nil, gErr
 	}
 
-	if err := validateBackupSvcSupportedVersion(k8sClient,
+	if err := ValidateBackupSvcSupportedVersion(k8sClient,
 		r.Spec.BackupService.Name,
 		r.Spec.BackupService.Namespace,
 	); err != nil {

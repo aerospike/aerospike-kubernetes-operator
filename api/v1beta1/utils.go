@@ -69,22 +69,22 @@ func ValidateBackupSvcVersion(image string) error {
 		return err
 	}
 
-	val, err := lib.CompareVersions(version, minSupportedVersion)
+	val, err := lib.CompareVersions(version, MinSupportedVersion)
 	if err != nil {
 		return fmt.Errorf("failed to check backup service image version: %v", err)
 	}
 
 	if val < 0 {
 		return fmt.Errorf("backup service version %s is not supported. Minimum supported version is %s",
-			version, minSupportedVersion)
+			version, MinSupportedVersion)
 	}
 
 	return nil
 }
 
-// validateBackupSvcSupportedVersion validates the supported backup service version.
+// ValidateBackupSvcSupportedVersion validates the supported backup service version.
 // It returns an error if the backup service version is less than 3.0.0.
-func validateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) error {
+func ValidateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) error {
 	var backupSvc AerospikeBackupService
 
 	if err := k8sClient.Get(context.TODO(),

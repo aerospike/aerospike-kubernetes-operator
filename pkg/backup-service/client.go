@@ -685,8 +685,8 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 	return jobID, &resp.StatusCode, nil
 }
 
-func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error) {
-	url := c.API(fmt.Sprintf("/restore/status/%d", *jobID))
+func (c *Client) CheckRestoreStatus(jobID int64) (map[string]interface{}, error) {
+	url := c.API(fmt.Sprintf("/restore/status/%d", jobID))
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -713,8 +713,8 @@ func (c *Client) CheckRestoreStatus(jobID *int64) (map[string]interface{}, error
 	return restoreStatus, nil
 }
 
-func (c *Client) CancelRestoreJob(jobID *int64) (int, error) {
-	url := c.API(fmt.Sprintf("/restore/cancel/%d", *jobID))
+func (c *Client) CancelRestoreJob(jobID int64) (int, error) {
+	url := c.API(fmt.Sprintf("/restore/cancel/%d", jobID))
 
 	resp, err := http.Post(url, contentTypeJSON, nil)
 	if err != nil {
@@ -729,7 +729,7 @@ func (c *Client) CancelRestoreJob(jobID *int64) (int, error) {
 			return 0, err
 		}
 
-		return resp.StatusCode, fmt.Errorf("failed to delete restore job, error: %s", string(body))
+		return resp.StatusCode, fmt.Errorf("failed to cancel restore job, error: %s", string(body))
 	}
 
 	return resp.StatusCode, nil

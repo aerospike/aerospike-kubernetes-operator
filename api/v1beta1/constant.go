@@ -24,6 +24,5 @@ const (
 const (
 	HTTPKey                   = "http"
 	AerospikeBackupServiceKey = "aerospike-backup-service"
-	ForceRefreshKey           = AerospikeBackupServiceKey + "/force-refresh"
 	RefreshTimeKey            = AerospikeBackupServiceKey + "/last-refresh"
 )

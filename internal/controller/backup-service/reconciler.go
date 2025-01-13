@@ -67,7 +67,8 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is to avoid rolling restart of the backup service pods after AKO upgrade
 	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
-		r.Log.Info("Skipping reconcile as backup service version is less than 3.0.0")
+		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
+			asdbv1beta1.MinSupportedVersion))
 		return reconcile.Result{}, nil
 	}
 
@@ -170,7 +171,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			context.TODO(), cm, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to create ConfigMap: %w",
+				"failed to create ConfigMap: %v",
 				err,
 			)
 		}

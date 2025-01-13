@@ -35,6 +35,16 @@ type SingleBackupReconciler struct {
 }
 
 func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) {
+	// Skip reconcile if the backup service version is less than 3.0.0.
+	// This is a safe check to avoid any issue after AKO upgrade due to older backup service versions
+	if err := asdbv1beta1.ValidateBackupSvcSupportedVersion(r.Client,
+		r.aeroBackup.Spec.BackupService.Name,
+		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
+		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
+			asdbv1beta1.MinSupportedVersion))
+		return reconcile.Result{}, nil
+	}
+
 	// Check DeletionTimestamp to see if the backup is being deleted
 	if !r.aeroBackup.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleting AerospikeBackup")

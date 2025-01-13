@@ -33,7 +33,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
-const minSupportedVersion = "3.0.0"
+const MinSupportedVersion = "3.0.0"
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).

@@ -166,7 +166,7 @@ func (r *SingleRestoreReconciler) checkRestoreStatus() error {
 		return err
 	}
 
-	restoreStatus, err := serviceClient.CheckRestoreStatus(r.aeroRestore.Status.JobID)
+	restoreStatus, err := serviceClient.CheckRestoreStatus(*r.aeroRestore.Status.JobID)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 		return err
 	}
 
-	if statusCode, err := serviceClient.CancelRestoreJob(r.aeroRestore.Status.JobID); err != nil {
+	if statusCode, err := serviceClient.CancelRestoreJob(*r.aeroRestore.Status.JobID); err != nil {
 		if statusCode == http.StatusNotFound {
 			r.Log.Info("Restore job not found, skipping cancel")
 			return nil
