@@ -382,16 +382,39 @@ var _ = Describe(
 			})
 
 			It("Should deploy backup service with custom Service Account", func() {
+				validateSA := func(serviceAccount string) {
+					podList, gErr := getBackupServicePodList(k8sClient, backupService)
+					Expect(gErr).ToNot(HaveOccurred())
+					Expect(len(podList.Items)).To(Equal(1))
+					Expect(podList.Items[0].Spec.ServiceAccountName).Should(Equal(serviceAccount))
+				}
+
 				backupService, err = NewBackupService()
 				Expect(err).ToNot(HaveOccurred())
-				backupService.Spec.PodSpec.ServiceAccountName = "default"
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				podList, gErr := getBackupServicePodList(k8sClient, backupService)
-				Expect(gErr).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
-				Expect(podList.Items[0].Spec.ServiceAccountName).Should(Equal("default"))
+				validateSA(common.AerospikeBackupService)
+
+				By("Update Service Account")
+				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupService.Spec.PodSpec.ServiceAccountName = "default"
+				err = updateBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				validateSA("default")
+
+				By("Revert back to default Service Account")
+				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				backupService.Spec.PodSpec.ServiceAccountName = ""
+				err = updateBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				validateSA(common.AerospikeBackupService)
 			})
 
 		})
