@@ -406,7 +406,7 @@ var _ = Describe(
 
 				validateSA("default")
 
-				By("Revert back to default Service Account")
+				By("Revert back to previous Service Account")
 				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
 				Expect(err).ToNot(HaveOccurred())
 

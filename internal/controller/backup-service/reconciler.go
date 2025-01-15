@@ -389,7 +389,7 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 					Labels: svcLabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: r.aeroBackupService.Spec.PodSpec.ServiceAccountName,
+					ServiceAccountName: r.getServiceAccount(),
 					Containers: []corev1.Container{
 						{
 							Name:            common.AerospikeBackupService,
@@ -432,6 +432,14 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	r.updateDeploymentFromPodSpec(deploy)
 
 	return deploy, nil
+}
+
+func (r *SingleBackupServiceReconciler) getServiceAccount() string {
+	if r.aeroBackupService.Spec.PodSpec.ServiceAccountName != "" {
+		return r.aeroBackupService.Spec.PodSpec.ServiceAccountName
+	}
+
+	return common.AerospikeBackupService
 }
 
 func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.Deployment) {

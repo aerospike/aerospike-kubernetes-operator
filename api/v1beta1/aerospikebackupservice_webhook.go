@@ -30,7 +30,6 @@ import (
 
 	"github.com/aerospike/aerospike-backup-service/pkg/model"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -52,10 +51,6 @@ func (r *AerospikeBackupService) Default() {
 
 	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
 		r.Spec.PodSpec.ServiceContainerSpec.Resources = r.Spec.Resources
-	}
-
-	if r.Spec.PodSpec.ServiceAccountName == "" {
-		r.Spec.PodSpec.ServiceAccountName = common.AerospikeBackupService
 	}
 }
 
