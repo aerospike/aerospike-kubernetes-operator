@@ -342,11 +342,11 @@ func getAerospikeWipeStorageConfig(
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	ddMethod := asdbv1.AerospikeVolumeMethodDD
-	blkDiscardMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
+	blkdiscardMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
 
 	if cloudProvider == CloudProviderAWS {
-		// Blkdiscard methood is not supported in AWS, so it is initialized as DD Method
-		blkDiscardMethod = asdbv1.AerospikeVolumeMethodDD
+		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
+		blkdiscardMethod = asdbv1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1.AerospikeStorageSpec{
@@ -377,8 +377,8 @@ func getAerospikeWipeStorageConfig(
 			{
 				Name: "test-wipe-device-blkdiscard-1",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &blkDiscardMethod,
-					InputWipeMethod: &blkDiscardMethod,
+					InputInitMethod: &blkdiscardMethod,
+					InputWipeMethod: &blkdiscardMethod,
 				},
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
@@ -469,7 +469,7 @@ func getAerospikeWipeStorageConfig(
 			{
 				Name: "device-blkdiscard",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &blkDiscardMethod,
+					InputInitMethod: &blkdiscardMethod,
 				},
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{

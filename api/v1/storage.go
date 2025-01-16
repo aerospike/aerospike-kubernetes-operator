@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
@@ -440,34 +441,6 @@ func validateStorageVolumeSource(volume *VolumeSpec) error {
 	}
 
 	if source.PersistentVolume != nil {
-		// Validate InitMethod
-		if source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			if volume.InitMethod == AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid init method %v for block volume: %v",
-					volume.InitMethod, volume,
-				)
-			}
-
-			if volume.WipeMethod != AerospikeVolumeMethodBlkdiscard && volume.WipeMethod != AerospikeVolumeMethodDD {
-				return fmt.Errorf("invalid wipe method: %s for block volume: %s", volume.WipeMethod, volume.Name)
-			}
-		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-			if volume.InitMethod != AerospikeVolumeMethodNone && volume.InitMethod != AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid init method %v for filesystem volume: %v",
-					volume.InitMethod, volume,
-				)
-			}
-
-			if volume.WipeMethod != AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid wipe method %s for filesystem volume: %s",
-					volume.WipeMethod, volume.Name,
-				)
-			}
-		}
-
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode
 
@@ -477,6 +450,47 @@ func validateStorageVolumeSource(volume *VolumeSpec) error {
 				"invalid VolumeMode `%s`. Valid VolumeModes: %s, %s", vm,
 				v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
 			)
+		}
+
+		// Validate InitMethod
+		if vm == v1.PersistentVolumeBlock {
+			// Validate the initialization method for the volume
+			validInitMethods := sets.New(AerospikeVolumeMethodDD, AerospikeVolumeMethodBlkdiscard, AerospikeVolumeMethodNone,
+				AerospikeVolumeMethodBlkdiscardWithHeaderCleanup)
+
+			if !validInitMethods.Has(volume.InitMethod) {
+				return fmt.Errorf(
+					"invalid init method %v for block volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+
+			// Validate the wipe method for the volume
+			validWipeMethods := sets.New(AerospikeVolumeMethodBlkdiscard, AerospikeVolumeMethodDD,
+				AerospikeVolumeMethodBlkdiscardWithHeaderCleanup)
+
+			if !validWipeMethods.Has(volume.WipeMethod) {
+				return fmt.Errorf(
+					"invalid wipe method %s for block volume: %s",
+					volume.WipeMethod, volume.Name,
+				)
+			}
+		} else {
+			validInitMethods := sets.New(AerospikeVolumeMethodNone, AerospikeVolumeMethodDeleteFiles)
+			if !validInitMethods.Has(volume.InitMethod) {
+				return fmt.Errorf(
+					"invalid init method %v for filesystem volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+
+			validWipeMethods := sets.New(AerospikeVolumeMethodDeleteFiles)
+			if !validWipeMethods.Has(volume.WipeMethod) {
+				return fmt.Errorf(
+					"invalid wipe method %s for filesystem volume: %s",
+					volume.WipeMethod, volume.Name,
+				)
+			}
 		}
 
 		// Validate accessModes
