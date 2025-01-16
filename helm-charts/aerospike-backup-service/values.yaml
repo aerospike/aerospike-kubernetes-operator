@@ -16,13 +16,6 @@ image:
 ## Custom labels that will be applied on the AerospikeBackupService resource
 customLabels: {}
 
-## ServiceAccount to be used for the Aerospike Backup Service pod
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
-  annotations: {}
-
 ## Config is the free form configuration for the backup service in YAML format.
 ## This config is used to start the backup service. The config is passed as a file to the backup service.
 backupServiceConfig: {}
@@ -52,6 +45,7 @@ secrets: []
 #      mountPath: /root/.aws/credentials
 #      subPath: credentials
 
+# Deprecated: Resources field is now part of spec.podSpec.serviceContainer
 ## Resources define the requests and limits for the backup service container.
 ## Resources.Limits should be more than Resources.Requests.
 resources: {}
@@ -69,6 +63,7 @@ service: {}
 
 ## Specify additional configuration for the AerospikeBackupService pods
 podSpec: {}
+#  serviceAccountName: aerospike-backup-service
 #  metadata: 
 #    labels:
 #      label-test-1: test1

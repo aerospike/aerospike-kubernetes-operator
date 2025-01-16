@@ -218,6 +218,11 @@ func (in *AerospikeBackupServiceStatus) DeepCopyInto(out *AerospikeBackupService
 	*out = *in
 	in.Config.DeepCopyInto(&out.Config)
 	in.PodSpec.DeepCopyInto(&out.PodSpec)
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(v1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.SecretMounts != nil {
 		in, out := &in.SecretMounts, &out.SecretMounts
 		*out = make([]SecretMount, len(*in))

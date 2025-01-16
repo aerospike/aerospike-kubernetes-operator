@@ -389,8 +389,7 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 					Labels: svcLabels,
 				},
 				Spec: corev1.PodSpec{
-					// TODO: Finalise on this. Who should create this SA?
-					ServiceAccountName: common.AerospikeBackupService,
+					ServiceAccountName: r.getServiceAccount(),
 					Containers: []corev1.Container{
 						{
 							Name:            common.AerospikeBackupService,
@@ -433,6 +432,14 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	r.updateDeploymentFromPodSpec(deploy)
 
 	return deploy, nil
+}
+
+func (r *SingleBackupServiceReconciler) getServiceAccount() string {
+	if r.aeroBackupService.Spec.PodSpec.ServiceAccountName != "" {
+		return r.aeroBackupService.Spec.PodSpec.ServiceAccountName
+	}
+
+	return common.AerospikeBackupService
 }
 
 func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.Deployment) {
@@ -756,6 +763,7 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status.Config = r.aeroBackupService.Spec.Config
 	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.PodSpec).(asdbv1beta1.ServicePodSpec)
 	status.PodSpec = statusServicePodSpec
+	status.Resources = r.aeroBackupService.Spec.Resources
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service
 
