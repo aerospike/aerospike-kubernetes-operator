@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -22,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
@@ -35,7 +36,7 @@ type serviceConfig struct {
 
 var defaultServiceConfig = serviceConfig{
 	portInfo: map[string]int32{
-		common.HTTPKey: 8080,
+		asdbv1beta1.HTTPKey: 8080,
 	},
 	contextPath: "/",
 }
@@ -62,6 +63,14 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 			}
 		}
 	}()
+
+	// Skip reconcile if the backup service version is less than 3.0.0.
+	// This is to avoid rolling restart of the backup service pods after AKO upgrade
+	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
+		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
+			asdbv1beta1.MinSupportedVersion))
+		return reconcile.Result{}, nil
+	}
 
 	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleted AerospikeBackupService")
@@ -187,23 +196,38 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 		return err
 	}
 
-	data := cm.Data[common.BackupServiceConfigYAML]
+	data := cm.Data[asdbv1beta1.BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &currentDataMap); err != nil {
 		return err
 	}
 
-	currentDataMap[common.ServiceKey] = desiredDataMap[common.ServiceKey]
-	currentDataMap[common.BackupPoliciesKey] = desiredDataMap[common.BackupPoliciesKey]
-	currentDataMap[common.StorageKey] = desiredDataMap[common.StorageKey]
-	currentDataMap[common.SecretAgentsKey] = desiredDataMap[common.SecretAgentsKey]
+	// Sync keys
+	keys := []string{
+		asdbv1beta1.ServiceKey,
+		asdbv1beta1.BackupPoliciesKey,
+		asdbv1beta1.StorageKey,
+		asdbv1beta1.SecretAgentsKey,
+	}
+
+	for _, key := range keys {
+		if value, ok := desiredDataMap[key]; ok {
+			currentDataMap[key] = value
+		} else {
+			delete(currentDataMap, key)
+		}
+	}
+
+	// Remove old "secret-agent: null" from configMap
+	// This was added internally in AKO (3.4) during backup service configMap update
+	delete(currentDataMap, "secret-agent")
 
 	updatedConfig, err := yaml.Marshal(currentDataMap)
 	if err != nil {
 		return err
 	}
 
-	cm.Data[common.BackupServiceConfigYAML] = string(updatedConfig)
+	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
 
 	if err = r.Client.Update(
 		context.TODO(), cm, common.UpdateOption,
@@ -224,7 +248,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	data := make(map[string]string)
-	data[common.BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+	data[asdbv1beta1.BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
 
 	return data
 }
@@ -314,22 +338,56 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		return err
 	}
 
-	// If there is a change in config hash, then restart the deployment pod
+	// If there is a change in config hash, then reload the config or restart the deployment pod
 	if desiredHash != currentHash {
-		r.Log.Info("BackupService config is updated, will result in rolling restart")
+		r.Log.Info("BackupService config mismatch, will reload the config")
 
-		podList, err := r.getBackupServicePodList()
-		if err != nil {
+		if err := r.updateBackupSvcConfig(); err != nil {
 			return err
 		}
 
-		for idx := range podList.Items {
-			pod := &podList.Items[idx]
+		r.Log.Info("Reloaded backup service")
+	}
 
-			err = r.Client.Delete(context.TODO(), pod)
-			if err != nil {
-				return err
-			}
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
+	var currentConfig, desiredConfig dto.Config
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Status.Config.Raw, &currentConfig); err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &desiredConfig); err != nil {
+		return err
+	}
+
+	if err := validation.ValidateStaticFieldChanges(&currentConfig, &desiredConfig); err != nil {
+		r.Log.Info("Static config change detected, will result in rolling restart")
+		// In case of static config change restart the backup service pod
+		return r.restartBackupSvcPod()
+	}
+
+	return common.ReloadBackupServiceConfigInPods(r.Client, r.Log,
+		&asdbv1beta1.BackupService{
+			Name:      r.aeroBackupService.Name,
+			Namespace: r.aeroBackupService.Namespace},
+	)
+}
+
+func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {
+	podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+	if err != nil {
+		return err
+	}
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+
+		err = r.Client.Delete(context.TODO(), pod)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -338,21 +396,6 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService) types.NamespacedName {
 	return types.NamespacedName{Name: aeroBackupService.Name, Namespace: aeroBackupService.Namespace}
-}
-
-func (r *SingleBackupServiceReconciler) getBackupServicePodList() (*corev1.PodList, error) {
-	var podList corev1.PodList
-
-	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name))
-	listOps := &client.ListOptions{
-		Namespace: r.aeroBackupService.Namespace, LabelSelector: labelSelector,
-	}
-
-	if err := r.Client.List(context.TODO(), &podList, listOps); err != nil {
-		return nil, err
-	}
-
-	return &podList, nil
 }
 
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
@@ -392,35 +435,11 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 					ServiceAccountName: r.getServiceAccount(),
 					Containers: []corev1.Container{
 						{
-							Name:            common.AerospikeBackupService,
+							Name:            asdbv1beta1.AerospikeBackupServiceKey,
 							Image:           r.aeroBackupService.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							VolumeMounts:    volumeMounts,
 							Ports:           containerPorts,
-						},
-					},
-					// Init-container is used to copy configMap data to work-dir(emptyDir).
-					// There is a limitation of read-only file-system for mounted configMap volumes
-					// Remove this init-container when backup-service start supporting hot reload
-					InitContainers: []corev1.Container{
-						{
-							Name:  "init-backup-service",
-							Image: "busybox",
-							Command: []string{
-								"sh",
-								"-c",
-								"cp /etc/aerospike-backup-service/aerospike-backup-service.yml /work-dir/aerospike-backup-service.yml",
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "backup-service-config-configmap",
-									MountPath: "/etc/aerospike-backup-service/",
-								},
-								{
-									Name:      "backup-service-config",
-									MountPath: "/work-dir",
-								},
-							},
 						},
 					},
 					Volumes: volumes,
@@ -496,28 +515,18 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
-		MountPath: fmt.Sprintf("/etc/aerospike-backup-service/%s", common.BackupServiceConfigYAML),
-		SubPath:   common.BackupServiceConfigYAML,
+		MountPath: "/etc/aerospike-backup-service",
 	})
 
 	// Backup service configMap
 	volumes = append(volumes, corev1.Volume{
-		Name: "backup-service-config-configmap",
+		Name: "backup-service-config",
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: r.aeroBackupService.Name,
 				},
 			},
-		},
-	})
-
-	// EmptyDir for init-container to copy configMap data to work-dir
-	// Remove this volume when backup-service starts supporting hot reload
-	volumes = append(volumes, corev1.Volume{
-		Name: "backup-service-config",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	})
 
@@ -630,22 +639,22 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 		return nil, err
 	}
 
-	if _, ok := config[common.ServiceKey]; !ok {
+	if _, ok := config[asdbv1beta1.ServiceKey]; !ok {
 		r.Log.Info("Service config not found")
 		return &defaultServiceConfig, nil
 	}
 
-	svc, ok := config[common.ServiceKey].(map[string]interface{})
+	svc, ok := config[asdbv1beta1.ServiceKey].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("service config is not in correct format")
 	}
 
-	if _, ok = svc[common.HTTPKey]; !ok {
+	if _, ok = svc[asdbv1beta1.HTTPKey]; !ok {
 		r.Log.Info("HTTP config not found")
 		return &defaultServiceConfig, nil
 	}
 
-	httpConf, ok := svc[common.HTTPKey].(map[string]interface{})
+	httpConf, ok := svc[asdbv1beta1.HTTPKey].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("http config is not in correct format")
 	}
@@ -656,7 +665,7 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 	if !ok {
 		svcConfig.portInfo = defaultServiceConfig.portInfo
 	} else {
-		svcConfig.portInfo = map[string]int32{common.HTTPKey: int32(port.(float64))}
+		svcConfig.portInfo = map[string]int32{asdbv1beta1.HTTPKey: int32(port.(float64))}
 	}
 
 	ctxPath, ok := httpConf["context-path"]
@@ -681,7 +690,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 
 	if err := wait.PollUntilContextTimeout(context.TODO(),
 		podStatusRetryInterval, podStatusTimeout, true, func(ctx context.Context) (done bool, err error) {
-			podList, err := r.getBackupServicePodList()
+			podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 			if err != nil {
 				return false, err
 			}
@@ -749,7 +758,7 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 
 	status := r.CopySpecToStatus()
 	status.ContextPath = svcConfig.contextPath
-	status.Port = svcConfig.portInfo[common.HTTPKey]
+	status.Port = svcConfig.portInfo[asdbv1beta1.HTTPKey]
 	status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
 
 	r.aeroBackupService.Status = *status

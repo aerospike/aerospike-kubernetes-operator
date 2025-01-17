@@ -121,7 +121,7 @@ type ServicePodSpec struct {
 	// MetaData to add to the pod.
 	ObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 
-	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
+	// SchedulingPolicy controls pods placement on Kubernetes nodes.
 	SchedulingPolicy `json:",inline"`
 
 	// ServiceAccountName is the name of the ServiceAccount to use to run the backup service pod.
