@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -33,6 +32,8 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 )
+
+const finalizerName = "asdb.aerospike.com/restore-finalizer"
 
 // AerospikeRestoreReconciler reconciles a AerospikeRestore object
 type AerospikeRestoreReconciler struct {
@@ -58,16 +59,6 @@ func (r *AerospikeRestoreReconciler) Reconcile(_ context.Context, request ctrl.R
 	aeroRestore := &asdbv1beta1.AerospikeRestore{}
 	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroRestore); err != nil {
 		if errors.IsNotFound(err) {
-			log.Info("Deleted AerospikeRestore")
-
-			aeroRestore.Namespace = request.Namespace
-			aeroRestore.Name = request.Name
-			r.Recorder.Eventf(
-				aeroRestore, corev1.EventTypeNormal, "Deleted",
-				"Deleted AerospikeRestore %s/%s", aeroRestore.Namespace,
-				aeroRestore.Name,
-			)
-
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
 		}

@@ -99,6 +99,12 @@ type AerospikeBackupServiceStatus struct {
 	// +optional
 	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
+	// Resources define the requests and limits for the backup service container.
+	// Resources.Limits should be more than Resources.Requests.
+	// Deprecated: Resources field is now part of status.podSpec.serviceContainer
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
 	// SecretMounts is the list of secret to be mounted in the backup service.
 	// +optional
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
@@ -130,8 +136,13 @@ type ServicePodSpec struct {
 	// +optional
 	ObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 
-	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
+	// SchedulingPolicy controls pods placement on Kubernetes nodes.
 	SchedulingPolicy `json:",inline"`
+
+	// ServiceAccountName is the name of the ServiceAccount to use to run the backup service pod.
+	// Defaults to "aerospike-backup-service" if not provided.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
 	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of
 	// the images used by this PodSpec.
