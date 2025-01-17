@@ -53,7 +53,7 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 
 	if warn, err = c.setDefaults(asLog); err != nil {
 		asLog.Error(err, "Mutate AerospikeCluster create failed")
-		return webhook.Denied(err.Error())
+		return webhook.Denied(err.Error()).WithWarnings(warn...)
 	}
 
 	asLog.Info("Setting defaults for aerospikeCluster completed")
