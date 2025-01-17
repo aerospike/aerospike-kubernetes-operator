@@ -23,13 +23,14 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 )
 
 const defaultPollingPeriod time.Duration = 60 * time.Second
@@ -67,7 +68,19 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 
 	arLog.Info("Validate create")
 
-	if err := r.validateRestoreConfig(); err != nil {
+	k8sClient, gErr := getK8sClient()
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	if err := ValidateBackupSvcSupportedVersion(k8sClient,
+		r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateRestoreConfig(k8sClient); err != nil {
 		return nil, err
 	}
 
@@ -99,22 +112,28 @@ func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *AerospikeRestore) validateRestoreConfig() error {
+func (r *AerospikeRestore) validateRestoreConfig(k8sClient client.Client) error {
 	restoreConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreConfig); err != nil {
 		return err
 	}
 
+	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, r.Spec.BackupService.Name,
+		r.Spec.BackupService.Namespace)
+	if err != nil {
+		return err
+	}
+
 	switch r.Spec.Type {
 	case Full, Incremental:
-		var restoreRequest model.RestoreRequest
+		var restoreRequest dto.RestoreRequest
 
-		if _, ok := restoreConfig[common.RoutineKey]; ok {
+		if _, ok := restoreConfig[RoutineKey]; ok {
 			return fmt.Errorf("routine field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
-		if _, ok := restoreConfig[common.TimeKey]; ok {
+		if _, ok := restoreConfig[TimeKey]; ok {
 			return fmt.Errorf("time field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
@@ -122,12 +141,12 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 			return err
 		}
 
-		return restoreRequest.Validate()
+		return validation.ValidateRestoreRequest(&restoreRequest, backupSvcConfig)
 
 	case Timestamp:
-		var restoreRequest model.RestoreTimestampRequest
+		var restoreRequest dto.RestoreTimestampRequest
 
-		if _, ok := restoreConfig[common.SourceKey]; ok {
+		if _, ok := restoreConfig[SourceKey]; ok {
 			return fmt.Errorf("source field is not allowed in restore config for restore type %s", r.Spec.Type)
 		}
 
@@ -135,7 +154,7 @@ func (r *AerospikeRestore) validateRestoreConfig() error {
 			return err
 		}
 
-		return restoreRequest.Validate()
+		return validation.ValidateRestoreTimestampRequest(&restoreRequest, backupSvcConfig)
 
 	default:
 		// Code flow should not come here

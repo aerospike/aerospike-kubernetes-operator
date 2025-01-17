@@ -28,9 +28,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
+
+const MinSupportedVersion = "3.0.0"
 
 func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -65,15 +68,7 @@ func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
 
 	absLog.Info("Validate create")
 
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return r.validateServicePodSpec()
+	return r.validate()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -82,15 +77,7 @@ func (r *AerospikeBackupService) ValidateUpdate(oldObj runtime.Object) (admissio
 
 	absLog.Info("Validate update")
 
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return r.validateServicePodSpec()
+	return r.validate()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -103,8 +90,24 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
+func (r *AerospikeBackupService) validate() (admission.Warnings, error) {
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceConfig(); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceSecrets(); err != nil {
+		return nil, err
+	}
+
+	return r.validateServicePodSpec()
+}
+
 func (r *AerospikeBackupService) validateBackupServiceConfig() error {
-	var config model.Config
+	var config dto.Config
 
 	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
 		return err
@@ -119,19 +122,15 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	}
 
 	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig == nil {
-		config.ServiceConfig = &model.BackupServiceConfig{}
-	}
-
 	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
 	}
 
 	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &model.LoggerConfig{}
+		config.ServiceConfig.Logger = &dto.LoggerConfig{}
 	}
 
-	return config.Validate()
+	return validation.ValidateConfiguration(&config)
 }
 
 func (r *AerospikeBackupService) validateBackupServiceSecrets() error {

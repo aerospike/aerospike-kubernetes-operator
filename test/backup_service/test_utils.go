@@ -18,12 +18,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-const BackupServiceImage = "aerospike/aerospike-backup-service:2.0.0"
+const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0.3"
+const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
 	timeout   = 2 * time.Minute
@@ -201,14 +202,14 @@ func getBackupServiceConfBytes() ([]byte, error) {
 func getWrongBackupServiceConfBytes() ([]byte, error) {
 	config := getBackupServiceConfMap()
 
-	tempList := make([]interface{}, 0, len(config[common.BackupPoliciesKey].(map[string]interface{})))
+	tempList := make([]interface{}, 0, len(config[asdbv1beta1.BackupPoliciesKey].(map[string]interface{})))
 
-	for _, policy := range config[common.BackupPoliciesKey].(map[string]interface{}) {
+	for _, policy := range config[asdbv1beta1.BackupPoliciesKey].(map[string]interface{}) {
 		tempList = append(tempList, policy)
 	}
 
 	// change the format from map to list
-	config[common.BackupPoliciesKey] = tempList
+	config[asdbv1beta1.BackupPoliciesKey] = tempList
 
 	configBytes, err := json.Marshal(config)
 	if err != nil {
@@ -222,32 +223,32 @@ func getWrongBackupServiceConfBytes() ([]byte, error) {
 
 func getBackupServiceConfMap() map[string]interface{} {
 	return map[string]interface{}{
-		common.ServiceKey: map[string]interface{}{
+		asdbv1beta1.ServiceKey: map[string]interface{}{
 			"http": map[string]interface{}{
 				"port": 8081,
 			},
 		},
-		common.BackupPoliciesKey: map[string]interface{}{
+		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			"test-policy": map[string]interface{}{
-				"parallel":     3,
-				"remove-files": "KeepAll",
+				"parallel": 3,
 			},
 			"test-policy1": map[string]interface{}{
-				"parallel":     3,
-				"remove-files": "KeepAll",
+				"parallel": 3,
 			},
 		},
-		common.StorageKey: map[string]interface{}{
+		asdbv1beta1.StorageKey: map[string]interface{}{
 			"local": map[string]interface{}{
-				"path": "/localStorage",
-				"type": "local",
+				"local-storage": map[string]interface{}{
+					"path": "/localStorage",
+				},
 			},
 			"s3Storage": map[string]interface{}{
-				"type":                 "aws-s3",
-				"path":                 "s3://aerospike-kubernetes-operator-test",
-				"s3-region":            "us-east-1",
-				"s3-endpoint-override": "",
-				"s3-profile":           "default",
+				"s3-storage": map[string]interface{}{
+					"bucket":     "aerospike-kubernetes-operator-test",
+					"path":       "/",
+					"s3-region":  "us-east-1",
+					"s3-profile": "default",
+				},
 			},
 		},
 	}
@@ -297,6 +298,56 @@ func DeleteBackupService(
 	}
 
 	return nil
+}
+
+func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupServiceNamespace string,
+) (map[string]interface{}, error) {
+	var backupK8sService corev1.Service
+
+	// Wait for Service LB IP to be populated
+	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
+		func(ctx context.Context) (bool, error) {
+			if err := k8sClient.Get(ctx,
+				types.NamespacedName{
+					Name:      backupServiceName,
+					Namespace: backupServiceNamespace,
+				},
+				&backupK8sService); err != nil {
+				return false, err
+			}
+
+			if backupK8sService.Status.LoadBalancer.Ingress == nil {
+				return false, nil
+			}
+
+			return true, nil
+		}); err != nil {
+		return nil, err
+	}
+
+	serviceClient := backup_service.Client{
+		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
+		Port:    8081,
+	}
+
+	backupSvcConfig := make(map[string]interface{})
+
+	// Wait for Backup service to be ready
+	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
+		func(_ context.Context) (bool, error) {
+			config, err := serviceClient.GetBackupServiceConfig()
+			if err != nil {
+				pkgLog.Error(err, "Failed to get backup service config")
+				return false, nil
+			}
+
+			backupSvcConfig = config
+			return true, nil
+		}); err != nil {
+		return nil, err
+	}
+
+	return backupSvcConfig, nil
 }
 
 func getBackupServiceDeployment(k8sClient client.Client, name, namespace string) (*app.Deployment, error) {
