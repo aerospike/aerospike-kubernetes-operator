@@ -88,9 +88,12 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				aeroCluster.Spec.MaxUnavailable = nil
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(aeroCluster.Spec.MaxUnavailable).To(BeNil())
 
 				_, err = getPDB(ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
@@ -98,9 +101,6 @@ var _ = Describe(
 				pkgLog.Info("PDB deleted as expected")
 
 				By("Update disablePDB to false")
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				aeroCluster.Spec.DisablePDB = ptr.To(false)
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -157,14 +157,6 @@ var _ = Describe(
 				// PDB should be < (least rf). rf is 2 in this test
 				aeroCluster.Spec.Size = 4
 				value := intstr.FromInt32(2)
-				aeroCluster.Spec.MaxUnavailable = &value
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).To(HaveOccurred())
-			})
-
-			It("Should fail if maxUnavailable is given but disablePDB is true", func() {
-				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				value := intstr.FromInt32(1)
 				aeroCluster.Spec.MaxUnavailable = &value
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())

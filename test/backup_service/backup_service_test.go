@@ -439,7 +439,7 @@ var _ = Describe(
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				validateSA(common.AerospikeBackupService)
+				validateSA(asdbv1beta1.AerospikeBackupServiceKey)
 
 				By("Update Service Account")
 				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
@@ -459,7 +459,7 @@ var _ = Describe(
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				validateSA(common.AerospikeBackupService)
+				validateSA(asdbv1beta1.AerospikeBackupServiceKey)
 			})
 
 		})
