@@ -46,9 +46,14 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 		c.Spec,
 	)
 
-	if err := c.setDefaults(asLog); err != nil {
+	var (
+		warn admission.Warnings
+		err  error
+	)
+
+	if warn, err = c.setDefaults(asLog); err != nil {
 		asLog.Error(err, "Mutate AerospikeCluster create failed")
-		return webhook.Denied(err.Error())
+		return webhook.Denied(err.Error()).WithWarnings(warn...)
 	}
 
 	asLog.Info("Setting defaults for aerospikeCluster completed")
@@ -67,12 +72,19 @@ func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
 	return webhook.Patched(
 		"Patched aerospike spec with defaults",
 		patches...,
-	)
+	).WithWarnings(warn...)
 }
 
-func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
-	// Set maxUnavailable default to 1
-	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
+func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, error) {
+	var warn admission.Warnings
+	// If PDB is disabled, set maxUnavailable to nil
+	if GetBool(c.Spec.DisablePDB) {
+		c.Spec.MaxUnavailable = nil
+
+		warn = append(warn, fmt.Sprintf("Spec field 'spec.maxUnavailable' will be omitted from Custom Resource (CR) "+
+			"because 'spec.disablePDB' is true."))
+	} else if c.Spec.MaxUnavailable == nil {
+		// Set default maxUnavailable if not set
 		maxUnavailable := intstr.FromInt32(1)
 		c.Spec.MaxUnavailable = &maxUnavailable
 	}
@@ -87,28 +99,26 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// Need to set before setting defaults in aerospikeConfig.
 	// aerospikeConfig.namespace checks for racks
 	if err := c.setDefaultRackConf(asLog); err != nil {
-		return err
+		return warn, err
 	}
 
 	if c.Spec.AerospikeConfig == nil {
-		return fmt.Errorf("spec.aerospikeConfig cannot be nil")
+		return warn, fmt.Errorf("spec.aerospikeConfig cannot be nil")
 	}
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
 	if err := c.setDefaultAerospikeConfigs(asLog, *c.Spec.AerospikeConfig, nil); err != nil {
-		return err
+		return warn, err
 	}
 
 	// Update racks configuration using global values where required.
 	if err := c.updateRacks(asLog); err != nil {
-		return err
+		return warn, err
 	}
 
 	// Set defaults for pod spec
-	if err := c.Spec.PodSpec.SetDefaults(); err != nil {
-		return err
-	}
+	c.Spec.PodSpec.SetDefaults()
 
 	// Validation policy
 	if c.Spec.ValidationPolicy == nil {
@@ -135,11 +145,11 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 		c.Labels[AerospikeAPIVersionLabel] = AerospikeAPIVersion
 	}
 
-	return nil
+	return warn, nil
 }
 
 // SetDefaults applies defaults to the pod spec.
-func (p *AerospikePodSpec) SetDefaults() error {
+func (p *AerospikePodSpec) SetDefaults() {
 	var groupID int64
 
 	if p.InputDNSPolicy == nil {
@@ -162,8 +172,6 @@ func (p *AerospikePodSpec) SetDefaults() error {
 		}
 		p.SecurityContext = SecurityContext
 	}
-
-	return nil
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.

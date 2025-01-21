@@ -458,7 +458,7 @@ func (r *SingleBackupServiceReconciler) getServiceAccount() string {
 		return r.aeroBackupService.Spec.PodSpec.ServiceAccountName
 	}
 
-	return common.AerospikeBackupService
+	return asdbv1beta1.AerospikeBackupServiceKey
 }
 
 func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.Deployment) {

@@ -41,7 +41,7 @@ helm install aerospike-backup-service aerospike/aerospike-backup-service \
 | Name                         | Description                                                                   | Default                              |
 |------------------------------|-------------------------------------------------------------------------------|--------------------------------------|
 | `image.repository`           | Aerospike backup service container image repository                           | `aerospike/aerospike-backup-service` |
-| `image.tag`                  | Aerospike backup service container image tag                                  | `2.0.0`                              |
+| `image.tag`                  | Aerospike backup service container image tag                                  | `3.0.0`                              |
 | `customLabels`               | Custom labels to add on the AerospikeBackupService resource                   | `{}` (nil)                           |
 | `serviceAccount.create`      | Enable ServiceAccount creation for Aerospike backup service.                  | true                                 |
 | `serviceAccount.annotations` | ServiceAccount annotations                                                    | `{}` (nil)                           |

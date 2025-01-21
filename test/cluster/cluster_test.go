@@ -1688,6 +1688,20 @@ func negativeDeployClusterValidationTest(
 						},
 					)
 
+					It(
+						"ServiceConf: should fail for setting advertise-ipv6",
+						func() {
+							aeroCluster := createDummyAerospikeCluster(
+								clusterNamespacedName, 1,
+							)
+							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["advertise-ipv6"] = true
+							err := deployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).Should(HaveOccurred())
+						},
+					)
+
 					Context(
 						"InvalidNamespace", func() {
 							It(

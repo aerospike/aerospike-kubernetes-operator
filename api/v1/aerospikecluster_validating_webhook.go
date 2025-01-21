@@ -739,6 +739,10 @@ func (c *AerospikeCluster) validateAerospikeConfig(
 		)
 	}
 
+	if val, exists := serviceConf["advertise-ipv6"]; exists && val.(bool) {
+		return fmt.Errorf("advertise-ipv6 is not supported")
+	}
+
 	if _, ok = serviceConf["cluster-name"]; !ok {
 		return fmt.Errorf("aerospikeCluster name not found in config. Looks like object is not mutated by webhook")
 	}
@@ -2294,17 +2298,19 @@ func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error
 }
 
 func (c *AerospikeCluster) validateMaxUnavailable() error {
-	// safe check for corner cases when mutation webhook somehow didn't work
-	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
-		return fmt.Errorf("maxUnavailable cannot be nil if PDB is not disabled. Mutation webhook didn't work")
-	}
-
-	if GetBool(c.Spec.DisablePDB) {
+	// safe checks for corner cases when mutation webhook somehow didn't work
+	if !GetBool(c.Spec.DisablePDB) {
+		// Ensure maxUnavailable is set when PDB is enabled
+		if c.Spec.MaxUnavailable == nil {
+			return fmt.Errorf("maxUnavailable cannot be nil if PDB is not disabled. Mutation webhook might not have worked")
+		}
+	} else {
+		// Ensure maxUnavailable is unset when PDB is disabled
 		if c.Spec.MaxUnavailable != nil {
 			return fmt.Errorf("maxUnavailable must be nil if PDB is disabled")
 		}
 
-		// PDB is disabled, so no need to validate further
+		// PDB is disabled, no further validation required
 		return nil
 	}
 
