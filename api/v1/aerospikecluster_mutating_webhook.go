@@ -118,9 +118,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, e
 	}
 
 	// Set defaults for pod spec
-	if err := c.Spec.PodSpec.SetDefaults(); err != nil {
-		return warn, err
-	}
+	c.Spec.PodSpec.SetDefaults()
 
 	// Validation policy
 	if c.Spec.ValidationPolicy == nil {
@@ -151,7 +149,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, e
 }
 
 // SetDefaults applies defaults to the pod spec.
-func (p *AerospikePodSpec) SetDefaults() error {
+func (p *AerospikePodSpec) SetDefaults() {
 	var groupID int64
 
 	if p.InputDNSPolicy == nil {
@@ -174,8 +172,6 @@ func (p *AerospikePodSpec) SetDefaults() error {
 		}
 		p.SecurityContext = SecurityContext
 	}
-
-	return nil
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.

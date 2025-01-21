@@ -23,7 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
-const BackupServiceImage = "abhishekdwivedi3060/aerospike-backup-service:3.0.0.3"
+const BackupServiceImage = "aerospike/aerospike-backup-service:3.0.0"
 const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
