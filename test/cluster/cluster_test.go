@@ -27,7 +27,7 @@ var _ = Describe(
 		// Cluster lifecycle related
 		Context(
 			"DeployClusterPost490", func() {
-				DeployClusterForAllImagesPost490(ctx)
+				DeployClusterForAllImagesPost570(ctx)
 			},
 		)
 		Context(
@@ -74,11 +74,6 @@ var _ = Describe(
 		Context(
 			"RunScaleDownWithMigrateFillDelay", func() {
 				ScaleDownWithMigrateFillDelay(ctx)
-			},
-		)
-		Context(
-			"UpdateClusterPre600", func() {
-				UpdateClusterPre600(ctx)
 			},
 		)
 		Context(
@@ -292,60 +287,6 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
-				},
-			)
-		},
-	)
-}
-
-func UpdateClusterPre600(ctx goctx.Context) {
-	Context(
-		"UpdateClusterPre600", func() {
-			clusterNamespacedName := getNamespacedName(
-				"deploy-cluster-pre6", namespace,
-			)
-
-			BeforeEach(
-				func() {
-					image := fmt.Sprintf(
-						"aerospike/aerospike-server-enterprise:%s", pre6Version,
-					)
-					aeroCluster, err := getAeroClusterConfig(
-						clusterNamespacedName, image,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					err = deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				},
-			)
-
-			AfterEach(
-				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				},
-			)
-
-			It(
-				"UpdateReplicationFactor: should fail for updating namespace replication-factor on server"+
-					"before 6.0.0. Cannot be updated", func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					namespaceConfig :=
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-					namespaceConfig["replication-factor"] = 5
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-
-					err = k8sClient.Update(
-						ctx, aeroCluster,
-					)
-					Expect(err).Should(HaveOccurred())
 				},
 			)
 		},
@@ -714,10 +655,9 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 }
 
 // Test cluster deployment with all image post 4.9.0
-func DeployClusterForAllImagesPost490(ctx goctx.Context) {
-	// post 4.9.0, need feature-key file
+func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 	versions := []string{
-		"6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16", "5.7.0.8", "5.6.0.7", "5.5.0.3", "5.4.0.5",
+		"7.2.0.6", "7.1.0.12", "7.0.0.20", "6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16",
 	}
 
 	for _, v := range versions {

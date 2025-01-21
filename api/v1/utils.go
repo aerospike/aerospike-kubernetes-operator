@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	baseVersion                  = "4.9.0.3"
+	baseVersion                  = "6.0.0.0"
 	baseInitVersion              = "1.0.0"
 	minInitVersionForDynamicConf = "2.2.0"
 )
@@ -242,20 +242,7 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(
-	version string, aerospikeConfig *AerospikeConfigSpec,
-) (bool, error) {
-	retval, err := lib.CompareVersions(version, "5.7.0")
-	if err != nil {
-		return false, err
-	}
-
-	if retval == -1 {
-		return IsAttributeEnabled(
-			aerospikeConfig, "security", "enable-security",
-		)
-	}
-
+func IsSecurityEnabled(aerospikeConfig *AerospikeConfigSpec) (bool, error) {
 	if _, err := GetConfigContext(aerospikeConfig, "security"); err != nil {
 		if errors.Is(err, internalerrors.ErrNotFound) {
 			return false, nil

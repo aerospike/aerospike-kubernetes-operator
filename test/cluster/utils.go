@@ -243,42 +243,19 @@ func (acs *AerospikeConfSpec) getVersion() string {
 	return acs.version
 }
 
-func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) error {
-	cmpVal, err := lib.CompareVersions(acs.version, "5.7.0")
-	if err != nil {
-		return err
+func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) {
+	if enableSecurity {
+		security := map[string]interface{}{}
+		acs.security = security
 	}
-
-	if cmpVal >= 0 {
-		if enableSecurity {
-			security := map[string]interface{}{}
-			acs.security = security
-		}
-
-		return nil
-	}
-
-	acs.security = map[string]interface{}{}
-	acs.security["enable-security"] = enableSecurity
-
-	return nil
 }
 
-func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) error {
-	cmpVal, err := lib.CompareVersions(acs.version, "5.6.0")
-	if err != nil {
-		return err
+func (acs *AerospikeConfSpec) setEnableQuotas(enableQuotas bool) {
+	if acs.security == nil {
+		acs.security = map[string]interface{}{}
 	}
 
-	if cmpVal >= 0 {
-		if acs.security == nil {
-			acs.security = map[string]interface{}{}
-		}
-
-		acs.security["enable-quotas"] = enableQuotas
-	}
-
-	return nil
+	acs.security["enable-quotas"] = enableQuotas
 }
 
 func (acs *AerospikeConfSpec) getSpec() map[string]interface{} {
@@ -406,7 +383,7 @@ func getAeroClusterConfig(
 		return nil, err
 	}
 
-	cmpVal1, err := lib.CompareVersions(version, "5.7.0")
+	cmpVal1, err := lib.CompareVersions(version, "6.0.0")
 	if err != nil {
 		return nil, err
 	}
@@ -423,12 +400,7 @@ func getAeroClusterConfig(
 		), nil
 
 	case cmpVal1 >= 0:
-		return createAerospikeClusterPost560(
-			namespace, 2, image,
-		), nil
-
-	case cmpVal1 < 0:
-		return createAerospikeClusterPost460(
+		return createAerospikeClusterPost570(
 			namespace, 2, image,
 		), nil
 
