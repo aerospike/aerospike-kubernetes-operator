@@ -118,9 +118,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, e
 	}
 
 	// Set defaults for pod spec
-	if err := c.Spec.PodSpec.SetDefaults(); err != nil {
-		return warn, err
-	}
+	c.Spec.PodSpec.SetDefaults()
 
 	// Validation policy
 	if c.Spec.ValidationPolicy == nil {

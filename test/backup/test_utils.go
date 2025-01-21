@@ -114,7 +114,7 @@ func getBackupConfigInMap(prefix string) map[string]interface{} {
 		asdbv1beta1.BackupRoutinesKey: map[string]interface{}{
 			fmt.Sprintf("%s-%s", prefix, "test-routine"): map[string]interface{}{
 				"backup-policy":      "test-policy",
-				"interval-cron":      "*/1 * * * * *",
+				"interval-cron":      "*/30 * * * * *",
 				"incr-interval-cron": "@hourly",
 				"namespaces":         []string{"test"},
 				"source-cluster":     fmt.Sprintf("%s-%s", prefix, "test-cluster"),
