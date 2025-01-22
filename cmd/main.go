@@ -13,6 +13,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -98,6 +102,17 @@ func main() {
 			watchNs: {},
 		}
 	}
+
+	// SecureServing is used to serve the metrics endpoint securely.
+	// The metrics endpoint is served over HTTPS with a self-signed certificate.
+	// It is required for WithAuthenticationAndAuthorization filter to work.
+	options.Metrics.SecureServing = true
+
+	// FilterProvider is used to protect the metrics endpoint with authn/authz.
+	// These configurations ensure that only authorized users and service accounts
+	// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
+	// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.18.4/pkg/metrics/filters#WithAuthenticationAndAuthorization
+	options.Metrics.FilterProvider = filters.WithAuthenticationAndAuthorization
 
 	kubeConfig := ctrl.GetConfigOrDie()
 
