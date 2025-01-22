@@ -1140,136 +1140,6 @@ var _ = Describe(
 				)
 
 				It(
-					"Try InvalidPost6Privilege in 5.x", func() {
-						accessControl := asdbv1.AerospikeAccessControlSpec{
-							Roles: []asdbv1.AerospikeRoleSpec{
-								{
-									Name: "profiler",
-									Privileges: []string{
-										"read-write.profileNs.setname",
-										"read.userNs",
-										"non-existent",
-									},
-								},
-							},
-							Users: []asdbv1.AerospikeUserSpec{
-								{
-									Name:       "aerospike",
-									SecretName: "someSecret",
-									Roles: []string{
-										"sys-admin",
-									},
-								},
-
-								{
-									Name:       "profileUser",
-									SecretName: "someOtherSecret",
-									Roles: []string{
-										"profiler",
-									},
-								},
-							},
-						}
-
-						clusterSpec := asdbv1.AerospikeClusterSpec{
-							Image:                  "aerospike/aerospike-server-enterprise:5.7.0.8",
-							AerospikeAccessControl: &accessControl,
-							AerospikeConfig:        aerospikeConfigWithSecurity,
-						}
-
-						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
-
-						if valid || err == nil {
-							Fail("InValid aerospike spec validated")
-						}
-						Expect(valid).To(
-							BeFalse(), "InValid aerospike spec validated",
-						)
-
-						if !strings.Contains(
-							strings.ToLower(err.Error()), "invalid privilege",
-						) {
-							Fail(
-								fmt.Sprintf(
-									"Error: %v should contain 'invalid privilege'",
-									err,
-								),
-							)
-						}
-					},
-				)
-
-				It(
-					"Try valid Post 6.0 definedRoleUpdate", func() {
-						accessControl := asdbv1.AerospikeAccessControlSpec{
-							Roles: []asdbv1.AerospikeRoleSpec{
-								{
-									Name: "profiler",
-									Privileges: []string{
-										"read-write.profileNs",
-										"read.userNs",
-									},
-									Whitelist: []string{
-										"8.8.0.0/16",
-									},
-								},
-								{
-									// Should be ok pre 6.0 since this role was not predefined then.
-									Name: "truncate",
-									Privileges: []string{
-										"read-write.profileNs",
-										"read.userNs",
-									},
-									Whitelist: []string{
-										"8.8.0.0/16",
-									},
-								},
-							},
-							Users: []asdbv1.AerospikeUserSpec{
-								{
-									Name:       "aerospike",
-									SecretName: "someSecret",
-									Roles: []string{
-										"sys-admin",
-										"user-admin",
-									},
-								},
-
-								{
-									Name:       "profileUser",
-									SecretName: "someOtherSecret",
-									Roles: []string{
-										"profiler",
-									},
-								},
-
-								{
-									Name:       "admin",
-									SecretName: test.AuthSecretName,
-									Roles: []string{
-										"sys-admin",
-										"user-admin",
-									},
-								},
-							},
-						}
-
-						clusterSpec := asdbv1.AerospikeClusterSpec{
-							Image:                  "aerospike/aerospike-server-enterprise:5.7.0.8",
-							AerospikeAccessControl: &accessControl,
-							AerospikeConfig:        aerospikeConfigWithSecurity,
-						}
-
-						valid, err := asdbv1.IsAerospikeAccessControlValid(&clusterSpec)
-
-						Expect(err).ToNot(HaveOccurred())
-						Expect(valid).To(
-							BeTrue(), "Valid aerospike spec marked invalid",
-						)
-					},
-				)
-
-				It(
 					"Try InvalidGlobalScopeOnlyPrivilege", func() {
 						accessControl := asdbv1.AerospikeAccessControlSpec{
 							Roles: []asdbv1.AerospikeRoleSpec{
@@ -2374,9 +2244,7 @@ func validateRoles(
 
 	for _, role := range asRoles {
 		if _, isPredefined := asdbv1.PredefinedRoles[role.Name]; !isPredefined {
-			if _, isPredefined = asdbv1.Post6PredefinedRoles[role.Name]; !isPredefined {
-				currentRoleNames = append(currentRoleNames, role.Name)
-			}
+			currentRoleNames = append(currentRoleNames, role.Name)
 		}
 	}
 
@@ -2409,10 +2277,6 @@ func validateRoles(
 	// Verify the privileges and whitelists are correct.
 	for _, asRole := range asRoles {
 		if _, isPredefined := asdbv1.PredefinedRoles[asRole.Name]; isPredefined {
-			continue
-		}
-
-		if _, isPredefined := asdbv1.Post6PredefinedRoles[asRole.Name]; isPredefined {
 			continue
 		}
 
