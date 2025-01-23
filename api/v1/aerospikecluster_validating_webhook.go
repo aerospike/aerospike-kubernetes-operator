@@ -19,7 +19,6 @@ package v1
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -680,12 +678,12 @@ func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 
 // TODO: This should be version specific and part of management lib.
 // max cluster size for 5.0+ cluster
-const maxEnterpriseClusterSzGt5_0 = 256
+const maxEnterpriseClusterSize = 256
 
 func validateClusterSize(_ logr.Logger, sz int) error {
-	if sz > maxEnterpriseClusterSzGt5_0 {
+	if sz > maxEnterpriseClusterSize {
 		return fmt.Errorf(
-			"cluster size cannot be more than %d", maxEnterpriseClusterSzGt5_0,
+			"cluster size cannot be more than %d", maxEnterpriseClusterSize,
 		)
 	}
 
@@ -1274,20 +1272,16 @@ func validateSecurityConfigUpdate(newSpec, oldSpec, currentStatus *AerospikeConf
 func validateSecurityContext(newSpec, oldSpec *AerospikeConfigSpec) error {
 	ovflag, err := IsSecurityEnabled(oldSpec)
 	if err != nil {
-		if !errors.Is(err, internalerrors.ErrNotFound) {
-			return fmt.Errorf(
-				"failed to validate Security context of old aerospike conf: %w", err,
-			)
-		}
+		return fmt.Errorf(
+			"failed to validate Security context of old aerospike conf: %w", err,
+		)
 	}
 
 	ivflag, err := IsSecurityEnabled(newSpec)
 	if err != nil {
-		if !errors.Is(err, internalerrors.ErrNotFound) {
-			return fmt.Errorf(
-				"failed to validate Security context of new aerospike conf: %w", err,
-			)
-		}
+		return fmt.Errorf(
+			"failed to validate Security context of new aerospike conf: %w", err,
+		)
 	}
 
 	if !ivflag && ovflag {
