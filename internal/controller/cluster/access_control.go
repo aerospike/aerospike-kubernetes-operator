@@ -46,7 +46,7 @@ func AerospikeAdminCredentials(
 	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig)
 	if !enabled {
 		if currentState.AerospikeConfig != nil {
-			// It is possible that this is a new cluster and current state is empty.
+			// It is possible that this is a new cluster and the current state is empty.
 			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig)
 		}
 

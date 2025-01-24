@@ -261,11 +261,6 @@ func IsSecurityEnabled(aerospikeConfig *AerospikeConfigSpec) (bool, error) {
 func IsAttributeEnabled(
 	aerospikeConfigSpec *AerospikeConfigSpec, context, key string,
 ) (bool, error) {
-	aerospikeConfig := aerospikeConfigSpec.Value
-	if len(aerospikeConfig) == 0 {
-		return false, fmt.Errorf("missing aerospike configuration in cluster state")
-	}
-
 	confMap, err := GetConfigContext(aerospikeConfigSpec, context)
 	if err != nil {
 		return false, err
@@ -284,10 +279,11 @@ func IsAttributeEnabled(
 func GetConfigContext(
 	aerospikeConfigSpec *AerospikeConfigSpec, context string,
 ) (map[string]interface{}, error) {
-	aerospikeConfig := aerospikeConfigSpec.Value
-	if len(aerospikeConfig) == 0 {
+	if aerospikeConfigSpec == nil {
 		return nil, fmt.Errorf("missing aerospike configuration in cluster state")
 	}
+
+	aerospikeConfig := aerospikeConfigSpec.Value
 
 	if contextConfigMap, ok := aerospikeConfig[context]; ok {
 		if validConfigMap, ok := contextConfigMap.(map[string]interface{}); ok {
