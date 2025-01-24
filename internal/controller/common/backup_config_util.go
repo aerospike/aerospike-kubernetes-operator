@@ -130,8 +130,8 @@ func validateBackupSvcConfigReload(k8sClient client.Client,
 		return err
 	}
 
-	log.Info(fmt.Sprintf("API Backup Service Config: %v", apiBackupSvcConfig))
-	log.Info(fmt.Sprintf("ConfigMap Backup Service Config: %v", configMapBackupSvcConfig))
+	log.Info(fmt.Sprintf("Backup Service config fetched from Backup Service via API: %v", apiBackupSvcConfig))
+	log.Info(fmt.Sprintf("Backup Service config found in ConfigMap: %v", configMapBackupSvcConfig))
 
 	if !reflect.DeepEqual(apiBackupSvcConfig, configMapBackupSvcConfig) {
 		log.Info("Backup service config not yet updated in pods, requeue")
