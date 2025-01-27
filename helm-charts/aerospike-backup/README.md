@@ -49,8 +49,6 @@ helm install aerospike-backup aerospike/aerospike-backup \
 | `onDemandBackups[*].delay`       | Delay interval before starting the on-demand backup  |            |
 
 ### Configurations Explained
-
-[//]: # (TODO: Update below link when the documentation is available.)
 Refer
-to [AerospikeBackup Customer Resource Spec](https://docs.aerospike.com/cloud/kubernetes/operator/cluster-configuration-settings#spec)
+to [AerospikeBackup Customer Resource Spec](https://aerospike.com/docs/cloud/kubernetes/operator/backup-and-restore/backup-configuration#spec)
 for details on above [configuration fields](#Configurations)

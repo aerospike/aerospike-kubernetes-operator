@@ -116,4 +116,4 @@ validationPolicy:
 
 ### Configurations Explained
 
-Refer to [AerospikeCluster Customer Resource Spec](https://docs.aerospike.com/cloud/kubernetes/operator/cluster-configuration-settings#spec) for details on above [configuration fields](#Configurations)
+Refer to [AerospikeCluster Customer Resource Spec](https://aerospike.com/docs/cloud/kubernetes/operator/configuration/Cluster-configuration-settings#spec) for details on above [configuration fields](#Configurations)

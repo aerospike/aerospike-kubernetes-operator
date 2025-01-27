@@ -1,6 +1,6 @@
 # Aerospike Backup Service (Custom Resource) Helm Chart
 
-A Helm chart for `AerospikeBackupService` custom resource to be used with the Aerospike Kubernetes Operator.
+A Helm chart for `AerospikeBackupService` (ABS) custom resource to be used with the Aerospike Kubernetes Operator.
 
 ## Pre Requisites
 
@@ -18,9 +18,21 @@ helm repo update
 
 ### Deploy Aerospike Backup Service
 
+#### Prepare the namespace
+
+We recommend using one ABS deployment per Aerospike cluster.
+
+Create the service account for the ABS in the namespace where Aerospike cluster is deployed
+
+```sh
+kubectl create serviceaccount aerospike-backup-service -n <namespace>
+```
+
+> Note: ServiceAccount name can be configured. Update the configured ServiceAccount in a ABS CR file to use a different service account name.
+
 #### Install the chart
 
-`<namespace>` used to install Aerospike backup service chart must be included in `watchNamespaces` value of
+`<namespace>` used to install ABS chart must be included in `watchNamespaces` value of
 aerospike-kubernetes-operator's `values.yaml`
 
 ```sh
@@ -38,22 +50,18 @@ helm install aerospike-backup-service aerospike/aerospike-backup-service \
 
 ## Configurations
 
-| Name                         | Description                                                                   | Default                              |
-|------------------------------|-------------------------------------------------------------------------------|--------------------------------------|
-| `image.repository`           | Aerospike backup service container image repository                           | `aerospike/aerospike-backup-service` |
-| `image.tag`                  | Aerospike backup service container image tag                                  | `3.0.0`                              |
-| `customLabels`               | Custom labels to add on the AerospikeBackupService resource                   | `{}` (nil)                           |
-| `serviceAccount.create`      | Enable ServiceAccount creation for Aerospike backup service.                  | true                                 |
-| `serviceAccount.annotations` | ServiceAccount annotations                                                    | `{}` (nil)                           |
-| `backupServiceConfig`        | Aerospike backup service configuration                                        | `{}` (nil)                           |
-| `secrets`                    | Secrets to be mounted in the Aerospike Backup Service pod like aws creds etc. | `[]` (nil)                           |
-| `resources`                  | Aerospike backup service pod resource requirements                            | `{}` (nil)                           |
-| `service`                    | Kubernetes service configuration for Aerospike backup service                 | `{}` (nil)                           |
-
+| Name                  | Description                                                                   | Default                              |
+|-----------------------|-------------------------------------------------------------------------------|--------------------------------------|
+| `image.repository`    | Aerospike backup service container image repository                           | `aerospike/aerospike-backup-service` |
+| `image.tag`           | Aerospike backup service container image tag                                  | `3.0.0`                              |
+| `customLabels`        | Custom labels to add on the Aerospike backup service resource                 | `{}` (nil)                           |
+| `backupServiceConfig` | Aerospike backup service configuration                                        | `{}` (nil)                           |
+| `secrets`             | Secrets to be mounted in the Aerospike backup service pod like aws creds etc. | `[]` (nil)                           |
+| `resources`           | Aerospike backup service pod resource requirements                            | `{}` (nil)                           |
+| `service`             | Kubernetes service configuration for Aerospike backup service                 | `{}` (nil)                           |
+| `podSpec`             | Aerospike backup service pod configuration                                    | `{}` (nil)                           |
 
 ### Configurations Explained
-
-[//]: # (TODO: Update below link when the documentation is available.)
 Refer
-to [AerospikeBackupService Customer Resource Spec](https://docs.aerospike.com/cloud/kubernetes/operator/cluster-configuration-settings#spec)
+to [AerospikeBackupService Customer Resource Spec](https://aerospike.com/docs/cloud/kubernetes/operator/backup-and-restore/backup-service-configuration#spec)
 for details on above [configuration fields](#Configurations)

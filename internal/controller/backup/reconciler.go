@@ -96,6 +96,8 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 		return reconcile.Result{}, err
 	}
 
+	r.Log.Info("Reconcile completed successfully")
+
 	return ctrl.Result{}, nil
 }
 
