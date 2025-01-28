@@ -1252,9 +1252,9 @@ func validateMRTFields(nsConf map[string]interface{}) error {
 
 func isMRTFieldSet(nsConf map[string]interface{}) bool {
 	_, isMRTDurationSet := nsConf["mrt-duration"]
-	disableMRTWrites, ok := nsConf["disable-mrt-writes"]
+	_, isDisableMRTWritesSet := nsConf["disable-mrt-writes"]
 
-	return (ok && disableMRTWrites.(bool)) || isMRTDurationSet
+	return isDisableMRTWritesSet || isMRTDurationSet
 }
 
 func validateNamespaceReplicationFactor(
