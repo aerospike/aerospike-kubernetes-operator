@@ -326,14 +326,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) error {
-	version, err := asdbv1.GetImageVersion(r.aeroCluster.Spec.Image)
-	if err != nil {
-		return err
-	}
-
-	enabled, err := asdbv1.IsSecurityEnabled(
-		version, r.aeroCluster.Spec.AerospikeConfig,
-	)
+	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}

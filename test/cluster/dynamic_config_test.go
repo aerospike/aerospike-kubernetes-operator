@@ -820,7 +820,7 @@ func validateServiceContextDynamically(
 	aeroCluster *asdbv1.AerospikeCluster, dynamic mapset.Set[string],
 ) error {
 	newSpec := *flatSpec
-	ignoredConf := mapset.NewSet("cluster-name", "microsecond-histograms")
+	ignoredConf := mapset.NewSet("cluster-name", "microsecond-histograms", "advertise-ipv6")
 
 	for confKey, val := range *flatServer {
 		if asconfig.ContextKey(confKey) != "service" {

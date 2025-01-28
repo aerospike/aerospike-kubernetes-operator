@@ -14,15 +14,6 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
-  controller: true
-  domain: aerospike.com
-  group: asdb
-  kind: AerospikeCluster
-  path: github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1
-  version: v1beta1
-- api:
-    crdVersion: v1
-    namespaced: true
   domain: aerospike.com
   group: asdb
   kind: AerospikeCluster

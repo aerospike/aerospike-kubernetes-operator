@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-
-	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // PrivilegeScope enumerates valid scopes for privileges.
@@ -33,9 +31,6 @@ const (
 
 	// DefaultAdminPassword si default admin user password.
 	DefaultAdminPassword = "admin"
-
-	// Version6 server version 6 tag
-	Version6 = "6.0.0.0"
 )
 
 // roleNameForbiddenChars are characters forbidden in role name.
@@ -58,13 +53,6 @@ var PredefinedRoles = map[string]struct{}{
 	"udf-admin":      {},
 }
 
-// Post6PredefinedRoles are roles predefined post version 6.0 in Aerospike server.
-var Post6PredefinedRoles = map[string]struct{}{
-	"truncate":     {},
-	"sindex-admin": {},
-	"udf-admin":    {},
-}
-
 // Expect at least one user with these required roles.
 var requiredRoles = []string{
 	"sys-admin",
@@ -85,13 +73,6 @@ var Privileges = map[string][]PrivilegeScope{
 	"udf-admin":      {Global},
 }
 
-// Post6Privileges are post version 6.0 privilege strings allowed in the spec and associated scopes.
-var Post6Privileges = map[string][]PrivilegeScope{
-	"truncate":     {Global, NamespaceSet},
-	"sindex-admin": {Global},
-	"udf-admin":    {Global},
-}
-
 // IsAerospikeAccessControlValid validates the accessControl specification in the clusterSpec.
 //
 // Asserts that the AerospikeAccessControlSpec
@@ -103,12 +84,7 @@ var Post6Privileges = map[string][]PrivilegeScope{
 func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	bool, error,
 ) {
-	version, err := GetImageVersion(aerospikeClusterSpec.Image)
-	if err != nil {
-		return false, err
-	}
-
-	enabled, err := IsSecurityEnabled(version, aerospikeClusterSpec.AerospikeConfig)
+	enabled, err := IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig)
 	if err != nil {
 		return false, err
 	}
@@ -129,7 +105,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	// Validate roles.
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
-		*aerospikeClusterSpec.AerospikeConfig, version,
+		*aerospikeClusterSpec.AerospikeConfig,
 	)
 	if err != nil {
 		return false, err
@@ -200,7 +176,7 @@ func validateRoleQuotaParam(
 
 // isRoleSpecValid indicates if input role spec is valid.
 func isRoleSpecValid(
-	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec, version string,
+	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec,
 ) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
@@ -214,20 +190,9 @@ func isRoleSpecValid(
 
 		seenRoles[roleSpec.Name] = true
 
-		_, ok := PredefinedRoles[roleSpec.Name]
-		if ok {
-			cmp, err := lib.CompareVersions(version, "6.0.0.0")
-			if err != nil {
-				return false, err
-			}
-
-			if cmp >= 0 {
-				// Cannot modify or add predefined roles.
-				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
-			} else if _, ok := Post6PredefinedRoles[roleSpec.Name]; !ok {
-				// Version < 6.0 and attempt to modify a pre 6.0 role
-				return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
-			}
+		if _, ok := PredefinedRoles[roleSpec.Name]; ok {
+			// Cannot modify or add predefined roles.
+			return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
 		}
 
 		if _, err := isRoleNameValid(roleSpec.Name); err != nil {
@@ -253,7 +218,7 @@ func isRoleSpecValid(
 
 			seenPrivileges[privilege] = true
 
-			if _, err := isPrivilegeValid(privilege, aerospikeConfigSpec, version); err != nil {
+			if _, err := isPrivilegeValid(privilege, aerospikeConfigSpec); err != nil {
 				return false, fmt.Errorf(
 					"role '%s' has invalid privilege: %v", roleSpec.Name, err,
 				)
@@ -312,26 +277,13 @@ func isRoleNameValid(roleName string) (bool, error) {
 
 // Indicates if privilege is a valid privilege.
 func isPrivilegeValid(
-	privilege string, aerospikeConfigSpec AerospikeConfigSpec, version string,
+	privilege string, aerospikeConfigSpec AerospikeConfigSpec,
 ) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
 	_, ok := Privileges[parts[0]]
 	if !ok {
 		return false, fmt.Errorf("invalid privilege %s", privilege)
-	}
-
-	// Check if new privileges are used in an older version.
-	cmp, err := lib.CompareVersions(version, Version6)
-	if err != nil {
-		return false, err
-	}
-
-	if cmp < 0 {
-		if _, ok := Post6Privileges[parts[0]]; ok {
-			// Version < 6.0 using post 6.0 privilege.
-			return false, fmt.Errorf("invalid privilege %s", privilege)
-		}
 	}
 
 	nParts := len(parts)

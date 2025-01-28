@@ -39,6 +39,7 @@ type AerospikeBackupSpec struct {
 	// OnDemandBackups is the configuration for on-demand backups.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On Demand Backups"
 	// +kubebuilder:validation:MaxItems:=1
+	// +optional
 	OnDemandBackups []OnDemandBackupSpec `json:"onDemandBackups,omitempty"`
 }
 
@@ -63,6 +64,7 @@ type OnDemandBackupSpec struct {
 	RoutineName string `json:"routineName"`
 
 	// Delay is the interval before starting the on-demand backup.
+	// +optional
 	Delay metav1.Duration `json:"delay,omitempty"`
 }
 
@@ -76,6 +78,7 @@ type AerospikeBackupStatus struct {
 	Config runtime.RawExtension `json:"config"`
 
 	// OnDemandBackups is the configuration for on-demand backups.
+	// +optional
 	OnDemandBackups []OnDemandBackupSpec `json:"onDemandBackups,omitempty"`
 
 	// TODO: finalize the status and phase

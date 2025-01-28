@@ -140,50 +140,6 @@ var _ = Describe(
 							)
 						}
 
-						By(
-							fmt.Sprintf(
-								"Downgrading image from %s to %s - volumes should be wiped",
-								version6, pre6Version,
-							),
-						)
-						err = UpdateClusterImage(aeroCluster, pre6Image)
-						Expect(err).ToNot(HaveOccurred())
-						err = aerospikeClusterCreateUpdate(
-							k8sClient, aeroCluster, ctx,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Checking - unrelated volume attachments should not be wiped")
-						err = checkData(
-							aeroCluster, true, true, map[string]struct{}{
-								"test-wipe-device-dd-1":         {},
-								"test-wipe-device-blkdiscard-1": {},
-								"test-wipe-device-dd-2":         {},
-								"test-wipe-device-blkdiscard-2": {},
-								"test-wipe-files-deletefiles-2": {},
-							},
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Checking - cluster data should be wiped")
-						records, err = CheckDataInCluster(
-							aeroCluster, k8sClient, namespaces,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						for namespace, recordExists := range records {
-							Expect(recordExists).To(
-								BeFalse(), fmt.Sprintf(
-									"Namespace: %s - should have records",
-									namespace,
-								),
-							)
-						}
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 

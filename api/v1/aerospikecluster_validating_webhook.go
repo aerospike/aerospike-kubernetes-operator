@@ -19,7 +19,6 @@ package v1
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -125,8 +123,7 @@ func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warn
 
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
-		aslog, incomingVersion, outgoingVersion,
-		c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
+		aslog, c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
 		c.Status.AerospikeConfig,
 	); err != nil {
 		return nil, err
@@ -192,7 +189,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		)
 	}
 
-	err = validateClusterSize(aslog, version, int(c.Spec.Size))
+	err = validateClusterSize(aslog, int(c.Spec.Size))
 	if err != nil {
 		return err
 	}
@@ -228,7 +225,7 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 		}
 
 		if err := validateRequiredFileStorageForMetadata(
-			rack.AerospikeConfig, &rack.Storage, c.Spec.ValidationPolicy, version,
+			rack.AerospikeConfig, &rack.Storage, c.Spec.ValidationPolicy,
 		); err != nil {
 			return err
 		}
@@ -423,16 +420,6 @@ func (c *AerospikeCluster) validateRackUpdate(
 		return nil
 	}
 
-	outgoingVersion, err := GetImageVersion(old.Spec.Image)
-	if err != nil {
-		return err
-	}
-
-	incomingVersion, err := GetImageVersion(c.Spec.Image)
-	if err != nil {
-		return err
-	}
-
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
@@ -466,8 +453,7 @@ func (c *AerospikeCluster) validateRackUpdate(
 
 					// Validate aerospikeConfig update
 					if err := validateAerospikeConfigUpdate(
-						aslog, incomingVersion, outgoingVersion,
-						&newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+						aslog, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
 						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
@@ -691,31 +677,13 @@ func getNsConfForNamespaces(rackConfig RackConfig) map[string]nsConf {
 // ******************************************************************************
 
 // TODO: This should be version specific and part of management lib.
-// max cluster size for pre-5.0 cluster
-const maxEnterpriseClusterSzLt5_0 = 128
-
 // max cluster size for 5.0+ cluster
-const maxEnterpriseClusterSzGt5_0 = 256
+const maxEnterpriseClusterSize = 256
 
-const versionForSzCheck = "5.0.0"
-
-func validateClusterSize(_ logr.Logger, version string, sz int) error {
-	val, err := lib.CompareVersions(version, versionForSzCheck)
-	if err != nil {
+func validateClusterSize(_ logr.Logger, sz int) error {
+	if sz > maxEnterpriseClusterSize {
 		return fmt.Errorf(
-			"failed to validate cluster size limit from version: %v", err,
-		)
-	}
-
-	if val < 0 && sz > maxEnterpriseClusterSzLt5_0 {
-		return fmt.Errorf(
-			"cluster size cannot be more than %d", maxEnterpriseClusterSzLt5_0,
-		)
-	}
-
-	if val > 0 && sz > maxEnterpriseClusterSzGt5_0 {
-		return fmt.Errorf(
-			"cluster size cannot be more than %d", maxEnterpriseClusterSzGt5_0,
+			"cluster size cannot be more than %d", maxEnterpriseClusterSize,
 		)
 	}
 
@@ -1281,84 +1249,39 @@ func getNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
 	return rf, nil
 }
 
-func validateSecurityConfigUpdate(
-	newVersion, oldVersion string, newSpec, oldSpec, currentStatus *AerospikeConfigSpec) error {
+func validateSecurityConfigUpdate(newSpec, oldSpec, currentStatus *AerospikeConfigSpec) error {
 	if currentStatus != nil {
-		currentSecurityConfig, err := IsSecurityEnabled(oldVersion, currentStatus)
+		currentSecurityEnabled, err := IsSecurityEnabled(currentStatus)
 		if err != nil {
 			return err
 		}
 
-		desiredSecurityConfig, err := IsSecurityEnabled(newVersion, newSpec)
+		desiredSecurityEnabled, err := IsSecurityEnabled(newSpec)
 		if err != nil {
 			return err
 		}
 
-		if currentSecurityConfig && !desiredSecurityConfig {
+		if currentSecurityEnabled && !desiredSecurityEnabled {
 			return fmt.Errorf("cannot disable cluster security in running cluster")
 		}
 	}
 
-	nv, err := lib.CompareVersions(newVersion, "5.7.0")
-	if err != nil {
-		return err
-	}
-
-	ov, err := lib.CompareVersions(oldVersion, "5.7.0")
-	if err != nil {
-		return err
-	}
-
-	if nv >= 0 || ov >= 0 {
-		return validateSecurityContext(newVersion, oldVersion, newSpec, oldSpec)
-	}
-
-	return validateEnableSecurityConfig(newSpec, oldSpec)
+	return validateSecurityContext(newSpec, oldSpec)
 }
 
-func validateEnableSecurityConfig(newConfSpec, oldConfSpec *AerospikeConfigSpec) error {
-	newConf := newConfSpec.Value
-	oldConf := oldConfSpec.Value
-
-	oldSec, oldSecConfFound := oldConf["security"]
-	if !oldSecConfFound {
-		return nil
-	}
-
-	newSec, newSecConfFound := newConf["security"]
-	if !newSecConfFound {
-		return fmt.Errorf("cannot remove cluster security config")
-	}
-
-	oldSecFlag, oldEnableSecurityFlagFound := oldSec.(map[string]interface{})["enable-security"]
-	newSecFlag, newEnableSecurityFlagFound := newSec.(map[string]interface{})["enable-security"]
-
-	if oldEnableSecurityFlagFound && oldSecFlag.(bool) && (!newEnableSecurityFlagFound || !newSecFlag.(bool)) {
-		return fmt.Errorf("cannot disable cluster security in running cluster")
-	}
-
-	return nil
-}
-
-func validateSecurityContext(
-	newVersion, oldVersion string, newSpec, oldSpec *AerospikeConfigSpec) error {
-	ovflag, err := IsSecurityEnabled(oldVersion, oldSpec)
+func validateSecurityContext(newSpec, oldSpec *AerospikeConfigSpec) error {
+	ovflag, err := IsSecurityEnabled(oldSpec)
 	if err != nil {
-		if !errors.Is(err, internalerrors.ErrNotFound) {
-			return fmt.Errorf(
-				"validateEnableSecurityConfig got an error - oldVersion: %s: %w",
-				oldVersion, err,
-			)
-		}
+		return fmt.Errorf(
+			"failed to validate Security context of old aerospike conf: %w", err,
+		)
 	}
 
-	ivflag, err := IsSecurityEnabled(newVersion, newSpec)
+	ivflag, err := IsSecurityEnabled(newSpec)
 	if err != nil {
-		if !errors.Is(err, internalerrors.ErrNotFound) {
-			return fmt.Errorf(
-				"validateEnableSecurityConfig got an error: %w", err,
-			)
-		}
+		return fmt.Errorf(
+			"failed to validate Security context of new aerospike conf: %w", err,
+		)
 	}
 
 	if !ivflag && ovflag {
@@ -1369,14 +1292,12 @@ func validateSecurityContext(
 }
 
 func validateAerospikeConfigUpdate(
-	aslog logr.Logger, incomingVersion, outgoingVersion string,
+	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *AerospikeConfigSpec,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 
-	if err := validateSecurityConfigUpdate(
-		incomingVersion, outgoingVersion, incomingSpec, outgoingSpec,
-		currentStatus); err != nil {
+	if err := validateSecurityConfigUpdate(incomingSpec, outgoingSpec, currentStatus); err != nil {
 		return err
 	}
 
@@ -1759,7 +1680,7 @@ func validateWorkDir(workDirPath string, fileStorageList []string) error {
 
 func validateRequiredFileStorageForMetadata(
 	configSpec AerospikeConfigSpec, storage *AerospikeStorageSpec,
-	validationPolicy *ValidationPolicySpec, version string,
+	validationPolicy *ValidationPolicySpec,
 ) error {
 	_, onlyPVFileStorageList, err := storage.getAerospikeStorageList(true)
 	if err != nil {
@@ -1784,41 +1705,6 @@ func validateRequiredFileStorageForMetadata(
 
 			if err := validateWorkDir(workDirPath, allFileStorageList); err != nil {
 				return err
-			}
-		}
-	}
-
-	if !validationPolicy.SkipXdrDlogFileValidate {
-		val, err := lib.CompareVersions(version, "5.0.0")
-		if err != nil {
-			return fmt.Errorf("failed to check image version: %v", err)
-		}
-
-		if val < 0 {
-			// Validate xdr-digestlog-path for pre-5.0.0 versions.
-			if IsXdrEnabled(configSpec) {
-				dglogFilePath, err := GetDigestLogFile(configSpec)
-				if err != nil {
-					return err
-				}
-
-				if !filepath.IsAbs(*dglogFilePath) {
-					return fmt.Errorf(
-						"xdr digestlog path %v must be absolute in storage config %v",
-						dglogFilePath, storage,
-					)
-				}
-
-				dglogDirPath := filepath.Dir(*dglogFilePath)
-
-				if !isFileStorageConfiguredForDir(
-					onlyPVFileStorageList, dglogDirPath,
-				) {
-					return fmt.Errorf(
-						"xdr digestlog path %v not mounted in Storage config %v",
-						dglogFilePath, storage,
-					)
-				}
 			}
 		}
 	}
