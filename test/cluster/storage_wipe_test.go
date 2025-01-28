@@ -376,7 +376,7 @@ func getAerospikeWipeStorageConfig(
 					},
 				},
 			},
-			//{
+			// {
 			//	Name: "init-container-volume-1",
 			//	AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
 			//		InputInitMethod: &ddMethod,

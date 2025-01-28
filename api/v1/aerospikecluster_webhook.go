@@ -29,6 +29,7 @@ var aerospikeClusterLog = logf.Log.WithName("aerospikecluster-resource")
 func (c *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	decoder := admission.NewDecoder(mgr.GetScheme())
+
 	aerospikeClusterLog.Info(
 		"Registering mutating webhook to the webhook" +
 			" server",

@@ -271,7 +271,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
 					By("Updating cluster to disable benchmarking")
 
@@ -286,7 +286,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 				},
 			)
 		},

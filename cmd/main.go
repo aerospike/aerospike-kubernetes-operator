@@ -28,11 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	// +kubebuilder:scaffold:imports
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup-service"
-	// +kubebuilder:scaffold:imports
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/restore"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
@@ -60,6 +60,7 @@ func main() {
 		enableHTTP2                bool
 		leaderElectionResourceName string
 	)
+
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -70,7 +71,6 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&leaderElectionResourceName, "resource-name", "96242fdf.aerospike.com",
 		"Name of the resource that will be used as the leader election lock when leader election is enabled.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
@@ -92,6 +92,7 @@ func main() {
 	// - https://github.com/advisories/GHSA-4374-p667-p6c8
 	disableHTTP2 := func(c *tls.Config) {
 		setupLog.Info("disabling http/2")
+
 		c.NextProtos = []string{"http/1.1"}
 	}
 
@@ -162,6 +163,12 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       leaderElectionResourceName,
 		Cache:                  cacheOptions,
+		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
+		// when the Manager ends. This requires the binary to immediately end when the
+		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
+		// speeds up voluntary leader transitions as the new leader don't have to wait
+		// LeaseDuration time first.
+		LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -236,7 +243,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&asdbv1beta1.AerospikeBackupService{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = asdbv1beta1.SetupAerospikeBackupServiceWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeBackupService")
 		os.Exit(1)
 	}
@@ -253,7 +260,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&asdbv1beta1.AerospikeBackup{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = asdbv1beta1.SetupAerospikeBackupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeBackup")
 		os.Exit(1)
 	}
@@ -270,7 +277,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&asdbv1beta1.AerospikeRestore{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = asdbv1beta1.SetupAerospikeRestoreWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeRestore")
 		os.Exit(1)
 	}

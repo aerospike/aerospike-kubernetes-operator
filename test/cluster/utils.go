@@ -734,7 +734,7 @@ func cleanupPVC(k8sClient client.Client, ns string) error {
 		//		return fmt.Errorf("could not patch %s finalizer from following pvc: %s: %w",
 		//			"kubernetes.io/pvc-protection", pvc.Name, err)
 		//	}
-		//}
+		// }
 		if err := k8sClient.Delete(goctx.TODO(), &pvcList.Items[pvcIndex]); err != nil {
 			return fmt.Errorf("could not delete pvc %s: %w", pvcList.Items[pvcIndex].Name, err)
 		}

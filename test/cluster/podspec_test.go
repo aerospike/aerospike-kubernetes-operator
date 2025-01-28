@@ -261,7 +261,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeZero())
+						Expect(len(stsList.Items)).ToNot(BeEmpty())
 
 						for _, sts := range stsList.Items {
 							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
@@ -419,7 +419,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeZero())
+						Expect(len(stsList.Items)).ToNot(BeEmpty())
 
 						var meFound bool
 						for _, sts := range stsList.Items {
@@ -626,11 +626,10 @@ func validateInitImage(
 
 	for stsIndex := range stsList.Items {
 		image := stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0].Image
-		Expect(image == expectedImage).To(
-			BeTrue(), fmt.Sprintf(
-				"expected init image %s, found image %s",
-				expectedImage, image,
-			),
+		Expect(image).To(Equal(expectedImage), fmt.Sprintf(
+			"expected init image %s, found image %s",
+			expectedImage, image,
+		),
 		)
 	}
 }

@@ -46,7 +46,7 @@ spec:
         command:
         - "/manager"
         args:
-          - --config=controller_manager_config.yaml
+          - --zap-log-level=info
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
@@ -76,9 +76,6 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
-        - mountPath: /controller_manager_config.yaml
-          name: manager-config
-          subPath: controller_manager_config.yaml
         {{- with .Values.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -103,25 +100,7 @@ spec:
           timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
           successThreshold: {{ .Values.readinessProbe.successThreshold }}
           failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-      - name: kube-rbac-proxy
-        image: {{ .Values.kubeRBACProxy.image.repository }}:{{ .Values.kubeRBACProxy.image.tag }}
-        imagePullPolicy: {{ .Values.kubeRBACProxy.image.pullPolicy }}
-        args:
-        - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxy.port }}
-        - --upstream=http://127.0.0.1:{{ .Values.metricsPort }}/
-        - --logtostderr=true
-        - --v=0
-        ports:
-        - containerPort: {{ .Values.kubeRBACProxy.port }}
-          name: https
-          protocol: TCP
-        {{- with .Values.kubeRBACProxy.resources }}
-        resources: {{- toYaml . | nindent 10 }}
-        {{- end }}
       volumes:
-        - configMap:
-            name: {{ template "aerospike-kubernetes-operator.fullname" . }}
-          name: manager-config
         # TODO: Make adding volumes configurable.
         - name: cert
           secret:

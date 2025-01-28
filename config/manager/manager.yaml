@@ -28,7 +28,6 @@ spec:
       - command:
         - /manager
         args:
-        - --config=controller_manager_config.yaml
         - --zap-log-level=info
         image: controller:latest
         name: manager

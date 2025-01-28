@@ -13,6 +13,8 @@ type mutatingHandler struct {
 }
 
 // InjectDecoder injects the decoder into a mutatingHandler.
+//
+//nolint:gocritic // used by external lib. Old Scaffolding. Need to move to kubeBuilder CustomerDefaulter interface
 func (h *mutatingHandler) InjectDecoder(d *admission.Decoder) error {
 	h.decoder = d
 	return nil

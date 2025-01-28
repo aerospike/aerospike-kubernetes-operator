@@ -81,7 +81,7 @@ var _ = Describe("Sample files validation", func() {
 				destCluster, k8sClient, []string{"test"},
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(records)).NotTo(Equal(0))
+			Expect(len(records)).NotTo(BeEmpty())
 
 			for namespace, recordExists := range records {
 				Expect(recordExists).To(

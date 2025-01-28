@@ -110,18 +110,3 @@ readinessProbe:
    timeoutSeconds: 1
    successThreshold: 1
    failureThreshold: 3
-
-# Kube RBAC Proxy sidecar
-kubeRBACProxy:
-  image:
-    repository: gcr.io/kubebuilder/kube-rbac-proxy
-    tag: v0.16.0
-    pullPolicy: IfNotPresent
-  port: 8443
-  resources:
-    limits:
-      cpu: 500m
-      memory: 128Mi
-    requests:
-      cpu: 5m
-      memory: 64Mi

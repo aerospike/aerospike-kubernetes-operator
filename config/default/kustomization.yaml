@@ -37,9 +37,11 @@ resources:
   #- ../network-policy
 
 patches:
-  # Mount the controller config file for loading manager configurations
-  # through a ComponentConfig type
-- path: manager_config_patch.yaml
+# [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.
+# More info: https://book.kubebuilder.io/reference/metrics
+- path: manager_metrics_patch.yaml
+  target:
+     kind: Deployment
 
   # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
   # crd/kustomization.yaml
