@@ -46,6 +46,9 @@ spec:
         command:
         - "/manager"
         args:
+          - --metrics-bind-address=":{{ .Values.metricsPort }}"
+          - --health-probe-bind-address=":{{ .Values.healthPort }}"
+          - --leader-elect
           - --zap-log-level=info
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:

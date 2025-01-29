@@ -20,7 +20,7 @@ rbac:
 
 ## Ports
 healthPort: 8081
-metricsPort: 8080
+metricsPort: 8443
 
 ## Create certificates
 certs:
