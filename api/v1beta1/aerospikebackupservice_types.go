@@ -31,10 +31,12 @@ const (
 	// AerospikeBackupServiceInProgress means the AerospikeBackupService CR is being reconciled and operations are
 	// in-progress state. This phase denotes that AerospikeBackupService resources are gradually getting deployed.
 	AerospikeBackupServiceInProgress AerospikeBackupServicePhase = "InProgress"
+
 	// AerospikeBackupServiceCompleted means the AerospikeBackupService CR has been reconciled.
 	// This phase denotes that the AerospikeBackupService resources have been deployed/upgraded successfully and is
 	// ready to use.
 	AerospikeBackupServiceCompleted AerospikeBackupServicePhase = "Completed"
+
 	// AerospikeBackupServiceError means the AerospikeBackupService operation is in error state because of some reason
 	// like incorrect backup service config, incorrect image, etc.
 	AerospikeBackupServiceError AerospikeBackupServicePhase = "Error"
@@ -57,21 +59,25 @@ type AerospikeBackupServiceSpec struct {
 
 	// Specify additional configuration for the AerospikeBackupService pods
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Configuration"
+	// +optional
 	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
 	// Deprecated: Resources field is now part of spec.podSpec.serviceContainer
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
+	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Backup Service SecretMounts"
+	// +optional
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
 	// Service defines the Kubernetes service configuration for the backup service.
 	// It is used to expose the backup service deployment. By default, the service type is ClusterIP.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="K8s Service"
+	// +optional
 	Service *Service `json:"service,omitempty"`
 }
 
@@ -80,14 +86,17 @@ type AerospikeBackupServiceSpec struct {
 //nolint:govet // for readbility
 type AerospikeBackupServiceStatus struct {
 	// Image is the image for the backup service.
+	// +optional
 	Image string `json:"image,omitempty"`
 
 	// Config is the free form configuration for the backup service in YAML format.
 	// This config is used to start the backup service. The config is passed as a file to the backup service.
 	// It includes: service, backup-policies, storage, secret-agent.
+	// +optional
 	Config runtime.RawExtension `json:"config,omitempty"`
 
 	// Specify additional configuration for the AerospikeBackupService pods
+	// +optional
 	PodSpec ServicePodSpec `json:"podSpec,omitempty"`
 
 	// Resources define the requests and limits for the backup service container.
@@ -97,28 +106,34 @@ type AerospikeBackupServiceStatus struct {
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// SecretMounts is the list of secret to be mounted in the backup service.
+	// +optional
 	SecretMounts []SecretMount `json:"secrets,omitempty"`
 
 	// Service defines the Kubernetes service configuration for the backup service.
 	// It is used to expose the backup service deployment. By default, the service type is ClusterIP.
+	// +optional
 	Service *Service `json:"service,omitempty"`
 
 	// ContextPath is the backup service API context path
+	// +optional
 	ContextPath string `json:"contextPath,omitempty"`
 
 	// Phase denotes Backup service phase
 	Phase AerospikeBackupServicePhase `json:"phase"`
 
 	// Port is the listening port of backup service
+	// +optional
 	Port int32 `json:"port,omitempty"`
 }
 
 type ServicePodSpec struct {
 	// ServiceContainerSpec configures the backup service container
 	// created by the operator.
+	// +optional
 	ServiceContainerSpec ServiceContainerSpec `json:"serviceContainer,omitempty"`
 
 	// MetaData to add to the pod.
+	// +optional
 	ObjectMeta AerospikeObjectMeta `json:"metadata,omitempty"`
 
 	// SchedulingPolicy controls pods placement on Kubernetes nodes.
@@ -131,10 +146,12 @@ type ServicePodSpec struct {
 
 	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of
 	// the images used by this PodSpec.
+	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type ServiceContainerSpec struct {
+	// SecurityContext defines the security context for the backup service container.
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 
 	// Resources defines the requests and limits for the backup service container.
@@ -185,4 +202,29 @@ type SecretMount struct {
 type Service struct {
 	// Type is the Kubernetes service type.
 	Type corev1.ServiceType `json:"type"`
+}
+
+type AerospikeObjectMeta struct {
+	// Key - Value pair that may be set by external tools to store and retrieve arbitrary metadata
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Key - Value pairs that can be used to organize and categorize scope and select objects
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+// SchedulingPolicy controls pod placement on Kubernetes nodes.
+type SchedulingPolicy struct { //nolint:govet // for readability
+	// Affinity rules for pod placement.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Tolerations for this pod.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// NodeSelector constraints for this pod.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }

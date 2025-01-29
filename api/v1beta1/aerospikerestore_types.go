@@ -28,8 +28,10 @@ type AerospikeRestorePhase string
 const (
 	// AerospikeRestoreInProgress means the AerospikeRestore CR is being reconciled and restore operation is going on.
 	AerospikeRestoreInProgress AerospikeRestorePhase = "InProgress"
+
 	// AerospikeRestoreCompleted means the AerospikeRestore CR has been reconciled and restore operation is completed.
 	AerospikeRestoreCompleted AerospikeRestorePhase = "Completed"
+
 	// AerospikeRestoreFailed means the AerospikeRestore CR has been reconciled and restore operation is failed.
 	AerospikeRestoreFailed AerospikeRestorePhase = "Failed"
 )
@@ -67,15 +69,18 @@ type AerospikeRestoreSpec struct {
 	// It is used to poll the restore service to fetch restore operation status.
 	// Default is 60 seconds.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
+	// +optional
 	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }
 
 // AerospikeRestoreStatus defines the observed state of AerospikeRestore
 type AerospikeRestoreStatus struct {
 	// JobID is the restore operation job id.
+	// +optional
 	JobID *int64 `json:"job-id,omitempty"`
 
 	// RestoreResult is the result of the restore operation.
+	// +optional
 	RestoreResult runtime.RawExtension `json:"restoreResult,omitempty"`
 
 	// Phase denotes the current phase of Aerospike restore operation.
