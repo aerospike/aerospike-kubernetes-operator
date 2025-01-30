@@ -200,6 +200,28 @@ var _ = Describe("SCMode", func() {
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
+
+		It("Should allow MRT fields in SC namespace", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			racks := getDummyRackConf(1)
+
+			sc1Path := "/test/dev/" + sc1Name
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
+
+			conf := getSCNamespaceConfig(sc1Name, sc1Path)
+			conf["mrt-duration"] = 15
+
+			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{conf},
+				},
+			}
+			aeroCluster.Spec.RackConfig.Racks = racks
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 
 	Context("When doing invalid operation", func() {
@@ -318,6 +340,29 @@ var _ = Describe("SCMode", func() {
 			}
 
 			aeroCluster.Spec.RackConfig.Racks = racks
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should not allow MRT fields in non-SC namespace", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			racks := getDummyRackConf(1)
+
+			sc1Path := "/test/dev/" + sc1Name
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
+
+			conf := getSCNamespaceConfig(sc1Name, sc1Path)
+			conf["strong-consistency"] = false
+			conf["mrt-duration"] = 10
+
+			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					"namespaces": []interface{}{conf},
+				},
+			}
+			aeroCluster.Spec.RackConfig.Racks = racks
+
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
