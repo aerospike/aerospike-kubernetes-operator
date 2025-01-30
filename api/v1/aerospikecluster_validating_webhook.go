@@ -1019,6 +1019,10 @@ func validateNamespaceConfig(
 			return nErr
 		}
 
+		if mErr := validateMRTFields(nsConf); mErr != nil {
+			return mErr
+		}
+
 		if nsStorage, ok := nsConf["storage-engine"]; ok {
 			if nsStorage == nil {
 				return fmt.Errorf(
@@ -1205,6 +1209,29 @@ func validateNamespaceConfig(
 	}
 
 	return nil
+}
+
+func validateMRTFields(nsConf map[string]interface{}) error {
+	mrtField := isMRTFieldSet(nsConf)
+	scEnabled := IsNSSCEnabled(nsConf)
+
+	if !scEnabled && mrtField {
+		return fmt.Errorf("MRT fields are not allowed in non-SC namespace %v", nsConf)
+	}
+
+	return nil
+}
+
+func isMRTFieldSet(nsConf map[string]interface{}) bool {
+	mrtFields := []string{"mrt-duration", "disable-mrt-writes"}
+
+	for _, field := range mrtFields {
+		if _, exists := nsConf[field]; exists {
+			return true
+		}
+	}
+
+	return false
 }
 
 func validateNamespaceReplicationFactor(
