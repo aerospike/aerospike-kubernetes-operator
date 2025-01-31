@@ -256,14 +256,8 @@ func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 }
 
 func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
-	var deploy app.Deployment
-
-	if err := r.Client.Get(context.TODO(),
-		types.NamespacedName{
-			Namespace: r.aeroBackupService.Namespace,
-			Name:      r.aeroBackupService.Name,
-		}, &deploy,
-	); err != nil {
+	deployment, err := r.getBackupSvcDeployment()
+	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -271,7 +265,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		r.Log.Info("Creating Backup Service deployment",
 			"name", getBackupServiceName(r.aeroBackupService))
 
-		deployment, err := r.getDeploymentObject()
+		deployment, err = r.getDeploymentObject()
 		if err != nil {
 			return err
 		}
@@ -302,16 +296,16 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		"name", getBackupServiceName(r.aeroBackupService),
 	)
 
-	oldResourceVersion := deploy.ResourceVersion
+	oldResourceVersion := deployment.ResourceVersion
 
 	desiredDeployObj, err := r.getDeploymentObject()
 	if err != nil {
 		return err
 	}
 
-	deploy.Spec = desiredDeployObj.Spec
+	deployment.Spec = desiredDeployObj.Spec
 
-	if err = r.Client.Update(context.TODO(), &deploy, common.UpdateOption); err != nil {
+	if err = r.Client.Update(context.TODO(), deployment, common.UpdateOption); err != nil {
 		return fmt.Errorf("failed to update Backup service deployment: %v", err)
 	}
 
@@ -320,7 +314,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentUpdated",
 		"Updated Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
-	if oldResourceVersion != deploy.ResourceVersion {
+	if oldResourceVersion != deployment.ResourceVersion {
 		r.Log.Info("Deployment spec is updated, will result in rolling restart")
 		return r.waitForDeploymentToBeReady()
 	}
@@ -351,7 +345,22 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		r.Log.Info("Reloaded backup service")
 	}
 
-	return nil
+	return r.waitForDeploymentToBeReady()
+}
+
+func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deployment, error) {
+	var deployment app.Deployment
+
+	if err := r.Client.Get(context.TODO(),
+		types.NamespacedName{
+			Namespace: r.aeroBackupService.Namespace,
+			Name:      r.aeroBackupService.Name,
+		}, &deployment,
+	); err != nil {
+		return nil, err
+	}
+
+	return &deployment, nil
 }
 
 func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
@@ -692,6 +701,18 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 
 	if err := wait.PollUntilContextTimeout(context.TODO(),
 		podStatusRetryInterval, podStatusTimeout, true, func(ctx context.Context) (done bool, err error) {
+			deployment, err := r.getBackupSvcDeployment()
+			if err != nil {
+				return false, err
+			}
+
+			// This check is for the condition when deployment rollout is yet to begin, and
+			// pods with new spec are yet to be created.
+			if deployment.Generation > deployment.Status.ObservedGeneration {
+				r.Log.Info("Waiting for deployment to be ready")
+				return false, nil
+			}
+
 			podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 			if err != nil {
 				return false, err
@@ -715,16 +736,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 				}
 			}
 
-			var deploy app.Deployment
-			if err := r.Client.Get(
-				ctx,
-				types.NamespacedName{Name: r.aeroBackupService.Name, Namespace: r.aeroBackupService.Namespace},
-				&deploy,
-			); err != nil {
-				return false, err
-			}
-
-			if deploy.Status.Replicas != *deploy.Spec.Replicas {
+			if deployment.Status.Replicas != *deployment.Spec.Replicas {
 				return false, nil
 			}
 
