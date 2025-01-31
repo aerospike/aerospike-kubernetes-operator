@@ -24,8 +24,12 @@ metricsPort: 8443
 
 ## Create certificates
 certs:
-  create: true
-  webhookServerCertSecretName: "webhook-server-cert"
+  webhook:
+    create: true
+    webhookServerCertSecretName: "webhook-server-cert"
+  metrics:
+    create: false
+    metricsServerCertSecretName: "metrics-server-cert"
 
 ##  Operator configurations
 watchNamespaces: "default,aerospike"

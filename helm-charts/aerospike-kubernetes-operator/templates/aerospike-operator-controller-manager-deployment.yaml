@@ -46,10 +46,14 @@ spec:
         command:
         - "/manager"
         args:
-          - --metrics-bind-address=":{{ .Values.metricsPort }}"
-          - --health-probe-bind-address=":{{ .Values.healthPort }}"
+          - --metrics-bind-address=:{{ .Values.metricsPort }}
+          - --health-probe-bind-address=:{{ .Values.healthPort }}
           - --leader-elect
           - --zap-log-level=info
+          - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+          {{- if .Values.certs.metrics.create }}
+          - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
+          {{- end }}
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
@@ -77,8 +81,13 @@ spec:
               fieldPath: metadata.name
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
+          name: webhook-certs
           readOnly: true
+        {{- if .Values.certs.metrics.create }}
+        - mountPath: /tmp/k8s-metrics-server/metrics-certs
+          name: metrics-certs
+          readOnly: true
+        {{- end }}
         {{- with .Values.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -105,7 +114,20 @@ spec:
           failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
       volumes:
         # TODO: Make adding volumes configurable.
-        - name: cert
+        - name: webhook-certs
           secret:
             defaultMode: 420
-            secretName: {{ .Values.certs.webhookServerCertSecretName }}
+            secretName: {{ .Values.certs.webhook.webhookServerCertSecretName }}
+        {{- if .Values.certs.metrics.create }}
+        - name: metrics-certs
+          secret:
+            secretName: {{ .Values.certs.metrics.metricsServerCertSecretName }}
+            optional: false
+            items:
+            - key: ca.crt
+              path: ca.crt
+            - key: tls.crt
+              path: tls.crt
+            - key: tls.key
+              path: tls.key
+        {{- end }}

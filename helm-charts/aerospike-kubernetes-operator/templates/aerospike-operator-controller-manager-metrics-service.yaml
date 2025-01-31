@@ -4,6 +4,7 @@ metadata:
   name: aerospike-operator-controller-manager-metrics-service
   namespace: {{ .Release.Namespace }}
   labels:
+    control-plane: controller-manager
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
     chart: {{ .Chart.Name }}
     release: {{ .Release.Name }}
