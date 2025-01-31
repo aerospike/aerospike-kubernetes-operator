@@ -140,7 +140,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
-						Expect(ok).ToNot(BeFalse())
+						Expect(ok).To(BeTrue())
 
 						Expect(cv).To(Equal(int64(18000)))
 
@@ -150,7 +150,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						reportDataOp, ok := conf["log.report-data-op[0]"].(string)
-						Expect(ok).ToNot(BeFalse())
+						Expect(ok).To(BeTrue())
 
 						Expect(reportDataOp).To(Equal("test"))
 
@@ -193,7 +193,7 @@ var _ = Describe(
 							"service", &pod)
 						Expect(err).ToNot(HaveOccurred())
 						cv, ok = conf["proto-fd-max"]
-						Expect(ok).ToNot(BeFalse())
+						Expect(ok).To(BeTrue())
 
 						Expect(cv).To(Equal(int64(15000)))
 
@@ -245,7 +245,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						enableQuotas, ok := conf["enable-quotas"].(bool)
-						Expect(ok).ToNot(BeFalse())
+						Expect(ok).To(BeTrue())
 
 						Expect(enableQuotas).To(BeTrue())
 
@@ -284,7 +284,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
-						Expect(ok).ToNot(BeFalse())
+						Expect(ok).To(BeTrue())
 
 						Expect(cv).To(Equal(int64(19000)))
 

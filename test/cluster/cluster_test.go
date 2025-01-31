@@ -238,7 +238,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					pod := aeroCluster.Status.Pods["deploy-cluster-benchmark-0-0"]
 					nsConfs, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(false))
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 
 					By("Updating cluster to enable benchmarking")
 
@@ -252,7 +252,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(Equal(true))
+					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
 					By("Updating cluster server to version which has the fix for AER-6767")
 

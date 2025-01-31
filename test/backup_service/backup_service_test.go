@@ -207,7 +207,7 @@ var _ = Describe(
 
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				PodUID := podList.Items[0].ObjectMeta.UID
 
@@ -223,7 +223,7 @@ var _ = Describe(
 
 				podList, err = getBackupServicePodList(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				Expect(podList.Items[0].ObjectMeta.UID).ToNot(Equal(PodUID))
 			})
@@ -237,7 +237,7 @@ var _ = Describe(
 
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				PodUID := podList.Items[0].ObjectMeta.UID
 
@@ -253,7 +253,7 @@ var _ = Describe(
 
 				podList, err = getBackupServicePodList(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				Expect(podList.Items[0].ObjectMeta.UID).To(Equal(PodUID))
 
@@ -272,7 +272,7 @@ var _ = Describe(
 
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				PodUID := podList.Items[0].ObjectMeta.UID
 
@@ -293,7 +293,7 @@ var _ = Describe(
 
 				podList, err = getBackupServicePodList(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 
 				Expect(podList.Items[0].ObjectMeta.UID).ToNot(Equal(PodUID))
 			})
@@ -385,7 +385,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
-				Expect(len(podList.Items)).To(Equal(1))
+				Expect(len(podList.Items)).To(HaveLen(1))
 				Expect(podList.Items[0].Spec.Affinity.NodeAffinity).Should(Equal(nodeAffinity))
 			})
 
@@ -430,7 +430,7 @@ var _ = Describe(
 				validateSA := func(serviceAccount string) {
 					podList, gErr := getBackupServicePodList(k8sClient, backupService)
 					Expect(gErr).ToNot(HaveOccurred())
-					Expect(len(podList.Items)).To(Equal(1))
+					Expect(len(podList.Items)).To(HaveLen(1))
 					Expect(podList.Items[0].Spec.ServiceAccountName).Should(Equal(serviceAccount))
 				}
 

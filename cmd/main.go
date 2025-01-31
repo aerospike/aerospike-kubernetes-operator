@@ -60,7 +60,6 @@ func main() {
 		probeAddr                                        string
 		secureMetrics                                    bool
 		enableHTTP2                                      bool
-		leaderElectionResourceName                       string
 		metricsCertPath, metricsCertName, metricsCertKey string
 		webhookCertPath, webhookCertName, webhookCertKey string
 	)
@@ -75,8 +74,6 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&leaderElectionResourceName, "resource-name", "96242fdf.aerospike.com",
-		"Name of the resource that will be used as the leader election lock when leader election is enabled.")
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
@@ -221,7 +218,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		WebhookServer:          webhookServer,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       leaderElectionResourceName,
+		LeaderElectionID:       "96242fdf.aerospike.com",
 		Cache:                  cacheOptions,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
@@ -285,7 +282,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = asdbv1.SetupAerospikeClusterWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "v1-webhook", "AerospikeCluster")
 		os.Exit(1)
 	}

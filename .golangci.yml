@@ -60,7 +60,7 @@ linters:
     - unconvert
     - unparam
     - whitespace
-#    - ginkgolinter
+    - ginkgolinter
     - lll
     - wsl # White space linter
 
