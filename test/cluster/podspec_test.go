@@ -261,7 +261,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeEmpty())
+						Expect(stsList.Items).ToNot(BeEmpty())
 
 						for _, sts := range stsList.Items {
 							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
@@ -419,7 +419,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeEmpty())
+						Expect(stsList.Items).ToNot(BeEmpty())
 
 						var meFound bool
 						for _, sts := range stsList.Items {

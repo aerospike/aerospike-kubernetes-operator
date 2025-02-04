@@ -30,7 +30,6 @@ spec:
         args:
         - --health-probe-bind-address=:8081
         - --leader-elect
-        - --zap-log-level=info
         image: controller:latest
         name: manager
         ports: []

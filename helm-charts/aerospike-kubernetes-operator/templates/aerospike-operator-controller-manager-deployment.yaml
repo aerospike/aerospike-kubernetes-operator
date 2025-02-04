@@ -49,7 +49,6 @@ spec:
           - --metrics-bind-address=:{{ .Values.metricsPort }}
           - --health-probe-bind-address=:{{ .Values.healthPort }}
           - --leader-elect
-          - --zap-log-level=info
           - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
           {{- if .Values.certs.metrics.create }}
           - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs

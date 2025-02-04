@@ -729,7 +729,7 @@ func doTestNetworkPolicy(
 
 		podList, err := getPodList(aeroCluster, k8sClient)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(len(podList.Items)).ToNot(BeEmpty())
+		Expect(podList.Items).ToNot(BeEmpty())
 
 		for idx := range podList.Items {
 			pod := &podList.Items[idx]

@@ -262,7 +262,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(len(pvcs)).Should(BeEmpty(), "PVCs not deleted")
+						Expect(pvcs).Should(BeEmpty(), "PVCs not deleted")
 					},
 				)
 
