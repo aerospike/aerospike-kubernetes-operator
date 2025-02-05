@@ -46,7 +46,13 @@ spec:
         command:
         - "/manager"
         args:
-          - --config=controller_manager_config.yaml
+          - --metrics-bind-address=:{{ .Values.metricsPort }}
+          - --health-probe-bind-address=:{{ .Values.healthPort }}
+          - --leader-elect
+          - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+          {{- if .Values.certs.metrics.create }}
+          - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
+          {{- end }}
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
@@ -74,11 +80,13 @@ spec:
               fieldPath: metadata.name
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
+          name: webhook-certs
           readOnly: true
-        - mountPath: /controller_manager_config.yaml
-          name: manager-config
-          subPath: controller_manager_config.yaml
+        {{- if .Values.certs.metrics.create }}
+        - mountPath: /tmp/k8s-metrics-server/metrics-certs
+          name: metrics-certs
+          readOnly: true
+        {{- end }}
         {{- with .Values.resources }}
         resources: {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -103,27 +111,22 @@ spec:
           timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
           successThreshold: {{ .Values.readinessProbe.successThreshold }}
           failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-      - name: kube-rbac-proxy
-        image: {{ .Values.kubeRBACProxy.image.repository }}:{{ .Values.kubeRBACProxy.image.tag }}
-        imagePullPolicy: {{ .Values.kubeRBACProxy.image.pullPolicy }}
-        args:
-        - --secure-listen-address=0.0.0.0:{{ .Values.kubeRBACProxy.port }}
-        - --upstream=http://127.0.0.1:{{ .Values.metricsPort }}/
-        - --logtostderr=true
-        - --v=0
-        ports:
-        - containerPort: {{ .Values.kubeRBACProxy.port }}
-          name: https
-          protocol: TCP
-        {{- with .Values.kubeRBACProxy.resources }}
-        resources: {{- toYaml . | nindent 10 }}
-        {{- end }}
       volumes:
-        - configMap:
-            name: {{ template "aerospike-kubernetes-operator.fullname" . }}
-          name: manager-config
         # TODO: Make adding volumes configurable.
-        - name: cert
+        - name: webhook-certs
           secret:
             defaultMode: 420
-            secretName: {{ .Values.certs.webhookServerCertSecretName }}
+            secretName: {{ .Values.certs.webhook.webhookServerCertSecretName }}
+        {{- if .Values.certs.metrics.create }}
+        - name: metrics-certs
+          secret:
+            secretName: {{ .Values.certs.metrics.metricsServerCertSecretName }}
+            optional: false
+            items:
+            - key: ca.crt
+              path: ca.crt
+            - key: tls.crt
+              path: tls.crt
+            - key: tls.key
+              path: tls.key
+        {{- end }}

@@ -163,7 +163,7 @@ var _ = Describe(
 									aeroCluster, k8sClient,
 								)
 								Expect(err).ShouldNot(HaveOccurred())
-								Expect(len(pvcs)).ShouldNot(BeZero())
+								Expect(pvcs).ShouldNot(BeEmpty())
 
 								for _, pvc := range pvcs {
 									// Match annotations

@@ -1,4 +1,4 @@
-{{- if .Values.certs.create }}
+{{- if or .Values.certs.webhook.create .Values.certs.metrics.create}}
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:

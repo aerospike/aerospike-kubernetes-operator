@@ -81,7 +81,7 @@ func rollCluster(ctx goCtx.Context, image string) {
 	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 
 	for _, marker := range podToMarkerPresent {
-		Expect(marker).To(Equal(true))
+		Expect(marker).To(BeTrue())
 	}
 }
 

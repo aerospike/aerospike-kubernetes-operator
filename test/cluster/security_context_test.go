@@ -152,7 +152,7 @@ func validateSecurityContext(
 	)
 	Expect(err).ToNot(HaveOccurred())
 
-	Expect(len(pods.Items)).ToNot(BeZero())
+	Expect(pods.Items).ToNot(BeEmpty())
 
 	for podIndex := range pods.Items {
 		// TODO: get pod.Spec container by name.

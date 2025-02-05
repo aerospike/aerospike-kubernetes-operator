@@ -70,11 +70,6 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `securityContext`                   | Security context for the operator container                                                           | `{}` (nil)                                                                                                        |
 | `livenessProbe`                     | Liveliness probe for operator container                                                               | `initialDelaySeconds: 15`, `periodSeconds: 20`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3` |
 | `readinessProbe`                    | Readiness probe for the operator container                                                            | `initialDelaySeconds: 5`, `periodSeconds: 10`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3`  |
-| `kubeRBACProxy.image.repository`    | Kube RBAC Proxy image repository container                                                            | `gcr.io/kubebuilder/kube-rbac-proxy`                                                                              |
-| `kubeRBACProxy.image.tag`           | Kube RBAC Proxy image tag                                                                             | `v0.16.0`                                                                                                         |
-| `kubeRBACProxy.image.pullPolicy`    | Kube RBAC Proxy image pull policy                                                                     | `IfNotPresent`                                                                                                    |
-| `kubeRBACProxy.port`                | Kube RBAC proxy listening port                                                                        | `8443`                                                                                                            |
-| `kubeRBACProxy.resources`           | Kube RBAC Proxy container resource                                                                    | `{}` (nil)                                                                                                        |
 <!-- ## Next Steps
 
 Deploy [Aerospike Cluster](https://artifacthub.io/packages/helm/aerospike/aerospike-cluster) -->

@@ -87,9 +87,9 @@ func checkAdvertisedAddress(
 
 	for podIndex := range podList.Items {
 		if expectNodIP {
-			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).To(Equal(true))
+			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).To(BeTrue())
 		} else {
-			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).ToNot(Equal(true))
+			Expect(intraClusterAdvertisesNodeIP(ctx, &podList.Items[podIndex])).ToNot(BeTrue())
 		}
 	}
 }

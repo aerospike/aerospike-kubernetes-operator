@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -44,146 +45,178 @@ var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
 
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
+// +kubebuilder:object:generate=false
+type AerospikeClusterCustomValidator struct {
+}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1}
 
-var _ webhook.Validator = &AerospikeCluster{}
+var _ webhook.CustomValidator = &AerospikeClusterCustomValidator{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (c *AerospikeCluster) ValidateCreate() (admission.Warnings, error) {
-	aslog := logf.Log.WithName(ClusterNamespacedName(c))
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	aerospikeCluster, ok := obj.(*AerospikeCluster)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeCluster, got %T", obj)
+	}
+
+	aslog := logf.Log.WithName(ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate create")
 
-	return nil, c.validate(aslog)
+	return aerospikeCluster.validate(aslog)
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (c *AerospikeCluster) ValidateDelete() (admission.Warnings, error) {
-	aslog := logf.Log.WithName(ClusterNamespacedName(c))
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	aerospikeCluster, ok := obj.(*AerospikeCluster)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeCluster, got %T", obj)
+	}
+
+	aslog := logf.Log.WithName(ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate delete")
 
 	return nil, nil
 }
 
-// ValidateUpdate validate update
-func (c *AerospikeCluster) ValidateUpdate(oldObj runtime.Object) (admission.Warnings, error) {
-	aslog := logf.Log.WithName(ClusterNamespacedName(c))
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
+) (admission.Warnings, error) {
+	aerospikeCluster, ok := newObj.(*AerospikeCluster)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeCluster, got %T", newObj)
+	}
+
+	aslog := logf.Log.WithName(ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate update")
 
-	old := oldObj.(*AerospikeCluster)
+	oldObject := oldObj.(*AerospikeCluster)
 
-	if err := c.validate(aslog); err != nil {
-		return nil, err
+	var warnings admission.Warnings
+
+	warns, vErr := aerospikeCluster.validate(aslog)
+	warnings = append(warnings, warns...)
+
+	if vErr != nil {
+		return warnings, vErr
 	}
 
-	if err := c.validateEnableDynamicConfigUpdate(); err != nil {
-		return nil, err
+	if err := aerospikeCluster.validateEnableDynamicConfigUpdate(); err != nil {
+		return warnings, err
 	}
 
-	outgoingVersion, err := GetImageVersion(old.Spec.Image)
+	outgoingVersion, err := GetImageVersion(oldObject.Spec.Image)
 	if err != nil {
-		return nil, err
+		return warnings, err
 	}
 
-	incomingVersion, err := GetImageVersion(c.Spec.Image)
+	incomingVersion, err := GetImageVersion(aerospikeCluster.Spec.Image)
 	if err != nil {
-		return nil, err
+		return warnings, err
 	}
 
 	if err := asconfig.IsValidUpgrade(
 		outgoingVersion, incomingVersion,
 	); err != nil {
-		return nil, fmt.Errorf("failed to start upgrade: %v", err)
+		return warnings, fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
 	// Volume storage update is not allowed but cascadeDelete policy is allowed
-	if err := old.Spec.Storage.validateStorageSpecChange(&c.Spec.Storage); err != nil {
-		return nil, fmt.Errorf("storage config cannot be updated: %v", err)
+	if err := oldObject.Spec.Storage.validateStorageSpecChange(&aerospikeCluster.Spec.Storage); err != nil {
+		return warnings, fmt.Errorf("storage config cannot be updated: %v", err)
 	}
 
 	// MultiPodPerHost cannot be updated
-	if GetBool(c.Spec.PodSpec.MultiPodPerHost) != GetBool(old.Spec.PodSpec.MultiPodPerHost) {
-		return nil, fmt.Errorf("cannot update MultiPodPerHost setting")
+	if GetBool(aerospikeCluster.Spec.PodSpec.MultiPodPerHost) != GetBool(oldObject.Spec.PodSpec.MultiPodPerHost) {
+		return warnings, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
 	if err := validateNetworkPolicyUpdate(
-		&old.Spec.AerospikeNetworkPolicy, &c.Spec.AerospikeNetworkPolicy,
+		&oldObject.Spec.AerospikeNetworkPolicy, &aerospikeCluster.Spec.AerospikeNetworkPolicy,
 	); err != nil {
-		return nil, err
+		return warnings, err
 	}
 
 	if err := validateOperationUpdate(
-		&old.Spec, &c.Spec, &c.Status,
+		&oldObject.Spec, &aerospikeCluster.Spec, &aerospikeCluster.Status,
 	); err != nil {
-		return nil, err
+		return warnings, err
 	}
 
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
-		aslog, c.Spec.AerospikeConfig, old.Spec.AerospikeConfig,
-		c.Status.AerospikeConfig,
+		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
+		aerospikeCluster.Status.AerospikeConfig,
 	); err != nil {
-		return nil, err
+		return warnings, err
 	}
 
 	// Validate RackConfig update
-	return nil, c.validateRackUpdate(aslog, old)
+	return warnings, aerospikeCluster.validateRackUpdate(aslog, oldObject)
 }
 
-func (c *AerospikeCluster) validate(aslog logr.Logger) error {
+func (c *AerospikeCluster) validate(aslog logr.Logger) (admission.Warnings, error) {
 	aslog.V(1).Info("Validate AerospikeCluster spec", "obj.Spec", c.Spec)
+
+	var warnings admission.Warnings
 
 	// Validate obj name
 	if c.Name == "" {
-		return fmt.Errorf("aerospikeCluster name cannot be empty")
+		return warnings, fmt.Errorf("aerospikeCluster name cannot be empty")
 	}
 
 	if strings.Contains(c.Name, " ") {
 		// Few parsing logic depend on this
-		return fmt.Errorf("aerospikeCluster name cannot have spaces")
+		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
 	}
 
 	// Validate obj namespace
 	if c.Namespace == "" {
-		return fmt.Errorf("aerospikeCluster namespace name cannot be empty")
+		return warnings, fmt.Errorf("aerospikeCluster namespace name cannot be empty")
 	}
 
 	if strings.Contains(c.Namespace, " ") {
 		// Few parsing logic depend on this
-		return fmt.Errorf("aerospikeCluster name cannot have spaces")
+		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
 	}
 
 	// Validate image type. Only enterprise image allowed for now
 	if !isEnterprise(c.Spec.Image) {
-		return fmt.Errorf("CommunityEdition Cluster not supported")
+		return warnings, fmt.Errorf("CommunityEdition Cluster not supported")
 	}
 
 	// Validate size
 	if c.Spec.Size == 0 {
-		return fmt.Errorf("invalid cluster size 0")
+		return warnings, fmt.Errorf("invalid cluster size 0")
 	}
 
 	// Validate MaxUnavailable for PodDisruptionBudget
-	if err := c.validateMaxUnavailable(); err != nil {
-		return err
+	warns, err := c.validateMaxUnavailable()
+	warnings = append(warnings, warns...)
+
+	if err != nil {
+		return warnings, err
 	}
 
 	// Validate Image version
 	version, err := GetImageVersion(c.Spec.Image)
 	if err != nil {
-		return err
+		return warnings, err
 	}
 
 	val, err := lib.CompareVersions(version, baseVersion)
 	if err != nil {
-		return fmt.Errorf("failed to check image version: %v", err)
+		return warnings, fmt.Errorf("failed to check image version: %v", err)
 	}
 
 	if val < 0 {
-		return fmt.Errorf(
+		return warnings, fmt.Errorf(
 			"image version %s not supported. Base version %s", version,
 			baseVersion,
 		)
@@ -191,83 +224,83 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) error {
 
 	err = validateClusterSize(aslog, int(c.Spec.Size))
 	if err != nil {
-		return err
+		return warnings, err
 	}
 
 	if err := c.validateOperation(); err != nil {
-		return err
+		return warnings, err
 	}
 
 	// Storage should be validated before validating aerospikeConfig and fileStorage
 	if err := validateStorage(&c.Spec.Storage, &c.Spec.PodSpec); err != nil {
-		return err
+		return warnings, err
 	}
 
 	for idx := range c.Spec.RackConfig.Racks {
 		rack := &c.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
 		if err := validateStorage(&rack.Storage, &c.Spec.PodSpec); err != nil {
-			return err
+			return warnings, err
 		}
 
 		// Validate if passed aerospikeConfig
 		if err := validateAerospikeConfigSchema(
 			aslog, version, rack.AerospikeConfig,
 		); err != nil {
-			return fmt.Errorf("aerospikeConfig not valid: %v", err)
+			return warnings, fmt.Errorf("aerospikeConfig not valid: %v", err)
 		}
 
 		// Validate common aerospike config
 		if err := c.validateAerospikeConfig(
 			&rack.AerospikeConfig, &rack.Storage, int(c.Spec.Size),
 		); err != nil {
-			return err
+			return warnings, err
 		}
 
 		if err := validateRequiredFileStorageForMetadata(
 			rack.AerospikeConfig, &rack.Storage, c.Spec.ValidationPolicy,
 		); err != nil {
-			return err
+			return warnings, err
 		}
 
 		if err := validateRequiredFileStorageForAerospikeConfig(
 			rack.AerospikeConfig, &rack.Storage,
 		); err != nil {
-			return err
+			return warnings, err
 		}
 	}
 
 	// Validate resource and limit
 	if err := c.validatePodSpecResourceAndLimits(aslog); err != nil {
-		return err
+		return warnings, err
 	}
 
 	// Validate access control
 	if err := c.validateAccessControl(aslog); err != nil {
-		return err
+		return warnings, err
 	}
 
 	// Validate rackConfig
 	if err := c.validateRackConfig(aslog); err != nil {
-		return err
+		return warnings, err
 	}
 
 	if err := validateClientCertSpec(
 		c.Spec.OperatorClientCertSpec, c.Spec.AerospikeConfig,
 	); err != nil {
-		return err
+		return warnings, err
 	}
 
 	if err := c.validateNetworkPolicy(c.Namespace); err != nil {
-		return err
+		return warnings, err
 	}
 
 	// Validate Sidecars
 	if err := c.validatePodSpec(); err != nil {
-		return err
+		return warnings, err
 	}
 
-	return c.validateSCNamespaces()
+	return warnings, c.validateSCNamespaces()
 }
 
 func (c *AerospikeCluster) validateOperation() error {
@@ -2210,32 +2243,26 @@ func validateIntOrStringField(value *intstr.IntOrString, fieldPath string) error
 	return nil
 }
 
-func (c *AerospikeCluster) validateMaxUnavailable() error {
-	// safe checks for corner cases when mutation webhook somehow didn't work
-	if !GetBool(c.Spec.DisablePDB) {
-		// Ensure maxUnavailable is set when PDB is enabled
-		if c.Spec.MaxUnavailable == nil {
-			return fmt.Errorf("maxUnavailable cannot be nil if PDB is not disabled. Mutation webhook might not have worked")
-		}
-	} else {
-		// Ensure maxUnavailable is unset when PDB is disabled
-		if c.Spec.MaxUnavailable != nil {
-			return fmt.Errorf("maxUnavailable must be nil if PDB is disabled")
-		}
+func (c *AerospikeCluster) validateMaxUnavailable() (admission.Warnings, error) {
+	var warnings admission.Warnings
+
+	if GetBool(c.Spec.DisablePDB) {
+		warnings = append(warnings, fmt.Sprintf("Spec field 'spec.maxUnavailable' will be omitted from Custom Resource (CR) "+
+			"because 'spec.disablePDB' is true."))
 
 		// PDB is disabled, no further validation required
-		return nil
+		return warnings, nil
 	}
 
 	if err := validateIntOrStringField(c.Spec.MaxUnavailable, "spec.maxUnavailable"); err != nil {
-		return err
+		return warnings, err
 	}
 
 	safeMaxUnavailable := int(c.Spec.Size)
 
 	// If Size is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
 	if safeMaxUnavailable == 1 {
-		return nil
+		return warnings, nil
 	}
 
 	for idx := range c.Spec.RackConfig.Racks {
@@ -2252,7 +2279,7 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 
 			rf, err := GetIntType(rfInterface)
 			if err != nil {
-				return fmt.Errorf("namespace replication-factor %v", err)
+				return warnings, fmt.Errorf("namespace replication-factor %v", err)
 			}
 
 			// If RF is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
@@ -2267,12 +2294,12 @@ func (c *AerospikeCluster) validateMaxUnavailable() error {
 	}
 
 	if c.Spec.MaxUnavailable.IntValue() >= safeMaxUnavailable {
-		return fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v as it may result in "+
+		return warnings, fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v as it may result in "+
 			"data loss. Set it to a lower value",
 			c.Spec.MaxUnavailable.String(), safeMaxUnavailable)
 	}
 
-	return nil
+	return warnings, nil
 }
 
 func (c *AerospikeCluster) validateEnableDynamicConfigUpdate() error {

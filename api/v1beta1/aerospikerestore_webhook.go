@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -35,36 +36,62 @@ import (
 
 const defaultPollingPeriod time.Duration = 60 * time.Second
 
-func (r *AerospikeRestore) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+// SetupAerospikeRestoreWebhookWithManager registers the webhook for AerospikeRestore in the manager.
+func SetupAerospikeRestoreWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeRestore{}).
+		WithDefaulter(&AerospikeRestoreCustomDefaulter{}).
+		WithValidator(&AerospikeRestoreCustomValidator{}).
 		Complete()
 }
 
-//nolint:lll // for readability
-//+kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikerestore,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikerestores,verbs=create;update,versions=v1beta1,name=maerospikerestore.kb.io,admissionReviewVersions=v1
-
-var _ webhook.Defaulter = &AerospikeRestore{}
-
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *AerospikeRestore) Default() {
-	arLog := logf.Log.WithName(namespacedName(r))
-
-	arLog.Info("Setting defaults for aerospikeRestore")
-
-	if r.Spec.PollingPeriod.Duration.Seconds() == 0 {
-		r.Spec.PollingPeriod.Duration = defaultPollingPeriod
-	}
+// +kubebuilder:object:generate=false
+// Above marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type AerospikeRestoreCustomDefaulter struct {
+	// Default values for various AerospikeRestore fields
 }
 
 //nolint:lll // for readability
-//+kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikerestore,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikerestores,verbs=create;update,versions=v1beta1,name=vaerospikerestore.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikerestore,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikerestores,verbs=create;update,versions=v1beta1,name=maerospikerestore.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &AerospikeRestore{}
+var _ webhook.CustomDefaulter = &AerospikeRestoreCustomDefaulter{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
-	arLog := logf.Log.WithName(namespacedName(r))
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	restore, ok := obj.(*AerospikeRestore)
+	if !ok {
+		return fmt.Errorf("expected AerospikeRestore, got %T", obj)
+	}
+
+	arLog := logf.Log.WithName(namespacedName(restore))
+
+	arLog.Info("Setting defaults for aerospikeRestore")
+
+	if restore.Spec.PollingPeriod.Duration.Seconds() == 0 {
+		restore.Spec.PollingPeriod.Duration = defaultPollingPeriod
+	}
+
+	return nil
+}
+
+// +kubebuilder:object:generate=false
+type AerospikeRestoreCustomValidator struct {
+}
+
+//nolint:lll // for readability
+// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikerestore,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikerestores,verbs=create;update,versions=v1beta1,name=vaerospikerestore.kb.io,admissionReviewVersions=v1
+
+var _ webhook.CustomValidator = &AerospikeRestoreCustomValidator{}
+
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	restore, ok := obj.(*AerospikeRestore)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeRestore, got %T", obj)
+	}
+
+	arLog := logf.Log.WithName(namespacedName(restore))
 
 	arLog.Info("Validate create")
 
@@ -74,37 +101,49 @@ func (r *AerospikeRestore) ValidateCreate() (admission.Warnings, error) {
 	}
 
 	if err := ValidateBackupSvcSupportedVersion(k8sClient,
-		r.Spec.BackupService.Name,
-		r.Spec.BackupService.Namespace,
+		restore.Spec.BackupService.Name,
+		restore.Spec.BackupService.Namespace,
 	); err != nil {
 		return nil, err
 	}
 
-	if err := r.validateRestoreConfig(k8sClient); err != nil {
+	if err := restore.validateRestoreConfig(k8sClient); err != nil {
 		return nil, err
 	}
 
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeRestore) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	arLog := logf.Log.WithName(namespacedName(r))
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (arv *AerospikeRestoreCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
+) (admission.Warnings, error) {
+	restore, ok := newObj.(*AerospikeRestore)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeRestore, got %T", newObj)
+	}
+
+	arLog := logf.Log.WithName(namespacedName(restore))
 
 	arLog.Info("Validate update")
 
-	oldRestore := old.(*AerospikeRestore)
+	oldRestore := oldObj.(*AerospikeRestore)
 
-	if !reflect.DeepEqual(oldRestore.Spec, r.Spec) {
+	if !reflect.DeepEqual(oldRestore.Spec, restore.Spec) {
 		return nil, fmt.Errorf("aerospikeRestore Spec is immutable")
 	}
 
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeRestore) ValidateDelete() (admission.Warnings, error) {
-	arLog := logf.Log.WithName(namespacedName(r))
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (arv *AerospikeRestoreCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	restore, ok := obj.(*AerospikeRestore)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeRestore, got %T", obj)
+	}
+
+	arLog := logf.Log.WithName(namespacedName(restore))
 
 	arLog.Info("Validate delete")
 

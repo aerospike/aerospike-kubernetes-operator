@@ -262,9 +262,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						Expect(len(pvcs)).Should(
-							Equal(0), "PVCs not deleted",
-						)
+						Expect(pvcs).Should(BeEmpty(), "PVCs not deleted")
 					},
 				)
 
@@ -496,7 +494,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						_, ok := aeroCluster.Labels["checkLabel"]
-						Expect(ok).To(Equal(false))
+						Expect(ok).To(BeFalse())
 
 						apiLabel = aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel]
 						Expect(apiLabel).To(Equal(asdbv1.AerospikeAPIVersion))
