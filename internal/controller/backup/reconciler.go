@@ -126,7 +126,13 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(finalizerName string)
 			return err
 		}
 
-		if err := common.ReloadBackupServiceConfigInPods(r.Client, r.Log, &r.aeroBackup.Spec.BackupService); err != nil {
+		backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
+		if err != nil {
+			return err
+		}
+
+		if err := common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient,
+			r.Log, &r.aeroBackup.Spec.BackupService); err != nil {
 			return err
 		}
 
@@ -420,7 +426,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(r.Client, r.Log, &r.aeroBackup.Spec.BackupService)
+		err = common.ReloadBackupServiceConfigInPods(r.Client, serviceClient, r.Log, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return err
 		}

@@ -25,6 +25,7 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -319,33 +320,12 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		return r.waitForDeploymentToBeReady()
 	}
 
-	// If status is empty then no need for config Hash comparison
-	if len(r.aeroBackupService.Status.Config.Raw) == 0 {
-		return r.waitForDeploymentToBeReady()
-	}
-
-	desiredHash, err := utils.GetHash(string(r.aeroBackupService.Spec.Config.Raw))
-	if err != nil {
+	// Wait for deployment pods to be ready before doing any operation related to the backup service
+	if err := r.waitForDeploymentToBeReady(); err != nil {
 		return err
 	}
 
-	currentHash, err := utils.GetHash(string(r.aeroBackupService.Status.Config.Raw))
-	if err != nil {
-		return err
-	}
-
-	// If there is a change in config hash, then reload the config or restart the deployment pod
-	if desiredHash != currentHash {
-		r.Log.Info("BackupService config mismatch, will reload the config")
-
-		if err := r.updateBackupSvcConfig(); err != nil {
-			return err
-		}
-
-		r.Log.Info("Reloaded backup service")
-	}
-
-	return r.waitForDeploymentToBeReady()
+	return r.updateBackupSvcConfig()
 }
 
 func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deployment, error) {
@@ -366,11 +346,50 @@ func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deploymen
 func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 	var currentConfig, desiredConfig dto.Config
 
-	if err := yaml.Unmarshal(r.aeroBackupService.Status.Config.Raw, &currentConfig); err != nil {
+	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &asdbv1beta1.BackupService{
+		Name:      r.aeroBackupService.Name,
+		Namespace: r.aeroBackupService.Namespace})
+	if err != nil {
 		return err
 	}
 
-	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &desiredConfig); err != nil {
+	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
+	if err != nil {
+		return err
+	}
+
+	backupSvc := &asdbv1beta1.BackupService{
+		Name:      r.aeroBackupService.Name,
+		Namespace: r.aeroBackupService.Namespace,
+	}
+
+	desiredData, err := common.GetBackupSvcConfigFromCM(r.Client, backupSvc)
+	if err != nil {
+		return err
+	}
+
+	synced, err := common.IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, r.Log)
+	if err != nil {
+		return err
+	}
+
+	if synced {
+		r.Log.Info("Backup service config already latest, skipping update")
+		return nil
+	}
+
+	r.Log.Info("Backup service config mismatch, will reload the config")
+
+	apiBackupSvcConfigData, err := yaml.Marshal(apiBackupSvcConfig)
+	if err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal(apiBackupSvcConfigData, &currentConfig); err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal([]byte(desiredData), &desiredConfig); err != nil {
 		return err
 	}
 
@@ -380,11 +399,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 		return r.restartBackupSvcPod()
 	}
 
-	return common.ReloadBackupServiceConfigInPods(r.Client, r.Log,
-		&asdbv1beta1.BackupService{
-			Name:      r.aeroBackupService.Name,
-			Namespace: r.aeroBackupService.Namespace},
-	)
+	return common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient, r.Log, backupSvc)
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {
