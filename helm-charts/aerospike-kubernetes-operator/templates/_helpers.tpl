@@ -56,9 +56,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Deprecated fields are not allowed to be used with new charts, install/upgrade should fail
 */}}
 {{- define "validateDeprecateFields" -}}
-{{- if .Values.kubeRBACProxyPort -}}
-    {{ fail ".Values.kubeRBACProxyPort field is deprecated, use .Values.kubeRBACProxy.port instead" }}
-{{- end -}}
 
 {{- if .Values.webhookServicePort -}}
     {{ fail ".Values.webhookServicePort field is deprecated, use .Values.webhookService.targetPort instead" }}

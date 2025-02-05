@@ -1,8 +1,8 @@
-{{- if .Values.certs.webhook.create }}
+{{- if .Values.certs.metrics.create }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: aerospike-operator-serving-cert
+  name: aerospike-operator-metrics-cert
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -10,10 +10,10 @@ metadata:
     release: {{ .Release.Name }}
 spec:
   dnsNames:
-  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc
-  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  - aerospike-operator-controller-manager-metrics-service.{{ .Release.Namespace }}.svc
+  - aerospike-operator-controller-manager-metrics-service.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: aerospike-operator-selfsigned-issuer
-  secretName: {{ .Values.certs.webhook.webhookServerCertSecretName }}
+  secretName: {{ .Values.certs.metrics.metricsServerCertSecretName }}
 {{- end }}

@@ -18,27 +18,12 @@ package v1
 
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// log is for logging in this package.
-var aerospikeClusterLog = logf.Log.WithName("aerospikecluster-resource")
-
-func (c *AerospikeCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	hookServer := mgr.GetWebhookServer()
-
-	aerospikeClusterLog.Info(
-		"Registering mutating webhook to the webhook" +
-			" server",
-	)
-	hookServer.Register(
-		"/mutate-asdb-aerospike-com-v1-aerospikecluster",
-		&webhook.Admission{Handler: &mutatingHandler{decoder: admission.NewDecoder(mgr.GetScheme())}},
-	)
-
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(c).
+// SetupAerospikeClusterWebhookWithManager registers the webhook for AerospikeCluster in the manager.
+func SetupAerospikeClusterWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeCluster{}).
+		WithDefaulter(&AerospikeClusterCustomDefaulter{}).
+		WithValidator(&AerospikeClusterCustomValidator{}).
 		Complete()
 }

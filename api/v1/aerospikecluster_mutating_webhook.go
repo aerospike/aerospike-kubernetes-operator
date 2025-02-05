@@ -17,72 +17,67 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
-	"gomodules.xyz/jsonpatch/v2"
-	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+// +kubebuilder:object:generate=false
+// Above marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type AerospikeClusterCustomDefaulter struct {
+	// Default values for various AerospikeCluster fields
+}
+
+// Implemented webhook.CustomDefaulter interface for future reference
+var _ webhook.CustomDefaulter = &AerospikeClusterCustomDefaulter{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
-	asLog := logf.Log.WithName(ClusterNamespacedName(c))
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	aerospikeCluster, ok := obj.(*AerospikeCluster)
+	if !ok {
+		return fmt.Errorf("expected AerospikeCluster, got %T", obj)
+	}
+
+	asLog := logf.Log.WithName(ClusterNamespacedName(aerospikeCluster))
 
 	asLog.Info(
 		"Setting defaults for aerospikeCluster", "aerospikecluster.Spec",
-		c.Spec,
+		aerospikeCluster.Spec,
 	)
 
-	var (
-		warn admission.Warnings
-		err  error
-	)
-
-	if warn, err = c.setDefaults(asLog); err != nil {
+	if err := aerospikeCluster.setDefaults(asLog); err != nil {
 		asLog.Error(err, "Mutate AerospikeCluster create failed")
-		return webhook.Denied(err.Error()).WithWarnings(warn...)
+		return err
 	}
 
 	asLog.Info("Setting defaults for aerospikeCluster completed")
 
 	asLog.Info(
-		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", c.Spec,
+		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", aerospikeCluster.Spec,
 	)
 
-	var patches []jsonpatch.JsonPatchOperation
-	patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec})
-
-	if operation == v1.Create {
-		patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels})
-	}
-
-	return webhook.Patched(
-		"Patched aerospike spec with defaults",
-		patches...,
-	).WithWarnings(warn...)
+	return nil
 }
 
-func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, error) {
-	var warn admission.Warnings
+func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	// If PDB is disabled, set maxUnavailable to nil
 	if GetBool(c.Spec.DisablePDB) {
 		c.Spec.MaxUnavailable = nil
-
-		warn = append(warn, fmt.Sprintf("Spec field 'spec.maxUnavailable' will be omitted from Custom Resource (CR) "+
-			"because 'spec.disablePDB' is true."))
 	} else if c.Spec.MaxUnavailable == nil {
 		// Set default maxUnavailable if not set
 		maxUnavailable := intstr.FromInt32(1)
@@ -99,22 +94,22 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, e
 	// Need to set before setting defaults in aerospikeConfig.
 	// aerospikeConfig.namespace checks for racks
 	if err := c.setDefaultRackConf(asLog); err != nil {
-		return warn, err
+		return err
 	}
 
 	if c.Spec.AerospikeConfig == nil {
-		return warn, fmt.Errorf("spec.aerospikeConfig cannot be nil")
+		return fmt.Errorf("spec.aerospikeConfig cannot be nil")
 	}
 
 	// Set common aerospikeConfig defaults
 	// Update configMap
 	if err := c.setDefaultAerospikeConfigs(asLog, *c.Spec.AerospikeConfig, nil); err != nil {
-		return warn, err
+		return err
 	}
 
 	// Update racks configuration using global values where required.
 	if err := c.updateRacks(asLog); err != nil {
-		return warn, err
+		return err
 	}
 
 	// Set defaults for pod spec
@@ -145,7 +140,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) (admission.Warnings, e
 		c.Labels[AerospikeAPIVersionLabel] = AerospikeAPIVersion
 	}
 
-	return warn, nil
+	return nil
 }
 
 // SetDefaults applies defaults to the pod spec.
