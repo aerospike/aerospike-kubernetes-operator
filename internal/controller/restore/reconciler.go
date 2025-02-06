@@ -93,6 +93,8 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
 		"Restore completed successfully %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
 
+	r.Log.Info("Reconcile completed successfully")
+
 	return ctrl.Result{}, nil
 }
 
