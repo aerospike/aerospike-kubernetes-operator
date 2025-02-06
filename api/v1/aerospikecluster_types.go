@@ -197,6 +197,14 @@ type SeedsFinderServices struct {
 	// Kubernetes cluster.
 	// +optional
 	LoadBalancer *LoadBalancerSpec `json:"loadBalancer,omitempty"`
+
+	// Settings for the Headless service created by default to discover Aerospike
+	// Cluster nodes by pod IP.
+	Headless HeadlessServiceSpec `json:"headless,omitempty"`
+
+	// Pod service is a NodePort type service created to discover both Aerospike pod ports and IP
+	// addresses. This service is only created if `multiPodPerHost` is set to `true`.
+	Pod PodServiceSpec `json:"pod,omitempty"`
 }
 
 // LoadBalancerSpec contains specification for Service with type LoadBalancer.
@@ -229,6 +237,22 @@ type LoadBalancerSpec struct { //nolint:govet // for readability
 
 	// +optional
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" patchStrategy:"merge"`
+}
+
+// HeadlessServiceSpec contains specification for the headless service with type ClusterIP.
+// +k8s:openapi-gen=true
+type HeadlessServiceSpec struct {
+	// +patchStrategy=merge
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" patchStrategy:"merge"`
+}
+
+// PodServiceSpec contains specification for the pod service with type NodePort.
+// +k8s:openapi-gen=true
+type PodServiceSpec struct {
+	// +patchStrategy=merge
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" patchStrategy:"merge"`
 }
 
 type AerospikeOperatorClientCertSpec struct { //nolint:govet // for readability
