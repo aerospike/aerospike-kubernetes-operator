@@ -22,7 +22,7 @@ helm repo update
 
 We recommend using one ABS deployment per Aerospike cluster.
 
-Create the service account for the ABS in the namespace where Aerospike cluster is deployed
+Create the service account for the ABS in the namespace where ABS is deployed
 
 ```sh
 kubectl create serviceaccount aerospike-backup-service -n <namespace>

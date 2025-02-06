@@ -91,7 +91,8 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	if err := r.reconcileConfigMap(); err != nil {
-		r.Log.Error(err, "Failed to reconcile config map")
+		r.Log.Error(err, "Failed to reconcile config map",
+			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
 			"ConfigMapReconcileFailed", "Failed to reconcile config map %s/%s",
 			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -102,7 +103,8 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	if err := r.reconcileDeployment(); err != nil {
-		r.Log.Error(err, "Failed to reconcile deployment")
+		r.Log.Error(err, "Failed to reconcile deployment",
+			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
 			"DeploymentReconcileFailed", "Failed to reconcile deployment %s/%s",
 			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -113,7 +115,8 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	if err := r.reconcileService(); err != nil {
-		r.Log.Error(err, "Failed to reconcile service")
+		r.Log.Error(err, "Failed to reconcile service",
+			"name", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
 			"ServiceReconcileFailed", "Failed to reconcile service %s/%s",
 			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
@@ -316,7 +319,8 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 		"Updated Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 	if oldResourceVersion != deployment.ResourceVersion {
-		r.Log.Info("Deployment spec is updated, will result in rolling restart")
+		r.Log.Info("Deployment spec is updated, will result in rolling restart of Backup service pod",
+			"name", getBackupServiceName(r.aeroBackupService))
 		return r.waitForDeploymentToBeReady()
 	}
 
@@ -346,9 +350,12 @@ func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deploymen
 func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 	var currentConfig, desiredConfig dto.Config
 
-	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &asdbv1beta1.BackupService{
+	backupSvc := &asdbv1beta1.BackupService{
 		Name:      r.aeroBackupService.Name,
-		Namespace: r.aeroBackupService.Namespace})
+		Namespace: r.aeroBackupService.Namespace,
+	}
+
+	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, backupSvc)
 	if err != nil {
 		return err
 	}
@@ -356,11 +363,6 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
 		return err
-	}
-
-	backupSvc := &asdbv1beta1.BackupService{
-		Name:      r.aeroBackupService.Name,
-		Namespace: r.aeroBackupService.Namespace,
 	}
 
 	desiredData, err := common.GetBackupSvcConfigFromCM(r.Client, backupSvc)
@@ -394,7 +396,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 	}
 
 	if err := validation.ValidateStaticFieldChanges(&currentConfig, &desiredConfig); err != nil {
-		r.Log.Info("Static config change detected, will result in rolling restart")
+		r.Log.Info("Static config change detected, will result in rolling restart of Backup service pod")
 		// In case of static config change restart the backup service pod
 		return r.restartBackupSvcPod()
 	}
@@ -711,7 +713,8 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 	)
 
 	r.Log.Info(
-		"Waiting for deployment to be ready", "WaitTimePerPod", podStatusTimeout,
+		"Waiting for deployment to be ready", "name", getBackupServiceName(r.aeroBackupService),
+		"WaitTimePerPod", podStatusTimeout,
 	)
 
 	if err := wait.PollUntilContextTimeout(context.TODO(),
@@ -724,7 +727,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			// This check is for the condition when deployment rollout is yet to begin, and
 			// pods with new spec are yet to be created.
 			if deployment.Generation > deployment.Status.ObservedGeneration {
-				r.Log.Info("Waiting for deployment to be ready")
+				r.Log.Info("Waiting for deployment to be ready", "name", deployment.Name)
 				return false, nil
 			}
 
@@ -734,7 +737,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			}
 
 			if len(podList.Items) == 0 {
-				r.Log.Info("No pod found for deployment")
+				r.Log.Info("No pod found for deployment", "name", deployment.Name)
 				return false, nil
 			}
 
@@ -746,7 +749,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 				}
 
 				if !utils.IsPodRunningAndReady(pod) {
-					r.Log.Info("Pod is not ready", "pod", pod.Name)
+					r.Log.Info("Pod is not ready", "name", pod.Name)
 					return false, nil
 				}
 			}
@@ -761,7 +764,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 		return err
 	}
 
-	r.Log.Info("Deployment is ready")
+	r.Log.Info("Deployment is ready", "name", getBackupServiceName(r.aeroBackupService))
 
 	return nil
 }
