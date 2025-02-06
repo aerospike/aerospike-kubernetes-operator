@@ -85,7 +85,7 @@ operator using OLM.
 ### Install operator-sdk
 
 Install operator-sdk version 1.39.1 using the
-installation [guide](https://v1-36-x.sdk.operatorframework.io/docs/installation/)
+installation [guide](https://v1-39-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle
 
@@ -221,7 +221,7 @@ operator-sdk cleanup aerospike-kubernetes-operator --namespace=aerospike
 
 ### Running tests
 
-The operator tests require following prerequisites
+The operator tests require the following prerequisites
 
 - A running Kubernetes cluster with at least 3 nodes with at least 12 CPUs
 - A storage class named "ssd" that allows provisioning of filesystem and block devices

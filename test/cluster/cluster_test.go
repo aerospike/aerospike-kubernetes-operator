@@ -26,7 +26,7 @@ var _ = Describe(
 
 		// Cluster lifecycle related
 		Context(
-			"DeployClusterPost490", func() {
+			"DeployClusterPost570", func() {
 				DeployClusterForAllImagesPost570(ctx)
 			},
 		)
@@ -654,7 +654,7 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 	Expect(err).ToNot(HaveOccurred())
 }
 
-// Test cluster deployment with all image post 4.9.0 except the latest version
+// Test cluster deployment with all image post 5.7.0 except the latest version
 func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 	versions := []string{
 		"7.2.0.6", "7.1.0.12", "7.0.0.20", "6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16",
