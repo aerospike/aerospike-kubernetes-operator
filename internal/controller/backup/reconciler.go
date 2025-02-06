@@ -159,7 +159,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	}
 
 	r.Log.Info("Updating existing ConfigMap for Backup",
-		"name", r.aeroBackup.Spec.BackupService.String(),
+		"configmap", r.aeroBackup.Spec.BackupService.String(),
 	)
 
 	specBackupConfig, err := r.getBackupConfigInMap()
@@ -234,7 +234,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap() error {
 	}
 
 	r.Log.Info("Updated Backup Service ConfigMap for Backup",
-		"name", r.aeroBackup.Spec.BackupService.String(),
+		"configmap", r.aeroBackup.Spec.BackupService.String(),
 	)
 	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "ConfigMapUpdated",
 		"Updated Backup Service ConfigMap %s for Backup %s/%s", r.aeroBackup.Spec.BackupService.String(),
@@ -248,7 +248,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Backup Service ConfigMap not found, skip updating",
-				"name", r.aeroBackup.Spec.BackupService.String())
+				"configmap", r.aeroBackup.Spec.BackupService.String())
 			return nil
 		}
 
@@ -256,7 +256,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	}
 
 	r.Log.Info("Removing Backup info from existing ConfigMap",
-		"name", r.aeroBackup.Spec.BackupService.String(),
+		"configmap", r.aeroBackup.Spec.BackupService.String(),
 	)
 
 	specBackupConfig, err := r.getBackupConfigInMap()
@@ -324,7 +324,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	}
 
 	r.Log.Info("Removed Backup info from existing ConfigMap",
-		"name", r.aeroBackup.Spec.BackupService.String(),
+		"configmap", r.aeroBackup.Spec.BackupService.String(),
 	)
 
 	return nil
