@@ -4,7 +4,7 @@ A Helm chart for `AerospikeBackupService` (ABS) custom resource to be used with 
 
 ## Pre Requisites
 
-- Kubernetes 1.19+
+- Kubernetes 1.23+
 - Aerospike Kubernetes Operator
 
 ## Usage

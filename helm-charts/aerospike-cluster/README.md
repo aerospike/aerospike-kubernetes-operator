@@ -4,7 +4,7 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ## Pre Requisites
 
-- Kubernetes 1.19+
+- Kubernetes 1.23+
 - Aerospike Kubernetes Operator
 
 ## Usage
