@@ -69,6 +69,14 @@ var _ = BeforeSuite(
 		err = cluster.DeployCluster(k8sClient, testCtx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
+		aeroCluster, err = cluster.GetCluster(k8sClient, testCtx, sourceAerospikeClusterNsNm)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = cluster.WriteDataToCluster(
+			aeroCluster, k8sClient, []string{"test"},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
 		backupObj, err := backup.NewBackup(backupNsNm)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -85,7 +93,7 @@ var _ = BeforeSuite(
 		pkgLog.Info(fmt.Sprintf("BackupDataPaths: %v", backupDataPaths))
 		Expect(backupDataPaths).ToNot(BeEmpty())
 
-		// Example backupDataPath = "/localStorage/test-sample-backup-test-routine/backup/1722353745635/data/test"
+		// Example backupDataPath = "test-sample-backup-test-routine/backup/1722353745635/data/test"
 		backupDataPath = backupDataPaths[0]
 
 		By(fmt.Sprintf("Deploy destination Aerospike Cluster: %s", destinationAerospikeClusterNsNm.String()))

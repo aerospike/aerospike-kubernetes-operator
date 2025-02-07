@@ -1,4 +1,4 @@
-{{- if .Values.certs.create }}
+{{- if .Values.certs.webhook.create }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -15,5 +15,5 @@ spec:
   issuerRef:
     kind: Issuer
     name: aerospike-operator-selfsigned-issuer
-  secretName: {{ .Values.certs.webhookServerCertSecretName }}
+  secretName: {{ .Values.certs.webhook.webhookServerCertSecretName }}
 {{- end }}

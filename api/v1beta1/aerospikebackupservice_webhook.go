@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -28,74 +29,99 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
-func (r *AerospikeBackupService) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+const MinSupportedVersion = "3.0.0"
+
+// SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
+func SetupAerospikeBackupServiceWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeBackupService{}).
+		WithDefaulter(&AerospikeBackupServiceCustomDefaulter{}).
+		WithValidator(&AerospikeBackupServiceCustomValidator{}).
 		Complete()
 }
 
+// +kubebuilder:object:generate=false
+// Above marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type AerospikeBackupServiceCustomDefaulter struct {
+	// Default values for various AerospikeBackupService fields
+}
+
 //nolint:lll // for readability
-//+kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Defaulter = &AerospikeBackupService{}
+var _ webhook.CustomDefaulter = &AerospikeBackupCustomDefaulter{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *AerospikeBackupService) Default() {
-	absLog := logf.Log.WithName(namespacedName(r))
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	backupSvc, ok := obj.(*AerospikeBackupService)
+	if !ok {
+		return fmt.Errorf("expected AerospikeBackupService, got %T", obj)
+	}
+
+	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Setting defaults for aerospikeBackupService")
 
-	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
-		r.Spec.PodSpec.ServiceContainerSpec.Resources = r.Spec.Resources
+	if backupSvc.Spec.Resources != nil && backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
+		backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources = backupSvc.Spec.Resources
 	}
+
+	return nil
+}
+
+// +kubebuilder:object:generate=false
+type AerospikeBackupServiceCustomValidator struct {
 }
 
 //nolint:lll // for readability
-//+kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=vaerospikebackupservice.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=vaerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &AerospikeBackupService{}
+var _ webhook.CustomValidator = &AerospikeBackupServiceCustomValidator{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeBackupService) ValidateCreate() (admission.Warnings, error) {
-	absLog := logf.Log.WithName(namespacedName(r))
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	backupSvc, ok := obj.(*AerospikeBackupService)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
+	}
+
+	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate create")
 
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return r.validateServicePodSpec()
+	return backupSvc.validate()
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeBackupService) ValidateUpdate(oldObj runtime.Object) (admission.Warnings, error) {
-	absLog := logf.Log.WithName(namespacedName(r))
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
+) (admission.Warnings, error) {
+	backupSvc, ok := newObj.(*AerospikeBackupService)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", newObj)
+	}
+
+	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate update")
 
-	if err := r.validateBackupServiceConfig(); err != nil {
-		return nil, err
-	}
-
-	if err := r.validateBackupServiceSecrets(); err != nil {
-		return nil, err
-	}
-
-	return r.validateServicePodSpec()
+	return backupSvc.validate()
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
-	absLog := logf.Log.WithName(namespacedName(r))
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+) (admission.Warnings, error) {
+	backupSvc, ok := obj.(*AerospikeBackupService)
+	if !ok {
+		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
+	}
+
+	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate delete")
 
@@ -103,8 +129,24 @@ func (r *AerospikeBackupService) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
+func (r *AerospikeBackupService) validate() (admission.Warnings, error) {
+	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceConfig(); err != nil {
+		return nil, err
+	}
+
+	if err := r.validateBackupServiceSecrets(); err != nil {
+		return nil, err
+	}
+
+	return r.validateServicePodSpec()
+}
+
 func (r *AerospikeBackupService) validateBackupServiceConfig() error {
-	var config model.Config
+	var config dto.Config
 
 	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
 		return err
@@ -119,19 +161,15 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	}
 
 	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig == nil {
-		config.ServiceConfig = &model.BackupServiceConfig{}
-	}
-
 	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &model.HTTPServerConfig{}
+		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
 	}
 
 	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &model.LoggerConfig{}
+		config.ServiceConfig.Logger = &dto.LoggerConfig{}
 	}
 
-	return config.Validate()
+	return validation.ValidateConfiguration(&config)
 }
 
 func (r *AerospikeBackupService) validateBackupServiceSecrets() error {

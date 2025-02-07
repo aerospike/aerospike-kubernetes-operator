@@ -65,7 +65,7 @@ var _ = Describe("Sample files validation", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = writeDataToCluster(
+			err = WriteDataToCluster(
 				aeroCluster, k8sClient, []string{"test"},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -77,11 +77,11 @@ var _ = Describe("Sample files validation", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			records, err := checkDataInCluster(
+			records, err := CheckDataInCluster(
 				destCluster, k8sClient, []string{"test"},
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(records)).NotTo(Equal(0))
+			Expect(records).NotTo(BeEmpty())
 
 			for namespace, recordExists := range records {
 				Expect(recordExists).To(

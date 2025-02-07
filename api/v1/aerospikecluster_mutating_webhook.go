@@ -17,62 +17,69 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
-	"gomodules.xyz/jsonpatch/v2"
-	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+// +kubebuilder:object:generate=false
+// Above marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type AerospikeClusterCustomDefaulter struct {
+	// Default values for various AerospikeCluster fields
+}
+
+// Implemented webhook.CustomDefaulter interface for future reference
+var _ webhook.CustomDefaulter = &AerospikeClusterCustomDefaulter{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (c *AerospikeCluster) Default(operation v1.Operation) admission.Response {
-	asLog := logf.Log.WithName(ClusterNamespacedName(c))
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
+	aerospikeCluster, ok := obj.(*AerospikeCluster)
+	if !ok {
+		return fmt.Errorf("expected AerospikeCluster, got %T", obj)
+	}
+
+	asLog := logf.Log.WithName(ClusterNamespacedName(aerospikeCluster))
 
 	asLog.Info(
 		"Setting defaults for aerospikeCluster", "aerospikecluster.Spec",
-		c.Spec,
+		aerospikeCluster.Spec,
 	)
 
-	if err := c.setDefaults(asLog); err != nil {
+	if err := aerospikeCluster.setDefaults(asLog); err != nil {
 		asLog.Error(err, "Mutate AerospikeCluster create failed")
-		return webhook.Denied(err.Error())
+		return err
 	}
 
 	asLog.Info("Setting defaults for aerospikeCluster completed")
 
 	asLog.Info(
-		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", c.Spec,
+		"Added defaults for aerospikeCluster", "aerospikecluster.Spec", aerospikeCluster.Spec,
 	)
 
-	var patches []jsonpatch.JsonPatchOperation
-	patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/spec", Value: c.Spec})
-
-	if operation == v1.Create {
-		patches = append(patches, webhook.JSONPatchOp{Operation: "replace", Path: "/metadata/labels", Value: c.Labels})
-	}
-
-	return webhook.Patched(
-		"Patched aerospike spec with defaults",
-		patches...,
-	)
+	return nil
 }
 
 func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
-	// Set maxUnavailable default to 1
-	if !GetBool(c.Spec.DisablePDB) && c.Spec.MaxUnavailable == nil {
+	// If PDB is disabled, set maxUnavailable to nil
+	if GetBool(c.Spec.DisablePDB) {
+		c.Spec.MaxUnavailable = nil
+	} else if c.Spec.MaxUnavailable == nil {
+		// Set default maxUnavailable if not set
 		maxUnavailable := intstr.FromInt32(1)
 		c.Spec.MaxUnavailable = &maxUnavailable
 	}
@@ -106,9 +113,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 	}
 
 	// Set defaults for pod spec
-	if err := c.Spec.PodSpec.SetDefaults(); err != nil {
-		return err
-	}
+	c.Spec.PodSpec.SetDefaults()
 
 	// Validation policy
 	if c.Spec.ValidationPolicy == nil {
@@ -139,7 +144,7 @@ func (c *AerospikeCluster) setDefaults(asLog logr.Logger) error {
 }
 
 // SetDefaults applies defaults to the pod spec.
-func (p *AerospikePodSpec) SetDefaults() error {
+func (p *AerospikePodSpec) SetDefaults() {
 	var groupID int64
 
 	if p.InputDNSPolicy == nil {
@@ -162,8 +167,6 @@ func (p *AerospikePodSpec) SetDefaults() error {
 		}
 		p.SecurityContext = SecurityContext
 	}
-
-	return nil
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.

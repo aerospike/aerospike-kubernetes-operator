@@ -2,7 +2,6 @@ package cluster
 
 import (
 	goctx "context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -23,8 +22,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -33,15 +32,14 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	nextServerVersion   = "7.2.0.1_1"
-	latestServerVersion = "7.2.0.1"
+	nextServerVersion   = "8.0.0.2_1"
+	latestServerVersion = "8.0.0.2"
 	invalidVersion      = "3.0.0.4"
 
 	post6Version = "7.0.0.0"
-	pre6Version  = "5.7.0.17"
 	version6     = "6.0.0.5"
 
-	latestSchemaVersion = "7.2.0"
+	latestSchemaVersion = "8.0.0"
 )
 
 var (
@@ -54,6 +52,14 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
+
+// constants for writing data to aerospike
+const (
+	setName  = "test"
+	key      = "key1"
+	binName  = "testBin"
+	binValue = "binValue"
+)
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
@@ -69,7 +75,6 @@ var (
 	// Storage wipe test
 	post6Image    = fmt.Sprintf("%s:%s", baseImage, post6Version)
 	version6Image = fmt.Sprintf("%s:%s", baseImage, version6)
-	pre6Image     = fmt.Sprintf("%s:%s", baseImage, pre6Version)
 )
 
 func rollingRestartClusterByEnablingTLS(
@@ -680,6 +685,22 @@ func getCluster(
 	return aeroCluster, nil
 }
 
+// GetCluster is the public variant of getCluster
+// Remove this when getCluster will be made public
+func GetCluster(
+	k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+) (*asdbv1.AerospikeCluster, error) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
+
+	err := k8sClient.Get(ctx, clusterNamespacedName, aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	return aeroCluster, nil
+}
+
 func getClusterIfExists(
 	k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName,
@@ -872,70 +893,7 @@ func getClusterPodList(
 }
 
 // feature-key file needed
-func createAerospikeClusterPost460(
-	clusterNamespacedName types.NamespacedName, size int32, image string,
-) *asdbv1.AerospikeCluster {
-	// create Aerospike custom resource
-	aeroCluster := &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterNamespacedName.Name,
-			Namespace: clusterNamespacedName.Namespace,
-		},
-		Spec: asdbv1.AerospikeClusterSpec{
-			Size:  size,
-			Image: image,
-			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
-				Users: []asdbv1.AerospikeUserSpec{
-					{
-						Name:       "admin",
-						SecretName: test.AuthSecretName,
-						Roles: []string{
-							"sys-admin",
-							"user-admin",
-						},
-					},
-				},
-			},
-
-			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: ptr.To(true),
-			},
-			OperatorClientCertSpec: &asdbv1.AerospikeOperatorClientCertSpec{
-				AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
-					SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-						SecretName:         test.AerospikeSecretName,
-						CaCertsFilename:    "cacert.pem",
-						ClientCertFilename: "svc_cluster_chain.pem",
-						ClientKeyFilename:  "svc_key.pem",
-					},
-				},
-			},
-			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-
-					"service": map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-					},
-					"security": map[string]interface{}{
-						"enable-security": true,
-					},
-					"network": getNetworkTLSConfig(),
-					"namespaces": []interface{}{
-						getNonSCNamespaceConfigPre700("test", "/test/dev/xvdf"),
-					},
-				},
-			},
-		},
-	}
-	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
-	aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
-	aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
-
-	return aeroCluster
-}
-
-// feature-key file needed
-func createAerospikeClusterPost560(
+func createAerospikeClusterPost570(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
@@ -999,7 +957,7 @@ func createAerospikeClusterPost640(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
-	aeroCluster := createAerospikeClusterPost560(clusterNamespacedName, size, image)
+	aeroCluster := createAerospikeClusterPost570(clusterNamespacedName, size, image)
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 	}
@@ -1246,56 +1204,6 @@ func UpdateClusterImage(
 
 			namespaces[idx] = ns
 		}
-	}
-
-	ov, err = lib.CompareVersions(outgoingVersion, "5.7.0")
-	if err != nil {
-		return err
-	}
-
-	nv, err = lib.CompareVersions(incomingVersion, "5.7.0")
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case nv >= 0 && ov >= 0, nv < 0 && ov < 0:
-		aerocluster.Spec.Image = image
-		return nil
-	case nv >= 0 && ov < 0:
-		enableSecurityFlag, err := asdbv1.IsSecurityEnabled(
-			outgoingVersion, aerocluster.Spec.AerospikeConfig,
-		)
-		if err != nil && !errors.Is(err, internalerrors.ErrNotFound) {
-			return err
-		}
-
-		aerocluster.Spec.Image = image
-		if enableSecurityFlag {
-			securityConfigMap := aerocluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})
-			delete(securityConfigMap, "enable-security")
-
-			return nil
-		}
-
-		delete(aerocluster.Spec.AerospikeConfig.Value, "security")
-	default:
-		enableSecurityFlag, err := asdbv1.IsSecurityEnabled(
-			outgoingVersion, aerocluster.Spec.AerospikeConfig,
-		)
-		if err != nil {
-			return err
-		}
-
-		aerocluster.Spec.Image = image
-		if enableSecurityFlag {
-			securityConfigMap := aerocluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})
-			securityConfigMap["enable-security"] = true
-
-			return nil
-		}
-
-		aerocluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{"enable-security": false}
 	}
 
 	return nil
@@ -1697,4 +1605,93 @@ func getAeroClusterPVCList(
 	}
 
 	return pvcList.Items, nil
+}
+
+func WriteDataToCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string,
+) error {
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
+	)
+
+	wp := as.NewWritePolicy(0, 0)
+
+	for _, ns := range namespaces {
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return err
+		}
+
+		if err := asClient.Put(
+			wp, newKey, as.BinMap{
+				binName: binValue,
+			},
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func CheckDataInCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespaces []string,
+) (map[string]bool, error) {
+	data := make(map[string]bool)
+
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info(
+		"Loading record", "nodes", asClient.GetNodeNames(),
+	)
+
+	for _, ns := range namespaces {
+		newKey, err := as.NewKey(ns, setName, key)
+		if err != nil {
+			return nil, err
+		}
+
+		record, err := asClient.Get(nil, newKey)
+		if err != nil {
+			return nil, nil
+		}
+
+		if bin, exists := record.Bins[binName]; exists {
+			value, ok := bin.(string)
+
+			if !ok {
+				return nil, fmt.Errorf(
+					"Bin-Name: %s - conversion to bin value failed", binName,
+				)
+			}
+
+			if value == binValue {
+				data[ns] = true
+			} else {
+				return nil, fmt.Errorf(
+					"bin: %s exsists but the value is changed", binName,
+				)
+			}
+		} else {
+			data[ns] = false
+		}
+	}
+
+	return data, nil
 }

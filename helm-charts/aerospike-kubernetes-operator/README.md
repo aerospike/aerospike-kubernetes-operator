@@ -4,7 +4,7 @@ A Helm chart for Aerospike Kubernetes Operator
 
 ## Pre Requisites
 
-- Kubernetes 1.19+
+- Kubernetes 1.23+
 
 ## Usage
 
@@ -37,7 +37,7 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 |-------------------------------------|-------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `replicas`                          | Number of operator replicas                                                                           | `2`                                                                                                               |
 | `operatorImage.repository`          | Operator image repository                                                                             | `aerospike/aerospike-kubernetes-operator`                                                                         |
-| `operatorImage.tag`                 | Operator image tag                                                                                    | `3.4.1`                                                                                                           |
+| `operatorImage.tag`                 | Operator image tag                                                                                    | `4.0.0`                                                                                                           |
 | `operatorImage.pullPolicy`          | Image pull policy                                                                                     | `IfNotPresent`                                                                                                    |
 | `imagePullSecrets`                  | Secrets containing credentials to pull Operator image from a private registry                         | `{}` (nil)                                                                                                        |
 | `rbac.create`                       | Set this to `true` to let helm chart automatically create RBAC resources necessary for operator       | `true`                                                                                                            |
@@ -70,11 +70,6 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `securityContext`                   | Security context for the operator container                                                           | `{}` (nil)                                                                                                        |
 | `livenessProbe`                     | Liveliness probe for operator container                                                               | `initialDelaySeconds: 15`, `periodSeconds: 20`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3` |
 | `readinessProbe`                    | Readiness probe for the operator container                                                            | `initialDelaySeconds: 5`, `periodSeconds: 10`, `timeoutSeconds: 1`, `successThreshold: 1`, `failureThreshold: 3`  |
-| `kubeRBACProxy.image.repository`    | Kube RBAC Proxy image repository container                                                            | `gcr.io/kubebuilder/kube-rbac-proxy`                                                                              |
-| `kubeRBACProxy.image.tag`           | Kube RBAC Proxy image tag                                                                             | `v0.16.0`                                                                                                         |
-| `kubeRBACProxy.image.pullPolicy`    | Kube RBAC Proxy image pull policy                                                                     | `IfNotPresent`                                                                                                    |
-| `kubeRBACProxy.port`                | Kube RBAC proxy listening port                                                                        | `8443`                                                                                                            |
-| `kubeRBACProxy.resources`           | Kube RBAC Proxy container resource                                                                    | `{}` (nil)                                                                                                        |
 <!-- ## Next Steps
 
 Deploy [Aerospike Cluster](https://artifacthub.io/packages/helm/aerospike/aerospike-cluster) -->

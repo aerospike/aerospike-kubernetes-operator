@@ -11,18 +11,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
-)
-
-const (
-	setName  = "test"
-	key      = "key1"
-	binName  = "testBin"
-	binValue = "binValue"
 )
 
 var (
@@ -99,7 +90,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to the cluster")
-						err = writeDataToCluster(
+						err = WriteDataToCluster(
 							aeroCluster, k8sClient, namespaces,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -135,7 +126,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking - cluster data should not be wiped")
-						records, err := checkDataInCluster(
+						records, err := CheckDataInCluster(
 							aeroCluster, k8sClient, namespaces,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -149,50 +140,6 @@ var _ = Describe(
 							)
 						}
 
-						By(
-							fmt.Sprintf(
-								"Downgrading image from %s to %s - volumes should be wiped",
-								version6, pre6Version,
-							),
-						)
-						err = UpdateClusterImage(aeroCluster, pre6Image)
-						Expect(err).ToNot(HaveOccurred())
-						err = aerospikeClusterCreateUpdate(
-							k8sClient, aeroCluster, ctx,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Checking - unrelated volume attachments should not be wiped")
-						err = checkData(
-							aeroCluster, true, true, map[string]struct{}{
-								"test-wipe-device-dd-1":         {},
-								"test-wipe-device-blkdiscard-1": {},
-								"test-wipe-device-dd-2":         {},
-								"test-wipe-device-blkdiscard-2": {},
-								"test-wipe-files-deletefiles-2": {},
-							},
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Checking - cluster data should be wiped")
-						records, err = checkDataInCluster(
-							aeroCluster, k8sClient, namespaces,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						for namespace, recordExists := range records {
-							Expect(recordExists).To(
-								BeFalse(), fmt.Sprintf(
-									"Namespace: %s - should have records",
-									namespace,
-								),
-							)
-						}
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -205,95 +152,6 @@ var _ = Describe(
 		)
 	},
 )
-
-func writeDataToCluster(
-	aeroCluster *asdbv1.AerospikeCluster,
-	k8sClient client.Client,
-	namespaces []string,
-) error {
-	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	defer asClient.Close()
-
-	pkgLog.Info(
-		"Loading record", "nodes", asClient.GetNodeNames(),
-	)
-
-	wp := as.NewWritePolicy(0, 0)
-
-	for _, ns := range namespaces {
-		newKey, err := as.NewKey(ns, setName, key)
-		if err != nil {
-			return err
-		}
-
-		if err := asClient.Put(
-			wp, newKey, as.BinMap{
-				binName: binValue,
-			},
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func checkDataInCluster(
-	aeroCluster *asdbv1.AerospikeCluster,
-	k8sClient client.Client,
-	namespaces []string,
-) (map[string]bool, error) {
-	data := make(map[string]bool)
-
-	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
-	if err != nil {
-		return nil, err
-	}
-
-	defer asClient.Close()
-
-	pkgLog.Info(
-		"Loading record", "nodes", asClient.GetNodeNames(),
-	)
-
-	for _, ns := range namespaces {
-		newKey, err := as.NewKey(ns, setName, key)
-		if err != nil {
-			return nil, err
-		}
-
-		record, err := asClient.Get(nil, newKey)
-		if err != nil {
-			return nil, nil
-		}
-
-		if bin, exists := record.Bins[binName]; exists {
-			value, ok := bin.(string)
-
-			if !ok {
-				return nil, fmt.Errorf(
-					"Bin-Name: %s - conversion to bin value failed", binName,
-				)
-			}
-
-			if value == binValue {
-				data[ns] = true
-			} else {
-				return nil, fmt.Errorf(
-					"bin: %s exsists but the value is changed", binName,
-				)
-			}
-		} else {
-			data[ns] = false
-		}
-	}
-
-	return data, nil
-}
 
 func getAerospikeClusterConfig() *asdbv1.AerospikeConfigSpec {
 	return &asdbv1.AerospikeConfigSpec{
@@ -518,7 +376,7 @@ func getAerospikeWipeStorageConfig(
 					},
 				},
 			},
-			//{
+			// {
 			//	Name: "init-container-volume-1",
 			//	AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
 			//		InputInitMethod: &ddMethod,

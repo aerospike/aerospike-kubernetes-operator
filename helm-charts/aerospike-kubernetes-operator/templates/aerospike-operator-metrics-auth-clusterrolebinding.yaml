@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: aerospike-operator-proxy-rolebinding
+  name: aerospike-operator-metrics-auth-rolebinding
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
     chart: {{ .Chart.Name }}
@@ -10,7 +10,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: aerospike-operator-proxy-role
+  name: aerospike-operator-metrics-auth-role
 subjects:
 - kind: ServiceAccount
   name: {{ template "aerospike-kubernetes-operator.fullname" . }}

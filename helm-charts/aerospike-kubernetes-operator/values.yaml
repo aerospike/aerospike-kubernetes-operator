@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 3.4.1
+  tag: 4.0.0
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -20,12 +20,16 @@ rbac:
 
 ## Ports
 healthPort: 8081
-metricsPort: 8080
+metricsPort: 8443
 
 ## Create certificates
 certs:
-  create: true
-  webhookServerCertSecretName: "webhook-server-cert"
+  webhook:
+    create: true
+    webhookServerCertSecretName: "webhook-server-cert"
+  metrics:
+    create: false
+    metricsServerCertSecretName: "metrics-server-cert"
 
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
@@ -37,7 +41,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.2.3"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.2.4"
 
 ## Resources - limits / requests
 resources:
@@ -110,18 +114,3 @@ readinessProbe:
    timeoutSeconds: 1
    successThreshold: 1
    failureThreshold: 3
-
-# Kube RBAC Proxy sidecar
-kubeRBACProxy:
-  image:
-    repository: gcr.io/kubebuilder/kube-rbac-proxy
-    tag: v0.16.0
-    pullPolicy: IfNotPresent
-  port: 8443
-  resources:
-    limits:
-      cpu: 500m
-      memory: 128Mi
-    requests:
-      cpu: 5m
-      memory: 64Mi

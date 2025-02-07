@@ -4,7 +4,7 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike/aerospike-backup-service:2.0.0
+  image: aerospike/aerospike-backup-service:3.0.0
   config:
     service:
       http:
@@ -12,20 +12,17 @@ spec:
     backup-policies:
       test-policy:
         parallel: 3
-        remove-files: KeepAll
       test-policy1:
         parallel: 3
-        remove-files: KeepAll
     storage:
       local:
-        path: /localStorage
-        type: local
+        local-storage:
+          path: /localStorage
       s3Storage:
-        type: aws-s3
-        path: "s3://aerospike-kubernetes-operator-test"
-        s3-region: us-east-1
-        s3-endpoint-override: ""
-        s3-profile: default
+        s3-storage:
+          bucket: aerospike-kubernetes-operator-test
+          s3-region: us-east-1
+          s3-profile: default
 
   secrets:
     - secretName: aws-secret
@@ -36,4 +33,3 @@ spec:
 
   service:
     type: LoadBalancer
-

@@ -31,83 +31,8 @@ rules:
   - asdb.aerospike.com
   resources:
   - aerospikebackups
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikebackups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikebackups/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
   - aerospikebackupservices
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikebackupservices/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikebackupservices/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
   - aerospikeclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikeclusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
-  - aerospikeclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - asdb.aerospike.com
-  resources:
   - aerospikerestores
   verbs:
   - create
@@ -120,12 +45,18 @@ rules:
 - apiGroups:
   - asdb.aerospike.com
   resources:
+  - aerospikebackups/finalizers
+  - aerospikebackupservices/finalizers
+  - aerospikeclusters/finalizers
   - aerospikerestores/finalizers
   verbs:
   - update
 - apiGroups:
   - asdb.aerospike.com
   resources:
+  - aerospikebackups/status
+  - aerospikebackupservices/status
+  - aerospikeclusters/status
   - aerospikerestores/status
   verbs:
   - get
@@ -135,30 +66,9 @@ rules:
   - ""
   resources:
   - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - events
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - persistentvolumeclaims
+  - services
   verbs:
   - create
   - delete
@@ -175,6 +85,7 @@ rules:
   - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - ""
@@ -188,18 +99,6 @@ rules:
   - secrets
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - policy
   resources:

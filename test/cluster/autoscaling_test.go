@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 )
 
 var _ = Describe("AutoScaler", func() {
@@ -62,16 +63,19 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 	dynamicClient := dynamic.NewForConfigOrDie(cfg)
 	Expect(dynamicClient).ToNot(BeNil())
 
-	scale, err := dynamicClient.Resource(gvr).Namespace(clusterNamespacedName.Namespace).Get(goctx.TODO(),
-		clusterNamespacedName.Name, metav1.GetOptions{}, "scale")
-	Expect(err).ToNot(HaveOccurred())
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		scale, err := dynamicClient.Resource(gvr).Namespace(clusterNamespacedName.Namespace).Get(goctx.TODO(),
+			clusterNamespacedName.Name, metav1.GetOptions{}, "scale")
+		Expect(err).ToNot(HaveOccurred())
 
-	Expect(scale.Object["spec"].(map[string]interface{})["replicas"]).To(Equal(int64(currentSize)))
+		Expect(scale.Object["spec"].(map[string]interface{})["replicas"]).To(Equal(int64(currentSize)))
 
-	scale.Object["spec"].(map[string]interface{})["replicas"] = desiredSize
+		scale.Object["spec"].(map[string]interface{})["replicas"] = desiredSize
+		_, err = dynamicClient.Resource(gvr).Namespace(clusterNamespacedName.Namespace).Update(goctx.TODO(),
+			scale, metav1.UpdateOptions{}, "scale")
 
-	_, err = dynamicClient.Resource(gvr).Namespace(clusterNamespacedName.Namespace).Update(goctx.TODO(),
-		scale, metav1.UpdateOptions{}, "scale")
+		return err
+	})
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(

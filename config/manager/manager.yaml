@@ -28,10 +28,11 @@ spec:
       - command:
         - /manager
         args:
-        - --config=controller_manager_config.yaml
-        - --zap-log-level=info
+        - --health-probe-bind-address=:8081
+        - --leader-elect
         image: controller:latest
         name: manager
+        ports: []
         imagePullPolicy: IfNotPresent
         resources:
           limits:
@@ -54,6 +55,7 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
+        volumeMounts: []
         env:
         - name: WATCH_NAMESPACE
           # for watching multiple namespaces by operator, give a list of namespaces (e.g. aerospike,test,test1,test2)
@@ -66,7 +68,8 @@ spec:
           value: aerospike
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.2.3
+          value: aerospike-kubernetes-init:2.2.4
+      volumes: []
       serviceAccountName: controller-manager
 
       terminationGracePeriodSeconds: 10

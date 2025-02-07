@@ -1,0 +1,19 @@
+{{- if .Values.certs.metrics.create }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aerospike-operator-metrics-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "aerospike-kubernetes-operator.fullname" . }}
+    chart: {{ .Chart.Name }}
+    release: {{ .Release.Name }}
+spec:
+  dnsNames:
+  - aerospike-operator-controller-manager-metrics-service.{{ .Release.Namespace }}.svc
+  - aerospike-operator-controller-manager-metrics-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: aerospike-operator-selfsigned-issuer
+  secretName: {{ .Values.certs.metrics.metricsServerCertSecretName }}
+{{- end }}

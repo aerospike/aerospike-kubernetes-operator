@@ -4,7 +4,7 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ## Pre Requisites
 
-- Kubernetes 1.19+
+- Kubernetes 1.23+
 - Aerospike Kubernetes Operator
 
 ## Usage
@@ -48,7 +48,7 @@ helm install aerospike ./aerospike-cluster/ \
 | -- |---------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
 | `replicas` | Aerospike cluster size                                                                                                          | `3`                                                       |
 | `image.repository` | Aerospike server container image repository                                                                             | `aerospike/aerospike-server-enterprise`                   |
-| `image.tag` | Aerospike server container image tag                                                                                           | `7.2.0.1`                                                 |
+| `image.tag` | Aerospike server container image tag                                                                                           | `8.0.0.2`                                                 |
 | `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry                                | `{}` (nil)                                                |
 | `customLabels` | Custom labels to add on the aerospikecluster resource                                                                           | `{}` (nil)                                                |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster.                                    | `{}` (nil)                                                |
@@ -116,4 +116,4 @@ validationPolicy:
 
 ### Configurations Explained
 
-Refer to [AerospikeCluster Customer Resource Spec](https://docs.aerospike.com/cloud/kubernetes/operator/cluster-configuration-settings#spec) for details on above [configuration fields](#Configurations)
+Refer to [AerospikeCluster Customer Resource Spec](https://aerospike.com/docs/cloud/kubernetes/operator/configuration/Cluster-configuration-settings#spec) for details on above [configuration fields](#Configurations)

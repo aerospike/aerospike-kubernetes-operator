@@ -261,7 +261,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeZero())
+						Expect(stsList.Items).ToNot(BeEmpty())
 
 						for _, sts := range stsList.Items {
 							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
@@ -419,7 +419,7 @@ var _ = Describe(
 						// validate
 						stsList, err := getSTSList(aeroCluster, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(len(stsList.Items)).ToNot(BeZero())
+						Expect(stsList.Items).ToNot(BeEmpty())
 
 						var meFound bool
 						for _, sts := range stsList.Items {
@@ -459,7 +459,7 @@ var _ = Describe(
 					"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.3"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						customRegistry := getEnvVar(customInitRegistryEnvVar)
 						customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
@@ -516,7 +516,7 @@ var _ = Describe(
 					func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.3"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 						By("Using incorrect registry namespace in CR")
@@ -626,11 +626,10 @@ func validateInitImage(
 
 	for stsIndex := range stsList.Items {
 		image := stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0].Image
-		Expect(image == expectedImage).To(
-			BeTrue(), fmt.Sprintf(
-				"expected init image %s, found image %s",
-				expectedImage, image,
-			),
+		Expect(image).To(Equal(expectedImage), fmt.Sprintf(
+			"expected init image %s, found image %s",
+			expectedImage, image,
+		),
 		)
 	}
 }

@@ -17,10 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-backup-service/pkg/model"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
 )
 
 const (
@@ -95,7 +95,7 @@ func getBackupConfBytes(prefix string) ([]byte, error) {
 
 func getBackupConfigInMap(prefix string) map[string]interface{} {
 	return map[string]interface{}{
-		common.AerospikeClusterKey: map[string]interface{}{
+		asdbv1beta1.AerospikeClusterKey: map[string]interface{}{
 			fmt.Sprintf("%s-%s", prefix, "test-cluster"): map[string]interface{}{
 				"credentials": map[string]interface{}{
 					"password": "admin123",
@@ -111,10 +111,10 @@ func getBackupConfigInMap(prefix string) map[string]interface{} {
 				},
 			},
 		},
-		common.BackupRoutinesKey: map[string]interface{}{
+		asdbv1beta1.BackupRoutinesKey: map[string]interface{}{
 			fmt.Sprintf("%s-%s", prefix, "test-routine"): map[string]interface{}{
 				"backup-policy":      "test-policy",
-				"interval-cron":      "@daily",
+				"interval-cron":      "*/30 * * * * *",
 				"incr-interval-cron": "@hourly",
 				"namespaces":         []string{"test"},
 				"source-cluster":     fmt.Sprintf("%s-%s", prefix, "test-cluster"),
@@ -128,8 +128,8 @@ func getWrongBackupConfBytes(prefix string) ([]byte, error) {
 	backupConfig := getBackupConfigInMap(prefix)
 
 	// change the format from map to list
-	backupConfig[common.BackupRoutinesKey] = []interface{}{
-		backupConfig[common.BackupRoutinesKey],
+	backupConfig[asdbv1beta1.BackupRoutinesKey] = []interface{}{
+		backupConfig[asdbv1beta1.BackupRoutinesKey],
 	}
 
 	configBytes, err := json.Marshal(backupConfig)
@@ -220,29 +220,27 @@ func waitForBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup,
 
 // validateTriggeredBackup validates if the backup is triggered by checking the current config of backup-service
 func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) error {
-	var backupK8sService corev1.Service
-
 	validateNewEntries := func(currentConfigInMap map[string]interface{}, desiredConfigInMap map[string]interface{},
 		fieldPath string) error {
-		newCluster := desiredConfigInMap[common.AerospikeClusterKey].(map[string]interface{})
+		newCluster := desiredConfigInMap[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
 
 		for clusterName := range newCluster {
-			if _, ok := currentConfigInMap[common.AerospikeClustersKey].(map[string]interface{})[clusterName]; !ok {
+			if _, ok := currentConfigInMap[asdbv1beta1.AerospikeClustersKey].(map[string]interface{})[clusterName]; !ok {
 				return fmt.Errorf("cluster %s not found in %s backup config", clusterName, fieldPath)
 			}
 		}
 
 		pkgLog.Info(fmt.Sprintf("Cluster info is found in %s backup config", fieldPath))
 
-		routines := desiredConfigInMap[common.BackupRoutinesKey].(map[string]interface{})
+		routines := desiredConfigInMap[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 
 		for routineName := range routines {
-			if _, ok := currentConfigInMap[common.BackupRoutinesKey].(map[string]interface{})[routineName]; !ok {
+			if _, ok := currentConfigInMap[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})[routineName]; !ok {
 				return fmt.Errorf("routine %s not found in %s backup config", routineName, fieldPath)
 			}
 		}
 
-		if len(routines) != len(currentConfigInMap[common.BackupRoutinesKey].(map[string]interface{})) {
+		if len(routines) != len(currentConfigInMap[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})) {
 			return fmt.Errorf("backup routine count mismatch in %s backup config", fieldPath)
 		}
 
@@ -264,7 +262,7 @@ func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.Aerosp
 
 	backupSvcConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal([]byte(configmap.Data[common.BackupServiceConfigYAML]), &backupSvcConfig); err != nil {
+	if err := yaml.Unmarshal([]byte(configmap.Data[asdbv1beta1.BackupServiceConfigYAML]), &backupSvcConfig); err != nil {
 		return err
 	}
 
@@ -278,48 +276,13 @@ func validateTriggeredBackup(k8sClient client.Client, backup *asdbv1beta1.Aerosp
 		return err
 	}
 
-	// Wait for Service LB IP to be populated
-	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
-		func(ctx context.Context) (bool, error) {
-			if err := k8sClient.Get(ctx,
-				types.NamespacedName{
-					Name:      backup.Spec.BackupService.Name,
-					Namespace: backup.Spec.BackupService.Namespace,
-				},
-				&backupK8sService); err != nil {
-				return false, err
-			}
-
-			if backupK8sService.Status.LoadBalancer.Ingress == nil {
-				return false, nil
-			}
-
-			return true, nil
-		}); err != nil {
+	config, err := backupservice.GetAPIBackupSvcConfig(k8sClient, backup.Spec.BackupService.Name,
+		backup.Spec.BackupService.Namespace)
+	if err != nil {
 		return err
 	}
 
-	serviceClient := backup_service.Client{
-		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
-		Port:    8081,
-	}
-
-	// Wait for Backup service to be ready
-	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
-		func(_ context.Context) (bool, error) {
-			config, err := serviceClient.GetBackupServiceConfig()
-			if err != nil {
-				pkgLog.Error(err, "Failed to get backup service config")
-				return false, nil
-			}
-
-			backupSvcConfig = config
-			return true, nil
-		}); err != nil {
-		return err
-	}
-
-	return validateNewEntries(backupSvcConfig, desiredConfigInMap, "backup-service API")
+	return validateNewEntries(config, desiredConfigInMap, "backup-service API")
 }
 
 func namePrefix(nsNm types.NamespacedName) string {
@@ -352,7 +315,7 @@ func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBa
 	}
 
 	var (
-		config          model.Config
+		config          dto.Config
 		backupDataPaths []string
 	)
 

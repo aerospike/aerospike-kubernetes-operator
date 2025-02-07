@@ -43,24 +43,11 @@ func AerospikeAdminCredentials(
 		desiredSecurityErr error
 	)
 
-	incomingVersion, incomingVersionErr := asdbv1.GetImageVersion(desiredState.Image)
-	if incomingVersionErr == nil {
-		enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(
-			incomingVersion, desiredState.AerospikeConfig,
-		)
-	} else {
-		desiredSecurityErr = incomingVersionErr
-	}
-
+	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig)
 	if !enabled {
-		outgoingVersion, outgoingVersionErr := asdbv1.GetImageVersion(currentState.Image)
-		if outgoingVersionErr == nil {
-			// It is possible that this is a new cluster and current state is empty.
-			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(
-				outgoingVersion, currentState.AerospikeConfig,
-			)
-		} else {
-			currentSecurityErr = outgoingVersionErr
+		if currentState.AerospikeConfig != nil {
+			// It is possible that this is a new cluster and the current state is empty.
+			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig)
 		}
 
 		if currentSecurityErr != nil && desiredSecurityErr != nil {
