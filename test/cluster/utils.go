@@ -420,12 +420,14 @@ func getAerospikeStorageConfig(
 	fileDeleteInitMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	ddInitMethod := asdbv1.AerospikeVolumeMethodDD
 	blkDiscardInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
+	blkDiscardWithHeaderCleanupInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup
 	blkDiscardWipeMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
 
 	if cloudProvider == CloudProviderAWS {
 		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
 		blkDiscardInitMethod = asdbv1.AerospikeVolumeMethodDD
 		blkDiscardWipeMethod = asdbv1.AerospikeVolumeMethodDD
+		blkDiscardWithHeaderCleanupInitMethod = asdbv1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1.AerospikeStorageSpec{
@@ -509,6 +511,23 @@ func getAerospikeStorageConfig(
 				},
 				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 					Path: "/opt/aerospike/blockdevice-init-blkdiscard",
+				},
+			},
+			{
+				Name: "device-blkdiscard-with-header-cleanup",
+				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &blkDiscardWithHeaderCleanupInitMethod,
+					InputWipeMethod: &blkDiscardWipeMethod,
+				},
+				Source: asdbv1.VolumeSource{
+					PersistentVolume: &asdbv1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/blockdevice-init-blkdiscard-with-header-cleanup",
 				},
 			},
 			{
