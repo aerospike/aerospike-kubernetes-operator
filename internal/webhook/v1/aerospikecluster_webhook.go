@@ -17,12 +17,13 @@ limitations under the License.
 package v1
 
 import (
+	v2 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // SetupAerospikeClusterWebhookWithManager registers the webhook for AerospikeCluster in the manager.
 func SetupAerospikeClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeCluster{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&v2.AerospikeCluster{}).
 		WithDefaulter(&AerospikeClusterCustomDefaulter{}).
 		WithValidator(&AerospikeClusterCustomValidator{}).
 		Complete()

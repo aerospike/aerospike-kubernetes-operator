@@ -539,7 +539,7 @@ func (r *SingleBackupReconciler) routinesToDelete(
 
 		// Delete any dangling backup-routines related to this cluster
 		// Strict prefix check might fail for cases where the prefix is same.
-		if strings.HasPrefix(name, r.aeroBackup.NamePrefix()) &&
+		if strings.HasPrefix(name, asdbv1beta1.NamePrefix(utils.GetNamespacedName(r.aeroBackup))) &&
 			allRoutines[name].(map[string]interface{})[asdbv1beta1.SourceClusterKey].(string) == clusterName {
 			routinesTobeDeleted = append(routinesTobeDeleted, name)
 		}

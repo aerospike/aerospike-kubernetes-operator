@@ -221,7 +221,7 @@ func getClientPolicy(
 			// InsecureSkipVerify: true,
 		}
 
-		if clientCertSpec != nil && clientCertSpec.IsClientCertConfigured() {
+		if clientCertSpec != nil && asdbv1.IsClientCertConfigured(clientCertSpec) {
 			if cert, err := getClientCertificate(
 				clientCertSpec, aeroCluster.Namespace, k8sClient,
 			); err == nil {
