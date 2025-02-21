@@ -135,7 +135,7 @@ func waitForBackupService(cl client.Client, backupService *asdbv1beta1.Aerospike
 
 	if err := wait.PollUntilContextTimeout(
 		testCtx, 1*time.Second,
-		timeout, false, func(ctx context.Context) (bool, error) {
+		timeout, true, func(ctx context.Context) (bool, error) {
 			if err := cl.Get(ctx, namespaceName, backupService); err != nil {
 				return false, nil
 			}
