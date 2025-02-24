@@ -907,6 +907,8 @@ func validateNamespaceContextDynamically(
 
 		tokens := strings.Split(confKey, ".")
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
+			// Check if strong consistency is enabled for this namespace.
+			// If yes, then only update strong consistency specific configs.
 			if scSpecificConf.Contains(asconfig.BaseKey(confKey)) {
 				strongConsistency := strings.Join([]string{tokens[0], tokens[1], "strong-consistency"}, ".")
 				if (*flatServer)[strongConsistency] == false {
