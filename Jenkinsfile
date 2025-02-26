@@ -52,6 +52,29 @@ pipeline {
                     }
                 }
 
+                stage('Check for /ok-to-test') {
+                    steps {
+                        script {
+                           if (env.CHANGE_ID) { // Only run for PRs
+                              def githubToken = credentials('github-jenkins')  // GitHub API token stored in Jenkins Credentials
+                              def prNumber = env.CHANGE_ID
+                              def repo = "aerospike/aerospike-kubernetes-operator"
+
+                              def response = sh(script: """
+                                  curl -s -H "Authorization: token ${githubToken}" \
+                                  "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
+                              """, returnStdout: true).trim()
+
+                              if (!response.contains('/ok-to-test')) {
+                                  error "Build skipped: No /ok-to-test comment found."
+                              } else {
+                                  echo "Build authorized by /ok-to-test comment!"
+                              }
+                           }
+                        }
+                    }
+                }
+
                 stage('Build') {
                     steps {
                         sh 'mkdir -p $GO_REPO_ROOT'
