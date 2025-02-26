@@ -28,7 +28,6 @@ pipeline {
     }
 
     stages {
-    stages {
         stage("Check for /ok-to-test") {
             when {
                 expression { return env.CHANGE_ID != null } // Run only for PRs
