@@ -222,6 +222,25 @@ func (c *AerospikeCluster) validate(aslog logr.Logger) (admission.Warnings, erro
 		)
 	}
 
+	initVersion, err := GetImageVersion(GetAerospikeInitContainerImage(c))
+	if err != nil {
+		return warnings, err
+	}
+
+	if GetBool(c.Spec.EnableDynamicConfigUpdate) {
+		val, err = lib.CompareVersions(initVersion, minInitVersionForDynamicConf)
+		if err != nil {
+			return warnings, fmt.Errorf("failed to check init image version: %v", err)
+		}
+
+		if val < 0 {
+			return warnings, fmt.Errorf("cannot set enableDynamicConfigUpdate flag, init container version is less"+
+				" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
+				" for more details about enableDynamicConfigUpdate flag",
+				minInitVersionForDynamicConf)
+		}
+	}
+
 	err = validateClusterSize(aslog, int(c.Spec.Size))
 	if err != nil {
 		return warnings, err
