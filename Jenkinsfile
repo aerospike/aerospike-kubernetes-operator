@@ -28,6 +28,32 @@ pipeline {
     }
 
     stages {
+    stages {
+        stage("Check for /ok-to-test") {
+            when {
+                expression { return env.CHANGE_ID != null } // Run only for PRs
+            }
+            steps {
+                script {
+                    def githubToken = credentials('github-jenkins') // Store GitHub token in Jenkins Credentials
+                    def prNumber = env.CHANGE_ID
+                    def repo = "aerospike/aerospike-kubernetes-operator"
+
+                    // Fetch PR comments using GitHub API
+                    def response = sh(script: """
+                        curl -s -H "Authorization: token ${githubToken}" \\
+                        "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
+                    """, returnStdout: true).trim()
+
+                    if (!response.contains('/ok-to-test')) {
+                        error "Build skipped: No '/ok-to-test' comment found."
+                    } else {
+                        echo "Build authorized by /ok-to-test comment!"
+                    }
+                }
+            }
+        }
+
         stage("Pipeline" ) {
             options {
               lock("gke-k8s-cluster")
@@ -49,29 +75,6 @@ pipeline {
                                         trackingSubmodules: false]],
                             userRemoteConfigs: scm.userRemoteConfigs
                         ])
-                    }
-                }
-
-                stage('Check for /ok-to-test') {
-                    steps {
-                        script {
-                           if (env.CHANGE_ID) { // Only run for PRs
-                              def githubToken = credentials('github-jenkins')  // GitHub API token stored in Jenkins Credentials
-                              def prNumber = env.CHANGE_ID
-                              def repo = "aerospike/aerospike-kubernetes-operator"
-
-                              def response = sh(script: """
-                                  curl -s -H "Authorization: token ${githubToken}" \
-                                  "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
-                              """, returnStdout: true).trim()
-
-                              if (!response.contains('/ok-to-test')) {
-                                  error "Build skipped: No /ok-to-test comment found."
-                              } else {
-                                  echo "Build authorized by /ok-to-test comment!"
-                              }
-                           }
-                        }
                     }
                 }
 
