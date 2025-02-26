@@ -897,8 +897,8 @@ func validateNamespaceContextDynamically(
 ) error {
 	newSpec := *flatSpec
 	ignoredConf := mapset.NewSet("rack-id", "default-ttl", "disable-write-dup-res",
-		"disallow-expunge", "conflict-resolution-policy", "compression-acceleration", "compression-level",
-		"strong-consistency-allow-expunge")
+		"disallow-expunge", "conflict-resolution-policy", "compression-acceleration", "compression-level")
+	scSpecificConf := mapset.NewSet("strong-consistency-allow-expunge", "mrt-duration", "disable-mrt-writes")
 
 	for confKey, val := range *flatServer {
 		if asconfig.ContextKey(confKey) != "namespaces" {
@@ -907,6 +907,15 @@ func validateNamespaceContextDynamically(
 
 		tokens := strings.Split(confKey, ".")
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) && !ignoredConf.Contains(asconfig.BaseKey(confKey)) {
+			// Check if strong consistency is enabled for this namespace.
+			// If yes, then only update strong consistency specific configs.
+			if scSpecificConf.Contains(asconfig.BaseKey(confKey)) {
+				strongConsistency := strings.Join([]string{tokens[0], tokens[1], "strong-consistency"}, ".")
+				if (*flatServer)[strongConsistency] == false {
+					continue
+				}
+			}
+
 			v, err := updateValue(val, asconfig.GetFlatKey(tokens))
 			if err != nil {
 				return err
