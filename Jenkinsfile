@@ -43,7 +43,7 @@ pipeline {
 //                     echo "PR comments curl: ${curl}"
 
                     def response = sh(script: """
-                        curl -s -H "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
+                        curl -s "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
                     """, returnStdout: true).trim()
 
                     echo "PR comments: ${response}"
