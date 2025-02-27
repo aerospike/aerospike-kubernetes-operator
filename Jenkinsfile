@@ -34,14 +34,13 @@ pipeline {
             }
             steps {
                 script {
-                    def githubToken = credentials('github-jenkins') // Store GitHub token in Jenkins Credentials
+
                     def prNumber = env.CHANGE_ID
                     def repo = "aerospike/aerospike-kubernetes-operator"
 
                     // Fetch PR comments using GitHub API
                     def response = sh(script: """
-                        curl -s -H "Authorization: token ${githubToken}" \\
-                        "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
+                        curl -s -H "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
                     """, returnStdout: true).trim()
 
                     if (!response.contains('/ok-to-test')) {
