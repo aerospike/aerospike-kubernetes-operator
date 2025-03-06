@@ -69,9 +69,9 @@ export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
 export CUSTOM_INIT_NAME_TAG="$INIT_IMAGE_NAME_TAG"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
-if [ "$TEST_TYPE" == "cluster-test" ] then
+if [ "$TEST_TYPE" = "cluster-test" ]; then
    make cluster-test FOCUS="$FOCUS" ARGS="$ARGS"
-elif [ "$TEST_TYPE" == "backup-test" ] then
+elif [ "$TEST_TYPE" = "backup-test" ]; then
    make backup-service-test FOCUS="$FOCUS" ARGS="$ARGS"
    make backup-test FOCUS="$FOCUS" ARGS="$ARGS"
    make restore-test FOCUS="$FOCUS" ARGS="$ARGS"
