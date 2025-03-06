@@ -11,7 +11,7 @@ set -e
 #  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "b:c:f:a:r:p:n:t:" opt
+while getopts "b:c:f:a:r:p:n:i:t:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -21,7 +21,8 @@ do
       r ) REGISTRY="$OPTARG" ;;
       p ) CRED_PATH="$OPTARG" ;;
       n ) REGISTRY_NAMESPACE="$OPTARG" ;;
-      t ) INIT_IMAGE_NAME_TAG="$OPTARG" ;;
+      i ) INIT_IMAGE_NAME_TAG="$OPTARG" ;;
+      t ) TEST_TYPE="$OPTARG" ;;
 
    esac
 done
@@ -68,4 +69,10 @@ export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
 export CUSTOM_INIT_NAME_TAG="$INIT_IMAGE_NAME_TAG"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
-make all-test FOCUS="$FOCUS" ARGS="$ARGS"
+if [ "$TEST_TYPE" == "cluster-test" ] then
+   make cluster-test FOCUS="$FOCUS" ARGS="$ARGS"
+elif [ "$TEST_TYPE" == "backup-test" ] then
+   make backup-service-test FOCUS="$FOCUS" ARGS="$ARGS"
+   make backup-test FOCUS="$FOCUS" ARGS="$ARGS"
+   make restore-test FOCUS="$FOCUS" ARGS="$ARGS"
+fi

@@ -87,12 +87,60 @@ pipeline {
                     }
                 }
 
-                stage('Test') {
+                // stage('Test') {
+                //     steps {
+                //         dir("${env.GO_REPO}") {
+                //             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+				// 			sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                //             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -t ${AEROSPIKE_CUSTOM_INIT_NAME_TAG}"
+
+                //         }
+                //     }
+                // }
+
+                stage ('Detect Changes'){
+                    steps {
+                        script {
+                            dir("${env.GO_REPO}") {
+                                def changedFiles = sh(script: "git diff --name-only origin/master HEAD", returnStdout: true).trim().split('\n')
+                            }
+                            def clusterTest = changedFiles.any {
+                                it.startsWith('internal/controller/cluster')
+                            }
+                            def backupTest = changedFiles.any {
+                                it.startsWith('internal/controller/backup') ||
+                                it.startsWith('internal/controller/backup-service') ||
+                                it.startsWith('internal/controller/restore')
+                            }
+                            env.RUN_CLUSTER_TEST = clusterTest.toString()
+                            env.RUN_BACKUP_TEST = backupTest.toString()
+                        }
+                    }
+                }
+
+                stage ('Cluster Tests') {
+                    when {
+                        expression { env.RUN_CLUSTER_TEST == 'true'}
+                    }
                     steps {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -t ${AEROSPIKE_CUSTOM_INIT_NAME_TAG}"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
+
+                        }
+                    }
+                }
+
+                stage ('Backup Tests') {
+                    when {
+                        expression { env.RUN_BACKUP_TEST == 'true'}
+                    }
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t backup-test"
 
                         }
                     }
