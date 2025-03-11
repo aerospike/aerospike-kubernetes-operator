@@ -75,4 +75,6 @@ elif [ "$TEST_TYPE" = "backup-test" ]; then
    make backup-service-test FOCUS="$FOCUS" ARGS="$ARGS"
    make backup-test FOCUS="$FOCUS" ARGS="$ARGS"
    make restore-test FOCUS="$FOCUS" ARGS="$ARGS"
+elif [ "$TEST_TYPE" = "all-test" ]; then
+   make all-test FOCUS="$FOCUS" ARGS="$ARGS"
 fi
