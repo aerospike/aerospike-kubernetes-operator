@@ -95,7 +95,8 @@ func getBackupServiceObj(cl client.Client,
 	return &backupService, nil
 }
 
-func getBackupK8sServiceObj(cl client.Client, backupServiceNamespacedName types.NamespacedName) (*corev1.Service, error) {
+func getBackupK8sServiceObj(cl client.Client,
+	backupServiceNamespacedName types.NamespacedName) (*corev1.Service, error) {
 	var svc corev1.Service
 
 	if err := cl.Get(testCtx, backupServiceNamespacedName, &svc); err != nil {

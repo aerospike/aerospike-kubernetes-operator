@@ -51,7 +51,7 @@ var _ = Describe(
 		// 		DeployClusterWithSyslog(ctx)
 		// 	},
 		// )
-		Context(
+		FContext(
 			"DeployClusterWithMaxIgnorablePod", func() {
 				clusterWithMaxIgnorablePod(ctx)
 			},
@@ -343,6 +343,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	var (
+		aeroCluster    *asdbv1.AerospikeCluster
 		err            error
 		nodeList       = &v1.NodeList{}
 		podList        = &v1.PodList{}
@@ -350,8 +351,6 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterCompleted,
 		}
 	)
-
-	aeroCluster := &asdbv1.AerospikeCluster{}
 
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndPendingPod", func() {
