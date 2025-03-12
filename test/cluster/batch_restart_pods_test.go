@@ -235,6 +235,7 @@ var _ = Describe("BatchRestart", func() {
 
 func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
 	aeroCluster := &asdbv1.AerospikeCluster{}
+
 	BeforeEach(
 		func() {
 			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
@@ -335,6 +336,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
+
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
@@ -357,6 +359,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
 	aeroCluster := &asdbv1.AerospikeCluster{}
+
 	BeforeEach(
 		func() {
 			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)

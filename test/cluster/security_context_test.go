@@ -37,6 +37,7 @@ func securityContextTest(
 	checkAeroInit bool,
 ) {
 	aeroCluster := &asdbv1.AerospikeCluster{}
+
 	AfterEach(
 		func() {
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -46,6 +47,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext applied", func() {
 			By("DeployCluster with SecurityContext")
+
 			clusterName := fmt.Sprintf("security-context-create-%d", GinkgoParallelProcess())
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
@@ -81,6 +83,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext updated", func() {
 			By("DeployCluster")
+
 			clusterName := fmt.Sprintf("security-context-updated-%d", GinkgoParallelProcess())
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,

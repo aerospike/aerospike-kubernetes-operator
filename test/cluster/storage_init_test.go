@@ -34,6 +34,7 @@ const (
 var _ = Describe(
 	"StorageInit", func() {
 		ctx := goctx.TODO()
+
 		Context(
 			"When doing valid operations", func() {
 
@@ -740,27 +741,56 @@ func writeDataToVolumeFileSystem(
 
 func hasDataBlock(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
+	cmd := []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path)}
 
-	cmd := []string{
-		"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path),
+	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
+	retryInterval := 20 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if err == nil {
+			return strings.HasPrefix(stdout, magicBytes)
+		}
+
+		if strings.Contains(stdout, "No such file or directory") {
+			return false
+		}
+
+		// Log the error and wait before retrying
+		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
 	}
-	stdout, stderr, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
-	println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	println(fmt.Sprintf("stdout: %s, stderr: %s, err: %v, path: %s, pod: %s, podstatus: %v", stdout, stderr, err, path, pod.Name, pod.Status.ContainerStatuses))
 
-	return strings.HasPrefix(stdout, magicBytes)
+	fmt.Println("Max retries reached. Returning false.")
+
+	return false
 }
 
 func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
-
 	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
-	stdout, stderr, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
-	println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	println(fmt.Sprintf("stdout: %s, stderr: %s, err: %v, path: %s, pod: %s, podstatus: %v", stdout, stderr, err, path, pod.Name, pod.Status.ContainerStatuses))
+	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
+	retryInterval := 20 * time.Second
 
-	return strings.HasPrefix(stdout, magicBytes)
+	for i := 0; i < maxRetries; i++ {
+		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if err == nil {
+			return strings.HasPrefix(stdout, magicBytes)
+		}
+
+		if strings.Contains(stdout, "No such file or directory") {
+			return false
+		}
+
+		// Log the error and wait before retrying
+		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
+	}
+
+	fmt.Println("Max retries reached. Returning false.")
+
+	return false
 }
 
 // getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage.

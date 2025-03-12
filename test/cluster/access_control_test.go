@@ -1708,24 +1708,9 @@ var _ = Describe(
 										},
 									},
 								}
-								// aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								//if err != nil {
-								//	Fail(
-								//		fmt.Sprintf(
-								//			"Invalid Aerospike Config Spec: %v",
-								//			err,
-								//		),
-								//	)
-								//}
-								//
-								//aerospikeConfigSpec.setEnableSecurity(true)
 
 								aeroCluster.Spec.AerospikeAccessControl = &accessControl
 
-								// aeroCluster = getAerospikeClusterSpecWithAccessControl(
-								//	clusterNamespacedName, &accessControl,
-								//	aerospikeConfigSpec,
-								//)
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)

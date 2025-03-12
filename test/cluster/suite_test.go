@@ -35,6 +35,7 @@ import (
 
 	// +kubebuilder:scaffold:imports
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
@@ -55,34 +56,26 @@ var scheme = k8Runtime.NewScheme()
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
+
 	suitecfg, repcfg := GinkgoConfiguration()
 	suitecfg.Timeout = 10 * time.Hour
 	RunSpecs(t, "Cluster Suite", suitecfg, repcfg)
 }
 
-// var _ = BeforeEach(func() {
-//	By("Cleaning up all Aerospike clusters.")
-//
-//	for idx := range test.Namespaces {
-//		deleteAllClusters(test.Namespaces[idx])
-//		Expect(cleanupPVC(k8sClient, test.Namespaces[idx])).NotTo(HaveOccurred())
-//	}
-//})
-//
-//func deleteAllClusters(namespace string) {
-//	ctx := goctx.TODO()
-//	list := &asdbv1.AerospikeClusterList{}
-//	listOps := &client.ListOptions{Namespace: namespace}
-//
-//	err := k8sClient.List(ctx, list, listOps)
-//	Expect(err).NotTo(HaveOccurred())
-//
-//	for clusterIndex := range list.Items {
-//		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", list.Items[clusterIndex].Namespace, list.Items[clusterIndex].Name))
-//		err := deleteCluster(k8sClient, ctx, &list.Items[clusterIndex])
-//		Expect(err).NotTo(HaveOccurred())
-//	}
-//}
+func deleteAllClusters(namespace string) {
+	ctx := goctx.TODO()
+	list := &asdbv1.AerospikeClusterList{}
+	listOps := &client.ListOptions{Namespace: namespace}
+
+	err := k8sClient.List(ctx, list, listOps)
+	Expect(err).NotTo(HaveOccurred())
+
+	for clusterIndex := range list.Items {
+		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", list.Items[clusterIndex].Namespace, list.Items[clusterIndex].Name))
+		err := deleteCluster(k8sClient, ctx, &list.Items[clusterIndex])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
 
 // This is used when running tests on existing cluster
 // user has to install its own operator then run cleanup and then start this
@@ -106,28 +99,14 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-// var _ = AfterSuite(
-//	func() {
-//		By("Cleaning up all pvcs")
-//
-//		for idx := range test.Namespaces {
-//			_ = cleanupPVC(k8sClient, test.Namespaces[idx], "")
-//		}
-//
-//		By("tearing down the test environment")
-//		gexec.KillAndWait(5 * time.Second)
-//		err := testEnv.Stop()
-//		Expect(err).ToNot(HaveOccurred())
-//	},
-//)
-
 var _ = SynchronizedAfterSuite(func() {
 	// runs on *all* processes
 }, func() {
 	// runs *only* on process #1
-	By("Cleaning up all pvcs")
+	By("Cleaning up all clusters and pvcs")
 
 	for idx := range test.Namespaces {
+		deleteAllClusters(test.Namespaces[idx])
 		_ = cleanupPVC(k8sClient, test.Namespaces[idx], "")
 	}
 })

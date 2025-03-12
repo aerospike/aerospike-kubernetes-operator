@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -24,10 +26,15 @@ var _ = Describe(
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
@@ -35,7 +42,7 @@ var _ = Describe(
 
 				It(
 					"Should validate rack management flow", func() {
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -156,7 +163,7 @@ var _ = Describe(
 				It(
 					"should allow Cluster sz less than number of racks",
 					func() {
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -212,7 +219,7 @@ var _ = Describe(
 						It(
 							"Should validate whole flow of rack.AerospikeConfig use",
 							func() {
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1, 2)
@@ -358,7 +365,7 @@ var _ = Describe(
 
 				Context(
 					"When using valid rack storage config", func() {
-						aeroCluster = createDummyRackAwareWithStorageAerospikeCluster(
+						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 

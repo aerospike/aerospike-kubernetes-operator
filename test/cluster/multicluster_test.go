@@ -109,6 +109,7 @@ func multiClusterGenChangeTest(
 ) {
 	aeroCluster1 := &asdbv1.AerospikeCluster{}
 	aeroCluster2 := &asdbv1.AerospikeCluster{}
+
 	AfterEach(
 		func() {
 			_ = deleteCluster(k8sClient, ctx, aeroCluster1)
@@ -164,6 +165,7 @@ func multiClusterPVCTest(
 ) {
 	aeroCluster1 := &asdbv1.AerospikeCluster{}
 	aeroCluster2 := &asdbv1.AerospikeCluster{}
+
 	AfterEach(
 		func() {
 			_ = deleteCluster(k8sClient, ctx, aeroCluster1)

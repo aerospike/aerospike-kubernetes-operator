@@ -715,9 +715,11 @@ func cleanupPVC(k8sClient client.Client, ns, clName string) error {
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	clLabels := map[string]string{"app": "aerospike-cluster"}
 	labelSelector := labels.SelectorFromSet(clLabels)
+
 	if clName != "" {
 		labelSelector = labels.SelectorFromSet(operatorUtils.LabelsForAerospikeCluster(clName))
 	}
+
 	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
 
 	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {

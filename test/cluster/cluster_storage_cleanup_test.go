@@ -25,7 +25,6 @@ var _ = Describe(
 		// Update
 		Context(
 			"When doing valid operations", func() {
-				var err error
 				clusterName := fmt.Sprintf("storage-cleanup-%d", GinkgoParallelProcess())
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
@@ -49,6 +48,8 @@ var _ = Describe(
 				// Check defaults
 				It(
 					"Try Defaults", func() {
+						var err error
+
 						suitecfg, _ := GinkgoConfiguration()
 						println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
 						By(suitecfg.Timeout.String())
@@ -82,6 +83,7 @@ var _ = Describe(
 
 				It(
 					"Try CleanupAllVolumes", func() {
+						var err error
 
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to true
 						aeroCluster, err = getCluster(
@@ -133,6 +135,7 @@ var _ = Describe(
 
 				It(
 					"Try CleanupSelectedVolumes", func() {
+						var err error
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to false and true for selected volumes
 						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -310,7 +313,9 @@ var _ = Describe(
 
 				It(
 					"UseForAerospikeConfig", func() {
-						aeroCluster, err := getCluster(
+						var err error
+
+						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -348,7 +353,9 @@ var _ = Describe(
 
 				It(
 					"UseForCascadeDelete", func() {
-						aeroCluster, err := getCluster(
+						var err error
+
+						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())

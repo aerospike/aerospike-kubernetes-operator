@@ -651,7 +651,8 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 		Namespaces: []string{scNamespace}, Racks: racks,
 	}
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
-	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+	})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 	err := deployCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 }
@@ -663,7 +664,6 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 	}
 
 	aeroCluster := &asdbv1.AerospikeCluster{}
-	var err error
 
 	AfterEach(
 		func() {
@@ -675,8 +675,9 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 	for _, v := range versions {
 		It(
 			fmt.Sprintf("Deploy-%s", v), func() {
-				clusterName := fmt.Sprintf("deploy-cluster-%d", GinkgoParallelProcess())
+				var err error
 
+				clusterName := fmt.Sprintf("deploy-cluster-%d", GinkgoParallelProcess())
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
@@ -743,8 +744,10 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -766,8 +769,10 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -788,8 +793,10 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -895,19 +902,14 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 }
 
 func UpdateTLSClusterTest(ctx goctx.Context) {
-	var (
-		clusterNamespacedName types.NamespacedName
-		clusterName           string
+	clusterName := fmt.Sprintf("update-tls-cluster-%d", GinkgoParallelProcess())
+	clusterNamespacedName := getNamespacedName(
+		clusterName, namespace,
 	)
 	aeroCluster := &asdbv1.AerospikeCluster{}
 
 	BeforeEach(
 		func() {
-			clusterName = fmt.Sprintf("update-tls-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName = getNamespacedName(
-				clusterName, namespace,
-			)
-
 			aeroCluster = createBasicTLSCluster(clusterNamespacedName, 3)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 				getSCNamespaceConfig("test", "/test/dev/xvdf"),
@@ -2155,6 +2157,7 @@ func negativeUpdateClusterValidationTest(
 				clusterName, namespace,
 			)
 			aeroCluster := &asdbv1.AerospikeCluster{}
+
 			BeforeEach(
 				func() {
 					aeroCluster = createDummyAerospikeCluster(

@@ -296,6 +296,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					}
 
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 				},
 			)
 
@@ -367,6 +368,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 		Context(
 			"InvalidAerospikeCustomInterface", func() {
 				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						aeroCluster = createDummyAerospikeCluster(
@@ -680,9 +682,12 @@ func doTestNetworkPolicy(
 
 			if !multiPodPerHost {
 				if enableTLS {
-					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 				}
-				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 			}
 
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -714,9 +719,12 @@ func doTestNetworkPolicy(
 
 			if !multiPodPerHost {
 				if enableTLS {
-					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 				}
-				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 			}
 
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -746,9 +754,12 @@ func doTestNetworkPolicy(
 
 		if !multiPodPerHost {
 			if enableTLS {
-				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 			}
-			aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+			aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+			})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 		}
 
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -855,6 +866,7 @@ func doTestNetworkPolicy(
 				},
 			)
 
+			//nolint:dupl // For readability
 			It(
 				"setting configured access-address", Serial, func() {
 					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
@@ -871,9 +883,12 @@ func doTestNetworkPolicy(
 
 					if !multiPodPerHost {
 						if enableTLS {
-							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 						}
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -883,6 +898,7 @@ func doTestNetworkPolicy(
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
+			//nolint:dupl // For readability
 			It(
 				"setting configured alternate-access-address", Serial, func() {
 					err := setNodeLabels(
@@ -903,9 +919,12 @@ func doTestNetworkPolicy(
 
 					if !multiPodPerHost {
 						if enableTLS {
-							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 						}
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -941,9 +960,12 @@ func doTestNetworkPolicy(
 
 					if !multiPodPerHost {
 						if enableTLS {
-							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 						}
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
@@ -996,9 +1018,12 @@ func doTestNetworkPolicy(
 
 					if !multiPodPerHost {
 						if enableTLS {
-							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 						}
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 					}
 
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
@@ -1067,10 +1092,12 @@ func doTestNetworkPolicy(
 
 			if !multiPodPerHost {
 				if enableTLS {
-					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 				}
 
-				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 			}
 
 			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
