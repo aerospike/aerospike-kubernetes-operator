@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -21,14 +22,14 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-				clusterName := "sts-storage"
+				clusterName := fmt.Sprintf("sts-storage-%d", GinkgoParallelProcess())
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
-
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
-						aeroCluster := createNonSCDummyAerospikeCluster(
+						aeroCluster = createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -37,13 +38,11 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
+
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 

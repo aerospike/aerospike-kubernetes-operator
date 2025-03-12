@@ -1,11 +1,11 @@
 apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
-  name: aerocluster
+  name: aeroclustertls
   namespace: aerospike
 
 spec:
-  size: 4
+  size: 6
   image: aerospike/aerospike-server-enterprise:8.0.0.2
 
   storage:
@@ -37,7 +37,7 @@ spec:
           path: /etc/aerospike/secret
 
   podSpec:
-    multiPodPerHost: true
+    multiPodPerHost: false
 
   aerospikeAccessControl:
     users:
@@ -63,6 +63,7 @@ spec:
         tls-name: aerospike-a-0.test-runner
         tls-authenticate-client: any
         tls-port: 4333
+        port: 3000
       heartbeat:
         tls-name: aerospike-a-0.test-runner
         tls-port: 3012

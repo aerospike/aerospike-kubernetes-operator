@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	set "github.com/deckarep/golang-set/v2"
@@ -21,8 +22,9 @@ var _ = Describe("BatchScaleDown", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid operations", func() {
+		clusterName := fmt.Sprintf(batchScaleDownClusterName+"-%d", GinkgoParallelProcess())
 		clusterNamespacedName := getNamespacedName(
-			batchScaleDownClusterName, namespace,
+			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
 
@@ -40,6 +42,7 @@ var _ = Describe("BatchScaleDown", func() {
 		AfterEach(
 			func() {
 				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 
@@ -89,8 +92,9 @@ var _ = Describe("BatchScaleDown", func() {
 	// TODO: Do we need to add all the invalid operation test-cases here?
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
 	Context("When doing invalid operations", func() {
+		clusterName := fmt.Sprintf(batchScaleDownClusterName+"-%d", GinkgoParallelProcess())
 		clusterNamespacedName := getNamespacedName(
-			batchScaleDownClusterName, namespace,
+			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
 
@@ -108,6 +112,7 @@ var _ = Describe("BatchScaleDown", func() {
 		AfterEach(
 			func() {
 				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 

@@ -2,11 +2,13 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -37,14 +39,35 @@ import (
 var _ = Describe(
 	"StorageVolumes", func() {
 		ctx := goctx.Background()
-
-		clusterName := "storage"
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
+		var (
+			clusterNamespacedName types.NamespacedName
+			clusterName           string
 		)
+		suitecfg, _ := GinkgoConfiguration()
+		println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
 
 		Context(
 			"When adding cluster", func() {
+				BeforeEach(func() {
+					clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+					clusterNamespacedName = getNamespacedName(
+						clusterName, namespace,
+					)
+				})
+
+				AfterEach(func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
+					err := deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				})
+
 				Context(
 					"When using volume", func() {
 						It(
@@ -176,9 +199,6 @@ var _ = Describe(
 									Expect(ok).To(BeTrue())
 									Expect(lab).To(Equal("labels"))
 								}
-								Expect(err).ShouldNot(HaveOccurred())
-
-								err = deleteCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ShouldNot(HaveOccurred())
 							},
 						)
@@ -388,9 +408,15 @@ var _ = Describe(
 
 		Context(
 			"When cluster is already deployed", func() {
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
-						aeroCluster := createDummyAerospikeCluster(
+						clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+						clusterNamespacedName = getNamespacedName(
+							clusterName, namespace,
+						)
+
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -400,13 +426,9 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 

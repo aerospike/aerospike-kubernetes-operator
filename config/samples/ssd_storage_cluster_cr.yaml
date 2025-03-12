@@ -1,11 +1,11 @@
 apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
-  name: aerocluster
+  name: aeroclusterssd
   namespace: aerospike
 
 spec:
-  size: 2
+  size: 6
   image: aerospike/aerospike-server-enterprise:8.0.0.2
 
   storage:

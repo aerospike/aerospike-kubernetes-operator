@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/client-go/util/retry"
+
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -223,7 +225,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 
 	for podName := range aeroCluster.Status.Pods {
 		// DirtyVolumes are not populated for scaled-up pods.
-		if podName == "update-cluster-0-3" {
+		if podName == aeroCluster.Name+"-0-3" {
 			continue
 		}
 
@@ -862,8 +864,18 @@ func updateClusterWithTO(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster, timeout time.Duration,
 ) error {
-	err := k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+		if err != nil {
+			return err
+		}
+
+		current.Spec = *lib.DeepCopy(&aeroCluster.Spec).(*asdbv1.AerospikeClusterSpec)
+		current.Labels = aeroCluster.Labels
+		current.Annotations = aeroCluster.Annotations
+
+		return k8sClient.Update(ctx, current)
+	}); err != nil {
 		return err
 	}
 
@@ -871,6 +883,24 @@ func updateClusterWithTO(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		timeout, []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	)
+}
+
+func updateClusterWithNoWait(
+	k8sClient client.Client, ctx goctx.Context,
+	aeroCluster *asdbv1.AerospikeCluster,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+		if err != nil {
+			return err
+		}
+
+		current.Spec = *lib.DeepCopy(&aeroCluster.Spec).(*asdbv1.AerospikeClusterSpec)
+		current.Labels = aeroCluster.Labels
+		current.Annotations = aeroCluster.Annotations
+
+		return k8sClient.Update(ctx, current)
+	})
 }
 
 func getClusterPodList(

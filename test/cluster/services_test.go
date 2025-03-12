@@ -35,13 +35,20 @@ var (
 var _ = Describe(
 	"ClusterService", func() {
 		ctx := goctx.TODO()
+		aeroCluster := &asdbv1.AerospikeCluster{}
+		AfterEach(
+			func() {
+				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			},
+		)
 		It(
 			"Validate LB created", func() {
 				By("DeployCluster with LB")
 				clusterNamespacedName := getNamespacedName(
 					"load-balancer-create", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
@@ -50,9 +57,6 @@ var _ = Describe(
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			},
 		)
 
@@ -62,7 +66,7 @@ var _ = Describe(
 				clusterNamespacedName := getNamespacedName(
 					"load-balancer-invalid", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
@@ -77,9 +81,6 @@ var _ = Describe(
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer.ExternalTrafficPolicy = "Cluster"
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			},
 		)
 
@@ -89,7 +90,7 @@ var _ = Describe(
 				clusterNamespacedName := getNamespacedName(
 					"load-balancer-update", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
@@ -112,9 +113,6 @@ var _ = Describe(
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			},
 		)
 	},

@@ -17,8 +17,11 @@ limitations under the License.
 package test
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/util/flowcontrol"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -72,6 +75,11 @@ var _ = BeforeSuite(
 		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
+		cfg.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(100, 200)
+		suitecfg, repcfg := GinkgoConfiguration()
+		println(fmt.Sprintf("suitecfg: %v", suitecfg))
+		println(fmt.Sprintf("repcfg: %v", repcfg))
+		println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
 
 		err = clientgoscheme.AddToScheme(scheme)
 		Expect(err).NotTo(HaveOccurred())

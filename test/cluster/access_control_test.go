@@ -1494,6 +1494,14 @@ var _ = Describe(
 				)
 				Context(
 					"When cluster is deployed", func() {
+						aeroCluster := &asdbv1.AerospikeCluster{}
+						AfterEach(
+							func() {
+								_ = deleteCluster(k8sClient, ctx, aeroCluster)
+								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+							},
+						)
+
 						It(
 							"SecurityEnable: should enable security in running cluster",
 							func() {
@@ -1516,7 +1524,7 @@ var _ = Describe(
 								aerospikeConfigSpec.setEnableSecurity(false)
 
 								// Save cluster variable as well for cleanup.
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1581,14 +1589,6 @@ var _ = Describe(
 								)
 								if err != nil {
 									Fail("Security should have enabled successfully")
-								}
-
-								if aeroCluster != nil {
-									err = deleteCluster(
-										k8sClient, ctx,
-										aeroCluster,
-									)
-									Expect(err).ToNot(HaveOccurred())
 								}
 							},
 						)
@@ -1663,7 +1663,7 @@ var _ = Describe(
 
 								aerospikeConfigSpec.setEnableSecurity(true)
 
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1708,22 +1708,24 @@ var _ = Describe(
 										},
 									},
 								}
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
+								// aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
+								//if err != nil {
+								//	Fail(
+								//		fmt.Sprintf(
+								//			"Invalid Aerospike Config Spec: %v",
+								//			err,
+								//		),
+								//	)
+								//}
+								//
+								//aerospikeConfigSpec.setEnableSecurity(true)
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aeroCluster.Spec.AerospikeAccessControl = &accessControl
 
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, &accessControl,
-									aerospikeConfigSpec,
-								)
+								// aeroCluster = getAerospikeClusterSpecWithAccessControl(
+								//	clusterNamespacedName, &accessControl,
+								//	aerospikeConfigSpec,
+								//)
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1983,13 +1985,6 @@ var _ = Describe(
 								) {
 									Fail("QuotaParamsSpecifiedButFlagIsOff should have failed")
 								}
-
-								if aeroCluster != nil {
-									err = deleteCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).ToNot(HaveOccurred())
-								}
 							},
 						)
 					},
@@ -2002,8 +1997,16 @@ var _ = Describe(
 				"default-password-file", namespace,
 			)
 
+			aeroCluster := &asdbv1.AerospikeCluster{}
+			AfterEach(
+				func() {
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				},
+			)
+
 			It("Should fail if volume is not present for default-password-file", func() {
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -2016,7 +2019,7 @@ var _ = Describe(
 			})
 
 			It("Should fail if volume source is not secret for default-password-file", func() {
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -2040,7 +2043,7 @@ var _ = Describe(
 			It("Should use default-password-file when configured", func() {
 				By("Creating cluster")
 
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -2101,13 +2104,6 @@ var _ = Describe(
 					k8sClient, ctx, clusterNamespacedName, 1,
 				)
 				Expect(err).ToNot(HaveOccurred())
-
-				if aeroCluster != nil {
-					err = deleteCluster(
-						k8sClient, ctx, aeroCluster,
-					)
-					Expect(err).ToNot(HaveOccurred())
-				}
 			})
 		})
 	},

@@ -43,17 +43,18 @@ var _ = Describe(
 	"DynamicConfig", func() {
 
 		ctx := goctx.Background()
-		var clusterNamespacedName = getNamespacedName(
-			clName, namespace,
-		)
 
 		Context(
 			"When doing valid operations", func() {
-
+				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
@@ -82,17 +83,16 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
 				It(
 					"Should update config dynamically", func() {
-
-						By("Modify dynamic config by adding fields")
+						suitecfg, _ := GinkgoConfiguration()
+						println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
+						By("Modify dynamic config by adding fields" + suitecfg.Timeout.String())
 
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -132,7 +132,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
@@ -186,7 +186,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod = aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
@@ -238,7 +238,7 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"security", &pod)
@@ -277,7 +277,7 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"service", &pod)
@@ -297,11 +297,15 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-
+				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
@@ -330,10 +334,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
@@ -438,11 +440,15 @@ var _ = Describe(
 
 		Context(
 			"When doing complete dynamic config change", func() {
-
+				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster := getAerospikeClusterSpecWithLDAP(
+						aeroCluster = getAerospikeClusterSpecWithLDAP(
 							clusterNamespacedName,
 						)
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
@@ -510,10 +516,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
@@ -610,10 +614,15 @@ var _ = Describe(
 
 		Context(
 			"When changing fields those need recluster", func() {
+				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
 						// Create a 4 node cluster
-						aeroCluster := createNonSCDummyAerospikeCluster(
+						aeroCluster = createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 4,
 						)
 						aeroCluster.Spec.Storage.Volumes = append(
@@ -655,10 +664,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
@@ -684,7 +691,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-1-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
 
 						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
 						Expect(err).ToNot(HaveOccurred())

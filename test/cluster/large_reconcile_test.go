@@ -43,6 +43,13 @@ var _ = Describe(
 				}
 				aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
 
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
+				)
+
 				It(
 					"Should try large reconcile operations", func() {
 
@@ -169,29 +176,25 @@ var _ = Describe(
 						// Change build to build1
 						// Change build to build2
 						// Only a single pod may have build1 at max in whole upgrade. Ultimately all should reach build2
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					},
-				)
-
-				Context(
-					"WaitingForStableCluster", func() {
-						It(
-							"LargeMigration", func() {
-								// Need to create large migration...is there any way to mimic or olny way is to load data
-								// Tested manually
-							},
-						)
-						It(
-							"ColdStart", func() {
-								// Not needed for this, isClusterStable call should fail and this will requeue request.
-							},
-						)
 					},
 				)
 			},
 		)
-
+		Context(
+			"WaitingForStableCluster", func() {
+				It(
+					"LargeMigration", func() {
+						// Need to create large migration...is there any way to mimic or only way is to load data
+						// Tested manually
+					},
+				)
+				It(
+					"ColdStart", func() {
+						// Not needed for this, isClusterStable call should fail and this will requeue request.
+					},
+				)
+			},
+		)
 	},
 )
 

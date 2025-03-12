@@ -26,11 +26,8 @@ var _ = Describe(
 	"PodSpec", func() {
 
 		ctx := goctx.TODO()
-
-		clusterName := "podspec"
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
-		)
+		clusterName := fmt.Sprintf("podspec-%d", GinkgoParallelProcess())
+		clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 		sidecar1 := corev1.Container{
 			Name:  "nginx1",
@@ -66,13 +63,13 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operation", func() {
-
+				aeroCluster := &asdbv1.AerospikeCluster{}
 				BeforeEach(
 					func() {
 						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 						// Deploy everything in single rack
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						racks := []asdbv1.Rack{
@@ -94,13 +91,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 				It(

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -19,15 +20,22 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
+				clusterName := fmt.Sprintf("rack-management-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(
+					clusterName, namespace,
+				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
+
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
+				)
 
 				It(
 					"Should validate rack management flow", func() {
-						clusterName := "rack-management1"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -142,24 +150,13 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-
-						// cleanup: Remove the cluster
-						By("Cleaning up the cluster")
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
 				It(
 					"should allow Cluster sz less than number of racks",
 					func() {
-						clusterName := "rack-management2"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -205,11 +202,6 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-						// cleanup: Remove the cluster
-						By("Cleaning up the cluster")
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
@@ -217,18 +209,13 @@ var _ = Describe(
 					"When using valid rack aerospike config", func() {
 						// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
 
-						clusterName := "rack-config-update"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-						aeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-						racks := getDummyRackConf(1, 2)
-
 						It(
 							"Should validate whole flow of rack.AerospikeConfig use",
 							func() {
+								aeroCluster = createDummyAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
+								racks := getDummyRackConf(1, 2)
 
 								// Op1: Add rack.AerospikeConfig
 								By("Deploying cluster having rack.AerospikeConfig")
@@ -273,7 +260,7 @@ var _ = Describe(
 								// Op2: Update rack.AerospikeConfig
 								By("Update rack.AerospikeConfig")
 
-								aeroCluster, err := getCluster(
+								aeroCluster, err = getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -364,12 +351,6 @@ var _ = Describe(
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
-
-								// cleanup: Remove the cluster
-								By("Cleaning up the cluster")
-
-								err = deleteCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
 							},
 						)
 					},
@@ -377,19 +358,13 @@ var _ = Describe(
 
 				Context(
 					"When using valid rack storage config", func() {
-
-						clusterName := "rack-specific-storage"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+						aeroCluster = createDummyRackAwareWithStorageAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
 						It(
 							"Should validate empty common storage if per rack storage is provided",
 							func() {
-
 								err := deployCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -407,10 +382,8 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-				clusterName := "invalid-rack-config"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
+				clusterName := fmt.Sprintf("invalid-rack-config-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 				Context(
 					"when deploy cluster with invalid rack ", func() {
@@ -705,9 +678,11 @@ var _ = Describe(
 				Context(
 					"when update cluster with invalid rack", func() {
 
+						aeroCluster := &asdbv1.AerospikeCluster{}
+
 						BeforeEach(
 							func() {
-								aeroCluster := createDummyAerospikeCluster(
+								aeroCluster = createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								rackConf := asdbv1.RackConfig{
@@ -724,12 +699,8 @@ var _ = Describe(
 
 						AfterEach(
 							func() {
-								aeroCluster, err := getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								_ = deleteCluster(k8sClient, ctx, aeroCluster)
+								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 							},
 						)
 
@@ -803,12 +774,13 @@ var _ = Describe(
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
+			aeroCluster := &asdbv1.AerospikeCluster{}
 			BeforeEach(
 				func() {
 					nodes, err := getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
@@ -821,12 +793,8 @@ var _ = Describe(
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 				},
 			)
 
@@ -854,14 +822,15 @@ var _ = Describe(
 
 		Context(
 			"When testing failed rack recovery by rolling restart", func() {
-				clusterName := "cl-resource-insuff"
+				clusterName := fmt.Sprintf("cl-resource-insuff-%d", GinkgoParallelProcess())
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
 				)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
-						aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+						aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 						racks := getDummyRackConf(1, 2)
 						aeroCluster.Spec.RackConfig.Racks = racks
 						aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -873,10 +842,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 

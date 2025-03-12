@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 var _ = Describe("AutoScaler", func() {
@@ -21,10 +23,11 @@ var _ = Describe("AutoScaler", func() {
 		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
+		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
-				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			},
@@ -32,12 +35,8 @@ var _ = Describe("AutoScaler", func() {
 
 		AfterEach(
 			func() {
-				aeroCluster, err := getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
-
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 

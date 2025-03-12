@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,14 +36,21 @@ func securityContextTest(
 	ctx goctx.Context, checkPodSpec bool, checkAeroServer bool,
 	checkAeroInit bool,
 ) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
+	AfterEach(
+		func() {
+			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+		},
+	)
 	It(
 		"Validate SecurityContext applied", func() {
 			By("DeployCluster with SecurityContext")
-
+			clusterName := fmt.Sprintf("security-context-create-%d", GinkgoParallelProcess())
 			clusterNamespacedName := getNamespacedName(
-				"security-context-create", namespace,
+				clusterName, namespace,
 			)
-			aeroCluster := createDummyAerospikeCluster(
+			aeroCluster = createDummyAerospikeCluster(
 				clusterNamespacedName, 2,
 			)
 
@@ -67,20 +75,17 @@ func securityContextTest(
 			validateSecurityContext(
 				aeroCluster,
 			)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 
 	It(
 		"Validate SecurityContext updated", func() {
 			By("DeployCluster")
-
+			clusterName := fmt.Sprintf("security-context-updated-%d", GinkgoParallelProcess())
 			clusterNamespacedName := getNamespacedName(
-				"security-context-updated", namespace,
+				clusterName, namespace,
 			)
-			aeroCluster := createDummyAerospikeCluster(
+			aeroCluster = createDummyAerospikeCluster(
 				clusterNamespacedName, 2,
 			)
 
@@ -136,9 +141,6 @@ func securityContextTest(
 			validateSecurityContext(
 				aeroCluster,
 			)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 }

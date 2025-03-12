@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/util/retry"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +19,8 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 )
 
-const batchClusterName = "batch-restart"
+const batchRestartClusterName = "batch-restart"
+const batchUpgradeClusterName = "batch-upgrade"
 
 var (
 	unavailableImage = fmt.Sprintf("%s:%s", baseImage, "7.2.0.99")
@@ -38,15 +41,15 @@ var _ = Describe("BatchRestart", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid operations", func() {
-		clusterName := batchClusterName
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
-		)
 		Context("BatchRollingRestart", func() {
+			clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
+			clusterNamespacedName := getNamespacedName(
+				clusterName, namespace,
+			)
 			BatchRollingRestart(ctx, clusterNamespacedName)
 		})
 		Context("BatchUpgrade", func() {
-			clusterName := "batch-upgrade"
+			clusterName := fmt.Sprintf(batchUpgradeClusterName+"-%d", GinkgoParallelProcess())
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
@@ -55,13 +58,15 @@ var _ = Describe("BatchRestart", func() {
 	})
 
 	Context("When doing invalid operations", func() {
-		clusterName := batchClusterName
+		clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
 		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
+		aeroCluster := &asdbv1.AerospikeCluster{}
+
 		BeforeEach(
 			func() {
-				aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+				aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -72,10 +77,8 @@ var _ = Describe("BatchRestart", func() {
 
 		AfterEach(
 			func() {
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 
@@ -143,13 +146,20 @@ var _ = Describe("BatchRestart", func() {
 	})
 
 	Context("When doing namespace related operations", func() {
-		clusterName := batchClusterName
+		clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
 		clusterNamespacedName := getNamespacedName(
 			clusterName, namespace,
 		)
+		aeroCluster := &asdbv1.AerospikeCluster{}
+		AfterEach(
+			func() {
+				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			},
+		)
 		It("Should fail if replication-factor is 1", func() {
 			By("Using RollingUpdateBatchSize PCT")
-			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -167,7 +177,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should fail if namespace is configured in single rack", func() {
-			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
@@ -191,7 +201,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should pass if namespace is configured in 1+ racks", func() {
-			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
@@ -224,9 +234,10 @@ var _ = Describe("BatchRestart", func() {
 })
 
 func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
 	BeforeEach(
 		func() {
-			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -237,10 +248,8 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},
 	)
 	// Restart 1 node at a time
@@ -250,7 +259,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200m")
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400m")
 		err = updateCluster(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -279,7 +288,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		// schedule batch of pods
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), "200m")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("100%"), "400m")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize Count greater than pods in rack")
@@ -288,7 +297,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		// Schedule batch of pods
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10), "300m")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(10), "500m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -299,7 +308,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		err := batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"))
 		Expect(err).ToNot(HaveOccurred())
 
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), "200m")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, percent("90%"), "400m")
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Update RollingUpdateBatchSize Count")
@@ -307,7 +316,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		err = batchRollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3))
 		Expect(err).ToNot(HaveOccurred())
 
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "300m")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "500m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -319,35 +328,38 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(3)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200m")
-		err = k8sClient.Update(ctx, aeroCluster)
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400m")
+		err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(time.Second * 1)
+
+		By("Again Update RollingUpdateBatchSize Count")
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
+			aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
+
+			return k8sClient.Update(ctx, aeroCluster)
+		})
 		Expect(err).ToNot(HaveOccurred())
 
 		time.Sleep(time.Second * 1)
 
 		By("Again Update RollingUpdateBatchSize Count")
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-
-		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
-		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
-		err = k8sClient.Update(ctx, aeroCluster)
-		Expect(err).ToNot(HaveOccurred())
-
-		time.Sleep(time.Second * 1)
-
-		By("Again Update RollingUpdateBatchSize Count")
-
-		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "200m")
+		err = rollingRestartTest(k8sClient, ctx, clusterNamespacedName, count(3), "400m")
 		Expect(err).ToNot(HaveOccurred())
 	})
 }
 
 func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
 	BeforeEach(
 		func() {
-			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
+			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -358,11 +370,8 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 
 	AfterEach(
 		func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},
 	)
 	// Restart 1 node at a time

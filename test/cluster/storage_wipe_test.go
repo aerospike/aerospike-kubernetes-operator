@@ -27,6 +27,7 @@ var _ = Describe(
 
 				containerName := "tomcat"
 				podSpec := asdbv1.AerospikePodSpec{
+					MultiPodPerHost: ptr.To(true),
 					Sidecars: []corev1.Container{
 						{
 							Name:  containerName,
@@ -43,6 +44,15 @@ var _ = Describe(
 				clusterName := "storage-wipe"
 				clusterNamespacedName := getNamespacedName(
 					clusterName, namespace,
+				)
+
+				aeroCluster := &asdbv1.AerospikeCluster{}
+
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
 				)
 
 				It(
@@ -63,7 +73,7 @@ var _ = Describe(
 								InputStorage: rackStorageConfig,
 							},
 						}
-						aeroCluster := getStorageWipeAerospikeCluster(
+						aeroCluster = getStorageWipeAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							post6Image, getAerospikeClusterConfig(),
 						)
@@ -72,7 +82,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
+						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
@@ -139,13 +149,6 @@ var _ = Describe(
 								),
 							)
 						}
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 			},

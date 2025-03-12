@@ -1,11 +1,11 @@
 apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
-  name: aerocluster
+  name: aeroclustersc
   namespace: aerospike
 
 spec:
-  size: 4
+  size: 6
   image: aerospike/aerospike-server-enterprise:8.0.0.2
 
   rosterNodeBlockList:
@@ -48,7 +48,7 @@ spec:
           path: /etc/aerospike/secret
 
   podSpec:
-    multiPodPerHost: true
+    multiPodPerHost: false
 
   aerospikeAccessControl:
     users:

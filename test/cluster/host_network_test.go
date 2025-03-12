@@ -29,6 +29,13 @@ var _ = Describe(
 				aeroCluster.Spec.PodSpec.HostNetwork = true
 				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
+				)
+
 				It(
 					"Should not work with MultiPodPerHost enabled", func() {
 						err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -41,6 +48,7 @@ var _ = Describe(
 						By("Deploying cluster, Should not advertise node address when off")
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						aeroCluster.Spec.PodSpec.HostNetwork = false
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -67,10 +75,6 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
-
-						By("Deleting cluster")
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 			},

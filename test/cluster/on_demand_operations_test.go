@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
@@ -16,14 +18,18 @@ var _ = Describe(
 	"OnDemandOperations", func() {
 
 		ctx := goctx.Background()
-		var clusterNamespacedName = getNamespacedName(
-			"operations", namespace,
+		var (
+			clusterNamespacedName types.NamespacedName
 		)
 
 		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
+				clusterName := fmt.Sprintf("operations-%d", GinkgoParallelProcess())
+				clusterNamespacedName = getNamespacedName(
+					clusterName, namespace,
+				)
 				// Create a 2 node cluster
 				aeroCluster = createDummyRackAwareAerospikeCluster(
 					clusterNamespacedName, 2,
@@ -37,6 +43,7 @@ var _ = Describe(
 		AfterEach(
 			func() {
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 
@@ -71,8 +78,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationWarmRestart,
-							"operations-1-1": asdbv1.OperationWarmRestart,
+							aeroCluster.Name + "-1-0": asdbv1.OperationWarmRestart,
+							aeroCluster.Name + "-1-1": asdbv1.OperationWarmRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -108,8 +115,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-1": asdbv1.OperationPodRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -152,8 +159,8 @@ var _ = Describe(
 						}, 1*time.Minute).ShouldNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-1": asdbv1.OperationPodRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -186,7 +193,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationPodRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0"},
+								PodList: []string{aeroCluster.Name + "-1-0"},
 							},
 						}
 
@@ -203,8 +210,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": "noRestart",
+							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-1": "noRestart",
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -251,8 +258,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-1": asdbv1.OperationPodRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -270,7 +277,7 @@ var _ = Describe(
 						oldPodIDs, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 						operations := []asdbv1.OperationSpec{
 							{
 								Kind: asdbv1.OperationWarmRestart,
@@ -289,8 +296,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
-							"operations-1-0": asdbv1.OperationPodRestart,
-							"operations-1-1": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
+							aeroCluster.Name + "-1-1": asdbv1.OperationPodRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -338,7 +345,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationWarmRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0", "invalid-pod"},
+								PodList: []string{aeroCluster.Name + "-1-0", "invalid-pod"},
 							},
 						}
 
@@ -360,7 +367,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationWarmRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0"},
+								PodList: []string{aeroCluster.Name + "-1-0"},
 							},
 						}
 
@@ -389,7 +396,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationWarmRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0"},
+								PodList: []string{aeroCluster.Name + "-1-0"},
 							},
 						}
 
@@ -399,7 +406,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Modify podList
-						operations[0].PodList = []string{"operations-1-1"}
+						operations[0].PodList = []string{aeroCluster.Name + "-1-1"}
 						aeroCluster.Spec.Operations = operations
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -418,7 +425,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationWarmRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0"},
+								PodList: []string{aeroCluster.Name + "-1-0"},
 							},
 						}
 
@@ -441,7 +448,7 @@ var _ = Describe(
 							{
 								Kind:    asdbv1.OperationWarmRestart,
 								ID:      "1",
-								PodList: []string{"operations-1-0"},
+								PodList: []string{aeroCluster.Name + "-1-0"},
 							},
 						}
 

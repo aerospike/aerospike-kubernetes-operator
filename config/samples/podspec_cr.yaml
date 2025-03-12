@@ -1,7 +1,7 @@
 apiVersion: asdb.aerospike.com/v1
 kind: AerospikeCluster
 metadata:
-  name: aerocluster
+  name: aeroclusterpodspec
   namespace: aerospike
 
 spec:

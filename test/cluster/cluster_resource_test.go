@@ -30,6 +30,13 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
+				)
+
 				It(
 					"Try ClusterWithResourceLifecycle", func() {
 
@@ -38,15 +45,12 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Testing aerospike-server resource")
-						validUpdateResourceTest(k8sClient, ctx, clusterNamespacedName, true, false)
+						validUpdateResourceTest(k8sClient, ctx, clusterNamespacedName, true)
 
 						By("Testing aerospike-init resource")
-						validUpdateResourceTest(k8sClient, ctx, clusterNamespacedName, false, true)
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						validUpdateResourceTest(k8sClient, ctx, clusterNamespacedName, false)
 					},
 				)
-
 			},
 		)
 
@@ -54,19 +58,25 @@ var _ = Describe(
 			"When doing invalid operations", func() {
 
 				// Test aerospike-server resource
-				invalidResourceTest(ctx, true, false)
+				invalidResourceTest(ctx, true)
 
-				// Test aerospike-server resource
-				invalidResourceTest(ctx, false, true)
+				// Test aerospike-init resource
+				invalidResourceTest(ctx, false)
 			},
 		)
 	},
 )
 
-func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool) {
+func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 	Context(
 		"Deploy", func() {
-			clusterName := "cluster-resource-invalid"
+			var clusterName string
+			if checkAeroServer {
+				clusterName = "server-resource-invalid"
+			} else {
+				clusterName = "init-resource-invalid"
+			}
+
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
@@ -94,9 +104,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 
 				if checkAeroServer {
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = resources
-				}
-
-				if checkAeroInit {
+				} else {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
 
@@ -104,19 +112,32 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 					k8sClient, ctx, aeroCluster,
 				)
 				Expect(err).Should(HaveOccurred())
-			},
-			)
+			})
 		},
 	)
 
 	Context(
 		"Update", func() {
-			clusterName := "cl-resource-insuff"
+			var clusterName string
+
+			if checkAeroServer {
+				clusterName = "server-resource-insuff"
+			} else {
+				clusterName = "init-resource-insuff"
+			}
+
 			clusterNamespacedName := getNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
 				clusterNamespacedName, 2,
+			)
+
+			AfterEach(
+				func() {
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				},
 			)
 
 			It("UpdateClusterWithResource: should fail for request exceeding limit", func() {
@@ -145,79 +166,72 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer, checkAeroInit bool)
 
 				if checkAeroServer {
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = resources
-				}
-
-				if checkAeroInit {
+				} else {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
 
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).Should(HaveOccurred())
-
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			},
-			)
+			})
 		},
 	)
 }
 
 func validUpdateResourceTest(
 	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, checkAeroServer, checkAeroInit bool,
+	clusterNamespacedName types.NamespacedName, checkAeroServer bool,
 ) {
 	res := &corev1.ResourceRequirements{}
 
 	By("UpdateClusterResourceLimitMemory")
 
 	res.Limits = corev1.ResourceList{}
-	res.Limits[corev1.ResourceMemory] = resource.MustParse("2Gi")
-	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer, checkAeroInit)
+	res.Limits[corev1.ResourceMemory] = resource.MustParse("1Gi")
+	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("UpdateClusterResourceLimitCpu")
 
 	res.Limits[corev1.ResourceCPU] = resource.MustParse("300m")
-	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer, checkAeroInit)
+	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("UpdateClusterResourceRequestMemory")
 
 	res.Requests = corev1.ResourceList{}
-	res.Requests[corev1.ResourceMemory] = resource.MustParse("1Gi")
-	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer, checkAeroInit)
+	res.Requests[corev1.ResourceMemory] = resource.MustParse("500Mi")
+	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("UpdateClusterResourceRequestCpu")
 
 	res.Requests[corev1.ResourceCPU] = resource.MustParse("200m")
-	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer, checkAeroInit)
+	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("RemoveResource")
-	updateResource(k8sClient, ctx, clusterNamespacedName, nil, checkAeroServer, checkAeroInit)
+	updateResource(k8sClient, ctx, clusterNamespacedName, nil, checkAeroServer)
 }
 
 func updateResource(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
-	res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool,
+	res *corev1.ResourceRequirements, checkAeroServer bool,
 ) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	if checkAeroServer {
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = res
-	}
-
-	if checkAeroInit {
+	} else {
 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = res
 	}
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = validateClusterResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer, checkAeroInit)
+	err = validateClusterResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 	Expect(err).ToNot(HaveOccurred())
 }
 
 func validateClusterResource(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
-	res *corev1.ResourceRequirements, checkAeroServer, checkAeroInit bool,
+	res *corev1.ResourceRequirements, checkAeroServer bool,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -242,9 +256,7 @@ func validateClusterResource(
 			if !reflect.DeepEqual(&cnt.Resources, res) {
 				return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)
 			}
-		}
-
-		if checkAeroInit {
+		} else {
 			cnt = stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0]
 			if !reflect.DeepEqual(&cnt.Resources, res) {
 				return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)

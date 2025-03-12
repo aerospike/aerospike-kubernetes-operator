@@ -251,7 +251,7 @@ func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
-	r.Log.Info("Delete statefulset")
+	r.Log.Info("Delete statefulset", "namespace", st.Namespace, "name", st.Name)
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,11 +33,9 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-
-				clusterName := "rack-enabled"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
+				clusterName := fmt.Sprintf("rack-enabled-%d", GinkgoParallelProcess())
+				clusterNamespacedName := getNamespacedName(clusterName, namespace)
+				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
@@ -50,7 +49,7 @@ var _ = Describe(
 						}
 
 						// Will be used in Update also
-						aeroCluster := createDummyAerospikeCluster(
+						aeroCluster = createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						// This needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -75,13 +74,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 

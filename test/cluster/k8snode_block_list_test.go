@@ -23,12 +23,15 @@ var _ = Describe(
 		ctx := context.TODO()
 		Context(
 			"Migrate pods from K8s blocked nodes", func() {
-				clusterName := "k8s-node-block-cluster"
+				var (
+					podName    string
+					oldK8sNode string
+					oldPvcInfo map[string]types.UID
+				)
+
+				clusterName := fmt.Sprintf("k8s-node-block-cluster-%d", GinkgoParallelProcess())
 				clusterNamespacedName := getNamespacedName(clusterName, namespace)
-				podName := clusterName + "-2-0"
 				aeroCluster := &asdbv1.AerospikeCluster{}
-				oldK8sNode := ""
-				oldPvcInfo := make(map[string]types.UID)
 
 				var (
 					err   error
@@ -64,9 +67,11 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig = rackConf
 
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						podName = clusterName + "-2-0"
 						pod := &corev1.Pod{}
 						err = k8sClient.Get(ctx, getNamespacedName(podName, namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
@@ -80,6 +85,7 @@ var _ = Describe(
 					func() {
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 

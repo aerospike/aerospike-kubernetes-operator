@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,7 +22,8 @@ var _ = Describe(
 		aeroCluster := &asdbv1.AerospikeCluster{}
 		maxUnavailable := intstr.FromInt32(0)
 		defaultMaxUnavailable := intstr.FromInt32(1)
-		clusterNamespacedName := getNamespacedName("pdb-test-cluster", namespace)
+		clusterName := fmt.Sprintf("pdb-test-cluster-%d", GinkgoParallelProcess())
+		clusterNamespacedName := getNamespacedName(clusterName, namespace)
 
 		BeforeEach(func() {
 			aeroCluster = createDummyAerospikeCluster(
@@ -32,6 +34,7 @@ var _ = Describe(
 		AfterEach(func() {
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 			Expect(deletePDB(ctx, aeroCluster)).NotTo(HaveOccurred())
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		})
 
 		Context("Valid Operations", func() {
