@@ -28,34 +28,34 @@ pipeline {
     }
 
     stages {
-        stage("Check for /ok-to-test") {
-            when {
-                expression { return env.CHANGE_ID != null } // Run only for PRs
-            }
-            steps {
-                script {
-
-                    def prNumber = env.CHANGE_ID
-                    def repo = "aerospike/aerospike-kubernetes-operator"
-
-                    // Fetch PR comments using GitHub API
-//                     def curl = sh(script: """curl -s -H "https://api.github.com/repos/${repo}/issues/${prNumber}/comments """, returnStdout: true)
-//                     echo "PR comments curl: ${curl}"
-
-                    def response = sh(script: """
-                        curl -s "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
-                    """, returnStdout: true).trim()
-
-                    echo "PR comments: ${response}"
-
-                    if (!response.contains('/ok-to-test')) {
-                        error "Build skipped: No '/ok-to-test' comment found."
-                    } else {
-                        echo "Build authorized by /ok-to-test comment!"
-                    }
-                }
-            }
-        }
+//         stage("Check for /ok-to-test") {
+//             when {
+//                 expression { return env.CHANGE_ID != null } // Run only for PRs
+//             }
+//             steps {
+//                 script {
+//
+//                     def prNumber = env.CHANGE_ID
+//                     def repo = "aerospike/aerospike-kubernetes-operator"
+//
+//                     // Fetch PR comments using GitHub API
+// //                     def curl = sh(script: """curl -s -H "https://api.github.com/repos/${repo}/issues/${prNumber}/comments """, returnStdout: true)
+// //                     echo "PR comments curl: ${curl}"
+//
+//                     def response = sh(script: """
+//                         curl -s "https://api.github.com/repos/${repo}/issues/${prNumber}/comments" | jq '.[] | .body'
+//                     """, returnStdout: true).trim()
+//
+//                     echo "PR comments: ${response}"
+//
+//                     if (!response.contains('/ok-to-test')) {
+//                         error "Build skipped: No '/ok-to-test' comment found."
+//                     } else {
+//                         echo "Build authorized by /ok-to-test comment!"
+//                     }
+//                 }
+//             }
+//         }
 
         stage("Pipeline" ) {
             options {
