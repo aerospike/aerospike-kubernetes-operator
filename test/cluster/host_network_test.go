@@ -12,6 +12,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -20,7 +21,7 @@ var _ = Describe(
 		Context(
 			"HostNetwork", func() {
 				clusterName := "host-network-cluster"
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := createAerospikeClusterPost640(

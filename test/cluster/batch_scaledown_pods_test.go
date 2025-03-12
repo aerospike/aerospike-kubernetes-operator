@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const batchScaleDownClusterName = "batch-scaledown"
@@ -23,7 +24,7 @@ var _ = Describe("BatchScaleDown", func() {
 
 	Context("When doing valid operations", func() {
 		clusterName := fmt.Sprintf(batchScaleDownClusterName+"-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
@@ -93,7 +94,7 @@ var _ = Describe("BatchScaleDown", func() {
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
 	Context("When doing invalid operations", func() {
 		clusterName := fmt.Sprintf(batchScaleDownClusterName+"-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}

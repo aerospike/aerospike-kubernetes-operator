@@ -46,7 +46,7 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Deploy Backup Service")
-		backupService, err := backupservice.NewBackupService()
+		backupService, err := backupservice.NewBackupService(test.GetNamespacedName("backup-service", namespace))
 		Expect(err).ToNot(HaveOccurred())
 
 		backupService.Spec.Service = &asdbv1beta1.Service{

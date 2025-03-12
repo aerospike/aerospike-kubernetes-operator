@@ -15,6 +15,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -28,7 +29,7 @@ var _ = Describe("SCMode", func() {
 
 	Context("When doing valid operation", func() {
 		clusterName := fmt.Sprintf("sc-mode-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
@@ -225,7 +226,7 @@ var _ = Describe("SCMode", func() {
 
 	Context("When doing invalid operation", func() {
 		clusterName := fmt.Sprintf("sc-mode-invalid-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 

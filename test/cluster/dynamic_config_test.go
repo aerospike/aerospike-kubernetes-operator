@@ -47,7 +47,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}
@@ -298,7 +298,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}
@@ -441,7 +441,7 @@ var _ = Describe(
 		Context(
 			"When doing complete dynamic config change", func() {
 				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}
@@ -615,7 +615,7 @@ var _ = Describe(
 		Context(
 			"When changing fields those need recluster", func() {
 				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}

@@ -42,7 +42,7 @@ var _ = Describe(
 				}
 
 				clusterName := "storage-wipe"
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 

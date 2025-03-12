@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe("AutoScaler", func() {
@@ -20,7 +21,7 @@ var _ = Describe("AutoScaler", func() {
 
 	Context("When doing scale operations", func() {
 		clusterName := "autoscale"
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}

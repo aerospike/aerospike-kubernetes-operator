@@ -14,6 +14,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -23,7 +24,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("sts-storage-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}

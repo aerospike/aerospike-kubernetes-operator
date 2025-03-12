@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -49,7 +50,7 @@ func securityContextTest(
 			By("DeployCluster with SecurityContext")
 
 			clusterName := fmt.Sprintf("security-context-create-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster = createDummyAerospikeCluster(
@@ -85,7 +86,7 @@ func securityContextTest(
 			By("DeployCluster")
 
 			clusterName := fmt.Sprintf("security-context-updated-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster = createDummyAerospikeCluster(

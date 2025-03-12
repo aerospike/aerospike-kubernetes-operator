@@ -50,7 +50,7 @@ var _ = Describe(
 			"When adding cluster", func() {
 				BeforeEach(func() {
 					clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
-					clusterNamespacedName = getNamespacedName(
+					clusterNamespacedName = test.GetNamespacedName(
 						clusterName, namespace,
 					)
 				})
@@ -412,7 +412,7 @@ var _ = Describe(
 				BeforeEach(
 					func() {
 						clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
-						clusterNamespacedName = getNamespacedName(
+						clusterNamespacedName = test.GetNamespacedName(
 							clusterName, namespace,
 						)
 

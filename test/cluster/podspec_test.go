@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var (
@@ -27,7 +28,7 @@ var _ = Describe(
 
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("podspec-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(clusterName, namespace)
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 		sidecar1 := corev1.Container{
 			Name:  "nginx1",

@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
@@ -45,7 +46,7 @@ var _ = Describe(
 		It(
 			"Validate LB created", func() {
 				By("DeployCluster with LB")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-create", namespace,
 				)
 				aeroCluster = createDummyAerospikeCluster(
@@ -63,7 +64,7 @@ var _ = Describe(
 		It(
 			"Validate LB can be updated", func() {
 				By("DeployCluster")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-invalid", namespace,
 				)
 				aeroCluster = createDummyAerospikeCluster(
@@ -87,7 +88,7 @@ var _ = Describe(
 		It(
 			"Validate LB created in existing cluster", func() {
 				By("DeployCluster without LB")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-update", namespace,
 				)
 				aeroCluster = createDummyAerospikeCluster(

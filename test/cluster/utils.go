@@ -885,10 +885,3 @@ func getGitRepoRootPath() (string, error) {
 
 	return strings.TrimSpace(string(path)), nil
 }
-
-func getNamespacedName(name, namespace string) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
-	}
-}

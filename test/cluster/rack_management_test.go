@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -23,7 +24,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("rack-management-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -390,7 +391,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				clusterName := fmt.Sprintf("invalid-rack-config-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(clusterName, namespace)
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 				Context(
 					"when deploy cluster with invalid rack ", func() {
@@ -778,7 +779,7 @@ var _ = Describe(
 
 		Context("When testing failed rack recovery by scale down", func() {
 			clusterName := "failed-rack-config"
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := &asdbv1.AerospikeCluster{}
@@ -830,7 +831,7 @@ var _ = Describe(
 		Context(
 			"When testing failed rack recovery by rolling restart", func() {
 				clusterName := fmt.Sprintf("cl-resource-insuff-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}

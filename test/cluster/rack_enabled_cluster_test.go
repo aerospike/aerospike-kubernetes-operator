@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -34,7 +35,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("rack-enabled-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(clusterName, namespace)
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(

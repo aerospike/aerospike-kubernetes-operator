@@ -12,6 +12,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 // Test cluster cr update
@@ -26,7 +28,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("storage-cleanup-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}
@@ -235,7 +237,7 @@ var _ = Describe(
 		Context(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("rack-storage-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -401,7 +403,7 @@ var _ = Describe(
 		Context(
 			"When doing invalid operations", func() {
 				clusterName := fmt.Sprintf("rack-storage-invalid-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				aeroCluster := &asdbv1.AerospikeCluster{}

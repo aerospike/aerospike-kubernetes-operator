@@ -110,7 +110,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 	Context(
 		"Negative cases for customInterface", func() {
 			clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(clusterName, namespace)
+			clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 			It(
 				"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
@@ -277,7 +277,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 	Context(
 		"Negative cases for configuredIP", func() {
 			clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(clusterName, test.MultiClusterNs1)
+			clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
 			BeforeEach(
 				func() {
@@ -363,7 +363,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 	Context("Negative cases for customInterface", func() {
 		clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(clusterName, namespace)
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 		Context(
 			"InvalidAerospikeCustomInterface", func() {
@@ -669,7 +669,7 @@ func doTestNetworkPolicy(
 	It(
 		"DefaultNetworkPolicy", func() {
 			clusterName := fmt.Sprintf("np-default-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, test.MultiClusterNs1,
 			)
 
@@ -701,7 +701,7 @@ func doTestNetworkPolicy(
 	It(
 		"PodAndExternal", func() {
 			clusterName := fmt.Sprintf("np-pod-external-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, test.MultiClusterNs1,
 			)
 
@@ -737,7 +737,7 @@ func doTestNetworkPolicy(
 
 	It("PodOnlyNetwork: Should not set the hostPort", func() {
 		clusterName := fmt.Sprintf("pod-network-cluster-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, test.MultiClusterNs1)
 
 		networkPolicy := asdbv1.AerospikeNetworkPolicy{
@@ -783,7 +783,7 @@ func doTestNetworkPolicy(
 	if multiPodPerHost {
 		It("PodOnlyNetwork: should create cluster without nodePort service", func() {
 			clusterName := fmt.Sprintf("pod-network-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, test.MultiClusterNs1)
 
 			networkPolicy := asdbv1.AerospikeNetworkPolicy{
@@ -857,7 +857,7 @@ func doTestNetworkPolicy(
 	Context(
 		"When using configuredIP", func() {
 			clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(clusterName, test.MultiClusterNs1)
+			clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
 			BeforeEach(
 				func() {
@@ -937,7 +937,7 @@ func doTestNetworkPolicy(
 			It(
 				"setting configured access-address and alternate-access-address", Serial, func() {
 					clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
-					clusterNamespacedName := getNamespacedName(clusterName, test.MultiClusterNs1)
+					clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
 					err := setNodeLabels(
 						ctx, map[string]string{
@@ -989,7 +989,7 @@ func doTestNetworkPolicy(
 			It(
 				"Should add all custom interface IPs in aerospike.conf file", func() {
 					clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
-					clusterNamespacedName := getNamespacedName(
+					clusterNamespacedName := test.GetNamespacedName(
 						clusterName, test.MultiClusterNs1,
 					)
 
@@ -1076,7 +1076,7 @@ func doTestNetworkPolicy(
 
 		It("Should recover when correct custom network names are updated", func() {
 			clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, test.MultiClusterNs1,
 			)
 

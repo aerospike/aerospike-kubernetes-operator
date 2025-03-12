@@ -16,6 +16,7 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -27,7 +28,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "large-reconcile"
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 

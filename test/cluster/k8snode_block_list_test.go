@@ -12,6 +12,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const (
@@ -30,7 +31,7 @@ var _ = Describe(
 				)
 
 				clusterName := fmt.Sprintf("k8s-node-block-cluster-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(clusterName, namespace)
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				var (
@@ -74,7 +75,7 @@ var _ = Describe(
 
 						podName = clusterName + "-2-0"
 						pod := &corev1.Pod{}
-						err = k8sClient.Get(ctx, getNamespacedName(podName, namespace), pod)
+						err = k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
 						oldK8sNode = pod.Spec.NodeName
 						oldPvcInfo, err = extractPodPVC(pod)
@@ -195,7 +196,7 @@ func extractPodPVC(pod *corev1.Pod) (map[string]types.UID, error) {
 
 	for p := range pvcUIDMap {
 		pvc := &corev1.PersistentVolumeClaim{}
-		if err := k8sClient.Get(context.TODO(), getNamespacedName(p, pod.Namespace), pvc); err != nil {
+		if err := k8sClient.Get(context.TODO(), test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
 			return nil, err
 		}
 
@@ -209,7 +210,7 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 	pvc := &corev1.PersistentVolumeClaim{}
 
 	for pvcName, pvcUID := range pvcUIDMap {
-		pvcNamespacesName := getNamespacedName(
+		pvcNamespacesName := test.GetNamespacedName(
 			pvcName, namespace,
 		)
 
@@ -232,7 +233,7 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 func validatePodAndPVCMigration(ctx context.Context, podName, oldK8sNode string,
 	oldPvcInfo map[string]types.UID, shouldDelete bool) {
 	pod := &corev1.Pod{}
-	err := k8sClient.Get(ctx, getNamespacedName(podName, namespace), pod)
+	err := k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(pod.Spec.NodeName).ToNot(Equal(oldK8sNode))
 

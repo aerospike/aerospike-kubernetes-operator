@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -22,7 +24,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "cl-resource-lifecycle"
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -77,7 +79,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 				clusterName = "init-resource-invalid"
 			}
 
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(
@@ -126,7 +128,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 				clusterName = "init-resource-insuff"
 			}
 
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(

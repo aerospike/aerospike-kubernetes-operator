@@ -12,6 +12,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -27,7 +28,7 @@ var _ = Describe(
 		BeforeEach(
 			func() {
 				clusterName := fmt.Sprintf("operations-%d", GinkgoParallelProcess())
-				clusterNamespacedName = getNamespacedName(
+				clusterNamespacedName = test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				// Create a 2 node cluster

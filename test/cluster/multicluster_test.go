@@ -21,13 +21,13 @@ var _ = Describe(
 					"multiClusterGenChangeTest", func() {
 						// 1st cluster
 						clusterName1 := "multiclustergen"
-						clusterNamespacedName1 := getNamespacedName(
+						clusterNamespacedName1 := test.GetNamespacedName(
 							clusterName1, test.MultiClusterNs1,
 						)
 
 						// 2nd cluster
 						clusterName2 := "multiclustergen"
-						clusterNamespacedName2 := getNamespacedName(
+						clusterNamespacedName2 := test.GetNamespacedName(
 							clusterName2, test.MultiClusterNs2,
 						)
 
@@ -40,13 +40,13 @@ var _ = Describe(
 					"multiClusterPVCTest", func() {
 						// 1st cluster
 						clusterName1 := "multicluster"
-						clusterNamespacedName1 := getNamespacedName(
+						clusterNamespacedName1 := test.GetNamespacedName(
 							clusterName1, test.MultiClusterNs1,
 						)
 
 						// 2nd cluster
 						clusterName2 := "multicluster"
-						clusterNamespacedName2 := getNamespacedName(
+						clusterNamespacedName2 := test.GetNamespacedName(
 							clusterName2, test.MultiClusterNs2,
 						)
 
@@ -64,13 +64,13 @@ var _ = Describe(
 					"multiClusterGenChangeTest", func() {
 						// 1st cluster
 						clusterName1 := "multiclustergen1"
-						clusterNamespacedName1 := getNamespacedName(
+						clusterNamespacedName1 := test.GetNamespacedName(
 							clusterName1, test.MultiClusterNs1,
 						)
 
 						// 2nd cluster
 						clusterName2 := "multiclustergen2"
-						clusterNamespacedName2 := getNamespacedName(
+						clusterNamespacedName2 := test.GetNamespacedName(
 							clusterName2, test.MultiClusterNs1,
 						)
 						multiClusterGenChangeTest(
@@ -82,13 +82,13 @@ var _ = Describe(
 					"multiClusterPVCTest", func() {
 						// 1st cluster
 						clusterName1 := "multicluster1"
-						clusterNamespacedName1 := getNamespacedName(
+						clusterNamespacedName1 := test.GetNamespacedName(
 							clusterName1, test.MultiClusterNs1,
 						)
 
 						// 2nd cluster
 						clusterName2 := "multicluster2"
-						clusterNamespacedName2 := getNamespacedName(
+						clusterNamespacedName2 := test.GetNamespacedName(
 							clusterName2, test.MultiClusterNs1,
 						)
 

@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -23,7 +24,7 @@ var _ = Describe(
 		maxUnavailable := intstr.FromInt32(0)
 		defaultMaxUnavailable := intstr.FromInt32(1)
 		clusterName := fmt.Sprintf("pdb-test-cluster-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(clusterName, namespace)
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 		BeforeEach(func() {
 			aeroCluster = createDummyAerospikeCluster(

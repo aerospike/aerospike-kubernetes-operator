@@ -5,6 +5,7 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -62,4 +63,11 @@ func BootStrapTestEnv(scheme *runtime.Scheme) (testEnv *envtest.Environment, cfg
 	}
 
 	return testEnv, cfg, k8sClient, k8sClientSet, nil
+}
+
+func GetNamespacedName(name, namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}
 }

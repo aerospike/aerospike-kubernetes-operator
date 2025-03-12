@@ -60,7 +60,7 @@ var _ = Describe(
 				}
 
 				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -313,7 +313,7 @@ var _ = Describe(
 
 				threeVar := 3
 				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -353,7 +353,7 @@ var _ = Describe(
 			"When doing PVC change", func() {
 
 				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				initVolName := "ns"
@@ -414,7 +414,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						pvcNamespacedName := getNamespacedName(
+						pvcNamespacedName := test.GetNamespacedName(
 							deletedPVC, namespace,
 						)
 

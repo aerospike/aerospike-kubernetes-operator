@@ -1204,7 +1204,7 @@ var _ = Describe(
 					"When cluster is not deployed", func() {
 
 						clusterName := "ac-invalid"
-						clusterNamespacedName := getNamespacedName(
+						clusterNamespacedName := test.GetNamespacedName(
 							clusterName, namespace,
 						)
 
@@ -1508,7 +1508,7 @@ var _ = Describe(
 								var accessControl *asdbv1.AerospikeAccessControlSpec
 
 								clusterName := "ac-no-security"
-								clusterNamespacedName := getNamespacedName(
+								clusterNamespacedName := test.GetNamespacedName(
 									clusterName, namespace,
 								)
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
@@ -1597,7 +1597,7 @@ var _ = Describe(
 							"AccessControlLifeCycle", func() {
 
 								clusterName := "ac-lifecycle"
-								clusterNamespacedName := getNamespacedName(
+								clusterNamespacedName := test.GetNamespacedName(
 									clusterName, namespace,
 								)
 
@@ -1978,7 +1978,7 @@ var _ = Describe(
 		)
 
 		Context("Using default-password-file", func() {
-			var clusterNamespacedName = getNamespacedName(
+			var clusterNamespacedName = test.GetNamespacedName(
 				"default-password-file", namespace,
 			)
 

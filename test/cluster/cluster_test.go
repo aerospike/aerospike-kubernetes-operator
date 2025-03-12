@@ -90,7 +90,7 @@ var _ = Describe(
 )
 
 func PauseReconcileTest(ctx goctx.Context) {
-	clusterNamespacedName := getNamespacedName(
+	clusterNamespacedName := test.GetNamespacedName(
 		"pause-reconcile", namespace,
 	)
 
@@ -200,7 +200,7 @@ func setPauseFlag(ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 	Context(
 		"ValidateAerospikeBenchmarkConfigs", func() {
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				"deploy-cluster-benchmark", namespace,
 			)
 			aeroCluster := &asdbv1.AerospikeCluster{}
@@ -290,7 +290,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 	Context(
 		"ScaleDownWithMigrateFillDelay", func() {
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				"migrate-fill-delay-cluster", namespace,
 			)
 			migrateFillDelay := int64(120)
@@ -356,7 +356,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndPendingPod", func() {
 			clusterName := fmt.Sprintf("ignore-pod-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 
@@ -493,7 +493,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndFailedPod", func() {
 			clusterName := fmt.Sprintf("ignore-pod-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 
@@ -678,7 +678,7 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 				var err error
 
 				clusterName := fmt.Sprintf("deploy-cluster-%d", GinkgoParallelProcess())
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -735,7 +735,7 @@ func DeployClusterForDiffStorageTest(
 			It(
 				"SSDStorageCluster", func() {
 					clusterName := fmt.Sprintf("ssdstoragecluster-%d", GinkgoParallelProcess())
-					clusterNamespacedName := getNamespacedName(
+					clusterNamespacedName := test.GetNamespacedName(
 						clusterName, namespace,
 					)
 					aeroCluster = createSSDStorageCluster(
@@ -759,7 +759,7 @@ func DeployClusterForDiffStorageTest(
 			It(
 				"HDDAndDataInMemStorageCluster", func() {
 					clusterName := fmt.Sprintf("inmemstoragecluster-%d", GinkgoParallelProcess())
-					clusterNamespacedName := getNamespacedName(
+					clusterNamespacedName := test.GetNamespacedName(
 						clusterName, namespace,
 					)
 
@@ -783,7 +783,7 @@ func DeployClusterForDiffStorageTest(
 			It(
 				"DataInMemWithoutPersistentStorageCluster", func() {
 					clusterName := fmt.Sprintf("nopersistentcluster-%d", GinkgoParallelProcess())
-					clusterNamespacedName := getNamespacedName(
+					clusterNamespacedName := test.GetNamespacedName(
 						clusterName, namespace,
 					)
 
@@ -825,7 +825,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 	It(
 		"deploy with dnsPolicy 'None' and dnsConfig given",
 		func() {
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				"dns-config-cluster", namespace,
 			)
 			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -877,7 +877,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 func DeployClusterWithSyslog(ctx goctx.Context) {
 	It(
 		"deploy with syslog logging config", func() {
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				"logging-config-cluster", namespace,
 			)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -903,7 +903,7 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 
 func UpdateTLSClusterTest(ctx goctx.Context) {
 	clusterName := fmt.Sprintf("update-tls-cluster-%d", GinkgoParallelProcess())
-	clusterNamespacedName := getNamespacedName(
+	clusterNamespacedName := test.GetNamespacedName(
 		clusterName, namespace,
 	)
 	aeroCluster := &asdbv1.AerospikeCluster{}
@@ -1191,7 +1191,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 	}
 
 	clusterName := fmt.Sprintf("update-cluster-%d", GinkgoParallelProcess())
-	clusterNamespacedName := getNamespacedName(
+	clusterNamespacedName := test.GetNamespacedName(
 		clusterName, namespace,
 	)
 	aeroCluster := &asdbv1.AerospikeCluster{}
@@ -1519,13 +1519,13 @@ func negativeDeployClusterValidationTest(
 	Context(
 		"Validation", func() {
 			clusterName := fmt.Sprintf("invalid-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 
 			It(
 				"EmptyClusterName: should fail for EmptyClusterName", func() {
-					cName := getNamespacedName(
+					cName := test.GetNamespacedName(
 						"", clusterNamespacedName.Namespace,
 					)
 
@@ -1538,7 +1538,7 @@ func negativeDeployClusterValidationTest(
 			It(
 				"EmptyNamespaceName: should fail for EmptyNamespaceName",
 				func() {
-					cName := getNamespacedName("validclustername", "")
+					cName := test.GetNamespacedName("validclustername", "")
 
 					aeroCluster := createDummyAerospikeCluster(cName, 1)
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -2153,7 +2153,7 @@ func negativeUpdateClusterValidationTest(
 	Context(
 		"Validation", func() {
 			clusterName := fmt.Sprintf("invalid-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := &asdbv1.AerospikeCluster{}
@@ -2551,7 +2551,7 @@ func negativeUpdateClusterValidationTest(
 	Context(
 		"InvalidAerospikeConfigSecret", func() {
 			clusterName := fmt.Sprintf("invalid-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			aeroCluster := &asdbv1.AerospikeCluster{}

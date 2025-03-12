@@ -17,6 +17,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const batchRestartClusterName = "batch-restart"
@@ -43,14 +44,14 @@ var _ = Describe("BatchRestart", func() {
 	Context("When doing valid operations", func() {
 		Context("BatchRollingRestart", func() {
 			clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			BatchRollingRestart(ctx, clusterNamespacedName)
 		})
 		Context("BatchUpgrade", func() {
 			clusterName := fmt.Sprintf(batchUpgradeClusterName+"-%d", GinkgoParallelProcess())
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
 			BatchUpgrade(ctx, clusterNamespacedName)
@@ -59,7 +60,7 @@ var _ = Describe("BatchRestart", func() {
 
 	Context("When doing invalid operations", func() {
 		clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
@@ -147,7 +148,7 @@ var _ = Describe("BatchRestart", func() {
 
 	Context("When doing namespace related operations", func() {
 		clusterName := fmt.Sprintf(batchRestartClusterName+"-%d", GinkgoParallelProcess())
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 		aeroCluster := &asdbv1.AerospikeCluster{}
