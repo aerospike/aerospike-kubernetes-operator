@@ -186,11 +186,6 @@ var _ = Describe(
 							BeTrue(), "Unable to find volume",
 						)
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",
 							Source: asdbv1.VolumeSource{
@@ -220,11 +215,6 @@ var _ = Describe(
 						)
 
 						// Delete
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						newAeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -343,10 +333,6 @@ var _ = Describe(
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",

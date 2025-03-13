@@ -2075,9 +2075,6 @@ var _ = Describe(
 					return nil
 				}, 5*time.Minute).ShouldNot(HaveOccurred())
 
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				// Set correct secret name for admin user credentials.
 				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = test.AuthSecretName
 

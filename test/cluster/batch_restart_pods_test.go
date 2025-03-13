@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/client-go/util/retry"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -63,11 +63,10 @@ var _ = Describe("BatchRestart", func() {
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
-				aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+				aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -78,6 +77,12 @@ var _ = Describe("BatchRestart", func() {
 
 		AfterEach(
 			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
@@ -266,9 +271,6 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Using RollingUpdateBatchSize PCT which is not enough eg. 1%")
-
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
 
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("1%")
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil

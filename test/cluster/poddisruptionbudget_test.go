@@ -57,9 +57,6 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				// Update maxUnavailable
 				By("Update maxUnavailable to 0")
 				aeroCluster.Spec.MaxUnavailable = &maxUnavailable
@@ -88,9 +85,6 @@ var _ = Describe(
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				By("Update disablePDB to true")
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())

@@ -120,8 +120,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Add new SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			SCConf := getSCNamespaceConfig(addedSCNs, path)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
@@ -133,8 +131,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Add new non-SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			addedNs := "newns"
 			conf := map[string]interface{}{
@@ -154,8 +150,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Remove added namespaces")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
@@ -243,9 +237,6 @@ var _ = Describe("SCMode", func() {
 		It("Should not allow updating strong-consistency config", func() {
 			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			namespaceConfig :=

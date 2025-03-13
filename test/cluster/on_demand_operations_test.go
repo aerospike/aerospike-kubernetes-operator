@@ -148,11 +148,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						Eventually(func() error {
-							aeroCluster, err = getCluster(
-								k8sClient, ctx, clusterNamespacedName,
-							)
-							Expect(err).ToNot(HaveOccurred())
-
 							aeroCluster.Spec.Operations[0].Kind = asdbv1.OperationPodRestart
 							aeroCluster.Spec.Operations[0].ID = "2"
 
@@ -168,11 +163,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// Remove operations
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.Operations = nil
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -230,11 +220,6 @@ var _ = Describe(
 						aeroCluster.Spec.Size = 4
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
 						Expect(err).ToNot(HaveOccurred())
 
 						oldPodIDs, err := getPodIDs(ctx, aeroCluster)

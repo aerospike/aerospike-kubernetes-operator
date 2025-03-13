@@ -100,11 +100,6 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						// RackID to be used to check if pvc are removed
 						racks := aeroCluster.Spec.RackConfig.Racks
 						lastRackID := racks[len(racks)-1].ID
@@ -151,11 +146,6 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.Volumes[0].InputCascadeDelete = &vRemove
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
 						Expect(err).ToNot(HaveOccurred())
 
 						// RackID to be used to check if pvc are removed

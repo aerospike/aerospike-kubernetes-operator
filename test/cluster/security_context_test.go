@@ -98,9 +98,6 @@ func securityContextTest(
 
 			By("UpdateCluster with SecurityContext")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			if checkPodSpec {
 				aeroCluster.Spec.PodSpec.SecurityContext = &corev1.PodSecurityContext{
 					SupplementalGroups: []int64{1000},
@@ -122,9 +119,6 @@ func securityContextTest(
 			validateSecurityContext(
 				aeroCluster,
 			)
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			if checkPodSpec {
 				aeroCluster.Spec.PodSpec.SecurityContext = nil

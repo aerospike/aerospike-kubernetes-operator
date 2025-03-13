@@ -598,11 +598,6 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
 					By("Updating custom fabric interface network list")
 
 					aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{nsNetworkTwo}
@@ -633,11 +628,6 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 					By("Creating cluster with custom tlsfabric interface")
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating custom tlsFabric interface network list")
@@ -1133,11 +1123,6 @@ func doTestNetworkPolicy(
 			// cluster will crash as wrong custom interface is passed in CustomAccessNetworkNames
 			err := deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)
 			Expect(err).Should(HaveOccurred())
-
-			aeroCluster, err = getCluster(
-				k8sClient, ctx, clusterNamespacedName,
-			)
-			Expect(err).ToNot(HaveOccurred())
 
 			By("Updating correct custom network name")
 

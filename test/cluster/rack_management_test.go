@@ -106,11 +106,6 @@ var _ = Describe(
 
 						By("Removing rack enabled namespace")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.RackConfig.Namespaces = []string{}
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -140,11 +135,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Removing all racks")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						rackConf := asdbv1.RackConfig{}
 						aeroCluster.Spec.RackConfig = rackConf
@@ -177,10 +167,6 @@ var _ = Describe(
 
 						// Op1: AddRackInCluster
 						By("Adding 1st rack in the cluster")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						racks = getDummyRackConf(1, 2, 3, 4, 5, 6)
 						aeroCluster.Spec.RackConfig.Racks = racks
@@ -195,10 +181,6 @@ var _ = Describe(
 
 						// Op2: RemoveRack
 						By("Removing single rack")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						racks = getDummyRackConf(1, 2, 3, 4, 5)
 						aeroCluster.Spec.RackConfig.Racks = racks
@@ -268,11 +250,6 @@ var _ = Describe(
 								// Op2: Update rack.AerospikeConfig
 								By("Update rack.AerospikeConfig")
 
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
@@ -311,11 +288,6 @@ var _ = Describe(
 
 								// Op3: Remove rack.AerospikeConfig
 								By("Remove rack.AerospikeConfig")
-
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								racks[0].InputAerospikeConfig = nil
 								racks[1].InputAerospikeConfig = nil
@@ -818,8 +790,6 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Scaling down the cluster size, failed pods should recover")
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
 
 				aeroCluster.Spec.Size--
 
@@ -864,9 +834,6 @@ var _ = Describe(
 					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
 					Expect(err).Should(HaveOccurred())
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -882,9 +849,6 @@ var _ = Describe(
 
 					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*3)
 					Expect(err).To(HaveOccurred())
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
 					aeroCluster.Spec.RackConfig.Racks[0].ID = 2

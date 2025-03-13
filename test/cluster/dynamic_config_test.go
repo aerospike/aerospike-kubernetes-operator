@@ -90,9 +90,8 @@ var _ = Describe(
 
 				It(
 					"Should update config dynamically", func() {
-						suitecfg, _ := GinkgoConfiguration()
-						println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
-						By("Modify dynamic config by adding fields" + suitecfg.Timeout.String())
+
+						By("Modify dynamic config by adding fields")
 
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -166,11 +165,6 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
 
 						By("Modify dynamic config by removing fields")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						podPIDMap, err = getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -358,11 +352,6 @@ var _ = Describe(
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						// Recovery:
 						// Update valid config value
 						// This change will lead to dynamic config update success.
@@ -415,11 +404,6 @@ var _ = Describe(
 
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Recovery:
 						// Update valid config value

@@ -75,10 +75,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("UpdateCluster with LB")
-				aeroCluster, err = getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer.ExternalTrafficPolicy = "Cluster"
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -104,10 +101,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("UpdateCluster with LB")
-				aeroCluster, err = getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())

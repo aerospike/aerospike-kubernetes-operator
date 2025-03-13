@@ -187,11 +187,6 @@ var _ = Describe(
 
 						By("Adding the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.Sidecars = append(
 							aeroCluster.Spec.PodSpec.Sidecars, sidecar2,
 						)
@@ -201,11 +196,6 @@ var _ = Describe(
 
 						By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{
 							"sh", "-c", "sleep 3600",
 						}
@@ -214,11 +204,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Removing all the containers")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
 
@@ -273,11 +258,6 @@ var _ = Describe(
 
 						By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
 							"sh", "-c", "echo The app is running; sleep 5",
 						}
@@ -286,11 +266,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Removing all the containers")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
 						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{}
@@ -373,11 +348,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Updating container image and affinity together")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Update image
 						newImage := "nginx:1.21.4"
@@ -472,8 +442,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Using registry, namespace and name in CR")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
@@ -487,8 +455,6 @@ var _ = Describe(
 						)
 
 						By("Using envVar registry, namespace and name")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Empty imageRegistry, should use operator envVar docker.io
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
@@ -526,8 +492,6 @@ var _ = Describe(
 						)
 
 						By("Using correct registry namespace in CR")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Nil ImageRegistryNamespace, should use operator envVar aerospike
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil

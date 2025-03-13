@@ -423,9 +423,6 @@ var _ = Describe(
 
 						By("Setting resources to schedule the pods")
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -478,9 +475,6 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						checkLabel := aeroCluster.Labels["checkLabel"]
 						Expect(checkLabel).To(Equal("true"))
 
@@ -512,9 +506,6 @@ var _ = Describe(
 						Expect(err).Should(HaveOccurred())
 
 						By("Setting resources to schedule the pods")
-
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 

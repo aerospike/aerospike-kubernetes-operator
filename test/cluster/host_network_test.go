@@ -57,10 +57,6 @@ var _ = Describe(
 						checkAdvertisedAddress(ctx, aeroCluster, false)
 
 						By("Updating cluster, Should advertise node address when dynamically enabled")
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = true
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -68,10 +64,6 @@ var _ = Describe(
 						checkAdvertisedAddress(ctx, aeroCluster, true)
 
 						By("Updating cluster, Should not advertise node address when dynamically disabled")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 						err = updateCluster(k8sClient, ctx, aeroCluster)

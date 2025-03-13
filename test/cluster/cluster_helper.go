@@ -66,7 +66,7 @@ const (
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
 var (
-	retryInterval      = time.Second * 5
+	retryInterval      = time.Second * 30
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
@@ -107,11 +107,6 @@ func rollingRestartClusterByEnablingTLS(
 	}
 
 	err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort, serviceNonTLSPort})
-	if err != nil {
-		return err
-	}
-
-	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -166,11 +161,6 @@ func rollingRestartClusterByDisablingTLS(
 	}
 
 	err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort, serviceNonTLSPort})
-	if err != nil {
-		return err
-	}
-
-	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -291,11 +281,6 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
-	if err != nil {
-		return err
-	}
-
-	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}

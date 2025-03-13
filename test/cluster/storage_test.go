@@ -501,10 +501,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								newAeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
@@ -575,10 +571,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								volumes := aeroCluster.Spec.Storage.Volumes
 								aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1.VolumeSource{
@@ -620,11 +612,6 @@ var _ = Describe(
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								va := asdbv1.VolumeAttachment{
 									ContainerName: containerName,
 									Path:          "/newpath",
@@ -637,20 +624,12 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{}
 								err = updateCluster(k8sClient, ctx, aeroCluster)
