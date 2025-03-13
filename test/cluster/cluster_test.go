@@ -51,7 +51,7 @@ var _ = Describe(
 		// 		DeployClusterWithSyslog(ctx)
 		// 	},
 		// )
-		FContext(
+		Context(
 			"DeployClusterWithMaxIgnorablePod", func() {
 				clusterWithMaxIgnorablePod(ctx)
 			},
