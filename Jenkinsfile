@@ -102,7 +102,7 @@ pipeline {
                     steps {
                         script {
                             dir("${env.GO_REPO}") {
-                                def changedFiles = sh(script: "git diff --name-only origin/master HEAD", returnStdout: true).trim().split('\n')
+                                def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim().split('\n')
                             
                                 def clusterTest = changedFiles.any {
                                     it.contains('cluster/') ||
