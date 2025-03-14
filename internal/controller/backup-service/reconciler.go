@@ -53,7 +53,7 @@ type SingleBackupServiceReconciler struct {
 }
 
 func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr error) {
-	r.Log.Info("testing...")
+	r.Log.Info("testing")
 	// Set the status phase to Error if the recErr is not nil
 	// recErr is only set when reconcile failure should result in Error phase of the Backup service operation
 	defer func() {

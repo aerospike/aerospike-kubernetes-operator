@@ -106,23 +106,27 @@ pipeline {
                             
                                 def clusterTest = changedFiles.any {
                                     it.contains('cluster/') ||
-                                    it.contains('api/v1/')
+                                    it.contains('v1/')
                                 }
                                 def backupTest = changedFiles.any {
                                     it.contains('/backup') ||
                                     it.contains('restore/') ||
-                                    it.contains('api/v1beta1/')
+                                    it.contains('v1beta1/')
                                 }
                                 def allTest = changedFiles.any {
                                     !it.contains('cluster/') &&
-                                    !it.contains('api/v1/') &&
+                                    !it.contains('v1/') &&
                                     !it.contains('/backup') &&
                                     !it.contains('restore/') &&
-                                    !it.contains('api/v1beta1/')
+                                    !it.contains('v1beta1/')
                                 }
                                 env.RUN_CLUSTER_TEST = clusterTest.toString()
                                 env.RUN_BACKUP_TEST = backupTest.toString()
                                 env.RUN_ALL_TEST = allTest.toString()
+                                
+                                echo "cluster test: ${env.RUN_CLUSTER_TEST}"
+                                echo "backup rest: ${env.RUN_BACKUP_TEST}"
+                                echo "all test: ${env.RUN_ALL_TEST}"
                             }
                         }
                     }
