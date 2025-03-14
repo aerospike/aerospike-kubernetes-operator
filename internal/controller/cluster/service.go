@@ -95,6 +95,10 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	r.Log.Info("Headless service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
+	if err := r.updateServiceMetadata(service, headlessSvc.Metadata); err != nil {
+		return err
+	}
+
 	return r.updateServicePorts(service)
 }
 
@@ -278,6 +282,10 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	r.Log.Info("Service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
+	if err := r.updateServiceMetadata(service, podService.Metadata); err != nil {
+		return err
+	}
+
 	return r.updateServicePorts(service)
 }
 
@@ -458,4 +466,32 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	}
 
 	return tlsName, port
+}
+
+func (r *SingleClusterReconciler) updateServiceMetadata(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+	updateMetadata := false
+
+	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
+		service.ObjectMeta.Annotations = metadata.Annotations
+		updateMetadata = true
+	}
+
+	if !reflect.DeepEqual(service.ObjectMeta.Labels, metadata.Labels) {
+		service.ObjectMeta.Labels = metadata.Labels
+		updateMetadata = true
+	}
+
+	if updateMetadata {
+		if err := r.Client.Update(
+			context.TODO(), service, common.UpdateOption,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to update metadata for service %s: %v", service.Name, err,
+			)
+		}
+		r.Log.Info("Updated metadata for service",
+			"name", utils.NamespacedName(service.Namespace, service.Name))
+	}
+
+	return nil
 }
