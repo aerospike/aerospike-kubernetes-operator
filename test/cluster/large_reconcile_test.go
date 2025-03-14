@@ -149,7 +149,7 @@ var _ = Describe(
 
 						err = UpdateClusterImage(aeroCluster, nextImage)
 						Expect(err).ToNot(HaveOccurred())
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Change build back to original

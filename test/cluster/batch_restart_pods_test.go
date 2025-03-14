@@ -459,12 +459,9 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 
 		By("Again Update RollingUpdateBatchSize Count")
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
 		aeroCluster.Spec.Image = latestImage
-		err = k8sClient.Update(ctx, aeroCluster)
+		err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		time.Sleep(time.Second * 1)

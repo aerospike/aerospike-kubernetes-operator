@@ -285,6 +285,11 @@ func scaleDownClusterTestWithNSDeviceHandling(
 		return err
 	}
 
+	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
 	for podName := range aeroCluster.Status.Pods {
 		if !contains(aeroCluster.Status.Pods[podName].DirtyVolumes, "dynamicns1") {
 			return fmt.Errorf(
