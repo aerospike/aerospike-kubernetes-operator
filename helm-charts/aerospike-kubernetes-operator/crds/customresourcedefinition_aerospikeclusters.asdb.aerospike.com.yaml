@@ -299,6 +299,26 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
+              headlessService:
+                description: Settings for the ClusterIP type headless service created
+                  to discover Aerospike Cluster nodes by pod IP
+                properties:
+                  metadata:
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pair that may be set by external
+                          tools to store and retrieve arbitrary metadata
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pairs that can be used to organize
+                          and categorize scope and select objects
+                        type: object
+                    type: object
+                type: object
               image:
                 description: Aerospike server image
                 type: string
@@ -399,6 +419,27 @@ spec:
                 description: Paused flag is used to pause the reconciliation for the
                   AerospikeCluster.
                 type: boolean
+              podService:
+                description: |-
+                  Settings for the NodePort type pod services created to discover both Aerospike pod ports and IP
+                  addresses. This service is only created if `multiPodPerHost` is set to `true`.
+                properties:
+                  metadata:
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pair that may be set by external
+                          tools to store and retrieve arbitrary metadata
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Key - Value pairs that can be used to organize
+                          and categorize scope and select objects
+                        type: object
+                    type: object
+                type: object
               podSpec:
                 description: Specify additional configuration for the Aerospike pods
                 properties:

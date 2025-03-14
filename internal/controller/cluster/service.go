@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
+	headlessSvc := r.aeroCluster.Spec.HeadlessService
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 
@@ -38,24 +40,30 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 		r.Log.Info("Creating headless service for statefulSet")
 
-		ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+		annotations := map[string]string{
+			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		}
+		if headlessSvc.Metadata.Annotations != nil {
+			maps.Copy(headlessSvc.Metadata.Annotations, annotations)
+		}
+		if headlessSvc.Metadata.Labels != nil {
+			maps.Copy(headlessSvc.Metadata.Labels, utils.LabelsForAerospikeCluster(r.aeroCluster.Name))
+		}
+
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				// Headless service has the same name as AerospikeCluster
-				Name:      serviceName,
-				Namespace: r.aeroCluster.Namespace,
-				// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-				Annotations: map[string]string{
-					"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-				},
-				Labels: ls,
+				Name:        serviceName,
+				Namespace:   r.aeroCluster.Namespace,
+				Annotations: headlessSvc.Metadata.Annotations,
+				Labels:      headlessSvc.Metadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
 				// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
 				// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
 				PublishNotReadyAddresses: true,
 				ClusterIP:                "None",
-				Selector:                 ls,
+				Selector:                 headlessSvc.Metadata.Labels,
 			},
 		}
 
@@ -211,6 +219,7 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace string) error {
+	podService := r.aeroCluster.Spec.PodService
 	service := &corev1.Service{}
 
 	err := r.Client.Get(
@@ -227,8 +236,10 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 		// NodePort will be allocated automatically
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      pName,
-				Namespace: pNamespace,
+				Name:        pName,
+				Namespace:   pNamespace,
+				Annotations: podService.Metadata.Annotations,
+				Labels:      podService.Metadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
 				Type: corev1.ServiceTypeNodePort,

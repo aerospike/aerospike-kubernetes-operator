@@ -141,6 +141,17 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 
+	// Settings for the ClusterIP type headless service created to discover Aerospike Cluster nodes by pod IP
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Headless Service"
+	// +optional
+	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
+
+	// Settings for the NodePort type pod services created to discover both Aerospike pod ports and IP
+	// addresses. This service is only created if `multiPodPerHost` is set to `true`.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Service"
+	// +optional
+	PodService ServiceSpec `json:"podService,omitempty"`
+
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	// +optional
@@ -229,6 +240,14 @@ type LoadBalancerSpec struct { //nolint:govet // for readability
 
 	// +optional
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" patchStrategy:"merge"`
+}
+
+// ServiceSpec contains specification customizations for a Kubernetesservice.
+// +k8s:openapi-gen=true
+type ServiceSpec struct {
+	// +patchStrategy=merge
+	// +optional
+	Metadata AerospikeObjectMeta `json:"metadata,omitempty"`
 }
 
 type AerospikeOperatorClientCertSpec struct { //nolint:govet // for readability
