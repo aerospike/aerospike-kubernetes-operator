@@ -43,7 +43,6 @@ type SingleClusterReconciler struct {
 }
 
 func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error) {
-	r.Log.Info("testing")
 	r.Log.V(1).Info(
 		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
 		r.aeroCluster.Status,
