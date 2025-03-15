@@ -219,7 +219,8 @@ var _ = Describe(
 			delete(aeroCluster.Spec.PodService.Metadata.Annotations, "test-annotation")
 			delete(aeroCluster.Spec.PodService.Metadata.Labels, "test-label")
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
+			// Pod service is not updated on cluster update, only when pods are scaled or restarted
+			err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validating pod service metadata was updated")
