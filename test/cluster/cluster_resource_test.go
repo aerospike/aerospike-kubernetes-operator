@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"reflect"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -28,12 +30,15 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 
-				aeroCluster := createDummyAerospikeCluster(
-					clusterNamespacedName, 2,
-				)
-
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
@@ -41,6 +46,9 @@ var _ = Describe(
 
 				It(
 					"Try ClusterWithResourceLifecycle", func() {
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
 
 						By("DeployClusterWithoutResource")
 						err := deployCluster(k8sClient, ctx, aeroCluster)
