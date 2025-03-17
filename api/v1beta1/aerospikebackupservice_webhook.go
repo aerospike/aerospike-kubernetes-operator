@@ -93,7 +93,6 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Cont
 
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
-	absLog.Info("testing")
 	absLog.Info("Validate create")
 
 	return backupSvc.validate()
