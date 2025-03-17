@@ -155,8 +155,8 @@ var _ = Describe(
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.HeadlessService.Metadata.Annotations["new-annotation"] = "new-value"
-			aeroCluster.Spec.HeadlessService.Metadata.Labels["new-label"] = "new-value"
+			aeroCluster.Spec.HeadlessService.Metadata.Annotations["new-annotation"] = "new-annotation-value"
+			aeroCluster.Spec.HeadlessService.Metadata.Labels["new-label"] = "new-label-value"
 			delete(aeroCluster.Spec.HeadlessService.Metadata.Annotations, "test-annotation")
 			delete(aeroCluster.Spec.HeadlessService.Metadata.Labels, "test-label")
 
@@ -171,8 +171,8 @@ var _ = Describe(
 			Expect(err).ToNot(HaveOccurred())
 			Expect(svc.Annotations).ToNot(HaveKey("test-annotation"))
 			Expect(svc.Labels).ToNot(HaveKey("test-label"))
-			Expect(svc.Annotations["new-annotation"]).To(Equal("new-value"))
-			Expect(svc.Labels["new-label"]).To(Equal("new-value"))
+			Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
+			Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -214,8 +214,8 @@ var _ = Describe(
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.PodService.Metadata.Annotations["new-annotation"] = "new-value"
-			aeroCluster.Spec.PodService.Metadata.Labels["new-label"] = "new-value"
+			aeroCluster.Spec.PodService.Metadata.Annotations["new-annotation"] = "new-annotation-value"
+			aeroCluster.Spec.PodService.Metadata.Labels["new-label"] = "new-label-value"
 			delete(aeroCluster.Spec.PodService.Metadata.Annotations, "test-annotation")
 			delete(aeroCluster.Spec.PodService.Metadata.Labels, "test-label")
 
@@ -233,8 +233,8 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 				Expect(svc.Annotations).ToNot(HaveKey("test-annotation"))
 				Expect(svc.Labels).ToNot(HaveKey("test-label"))
-				Expect(svc.Annotations["new-annotation"]).To(Equal("new-value"))
-				Expect(svc.Labels["new-label"]).To(Equal("new-value"))
+				Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
+				Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
 			}
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)

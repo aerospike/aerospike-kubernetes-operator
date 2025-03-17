@@ -47,6 +47,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		if headlessSvc.Metadata.Annotations != nil {
 			maps.Copy(headlessSvc.Metadata.Annotations, annotations)
 		}
+
 		if headlessSvc.Metadata.Labels != nil {
 			maps.Copy(headlessSvc.Metadata.Labels, utils.LabelsForAerospikeCluster(r.aeroCluster.Name))
 		}
@@ -468,7 +469,10 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
-func (r *SingleClusterReconciler) updateServiceMetadata(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+func (r *SingleClusterReconciler) updateServiceMetadata(
+	service *corev1.Service,
+	metadata asdbv1.AerospikeObjectMeta,
+) error {
 	updateMetadata := false
 
 	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
@@ -489,6 +493,7 @@ func (r *SingleClusterReconciler) updateServiceMetadata(service *corev1.Service,
 				"failed to update metadata for service %s: %v", service.Name, err,
 			)
 		}
+
 		r.Log.Info("Updated metadata for service",
 			"name", utils.NamespacedName(service.Namespace, service.Name))
 	}
