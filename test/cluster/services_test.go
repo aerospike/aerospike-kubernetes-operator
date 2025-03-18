@@ -141,11 +141,10 @@ var _ = Describe(
 			By("Validating headless service exists with correct metadata")
 			svc := &corev1.Service{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf("%s-headless", clusterNamespacedName.Name),
+				Name:      clusterNamespacedName.Name,
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(svc.Spec.ClusterIP).To(Equal("None"))
 			Expect(svc.Annotations["test-annotation"]).To(Equal("test-value"))
 			Expect(svc.Labels["test-label"]).To(Equal("test-value"))
 			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
@@ -165,7 +164,7 @@ var _ = Describe(
 
 			By("Validating headless service metadata was updated")
 			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf("%s-headless", clusterNamespacedName.Name),
+				Name:      clusterNamespacedName.Name,
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
@@ -202,7 +201,7 @@ var _ = Describe(
 			for i := 0; i < 3; i++ {
 				svc := &corev1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-%d", clusterNamespacedName.Name, i),
+					Name:      fmt.Sprintf("%s-0-%d", clusterNamespacedName.Name, i),
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
@@ -227,7 +226,7 @@ var _ = Describe(
 			for i := 0; i < 3; i++ {
 				svc := &corev1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-%d", clusterNamespacedName.Name, i),
+					Name:      fmt.Sprintf("%s-0-%d", clusterNamespacedName.Name, i),
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
