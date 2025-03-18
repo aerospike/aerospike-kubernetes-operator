@@ -601,11 +601,12 @@ const (
 	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
 	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
 
-	// AerospikeVolumeMethodBlkdiscard specifies the block volume should be discarded using blkdiscard command.
+	// AerospikeVolumeMethodBlkdiscard specifies that block volume should be discarded using the blkdiscard command.
 	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
 
-	// AerospikeVolumeMethodBlkdiscardWithHeaderCleanup specifies the block volume should be discarded using blkdiscard
-	// command with 8Mib header cleanup.
+	// AerospikeVolumeMethodBlkdiscardWithHeaderCleanup specifies that the block volume
+	// should be discarded using the blkdiscard command, along with an 8MiB header cleanup.
+	// Use this method only if the underlying device does not contain old Aerospike data.
 	AerospikeVolumeMethodBlkdiscardWithHeaderCleanup AerospikeVolumeMethod = "blkdiscardWithHeaderCleanup"
 
 	// AerospikeVolumeMethodDeleteFiles specifies the filesystem volume

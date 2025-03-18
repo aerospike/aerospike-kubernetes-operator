@@ -418,32 +418,35 @@ func (v *VolumeSpec) isSafeChange(newVolume *VolumeSpec) bool {
 
 func validateStorageVolumeSource(volume *VolumeSpec) error {
 	source := volume.Source
+	sourceCount := 0
 
-	var sourceFound bool
 	if source.EmptyDir != nil {
-		sourceFound = true
+		sourceCount++
 	}
 
 	if source.Secret != nil {
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
-		}
-
-		sourceFound = true
+		sourceCount++
 	}
 
 	if source.ConfigMap != nil {
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
-		}
+		sourceCount++
+	}
 
-		sourceFound = true
+	if source.PersistentVolume != nil {
+		sourceCount++
+	}
+
+	if sourceCount == 0 {
+		return fmt.Errorf("no volume source found")
+	}
+
+	if sourceCount > 1 {
+		return fmt.Errorf("can not specify more than 1 source")
 	}
 
 	if source.PersistentVolume != nil {
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode
-
 		if vm != v1.PersistentVolumeBlock &&
 			vm != v1.PersistentVolumeFilesystem {
 			return fmt.Errorf(
@@ -494,26 +497,13 @@ func validateStorageVolumeSource(volume *VolumeSpec) error {
 		}
 
 		// Validate accessModes
+		validAccessModes := sets.New(v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
 		for _, am := range source.PersistentVolume.AccessModes {
-			if am != v1.ReadOnlyMany &&
-				am != v1.ReadWriteMany &&
-				am != v1.ReadWriteOnce {
-				return fmt.Errorf(
-					"invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
-					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce,
-				)
+			if !validAccessModes.Has(am) {
+				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
+					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
 			}
 		}
-
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
-		}
-
-		sourceFound = true
-	}
-
-	if !sourceFound {
-		return fmt.Errorf("no volume source found")
 	}
 
 	return nil
