@@ -128,6 +128,13 @@ pipeline {
                                     env.RUN_BACKUP_TEST = backupTest.toString()
                                     env.RUN_ALL_TEST = allTest.toString()
                                     
+                                    echo "cluster test: ${clusterTest}"
+                                    echo "backup test: ${backupTest}"
+                                    echo "all test: ${allTest}"
+
+                                    echo "env cluster test: ${env.RUN_CLUSTER_TEST}"
+                                    echo "env backup test: ${env.RUN_BACKUP_TEST}"
+                                    echo "env all test: ${env.RUN_ALL_TEST}"
                                 }
                             }
                         }
