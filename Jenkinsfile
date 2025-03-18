@@ -16,6 +16,10 @@ pipeline {
         OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-bundle-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-catalog-nightly:${env.OPERATOR_VERSION}"
+        RUN_ALL_TEST = "false"
+        RUN_CLUSTER_TEST = "false"
+        RUN_BACKUP_TEST = "false"
+        RUN_NIGHTLY_OR_MASTER = "false"
 
         // Variable names used in the operator make file.
         VERSION="${env.OPERATOR_VERSION}"
@@ -87,46 +91,44 @@ pipeline {
                     }
                 }
 
-                // stage('Test') {
-                //     steps {
-                //         dir("${env.GO_REPO}") {
-                //             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-				// 			sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                //             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -t ${AEROSPIKE_CUSTOM_INIT_NAME_TAG}"
-
-                //         }
-                //     }
-                // }
-
                 stage ('Detect Changes'){
                     steps {
                         script {
                             dir("${env.GO_REPO}") {
-                                def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim().split('\n')
-                            
-                                def clusterTest = changedFiles.any {
-                                    it.contains('cluster/') ||
-                                    it.contains('v1/')
+                                if(isNightly() || env.BRANCH_NAME == 'master'){
+                                    env.RUN_NIGHTLY_OR_MASTER = "true"
                                 }
-                                def backupTest = changedFiles.any {
-                                    it.contains('/backup') ||
-                                    it.contains('restore/') ||
-                                    it.contains('v1beta1/')
+                                else{
+                                    def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
+                                    if(!changedFiles.isEmpty()){
+                                        changedFiles = changedFiles.split('\n')
+                                    }
+                                    else{
+                                        changedFiles = []
+                                    }
+
+                                    def clusterTest = changedFiles.any {
+                                        it.contains('cluster/') ||
+                                        it.contains('v1/')
+                                    }
+                                    def backupTest = changedFiles.any {
+                                        it.contains('/backup') ||
+                                        it.contains('restore/') ||
+                                        it.contains('v1beta1/')
+                                    }
+                                    def allTest = changedFiles.any {
+                                        !it.contains('cluster/') &&
+                                        !it.contains('v1/') &&
+                                        !it.contains('/backup') &&
+                                        !it.contains('restore/') &&
+                                        !it.contains('v1beta1/')
+                                    }
+
+                                    env.RUN_CLUSTER_TEST = clusterTest.toString()
+                                    env.RUN_BACKUP_TEST = backupTest.toString()
+                                    env.RUN_ALL_TEST = allTest.toString()
+                                    
                                 }
-                                def allTest = changedFiles.any {
-                                    !it.contains('cluster/') &&
-                                    !it.contains('v1/') &&
-                                    !it.contains('/backup') &&
-                                    !it.contains('restore/') &&
-                                    !it.contains('v1beta1/')
-                                }
-                                env.RUN_CLUSTER_TEST = clusterTest.toString()
-                                env.RUN_BACKUP_TEST = backupTest.toString()
-                                env.RUN_ALL_TEST = allTest.toString()
-                                
-                                echo "cluster test: ${env.RUN_CLUSTER_TEST}"
-                                echo "backup rest: ${env.RUN_BACKUP_TEST}"
-                                echo "all test: ${env.RUN_ALL_TEST}"
                             }
                         }
                     }
@@ -162,7 +164,7 @@ pipeline {
 
                 stage ('All Tests') {
                     when {
-                        expression { env.RUN_ALL_TEST == 'true'}
+                        expression { env.RUN_ALL_TEST == 'true' || env.RUN_NIGHTLY_OR_MASTER == 'true'}
                     }
                     steps {
                         dir("${env.GO_REPO}") {
