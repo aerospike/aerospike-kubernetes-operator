@@ -161,7 +161,7 @@ type ServiceContainerSpec struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.0.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.0.1"
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
