@@ -16,10 +16,6 @@ pipeline {
         OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-bundle-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-catalog-nightly:${env.OPERATOR_VERSION}"
-        RUN_ALL_TEST = "false"
-        RUN_CLUSTER_TEST = "false"
-        RUN_BACKUP_TEST = "false"
-        RUN_NIGHTLY_OR_MASTER = "false"
 
         // Variable names used in the operator make file.
         VERSION="${env.OPERATOR_VERSION}"
@@ -171,7 +167,7 @@ pipeline {
 
                 stage ('All Tests') {
                     when {
-                        expression { env.RUN_ALL_TEST == 'true' || env.RUN_NIGHTLY_OR_MASTER == 'true'}
+                        expression { env.RUN_NIGHTLY_OR_MASTER == 'true' || env.RUN_ALL_TEST == 'true'}
                     }
                     steps {
                         dir("${env.GO_REPO}") {
