@@ -24,11 +24,10 @@ var _ = Describe("AutoScaler", func() {
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
-				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			},
@@ -36,6 +35,13 @@ var _ = Describe("AutoScaler", func() {
 
 		AfterEach(
 			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},

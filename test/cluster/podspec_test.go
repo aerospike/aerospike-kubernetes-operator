@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -64,13 +65,13 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operation", func() {
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 						// Deploy everything in single rack
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						racks := []asdbv1.Rack{
@@ -92,6 +93,12 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},

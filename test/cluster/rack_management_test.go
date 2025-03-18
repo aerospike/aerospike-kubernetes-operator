@@ -658,11 +658,9 @@ var _ = Describe(
 				Context(
 					"when update cluster with invalid rack", func() {
 
-						aeroCluster := &asdbv1.AerospikeCluster{}
-
 						BeforeEach(
 							func() {
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								rackConf := asdbv1.RackConfig{
@@ -679,6 +677,13 @@ var _ = Describe(
 
 						AfterEach(
 							func() {
+								aeroCluster := &asdbv1.AerospikeCluster{
+									ObjectMeta: metav1.ObjectMeta{
+										Name:      clusterName,
+										Namespace: namespace,
+									},
+								}
+
 								_ = deleteCluster(k8sClient, ctx, aeroCluster)
 								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 							},
@@ -754,13 +759,13 @@ var _ = Describe(
 			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
-			aeroCluster := &asdbv1.AerospikeCluster{}
+
 			BeforeEach(
 				func() {
 					nodes, err := getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
@@ -773,6 +778,13 @@ var _ = Describe(
 
 			AfterEach(
 				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 				},
@@ -804,11 +816,10 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
-						aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+						aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 						racks := getDummyRackConf(1, 2)
 						aeroCluster.Spec.RackConfig.Racks = racks
 						aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -820,6 +831,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},

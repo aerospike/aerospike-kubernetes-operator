@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -32,7 +33,6 @@ var _ = Describe(
 
 				clusterName := fmt.Sprintf("k8s-node-block-cluster-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				var (
 					err   error
@@ -41,7 +41,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 
@@ -85,6 +85,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
@@ -94,7 +101,7 @@ var _ = Describe(
 				It(
 					"Should migrate the pods from blocked nodes to other nodes", func() {
 						By("Blocking the k8s node")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -109,7 +116,7 @@ var _ = Describe(
 					"Should migrate the pods from blocked nodes to other nodes along with rolling "+
 						"restart", func() {
 						By("Blocking the k8s node and updating aerospike config")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
@@ -126,7 +133,7 @@ var _ = Describe(
 				It(
 					"Should migrate the pods from blocked nodes to other nodes along with upgrade", func() {
 						By("Blocking the k8s node and updating aerospike image")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.Image = availableImage1
@@ -143,7 +150,7 @@ var _ = Describe(
 					"Should migrate the pods from blocked nodes to other nodes and delete corresponding"+
 						"local PVCs", func() {
 						By("Blocking the k8s node")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
@@ -168,7 +175,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Blocking the k8s node and setting maxIgnorablePod to 1")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						maxIgnorablePods := intstr.FromInt32(1)
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorablePods

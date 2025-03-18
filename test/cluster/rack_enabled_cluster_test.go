@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
@@ -36,7 +37,6 @@ var _ = Describe(
 			"When doing valid operations", func() {
 				clusterName := fmt.Sprintf("rack-enabled-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
@@ -50,7 +50,7 @@ var _ = Describe(
 						}
 
 						// Will be used in Update also
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						// This needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -75,6 +75,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},

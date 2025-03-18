@@ -64,10 +64,15 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 
-				aeroCluster := &asdbv1.AerospikeCluster{}
-
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
@@ -125,7 +130,7 @@ var _ = Describe(
 							},
 						)
 
-						aeroCluster = getStorageInitAerospikeCluster(
+						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
@@ -190,7 +195,7 @@ var _ = Describe(
 						storageConfig := getAerospikeStorageConfig(
 							sidecarContainerName, false, "1Gi", cloudProvider,
 						)
-						aeroCluster = getStorageInitAerospikeCluster(
+						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
@@ -287,7 +292,7 @@ var _ = Describe(
 						storageConfig := getLongInitStorageConfig(
 							false, "50Gi",
 						)
-						aeroCluster = getStorageInitAerospikeCluster(
+						aeroCluster := getStorageInitAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							latestImage,
 						)
@@ -357,7 +362,6 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 				initVolName := "ns"
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
@@ -367,7 +371,7 @@ var _ = Describe(
 							{ID: 2},
 						}
 
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						rackConf := asdbv1.RackConfig{
@@ -384,6 +388,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)

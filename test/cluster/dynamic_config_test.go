@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,11 +51,11 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
@@ -83,8 +84,15 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -295,11 +303,11 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
@@ -328,6 +336,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
@@ -428,11 +443,11 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
-						aeroCluster = getAerospikeClusterSpecWithLDAP(
+						aeroCluster := getAerospikeClusterSpecWithLDAP(
 							clusterNamespacedName,
 						)
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
@@ -500,6 +515,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
@@ -602,11 +624,11 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
 						// Create a 4 node cluster
-						aeroCluster = createNonSCDummyAerospikeCluster(
+						aeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 4,
 						)
 						aeroCluster.Spec.Storage.Volumes = append(
@@ -648,6 +670,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},

@@ -20,19 +20,19 @@ import (
 var _ = Describe(
 	"PodDisruptionBudget", func() {
 		ctx := context.TODO()
-		aeroCluster := &asdbv1.AerospikeCluster{}
 		maxUnavailable := intstr.FromInt32(0)
 		defaultMaxUnavailable := intstr.FromInt32(1)
 		clusterName := fmt.Sprintf("pdb-test-cluster-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-		BeforeEach(func() {
-			aeroCluster = createDummyAerospikeCluster(
-				clusterNamespacedName, 2,
-			)
-		})
-
 		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 			Expect(deletePDB(ctx, aeroCluster)).NotTo(HaveOccurred())
 			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
@@ -40,12 +40,20 @@ var _ = Describe(
 
 		Context("Valid Operations", func() {
 			It("Validate create PDB with default maxUnavailable", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 			})
 
 			It("Validate create PDB with specified maxUnavailable", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				aeroCluster.Spec.MaxUnavailable = &maxUnavailable
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -53,6 +61,10 @@ var _ = Describe(
 			})
 
 			It("Validate update PDB", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
@@ -67,6 +79,10 @@ var _ = Describe(
 			})
 
 			It("Validate disablePDB, the Operator will not create PDB", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -79,6 +95,10 @@ var _ = Describe(
 			})
 
 			It("Validate update disablePDB, the Operator will delete and recreate PDB", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				By("Create cluster with PDB enabled")
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -106,6 +126,10 @@ var _ = Describe(
 			})
 
 			It("Validate that non-operator created PDB is not created", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				By("Create PDB")
 				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
@@ -131,6 +155,10 @@ var _ = Describe(
 			})
 
 			It("Validate that cluster is deployed with disabledPDB even if non-operator created PDB is present", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
 
@@ -145,6 +173,10 @@ var _ = Describe(
 			value := intstr.FromInt32(3)
 
 			It("Should fail if maxUnavailable is greater than size", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				// Cluster size is 2
 				aeroCluster.Spec.MaxUnavailable = &value
 				err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -152,6 +184,10 @@ var _ = Describe(
 			})
 
 			It("Should fail if maxUnavailable is greater than RF", func() {
+				aeroCluster := createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
 				// PDB should be < (least rf). rf is 2 in this test
 				aeroCluster.Spec.Size = 4
 				value := intstr.FromInt32(2)

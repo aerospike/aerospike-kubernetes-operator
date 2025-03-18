@@ -156,16 +156,23 @@ var _ = Describe("BatchRestart", func() {
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
+
 		AfterEach(
 			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 		It("Should fail if replication-factor is 1", func() {
 			By("Using RollingUpdateBatchSize PCT")
-			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -183,7 +190,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should fail if namespace is configured in single rack", func() {
-			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
@@ -207,7 +214,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should pass if namespace is configured in 1+ racks", func() {
-			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}
@@ -240,11 +247,9 @@ var _ = Describe("BatchRestart", func() {
 })
 
 func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
-	aeroCluster := &asdbv1.AerospikeCluster{}
-
 	BeforeEach(
 		func() {
-			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -255,6 +260,13 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 	AfterEach(
 		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},
@@ -361,11 +373,9 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 }
 
 func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName) {
-	aeroCluster := &asdbv1.AerospikeCluster{}
-
 	BeforeEach(
 		func() {
-			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
+			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 8, 2)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -376,6 +386,13 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 
 	AfterEach(
 		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},

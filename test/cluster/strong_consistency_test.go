@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -32,8 +33,15 @@ var _ = Describe("SCMode", func() {
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
+
 		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
 			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
@@ -47,7 +55,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test combination of sc and non-sc namespace cluster lifecycle in a rack enabled cluster", func() {
 			By("Deploy")
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
 			racks := []asdbv1.Rack{
@@ -70,7 +78,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test sc cluster lifecycle in a no rack cluster", func() {
 			By("Deploy")
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
 
@@ -84,7 +92,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test single sc namespace cluster", func() {
 			By("Deploy")
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace
 			racks := []asdbv1.Rack{
@@ -107,7 +115,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should allow adding and removing SC namespace", func() {
 			By("Deploy")
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
 			addedSCNs := "newscns"
@@ -159,7 +167,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should allow batch restart in the SC setup", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 6)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			nonSCNamespace := "bar"
 			racks := []asdbv1.Rack{
@@ -196,7 +204,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should allow MRT fields in SC namespace", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
 			sc1Path := "/test/dev/" + sc1Name
@@ -224,9 +232,15 @@ var _ = Describe("SCMode", func() {
 			clusterName, namespace,
 		)
 
-		aeroCluster := &asdbv1.AerospikeCluster{}
 		AfterEach(
 			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
@@ -235,7 +249,7 @@ var _ = Describe("SCMode", func() {
 		// Validation: can not remove more than replica node.
 		//             not allow updating strong-consistency config
 		It("Should not allow updating strong-consistency config", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -255,7 +269,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should not allow different sc namespaces in different racks", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1, 2)
 
 			sc1Path := "/test/dev/" + sc1Name
@@ -289,7 +303,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should not allow cluster size < replication factor for sc namespace", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
 			sc1Path := "/test/dev/" + sc1Name
@@ -311,7 +325,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should not allow in-memory sc namespace", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
 			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
@@ -336,7 +350,7 @@ var _ = Describe("SCMode", func() {
 		})
 
 		It("Should not allow MRT fields in non-SC namespace", func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
 			sc1Path := "/test/dev/" + sc1Name

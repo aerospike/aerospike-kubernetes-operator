@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
@@ -31,12 +32,11 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				BeforeEach(
 					func() {
 						// Deploy cluster with 2 racks.
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 						racks := getDummyRackConf(1, 2)
@@ -52,10 +52,7 @@ var _ = Describe(
 					"Try Defaults", func() {
 						var err error
 
-						suitecfg, _ := GinkgoConfiguration()
-						println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
-						By(suitecfg.Timeout.String())
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -88,7 +85,7 @@ var _ = Describe(
 						var err error
 
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to true
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -134,7 +131,7 @@ var _ = Describe(
 					"Try CleanupSelectedVolumes", func() {
 						var err error
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to false and true for selected volumes
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -205,9 +202,16 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						// cleanup cluster
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 			},
@@ -230,8 +234,6 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-
-				aeroCluster := &asdbv1.AerospikeCluster{}
 
 				devName := "/test/dev/rackstorage"
 				devPVCName := "ns"
@@ -293,7 +295,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
@@ -307,7 +309,7 @@ var _ = Describe(
 					"UseForAerospikeConfig", func() {
 						var err error
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -347,7 +349,7 @@ var _ = Describe(
 					"UseForCascadeDelete", func() {
 						var err error
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -380,8 +382,15 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 			},
@@ -396,11 +405,18 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -410,7 +426,7 @@ var _ = Describe(
 							"should fail for not having aerospikeConfig namespace Storage device in rack storage",
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 3,
 								)
 								racks := getDummyRackConf(1)
@@ -465,7 +481,7 @@ var _ = Describe(
 								"Storage doesn't have namespace related volumes",
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
@@ -503,7 +519,7 @@ var _ = Describe(
 							"NilToValue: should fail for updating Storage. Cannot be updated",
 							func() {
 								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
@@ -553,7 +569,7 @@ var _ = Describe(
 						It(
 							"ValueToNil: should fail for updating Storage. Cannot be updated",
 							func() {
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)
@@ -605,7 +621,7 @@ var _ = Describe(
 						It(
 							"ValueToValue: should fail for updating Storage. Cannot be updated",
 							func() {
-								aeroCluster = createDummyAerospikeCluster(
+								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
 								racks := getDummyRackConf(1)

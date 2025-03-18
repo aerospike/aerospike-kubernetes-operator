@@ -46,10 +46,15 @@ var _ = Describe(
 					clusterName, namespace,
 				)
 
-				aeroCluster := &asdbv1.AerospikeCluster{}
-
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
@@ -73,7 +78,7 @@ var _ = Describe(
 								InputStorage: rackStorageConfig,
 							},
 						}
-						aeroCluster = getStorageWipeAerospikeCluster(
+						aeroCluster := getStorageWipeAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							post6Image, getAerospikeClusterConfig(),
 						)

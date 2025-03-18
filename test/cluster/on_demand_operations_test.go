@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/types"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -19,20 +18,15 @@ var _ = Describe(
 	"OnDemandOperations", func() {
 
 		ctx := goctx.Background()
-		var (
-			clusterNamespacedName types.NamespacedName
+		clusterName := fmt.Sprintf("operations-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
 		)
-
-		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
-				clusterName := fmt.Sprintf("operations-%d", GinkgoParallelProcess())
-				clusterNamespacedName = test.GetNamespacedName(
-					clusterName, namespace,
-				)
 				// Create a 2 node cluster
-				aeroCluster = createDummyRackAwareAerospikeCluster(
+				aeroCluster := createDummyRackAwareAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 
@@ -43,6 +37,13 @@ var _ = Describe(
 
 		AfterEach(
 			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
 				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},

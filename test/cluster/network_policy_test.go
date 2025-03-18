@@ -365,188 +365,192 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 		clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-		Context(
-			"InvalidAerospikeCustomInterface", func() {
-				aeroCluster := &asdbv1.AerospikeCluster{}
+		Context("InvalidAerospikeCustomInterface", func() {
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 3,
+					)
 
-				BeforeEach(
-					func() {
-						aeroCluster = createDummyAerospikeCluster(
-							clusterNamespacedName, 3,
-						)
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
 
-				AfterEach(
-					func() {
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
-					},
-				)
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				},
+			)
 
-				It(
-					"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
-						"'customInterface' and customAlternateAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
+					"'customInterface' and customAlternateAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'customInterface' and "+
-						"customTLSAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'customInterface' and "+
+					"customTLSAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set "+
-						"to 'customInterface' and customTLSAlternateAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set "+
+					"to 'customInterface' and customTLSAlternateAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UpdatingFabricTypeInNetworkPolicy: should fail when fabric type is changed",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UpdatingFabricTypeInNetworkPolicy: should fail when fabric type is changed",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UpdatingTLSFabricTypeInNetworkPolicy: should fail when TLS fabric type is changed",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UpdatingTLSFabricTypeInNetworkPolicy: should fail when TLS fabric type is changed",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomTLSFabricNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomTLSFabricNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				// Following test-cases are applicable for all custom Interfaces
-				// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
-				It(
-					"MissingNetworkNameInPodAnnotations: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames is not present in pod annotations",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			// Following test-cases are applicable for all custom Interfaces
+			// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
+			It(
+				"MissingNetworkNameInPodAnnotations: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames is not present in pod annotations",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
 
-						// define different networks than the ones defined in CustomAccessNetworkNames
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: "ipvlan-conf-2, ipvlan-conf-3",
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					// define different networks than the ones defined in CustomAccessNetworkNames
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: "ipvlan-conf-2, ipvlan-conf-3",
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UsingHostNetworkAndCustomInterface: should fail when access is set to 'customInterface' and "+
-						"Host network is used",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UsingHostNetworkAndCustomInterface: should fail when access is set to 'customInterface' and "+
+					"Host network is used",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						aeroCluster.Spec.PodSpec.HostNetwork = true
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					aeroCluster.Spec.PodSpec.HostNetwork = true
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"NetworkNameOfDifferentNamespace: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames present in pod annotations is of different namespace",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"NetworkNameOfDifferentNamespace: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames present in pod annotations is of different namespace",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"random/ipvlan-conf-1"}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"random/ipvlan-conf-1"}
 
-						// define different networks than the ones defined in CustomAccessNetworkNames
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
-			},
+					// define different networks than the ones defined in CustomAccessNetworkNames
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
 		)
 
 		Context("InvalidFabricNetworkNamesUpdate", func() {

@@ -408,15 +408,14 @@ var _ = Describe(
 
 		Context(
 			"When cluster is already deployed", func() {
-				aeroCluster := &asdbv1.AerospikeCluster{}
+				clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+				clusterNamespacedName = test.GetNamespacedName(
+					clusterName, namespace,
+				)
+
 				BeforeEach(
 					func() {
-						clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
-						clusterNamespacedName = test.GetNamespacedName(
-							clusterName, namespace,
-						)
-
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 						err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -426,6 +425,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)

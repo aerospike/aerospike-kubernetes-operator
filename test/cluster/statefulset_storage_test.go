@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -27,10 +28,10 @@ var _ = Describe(
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := &asdbv1.AerospikeCluster{}
+
 				BeforeEach(
 					func() {
-						aeroCluster = createNonSCDummyAerospikeCluster(
+						aeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
@@ -42,6 +43,13 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},

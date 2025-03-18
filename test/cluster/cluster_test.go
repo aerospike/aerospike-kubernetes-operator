@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -94,11 +95,9 @@ func PauseReconcileTest(ctx goctx.Context) {
 		"pause-reconcile", namespace,
 	)
 
-	aeroCluster := &asdbv1.AerospikeCluster{}
-
 	BeforeEach(
 		func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 		},
@@ -106,8 +105,15 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+			_ = cleanupPVC(k8sClient, aeroCluster.Name, aeroCluster.Name)
 		},
 	)
 
@@ -203,10 +209,16 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 			clusterNamespacedName := test.GetNamespacedName(
 				"deploy-cluster-benchmark", namespace,
 			)
-			aeroCluster := &asdbv1.AerospikeCluster{}
 
 			AfterEach(
 				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 				},
@@ -216,7 +228,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					By("Deploying cluster which does not have the fix for AER-6767")
 
 					imageBeforeFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.2")
-					aeroCluster = createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
+					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = false
@@ -287,11 +299,10 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 				"migrate-fill-delay-cluster", namespace,
 			)
 			migrateFillDelay := int64(120)
-			aeroCluster := &asdbv1.AerospikeCluster{}
 
 			BeforeEach(
 				func() {
-					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 4)
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -301,6 +312,13 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 			AfterEach(
 				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 				},
@@ -895,11 +913,10 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 	clusterNamespacedName := test.GetNamespacedName(
 		clusterName, namespace,
 	)
-	aeroCluster := &asdbv1.AerospikeCluster{}
 
 	BeforeEach(
 		func() {
-			aeroCluster = createBasicTLSCluster(clusterNamespacedName, 3)
+			aeroCluster := createBasicTLSCluster(clusterNamespacedName, 3)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
 				getSCNamespaceConfig("test", "/test/dev/xvdf"),
 			}
@@ -912,8 +929,15 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},
 	)
 
@@ -1143,11 +1167,10 @@ func UpdateClusterTest(ctx goctx.Context) {
 	clusterNamespacedName := test.GetNamespacedName(
 		clusterName, namespace,
 	)
-	aeroCluster := &asdbv1.AerospikeCluster{}
 
 	BeforeEach(
 		func() {
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 3)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume, dynamicNsVolume1,
 			)
@@ -1159,6 +1182,13 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
 			_ = deleteCluster(k8sClient, ctx, aeroCluster)
 			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		},
@@ -2105,11 +2135,10 @@ func negativeUpdateClusterValidationTest(
 			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
-			aeroCluster := &asdbv1.AerospikeCluster{}
 
 			BeforeEach(
 				func() {
-					aeroCluster = createDummyAerospikeCluster(
+					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 3,
 					)
 
@@ -2120,6 +2149,13 @@ func negativeUpdateClusterValidationTest(
 
 			AfterEach(
 				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 				},
@@ -2503,11 +2539,10 @@ func negativeUpdateClusterValidationTest(
 			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
-			aeroCluster := &asdbv1.AerospikeCluster{}
 
 			BeforeEach(
 				func() {
-					aeroCluster = createAerospikeClusterPost640(
+					aeroCluster := createAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 
@@ -2518,6 +2553,13 @@ func negativeUpdateClusterValidationTest(
 
 			AfterEach(
 				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
+
 					_ = deleteCluster(k8sClient, ctx, aeroCluster)
 					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 				},
