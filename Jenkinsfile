@@ -92,7 +92,7 @@ pipeline {
                         script {
                             dir("${env.GO_REPO}") {
                                 if(isNightly() || env.BRANCH_NAME == 'master'){
-                                    env.RUN_NIGHTLY_OR_MASTER = "true"
+                                    env.RUN_NIGHTLY_OR_MASTER = 'true'
                                 }
                                 else{
                                     def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
@@ -124,13 +124,10 @@ pipeline {
                                     env.RUN_BACKUP_TEST = backupTest.toString()
                                     env.RUN_ALL_TEST = allTest.toString()
                                     
-                                    echo "cluster test: ${clusterTest}"
-                                    echo "backup test: ${backupTest}"
-                                    echo "all test: ${allTest}"
-
                                     echo "env cluster test: ${env.RUN_CLUSTER_TEST}"
                                     echo "env backup test: ${env.RUN_BACKUP_TEST}"
                                     echo "env all test: ${env.RUN_ALL_TEST}"
+                                    echo "env nightly: ${env.RUN_NIGHTLY_OR_MASTER}"
                                 }
                             }
                         }
