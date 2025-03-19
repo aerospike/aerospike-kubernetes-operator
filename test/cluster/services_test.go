@@ -147,7 +147,6 @@ var _ = Describe(
 			Expect(err).ToNot(HaveOccurred())
 			Expect(svc.Annotations["test-annotation"]).To(Equal("test-value"))
 			Expect(svc.Labels["test-label"]).To(Equal("test-value"))
-			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
 			Expect(svc.Labels["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 
 			By("Updating headless service metadata")
@@ -172,6 +171,7 @@ var _ = Describe(
 			Expect(svc.Labels).ToNot(HaveKey("test-label"))
 			Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
 			Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
+			Expect(svc.Labels["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())

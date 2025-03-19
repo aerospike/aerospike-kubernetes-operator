@@ -40,16 +40,17 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 		r.Log.Info("Creating headless service for statefulSet")
 
-		annotations := map[string]string{
+		defaultAnnotations := map[string]string{
 			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
 			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
 		}
 		if headlessSvc.Metadata.Annotations != nil {
-			maps.Copy(headlessSvc.Metadata.Annotations, annotations)
+			maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
 		}
 
+		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 		if headlessSvc.Metadata.Labels != nil {
-			maps.Copy(headlessSvc.Metadata.Labels, utils.LabelsForAerospikeCluster(r.aeroCluster.Name))
+			maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
 		}
 
 		service = &corev1.Service{
@@ -64,7 +65,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 				// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
 				PublishNotReadyAddresses: true,
 				ClusterIP:                "None",
-				Selector:                 headlessSvc.Metadata.Labels,
+				Selector:                 aerospikeClusterLabels,
 			},
 		}
 
@@ -96,11 +97,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	r.Log.Info("Headless service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	if err := r.updateServiceMetadata(service, headlessSvc.Metadata); err != nil {
-		return err
-	}
-
-	return r.updateServicePorts(service)
+	return r.updateService(service, headlessSvc.Metadata)
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
@@ -283,11 +280,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	r.Log.Info("Service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	if err := r.updateServiceMetadata(service, podService.Metadata); err != nil {
-		return err
-	}
-
-	return r.updateServicePorts(service)
+	return r.updateService(service, podService.Metadata)
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -314,7 +307,7 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
-func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) error {
+func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) bool {
 	servicePorts := r.getServicePorts()
 
 	servicePortsMap := make(map[string]int32)
@@ -328,25 +321,12 @@ func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) er
 	}
 
 	if reflect.DeepEqual(servicePortsMap, specPortsMap) {
-		r.Log.Info("Service update not required, skipping",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
-
-		return nil
+		return false
 	}
 
 	service.Spec.Ports = servicePorts
-	if err := r.Client.Update(
-		context.TODO(), service, common.UpdateOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to update service %s: %v", service.Name, err,
-		)
-	}
 
-	r.Log.Info("Service updated",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
-
-	return nil
+	return true
 }
 
 func (r *SingleClusterReconciler) getServicePorts() []corev1.ServicePort {
@@ -469,34 +449,40 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
-func (r *SingleClusterReconciler) updateServiceMetadata(
-	service *corev1.Service,
-	metadata asdbv1.AerospikeObjectMeta,
-) error {
-	updateMetadata := false
+func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+	var needsUpdate bool
 
 	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
 		service.ObjectMeta.Annotations = metadata.Annotations
-		updateMetadata = true
+		needsUpdate = true
 	}
 
 	if !reflect.DeepEqual(service.ObjectMeta.Labels, metadata.Labels) {
 		service.ObjectMeta.Labels = metadata.Labels
-		updateMetadata = true
+		needsUpdate = true
 	}
 
-	if updateMetadata {
+	if r.updateServicePorts(service) {
+		needsUpdate = true
+	}
+
+	if needsUpdate {
 		if err := r.Client.Update(
 			context.TODO(), service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to update metadata for service %s: %v", service.Name, err,
+				"failed to update service %s: %v", service.Name, err,
 			)
 		}
 
-		r.Log.Info("Updated metadata for service",
+		r.Log.Info("Service updated",
 			"name", utils.NamespacedName(service.Namespace, service.Name))
+
+		return nil
 	}
+
+	r.Log.Info("Service update not required, skipping",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return nil
 }
