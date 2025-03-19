@@ -36,11 +36,11 @@ var _ = Describe(
 			// ClusterRole: aerospike-cluster
 			// ClusterRoleBinding: aerospike-cluster
 
-			err := setupByUser(k8sClient, goctx.TODO())
+			err := SetupByUser(k8sClient, goctx.TODO())
 			Expect(err).ToNot(HaveOccurred())
 
 			// Set up AerospikeBackupService RBAC and AWS secret
-			err = setupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
+			err = SetupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

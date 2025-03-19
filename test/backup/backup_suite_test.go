@@ -1,6 +1,7 @@
 package backup
 
 import (
+	goctx "context"
 	"testing"
 	"time"
 
@@ -42,6 +43,13 @@ var _ = BeforeSuite(
 
 		testEnv, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
 		Expect(err).NotTo(HaveOccurred())
+
+		err = test.SetupByUser(k8sClient, goctx.TODO())
+		Expect(err).ToNot(HaveOccurred())
+
+		// Set up AerospikeBackupService RBAC and AWS secret
+		err = test.SetupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
+		Expect(err).ToNot(HaveOccurred())
 
 		By("Deploy Backup Service")
 		backupServiceNamespacedName := test.GetNamespacedName("backup-service", namespace)

@@ -80,8 +80,19 @@ func deleteAllClusters(namespace string) {
 // This is used when running tests on existing cluster
 // user has to install its own operator then run cleanup and then start this
 
-var _ = BeforeSuite(
-	func() {
+var _ = SynchronizedBeforeSuite(
+	func() []byte {
+		var err error
+		_, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = test.SetupByUser(k8sClient, goctx.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		// Return setupData → Passed to all nodes
+		return nil
+	},
+
+	func(data []byte) {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
@@ -97,7 +108,8 @@ var _ = BeforeSuite(
 
 		cloudProvider, err = getCloudProvider(goctx.TODO(), k8sClient)
 		Expect(err).ToNot(HaveOccurred())
-	})
+	},
+)
 
 var _ = SynchronizedAfterSuite(func() {
 	// runs on *all* processes

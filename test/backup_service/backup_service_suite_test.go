@@ -1,6 +1,7 @@
 package backupservice
 
 import (
+	goctx "context"
 	"testing"
 	"time"
 
@@ -27,8 +28,23 @@ func TestBackupService(t *testing.T) {
 	RunSpecs(t, "BackupService Suite")
 }
 
-var _ = BeforeSuite(
-	func() {
+var _ = SynchronizedBeforeSuite(
+	func() []byte {
+		var err error
+		_, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = test.SetupByUser(k8sClient, goctx.TODO())
+		Expect(err).ToNot(HaveOccurred())
+
+		// Set up AerospikeBackupService RBAC and AWS secret
+		err = test.SetupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
+		Expect(err).ToNot(HaveOccurred())
+		// Return setupData → Passed to all nodes
+		return nil
+	},
+
+	func(data []byte) {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
@@ -36,7 +52,8 @@ var _ = BeforeSuite(
 		var err error
 		testEnv, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
 		Expect(err).NotTo(HaveOccurred())
-	})
+	},
+)
 
 var _ = AfterSuite(
 	func() {
