@@ -449,8 +449,14 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
-func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+func (r *SingleClusterReconciler) updateServiceMetadata(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) bool {
 	var needsUpdate bool
+
+	if service.Spec.Type == corev1.ServiceTypeClusterIP {
+		maps.Copy(metadata.Annotations, map[string]string{
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		})
+	}
 
 	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
 		service.ObjectMeta.Annotations = metadata.Annotations
@@ -459,6 +465,16 @@ func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadat
 
 	if !reflect.DeepEqual(service.ObjectMeta.Labels, metadata.Labels) {
 		service.ObjectMeta.Labels = metadata.Labels
+		needsUpdate = true
+	}
+
+	return needsUpdate
+}
+
+func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+	var needsUpdate bool
+
+	if r.updateServiceMetadata(service, metadata) {
 		needsUpdate = true
 	}
 
