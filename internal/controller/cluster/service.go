@@ -449,7 +449,10 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
-func (r *SingleClusterReconciler) updateServiceMetadata(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) bool {
+func (r *SingleClusterReconciler) updateServiceMetadata(
+	service *corev1.Service,
+	metadata asdbv1.AerospikeObjectMeta,
+) bool {
 	var needsUpdate bool
 
 	if service.Spec.Type == corev1.ServiceTypeClusterIP {
