@@ -17,13 +17,16 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	goctx "context"
+	"encoding/gob"
 	"fmt"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -83,24 +86,39 @@ func deleteAllClusters(namespace string) {
 var _ = SynchronizedBeforeSuite(
 	func() []byte {
 		var err error
-		_, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
+
+		testEnv, cfg, err = test.StartTestEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+
+		k8sClient, _, err = test.BootStrapTestEnv(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = test.SetupByUser(k8sClient, goctx.TODO())
 		Expect(err).ToNot(HaveOccurred())
-		// Return setupData → Passed to all nodes
-		return nil
+
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		Expect(enc.Encode(cfg)).To(Succeed())
+		return buf.Bytes()
 	},
 
 	func(data []byte) {
+		// this runs once per process, we grab the existing rest.Config here
+		dec := gob.NewDecoder(bytes.NewReader(data))
+		var (
+			config rest.Config
+			err    error
+		)
+		Expect(dec.Decode(&config)).To(Succeed())
+		cfg = &config
+
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
 		pkgLog.Info(fmt.Sprintf("Client will connect through '%s' network to Aerospike Clusters.",
 			*defaultNetworkType))
 
-		var err error
-		testEnv, cfg, k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme)
+		k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		projectRoot, err = getGitRepoRootPath()
@@ -121,4 +139,9 @@ var _ = SynchronizedAfterSuite(func() {
 		deleteAllClusters(test.Namespaces[idx])
 		_ = cleanupPVC(k8sClient, test.Namespaces[idx], "")
 	}
+
+	By("tearing down the test environment")
+	gexec.KillAndWait(5 * time.Second)
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
 })
