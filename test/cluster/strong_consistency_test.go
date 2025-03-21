@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -15,6 +16,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -27,16 +29,22 @@ var _ = Describe("SCMode", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid operation", func() {
-		clusterName := "sc-mode"
-		clusterNamespacedName := getNamespacedName(
+		clusterName := fmt.Sprintf("sc-mode-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		AfterEach(func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
+			err := deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 		})
 
 		// Dead/Unavailable partition
@@ -120,8 +128,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Add new SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			SCConf := getSCNamespaceConfig(addedSCNs, path)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
@@ -133,8 +139,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Add new non-SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			addedNs := "newns"
 			conf := map[string]interface{}{
@@ -154,8 +158,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Remove added namespaces")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
@@ -225,27 +227,30 @@ var _ = Describe("SCMode", func() {
 	})
 
 	Context("When doing invalid operation", func() {
-		clusterName := "sc-mode-invalid"
-		clusterNamespacedName := getNamespacedName(
+		clusterName := fmt.Sprintf("sc-mode-invalid-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 
-		AfterEach(func() {
-			aeroCluster, _ := getCluster(k8sClient, ctx, clusterNamespacedName)
-			if aeroCluster != nil {
-				err := deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
+				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			},
+		)
 
 		// Validation: can not remove more than replica node.
 		//             not allow updating strong-consistency config
 		It("Should not allow updating strong-consistency config", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			namespaceConfig :=

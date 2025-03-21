@@ -17,7 +17,9 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	goctx "context"
+	"encoding/gob"
 	"fmt"
 	"testing"
 	"time"
@@ -57,17 +59,11 @@ var scheme = k8Runtime.NewScheme()
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cluster Suite")
+
+	suitecfg, repcfg := GinkgoConfiguration()
+	suitecfg.Timeout = 10 * time.Hour
+	RunSpecs(t, "Cluster Suite", suitecfg, repcfg)
 }
-
-var _ = BeforeEach(func() {
-	By("Cleaning up all Aerospike clusters.")
-
-	for idx := range test.Namespaces {
-		deleteAllClusters(test.Namespaces[idx])
-		Expect(cleanupPVC(k8sClient, test.Namespaces[idx])).NotTo(HaveOccurred())
-	}
-})
 
 func deleteAllClusters(namespace string) {
 	ctx := goctx.TODO()
@@ -87,16 +83,42 @@ func deleteAllClusters(namespace string) {
 // This is used when running tests on existing cluster
 // user has to install its own operator then run cleanup and then start this
 
-var _ = BeforeSuite(
-	func() {
+var _ = SynchronizedBeforeSuite(
+	func() []byte {
+		var err error
+
+		testEnv, cfg, err = test.StartTestEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+
+		k8sClient, _, err = test.BootStrapTestEnv(scheme, cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = test.SetupByUser(k8sClient, goctx.TODO())
+		Expect(err).ToNot(HaveOccurred())
+
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		Expect(enc.Encode(cfg)).To(Succeed())
+		return buf.Bytes()
+	},
+
+	func(data []byte) {
+		// this runs once per process, we grab the existing rest.Config here
+		dec := gob.NewDecoder(bytes.NewReader(data))
+		var (
+			config rest.Config
+			err    error
+		)
+		Expect(dec.Decode(&config)).To(Succeed())
+		cfg = &config
+
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
 		pkgLog.Info(fmt.Sprintf("Client will connect through '%s' network to Aerospike Clusters.",
 			*defaultNetworkType))
 
-		var err error
-		testEnv, cfg, k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme)
+		k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		projectRoot, err = getGitRepoRootPath()
@@ -104,19 +126,22 @@ var _ = BeforeSuite(
 
 		cloudProvider, err = getCloudProvider(goctx.TODO(), k8sClient)
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-var _ = AfterSuite(
-	func() {
-		By("Cleaning up all pvcs")
-
-		for idx := range test.Namespaces {
-			_ = cleanupPVC(k8sClient, test.Namespaces[idx])
-		}
-
-		By("tearing down the test environment")
-		gexec.KillAndWait(5 * time.Second)
-		err := testEnv.Stop()
-		Expect(err).ToNot(HaveOccurred())
 	},
 )
+
+var _ = SynchronizedAfterSuite(func() {
+	// runs on *all* processes
+}, func() {
+	// runs *only* on process #1
+	By("Cleaning up all clusters and pvcs")
+
+	for idx := range test.Namespaces {
+		deleteAllClusters(test.Namespaces[idx])
+		_ = cleanupPVC(k8sClient, test.Namespaces[idx], "")
+	}
+
+	By("tearing down the test environment")
+	gexec.KillAndWait(5 * time.Second)
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
+})

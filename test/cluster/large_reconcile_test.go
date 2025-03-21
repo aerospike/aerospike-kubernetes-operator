@@ -16,6 +16,7 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -27,7 +28,7 @@ var _ = Describe(
 			"When doing valid operations", func() {
 
 				clusterName := "large-reconcile"
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -42,6 +43,13 @@ var _ = Describe(
 					TLSAlternateAccessType: asdbv1.AerospikeNetworkType(*defaultNetworkType),
 				}
 				aeroCluster.Spec.AerospikeNetworkPolicy = networkPolicy
+
+				AfterEach(
+					func() {
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
+				)
 
 				It(
 					"Should try large reconcile operations", func() {
@@ -83,7 +91,7 @@ var _ = Describe(
 							aeroCluster.Spec.Size = 4
 
 							return k8sClient.Update(goctx.TODO(), aeroCluster)
-						}, 1*time.Minute).ShouldNot(HaveOccurred())
+						}, time.Minute, time.Second).ShouldNot(HaveOccurred())
 
 						// Cluster size should never go below 4,
 						// as only one node is removed at a time and before reducing 2nd node, we changed the size to 4
@@ -119,7 +127,7 @@ var _ = Describe(
 							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["auto-pin"] = "none"
 
 							return k8sClient.Update(goctx.TODO(), aeroCluster)
-						}, 1*time.Minute).ShouldNot(HaveOccurred())
+						}, time.Minute, time.Second).ShouldNot(HaveOccurred())
 
 						// Cluster status should never get updated with old conf "tempConf"
 						err = waitForClusterRollingRestart(
@@ -141,7 +149,7 @@ var _ = Describe(
 
 						err = UpdateClusterImage(aeroCluster, nextImage)
 						Expect(err).ToNot(HaveOccurred())
-						err = k8sClient.Update(goctx.TODO(), aeroCluster)
+						err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Change build back to original
@@ -154,7 +162,7 @@ var _ = Describe(
 							err = UpdateClusterImage(aeroCluster, latestImage)
 							Expect(err).ToNot(HaveOccurred())
 							return k8sClient.Update(goctx.TODO(), aeroCluster)
-						}, 1*time.Minute).ShouldNot(HaveOccurred())
+						}, time.Minute, time.Second).ShouldNot(HaveOccurred())
 
 						// Only 1 pod need upgrade
 						err = waitForClusterUpgrade(
@@ -169,29 +177,25 @@ var _ = Describe(
 						// Change build to build1
 						// Change build to build2
 						// Only a single pod may have build1 at max in whole upgrade. Ultimately all should reach build2
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					},
-				)
-
-				Context(
-					"WaitingForStableCluster", func() {
-						It(
-							"LargeMigration", func() {
-								// Need to create large migration...is there any way to mimic or olny way is to load data
-								// Tested manually
-							},
-						)
-						It(
-							"ColdStart", func() {
-								// Not needed for this, isClusterStable call should fail and this will requeue request.
-							},
-						)
 					},
 				)
 			},
 		)
-
+		Context(
+			"WaitingForStableCluster", func() {
+				It(
+					"LargeMigration", func() {
+						// Need to create large migration...is there any way to mimic or only way is to load data
+						// Tested manually
+					},
+				)
+				It(
+					"ColdStart", func() {
+						// Not needed for this, isClusterStable call should fail and this will requeue request.
+					},
+				)
+			},
+		)
 	},
 )
 

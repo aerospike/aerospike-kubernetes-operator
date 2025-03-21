@@ -11,6 +11,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const tempTestDir = "/tmp/test"
@@ -39,7 +40,7 @@ func WarmRestart(ctx goCtx.Context) {
 
 func rollCluster(ctx goCtx.Context, image string) {
 	clusterName := "warm-restart-cluster"
-	clusterNamespacedName := getNamespacedName(clusterName, namespace)
+	clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 	aeroCluster, err := getAeroClusterConfig(
 		clusterNamespacedName, image,

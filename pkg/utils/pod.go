@@ -141,7 +141,7 @@ func GetRackIDFromPodName(podName string) (*int, error) {
 	return &rackID, nil
 }
 
-// Exec executes a non interactive command on a pod.
+// Exec executes a non-interactive command on a pod.
 func Exec(podNamespacedName types.NamespacedName, container string, cmd []string, kubeClient *kubernetes.Clientset,
 	kubeConfig *rest.Config) (stdoutStr, stderrStr string, err error) {
 	request := kubeClient.

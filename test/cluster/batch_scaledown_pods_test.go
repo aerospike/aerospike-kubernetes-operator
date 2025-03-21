@@ -2,44 +2,53 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	set "github.com/deckarep/golang-set/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const batchScaleDownClusterName = "batch-scaledown"
 
 var _ = Describe("BatchScaleDown", func() {
 	ctx := goctx.TODO()
+	clusterName := fmt.Sprintf(batchScaleDownClusterName+"-%d", GinkgoParallelProcess())
+	clusterNamespacedName := test.GetNamespacedName(
+		clusterName, namespace,
+	)
+
+	AfterEach(
+		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+		},
+	)
 
 	Context("When doing valid operations", func() {
-		clusterNamespacedName := getNamespacedName(
-			batchScaleDownClusterName, namespace,
-		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
-
 		BeforeEach(
 			func() {
-				aeroCluster = createNonSCDummyAerospikeCluster(clusterNamespacedName, 8)
+				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 8)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-			},
-		)
-
-		AfterEach(
-			func() {
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -89,25 +98,15 @@ var _ = Describe("BatchScaleDown", func() {
 	// TODO: Do we need to add all the invalid operation test-cases here?
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
 	Context("When doing invalid operations", func() {
-		clusterNamespacedName := getNamespacedName(
-			batchScaleDownClusterName, namespace,
-		)
-		aeroCluster := &asdbv1.AerospikeCluster{}
 
 		BeforeEach(
 			func() {
-				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 8)
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 8)
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 				err := deployCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
-			},
-		)
-
-		AfterEach(
-			func() {
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -187,7 +186,7 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 		}
 
 		return true
-	}, getTimeout(aeroCluster.Spec.Size), 2*time.Second).Should(BeTrue())
+	}, getTimeout(aeroCluster.Spec.Size), 20*time.Second).Should(BeTrue())
 }
 
 func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatchSize, rackID int) {
@@ -224,7 +223,7 @@ func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatc
 		pkgLog.Info("Batch scale-down finished for deleted rack", "rack", rackID)
 
 		return true
-	}, getTimeout(aeroCluster.Spec.Size), 2*time.Second).Should(BeTrue())
+	}, getTimeout(aeroCluster.Spec.Size), 20*time.Second).Should(BeTrue())
 }
 
 func podsPerRack(size, racks int) []int {

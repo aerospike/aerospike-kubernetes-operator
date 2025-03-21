@@ -103,7 +103,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/junit.xml', keepLongStdio: true
+            junit testResults: '**/junit*.xml', keepLongStdio: true
         }
         cleanup {
             script {

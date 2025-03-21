@@ -70,7 +70,7 @@ func waitForAerospikeCluster(
 			if err != nil {
 				if errors.IsNotFound(err) {
 					pkgLog.Info(
-						"Waiting for availability of %s AerospikeCluster\n",
+						"Waiting for availability of AerospikeCluster\n",
 						"name", aeroCluster.Name,
 					)
 
@@ -710,11 +710,16 @@ func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) 
 	return nil
 }
 
-func cleanupPVC(k8sClient client.Client, ns string) error {
+func cleanupPVC(k8sClient client.Client, ns, clName string) error {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	clLabels := map[string]string{"app": "aerospike-cluster"}
 	labelSelector := labels.SelectorFromSet(clLabels)
+
+	if clName != "" {
+		labelSelector = labels.SelectorFromSet(operatorUtils.LabelsForAerospikeCluster(clName))
+	}
+
 	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
 
 	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
@@ -879,11 +884,4 @@ func getGitRepoRootPath() (string, error) {
 	}
 
 	return strings.TrimSpace(string(path)), nil
-}
-
-func getNamespacedName(name, namespace string) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
-	}
 }

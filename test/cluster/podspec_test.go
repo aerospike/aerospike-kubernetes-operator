@@ -10,9 +10,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var (
@@ -26,11 +28,8 @@ var _ = Describe(
 	"PodSpec", func() {
 
 		ctx := goctx.TODO()
-
-		clusterName := "podspec"
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
-		)
+		clusterName := fmt.Sprintf("podspec-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 		sidecar1 := corev1.Container{
 			Name:  "nginx1",
@@ -94,13 +93,14 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 				It(
@@ -194,11 +194,6 @@ var _ = Describe(
 
 						By("Adding the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.Sidecars = append(
 							aeroCluster.Spec.PodSpec.Sidecars, sidecar2,
 						)
@@ -208,11 +203,6 @@ var _ = Describe(
 
 						By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.Sidecars[1].Command = []string{
 							"sh", "-c", "sleep 3600",
 						}
@@ -221,11 +211,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Removing all the containers")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{}
 
@@ -280,11 +265,6 @@ var _ = Describe(
 
 						By("Updating the container2")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
 							"sh", "-c", "echo The app is running; sleep 5",
 						}
@@ -293,11 +273,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Removing all the containers")
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
 						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{}
@@ -381,11 +356,6 @@ var _ = Describe(
 
 						By("Updating container image and affinity together")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						// Update image
 						newImage := "nginx:1.21.4"
 						aeroCluster.Spec.PodSpec.Sidecars[0].Image = newImage
@@ -459,7 +429,7 @@ var _ = Describe(
 					"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.5"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						customRegistry := getEnvVar(customInitRegistryEnvVar)
 						customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
@@ -479,8 +449,6 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Using registry, namespace and name in CR")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
@@ -494,8 +462,6 @@ var _ = Describe(
 						)
 
 						By("Using envVar registry, namespace and name")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Empty imageRegistry, should use operator envVar docker.io
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
@@ -516,7 +482,7 @@ var _ = Describe(
 					func() {
 						operatorEnvVarRegistry := "docker.io"
 						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.5"
+						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 						By("Using incorrect registry namespace in CR")
@@ -533,8 +499,6 @@ var _ = Describe(
 						)
 
 						By("Using correct registry namespace in CR")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Nil ImageRegistryNamespace, should use operator envVar aerospike
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil

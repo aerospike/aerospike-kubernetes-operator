@@ -10,10 +10,12 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -22,6 +24,9 @@ var _ = Describe(
 			backupService *asdbv1beta1.AerospikeBackupService
 			err           error
 		)
+
+		backupServiceName := fmt.Sprintf(name+"-%d", GinkgoParallelProcess())
+		backupServiceNamespacedName := test.GetNamespacedName(backupServiceName, namespace)
 
 		AfterEach(func() {
 			Expect(DeleteBackupService(k8sClient, backupService)).ToNot(HaveOccurred())
@@ -32,7 +37,7 @@ var _ = Describe(
 				It("Should fail when wrong format backup service config is given", func() {
 					badConfig, gErr := getWrongBackupServiceConfBytes()
 					Expect(gErr).ToNot(HaveOccurred())
-					backupService = newBackupServiceWithConfig(badConfig)
+					backupService = newBackupServiceWithConfig(backupServiceNamespacedName, badConfig)
 
 					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).To(HaveOccurred())
@@ -45,7 +50,7 @@ var _ = Describe(
 					configBytes, mErr := json.Marshal(configMap)
 					Expect(mErr).ToNot(HaveOccurred())
 
-					backupService = newBackupServiceWithConfig(configBytes)
+					backupService = newBackupServiceWithConfig(backupServiceNamespacedName, configBytes)
 
 					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).To(HaveOccurred())
@@ -53,7 +58,7 @@ var _ = Describe(
 				})
 
 				It("Should fail when wrong image is given", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					backupService.Spec.Image = "wrong-image"
@@ -63,7 +68,7 @@ var _ = Describe(
 				})
 
 				It("Should fail when backup service version is less than 3.0.0", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					backupService.Spec.Image = BackupServiceVersion2Image
@@ -74,13 +79,13 @@ var _ = Describe(
 				})
 
 				It("Should fail when backup service image version is downgraded to 2.0", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					err = DeployBackupService(k8sClient, backupService)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Downgrading image version to 2.0")
-					backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+					backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					backupService.Spec.Image = BackupServiceVersion2Image
@@ -91,7 +96,7 @@ var _ = Describe(
 				})
 
 				It("Should fail when duplicate volume names are given in secrets", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					secretCopy := backupService.Spec.SecretMounts[0]
 					backupService.Spec.SecretMounts = append(backupService.Spec.SecretMounts, secretCopy)
@@ -121,7 +126,7 @@ var _ = Describe(
 					configBytes, mErr := json.Marshal(configMap)
 					Expect(mErr).ToNot(HaveOccurred())
 
-					backupService = newBackupServiceWithConfig(configBytes)
+					backupService = newBackupServiceWithConfig(backupServiceNamespacedName, configBytes)
 
 					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
 					Expect(err).To(HaveOccurred())
@@ -145,7 +150,7 @@ var _ = Describe(
 					configBytes, mErr := json.Marshal(configMap)
 					Expect(mErr).ToNot(HaveOccurred())
 
-					backupService = newBackupServiceWithConfig(configBytes)
+					backupService = newBackupServiceWithConfig(backupServiceNamespacedName, configBytes)
 
 					err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
 					Expect(err).To(HaveOccurred())
@@ -154,7 +159,7 @@ var _ = Describe(
 				})
 
 				It("Should fail when adding reserved label", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 					backupService.Spec.PodSpec.ObjectMeta.Labels = map[string]string{
 						asdbv1.AerospikeAppLabel: "test",
@@ -164,7 +169,7 @@ var _ = Describe(
 				})
 
 				It("Should fail when resources.request exceeding resources.limit", func() {
-					backupService, err = NewBackupService()
+					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					requestMem := resource.MustParse("3Gi")
@@ -192,7 +197,7 @@ var _ = Describe(
 
 		Context("When doing Valid operations", func() {
 			It("Should deploy backup service components when correct backup config is given", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -200,7 +205,7 @@ var _ = Describe(
 
 			It("Should restart backup service deployment pod when static fields are changed in backup service "+
 				"config", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -212,7 +217,7 @@ var _ = Describe(
 				PodUID := podList.Items[0].ObjectMeta.UID
 
 				// Get backup service object
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Change static fields")
@@ -229,7 +234,7 @@ var _ = Describe(
 			})
 
 			It("Should do hot-reload when dynamic fields are changed in backup service config", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				backupService.Spec.Service = &asdbv1beta1.Service{Type: corev1.ServiceTypeLoadBalancer}
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
@@ -242,7 +247,7 @@ var _ = Describe(
 				PodUID := podList.Items[0].ObjectMeta.UID
 
 				// Get backup service object
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Change dynamic fields")
@@ -265,7 +270,7 @@ var _ = Describe(
 			})
 
 			It("Should restart backup service deployment pod when pod spec is changed", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -277,7 +282,7 @@ var _ = Describe(
 				PodUID := podList.Items[0].ObjectMeta.UID
 
 				// Get backup service object
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change Pod spec
@@ -299,17 +304,17 @@ var _ = Describe(
 			})
 
 			It("Should change K8s service type when service type is changed in CR", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				svc, sErr := getBackupK8sServiceObj(k8sClient, name, namespace)
+				svc, sErr := getBackupK8sServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(sErr).ToNot(HaveOccurred())
 				Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeClusterIP))
 
 				// Get backup service object
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change service type
@@ -318,7 +323,7 @@ var _ = Describe(
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				svc, err = getBackupK8sServiceObj(k8sClient, name, namespace)
+				svc, err = getBackupK8sServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 
@@ -330,31 +335,31 @@ var _ = Describe(
 				labels := map[string]string{"label-test-1": "test-1"}
 				annotations := map[string]string{"annotation-test-1": "test-1"}
 
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				backupService.Spec.PodSpec.ObjectMeta.Labels = labels
 				backupService.Spec.PodSpec.ObjectMeta.Annotations = annotations
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				validatePodObjectMeta(annotations, labels)
+				validatePodObjectMeta(annotations, labels, backupServiceNamespacedName)
 
 				By("Updating custom annotations and labels")
 				updatedLabels := map[string]string{"label-test-2": "test-2", "label-test-3": "test-3"}
 				updatedAnnotations := map[string]string{"annotation-test-2": "test-2", "annotation-test-3": "test-3"}
 
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				backupService.Spec.PodSpec.ObjectMeta.Labels = updatedLabels
 				backupService.Spec.PodSpec.ObjectMeta.Annotations = updatedAnnotations
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				validatePodObjectMeta(updatedAnnotations, updatedLabels)
+				validatePodObjectMeta(updatedAnnotations, updatedLabels, backupServiceNamespacedName)
 			})
 
 			It("Should add SchedulingPolicy in the backup service deployement pods", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Validating Affinity")
@@ -381,7 +386,7 @@ var _ = Describe(
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
@@ -390,7 +395,7 @@ var _ = Describe(
 			})
 
 			It("Should add resources and securityContext in the backup service container", func() {
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -414,16 +419,16 @@ var _ = Describe(
 				sc := &corev1.SecurityContext{Privileged: new(bool)}
 
 				By("Validating Resources")
-				updateBackupServiceResources(k8sClient, res)
+				updateBackupServiceResources(k8sClient, backupServiceNamespacedName, res)
 
 				By("Remove Resources")
-				updateBackupServiceResources(k8sClient, nil)
+				updateBackupServiceResources(k8sClient, backupServiceNamespacedName, nil)
 
 				By("Validating SecurityContext")
-				updateBackupServiceSecurityContext(k8sClient, sc)
+				updateBackupServiceSecurityContext(k8sClient, backupServiceNamespacedName, sc)
 
 				By("Remove SecurityContext")
-				updateBackupServiceSecurityContext(k8sClient, nil)
+				updateBackupServiceSecurityContext(k8sClient, backupServiceNamespacedName, nil)
 			})
 
 			It("Should deploy backup service with custom Service Account", func() {
@@ -434,7 +439,7 @@ var _ = Describe(
 					Expect(podList.Items[0].Spec.ServiceAccountName).Should(Equal(serviceAccount))
 				}
 
-				backupService, err = NewBackupService()
+				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
@@ -442,7 +447,7 @@ var _ = Describe(
 				validateSA(asdbv1beta1.AerospikeBackupServiceKey)
 
 				By("Update Service Account")
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				backupService.Spec.PodSpec.ServiceAccountName = "default"
@@ -452,7 +457,7 @@ var _ = Describe(
 				validateSA("default")
 
 				By("Revert back to previous Service Account")
-				backupService, err = getBackupServiceObj(k8sClient, name, namespace)
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
 				backupService.Spec.PodSpec.ServiceAccountName = ""
@@ -466,20 +471,22 @@ var _ = Describe(
 	},
 )
 
-func updateBackupServiceResources(k8sClient client.Client, res *corev1.ResourceRequirements) {
-	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+func updateBackupServiceResources(k8sClient client.Client, backupServiceNamespacedName types.NamespacedName,
+	res *corev1.ResourceRequirements) {
+	backupService, err := getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	backupService.Spec.PodSpec.ServiceContainerSpec.Resources = res
 	err = updateBackupService(k8sClient, backupService)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = validateBackupServiceResources(k8sClient, res)
+	err = validateBackupServiceResources(k8sClient, backupServiceNamespacedName, res)
 	Expect(err).ToNot(HaveOccurred())
 }
 
-func validateBackupServiceResources(k8sClient client.Client, res *corev1.ResourceRequirements) error {
-	deploy, err := getBackupServiceDeployment(k8sClient, name, namespace)
+func validateBackupServiceResources(k8sClient client.Client, backupServiceNamespacedName types.NamespacedName,
+	res *corev1.ResourceRequirements) error {
+	deploy, err := getBackupServiceDeployment(k8sClient, backupServiceNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -497,20 +504,22 @@ func validateBackupServiceResources(k8sClient client.Client, res *corev1.Resourc
 	return nil
 }
 
-func updateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.SecurityContext) {
-	backupService, err := getBackupServiceObj(k8sClient, name, namespace)
+func updateBackupServiceSecurityContext(k8sClient client.Client, backupServiceNamespacedName types.NamespacedName,
+	sc *corev1.SecurityContext) {
+	backupService, err := getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
 	backupService.Spec.PodSpec.ServiceContainerSpec.SecurityContext = sc
 	err = updateBackupService(k8sClient, backupService)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = validateBackupServiceSecurityContext(k8sClient, sc)
+	err = validateBackupServiceSecurityContext(k8sClient, backupServiceNamespacedName, sc)
 	Expect(err).ToNot(HaveOccurred())
 }
 
-func validateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.SecurityContext) error {
-	deploy, err := getBackupServiceDeployment(k8sClient, name, namespace)
+func validateBackupServiceSecurityContext(k8sClient client.Client, backupServiceNamespacedName types.NamespacedName,
+	sc *corev1.SecurityContext) error {
+	deploy, err := getBackupServiceDeployment(k8sClient, backupServiceNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -523,8 +532,8 @@ func validateBackupServiceSecurityContext(k8sClient client.Client, sc *corev1.Se
 	return nil
 }
 
-func validatePodObjectMeta(annotations, labels map[string]string) {
-	deploy, dErr := getBackupServiceDeployment(k8sClient, name, namespace)
+func validatePodObjectMeta(annotations, labels map[string]string, backupServiceNamespacedName types.NamespacedName) {
+	deploy, dErr := getBackupServiceDeployment(k8sClient, backupServiceNamespacedName)
 	Expect(dErr).ToNot(HaveOccurred())
 
 	By("Validating Annotations")

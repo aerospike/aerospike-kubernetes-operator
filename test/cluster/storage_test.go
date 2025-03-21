@@ -2,11 +2,13 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -37,14 +39,35 @@ import (
 var _ = Describe(
 	"StorageVolumes", func() {
 		ctx := goctx.Background()
-
-		clusterName := "storage"
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
+		var (
+			clusterNamespacedName types.NamespacedName
+			clusterName           string
 		)
+		suitecfg, _ := GinkgoConfiguration()
+		println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
 
 		Context(
 			"When adding cluster", func() {
+				BeforeEach(func() {
+					clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+					clusterNamespacedName = test.GetNamespacedName(
+						clusterName, namespace,
+					)
+				})
+
+				AfterEach(func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
+					err := deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				})
+
 				Context(
 					"When using volume", func() {
 						It(
@@ -176,9 +199,6 @@ var _ = Describe(
 									Expect(ok).To(BeTrue())
 									Expect(lab).To(Equal("labels"))
 								}
-								Expect(err).ShouldNot(HaveOccurred())
-
-								err = deleteCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ShouldNot(HaveOccurred())
 							},
 						)
@@ -388,6 +408,11 @@ var _ = Describe(
 
 		Context(
 			"When cluster is already deployed", func() {
+				clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+				clusterNamespacedName = test.GetNamespacedName(
+					clusterName, namespace,
+				)
+
 				BeforeEach(
 					func() {
 						aeroCluster := createDummyAerospikeCluster(
@@ -400,13 +425,16 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -479,10 +507,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								newAeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
@@ -553,10 +577,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								volumes := aeroCluster.Spec.Storage.Volumes
 								aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1.VolumeSource{
@@ -598,11 +618,6 @@ var _ = Describe(
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								va := asdbv1.VolumeAttachment{
 									ContainerName: containerName,
 									Path:          "/newpath",
@@ -615,20 +630,12 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{}
 								err = updateCluster(k8sClient, ctx, aeroCluster)

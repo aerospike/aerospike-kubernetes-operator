@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
@@ -35,13 +36,20 @@ var (
 var _ = Describe(
 	"ClusterService", func() {
 		ctx := goctx.TODO()
+		aeroCluster := &asdbv1.AerospikeCluster{}
+		AfterEach(
+			func() {
+				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			},
+		)
 		It(
 			"Validate LB created", func() {
 				By("DeployCluster with LB")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-create", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
@@ -50,19 +58,16 @@ var _ = Describe(
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			},
 		)
 
 		It(
 			"Validate LB can be updated", func() {
 				By("DeployCluster")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-invalid", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
@@ -70,15 +75,9 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("UpdateCluster with LB")
-				aeroCluster, err = getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer.ExternalTrafficPolicy = "Cluster"
 				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 			},
 		)
@@ -86,10 +85,10 @@ var _ = Describe(
 		It(
 			"Validate LB created in existing cluster", func() {
 				By("DeployCluster without LB")
-				clusterNamespacedName := getNamespacedName(
+				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-update", namespace,
 				)
-				aeroCluster := createDummyAerospikeCluster(
+				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
@@ -102,19 +101,13 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("UpdateCluster with LB")
-				aeroCluster, err = getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
 			},
 		)
 	},

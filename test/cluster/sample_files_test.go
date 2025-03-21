@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -171,14 +170,6 @@ func getSamplesFiles() ([]string, error) {
 }
 
 func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.AerospikeCluster, error) {
-	cmd := exec.Command("kubectl", "create", "-f", filePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
@@ -186,14 +177,16 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 
 	aeroCluster := &asdbv1.AerospikeCluster{}
 
-	if err := yaml.Unmarshal(data, aeroCluster); err != nil {
+	if err := yaml.UnmarshalStrict(data, aeroCluster); err != nil {
 		return aeroCluster, err
 	}
 
-	if err := waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-	); err != nil {
+	if !strings.Contains(filePath, "xdr") {
+		aeroCluster.Name = fmt.Sprintf("%s-%d", aeroCluster.Name, GinkgoParallelProcess())
+	}
+
+	// Deploy the cluster
+	if err := DeployCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return aeroCluster, err
 	}
 
