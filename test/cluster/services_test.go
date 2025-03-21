@@ -146,8 +146,10 @@ var _ = Describe(
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(svc.Annotations["test-annotation"]).To(Equal("test-value"))
+			Expect(svc.Annotations["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 			Expect(svc.Labels["test-label"]).To(Equal("test-value"))
-			Expect(svc.Labels["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
+			Expect(svc.Labels["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.Labels["app"]).To(Equal("aerospike-cluster"))
 
 			By("Updating headless service metadata")
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -170,8 +172,10 @@ var _ = Describe(
 			Expect(svc.Annotations).ToNot(HaveKey("test-annotation"))
 			Expect(svc.Labels).ToNot(HaveKey("test-label"))
 			Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
+			Expect(svc.Annotations["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 			Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
-			Expect(svc.Labels["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
+			Expect(svc.Labels["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.Labels["app"]).To(Equal("aerospike-cluster"))
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())

@@ -148,7 +148,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
 	// PodService defines additional configuration parameters for the pod service created to expose the
-	// Aerospike Cluster nodes outside the Kubernetes cluster. This service created only created when
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
 	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
 	// 'hostInternal', 'hostExternal', 'configuredIP'
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Service"

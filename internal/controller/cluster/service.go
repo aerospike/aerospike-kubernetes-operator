@@ -28,6 +28,19 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 
+	defaultAnnotations := map[string]string{
+		// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+		"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+	}
+	if headlessSvc.Metadata.Annotations != nil {
+		maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
+	}
+
+	aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+	if headlessSvc.Metadata.Labels != nil {
+		maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
+	}
+
 	err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
@@ -39,19 +52,6 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		}
 
 		r.Log.Info("Creating headless service for statefulSet")
-
-		defaultAnnotations := map[string]string{
-			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-		}
-		if headlessSvc.Metadata.Annotations != nil {
-			maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
-		}
-
-		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-		if headlessSvc.Metadata.Labels != nil {
-			maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
-		}
 
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -307,7 +307,7 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	return nil
 }
 
-func (r *SingleClusterReconciler) updateServicePorts(service *corev1.Service) bool {
+func (r *SingleClusterReconciler) areServicePortsUpdated(service *corev1.Service) bool {
 	servicePorts := r.getServicePorts()
 
 	servicePortsMap := make(map[string]int32)
@@ -449,7 +449,7 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
-func (r *SingleClusterReconciler) updateServiceMetadata(
+func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	service *corev1.Service,
 	metadata asdbv1.AerospikeObjectMeta,
 ) bool {
@@ -477,11 +477,11 @@ func (r *SingleClusterReconciler) updateServiceMetadata(
 func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
 	var needsUpdate bool
 
-	if r.updateServiceMetadata(service, metadata) {
+	if r.isServiceMetadataUpdated(service, metadata) {
 		needsUpdate = true
 	}
 
-	if r.updateServicePorts(service) {
+	if r.areServicePortsUpdated(service) {
 		needsUpdate = true
 	}
 
