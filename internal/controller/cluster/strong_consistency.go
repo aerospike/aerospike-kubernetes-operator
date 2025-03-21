@@ -1,11 +1,11 @@
 package cluster
 
 import (
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 	gosets "github.com/deckarep/golang-set/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	as "github.com/aerospike/aerospike-client-go/v8"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -52,7 +52,7 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 	for _, nsConfInterface := range nsList {
-		if asdbv1.IsNSSCEnabled(nsConfInterface.(map[string]interface{})) {
+		if asconfig.IsNSSCEnabled(nsConfInterface.(map[string]interface{})) {
 			specSCNamespaces.Add(nsConfInterface.(map[string]interface{})["name"].(string))
 		}
 	}

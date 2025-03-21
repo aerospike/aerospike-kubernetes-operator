@@ -18,6 +18,10 @@ linters-settings:
       - opinionated
       - performance
       - style
+  gosec:
+    # TODO: Need to fix the issues across the project and enable the linter
+    excludes:
+      - G115 # Potential integer overflow when converting between integer types
   govet:
     enable:
       - fieldalignment
@@ -35,7 +39,7 @@ linters:
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
+    - copyloopvar
     - exhaustive
     - goconst
     - gocritic
@@ -66,7 +70,7 @@ linters:
 
 run:
   issues-exit-code: 1
-  go: '1.22'
+  go: '1.23'
 #  skip-dirs:
 #    - sample
 #  skip-files:

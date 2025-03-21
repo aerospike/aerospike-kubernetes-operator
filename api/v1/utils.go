@@ -13,6 +13,7 @@ import (
 
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 const (
@@ -516,7 +517,7 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 
 	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 	for _, nsConfInterface := range nsList {
-		isEnabled := IsNSSCEnabled(nsConfInterface.(map[string]interface{}))
+		isEnabled := asconfig.IsNSSCEnabled(nsConfInterface.(map[string]interface{}))
 		if isEnabled {
 			return true
 		}
