@@ -59,10 +59,7 @@ var scheme = k8Runtime.NewScheme()
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	suitecfg, repcfg := GinkgoConfiguration()
-	suitecfg.Timeout = 10 * time.Hour
-	RunSpecs(t, "Cluster Suite", suitecfg, repcfg)
+	RunSpecs(t, "Cluster Suite")
 }
 
 func deleteAllClusters(namespace string) {

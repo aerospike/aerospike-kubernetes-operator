@@ -358,7 +358,7 @@ var _ = Describe(
 				validatePodObjectMeta(updatedAnnotations, updatedLabels, backupServiceNamespacedName)
 			})
 
-			It("Should add SchedulingPolicy in the backup service deployement pods", func() {
+			It("Should add SchedulingPolicy in the backup service deployment pods", func() {
 				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
