@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
@@ -417,60 +418,35 @@ func (v *VolumeSpec) isSafeChange(newVolume *VolumeSpec) bool {
 
 func validateStorageVolumeSource(volume *VolumeSpec) error {
 	source := volume.Source
+	sourceCount := 0
 
-	var sourceFound bool
 	if source.EmptyDir != nil {
-		sourceFound = true
+		sourceCount++
 	}
 
 	if source.Secret != nil {
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
-		}
-
-		sourceFound = true
+		sourceCount++
 	}
 
 	if source.ConfigMap != nil {
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
-		}
-
-		sourceFound = true
+		sourceCount++
 	}
 
 	if source.PersistentVolume != nil {
-		// Validate InitMethod
-		if source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock {
-			if volume.InitMethod == AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid init method %v for block volume: %v",
-					volume.InitMethod, volume,
-				)
-			}
+		sourceCount++
+	}
 
-			if volume.WipeMethod != AerospikeVolumeMethodBlkdiscard && volume.WipeMethod != AerospikeVolumeMethodDD {
-				return fmt.Errorf("invalid wipe method: %s for block volume: %s", volume.WipeMethod, volume.Name)
-			}
-		} else if source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem {
-			if volume.InitMethod != AerospikeVolumeMethodNone && volume.InitMethod != AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid init method %v for filesystem volume: %v",
-					volume.InitMethod, volume,
-				)
-			}
+	if sourceCount == 0 {
+		return fmt.Errorf("no volume source found")
+	}
 
-			if volume.WipeMethod != AerospikeVolumeMethodDeleteFiles {
-				return fmt.Errorf(
-					"invalid wipe method %s for filesystem volume: %s",
-					volume.WipeMethod, volume.Name,
-				)
-			}
-		}
+	if sourceCount > 1 {
+		return fmt.Errorf("can not specify more than 1 source")
+	}
 
+	if source.PersistentVolume != nil {
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode
-
 		if vm != v1.PersistentVolumeBlock &&
 			vm != v1.PersistentVolumeFilesystem {
 			return fmt.Errorf(
@@ -479,27 +455,55 @@ func validateStorageVolumeSource(volume *VolumeSpec) error {
 			)
 		}
 
-		// Validate accessModes
-		for _, am := range source.PersistentVolume.AccessModes {
-			if am != v1.ReadOnlyMany &&
-				am != v1.ReadWriteMany &&
-				am != v1.ReadWriteOnce {
+		// Validate InitMethod
+		if vm == v1.PersistentVolumeBlock {
+			// Validate the initialization method for the volume
+			validInitMethods := sets.New(AerospikeVolumeMethodDD, AerospikeVolumeMethodBlkdiscard, AerospikeVolumeMethodNone,
+				AerospikeVolumeMethodBlkdiscardWithHeaderCleanup)
+
+			if !validInitMethods.Has(volume.InitMethod) {
 				return fmt.Errorf(
-					"invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
-					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce,
+					"invalid init method %v for block volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+
+			// Validate the wipe method for the volume
+			validWipeMethods := sets.New(AerospikeVolumeMethodBlkdiscard, AerospikeVolumeMethodDD,
+				AerospikeVolumeMethodBlkdiscardWithHeaderCleanup)
+
+			if !validWipeMethods.Has(volume.WipeMethod) {
+				return fmt.Errorf(
+					"invalid wipe method %s for block volume: %s",
+					volume.WipeMethod, volume.Name,
+				)
+			}
+		} else {
+			validInitMethods := sets.New(AerospikeVolumeMethodNone, AerospikeVolumeMethodDeleteFiles)
+			if !validInitMethods.Has(volume.InitMethod) {
+				return fmt.Errorf(
+					"invalid init method %v for filesystem volume: %v",
+					volume.InitMethod, volume,
+				)
+			}
+
+			validWipeMethods := sets.New(AerospikeVolumeMethodDeleteFiles)
+			if !validWipeMethods.Has(volume.WipeMethod) {
+				return fmt.Errorf(
+					"invalid wipe method %s for filesystem volume: %s",
+					volume.WipeMethod, volume.Name,
 				)
 			}
 		}
 
-		if sourceFound {
-			return fmt.Errorf("can not specify more than 1 source")
+		// Validate accessModes
+		validAccessModes := sets.New(v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
+		for _, am := range source.PersistentVolume.AccessModes {
+			if !validAccessModes.Has(am) {
+				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
+					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
+			}
 		}
-
-		sourceFound = true
-	}
-
-	if !sourceFound {
-		return fmt.Errorf("no volume source found")
 	}
 
 	return nil
