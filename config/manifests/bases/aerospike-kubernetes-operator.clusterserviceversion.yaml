@@ -110,6 +110,10 @@ spec:
           In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
         displayName: Enable Dynamic Config Update
         path: enableDynamicConfigUpdate
+      - description: Settings for the ClusterIP type headless service created to discover
+          Aerospike Cluster nodes by pod IP
+        displayName: Headless Service
+        path: headlessService
       - description: Aerospike server image
         displayName: Server Image
         path: image
@@ -135,6 +139,11 @@ spec:
       - description: Paused flag is used to pause the reconciliation for the AerospikeCluster.
         displayName: Pause Reconcile
         path: paused
+      - description: |-
+          Settings for the NodePort type pod services created to discover both Aerospike pod ports and IP
+          addresses. This service is only created if `multiPodPerHost` is set to `true`.
+        displayName: Pod Service
+        path: podService
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec
