@@ -427,9 +427,6 @@ var _ = Describe(
 
 				It(
 					"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
-						operatorEnvVarRegistry := "docker.io"
-						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						customRegistry := getEnvVar(customInitRegistryEnvVar)
 						customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
@@ -471,8 +468,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						validateInitImage(
-							k8sClient, aeroCluster, operatorEnvVarRegistry,
-							operatorEnvVarRegistryNamespace, operatorEnvVarNameAndTag,
+							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
+							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
 						)
 					},
 				)
@@ -480,9 +477,6 @@ var _ = Describe(
 				It(
 					"Should be able to recover cluster after setting correct aerospike-init custom registry/namespace",
 					func() {
-						operatorEnvVarRegistry := "docker.io"
-						operatorEnvVarRegistryNamespace := "aerospike"
-						operatorEnvVarNameAndTag := "aerospike-kubernetes-init:2.2.4"
 						incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 						By("Using incorrect registry namespace in CR")
@@ -494,8 +488,8 @@ var _ = Describe(
 						Expect(err).Should(HaveOccurred())
 
 						validateInitImage(
-							k8sClient, aeroCluster, operatorEnvVarRegistry,
-							incorrectCustomRegistryNamespace, operatorEnvVarNameAndTag,
+							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
+							incorrectCustomRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
 						)
 
 						By("Using correct registry namespace in CR")
@@ -506,8 +500,8 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						validateInitImage(
-							k8sClient, aeroCluster, operatorEnvVarRegistry,
-							operatorEnvVarRegistryNamespace, operatorEnvVarNameAndTag,
+							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
+							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
 						)
 					},
 				)
