@@ -373,6 +373,7 @@ var _ = Describe(
 										aeroCluster := createDummyAerospikeCluster(
 											clusterNamespacedName, 2,
 										)
+
 										rackConf := asdbv1.RackConfig{
 											Racks: []asdbv1.Rack{
 												{ID: 2}, {ID: 2},
@@ -678,8 +679,8 @@ var _ = Describe(
 							func() {
 								aeroCluster := &asdbv1.AerospikeCluster{
 									ObjectMeta: metav1.ObjectMeta{
-										Name:      clusterName,
-										Namespace: namespace,
+										Name:      clusterNamespacedName.Name,
+										Namespace: clusterNamespacedName.Namespace,
 									},
 								}
 
@@ -768,6 +769,8 @@ var _ = Describe(
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 
 					By("Deploying cluster")
 					err = deployCluster(k8sClient, ctx, aeroCluster)
