@@ -32,7 +32,6 @@ var _ = Describe(
 		Context(
 			"When doing Invalid operations", func() {
 				It("Should fail when wrong format restore config is given", func() {
-					By("testing")
 					config := getRestoreConfigInMap(backupDataPath)
 
 					// change the format from a single element to slice
