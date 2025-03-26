@@ -18,11 +18,13 @@ package v1
 
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 )
 
 // SetupAerospikeClusterWebhookWithManager registers the webhook for AerospikeCluster in the manager.
 func SetupAerospikeClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeCluster{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1.AerospikeCluster{}).
 		WithDefaulter(&AerospikeClusterCustomDefaulter{}).
 		WithValidator(&AerospikeClusterCustomValidator{}).
 		Complete()
