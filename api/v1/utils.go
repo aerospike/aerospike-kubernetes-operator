@@ -35,8 +35,9 @@ const (
 
 const (
 	// Namespace keys.
-	confKeyNamespace = "namespaces"
-	ConfKeyTLSName   = "tls-name"
+	confKeyNamespace     = "namespaces"
+	ConfKeyTLSName       = "tls-name"
+	ConfKeyStorageEngine = "storage-engine"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
@@ -76,17 +77,6 @@ const (
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	AerospikeAPIVersion                            = "v1"
 )
-
-// ContainsString check whether list contains given string
-func ContainsString(list []string, ele string) bool {
-	for _, listEle := range list {
-		if strings.EqualFold(ele, listEle) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
 func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
@@ -236,7 +226,7 @@ func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 
 // IsSecurityEnabled tells if security is enabled in cluster
 // TODO: can an invalid map come here
-func IsSecurityEnabled(aerospikeConfig *AerospikeConfigSpec) (bool, error) {
+func IsSecurityEnabled(aerospikeConfig map[string]interface{}) (bool, error) {
 	if _, err := GetConfigContext(aerospikeConfig, "security"); err != nil {
 		if errors.Is(err, internalerrors.ErrNotFound) {
 			return false, nil
@@ -253,9 +243,9 @@ func IsSecurityEnabled(aerospikeConfig *AerospikeConfigSpec) (bool, error) {
 }
 
 func IsAttributeEnabled(
-	aerospikeConfigSpec *AerospikeConfigSpec, context, key string,
+	aerospikeConfig map[string]interface{}, context, key string,
 ) (bool, error) {
-	confMap, err := GetConfigContext(aerospikeConfigSpec, context)
+	confMap, err := GetConfigContext(aerospikeConfig, context)
 	if err != nil {
 		return false, err
 	}
@@ -271,13 +261,11 @@ func IsAttributeEnabled(
 }
 
 func GetConfigContext(
-	aerospikeConfigSpec *AerospikeConfigSpec, context string,
+	aerospikeConfig map[string]interface{}, context string,
 ) (map[string]interface{}, error) {
-	if aerospikeConfigSpec == nil {
-		return nil, fmt.Errorf("missing aerospike configuration in cluster state")
+	if aerospikeConfig == nil {
+		return nil, fmt.Errorf("missing aerospike configuration")
 	}
-
-	aerospikeConfig := aerospikeConfigSpec.Value
 
 	if contextConfigMap, ok := aerospikeConfig[context]; ok {
 		if validConfigMap, ok := contextConfigMap.(map[string]interface{}); ok {
