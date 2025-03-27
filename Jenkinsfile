@@ -122,8 +122,8 @@ pipeline {
                                     }
                                     def smokeTest = changedFiles.any {
                                         (it.startsWith('pkg/') && !it.contains('backup-service/') && !it.contains('utils/')) ||
-                                        (it.startsWith('test/') && !it.contains('cluster/') && !it.contains('/backup') &&
-                                        !it.contains('restore/')) ||
+                                        (it.startsWith('test/') && !it.contains('cluster/') && !it.contains('backup/') &&
+                                        !it.contains('restore/') && !it.contains('backup_service/')) ||
                                         (!it.startsWith('helm-charts/') && !it.endsWith('.go'))
                                     }
                                     def sampleFilesTest = changedFiles.any {
@@ -136,11 +136,6 @@ pipeline {
                                     env.RUN_SMOKE_TEST = smokeTest.toString()
                                     env.RUN_SAMPLE_FILES_TEST = sampleFilesTest.toString()
 
-                                    echo "cluster test: ${env.RUN_CLUSTER_TEST}"
-                                    echo "backup test: ${env.RUN_BACKUP_TEST}"
-                                    echo "all test: ${env.RUN_ALL_TEST}"
-                                    echo "smoke test: ${env.RUN_SMOKE_TEST}"
-                                    echo "sample test: ${env.RUN_SAMPLE_FILES_TEST}"
                                 }
                             }
                         }
