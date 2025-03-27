@@ -3,6 +3,8 @@ package cluster
 import (
 	"bufio"
 	goctx "context"
+	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"regexp"
 	"strings"
 
@@ -20,18 +22,20 @@ var _ = Describe(
 		ctx := goctx.TODO()
 		Context(
 			"HostNetwork", func() {
-				clusterName := "host-network-cluster"
+				clusterName := fmt.Sprintf("host-network-cluster-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := createAerospikeClusterPost640(
-					clusterNamespacedName, 2, latestImage,
-				)
-				aeroCluster.Spec.PodSpec.HostNetwork = true
-				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+
 						_ = deleteCluster(k8sClient, ctx, aeroCluster)
 						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
@@ -39,6 +43,12 @@ var _ = Describe(
 
 				It(
 					"Should not work with MultiPodPerHost enabled", func() {
+						aeroCluster := createAerospikeClusterPost640(
+							clusterNamespacedName, 2, latestImage,
+						)
+						aeroCluster.Spec.PodSpec.HostNetwork = true
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
+
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 					},
@@ -46,11 +56,17 @@ var _ = Describe(
 
 				It(
 					"Should verify hostNetwork flag updates", func() {
+						aeroCluster := createAerospikeClusterPost640(
+							clusterNamespacedName, 2, latestImage,
+						)
+
 						By("Deploying cluster, Should not advertise node address when off")
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
 						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
