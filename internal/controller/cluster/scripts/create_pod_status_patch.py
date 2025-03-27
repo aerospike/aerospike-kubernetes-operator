@@ -355,7 +355,7 @@ def get_namespace_volume_paths(pod_name, config):
 
     for namespace in namespaces:
 
-        storage_engine = namespace["storage-engine"]
+        storage_engine = namespace[asdbv1.ConfigStorageEngine]
         device_type = storage_engine["type"]
         if device_type == "device":
 
