@@ -101,6 +101,7 @@ func securityContextTest(
 	It(
 		"Validate SecurityContext updated", func() {
 			By("DeployCluster")
+
 			aeroCluster := createDummyAerospikeCluster(
 				clusterNamespacedNameUpdate, 2,
 			)
