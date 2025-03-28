@@ -1022,8 +1022,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 			}
 
 			namespaceFound = true
-			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
-			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 			statusDevices := sets.Set[string]{}
 			specDevices := sets.Set[string]{}
@@ -1115,7 +1115,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})["name"],
 			)
 
-			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 			if statusStorage["devices"] != nil {
 				var statusDevices []string
@@ -1237,8 +1237,8 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 			}
 
 			namespaceFound = true
-			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
-			statusStorage := statusNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 			var specDevices []string
 
@@ -1275,7 +1275,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 				"Namespace added",
 			)
 
-			specStorage := specNamespace.(map[string]interface{})["storage-engine"].(map[string]interface{})
+			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 			if specStorage["type"] == "device" && specStorage["devices"] != nil {
 				var specDevices []string
 				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
