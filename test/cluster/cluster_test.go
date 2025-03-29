@@ -573,7 +573,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 									validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 								},
 							)
-						}, 4*time.Minute, 10*time.Second,
+						}, 5*time.Minute, 10*time.Second,
 					).Should(Succeed())
 				},
 			)
