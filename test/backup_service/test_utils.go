@@ -28,7 +28,7 @@ const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
 	timeout   = 2 * time.Minute
-	interval  = 2 * time.Second
+	interval  = 10 * time.Second
 	name      = "backup-service"
 	namespace = "test"
 )
@@ -37,13 +37,13 @@ var testCtx = context.TODO()
 
 var pkgLog = ctrl.Log.WithName("aerospikebackupservice")
 
-func NewBackupService() (*asdbv1beta1.AerospikeBackupService, error) {
+func NewBackupService(backupServiceNamespaceName types.NamespacedName) (*asdbv1beta1.AerospikeBackupService, error) {
 	configBytes, err := getBackupServiceConfBytes()
 	if err != nil {
 		return nil, err
 	}
 
-	backupService := newBackupServiceWithEmptyConfig()
+	backupService := newBackupServiceWithEmptyConfig(backupServiceNamespaceName)
 	backupService.Spec.Config = runtime.RawExtension{
 		Raw: configBytes,
 	}
@@ -51,8 +51,9 @@ func NewBackupService() (*asdbv1beta1.AerospikeBackupService, error) {
 	return backupService, nil
 }
 
-func newBackupServiceWithConfig(config []byte) *asdbv1beta1.AerospikeBackupService {
-	backupService := newBackupServiceWithEmptyConfig()
+func newBackupServiceWithConfig(backupServiceNamespaceName types.NamespacedName,
+	config []byte) *asdbv1beta1.AerospikeBackupService {
+	backupService := newBackupServiceWithEmptyConfig(backupServiceNamespaceName)
 	backupService.Spec.Config = runtime.RawExtension{
 		Raw: config,
 	}
@@ -60,11 +61,12 @@ func newBackupServiceWithConfig(config []byte) *asdbv1beta1.AerospikeBackupServi
 	return backupService
 }
 
-func newBackupServiceWithEmptyConfig() *asdbv1beta1.AerospikeBackupService {
+func newBackupServiceWithEmptyConfig(
+	backupServiceNamespaceName types.NamespacedName) *asdbv1beta1.AerospikeBackupService {
 	return &asdbv1beta1.AerospikeBackupService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      backupServiceNamespaceName.Name,
+			Namespace: backupServiceNamespaceName.Namespace,
 		},
 		Spec: asdbv1beta1.AerospikeBackupServiceSpec{
 			Image: BackupServiceImage,
@@ -82,21 +84,22 @@ func newBackupServiceWithEmptyConfig() *asdbv1beta1.AerospikeBackupService {
 	}
 }
 
-func getBackupServiceObj(cl client.Client, name, namespace string) (*asdbv1beta1.AerospikeBackupService,
-	error) {
+func getBackupServiceObj(cl client.Client,
+	backupServiceNamespacedName types.NamespacedName) (*asdbv1beta1.AerospikeBackupService, error) {
 	var backupService asdbv1beta1.AerospikeBackupService
 
-	if err := cl.Get(testCtx, types.NamespacedName{Name: name, Namespace: namespace}, &backupService); err != nil {
+	if err := cl.Get(testCtx, backupServiceNamespacedName, &backupService); err != nil {
 		return nil, err
 	}
 
 	return &backupService, nil
 }
 
-func getBackupK8sServiceObj(cl client.Client, name, namespace string) (*corev1.Service, error) {
+func getBackupK8sServiceObj(cl client.Client,
+	backupServiceNamespacedName types.NamespacedName) (*corev1.Service, error) {
 	var svc corev1.Service
 
-	if err := cl.Get(testCtx, types.NamespacedName{Name: name, Namespace: namespace}, &svc); err != nil {
+	if err := cl.Get(testCtx, backupServiceNamespacedName, &svc); err != nil {
 		return nil, err
 	}
 
@@ -134,7 +137,7 @@ func waitForBackupService(cl client.Client, backupService *asdbv1beta1.Aerospike
 	}
 
 	if err := wait.PollUntilContextTimeout(
-		testCtx, 1*time.Second,
+		testCtx, 5*time.Second,
 		timeout, false, func(ctx context.Context) (bool, error) {
 			if err := cl.Get(ctx, namespaceName, backupService); err != nil {
 				return false, nil
@@ -284,7 +287,7 @@ func DeleteBackupService(
 
 	// Wait for all the dependent resources to be garbage collected by k8s
 	for {
-		_, err := getBackupServiceObj(k8sClient, backService.Name, backService.Namespace)
+		_, err := getBackupServiceObj(k8sClient, utils.GetNamespacedName(backService))
 
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
@@ -350,12 +353,10 @@ func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupSer
 	return backupSvcConfig, nil
 }
 
-func getBackupServiceDeployment(k8sClient client.Client, name, namespace string) (*app.Deployment, error) {
+func getBackupServiceDeployment(k8sClient client.Client,
+	backupServiceNamespacedName types.NamespacedName) (*app.Deployment, error) {
 	deployment := &app.Deployment{}
-	if err := k8sClient.Get(context.TODO(), types.NamespacedName{
-		Namespace: namespace,
-		Name:      name,
-	}, deployment); err != nil {
+	if err := k8sClient.Get(context.TODO(), backupServiceNamespacedName, deployment); err != nil {
 		return nil, err
 	}
 

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -9,10 +10,12 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -21,8 +24,8 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-				clusterName := "sts-storage"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("sts-storage-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -37,13 +40,18 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
+
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -186,11 +194,6 @@ var _ = Describe(
 							BeTrue(), "Unable to find volume",
 						)
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",
 							Source: asdbv1.VolumeSource{
@@ -220,11 +223,6 @@ var _ = Describe(
 						)
 
 						// Delete
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						newAeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -343,10 +341,6 @@ var _ = Describe(
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						volume := asdbv1.VolumeSpec{
 							Name: "newvolume",

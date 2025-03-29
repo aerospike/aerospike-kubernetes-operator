@@ -1204,7 +1204,7 @@ var _ = Describe(
 					"When cluster is not deployed", func() {
 
 						clusterName := "ac-invalid"
-						clusterNamespacedName := getNamespacedName(
+						clusterNamespacedName := test.GetNamespacedName(
 							clusterName, namespace,
 						)
 
@@ -1494,13 +1494,21 @@ var _ = Describe(
 				)
 				Context(
 					"When cluster is deployed", func() {
+						aeroCluster := &asdbv1.AerospikeCluster{}
+						AfterEach(
+							func() {
+								_ = deleteCluster(k8sClient, ctx, aeroCluster)
+								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+							},
+						)
+
 						It(
 							"SecurityEnable: should enable security in running cluster",
 							func() {
 								var accessControl *asdbv1.AerospikeAccessControlSpec
 
 								clusterName := "ac-no-security"
-								clusterNamespacedName := getNamespacedName(
+								clusterNamespacedName := test.GetNamespacedName(
 									clusterName, namespace,
 								)
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
@@ -1516,7 +1524,7 @@ var _ = Describe(
 								aerospikeConfigSpec.setEnableSecurity(false)
 
 								// Save cluster variable as well for cleanup.
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1582,14 +1590,6 @@ var _ = Describe(
 								if err != nil {
 									Fail("Security should have enabled successfully")
 								}
-
-								if aeroCluster != nil {
-									err = deleteCluster(
-										k8sClient, ctx,
-										aeroCluster,
-									)
-									Expect(err).ToNot(HaveOccurred())
-								}
 							},
 						)
 
@@ -1597,7 +1597,7 @@ var _ = Describe(
 							"AccessControlLifeCycle", func() {
 
 								clusterName := "ac-lifecycle"
-								clusterNamespacedName := getNamespacedName(
+								clusterNamespacedName := test.GetNamespacedName(
 									clusterName, namespace,
 								)
 
@@ -1663,7 +1663,7 @@ var _ = Describe(
 
 								aerospikeConfigSpec.setEnableSecurity(true)
 
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1708,22 +1708,9 @@ var _ = Describe(
 										},
 									},
 								}
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aeroCluster.Spec.AerospikeAccessControl = &accessControl
 
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, &accessControl,
-									aerospikeConfigSpec,
-								)
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1983,13 +1970,6 @@ var _ = Describe(
 								) {
 									Fail("QuotaParamsSpecifiedButFlagIsOff should have failed")
 								}
-
-								if aeroCluster != nil {
-									err = deleteCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).ToNot(HaveOccurred())
-								}
 							},
 						)
 					},
@@ -1998,8 +1978,22 @@ var _ = Describe(
 		)
 
 		Context("Using default-password-file", func() {
-			var clusterNamespacedName = getNamespacedName(
+			var clusterNamespacedName = test.GetNamespacedName(
 				"default-password-file", namespace,
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				},
 			)
 
 			It("Should fail if volume is not present for default-password-file", func() {
@@ -2085,10 +2079,7 @@ var _ = Describe(
 					pkgLog.Info("Connected to cluster", "nodes", nodes, "pass", pass)
 
 					return nil
-				}, 5*time.Minute).ShouldNot(HaveOccurred())
-
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
+				}, 5*time.Minute, 10*time.Second).ShouldNot(HaveOccurred())
 
 				// Set correct secret name for admin user credentials.
 				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = test.AuthSecretName
@@ -2101,13 +2092,6 @@ var _ = Describe(
 					k8sClient, ctx, clusterNamespacedName, 1,
 				)
 				Expect(err).ToNot(HaveOccurred())
-
-				if aeroCluster != nil {
-					err = deleteCluster(
-						k8sClient, ctx, aeroCluster,
-					)
-					Expect(err).ToNot(HaveOccurred())
-				}
 			})
 		})
 	},

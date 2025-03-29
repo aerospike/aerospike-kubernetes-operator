@@ -7,11 +7,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 const (
@@ -23,12 +25,14 @@ var _ = Describe(
 		ctx := context.TODO()
 		Context(
 			"Migrate pods from K8s blocked nodes", func() {
-				clusterName := "k8s-node-block-cluster"
-				clusterNamespacedName := getNamespacedName(clusterName, namespace)
-				podName := clusterName + "-2-0"
-				aeroCluster := &asdbv1.AerospikeCluster{}
-				oldK8sNode := ""
-				oldPvcInfo := make(map[string]types.UID)
+				var (
+					podName    string
+					oldK8sNode string
+					oldPvcInfo map[string]types.UID
+				)
+
+				clusterName := fmt.Sprintf("k8s-node-block-cluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 				var (
 					err   error
@@ -37,7 +41,7 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster = createDummyAerospikeCluster(
+						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 
@@ -64,11 +68,14 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig = rackConf
 
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
 						err = deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
+						podName = clusterName + "-2-0"
 						pod := &corev1.Pod{}
-						err = k8sClient.Get(ctx, getNamespacedName(podName, namespace), pod)
+						err = k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
 						oldK8sNode = pod.Spec.NodeName
 						oldPvcInfo, err = extractPodPVC(pod)
@@ -78,15 +85,23 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
 				It(
 					"Should migrate the pods from blocked nodes to other nodes", func() {
 						By("Blocking the k8s node")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -101,7 +116,7 @@ var _ = Describe(
 					"Should migrate the pods from blocked nodes to other nodes along with rolling "+
 						"restart", func() {
 						By("Blocking the k8s node and updating aerospike config")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] =
@@ -118,7 +133,7 @@ var _ = Describe(
 				It(
 					"Should migrate the pods from blocked nodes to other nodes along with upgrade", func() {
 						By("Blocking the k8s node and updating aerospike image")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.Image = availableImage1
@@ -135,7 +150,7 @@ var _ = Describe(
 					"Should migrate the pods from blocked nodes to other nodes and delete corresponding"+
 						"local PVCs", func() {
 						By("Blocking the k8s node")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
@@ -160,7 +175,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Blocking the k8s node and setting maxIgnorablePod to 1")
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 						maxIgnorablePods := intstr.FromInt32(1)
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorablePods
@@ -188,7 +203,7 @@ func extractPodPVC(pod *corev1.Pod) (map[string]types.UID, error) {
 
 	for p := range pvcUIDMap {
 		pvc := &corev1.PersistentVolumeClaim{}
-		if err := k8sClient.Get(context.TODO(), getNamespacedName(p, pod.Namespace), pvc); err != nil {
+		if err := k8sClient.Get(context.TODO(), test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
 			return nil, err
 		}
 
@@ -202,7 +217,7 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 	pvc := &corev1.PersistentVolumeClaim{}
 
 	for pvcName, pvcUID := range pvcUIDMap {
-		pvcNamespacesName := getNamespacedName(
+		pvcNamespacesName := test.GetNamespacedName(
 			pvcName, namespace,
 		)
 
@@ -225,7 +240,7 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 func validatePodAndPVCMigration(ctx context.Context, podName, oldK8sNode string,
 	oldPvcInfo map[string]types.UID, shouldDelete bool) {
 	pod := &corev1.Pod{}
-	err := k8sClient.Get(ctx, getNamespacedName(podName, namespace), pod)
+	err := k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(pod.Spec.NodeName).ToNot(Equal(oldK8sNode))
 

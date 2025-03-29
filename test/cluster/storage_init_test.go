@@ -29,12 +29,12 @@ const (
 	storageInitTestClusterSize = 2
 	magicBytes                 = "aero"
 	sidecarContainerName       = "tomcat"
-	clusterName                = "storage-init"
 )
 
 var _ = Describe(
 	"StorageInit", func() {
 		ctx := goctx.TODO()
+
 		Context(
 			"When doing valid operations", func() {
 
@@ -43,6 +43,7 @@ var _ = Describe(
 				updatedCleanupThreads := 5
 
 				podSpec := asdbv1.AerospikePodSpec{
+					MultiPodPerHost: ptr.To(true),
 					Sidecars: []corev1.Container{
 						{
 							Name:  sidecarContainerName,
@@ -58,8 +59,24 @@ var _ = Describe(
 						AerospikeInitContainerSpec{},
 				}
 
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
 				)
 
 				It(
@@ -141,7 +158,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
+						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
@@ -159,9 +176,6 @@ var _ = Describe(
 						By("Updating the cluster")
 
 						err = k8sClient.Update(ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -190,7 +204,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
+						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
@@ -287,15 +301,12 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
+						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
 
 						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -306,7 +317,8 @@ var _ = Describe(
 			"When doing invalid operations", func() {
 
 				threeVar := 3
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -330,7 +342,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
+						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
@@ -345,7 +357,8 @@ var _ = Describe(
 		Context(
 			"When doing PVC change", func() {
 
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				initVolName := "ns"
@@ -375,13 +388,16 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
+						err := deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -409,7 +425,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						pvcNamespacedName := getNamespacedName(
+						pvcNamespacedName := test.GetNamespacedName(
 							deletedPVC, namespace,
 						)
 
@@ -418,10 +434,7 @@ var _ = Describe(
 
 						By("Setting resources to schedule the pods")
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -473,9 +486,6 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						checkLabel := aeroCluster.Labels["checkLabel"]
 						Expect(checkLabel).To(Equal("true"))
 
@@ -508,10 +518,7 @@ var _ = Describe(
 
 						By("Setting resources to schedule the pods")
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -625,7 +632,7 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not", storage.Volumes[volumeIndex].Name,
+					"expected volume %s%s but is not", storage.Volumes[volumeIndex].Name,
 					expectedStr,
 				)
 			}
@@ -736,22 +743,56 @@ func writeDataToVolumeFileSystem(
 
 func hasDataBlock(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
+	cmd := []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path)}
 
-	cmd := []string{
-		"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path),
+	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
+	retryInterval := 20 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if err == nil {
+			return strings.HasPrefix(stdout, magicBytes)
+		}
+
+		if strings.Contains(stdout, "No such file or directory") {
+			return false
+		}
+
+		// Log the error and wait before retrying
+		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
 	}
-	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
-	return strings.HasPrefix(stdout, magicBytes)
+	fmt.Println("Max retries reached. Returning false.")
+
+	return false
 }
 
 func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
-
 	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
-	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
-	return strings.HasPrefix(stdout, magicBytes)
+	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
+	retryInterval := 20 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if err == nil {
+			return strings.HasPrefix(stdout, magicBytes)
+		}
+
+		if strings.Contains(stdout, "No such file or directory") {
+			return false
+		}
+
+		// Log the error and wait before retrying
+		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
+	}
+
+	fmt.Println("Max retries reached. Returning false.")
+
+	return false
 }
 
 // getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage.

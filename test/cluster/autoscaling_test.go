@@ -11,6 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe("AutoScaler", func() {
@@ -18,7 +21,7 @@ var _ = Describe("AutoScaler", func() {
 
 	Context("When doing scale operations", func() {
 		clusterName := "autoscale"
-		clusterNamespacedName := getNamespacedName(
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 
@@ -32,12 +35,15 @@ var _ = Describe("AutoScaler", func() {
 
 		AfterEach(
 			func() {
-				aeroCluster, err := getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
 
 				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 			},
 		)
 
@@ -84,6 +90,6 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 			Expect(err).ToNot(HaveOccurred())
 
 			return aeroCluster.Spec.Size
-		}, 1*time.Minute,
+		}, time.Minute, time.Second,
 	).Should(Equal(int32(desiredSize)))
 }

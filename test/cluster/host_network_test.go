@@ -3,15 +3,18 @@ package cluster
 import (
 	"bufio"
 	goctx "context"
+	"fmt"
 	"regexp"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
 var _ = Describe(
@@ -19,18 +22,33 @@ var _ = Describe(
 		ctx := goctx.TODO()
 		Context(
 			"HostNetwork", func() {
-				clusterName := "host-network-cluster"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("host-network-cluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
-				aeroCluster := createAerospikeClusterPost640(
-					clusterNamespacedName, 2, latestImage,
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+
+						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					},
 				)
-				aeroCluster.Spec.PodSpec.HostNetwork = true
-				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
 				It(
 					"Should not work with MultiPodPerHost enabled", func() {
+						aeroCluster := createAerospikeClusterPost640(
+							clusterNamespacedName, 2, latestImage,
+						)
+						aeroCluster.Spec.PodSpec.HostNetwork = true
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
+
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 					},
@@ -38,19 +56,23 @@ var _ = Describe(
 
 				It(
 					"Should verify hostNetwork flag updates", func() {
+						aeroCluster := createAerospikeClusterPost640(
+							clusterNamespacedName, 2, latestImage,
+						)
+
 						By("Deploying cluster, Should not advertise node address when off")
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						aeroCluster.Spec.PodSpec.HostNetwork = false
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
 
 						By("Updating cluster, Should advertise node address when dynamically enabled")
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = true
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -58,19 +80,11 @@ var _ = Describe(
 						checkAdvertisedAddress(ctx, aeroCluster, true)
 
 						By("Updating cluster, Should not advertise node address when dynamically disabled")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
-
-						By("Deleting cluster")
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 			},

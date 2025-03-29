@@ -109,7 +109,8 @@ func negativeAerospikeNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enab
 func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableTLS bool) {
 	Context(
 		"Negative cases for customInterface", func() {
-			clusterNamespacedName := getNamespacedName("np-custom-interface", namespace)
+			clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 			It(
 				"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
@@ -275,7 +276,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 	Context(
 		"Negative cases for configuredIP", func() {
-			clusterNamespacedName := getNamespacedName("np-configured-ip", test.MultiClusterNs1)
+			clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
 			BeforeEach(
 				func() {
@@ -286,16 +288,20 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
 
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 				},
 			)
 
 			It(
-				"setting configured access-address without right label", func() {
+				"setting configured access-address without right label", Serial, func() {
 					err := setNodeLabels(
 						ctx,
 						map[string]string{labelAlternateAccessAddress: valueAlternateAccessAddress},
@@ -316,7 +322,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				},
 			)
 			It(
-				"setting configured alternate-access-address without right label", func() {
+				"setting configured alternate-access-address without right label", Serial, func() {
 					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
@@ -334,7 +340,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				},
 			)
 			It(
-				"setting configured access-address and alternate-access-address without label", func() {
+				"setting configured access-address and alternate-access-address without label", Serial, func() {
 					networkPolicy := &asdbv1.AerospikeNetworkPolicy{
 						AccessType:             asdbv1.AerospikeNetworkTypeConfigured,
 						TLSAccessType:          asdbv1.AerospikeNetworkTypeConfigured,
@@ -356,192 +362,195 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 	Context("Negative cases for customInterface", func() {
-		clusterNamespacedName := getNamespacedName("np-custom-interface", namespace)
+		clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-		Context(
-			"InvalidAerospikeCustomInterface", func() {
-				BeforeEach(
-					func() {
-						aeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 3,
-						)
+		Context("InvalidAerospikeCustomInterface", func() {
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 3,
+					)
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
+					err := deployCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
 
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
 
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					},
-				)
+					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				},
+			)
 
-				It(
-					"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomAccessNetworkNames: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
-						"'customInterface' and customAlternateAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to "+
+					"'customInterface' and customAlternateAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'customInterface' and "+
-						"customTLSAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to 'customInterface' and "+
+					"customTLSAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set "+
-						"to 'customInterface' and customTLSAlternateAccessNetworkNames is not given",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set "+
+					"to 'customInterface' and customTLSAlternateAccessNetworkNames is not given",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UpdatingFabricTypeInNetworkPolicy: should fail when fabric type is changed",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UpdatingFabricTypeInNetworkPolicy: should fail when fabric type is changed",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UpdatingTLSFabricTypeInNetworkPolicy: should fail when TLS fabric type is changed",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UpdatingTLSFabricTypeInNetworkPolicy: should fail when TLS fabric type is changed",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomTLSFabricNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomTLSFabricNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				// Following test-cases are applicable for all custom Interfaces
-				// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
-				It(
-					"MissingNetworkNameInPodAnnotations: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames is not present in pod annotations",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			// Following test-cases are applicable for all custom Interfaces
+			// Added test-case for only 'customAccessNetworkNames`, rest of the types will be similar to this only
+			It(
+				"MissingNetworkNameInPodAnnotations: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames is not present in pod annotations",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
 
-						// define different networks than the ones defined in CustomAccessNetworkNames
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: "ipvlan-conf-2, ipvlan-conf-3",
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					// define different networks than the ones defined in CustomAccessNetworkNames
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: "ipvlan-conf-2, ipvlan-conf-3",
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"UsingHostNetworkAndCustomInterface: should fail when access is set to 'customInterface' and "+
-						"Host network is used",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"UsingHostNetworkAndCustomInterface: should fail when access is set to 'customInterface' and "+
+					"Host network is used",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						aeroCluster.Spec.PodSpec.HostNetwork = true
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{networkOne}
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					aeroCluster.Spec.PodSpec.HostNetwork = true
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
 
-				It(
-					"NetworkNameOfDifferentNamespace: should fail when access is set to 'customInterface' and "+
-						"customAccessNetworkNames present in pod annotations is of different namespace",
-					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+			It(
+				"NetworkNameOfDifferentNamespace: should fail when access is set to 'customInterface' and "+
+					"customAccessNetworkNames present in pod annotations is of different namespace",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-						aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"random/ipvlan-conf-1"}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
+					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{"random/ipvlan-conf-1"}
 
-						// define different networks than the ones defined in CustomAccessNetworkNames
-						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
-							networkAnnotationKey: networkOne,
-						}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
-					},
-				)
-			},
+					// define different networks than the ones defined in CustomAccessNetworkNames
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+						networkAnnotationKey: networkOne,
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
 		)
 
 		Context("InvalidFabricNetworkNamesUpdate", func() {
@@ -593,11 +602,6 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
 					By("Updating custom fabric interface network list")
 
 					aeroCluster.Spec.AerospikeNetworkPolicy.CustomFabricNetworkNames = []string{nsNetworkTwo}
@@ -630,11 +634,6 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 					err := deployCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster, err = getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
 					By("Updating custom tlsFabric interface network list")
 
 					aeroCluster.Spec.AerospikeNetworkPolicy.CustomTLSFabricNetworkNames = []string{nsNetworkTwo}
@@ -663,8 +662,9 @@ func doTestNetworkPolicy(
 
 	It(
 		"DefaultNetworkPolicy", func() {
-			clusterNamespacedName := getNamespacedName(
-				"np-default", test.MultiClusterNs1,
+			clusterName := fmt.Sprintf("np-default-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, test.MultiClusterNs1,
 			)
 
 			// Ensures that default network policy is applied.
@@ -673,6 +673,16 @@ func doTestNetworkPolicy(
 				clusterNamespacedName, &defaultNetworkPolicy, multiPodPerHost,
 				enableTLS,
 			)
+
+			if !multiPodPerHost {
+				if enableTLS {
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+				}
+
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+			}
 
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
@@ -684,8 +694,9 @@ func doTestNetworkPolicy(
 
 	It(
 		"PodAndExternal", func() {
-			clusterNamespacedName := getNamespacedName(
-				"np-pod-external", test.MultiClusterNs1,
+			clusterName := fmt.Sprintf("np-pod-external-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, test.MultiClusterNs1,
 			)
 
 			// Ensures that default network policy is applied.
@@ -700,6 +711,16 @@ func doTestNetworkPolicy(
 				enableTLS,
 			)
 
+			if !multiPodPerHost {
+				if enableTLS {
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+				}
+
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+			}
+
 			err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -709,8 +730,9 @@ func doTestNetworkPolicy(
 	)
 
 	It("PodOnlyNetwork: Should not set the hostPort", func() {
-		clusterNamespacedName := getNamespacedName(
-			"pod-network-cluster", test.MultiClusterNs1)
+		clusterName := fmt.Sprintf("pod-network-cluster-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, test.MultiClusterNs1)
 
 		networkPolicy := asdbv1.AerospikeNetworkPolicy{
 			AccessType:             asdbv1.AerospikeNetworkTypePod,
@@ -723,6 +745,16 @@ func doTestNetworkPolicy(
 			clusterNamespacedName, &networkPolicy, multiPodPerHost,
 			enableTLS,
 		)
+
+		if !multiPodPerHost {
+			if enableTLS {
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+			}
+
+			aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+			})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+		}
 
 		err := aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -744,8 +776,9 @@ func doTestNetworkPolicy(
 	// test-case valid only for multiPodPerHost true
 	if multiPodPerHost {
 		It("PodOnlyNetwork: should create cluster without nodePort service", func() {
-			clusterNamespacedName := getNamespacedName(
-				"pod-network-cluster", test.MultiClusterNs1)
+			clusterName := fmt.Sprintf("pod-network-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, test.MultiClusterNs1)
 
 			networkPolicy := asdbv1.AerospikeNetworkPolicy{
 				AccessType:             asdbv1.AerospikeNetworkTypePod,
@@ -817,7 +850,8 @@ func doTestNetworkPolicy(
 
 	Context(
 		"When using configuredIP", func() {
-			clusterNamespacedName := getNamespacedName("np-configured-ip", test.MultiClusterNs1)
+			clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
 			BeforeEach(
 				func() {
@@ -826,8 +860,9 @@ func doTestNetworkPolicy(
 				},
 			)
 
+			//nolint:dupl // For readability
 			It(
-				"setting configured access-address", func() {
+				"setting configured access-address", Serial, func() {
 					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
@@ -840,6 +875,16 @@ func doTestNetworkPolicy(
 						enableTLS,
 					)
 
+					if !multiPodPerHost {
+						if enableTLS {
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						}
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+					}
+
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -847,8 +892,9 @@ func doTestNetworkPolicy(
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
+			//nolint:dupl // For readability
 			It(
-				"setting configured alternate-access-address", func() {
+				"setting configured alternate-access-address", Serial, func() {
 					err := setNodeLabels(
 						ctx, map[string]string{
 							labelAlternateAccessAddress: valueAlternateAccessAddress,
@@ -865,6 +911,16 @@ func doTestNetworkPolicy(
 						enableTLS,
 					)
 
+					if !multiPodPerHost {
+						if enableTLS {
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						}
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+					}
+
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -873,7 +929,10 @@ func doTestNetworkPolicy(
 				},
 			)
 			It(
-				"setting configured access-address and alternate-access-address", func() {
+				"setting configured access-address and alternate-access-address", Serial, func() {
+					clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
+
 					err := setNodeLabels(
 						ctx, map[string]string{
 							labelAccessAddress:          valueAccessAddress,
@@ -893,6 +952,16 @@ func doTestNetworkPolicy(
 						enableTLS,
 					)
 
+					if !multiPodPerHost {
+						if enableTLS {
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						}
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+					}
+
 					err = aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -908,15 +977,16 @@ func doTestNetworkPolicy(
 	// which is ideally added by CNI at runtime.
 	// Test cases with NetworkAttachmentDefinition of different namespaces can't be tested with current mocking.
 	Context("customInterface", func() {
-		clusterNamespacedName := getNamespacedName(
-			"np-custom-interface", test.MultiClusterNs1,
-		)
-
 		// Skip this test when multiPodPerHost is true and enabledTLS true because Network Policy contains all
 		// customInterface type, so no nodePort service will be created hence no port mapping with k8s host node
 		if !(multiPodPerHost && enableTLS) {
 			It(
 				"Should add all custom interface IPs in aerospike.conf file", func() {
+					clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(
+						clusterName, test.MultiClusterNs1,
+					)
+
 					networkPolicy := asdbv1.AerospikeNetworkPolicy{
 						AccessType:                        asdbv1.AerospikeNetworkTypeCustomInterface,
 						CustomAccessNetworkNames:          []string{networkOne, networkTwo},
@@ -939,6 +1009,16 @@ func doTestNetworkPolicy(
 						clusterNamespacedName, &networkPolicy, multiPodPerHost,
 						enableTLS,
 					)
+
+					if !multiPodPerHost {
+						if enableTLS {
+							aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+							})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+						}
+
+						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+					}
 
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 						// Network Interfaces to be used
@@ -989,6 +1069,11 @@ func doTestNetworkPolicy(
 		}
 
 		It("Should recover when correct custom network names are updated", func() {
+			clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, test.MultiClusterNs1,
+			)
+
 			networkPolicy := asdbv1.AerospikeNetworkPolicy{
 				AccessType:               asdbv1.AerospikeNetworkTypeCustomInterface,
 				CustomAccessNetworkNames: []string{"missing-network"},
@@ -998,6 +1083,17 @@ func doTestNetworkPolicy(
 				clusterNamespacedName, &networkPolicy, multiPodPerHost,
 				enableTLS,
 			)
+
+			if !multiPodPerHost {
+				if enableTLS {
+					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+					})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
+				}
+
+				aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+				})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+			}
+
 			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 				networkAnnotationKey: "missing-network, test1/ipvlan-conf-1, test1/ipvlan-conf-2",
 				networkStatusAnnotationKey: `[{
@@ -1031,11 +1127,6 @@ func doTestNetworkPolicy(
 			// cluster will crash as wrong custom interface is passed in CustomAccessNetworkNames
 			err := deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)
 			Expect(err).Should(HaveOccurred())
-
-			aeroCluster, err = getCluster(
-				k8sClient, ctx, clusterNamespacedName,
-			)
-			Expect(err).ToNot(HaveOccurred())
 
 			By("Updating correct custom network name")
 
@@ -1088,9 +1179,10 @@ func validateNetworkPolicy(
 		}
 
 		cp := getClientPolicy(current, k8sClient)
-		res, err := runInfo(cp, asConn, "endpoints")
 
+		res, err := runInfo(cp, asConn, "endpoints")
 		if err != nil {
+			println(err.Error())
 			return fmt.Errorf("failed to run Aerospike info command: %v", err)
 		}
 
