@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/test"
 )
 
@@ -201,18 +201,18 @@ func validUpdateResourceTest(
 
 	By("UpdateClusterResourceLimitCpu")
 
-	res.Limits[corev1.ResourceCPU] = resource.MustParse("300m")
+	res.Limits[corev1.ResourceCPU] = resource.MustParse("400m")
 	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("UpdateClusterResourceRequestMemory")
 
 	res.Requests = corev1.ResourceList{}
-	res.Requests[corev1.ResourceMemory] = resource.MustParse("500Mi")
+	res.Requests[corev1.ResourceMemory] = resource.MustParse("300Mi")
 	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("UpdateClusterResourceRequestCpu")
 
-	res.Requests[corev1.ResourceCPU] = resource.MustParse("200m")
+	res.Requests[corev1.ResourceCPU] = resource.MustParse("300m")
 	updateResource(k8sClient, ctx, clusterNamespacedName, res, checkAeroServer)
 
 	By("RemoveResource")
