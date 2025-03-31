@@ -87,13 +87,125 @@ pipeline {
                     }
                 }
 
-                stage('Test') {
+                stage ('Detect Changes'){
+                    steps {
+                        script {
+                            dir("${env.GO_REPO}") {
+                                if(isNightly() || env.BRANCH_NAME == 'master'){
+                                    env.RUN_NIGHTLY_OR_MASTER = 'true'
+                                }
+                                else{
+                                    def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
+                                    if(!changedFiles.isEmpty()){
+                                        changedFiles = changedFiles.split('\n')
+                                    }
+                                    else{
+                                        changedFiles = []
+                                    }
+
+                                    def clusterTest = changedFiles.any {
+                                        !it.startsWith('helm-charts/') &&
+                                        (it.contains('cluster/') ||
+                                        it.contains('v1/'))
+                                    }
+                                    def backupTest = changedFiles.any {
+                                        !it.startsWith('helm-charts/') &&
+                                        (it.contains('/backup') ||
+                                        it.contains('restore/') ||
+                                        it.contains('v1beta1/'))
+                                    }
+                                    def allTest = changedFiles.any {
+                                        it.startsWith('cmd/') ||
+                                        (it.startsWith('internal/controller/common/') && !it.contains('backup_config_util.go')) ||
+                                        it.startsWith('pkg/utils/') ||
+                                        it.startsWith('errors/')
+                                    }
+                                    def smokeTest = changedFiles.any {
+                                        (it.startsWith('pkg/') && !it.contains('backup-service/') && !it.contains('utils/')) ||
+                                        (it.startsWith('test/') && !it.contains('cluster/') && !it.contains('backup/') &&
+                                        !it.contains('restore/') && !it.contains('backup_service/')) ||
+                                        (!it.startsWith('helm-charts/') && !it.endsWith('.go'))
+                                    }
+                                    def sampleFilesTest = changedFiles.any {
+                                        it.startsWith('config/samples/') && !it.contains('openldap/') && !it.contains('secrets/') && !it.contains('storage/')
+                                    }
+
+                                    env.RUN_CLUSTER_TEST = clusterTest.toString()
+                                    env.RUN_BACKUP_TEST = backupTest.toString()
+                                    env.RUN_ALL_TEST = allTest.toString()
+                                    env.RUN_SMOKE_TEST = smokeTest.toString()
+                                    env.RUN_SAMPLE_FILES_TEST = sampleFilesTest.toString()
+
+                                }
+                            }
+                        }
+                    }
+                }
+
+                stage ('Cluster Test') {
+                    when {
+                        expression { env.RUN_CLUSTER_TEST == 'true' && env.RUN_ALL_TEST == 'false'}
+                    }
                     steps {
                         dir("${env.GO_REPO}") {
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -t ${AEROSPIKE_CUSTOM_INIT_NAME_TAG}"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
 
+                        }
+                    }
+                }
+
+                stage ('Backup Test') {
+                    when {
+                        expression { env.RUN_BACKUP_TEST == 'true' && env.RUN_ALL_TEST == 'false'}
+                    }
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t backup-test"
+
+                        }
+                    }
+                }
+
+                stage ('All Test') {
+                    when {
+                        expression { env.RUN_NIGHTLY_OR_MASTER == 'true' || env.RUN_ALL_TEST == 'true'}
+                    }
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t all-test"
+
+                        }
+                    }
+                }
+
+                stage ('Smoke Test') {
+                    when {
+                        expression { env.RUN_SMOKE_TEST == 'true' && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
+                    }
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f AerospikeCluster"
+                        }
+                    }
+                }
+
+                stage ('SampleFiles Test') {
+                    when {
+                        expression { env.RUN_SAMPLE_FILES_TEST == 'true' && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
+                    }
+                    steps {
+                        dir("${env.GO_REPO}") {
+                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
                         }
                     }
                 }
