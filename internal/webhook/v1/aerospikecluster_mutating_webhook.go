@@ -29,7 +29,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v1api "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/merge"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -49,12 +49,12 @@ var _ webhook.CustomDefaulter = &AerospikeClusterCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
 func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	aerospikeCluster, ok := obj.(*v1api.AerospikeCluster)
+	aerospikeCluster, ok := obj.(*asdbv1.AerospikeCluster)
 	if !ok {
 		return fmt.Errorf("expected AerospikeCluster, got %T", obj)
 	}
 
-	asLog := logf.Log.WithName(v1api.ClusterNamespacedName(aerospikeCluster))
+	asLog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	asLog.Info(
 		"Setting defaults for aerospikeCluster", "aerospikecluster.Spec",
@@ -75,9 +75,9 @@ func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, obj runti
 	return nil
 }
 
-func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, cluster *v1api.AerospikeCluster) error {
+func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	// If PDB is disabled, set maxUnavailable to nil
-	if v1api.GetBool(cluster.Spec.DisablePDB) {
+	if asdbv1.GetBool(cluster.Spec.DisablePDB) {
 		cluster.Spec.MaxUnavailable = nil
 	} else if cluster.Spec.MaxUnavailable == nil {
 		// Set default maxUnavailable if not set
@@ -118,7 +118,7 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 
 	// Validation policy
 	if cluster.Spec.ValidationPolicy == nil {
-		validationPolicy := v1api.ValidationPolicySpec{}
+		validationPolicy := asdbv1.ValidationPolicySpec{}
 
 		asLog.Info(
 			"Set default validation policy", "validationPolicy",
@@ -133,19 +133,19 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 		cluster.Spec.RosterNodeBlockList[idx] = strings.TrimLeft(strings.ToUpper(nodeID), "0")
 	}
 
-	if _, ok := cluster.Labels[v1api.AerospikeAPIVersionLabel]; !ok {
+	if _, ok := cluster.Labels[asdbv1.AerospikeAPIVersionLabel]; !ok {
 		if cluster.Labels == nil {
 			cluster.Labels = make(map[string]string)
 		}
 
-		cluster.Labels[v1api.AerospikeAPIVersionLabel] = v1api.AerospikeAPIVersion
+		cluster.Labels[asdbv1.AerospikeAPIVersionLabel] = asdbv1.AerospikeAPIVersion
 	}
 
 	return nil
 }
 
 // setPodSpecDefaults applies defaults to the pod spec.
-func setPodSpecDefaults(podSpec *v1api.AerospikePodSpec) {
+func setPodSpecDefaults(podSpec *asdbv1.AerospikePodSpec) {
 	var groupID int64
 
 	if podSpec.InputDNSPolicy == nil {
@@ -171,26 +171,26 @@ func setPodSpecDefaults(podSpec *v1api.AerospikePodSpec) {
 }
 
 // setDefaultRackConf create the default rack if the spec has no racks configured.
-func setDefaultRackConf(asLog logr.Logger, rackConfig *v1api.RackConfig) error {
-	defaultRack := v1api.Rack{ID: v1api.DefaultRackID}
+func setDefaultRackConf(asLog logr.Logger, rackConfig *asdbv1.RackConfig) error {
+	defaultRack := asdbv1.Rack{ID: asdbv1.DefaultRackID}
 
 	if len(rackConfig.Racks) == 0 {
 		rackConfig.Racks = append(rackConfig.Racks, defaultRack)
 		asLog.Info(
 			"No rack given. Added default rack-id for all nodes", "racks",
-			rackConfig, "DefaultRackID", v1api.DefaultRackID,
+			rackConfig, "DefaultRackID", asdbv1.DefaultRackID,
 		)
 	} else {
 		for idx := range rackConfig.Racks {
 			rack := &rackConfig.Racks[idx]
-			if rack.ID == v1api.DefaultRackID {
+			if rack.ID == asdbv1.DefaultRackID {
 				// User has modified defaultRackConfig or used defaultRackID
 				if len(rackConfig.Racks) > 1 ||
 					rack.Zone != "" || rack.Region != "" || rack.RackLabel != "" || rack.NodeName != "" ||
 					rack.InputAerospikeConfig != nil || rack.InputStorage != nil || rack.InputPodSpec != nil {
 					return fmt.Errorf(
 						"invalid RackConfig %v. RackID %d is reserved",
-						rackConfig, v1api.DefaultRackID,
+						rackConfig, asdbv1.DefaultRackID,
 					)
 				}
 			}
@@ -200,7 +200,7 @@ func setDefaultRackConf(asLog logr.Logger, rackConfig *v1api.RackConfig) error {
 	return nil
 }
 
-func updateRacks(asLog logr.Logger, cluster *v1api.AerospikeCluster) error {
+func updateRacks(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	updateRacksStorageFromGlobal(asLog, cluster)
 
 	if err := updateRacksAerospikeConfigFromGlobal(asLog, cluster); err != nil {
@@ -212,7 +212,7 @@ func updateRacks(asLog logr.Logger, cluster *v1api.AerospikeCluster) error {
 	return nil
 }
 
-func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *v1api.AerospikeCluster) {
+func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) {
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 
@@ -232,7 +232,7 @@ func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *v1api.AerospikeClu
 	}
 }
 
-func updateRacksPodSpecFromGlobal(asLog logr.Logger, cluster *v1api.AerospikeCluster) {
+func updateRacksPodSpecFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) {
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 
@@ -249,7 +249,7 @@ func updateRacksPodSpecFromGlobal(asLog logr.Logger, cluster *v1api.AerospikeClu
 	}
 }
 
-func updateRacksAerospikeConfigFromGlobal(asLog logr.Logger, cluster *v1api.AerospikeCluster) error {
+func updateRacksAerospikeConfigFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 
@@ -283,7 +283,7 @@ func updateRacksAerospikeConfigFromGlobal(asLog logr.Logger, cluster *v1api.Aero
 
 		// Set defaults in updated rack config
 		// Above merge function may have overwritten defaults.
-		if err := setDefaultAerospikeConfigs(asLog, v1api.AerospikeConfigSpec{Value: m}, &rack.ID,
+		if err := setDefaultAerospikeConfigs(asLog, asdbv1.AerospikeConfigSpec{Value: m}, &rack.ID,
 			cluster); err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func updateRacksAerospikeConfigFromGlobal(asLog logr.Logger, cluster *v1api.Aero
 }
 
 func setDefaultAerospikeConfigs(asLog logr.Logger,
-	configSpec v1api.AerospikeConfigSpec, rackID *int, cluster *v1api.AerospikeCluster) error {
+	configSpec asdbv1.AerospikeConfigSpec, rackID *int, cluster *asdbv1.AerospikeCluster) error {
 	config := configSpec.Value
 
 	// namespace conf
@@ -332,28 +332,28 @@ func setDefaultAerospikeConfigs(asLog logr.Logger,
 }
 
 // setDefaults applies default to unspecified fields on the network policy.
-func setNetworkPolicyDefaults(networkPolicy *v1api.AerospikeNetworkPolicy, namespace string) {
-	if networkPolicy.AccessType == v1api.AerospikeNetworkTypeUnspecified {
-		networkPolicy.AccessType = v1api.AerospikeNetworkTypeHostInternal
+func setNetworkPolicyDefaults(networkPolicy *asdbv1.AerospikeNetworkPolicy, namespace string) {
+	if networkPolicy.AccessType == asdbv1.AerospikeNetworkTypeUnspecified {
+		networkPolicy.AccessType = asdbv1.AerospikeNetworkTypeHostInternal
 	}
 
-	if networkPolicy.AlternateAccessType == v1api.AerospikeNetworkTypeUnspecified {
-		networkPolicy.AlternateAccessType = v1api.AerospikeNetworkTypeHostExternal
+	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
+		networkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
 	}
 
-	if networkPolicy.TLSAccessType == v1api.AerospikeNetworkTypeUnspecified {
-		networkPolicy.TLSAccessType = v1api.AerospikeNetworkTypeHostInternal
+	if networkPolicy.TLSAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
+		networkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeHostInternal
 	}
 
-	if networkPolicy.TLSAlternateAccessType == v1api.AerospikeNetworkTypeUnspecified {
-		networkPolicy.TLSAlternateAccessType = v1api.AerospikeNetworkTypeHostExternal
+	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
+		networkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
 	}
 
 	// Set network namespace if not present
 	setNetworkNamespace(namespace, networkPolicy)
 }
 
-func setNetworkNamespace(namespace string, networkPolicy *v1api.AerospikeNetworkPolicy) {
+func setNetworkNamespace(namespace string, networkPolicy *asdbv1.AerospikeNetworkPolicy) {
 	setNamespaceDefault(networkPolicy.CustomAccessNetworkNames, namespace)
 	setNamespaceDefault(networkPolicy.CustomAlternateAccessNetworkNames, namespace)
 	setNamespaceDefault(networkPolicy.CustomTLSAccessNetworkNames, namespace)
@@ -366,7 +366,7 @@ func setNetworkNamespace(namespace string, networkPolicy *v1api.AerospikeNetwork
 // Helper
 // *****************************************************************************
 
-func setDefaultNsConf(asLog logr.Logger, configSpec v1api.AerospikeConfigSpec,
+func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 	rackEnabledNsList []string, rackID *int) error {
 	config := configSpec.Value
 	// namespace conf
@@ -452,7 +452,7 @@ func setDefaultNsConf(asLog logr.Logger, configSpec v1api.AerospikeConfigSpec,
 }
 
 func setDefaultServiceConf(
-	asLog logr.Logger, configSpec v1api.AerospikeConfigSpec, crObjName string,
+	asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec, crObjName string,
 ) error {
 	config := configSpec.Value
 
@@ -489,8 +489,8 @@ func setDefaultServiceConf(
 }
 
 func setDefaultNetworkConf(
-	asLog logr.Logger, configSpec *v1api.AerospikeConfigSpec,
-	clientCertSpec *v1api.AerospikeOperatorClientCertSpec,
+	asLog logr.Logger, configSpec *asdbv1.AerospikeConfigSpec,
+	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 ) error {
 	config := configSpec.Value
 
@@ -522,7 +522,7 @@ func setDefaultNetworkConf(
 	// TODO: These values lines will be replaced with runtime info by akoinit binary in init-container
 	// See if we can get better way to make template
 	serviceDefaults := map[string]interface{}{}
-	srvPort := v1api.GetServicePort(configSpec)
+	srvPort := asdbv1.GetServicePort(configSpec)
 
 	if srvPort != nil {
 		serviceDefaults["port"] = *srvPort
@@ -537,7 +537,7 @@ func setDefaultNetworkConf(
 		delete(serviceConf, "alternate-access-port")
 	}
 
-	if tlsName, tlsPort := v1api.GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
+	if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(configSpec); tlsName != "" && tlsPort != nil {
 		serviceDefaults["tls-port"] = *tlsPort
 		serviceDefaults["tls-access-port"] = *tlsPort
 		serviceDefaults["tls-access-addresses"] = []string{"<tls-access-address>"}
@@ -607,12 +607,12 @@ func setDefaultNetworkConf(
 
 func addOperatorClientNameIfNeeded(
 	aslog logr.Logger, serviceConf map[string]interface{},
-	configSpec *v1api.AerospikeConfigSpec,
-	clientCertSpec *v1api.AerospikeOperatorClientCertSpec,
+	configSpec *asdbv1.AerospikeConfigSpec,
+	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 ) error {
 	tlsAuthenticateClientConfig, ok := serviceConf["tls-authenticate-client"]
 	if !ok {
-		if v1api.IsServiceTLSEnabled(configSpec) {
+		if asdbv1.IsServiceTLSEnabled(configSpec) {
 			serviceConf["tls-authenticate-client"] = "any"
 		}
 
@@ -652,7 +652,7 @@ func addOperatorClientNameIfNeeded(
 }
 
 func setDefaultLoggingConf(
-	asLog logr.Logger, configSpec v1api.AerospikeConfigSpec,
+	asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 ) error {
 	config := configSpec.Value
 
@@ -703,7 +703,7 @@ func setDefaultLoggingConf(
 }
 
 func setDefaultXDRConf(
-	_ logr.Logger, _ v1api.AerospikeConfigSpec,
+	_ logr.Logger, _ asdbv1.AerospikeConfigSpec,
 ) error {
 	// Nothing to update for now
 	return nil
@@ -775,7 +775,7 @@ func isNameExist(names []string, name string) bool {
 // escapeLDAPConfiguration escapes LDAP variables ${un} and ${dn} to
 // $${_DNE}{un} and $${_DNE}{dn} to prevent aerospike container images
 // template expansion from messing up the LDAP section.
-func escapeLDAPConfiguration(configSpec v1api.AerospikeConfigSpec) error {
+func escapeLDAPConfiguration(configSpec asdbv1.AerospikeConfigSpec) error {
 	config := configSpec.Value
 
 	if _, ok := config["security"]; ok {

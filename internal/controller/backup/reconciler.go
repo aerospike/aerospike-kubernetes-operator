@@ -41,7 +41,7 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 		r.aeroBackup.Spec.BackupService.Name,
 		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
-			asdbv1beta1.MinSupportedVersion))
+			asdbv1beta1.BackupSvcMinSupportedVersion))
 		return reconcile.Result{}, nil
 	}
 

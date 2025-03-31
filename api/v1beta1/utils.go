@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	lib "github.com/aerospike/aerospike-management-lib"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-const MinSupportedVersion = "3.0.0"
+const BackupSvcMinSupportedVersion = "3.0.0"
 
 func ValidateBackupSvcVersion(image string) error {
 	version, err := asdbv1.GetImageVersion(image)
@@ -18,14 +19,14 @@ func ValidateBackupSvcVersion(image string) error {
 		return err
 	}
 
-	val, err := lib.CompareVersions(version, MinSupportedVersion)
+	val, err := lib.CompareVersions(version, BackupSvcMinSupportedVersion)
 	if err != nil {
 		return fmt.Errorf("failed to check backup service image version: %v", err)
 	}
 
 	if val < 0 {
 		return fmt.Errorf("backup service version %s is not supported. Minimum supported version is %s",
-			version, MinSupportedVersion)
+			version, BackupSvcMinSupportedVersion)
 	}
 
 	return nil
