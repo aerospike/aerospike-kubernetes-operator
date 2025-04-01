@@ -28,18 +28,22 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 
+	if headlessSvc.Metadata.Annotations == nil {
+		headlessSvc.Metadata.Annotations = make(map[string]string)
+	}
+
 	defaultAnnotations := map[string]string{
 		// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
 		"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
 	}
-	if headlessSvc.Metadata.Annotations != nil {
-		maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
+	maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
+
+	if headlessSvc.Metadata.Labels == nil {
+		headlessSvc.Metadata.Labels = make(map[string]string)
 	}
 
 	aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-	if headlessSvc.Metadata.Labels != nil {
-		maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
-	}
+	maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
 
 	err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
