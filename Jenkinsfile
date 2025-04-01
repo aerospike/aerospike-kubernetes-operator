@@ -92,9 +92,11 @@ pipeline {
                         script {
                             dir("${env.GO_REPO}") {
                                 if(isNightly() || env.BRANCH_NAME == 'master'){
+                                    // Run all-test cases for master and nightly builds
                                     env.RUN_NIGHTLY_OR_MASTER = 'true'
                                 }
                                 else{
+                                    // Identify changed files using git diff
                                     def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
                                     if(!changedFiles.isEmpty()){
                                         changedFiles = changedFiles.split('\n')
@@ -148,6 +150,7 @@ pipeline {
                     }
                     steps {
                         dir("${env.GO_REPO}") {
+                            // Run all cluster-related test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
@@ -162,6 +165,7 @@ pipeline {
                     }
                     steps {
                         dir("${env.GO_REPO}") {
+                            // Run all backup-related test cases, including backup, backup-service, and restore test suites
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t backup-test"
@@ -176,6 +180,7 @@ pipeline {
                     }
                     steps {
                         dir("${env.GO_REPO}") {
+                            // Run all-test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t all-test"
@@ -190,6 +195,7 @@ pipeline {
                     }
                     steps {
                         dir("${env.GO_REPO}") {
+                            // Run smoke test
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f AerospikeCluster"
@@ -203,6 +209,7 @@ pipeline {
                     }
                     steps {
                         dir("${env.GO_REPO}") {
+                            // Run sample-files test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                             sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
@@ -215,7 +222,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/junit.xml', keepLongStdio: true
+            junit testResults: '**/junit*.xml', keepLongStdio: true
         }
         cleanup {
             script {
