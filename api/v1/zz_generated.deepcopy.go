@@ -303,6 +303,8 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 	}
 	in.PodSpec.DeepCopyInto(&out.PodSpec)
 	in.SeedsFinderServices.DeepCopyInto(&out.SeedsFinderServices)
+	in.HeadlessService.DeepCopyInto(&out.HeadlessService)
+	in.PodService.DeepCopyInto(&out.PodService)
 	if in.RosterNodeBlockList != nil {
 		in, out := &in.RosterNodeBlockList, &out.RosterNodeBlockList
 		*out = make([]string, len(*in))

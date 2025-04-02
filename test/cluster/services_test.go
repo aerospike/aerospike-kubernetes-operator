@@ -123,17 +123,10 @@ var _ = Describe(
 			clusterNamespacedName := getNamespacedName("headless-service-test", namespace)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-			// Add annotations and labels to headless service
-			aeroCluster.Spec.HeadlessService = asdbv1.ServiceSpec{
-				Metadata: asdbv1.AerospikeObjectMeta{
-					Annotations: map[string]string{
-						"test-annotation": "test-annotation-value",
-					},
-					Labels: map[string]string{
-						"test-label": "test-label-value",
-					},
-				},
-			}
+			aeroCluster.Spec.HeadlessService.Metadata.Annotations = make(map[string]string)
+			aeroCluster.Spec.HeadlessService.Metadata.Labels = make(map[string]string)
+			aeroCluster.Spec.HeadlessService.Metadata.Annotations["test-annotation"] = "test-annotation-value"
+			aeroCluster.Spec.HeadlessService.Metadata.Labels["test-label"] = "test-label-value"
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -145,11 +138,11 @@ var _ = Describe(
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(svc.Annotations["test-annotation"]).To(Equal("test-annotation-value"))
-			Expect(svc.Annotations["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
-			Expect(svc.Labels["test-label"]).To(Equal("test-label-value"))
-			Expect(svc.Labels["aerospike.com/cr"]).To(Equal("headless-service-test"))
-			Expect(svc.Labels["app"]).To(Equal("aerospike-cluster"))
+			Expect(svc.GetAnnotations()["test-annotation"]).To(Equal("test-annotation-value"))
+			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
+			Expect(svc.GetLabels()["test-label"]).To(Equal("test-label-value"))
+			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))
 
 			By("Updating headless service metadata")
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -169,13 +162,13 @@ var _ = Describe(
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(svc.Annotations).ToNot(HaveKey("test-annotation"))
-			Expect(svc.Labels).ToNot(HaveKey("test-label"))
-			Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
-			Expect(svc.Annotations["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
-			Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
-			Expect(svc.Labels["aerospike.com/cr"]).To(Equal("headless-service-test"))
-			Expect(svc.Labels["app"]).To(Equal("aerospike-cluster"))
+			Expect(svc.GetAnnotations()).ToNot(HaveKey("test-annotation"))
+			Expect(svc.GetLabels()).ToNot(HaveKey("test-label"))
+			Expect(svc.GetAnnotations()["new-annotation"]).To(Equal("new-annotation-value"))
+			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
+			Expect(svc.GetLabels()["new-label"]).To(Equal("new-label-value"))
+			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -186,17 +179,10 @@ var _ = Describe(
 			clusterNamespacedName := getNamespacedName("pod-service-test", namespace)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-			// Add annotations and labels to pod service
-			aeroCluster.Spec.PodService = asdbv1.ServiceSpec{
-				Metadata: asdbv1.AerospikeObjectMeta{
-					Annotations: map[string]string{
-						"test-annotation": "test-annotation-value",
-					},
-					Labels: map[string]string{
-						"test-label": "test-label-value",
-					},
-				},
-			}
+			aeroCluster.Spec.PodService.Metadata.Annotations = make(map[string]string)
+			aeroCluster.Spec.PodService.Metadata.Labels = make(map[string]string)
+			aeroCluster.Spec.PodService.Metadata.Annotations["test-annotation"] = "test-annotation-value"
+			aeroCluster.Spec.PodService.Metadata.Labels["test-label"] = "test-label-value"
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -209,8 +195,8 @@ var _ = Describe(
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(svc.Annotations["test-annotation"]).To(Equal("test-annotation-value"))
-				Expect(svc.Labels["test-label"]).To(Equal("test-label-value"))
+				Expect(svc.GetAnnotations()["test-annotation"]).To(Equal("test-annotation-value"))
+				Expect(svc.GetLabels()["test-label"]).To(Equal("test-label-value"))
 			}
 
 			By("Updating pod service metadata")
@@ -234,10 +220,10 @@ var _ = Describe(
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(svc.Annotations).ToNot(HaveKey("test-annotation"))
-				Expect(svc.Labels).ToNot(HaveKey("test-label"))
-				Expect(svc.Annotations["new-annotation"]).To(Equal("new-annotation-value"))
-				Expect(svc.Labels["new-label"]).To(Equal("new-label-value"))
+				Expect(svc.GetAnnotations()).ToNot(HaveKey("test-annotation"))
+				Expect(svc.GetLabels()).ToNot(HaveKey("test-label"))
+				Expect(svc.GetAnnotations()["new-annotation"]).To(Equal("new-annotation-value"))
+				Expect(svc.GetLabels()["new-label"]).To(Equal("new-label-value"))
 			}
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
