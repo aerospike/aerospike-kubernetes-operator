@@ -459,12 +459,6 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 ) bool {
 	var needsUpdate bool
 
-	if service.Spec.Type == corev1.ServiceTypeClusterIP {
-		maps.Copy(metadata.Annotations, map[string]string{
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-		})
-	}
-
 	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
 		service.ObjectMeta.Annotations = metadata.Annotations
 		needsUpdate = true

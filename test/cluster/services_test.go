@@ -127,10 +127,10 @@ var _ = Describe(
 			aeroCluster.Spec.HeadlessService = asdbv1.ServiceSpec{
 				Metadata: asdbv1.AerospikeObjectMeta{
 					Annotations: map[string]string{
-						"test-annotation": "test-value",
+						"test-annotation": "test-annotation-value",
 					},
 					Labels: map[string]string{
-						"test-label": "test-value",
+						"test-label": "test-label-value",
 					},
 				},
 			}
@@ -145,9 +145,9 @@ var _ = Describe(
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(svc.Annotations["test-annotation"]).To(Equal("test-value"))
+			Expect(svc.Annotations["test-annotation"]).To(Equal("test-annotation-value"))
 			Expect(svc.Annotations["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
-			Expect(svc.Labels["test-label"]).To(Equal("test-value"))
+			Expect(svc.Labels["test-label"]).To(Equal("test-label-value"))
 			Expect(svc.Labels["aerospike.com/cr"]).To(Equal("headless-service-test"))
 			Expect(svc.Labels["app"]).To(Equal("aerospike-cluster"))
 
@@ -190,10 +190,10 @@ var _ = Describe(
 			aeroCluster.Spec.PodService = asdbv1.ServiceSpec{
 				Metadata: asdbv1.AerospikeObjectMeta{
 					Annotations: map[string]string{
-						"test-annotation": "test-value",
+						"test-annotation": "test-annotation-value",
 					},
 					Labels: map[string]string{
-						"test-label": "test-value",
+						"test-label": "test-label-value",
 					},
 				},
 			}
@@ -209,8 +209,8 @@ var _ = Describe(
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(svc.Annotations["test-annotation"]).To(Equal("test-value"))
-				Expect(svc.Labels["test-label"]).To(Equal("test-value"))
+				Expect(svc.Annotations["test-annotation"]).To(Equal("test-annotation-value"))
+				Expect(svc.Labels["test-label"]).To(Equal("test-label-value"))
 			}
 
 			By("Updating pod service metadata")
