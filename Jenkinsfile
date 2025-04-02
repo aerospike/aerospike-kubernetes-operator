@@ -191,28 +191,22 @@ pipeline {
 
                 stage ('Smoke Test') {
                     when {
-                        expression { env.RUN_SMOKE_TEST == 'true' && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
+                        expression { (env.RUN_SMOKE_TEST == 'true' || env.RUN_SAMPLE_FILES_TEST == 'true') && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
                     }
                     steps {
                         dir("${env.GO_REPO}") {
-                            // Run smoke test
-                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f AerospikeCluster"
-                        }
-                    }
-                }
-
-                stage ('SampleFiles Test') {
-                    when {
-                        expression { env.RUN_SAMPLE_FILES_TEST == 'true' && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
-                    }
-                    steps {
-                        dir("${env.GO_REPO}") {
-                            // Run sample-files test cases
-                            sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
-							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
+                            script {
+                                sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
+							    sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
+                                // Run smoke test
+                                if (env.RUN_SMOKE_TEST == 'true' || env.RUN_SAMPLE_FILES_TEST == 'true'){
+                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f AerospikeCluster"
+                                }
+                                // Run sample-files test cases
+                                if(env.RUN_SAMPLE_FILES_TEST == 'true'){
+                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
+                                }
+                            }
                         }
                     }
                 }
@@ -222,7 +216,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/junit*.xml', keepLongStdio: true
+            junit testResults: '**/junit.xml', keepLongStdio: true
         }
         cleanup {
             script {
