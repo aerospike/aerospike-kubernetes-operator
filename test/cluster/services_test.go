@@ -133,8 +133,6 @@ var _ = Describe(
 				Namespace: clusterNamespacedName.Namespace,
 			}, svc)
 			Expect(err).ToNot(HaveOccurred())
-			fmt.Printf("Service Annotations: %v\n", svc.GetAnnotations())
-			fmt.Printf("Service Labels: %v\n", svc.GetLabels())
 			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-create"))
 			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))

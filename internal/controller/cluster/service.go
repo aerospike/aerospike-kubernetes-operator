@@ -465,24 +465,29 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	var needsUpdate bool
 
 	if !reflect.DeepEqual(statusMetadata.Annotations, specMetadata.Annotations) {
-		defaultAnnotations := map[string]string{
-			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-		}
 		serviceAnnotations := make(map[string]string)
-		maps.Copy(serviceAnnotations, defaultAnnotations)
-		maps.Copy(serviceAnnotations, specMetadata.Annotations)
+		if service.Spec.Type == corev1.ServiceTypeClusterIP {
+			defaultAnnotations := map[string]string{
+				// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+				"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+			}
 
+			maps.Copy(serviceAnnotations, defaultAnnotations)
+		}
+
+		maps.Copy(serviceAnnotations, specMetadata.Annotations)
 		service.ObjectMeta.Annotations = serviceAnnotations
 		needsUpdate = true
 	}
 
 	if !reflect.DeepEqual(statusMetadata.Labels, specMetadata.Labels) {
-		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 		serviceLabels := make(map[string]string)
-		maps.Copy(serviceLabels, aerospikeClusterLabels)
-		maps.Copy(serviceLabels, specMetadata.Labels)
+		if service.Spec.Type == corev1.ServiceTypeClusterIP {
+			aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+			maps.Copy(serviceLabels, aerospikeClusterLabels)
+		}
 
+		maps.Copy(serviceLabels, specMetadata.Labels)
 		service.ObjectMeta.Labels = serviceLabels
 		needsUpdate = true
 	}
