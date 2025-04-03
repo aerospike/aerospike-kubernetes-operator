@@ -41,7 +41,7 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 		r.aeroBackup.Spec.BackupService.Name,
 		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
-			asdbv1beta1.MinSupportedVersion))
+			asdbv1beta1.BackupSvcMinSupportedVersion))
 		return reconcile.Result{}, nil
 	}
 
@@ -539,7 +539,7 @@ func (r *SingleBackupReconciler) routinesToDelete(
 
 		// Delete any dangling backup-routines related to this cluster
 		// Strict prefix check might fail for cases where the prefix is same.
-		if strings.HasPrefix(name, r.aeroBackup.NamePrefix()) &&
+		if strings.HasPrefix(name, asdbv1beta1.NamePrefix(utils.GetNamespacedName(r.aeroBackup))) &&
 			allRoutines[name].(map[string]interface{})[asdbv1beta1.SourceClusterKey].(string) == clusterName {
 			routinesTobeDeleted = append(routinesTobeDeleted, name)
 		}

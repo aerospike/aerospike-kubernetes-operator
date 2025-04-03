@@ -20,6 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -235,7 +236,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
 func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string]string, error) {
 	workDir := asdbv1.GetWorkDirectory(rack.AerospikeConfig)
-	volume := rack.Storage.GetVolumeForAerospikePath(workDir)
+	volume := webhookv1.GetVolumeForAerospikePath(&rack.Storage, workDir)
 
 	if volume != nil {
 		// Init container mounts all volumes by name. Update workdir to reflect that path.
