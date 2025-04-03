@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 )
 
 // fromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.

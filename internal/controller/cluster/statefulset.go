@@ -21,10 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 

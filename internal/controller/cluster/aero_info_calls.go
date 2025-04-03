@@ -22,10 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/jsonpatch"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )

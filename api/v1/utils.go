@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/v4/errors"
 )
 
 var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)

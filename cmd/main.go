@@ -29,18 +29,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/restore"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
 
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
 	// +kubebuilder:scaffold:imports
 	// to ensure that exec-entrypoint and run can make use of them.
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1"
-	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1beta1"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
