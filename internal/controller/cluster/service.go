@@ -32,18 +32,9 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		headlessSvc.Metadata.Annotations = make(map[string]string)
 	}
 
-	defaultAnnotations := map[string]string{
-		// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-		"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-	}
-	maps.Copy(headlessSvc.Metadata.Annotations, defaultAnnotations)
-
 	if headlessSvc.Metadata.Labels == nil {
 		headlessSvc.Metadata.Labels = make(map[string]string)
 	}
-
-	aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-	maps.Copy(headlessSvc.Metadata.Labels, aerospikeClusterLabels)
 
 	err := r.Client.Get(
 		context.TODO(), types.NamespacedName{
@@ -57,12 +48,25 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 		r.Log.Info("Creating headless service for statefulSet")
 
+		defaultAnnotations := map[string]string{
+			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		}
+		serviceAnnotations := make(map[string]string)
+		maps.Copy(serviceAnnotations, defaultAnnotations)
+		maps.Copy(serviceAnnotations, headlessSvc.Metadata.Annotations)
+
+		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+		serviceLabels := make(map[string]string)
+		maps.Copy(serviceLabels, aerospikeClusterLabels)
+		maps.Copy(serviceLabels, headlessSvc.Metadata.Labels)
+
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        serviceName,
 				Namespace:   r.aeroCluster.Namespace,
-				Annotations: headlessSvc.Metadata.Annotations,
-				Labels:      headlessSvc.Metadata.Labels,
+				Annotations: serviceAnnotations,
+				Labels:      serviceLabels,
 			},
 			Spec: corev1.ServiceSpec{
 				// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
@@ -101,7 +105,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	r.Log.Info("Headless service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	return r.updateService(service, headlessSvc.Metadata)
+	return r.updateService(service, r.aeroCluster.Status.HeadlessService.Metadata, headlessSvc.Metadata)
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
@@ -284,7 +288,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	r.Log.Info("Service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	return r.updateService(service, podService.Metadata)
+	return r.updateService(service, r.aeroCluster.Status.PodService.Metadata, podService.Metadata)
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -455,27 +459,45 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 
 func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	service *corev1.Service,
-	metadata asdbv1.AerospikeObjectMeta,
+	statusMetadata asdbv1.AerospikeObjectMeta,
+	specMetadata asdbv1.AerospikeObjectMeta,
 ) bool {
 	var needsUpdate bool
 
-	if !reflect.DeepEqual(service.ObjectMeta.Annotations, metadata.Annotations) {
-		service.ObjectMeta.Annotations = metadata.Annotations
+	if !reflect.DeepEqual(statusMetadata.Annotations, specMetadata.Annotations) {
+		defaultAnnotations := map[string]string{
+			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		}
+		serviceAnnotations := make(map[string]string)
+		maps.Copy(serviceAnnotations, defaultAnnotations)
+		maps.Copy(serviceAnnotations, specMetadata.Annotations)
+
+		service.ObjectMeta.Annotations = serviceAnnotations
 		needsUpdate = true
 	}
 
-	if !reflect.DeepEqual(service.ObjectMeta.Labels, metadata.Labels) {
-		service.ObjectMeta.Labels = metadata.Labels
+	if !reflect.DeepEqual(statusMetadata.Labels, specMetadata.Labels) {
+		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
+		serviceLabels := make(map[string]string)
+		maps.Copy(serviceLabels, aerospikeClusterLabels)
+		maps.Copy(serviceLabels, specMetadata.Labels)
+
+		service.ObjectMeta.Labels = serviceLabels
 		needsUpdate = true
 	}
 
 	return needsUpdate
 }
 
-func (r *SingleClusterReconciler) updateService(service *corev1.Service, metadata asdbv1.AerospikeObjectMeta) error {
+func (r *SingleClusterReconciler) updateService(
+	service *corev1.Service,
+	statusMetadata asdbv1.AerospikeObjectMeta,
+	specMetadata asdbv1.AerospikeObjectMeta,
+) error {
 	var needsUpdate bool
 
-	if r.isServiceMetadataUpdated(service, metadata) {
+	if r.isServiceMetadataUpdated(service, statusMetadata, specMetadata) {
 		needsUpdate = true
 	}
 

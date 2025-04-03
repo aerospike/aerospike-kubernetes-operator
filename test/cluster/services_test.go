@@ -118,9 +118,34 @@ var _ = Describe(
 			},
 		)
 
+		It("Validate default metadata gets created with headless service", func() {
+			By("Deploying cluster with headless service")
+			clusterNamespacedName := getNamespacedName("headless-service-create", namespace)
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+			err := deployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Validating headless service exists with correct metadata")
+			svc := &corev1.Service{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      clusterNamespacedName.Name,
+				Namespace: clusterNamespacedName.Namespace,
+			}, svc)
+			Expect(err).ToNot(HaveOccurred())
+			fmt.Printf("Service Annotations: %v\n", svc.GetAnnotations())
+			fmt.Printf("Service Labels: %v\n", svc.GetLabels())
+			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
+			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-create"))
+			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))
+
+			err = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("Validate headless service is created and updated with correct metadata", func() {
 			By("Deploying cluster with headless service")
-			clusterNamespacedName := getNamespacedName("headless-service-test", namespace)
+			clusterNamespacedName := getNamespacedName("headless-service-update", namespace)
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
 			aeroCluster.Spec.HeadlessService.Metadata.Annotations = make(map[string]string)
@@ -141,7 +166,7 @@ var _ = Describe(
 			Expect(svc.GetAnnotations()["test-annotation"]).To(Equal("test-annotation-value"))
 			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 			Expect(svc.GetLabels()["test-label"]).To(Equal("test-label-value"))
-			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-update"))
 			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))
 
 			By("Updating headless service metadata")
@@ -167,7 +192,7 @@ var _ = Describe(
 			Expect(svc.GetAnnotations()["new-annotation"]).To(Equal("new-annotation-value"))
 			Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 			Expect(svc.GetLabels()["new-label"]).To(Equal("new-label-value"))
-			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-test"))
+			Expect(svc.GetLabels()["aerospike.com/cr"]).To(Equal("headless-service-update"))
 			Expect(svc.GetLabels()["app"]).To(Equal("aerospike-cluster"))
 
 			err = deleteCluster(k8sClient, ctx, aeroCluster)
@@ -188,7 +213,7 @@ var _ = Describe(
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validating pod service exists with correct metadata")
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 2; i++ {
 				svc := &corev1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      fmt.Sprintf("%s-0-%d", clusterNamespacedName.Name, i),
@@ -213,7 +238,7 @@ var _ = Describe(
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Validating pod service metadata was updated")
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 2; i++ {
 				svc := &corev1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      fmt.Sprintf("%s-0-%d", clusterNamespacedName.Name, i),
