@@ -466,6 +466,7 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 
 	if !reflect.DeepEqual(statusMetadata.Annotations, specMetadata.Annotations) {
 		serviceAnnotations := make(map[string]string)
+
 		if service.Spec.Type == corev1.ServiceTypeClusterIP {
 			defaultAnnotations := map[string]string{
 				// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
@@ -482,6 +483,7 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 
 	if !reflect.DeepEqual(statusMetadata.Labels, specMetadata.Labels) {
 		serviceLabels := make(map[string]string)
+
 		if service.Spec.Type == corev1.ServiceTypeClusterIP {
 			aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 			maps.Copy(serviceLabels, aerospikeClusterLabels)
