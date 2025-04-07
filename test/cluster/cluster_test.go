@@ -67,7 +67,7 @@ var _ = Describe(
 			},
 		)
 		Context(
-			"UpdateCluster", func() {
+			"UpdateAerospikeCluster", func() {
 				UpdateClusterTest(ctx)
 			},
 		)
