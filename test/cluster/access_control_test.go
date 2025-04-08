@@ -1494,11 +1494,22 @@ var _ = Describe(
 				)
 				Context(
 					"When cluster is deployed", func() {
-						aeroCluster := &asdbv1.AerospikeCluster{}
+						clusterName := fmt.Sprintf("ac-lifecycle-%d", GinkgoParallelProcess())
+						clusterNamespacedName := test.GetNamespacedName(
+							clusterName, namespace,
+						)
+
 						AfterEach(
 							func() {
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
-								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+								aeroCluster := &asdbv1.AerospikeCluster{
+									ObjectMeta: metav1.ObjectMeta{
+										Name:      clusterNamespacedName.Name,
+										Namespace: clusterNamespacedName.Namespace,
+									},
+								}
+
+								Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+								Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 							},
 						)
 
@@ -1507,10 +1518,6 @@ var _ = Describe(
 							func() {
 								var accessControl *asdbv1.AerospikeAccessControlSpec
 
-								clusterName := "ac-no-security"
-								clusterNamespacedName := test.GetNamespacedName(
-									clusterName, namespace,
-								)
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
@@ -1524,7 +1531,7 @@ var _ = Describe(
 								aerospikeConfigSpec.setEnableSecurity(false)
 
 								// Save cluster variable as well for cleanup.
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1596,11 +1603,6 @@ var _ = Describe(
 						It(
 							"AccessControlLifeCycle", func() {
 
-								clusterName := "ac-lifecycle"
-								clusterNamespacedName := test.GetNamespacedName(
-									clusterName, namespace,
-								)
-
 								By("AccessControlCreate")
 
 								accessControl := asdbv1.AerospikeAccessControlSpec{
@@ -1663,7 +1665,7 @@ var _ = Describe(
 
 								aerospikeConfigSpec.setEnableSecurity(true)
 
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
@@ -1978,8 +1980,9 @@ var _ = Describe(
 		)
 
 		Context("Using default-password-file", func() {
+			clusterName := fmt.Sprintf("default-password-file-%d", GinkgoParallelProcess())
 			var clusterNamespacedName = test.GetNamespacedName(
-				"default-password-file", namespace,
+				clusterName, namespace,
 			)
 
 			AfterEach(
@@ -1991,8 +1994,8 @@ var _ = Describe(
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 

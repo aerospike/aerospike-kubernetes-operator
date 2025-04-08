@@ -36,7 +36,7 @@ var _ = Describe("BatchScaleDown", func() {
 				},
 			}
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 

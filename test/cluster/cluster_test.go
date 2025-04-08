@@ -112,8 +112,8 @@ func PauseReconcileTest(ctx goctx.Context) {
 				},
 			}
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Name, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -219,8 +219,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 			It(
@@ -319,8 +319,8 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -354,7 +354,6 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	var (
-		aeroCluster    *asdbv1.AerospikeCluster
 		err            error
 		nodeList       = &v1.NodeList{}
 		podList        = &v1.PodList{}
@@ -363,15 +362,31 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 		}
 	)
 
+	clusterName := fmt.Sprintf("ignore-pod-cluster-%d", GinkgoParallelProcess())
+	clusterNamespacedName := test.GetNamespacedName(
+		clusterName, namespace,
+	)
+
+	AfterEach(
+		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
+
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndPendingPod", func() {
-			clusterName := fmt.Sprintf("ignore-pod-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := test.GetNamespacedName(
-				clusterName, namespace,
-			)
-
 			BeforeEach(
 				func() {
+					var aeroCluster *asdbv1.AerospikeCluster
+
 					nodeList, err = getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -390,16 +405,11 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				},
 			)
 
-			AfterEach(
-				func() {
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-				},
-			)
-
 			It(
 				"Should allow cluster operations with pending pod", func() {
 					By("Set MaxIgnorablePod and Rolling restart cluster")
+
+					var aeroCluster *asdbv1.AerospikeCluster
 
 					// As pod is in pending state, CR object will be updated continuously
 					// This is put in eventually to retry Object Conflict error
@@ -502,21 +512,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 	Context(
 		"UpdateClusterWithMaxIgnorablePodAndFailedPod", func() {
-			clusterName := fmt.Sprintf("ignore-pod-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := test.GetNamespacedName(
-				clusterName, namespace,
-			)
-
 			BeforeEach(
 				func() {
 					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, 4)
-				},
-			)
-
-			AfterEach(
-				func() {
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 				},
 			)
 
@@ -542,7 +540,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
@@ -599,7 +597,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
@@ -674,8 +672,8 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -728,8 +726,8 @@ func DeployClusterForDiffStorageTest(
 			aeroCluster := &asdbv1.AerospikeCluster{}
 			AfterEach(
 				func() {
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 			// Cluster with n nodes, enterprise can be more than 8
@@ -875,8 +873,8 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -903,7 +901,7 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 			err := deployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -936,8 +934,8 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 				},
 			}
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -1189,8 +1187,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 				},
 			}
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -2156,8 +2154,8 @@ func negativeUpdateClusterValidationTest(
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -2560,8 +2558,8 @@ func negativeUpdateClusterValidationTest(
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 

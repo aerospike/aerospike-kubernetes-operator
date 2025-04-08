@@ -730,11 +730,16 @@ func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) 
 }
 
 func cleanupPVC(k8sClient client.Client, ns, clName string) error {
-	clLabels := operatorUtils.LabelsForAerospikeCluster(clName)
-
-	if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns),
-		client.MatchingLabels(clLabels)); err != nil {
-		return fmt.Errorf("could not delete pvcs: %w", err)
+	if clName == "" {
+		if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns)); err != nil {
+			return fmt.Errorf("could not delete pvcs: %w", err)
+		}
+	} else {
+		clLabels := operatorUtils.LabelsForAerospikeCluster(clName)
+		if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns),
+			client.MatchingLabels(clLabels)); err != nil {
+			return fmt.Errorf("could not delete pvcs: %w", err)
+		}
 	}
 
 	return nil

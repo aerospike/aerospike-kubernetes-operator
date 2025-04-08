@@ -42,9 +42,8 @@ var _ = Describe("SCMode", func() {
 				},
 			}
 
-			err := deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
 		// Dead/Unavailable partition
@@ -241,8 +240,8 @@ var _ = Describe("SCMode", func() {
 					},
 				}
 
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 

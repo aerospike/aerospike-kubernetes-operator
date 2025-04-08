@@ -142,11 +142,11 @@ all-test: manifests generate fmt vet envtest cluster-test backup-service-test ba
 
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --fail-fast -p --procs=8 -coverprofile ascover.out -v -show-node-events -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
 
 .PHONY: backup-service-test
 backup-service-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/backup_service; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo -p --procs=8 -coverprofile abscover.out -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-backup-service.xml  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/backup_service; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile abscover.out -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-backup-service.xml  -- ${ARGS}
 
 .PHONY: backup-test
 backup-test: manifests generate fmt vet envtest ## Run tests.
@@ -155,7 +155,7 @@ backup-test: manifests generate fmt vet envtest ## Run tests.
 .PHONY: restore-test
 restore-test: manifests generate fmt vet envtest ## Run tests.
 	# KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/restore; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile arcover.out -r --keep-going -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-restore.xml  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/restore; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile arcover.out -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-restore.xml  -- ${ARGS}
 
 ##@ Build
 

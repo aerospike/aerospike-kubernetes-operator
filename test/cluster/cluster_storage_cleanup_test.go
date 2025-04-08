@@ -210,8 +210,8 @@ var _ = Describe(
 						}
 
 						// cleanup cluster
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -389,8 +389,8 @@ var _ = Describe(
 							},
 						}
 
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -415,8 +415,8 @@ var _ = Describe(
 							},
 						}
 
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

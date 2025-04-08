@@ -48,9 +48,10 @@ var _ = BeforeSuite(
 		testEnv, cfg, err = test.StartTestEnvironment()
 		Expect(err).NotTo(HaveOccurred())
 
-		k8sClient, _, err = test.BootStrapTestEnv(scheme, cfg)
+		k8sClient, _, err = test.InitialiseClients(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Set up all necessary Secrets, RBAC roles, and ServiceAccounts for the test environment
 		err = test.SetupByUser(k8sClient, goctx.TODO())
 		Expect(err).ToNot(HaveOccurred())
 
@@ -93,8 +94,7 @@ var _ = AfterSuite(
 			},
 		}
 
-		err := cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")
 		backupService := asdbv1beta1.AerospikeBackupService{
@@ -104,7 +104,7 @@ var _ = AfterSuite(
 			},
 		}
 
-		err = backupservice.DeleteBackupService(k8sClient, &backupService)
+		err := backupservice.DeleteBackupService(k8sClient, &backupService)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("tearing down the test environment")

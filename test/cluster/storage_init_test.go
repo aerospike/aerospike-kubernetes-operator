@@ -73,9 +73,8 @@ var _ = Describe(
 							},
 						}
 
-						err := deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -156,14 +155,9 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
+						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster, err = getCluster(
@@ -202,14 +196,9 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec = podSpec
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
+						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						err = checkData(
@@ -299,14 +288,9 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec = podSpec
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
+						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -340,14 +324,9 @@ var _ = Describe(
 							latestImage,
 						)
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
+						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).Should(HaveOccurred())
 					},
 				)
@@ -395,9 +374,8 @@ var _ = Describe(
 							},
 						}
 
-						err := deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -610,13 +588,7 @@ func checkData(
 				continue
 			}
 
-			var volumeHasData bool
-
-			if storage.Volumes[volumeIndex].Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-				volumeHasData = hasDataBlock(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
-			} else {
-				volumeHasData = hasDataFilesystem(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
-			}
+			volumeHasData := hasData(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
 
 			var expectedHasData = assertHasData && wasDataWritten
 			if storage.Volumes[volumeIndex].InitMethod == asdbv1.AerospikeVolumeMethodNone {
@@ -741,36 +713,17 @@ func writeDataToVolumeFileSystem(
 	return nil
 }
 
-func hasDataBlock(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
+func hasData(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
-	cmd := []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path)}
 
-	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
-	retryInterval := 20 * time.Second
+	var cmd []string
 
-	for i := 0; i < maxRetries; i++ {
-		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
-		if err == nil {
-			return strings.HasPrefix(stdout, magicBytes)
-		}
-
-		if strings.Contains(stdout, "No such file or directory") {
-			return false
-		}
-
-		// Log the error and wait before retrying
-		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
-		time.Sleep(retryInterval)
+	switch volume.Source.PersistentVolume.VolumeMode {
+	case corev1.PersistentVolumeBlock:
+		cmd = []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path)}
+	case corev1.PersistentVolumeFilesystem:
+		cmd = []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
 	}
-
-	fmt.Println("Max retries reached. Returning false.")
-
-	return false
-}
-
-func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
-	cName, path := getContainerNameAndPath(volume)
-	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
 
 	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
 	retryInterval := 20 * time.Second

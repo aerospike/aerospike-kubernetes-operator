@@ -46,8 +46,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

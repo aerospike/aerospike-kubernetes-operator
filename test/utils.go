@@ -17,7 +17,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
 )
 
-func BootStrapTestEnv(scheme *runtime.Scheme, cfg *rest.Config) (
+func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 	k8sClient client.Client, k8sClientSet *kubernetes.Clientset, err error) {
 	utilRuntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))

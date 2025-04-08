@@ -116,14 +116,14 @@ func multiClusterGenChangeTest(
 					Namespace: clusterNamespacedName1.Namespace,
 				},
 			}
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 			aeroCluster.Name = clusterNamespacedName2.Name
 			aeroCluster.Namespace = clusterNamespacedName2.Namespace
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -179,14 +179,14 @@ func multiClusterPVCTest(
 				},
 			}
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 			aeroCluster.Name = clusterNamespacedName2.Name
 			aeroCluster.Namespace = clusterNamespacedName2.Namespace
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 

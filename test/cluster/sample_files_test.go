@@ -182,7 +182,8 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 	}
 
 	if !strings.Contains(filePath, "xdr") {
-		aeroCluster.Name = fmt.Sprintf("%s-%d", aeroCluster.Name, GinkgoParallelProcess())
+		baseName := strings.TrimSuffix(filepath.Base(filePath), "_cr.yaml")
+		aeroCluster.Name = strings.ReplaceAll(baseName, "_", "-")
 	}
 
 	// Deploy the cluster

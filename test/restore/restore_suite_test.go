@@ -50,9 +50,10 @@ var _ = BeforeSuite(
 		testEnv, cfg, err = test.StartTestEnvironment()
 		Expect(err).NotTo(HaveOccurred())
 
-		k8sClient, _, err = test.BootStrapTestEnv(scheme, cfg)
+		k8sClient, _, err = test.InitialiseClients(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Set up all necessary Secrets, RBAC roles, and ServiceAccounts for the test environment
 		err = test.SetupByUser(k8sClient, goctx.TODO())
 		Expect(err).ToNot(HaveOccurred())
 

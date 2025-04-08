@@ -87,9 +87,10 @@ var _ = SynchronizedBeforeSuite(
 		testEnv, cfg, err = test.StartTestEnvironment()
 		Expect(err).NotTo(HaveOccurred())
 
-		k8sClient, _, err = test.BootStrapTestEnv(scheme, cfg)
+		k8sClient, _, err = test.InitialiseClients(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Set up all necessary Secrets, RBAC roles, and ServiceAccounts for the test environment
 		err = test.SetupByUser(k8sClient, goctx.TODO())
 		Expect(err).ToNot(HaveOccurred())
 
@@ -115,7 +116,7 @@ var _ = SynchronizedBeforeSuite(
 		pkgLog.Info(fmt.Sprintf("Client will connect through '%s' network to Aerospike Clusters.",
 			*defaultNetworkType))
 
-		k8sClient, k8sClientSet, err = test.BootStrapTestEnv(scheme, cfg)
+		k8sClient, k8sClientSet, err = test.InitialiseClients(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
 		projectRoot, err = getGitRepoRootPath()

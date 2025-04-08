@@ -44,13 +44,27 @@ var _ = Describe(
 	"DynamicConfig", func() {
 
 		ctx := goctx.Background()
+		clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
 
 		Context(
 			"When doing valid operations", func() {
-				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := test.GetNamespacedName(
-					clusterName, namespace,
-				)
 
 				BeforeEach(
 					func() {
@@ -79,20 +93,6 @@ var _ = Describe(
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster := &asdbv1.AerospikeCluster{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      clusterName,
-								Namespace: namespace,
-							},
-						}
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
 					},
 				)
 
@@ -299,10 +299,6 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := test.GetNamespacedName(
-					clusterName, namespace,
-				)
 
 				BeforeEach(
 					func() {
@@ -331,20 +327,6 @@ var _ = Describe(
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster := &asdbv1.AerospikeCluster{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      clusterName,
-								Namespace: namespace,
-							},
-						}
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
@@ -439,10 +421,6 @@ var _ = Describe(
 
 		Context(
 			"When doing complete dynamic config change", func() {
-				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := test.GetNamespacedName(
-					clusterName, namespace,
-				)
 
 				BeforeEach(
 					func() {
@@ -510,20 +488,6 @@ var _ = Describe(
 
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster := &asdbv1.AerospikeCluster{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      clusterName,
-								Namespace: namespace,
-							},
-						}
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 
@@ -620,10 +584,6 @@ var _ = Describe(
 
 		Context(
 			"When changing fields those need recluster", func() {
-				clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
-				clusterNamespacedName := test.GetNamespacedName(
-					clusterName, namespace,
-				)
 
 				BeforeEach(
 					func() {
@@ -665,20 +625,6 @@ var _ = Describe(
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
 						err := deployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster := &asdbv1.AerospikeCluster{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      clusterName,
-								Namespace: namespace,
-							},
-						}
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, namespace, aeroCluster.Name)
 					},
 				)
 

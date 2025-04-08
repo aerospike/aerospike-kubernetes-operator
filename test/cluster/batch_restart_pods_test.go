@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
@@ -85,8 +84,8 @@ var _ = Describe("BatchRestart", func() {
 						Namespace: clusterNamespacedName.Namespace,
 					},
 				}
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -168,8 +167,8 @@ var _ = Describe("BatchRestart", func() {
 					},
 				}
 
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 		It("Should fail if replication-factor is 1", func() {
@@ -269,8 +268,8 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 				},
 			}
 
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	// Restart 1 node at a time
@@ -354,15 +353,13 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 		By("Again Update RollingUpdateBatchSize Count")
 
-		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+		Expect(err).ToNot(HaveOccurred())
 
-			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
-			aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
+		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
+		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
 
-			return k8sClient.Update(ctx, aeroCluster)
-		})
+		err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		time.Sleep(time.Second * 1)
@@ -396,7 +393,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 			}
 
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	// Restart 1 node at a time

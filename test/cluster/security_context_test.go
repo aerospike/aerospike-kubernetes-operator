@@ -38,32 +38,21 @@ func securityContextTest(
 	ctx goctx.Context, checkPodSpec bool, checkAeroServer bool,
 	checkAeroInit bool,
 ) {
-	clusterNameCreate := fmt.Sprintf("security-context-create-%d", GinkgoParallelProcess())
-	clusterNamespacedNameCreate := test.GetNamespacedName(
-		clusterNameCreate, namespace,
-	)
-
-	clusterNameUpdate := fmt.Sprintf("security-context-update-%d", GinkgoParallelProcess())
-	clusterNamespacedNameUpdate := test.GetNamespacedName(
-		clusterNameUpdate, namespace,
+	clusterName := fmt.Sprintf("security-context-%d", GinkgoParallelProcess())
+	clusterNamespacedName := test.GetNamespacedName(
+		clusterName, namespace,
 	)
 
 	AfterEach(
 		func() {
 			aeroCluster := &asdbv1.AerospikeCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterNamespacedNameCreate.Name,
-					Namespace: clusterNamespacedNameCreate.Namespace,
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
 				},
 			}
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
-
-			aeroCluster.Name = clusterNamespacedNameUpdate.Name
-			aeroCluster.Namespace = clusterNamespacedNameUpdate.Namespace
-
-			_ = deleteCluster(k8sClient, ctx, aeroCluster)
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	It(
@@ -71,7 +60,7 @@ func securityContextTest(
 			By("DeployCluster with SecurityContext")
 
 			aeroCluster := createDummyAerospikeCluster(
-				clusterNamespacedNameCreate, 2,
+				clusterNamespacedName, 2,
 			)
 
 			if checkPodSpec {
@@ -103,7 +92,7 @@ func securityContextTest(
 			By("DeployCluster")
 
 			aeroCluster := createDummyAerospikeCluster(
-				clusterNamespacedNameUpdate, 2,
+				clusterNamespacedName, 2,
 			)
 
 			err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -111,7 +100,7 @@ func securityContextTest(
 
 			By("UpdateCluster with SecurityContext")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedNameUpdate)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			if checkPodSpec {
@@ -136,7 +125,7 @@ func securityContextTest(
 				aeroCluster,
 			)
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedNameUpdate)
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			if checkPodSpec {

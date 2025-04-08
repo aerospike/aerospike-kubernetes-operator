@@ -35,8 +35,8 @@ var _ = Describe(
 								Namespace: clusterNamespacedName.Namespace,
 							},
 						}
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -337,13 +337,13 @@ var _ = Describe(
 
 				Context(
 					"When using valid rack storage config", func() {
-						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-
 						It(
 							"Should validate empty common storage if per rack storage is provided",
 							func() {
+								aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
+
 								err := deployCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -684,8 +684,8 @@ var _ = Describe(
 									},
 								}
 
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
-								_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+								Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+								Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 							},
 						)
 
@@ -787,8 +787,8 @@ var _ = Describe(
 						},
 					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
-					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -840,8 +840,8 @@ var _ = Describe(
 							},
 						}
 
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

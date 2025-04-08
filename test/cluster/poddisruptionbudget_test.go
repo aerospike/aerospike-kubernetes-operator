@@ -35,7 +35,7 @@ var _ = Describe(
 
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 			Expect(deletePDB(ctx, aeroCluster)).NotTo(HaveOccurred())
-			_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
 		Context("Valid Operations", func() {

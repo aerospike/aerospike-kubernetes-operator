@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -20,7 +21,7 @@ var _ = Describe("AutoScaler", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing scale operations", func() {
-		clusterName := "autoscale"
+		clusterName := fmt.Sprintf("autoscale-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
@@ -42,8 +43,8 @@ var _ = Describe("AutoScaler", func() {
 					},
 				}
 
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
-				_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 

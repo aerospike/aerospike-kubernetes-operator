@@ -43,8 +43,6 @@ var _ = Describe(
 			clusterNamespacedName types.NamespacedName
 			clusterName           string
 		)
-		suitecfg, _ := GinkgoConfiguration()
-		println(fmt.Sprintf("suitecfg.Timeout: %v", suitecfg.Timeout))
 
 		Context(
 			"When adding cluster", func() {
@@ -63,9 +61,8 @@ var _ = Describe(
 						},
 					}
 
-					err := deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-					_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				})
 
 				Context(
@@ -432,9 +429,8 @@ var _ = Describe(
 							},
 						}
 
-						err := deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-						_ = cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)
+						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
