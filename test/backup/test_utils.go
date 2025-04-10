@@ -18,9 +18,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/test/backup_service"
 )
 
 const (

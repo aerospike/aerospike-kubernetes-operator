@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 var _ = Describe(

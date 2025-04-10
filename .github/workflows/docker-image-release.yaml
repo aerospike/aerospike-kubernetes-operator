@@ -2,7 +2,7 @@ name: Release Container Image
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build-and-push:
@@ -10,12 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMG_BASE: ${{ github.repository }}
-      TAG: ${{ github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           submodules: 'true'
+
+      - name: Extract Tag
+        run: echo "TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         id: buildx

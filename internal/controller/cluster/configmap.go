@@ -19,9 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/internal/webhook/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )

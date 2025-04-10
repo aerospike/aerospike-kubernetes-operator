@@ -18,10 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // SingleBackupReconciler reconciles a single AerospikeBackup object
