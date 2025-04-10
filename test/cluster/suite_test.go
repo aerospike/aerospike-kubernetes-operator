@@ -36,8 +36,8 @@ import (
 
 	// +kubebuilder:scaffold:imports
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
