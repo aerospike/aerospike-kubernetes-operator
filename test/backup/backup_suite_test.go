@@ -17,11 +17,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
-	"github.com/aerospike/aerospike-kubernetes-operator/test/cluster"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/test/backup_service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 )
 
 var testEnv *envtest.Environment

@@ -21,9 +21,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
