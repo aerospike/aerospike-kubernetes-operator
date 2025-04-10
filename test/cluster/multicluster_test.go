@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,20 +19,20 @@ var _ = Describe(
 
 		Context(
 			"When DeployMultiClusterMultiNs", func() {
+				// 1st cluster
+				clusterName1 := fmt.Sprintf("multicluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName1 := test.GetNamespacedName(
+					clusterName1, test.MultiClusterNs1,
+				)
+
+				// 2nd cluster
+				clusterName2 := fmt.Sprintf("multicluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName2 := test.GetNamespacedName(
+					clusterName2, test.MultiClusterNs2,
+				)
+
 				Context(
 					"multiClusterGenChangeTest", func() {
-						// 1st cluster
-						clusterName1 := "multiclustergen"
-						clusterNamespacedName1 := test.GetNamespacedName(
-							clusterName1, test.MultiClusterNs1,
-						)
-
-						// 2nd cluster
-						clusterName2 := "multiclustergen"
-						clusterNamespacedName2 := test.GetNamespacedName(
-							clusterName2, test.MultiClusterNs2,
-						)
-
 						multiClusterGenChangeTest(
 							ctx, clusterNamespacedName1, clusterNamespacedName2,
 						)
@@ -39,18 +40,6 @@ var _ = Describe(
 				)
 				Context(
 					"multiClusterPVCTest", func() {
-						// 1st cluster
-						clusterName1 := "multicluster"
-						clusterNamespacedName1 := test.GetNamespacedName(
-							clusterName1, test.MultiClusterNs1,
-						)
-
-						// 2nd cluster
-						clusterName2 := "multicluster"
-						clusterNamespacedName2 := test.GetNamespacedName(
-							clusterName2, test.MultiClusterNs2,
-						)
-
 						multiClusterPVCTest(
 							ctx, clusterNamespacedName1, clusterNamespacedName2,
 						)
@@ -61,19 +50,20 @@ var _ = Describe(
 
 		Context(
 			"When DeployMultiClusterSingleNsTest", func() {
+				// 1st cluster
+				clusterName1 := fmt.Sprintf("multicluster1-%d", GinkgoParallelProcess())
+				clusterNamespacedName1 := test.GetNamespacedName(
+					clusterName1, test.MultiClusterNs1,
+				)
+
+				// 2nd cluster
+				clusterName2 := fmt.Sprintf("multicluster2-%d", GinkgoParallelProcess())
+				clusterNamespacedName2 := test.GetNamespacedName(
+					clusterName2, test.MultiClusterNs1,
+				)
+
 				Context(
 					"multiClusterGenChangeTest", func() {
-						// 1st cluster
-						clusterName1 := "multiclustergen1"
-						clusterNamespacedName1 := test.GetNamespacedName(
-							clusterName1, test.MultiClusterNs1,
-						)
-
-						// 2nd cluster
-						clusterName2 := "multiclustergen2"
-						clusterNamespacedName2 := test.GetNamespacedName(
-							clusterName2, test.MultiClusterNs1,
-						)
 						multiClusterGenChangeTest(
 							ctx, clusterNamespacedName1, clusterNamespacedName2,
 						)
@@ -81,18 +71,6 @@ var _ = Describe(
 				)
 				Context(
 					"multiClusterPVCTest", func() {
-						// 1st cluster
-						clusterName1 := "multicluster1"
-						clusterNamespacedName1 := test.GetNamespacedName(
-							clusterName1, test.MultiClusterNs1,
-						)
-
-						// 2nd cluster
-						clusterName2 := "multicluster2"
-						clusterNamespacedName2 := test.GetNamespacedName(
-							clusterName2, test.MultiClusterNs1,
-						)
-
 						multiClusterPVCTest(
 							ctx, clusterNamespacedName1, clusterNamespacedName2,
 						)

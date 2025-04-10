@@ -769,8 +769,7 @@ var _ = Describe(
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
-					aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-					})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+					randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 
 					By("Deploying cluster")
 					err = deployCluster(k8sClient, ctx, aeroCluster)

@@ -656,8 +656,9 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 		Namespaces: []string{scNamespace}, Racks: racks,
 	}
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
-	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-	})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+
+	randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
+
 	err := deployCluster(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 }
@@ -749,10 +750,7 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -774,10 +772,7 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -798,10 +793,7 @@ func DeployClusterForDiffStorageTest(
 					)
 
 					if !multiPodPerHost {
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + GinkgoParallelProcess()*10
-						aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
-						})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + GinkgoParallelProcess()*10
+						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
 					err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -902,6 +894,7 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 }

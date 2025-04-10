@@ -882,3 +882,16 @@ func getGitRepoRootPath() (string, error) {
 
 	return strings.TrimSpace(string(path)), nil
 }
+
+func randomizeServicePorts(
+	aeroCluster *asdbv1.AerospikeCluster,
+	tlsEnabled bool, processID int,
+) {
+	if tlsEnabled {
+		aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+		})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + processID*10
+	}
+
+	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+	})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + processID*10
+}

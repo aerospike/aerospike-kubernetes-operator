@@ -353,9 +353,6 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 
 		By("Again Update RollingUpdateBatchSize Count")
 
-		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-		Expect(err).ToNot(HaveOccurred())
-
 		aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(1)
 		aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = nil
 

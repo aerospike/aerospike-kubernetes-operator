@@ -65,6 +65,7 @@ func rollCluster(ctx goCtx.Context, image string) {
 		aeroCluster *asdbv1.AerospikeCluster,
 	) {
 		Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 	}(k8sClient, ctx, aeroCluster)
 
 	// Create a file in the empty dir as a marker.
