@@ -92,12 +92,12 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
+	serviceName := r.aeroCluster.Name + "-lb"
+
 	if loadBalancer == nil {
-		r.Log.Info("LoadBalancer is not configured. Skipping...")
-		return nil
+		return r.deleteLBServiceIfPresent(serviceName, r.aeroCluster.Namespace)
 	}
 
-	serviceName := r.aeroCluster.Name + "-lb"
 	service := &corev1.Service{}
 	servicePort := r.getLBServicePort(loadBalancer)
 
@@ -160,6 +160,30 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	return r.updateLBService(service, &servicePort, loadBalancer)
+}
+
+func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace string) error {
+	service := &corev1.Service{}
+	svcNamespacedName := types.NamespacedName{Name: svcName, Namespace: svcNamespace}
+
+	if err := r.Client.Get(context.TODO(), svcNamespacedName, service); err != nil {
+		if errors.IsNotFound(err) {
+			r.Log.Info("LoadBalancer is not configured. Skipping...")
+
+			return nil
+		}
+
+		return fmt.Errorf("failed to get loadbalancer service %s: %v", svcName, err)
+	}
+
+	if err := r.Client.Delete(context.TODO(), service); err != nil {
+		return fmt.Errorf("failed to delete loadbalancer service %s: %v", svcName, err)
+	}
+
+	r.Log.Info("LoadBalancer service deleted",
+		"name", utils.NamespacedName(service.Namespace, service.Name))
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servicePort *corev1.ServicePort,
