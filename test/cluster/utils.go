@@ -25,8 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -420,12 +420,14 @@ func getAerospikeStorageConfig(
 	fileDeleteInitMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	ddInitMethod := asdbv1.AerospikeVolumeMethodDD
 	blkDiscardInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
+	blkDiscardWithHeaderCleanupInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup
 	blkDiscardWipeMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
 
 	if cloudProvider == CloudProviderAWS {
 		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
 		blkDiscardInitMethod = asdbv1.AerospikeVolumeMethodDD
 		blkDiscardWipeMethod = asdbv1.AerospikeVolumeMethodDD
+		blkDiscardWithHeaderCleanupInitMethod = asdbv1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1.AerospikeStorageSpec{
@@ -509,6 +511,23 @@ func getAerospikeStorageConfig(
 				},
 				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 					Path: "/opt/aerospike/blockdevice-init-blkdiscard",
+				},
+			},
+			{
+				Name: "device-blkdiscard-with-header-cleanup",
+				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &blkDiscardWithHeaderCleanupInitMethod,
+					InputWipeMethod: &blkDiscardWipeMethod,
+				},
+				Source: asdbv1.VolumeSource{
+					PersistentVolume: &asdbv1.PersistentVolumeSpec{
+						Size:         resource.MustParse(storageSize),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/blockdevice-init-blkdiscard-with-header-cleanup",
 				},
 			},
 			{

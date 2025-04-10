@@ -14,9 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // GetConfigSection returns the section of the config with the given name.

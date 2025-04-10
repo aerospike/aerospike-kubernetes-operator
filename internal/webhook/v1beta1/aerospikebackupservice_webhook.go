@@ -31,14 +31,13 @@ import (
 
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
-
-const MinSupportedVersion = "3.0.0"
 
 // SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
 func SetupAerospikeBackupServiceWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeBackupService{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1beta1.AerospikeBackupService{}).
 		WithDefaulter(&AerospikeBackupServiceCustomDefaulter{}).
 		WithValidator(&AerospikeBackupServiceCustomValidator{}).
 		Complete()
@@ -58,7 +57,7 @@ var _ webhook.CustomDefaulter = &AerospikeBackupCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
 func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backupSvc, ok := obj.(*AerospikeBackupService)
+	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
 	if !ok {
 		return fmt.Errorf("expected AerospikeBackupService, got %T", obj)
 	}
@@ -86,7 +85,7 @@ var _ webhook.CustomValidator = &AerospikeBackupServiceCustomValidator{}
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
 ) (admission.Warnings, error) {
-	backupSvc, ok := obj.(*AerospikeBackupService)
+	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
 	}
@@ -95,13 +94,13 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Cont
 
 	absLog.Info("Validate create")
 
-	return backupSvc.validate()
+	return validateBackupService(backupSvc)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
 ) (admission.Warnings, error) {
-	backupSvc, ok := newObj.(*AerospikeBackupService)
+	backupSvc, ok := newObj.(*asdbv1beta1.AerospikeBackupService)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", newObj)
 	}
@@ -110,13 +109,13 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Cont
 
 	absLog.Info("Validate update")
 
-	return backupSvc.validate()
+	return validateBackupService(backupSvc)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
 ) (admission.Warnings, error) {
-	backupSvc, ok := obj.(*AerospikeBackupService)
+	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
 	}
@@ -129,26 +128,26 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Cont
 	return nil, nil
 }
 
-func (r *AerospikeBackupService) validate() (admission.Warnings, error) {
-	if err := ValidateBackupSvcVersion(r.Spec.Image); err != nil {
+func validateBackupService(backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
+	if err := asdbv1beta1.ValidateBackupSvcVersion(backupSvc.Spec.Image); err != nil {
 		return nil, err
 	}
 
-	if err := r.validateBackupServiceConfig(); err != nil {
+	if err := validateBackupServiceConfig(backupSvc.Spec.Config); err != nil {
 		return nil, err
 	}
 
-	if err := r.validateBackupServiceSecrets(); err != nil {
+	if err := validateBackupServiceSecrets(backupSvc.Spec.SecretMounts); err != nil {
 		return nil, err
 	}
 
-	return r.validateServicePodSpec()
+	return validateServicePodSpec(backupSvc)
 }
 
-func (r *AerospikeBackupService) validateBackupServiceConfig() error {
+func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
 	var config dto.Config
 
-	if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &config); err != nil {
+	if err := yaml.UnmarshalStrict(svcConfig.Raw, &config); err != nil {
 		return err
 	}
 
@@ -172,10 +171,10 @@ func (r *AerospikeBackupService) validateBackupServiceConfig() error {
 	return validation.ValidateConfiguration(&config)
 }
 
-func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
+func validateBackupServiceSecrets(secretMounts []asdbv1beta1.SecretMount) error {
 	volumeNameSet := set.NewSet[string]()
 
-	for _, secret := range r.Spec.SecretMounts {
+	for _, secret := range secretMounts {
 		if volumeNameSet.Contains(secret.VolumeMount.Name) {
 			return fmt.Errorf("duplicate volume name %s found in secrets field", secret.VolumeMount.Name)
 		}
@@ -186,19 +185,19 @@ func (r *AerospikeBackupService) validateBackupServiceSecrets() error {
 	return nil
 }
 
-func (r *AerospikeBackupService) validateServicePodSpec() (admission.Warnings, error) {
-	if err := validatePodObjectMeta(&r.Spec.PodSpec.ObjectMeta); err != nil {
+func validateServicePodSpec(backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
+	if err := validatePodObjectMeta(&backupSvc.Spec.PodSpec.ObjectMeta); err != nil {
 		return nil, err
 	}
 
-	return r.validateResources()
+	return validateResources(backupSvc)
 }
 
-func (r *AerospikeBackupService) validateResources() (admission.Warnings, error) {
+func validateResources(backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
 	var warn admission.Warnings
 
-	if r.Spec.Resources != nil && r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
-		if !reflect.DeepEqual(r.Spec.Resources, r.Spec.PodSpec.ServiceContainerSpec.Resources) {
+	if backupSvc.Spec.Resources != nil && backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		if !reflect.DeepEqual(backupSvc.Spec.Resources, backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources) {
 			return nil, fmt.Errorf("resources mismatch, different resources requirements found in " +
 				"spec.resources and spec.podSpec.serviceContainer.resources")
 		}
@@ -207,8 +206,8 @@ func (r *AerospikeBackupService) validateResources() (admission.Warnings, error)
 			"resources field is now part of spec.podSpec.serviceContainer"}
 	}
 
-	if r.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
-		resources := r.Spec.PodSpec.ServiceContainerSpec.Resources
+	if backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
+		resources := backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources
 		if resources.Limits != nil && resources.Requests != nil &&
 			((resources.Limits.Cpu().Cmp(*resources.Requests.Cpu()) < 0) ||
 				(resources.Limits.Memory().Cmp(*resources.Requests.Memory()) < 0)) {
@@ -220,7 +219,7 @@ func (r *AerospikeBackupService) validateResources() (admission.Warnings, error)
 	return warn, nil
 }
 
-func validatePodObjectMeta(objectMeta *AerospikeObjectMeta) error {
+func validatePodObjectMeta(objectMeta *asdbv1beta1.AerospikeObjectMeta) error {
 	for label := range objectMeta.Labels {
 		if label == asdbv1.AerospikeAppLabel || label == asdbv1.AerospikeCustomResourceLabel {
 			return fmt.Errorf(

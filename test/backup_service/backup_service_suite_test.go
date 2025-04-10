@@ -13,7 +13,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 var testEnv *envtest.Environment

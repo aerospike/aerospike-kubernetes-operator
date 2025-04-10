@@ -18,10 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	backup_service "github.com/aerospike/aerospike-kubernetes-operator/pkg/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // SingleBackupReconciler reconciles a single AerospikeBackup object
@@ -41,7 +41,7 @@ func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) 
 		r.aeroBackup.Spec.BackupService.Name,
 		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
-			asdbv1beta1.MinSupportedVersion))
+			asdbv1beta1.BackupSvcMinSupportedVersion))
 		return reconcile.Result{}, nil
 	}
 
@@ -539,7 +539,7 @@ func (r *SingleBackupReconciler) routinesToDelete(
 
 		// Delete any dangling backup-routines related to this cluster
 		// Strict prefix check might fail for cases where the prefix is same.
-		if strings.HasPrefix(name, r.aeroBackup.NamePrefix()) &&
+		if strings.HasPrefix(name, asdbv1beta1.NamePrefix(utils.GetNamespacedName(r.aeroBackup))) &&
 			allRoutines[name].(map[string]interface{})[asdbv1beta1.SourceClusterKey].(string) == clusterName {
 			routinesTobeDeleted = append(routinesTobeDeleted, name)
 		}
